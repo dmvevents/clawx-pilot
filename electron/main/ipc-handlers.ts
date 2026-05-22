@@ -59,6 +59,7 @@ import {
   registerMoeFormFillerHandlers,
   setMoeFormFillerWindow,
 } from './moe-form-filler-ipc';
+import { registerOutlookBrowserHandlers } from './outlook-browser-ipc';
 import { registerAsrIpcHandlers } from './asr-ipc';
 import {
   registerAzureSpeechHandlers,
@@ -171,6 +172,11 @@ export function registerIpcHandlers(
   // MoE form-filler (Microsoft Forms automation via OpenClaw browser plugin)
   setMoeFormFillerWindow(mainWindow);
   registerMoeFormFillerHandlers();
+
+  // Outlook (browser-session) — drives Outlook Web through the OpenClaw
+  // browser plugin in the principal's existing Chrome (profile=user).
+  // Phase-1 path; Phase-2 (Graph OAuth) lives in microsoft-graph-ipc.
+  registerOutlookBrowserHandlers();
 
   // Azure Speech (optional cloud fallback ASR). Must be registered before
   // asr-ipc so the Azure streaming hook is available when asr:transcribe-stream

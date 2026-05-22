@@ -134,6 +134,11 @@ export const PRINCIPAL_SKILL_ALLOWLIST = new Set<string>([
   'taskflow',
   'taskflow-inbox-triage',
   'weather',
+  // Outlook (browser-session) — Phase-1 Outlook integration. The actual
+  // outlook.* tools registered by the moe-principal-assistant plugin are
+  // gated on this slug being present; remove it to disable outlook.* end
+  // to end without changing code in the plugin.
+  'outlook',
 ]);
 
 /**

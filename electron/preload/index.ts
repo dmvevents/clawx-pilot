@@ -162,6 +162,11 @@ const electronAPI = {
         'moeforms:resume',
         'moeforms:confirm',
         'moeforms:cancel',
+        // Outlook (browser-session) — drives Outlook Web in the user's Chrome
+        'outlook:open',
+        'outlook:readInbox',
+        'outlook:draft',
+        'outlook:send',
         // ASR (microphone capture → main process)
         'asr:saveBlob',
         'asr:transcribe',
@@ -307,6 +312,42 @@ const electronAPI = {
    */
   openExternal: (url: string) => {
     return ipcRenderer.invoke('shell:openExternal', url);
+  },
+
+  /**
+   * Outlook (browser-session) facade.
+   *
+   * Thin pass-through to the main-process OutlookBrowserManager via IPC.
+   * All four calls return { ok: true, data } on success or { ok: false, error }
+   * on failure. The renderer's Settings tile uses these to verify the
+   * connection; the principal-assistant plugin's outlook.* tools route
+   * through the main process via the Host API and are gated by the
+   * PRINCIPAL_SKILL_ALLOWLIST flag.
+   *
+   * Hard rules (preserved by the manager and re-asserted here):
+   *   - profile is always 'user' (managed Chromium is blocked).
+   *   - No password is ever stored or transmitted.
+   *   - send() refuses unless { confirm: true } is set; the agent must show
+   *     the draft and obtain explicit user consent before flipping the bit.
+   */
+  outlook: {
+    open: () => ipcRenderer.invoke('outlook:open'),
+    readInbox: (top?: number) => ipcRenderer.invoke('outlook:readInbox', { top }),
+    draft: (args: {
+      to: string | string[];
+      subject: string;
+      body: string;
+      cc?: string | string[];
+      bcc?: string | string[];
+    }) => ipcRenderer.invoke('outlook:draft', args),
+    send: (args: {
+      to: string | string[];
+      subject: string;
+      body: string;
+      cc?: string | string[];
+      bcc?: string | string[];
+      confirm: boolean;
+    }) => ipcRenderer.invoke('outlook:send', args),
   },
 
   /**

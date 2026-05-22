@@ -307,8 +307,24 @@ export function register({ config, registerTool, log = console, host = {} }) {
   // capability by passing { outlook } on the host handle. Phase-2 (Graph
   // OAuth) is parked in extensions/microsoft-graph/ until IT returns a
   // client_id and stays untouched here.
+  //
+  // Allowlist gate: outlook.* tools are only registered when the host both
+  //   (a) provides a usable outlook facade AND
+  //   (b) declares the 'outlook' capability in host.skillAllowlist.
+  // ClawX's PRINCIPAL_SKILL_ALLOWLIST in shared/feature-flags.ts is the
+  // authoritative list; the host is expected to forward it on the handle.
+  // If skillAllowlist is absent we fall back to opt-in: tools register only
+  // when host.outlook was explicitly wired by the host (the existing
+  // contract), so removing 'outlook' from the allowlist disables the tools
+  // without changing this plugin.
   const outlook = host?.outlook;
-  if (outlook && typeof outlook.open === 'function') {
+  const allowlist = host?.skillAllowlist;
+  const allowlistGate =
+    allowlist == null
+      ? true // opt-in via host.outlook presence (legacy contract)
+      : (typeof allowlist.has === 'function' ? allowlist.has('outlook') : false) ||
+        (Array.isArray(allowlist) && allowlist.includes('outlook'));
+  if (outlook && typeof outlook.open === 'function' && allowlistGate) {
     registerTool({
       name: 'outlook.open',
       description:
@@ -369,6 +385,10 @@ export function register({ config, registerTool, log = console, host = {} }) {
     });
 
     log.info?.('moe-principal-assistant: outlook (browser-session) tools registered');
+  } else if (outlook && typeof outlook.open === 'function' && !allowlistGate) {
+    log.info?.(
+      'moe-principal-assistant: outlook capability present but disabled by allowlist — outlook.* tools skipped',
+    );
   } else {
     log.info?.(
       'moe-principal-assistant: outlook host handle not provided — outlook.* tools skipped',
