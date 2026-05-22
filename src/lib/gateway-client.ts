@@ -4,6 +4,11 @@ type GatewayInfo = {
   wsUrl: string;
   token: string;
   port: number;
+  /**
+   * Per-device token issued after pairing. When present, the gateway requires
+   * it instead of the shared `token` on the connect handshake.
+   */
+  deviceToken?: string | null;
 };
 
 type PendingRequest = {
@@ -154,9 +159,9 @@ class GatewayBrowserClient {
                   platform: navigator.platform,
                   mode: 'ui',
                 },
-                auth: {
-                  token: this.gatewayInfo?.token,
-                },
+                auth: this.gatewayInfo?.deviceToken
+                  ? { deviceToken: this.gatewayInfo.deviceToken }
+                  : { token: this.gatewayInfo?.token },
                 caps: [],
                 role: 'operator',
                 scopes: ['operator.admin'],

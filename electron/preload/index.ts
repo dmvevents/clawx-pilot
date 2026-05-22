@@ -145,6 +145,34 @@ const electronAPI = {
         'openclaw:getConfigDir',
         'openclaw:getSkillsDir',
         'openclaw:getCliCommand',
+        // Microsoft Graph (Outlook) capability
+        'msgraph:status',
+        'msgraph:get-config',
+        'msgraph:set-config',
+        'msgraph:sign-in',
+        'msgraph:sign-out',
+        'msgraph:submit-manual-code',
+        'msgraph:set-mock-mailbox',
+        'msgraph:rpc',
+        // MoE form-filler (Microsoft Forms automation)
+        'moeforms:status',
+        'moeforms:get-urls',
+        'moeforms:set-urls',
+        'moeforms:start',
+        'moeforms:resume',
+        'moeforms:confirm',
+        'moeforms:cancel',
+        // ASR (microphone capture → main process)
+        'asr:saveBlob',
+        'asr:transcribe',
+        'asr:transcribe-stream',
+        // Azure Speech (optional cloud fallback ASR)
+        'azure-speech:get-config',
+        'azure-speech:set-config',
+        'azure-speech:test',
+        // MoE seed (cron + form URLs)
+        'moe:seed-cron',
+        'moe:set-form-urls',
       ];
 
       if (validChannels.includes(channel)) {
@@ -188,6 +216,15 @@ const electronAPI = {
         'oauth:success',
         'oauth:error',
         'openclaw:cli-installed',
+        // Microsoft Graph (Outlook) capability
+        'msgraph:code',
+        'msgraph:signed-in',
+        'msgraph:signed-out',
+        'msgraph:error',
+        // MoE form-filler
+        'moeforms:status',
+        // ASR streaming partials (Azure Speech path)
+        'asr:transcribe-partial',
       ];
 
       if (validChannels.includes(channel) || channel.startsWith('ext:')) {
@@ -237,6 +274,11 @@ const electronAPI = {
         'oauth:code',
         'oauth:success',
         'oauth:error',
+        // Microsoft Graph (Outlook) capability
+        'msgraph:code',
+        'msgraph:signed-in',
+        'msgraph:signed-out',
+        'msgraph:error',
       ];
 
       if (validChannels.includes(channel) || channel.startsWith('ext:')) {

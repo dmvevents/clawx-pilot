@@ -6,6 +6,7 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (_key: string, defaultValue?: string) => defaultValue ?? '',
   }),
+  initReactI18next: { type: '3rdParty', init: () => undefined },
 }));
 
 vi.mock('@/stores/gateway', () => ({

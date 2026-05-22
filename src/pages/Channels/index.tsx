@@ -153,7 +153,11 @@ export function Channels() {
   const agentsFetchInFlightRef = useRef<Promise<void> | null>(null);
   const hasLoadedAgentsRef = useRef(false);
 
-  const displayedChannelTypes = getPrimaryChannels();
+  // Pilot deployment ships WhatsApp only. Other channels remain in the
+  // bundled gateway runtime but are hidden from the principal-facing UI.
+  const displayedChannelTypes: ChannelType[] = (getPrimaryChannels() as readonly ChannelType[]).filter(
+    (type) => type === 'whatsapp',
+  );
   const visibleChannelGroups = channelGroups;
   const visibleAgents = agents;
   const hasStableValue = visibleChannelGroups.length > 0 || visibleAgents.length > 0;
@@ -248,7 +252,13 @@ export function Channels() {
         throw new Error(channelsPayload.error || 'Failed to load channels');
       }
 
-      setChannelGroups(channelsPayload.channels || []);
+      // Pilot deployment ships WhatsApp only. The bundled gateway loads many
+      // other channel extensions, but the principal-facing UI hides them.
+      const allowedChannelTypes = new Set(['whatsapp']);
+      const filteredChannels = (channelsPayload.channels || []).filter(
+        (group) => allowedChannelTypes.has(group.channelType),
+      );
+      setChannelGroups(filteredChannels);
       setGatewayHealth(channelsPayload.gatewayHealth || DEFAULT_GATEWAY_HEALTH);
       setDiagnosticsSnapshot(null);
       setShowDiagnostics(false);

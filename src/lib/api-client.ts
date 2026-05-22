@@ -128,6 +128,12 @@ type WsTransportOptions = {
 type GatewayWsTransportOptions = {
   urlResolver?: () => Promise<string> | string;
   tokenResolver?: () => Promise<string | null> | string | null;
+  /**
+   * Resolve the per-device token (from `~/.openclaw/devices/paired.json`) when
+   * the device has been paired. The gateway requires this in place of the
+   * shared `token` for paired devices.
+   */
+  deviceTokenResolver?: () => Promise<string | null> | string | null;
   timeoutMs?: number;
   websocketFactory?: (url: string) => WebSocket;
 };
@@ -648,6 +654,20 @@ export function createGatewayWsTransportInvoker(options: GatewayWsTransportOptio
     }
     return await invokeViaIpc<string | null>('settings:get', [{ key: 'gatewayToken' }]);
   });
+  const resolveDeviceToken = options.deviceTokenResolver ?? (async () => {
+    try {
+      const info = await invokeViaIpc<{ deviceToken?: string | null } | null>(
+        'hostapi:fetch',
+        [{ path: '/api/app/gateway-info', method: 'GET' }],
+      );
+      const dt = (info as { data?: { json?: { deviceToken?: string | null } } } | null)?.data?.json?.deviceToken
+        ?? (info as { deviceToken?: string | null } | null)?.deviceToken
+        ?? null;
+      return typeof dt === 'string' && dt.length > 0 ? dt : null;
+    } catch {
+      return null;
+    }
+  });
 
   let socket: WebSocket | null = null;
   let connectPromise: Promise<WebSocket> | null = null;
@@ -693,11 +713,16 @@ export function createGatewayWsTransportInvoker(options: GatewayWsTransportOptio
       throw new Error('Gateway WS not open during connect handshake');
     }
     const token = await Promise.resolve(resolveToken());
+    const deviceToken = await Promise.resolve(resolveDeviceToken());
     connectRequestId = `connect-${Date.now()}`;
-    const auth =
-      typeof token === 'string' && token.trim().length > 0
-        ? { token }
-        : undefined;
+    let auth: { token: string } | { deviceToken: string } | undefined;
+    if (typeof deviceToken === 'string' && deviceToken.trim().length > 0) {
+      auth = { deviceToken };
+    } else if (typeof token === 'string' && token.trim().length > 0) {
+      auth = { token };
+    } else {
+      auth = undefined;
+    }
     socket.send(JSON.stringify({
       type: 'req',
       id: connectRequestId,

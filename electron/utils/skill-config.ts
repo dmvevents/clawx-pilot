@@ -35,6 +35,12 @@ interface PreinstalledSkillSpec {
     slug: string;
     version?: string;
     autoEnable?: boolean;
+    /**
+     * Platform allow-list. When set, the skill is only deployed if
+     * `process.platform` is in the list. Used for darwin-only bridges
+     * (bluebubbles, imsg) that have no Windows/Linux equivalent.
+     */
+    platforms?: NodeJS.Platform[];
 }
 
 interface PreinstalledManifest {
@@ -334,6 +340,11 @@ export async function ensurePreinstalledSkillsInstalled(): Promise<void> {
     const toEnable: string[] = [];
 
     for (const spec of skills) {
+        if (spec.platforms && spec.platforms.length > 0 && !spec.platforms.includes(process.platform)) {
+            logger.debug(`Skipping preinstalled skill ${spec.slug}: platform ${process.platform} not in [${spec.platforms.join(',')}]`);
+            continue;
+        }
+
         const sourceDir = join(sourceRoot, spec.slug);
         const sourceManifest = join(sourceDir, 'SKILL.md');
         if (!existsSync(sourceManifest)) {

@@ -7,6 +7,10 @@ import { hostApiFetch } from '@/lib/host-api';
 import { AppError, normalizeAppError } from '@/lib/error-model';
 import { useGatewayStore } from './gateway';
 import type { Skill, MarketplaceSkill } from '../types/skill';
+import {
+  FILTER_SKILLS_TO_ALLOWLIST,
+  PRINCIPAL_SKILL_ALLOWLIST,
+} from '../../shared/feature-flags';
 
 type GatewaySkillStatus = {
   skillKey: string;
@@ -186,12 +190,23 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
             ? new Error(clawhubData.error || 'Failed to fetch marketplace skills')
             : null;
 
+      // Pilot deployment hides skills outside the curated principal set. The
+      // gateway still has them installed and the agent can reach them
+      // programmatically — this only filters the marketplace UI surface.
+      const visibleSkills = FILTER_SKILLS_TO_ALLOWLIST
+        ? combinedSkills.filter((s) => {
+            const slug = s.slug ?? '';
+            const id = s.id ?? '';
+            return PRINCIPAL_SKILL_ALLOWLIST.has(slug) || PRINCIPAL_SKILL_ALLOWLIST.has(id);
+          })
+        : combinedSkills;
+
       if (partialError) {
         const appError = normalizeAppError(partialError, { module: 'skills', operation: 'fetch' });
         const errorKey = mapErrorCodeToSkillErrorKey(appError.code, 'fetch');
-        set({ skills: combinedSkills, loading: false, error: errorKey ?? appError.message });
+        set({ skills: visibleSkills, loading: false, error: errorKey ?? appError.message });
       } else {
-        set({ skills: combinedSkills, loading: false, error: null });
+        set({ skills: visibleSkills, loading: false, error: null });
       }
 
       return true;

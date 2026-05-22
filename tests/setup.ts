@@ -5,6 +5,55 @@
 import { vi } from 'vitest';
 import '@testing-library/jest-dom';
 
+// Node 25+ ships an experimental built-in `localStorage`/`sessionStorage` that
+// requires `--localstorage-file=<path>` to be functional; without it the globals
+// exist but lack methods like `clear`/`setItem`/`removeItem`, and they shadow
+// JSDOM's proper Storage on the window. Install an in-memory shim that matches
+// the Web Storage API so tests get a working store regardless of Node version.
+function createMemoryStorage(): Storage {
+  let store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    clear() {
+      store = new Map();
+    },
+    getItem(key: string) {
+      return store.has(key) ? (store.get(key) as string) : null;
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null;
+    },
+    removeItem(key: string) {
+      store.delete(key);
+    },
+    setItem(key: string, value: string) {
+      store.set(String(key), String(value));
+    },
+  } as Storage;
+}
+
+function installStorage(name: 'localStorage' | 'sessionStorage') {
+  const target: Storage = createMemoryStorage();
+  // Define on both window and globalThis so code that reads either gets the shim.
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, name, {
+      value: target,
+      writable: true,
+      configurable: true,
+    });
+  }
+  Object.defineProperty(globalThis, name, {
+    value: target,
+    writable: true,
+    configurable: true,
+  });
+}
+
+installStorage('localStorage');
+installStorage('sessionStorage');
+
 // Provide a minimal `electron` mock so tests that transitively import
 // main-process code (logger, store, etc.) don't blow up when the Electron
 // binary is not present (e.g. CI with ELECTRON_SKIP_BINARY_DOWNLOAD=1).

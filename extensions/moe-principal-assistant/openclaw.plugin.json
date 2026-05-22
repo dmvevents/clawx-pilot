@@ -1,0 +1,75 @@
+{
+  "id": "moe-principal-assistant",
+  "name": "MoE Principal Assistant (Trinidad & Tobago)",
+  "description": "Persona, tone, jurisdiction, templates, and form-payload builders for a digital admin assistant serving primary-school principals in Trinidad & Tobago. Provides drafting, summarisation, and structured payloads for the MoE Daily Report and Student Suspension forms. Does not submit forms — that is delegated to the browser/Graph plugins under explicit user confirmation.",
+  "enabledByDefault": false,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "principalName": {
+        "type": "string",
+        "description": "Full name of the principal as it should appear in letter signoffs and memo headers."
+      },
+      "schoolName": {
+        "type": "string",
+        "description": "School name. Should match an entry in data/schools.json so dropdowns auto-fill correctly."
+      },
+      "educationDistrict": {
+        "type": "string",
+        "enum": [
+          "Caroni",
+          "North Eastern",
+          "Port of Spain & Environs",
+          "South Eastern",
+          "St. George East",
+          "St. Patrick",
+          "Victoria"
+        ],
+        "description": "One of the seven MoE education districts."
+      },
+      "schoolType": {
+        "type": "string",
+        "enum": ["Denominational", "Government"],
+        "description": "Denominational or Government primary school."
+      },
+      "defaultDailyReportRecipientUrl": {
+        "type": "string",
+        "default": "https://forms.office.com/...",
+        "description": "Microsoft Forms URL for the Primary School Daily Report. Placeholder — supplied by the MoE district office."
+      },
+      "defaultSuspensionFormUrl": {
+        "type": "string",
+        "default": "https://forms.office.com/...",
+        "description": "Microsoft Forms URL for the Primary School Student Suspensions form. Placeholder — supplied by the MoE district office."
+      }
+    },
+    "required": ["principalName", "schoolName", "educationDistrict", "schoolType"]
+  },
+  "uiHints": {
+    "principalName": {
+      "label": "Principal name",
+      "help": "Used in letter signoffs and memo From: lines."
+    },
+    "schoolName": {
+      "label": "School",
+      "help": "Start typing — the assistant will match against the MoE school roster."
+    },
+    "educationDistrict": {
+      "label": "Education district",
+      "help": "Caroni, North Eastern, Port of Spain & Environs, South Eastern, St. George East, St. Patrick, or Victoria."
+    },
+    "schoolType": {
+      "label": "School type",
+      "help": "Denominational or Government."
+    },
+    "defaultDailyReportRecipientUrl": {
+      "label": "Daily report form URL",
+      "help": "Provided by your district office. Leave the placeholder until you have the real URL."
+    },
+    "defaultSuspensionFormUrl": {
+      "label": "Suspension form URL",
+      "help": "Provided by your district office. One submission per suspended student."
+    }
+  }
+}

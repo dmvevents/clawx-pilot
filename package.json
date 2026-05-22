@@ -1,6 +1,7 @@
 {
     "name": "clawx",
-    "version": "0.4.3",
+    "productName": "Ministry of Education",
+    "version": "0.4.3-moe.1",
     "pnpm": {
         "onlyBuiltDependencies": [
             "@discordjs/opus",
@@ -25,9 +26,9 @@
             ]
         }
     },
-    "description": "ClawX - Graphical AI Assistant based on OpenClaw",
+    "description": "Ministry of Education — AI-supported administrative assistant for primary-school principals (built on ClawX/OpenClaw)",
     "main": "dist-electron/main/index.js",
-    "author": "ClawX Team",
+    "author": "Ministry of Education, Trinidad & Tobago",
     "license": "MIT",
     "private": true,
     "scripts": {
@@ -63,6 +64,7 @@
         "package:mac": "pnpm run package && node scripts/run-electron-builder.mjs --mac --publish never",
         "package:mac:local": "SKIP_PREINSTALLED_SKILLS=1 pnpm run package && node scripts/run-electron-builder.mjs --mac --publish never",
         "package:win": "pnpm run prep:win-binaries && pnpm run package && node scripts/run-electron-builder.mjs --win --publish never",
+        "build:win": "pnpm run prep:win-binaries && pnpm run package && node scripts/run-electron-builder.mjs --win nsis --x64 --publish never",
         "package:linux": "pnpm run package && node scripts/run-electron-builder.mjs --linux --publish never",
         "release": "pnpm run uv:download && pnpm run package && node scripts/run-electron-builder.mjs --publish always",
         "preversion": "node scripts/pre-version-fetch-tags.mjs",

@@ -107,6 +107,12 @@ export function buildGatewayConnectFrame(options: {
   token: string;
   deviceIdentity: DeviceIdentity | null;
   platform: string;
+  /**
+   * Per-device token issued by the gateway after pairing. When present, the
+   * gateway requires it on the connect frame; the shared `auth.token` will be
+   * rejected with AUTH_TOKEN_MISMATCH for any paired device.
+   */
+  deviceToken?: string | null;
 }): { connectId: string; frame: Record<string, unknown> } {
   const connectId = `connect-${Date.now()}`;
   const role = 'operator';
@@ -114,6 +120,12 @@ export function buildGatewayConnectFrame(options: {
   const signedAtMs = Date.now();
   const clientId = 'gateway-client';
   const clientMode = 'ui';
+
+  // The signed payload's `token` field MUST equal whichever credential we
+  // present in `auth.*`, otherwise the server's signature check fails even
+  // though the token itself is correct.
+  const useDeviceToken = typeof options.deviceToken === 'string' && options.deviceToken.length > 0;
+  const signatureToken = useDeviceToken ? options.deviceToken! : options.token;
 
   const device = (() => {
     if (!options.deviceIdentity) return undefined;
@@ -125,7 +137,7 @@ export function buildGatewayConnectFrame(options: {
       role,
       scopes,
       signedAtMs,
-      token: options.token ?? null,
+      token: signatureToken ?? null,
       nonce: options.challengeNonce,
     });
     const signature = signDevicePayload(options.deviceIdentity.privateKeyPem, payload);
@@ -137,6 +149,10 @@ export function buildGatewayConnectFrame(options: {
       nonce: options.challengeNonce,
     };
   })();
+
+  const auth: Record<string, unknown> = useDeviceToken
+    ? { deviceToken: options.deviceToken }
+    : { token: options.token };
 
   return {
     connectId,
@@ -154,9 +170,7 @@ export function buildGatewayConnectFrame(options: {
           platform: options.platform,
           mode: clientMode,
         },
-        auth: {
-          token: options.token,
-        },
+        auth,
         caps: [],
         role,
         scopes,
@@ -172,6 +186,13 @@ export async function connectGatewaySocket(options: {
   platform: string;
   pendingRequests: Map<string, PendingGatewayRequest>;
   getToken: () => Promise<string>;
+  /**
+   * Optional resolver for the per-device token issued by the gateway after
+   * pairing (`~/.openclaw/devices/paired.json`). When this returns a non-empty
+   * string, the connect frame uses `auth.deviceToken` instead of the shared
+   * `auth.token` — required for paired devices.
+   */
+  getDeviceToken?: () => Promise<string | null>;
   onHandshakeComplete: (ws: WebSocket) => void;
   onMessage: (message: unknown) => void;
   onCloseAfterHandshake: (code: number) => void;
@@ -228,11 +249,16 @@ export async function connectGatewaySocket(options: {
       logger.debug('Sending connect handshake with challenge nonce');
 
       const currentToken = await options.getToken();
+      const deviceToken = options.getDeviceToken ? await options.getDeviceToken() : null;
+      if (deviceToken) {
+        logger.debug('Using paired device token for connect handshake');
+      }
       const connectPayload = buildGatewayConnectFrame({
         challengeNonce,
         token: currentToken,
         deviceIdentity: options.deviceIdentity,
         platform: options.platform,
+        deviceToken,
       });
       connectId = connectPayload.connectId;
 

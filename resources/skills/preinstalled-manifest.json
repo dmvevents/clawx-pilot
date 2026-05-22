@@ -55,6 +55,87 @@
       "ref": "main",
       "version": "main",
       "autoEnable": true
+    },
+    {
+      "slug": "weather",
+      "repo": "openclaw/openclaw",
+      "repoPath": "skills/weather",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
+      "slug": "summarize",
+      "repo": "openclaw/openclaw",
+      "repoPath": "skills/summarize",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
+      "slug": "skill-creator",
+      "repo": "openclaw/openclaw",
+      "repoPath": "skills/skill-creator",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
+      "slug": "taskflow",
+      "repo": "openclaw/openclaw",
+      "repoPath": "skills/taskflow",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
+      "slug": "taskflow-inbox-triage",
+      "repo": "openclaw/openclaw",
+      "repoPath": "skills/taskflow-inbox-triage",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": true
+    },
+    {
+      "slug": "openai-whisper",
+      "repo": "openclaw/openclaw",
+      "repoPath": "skills/openai-whisper",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "blogwatcher",
+      "repo": "openclaw/openclaw",
+      "repoPath": "skills/blogwatcher",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "goplaces",
+      "repo": "openclaw/openclaw",
+      "repoPath": "skills/goplaces",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "nano-pdf",
+      "repo": "openclaw/openclaw",
+      "repoPath": "skills/nano-pdf",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false
+    },
+    {
+      "slug": "imsg",
+      "repo": "openclaw/openclaw",
+      "repoPath": "skills/imsg",
+      "ref": "main",
+      "version": "main",
+      "autoEnable": false,
+      "platforms": ["darwin"]
     }
   ]
 }

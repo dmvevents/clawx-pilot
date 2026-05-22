@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { MicrosoftGraphSection } from './MicrosoftGraphSection';
+import { AzureSpeechSection } from './AzureSpeechSection';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -37,7 +39,6 @@ import {
   type UiTelemetryEntry,
 } from '@/lib/telemetry';
 import { useTranslation } from 'react-i18next';
-import { SUPPORTED_LANGUAGES } from '@/i18n';
 import { hostApiFetch } from '@/lib/host-api';
 import { cn } from '@/lib/utils';
 type ControlUiInfo = {
@@ -51,8 +52,6 @@ export function Settings() {
   const {
     theme,
     setTheme,
-    language,
-    setLanguage,
     launchAtStartup,
     setLaunchAtStartup,
     gatewayAutoStart,
@@ -77,6 +76,10 @@ export function Settings() {
     setDevModeUnlocked,
     telemetryEnabled,
     setTelemetryEnabled,
+    reasoningVisibility,
+    setReasoningVisibility,
+    preferredChannel,
+    setPreferredChannel,
   } = useSettingsStore();
 
   const { status: gatewayStatus, restart: restartGateway } = useGatewayStore();
@@ -525,21 +528,6 @@ export function Settings() {
                   </Button>
                 </div>
               </div>
-              <div className="space-y-3">
-                <Label className="text-sm font-medium text-foreground/80">{t('appearance.language')}</Label>
-                <div className="flex flex-wrap gap-2">
-                  {SUPPORTED_LANGUAGES.map((lang) => (
-                    <Button
-                      key={lang.code}
-                      variant={language === lang.code ? 'secondary' : 'outline'}
-                      className={cn("rounded-full px-5 h-10 border-black/10 dark:border-white/10", language === lang.code ? "bg-black/5 dark:bg-white/10 text-foreground" : "bg-transparent text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5")}
-                      onClick={() => setLanguage(lang.code)}
-                    >
-                      {lang.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="text-sm font-medium text-foreground/80">{t('appearance.launchAtStartup')}</Label>
@@ -660,6 +648,103 @@ export function Settings() {
             </div>
           </div>
 
+          <Separator className="bg-black/5 dark:bg-white/5" />
+
+          <MicrosoftGraphSection />
+
+          <Separator className="bg-black/5 dark:bg-white/5" />
+
+          <AzureSpeechSection />
+
+          <Separator className="bg-black/5 dark:bg-white/5" />
+
+          {/* Chat behaviour */}
+          <div data-testid="settings-chat-behaviour-section">
+            <h2 className="text-3xl font-serif text-foreground mb-2 font-normal tracking-tight">
+              Chat behaviour
+            </h2>
+            <p className="text-meta text-muted-foreground mb-6 max-w-prose">
+              Tune how the assistant presents itself in chat. These settings
+              don't change what the assistant can do — only what you see.
+            </p>
+
+            <div className="space-y-6">
+              <div className="space-y-3" data-testid="settings-preferred-channel">
+                <Label className="text-sm font-medium text-foreground/80">
+                  Where the assistant runs
+                </Label>
+                <p className="text-meta text-muted-foreground">
+                  Choose whether the assistant runs on this device (works
+                  offline, no usage charges) or online (faster, larger model,
+                  needs internet). If your pick is unavailable when you send,
+                  the chat will quietly fall back to the other one.
+                </p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(['on-device', 'online'] as const).map((value) => (
+                    <Button
+                      key={value}
+                      variant={preferredChannel === value ? 'secondary' : 'outline'}
+                      onClick={() => setPreferredChannel(value)}
+                      className={cn(
+                        'rounded-full px-5 h-10 border-black/10 dark:border-white/10',
+                        preferredChannel === value
+                          ? 'bg-black/5 dark:bg-white/10 text-foreground'
+                          : 'bg-transparent text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5',
+                      )}
+                      data-testid={`preferred-channel-${value}`}
+                    >
+                      {value === 'on-device' ? 'On this device' : 'Online'}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-foreground/80">
+                  Show agent reasoning
+                </Label>
+                <p className="text-meta text-muted-foreground">
+                  Reasoning is the assistant's chain-of-thought before it
+                  answers. Some assistants produce visible reasoning; older
+                  ones don't.
+                </p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(['hidden', 'condensed', 'expanded', 'auto'] as const).map((value) => (
+                    <Button
+                      key={value}
+                      variant={reasoningVisibility === value ? 'secondary' : 'outline'}
+                      onClick={() => setReasoningVisibility(value)}
+                      className={cn(
+                        'rounded-full px-5 h-10 border-black/10 dark:border-white/10',
+                        reasoningVisibility === value
+                          ? 'bg-black/5 dark:bg-white/10 text-foreground'
+                          : 'bg-transparent text-muted-foreground hover:bg-black/5 dark:hover:bg-white/5',
+                      )}
+                      data-testid={`reasoning-visibility-${value}`}
+                    >
+                      {value === 'hidden'
+                        ? 'Hidden'
+                        : value === 'condensed'
+                          ? 'Condensed'
+                          : value === 'expanded'
+                            ? 'Expanded'
+                            : 'Auto'}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-meta text-muted-foreground/70 mt-2">
+                  {reasoningVisibility === 'hidden'
+                    && 'Reasoning is stripped from replies; only the answer is shown.'}
+                  {reasoningVisibility === 'condensed'
+                    && 'A small "Reasoning" chip appears with each reply; click to expand.'}
+                  {reasoningVisibility === 'expanded'
+                    && 'The assistant\'s full reasoning streams above each reply.'}
+                  {reasoningVisibility === 'auto'
+                    && 'Use the platform default (currently Condensed).'}
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Developer */}
           {devModeUnlocked && (

@@ -15,10 +15,22 @@ export async function handleGatewayRoutes(
     const status = ctx.gatewayManager.getStatus();
     const token = await getSetting('gatewayToken');
     const port = status.port || PORTS.OPENCLAW_GATEWAY;
+    let deviceToken: string | null = null;
+    try {
+      const identity = ctx.gatewayManager.getDeviceIdentity?.();
+      if (identity?.deviceId) {
+        const { readPairedDeviceToken } = await import('../../utils/paired-device-token');
+        const paired = await readPairedDeviceToken(identity.deviceId, 'operator');
+        deviceToken = paired?.token ?? null;
+      }
+    } catch {
+      // pairing data unavailable; renderer will fall back to shared token
+    }
     sendJson(res, 200, {
       wsUrl: `ws://127.0.0.1:${port}/ws`,
       token,
       port,
+      deviceToken,
     });
     return true;
   }

@@ -1407,6 +1407,79 @@ export async function setOpenClawDefaultModelWithOverride(
 }
 
 /**
+ * Patch the `compat` block on one or more model entries under a given runtime
+ * provider key in `~/.openclaw/openclaw.json`.
+ *
+ * Used after seeding a local Ollama account (Nora) so the gateway knows the
+ * model emits `<think>` blocks that should be extracted as reasoning, and that
+ * tool-calling is not supported.
+ *
+ * Idempotent: only writes when at least one compat field actually changes.
+ * Silently no-ops when the provider entry or matching model is missing — this
+ * lets callers schedule the patch without first having to await the writer
+ * that created the entry.
+ *
+ * @param runtimeProviderKey  The key under `models.providers` (e.g. "ollama-ollamalo").
+ * @param modelIdMatcher      Either a string (exact model id) or a predicate.
+ * @param compat              Compat overrides to merge into each matching model.
+ */
+export async function patchProviderModelCompat(
+  runtimeProviderKey: string,
+  modelIdMatcher: string | ((modelId: string) => boolean),
+  compat: Record<string, unknown>,
+): Promise<void> {
+  const matches = typeof modelIdMatcher === 'function'
+    ? modelIdMatcher
+    : (id: string): boolean => id === modelIdMatcher;
+
+  return withConfigLock(async () => {
+    const config = await readOpenClawJson();
+    const models = isPlainRecord(config.models) ? config.models as Record<string, unknown> : null;
+    const providers = models && isPlainRecord(models.providers)
+      ? models.providers as Record<string, unknown>
+      : null;
+    const providerEntry = providers && isPlainRecord(providers[runtimeProviderKey])
+      ? providers[runtimeProviderKey] as Record<string, unknown>
+      : null;
+    if (!providerEntry) return;
+
+    const modelEntries = Array.isArray(providerEntry.models)
+      ? providerEntry.models as Array<Record<string, unknown>>
+      : null;
+    if (!modelEntries) return;
+
+    let modified = false;
+    for (const model of modelEntries) {
+      const id = typeof model.id === 'string' ? model.id : '';
+      if (!id || !matches(id)) continue;
+
+      const existingCompat = isPlainRecord(model.compat)
+        ? model.compat as Record<string, unknown>
+        : {};
+      let entryModified = false;
+      const nextCompat: Record<string, unknown> = { ...existingCompat };
+      for (const [key, value] of Object.entries(compat)) {
+        if (existingCompat[key] !== value) {
+          nextCompat[key] = value;
+          entryModified = true;
+        }
+      }
+      if (entryModified) {
+        model.compat = nextCompat;
+        modified = true;
+      }
+    }
+
+    if (!modified) return;
+
+    await writeOpenClawJson(config);
+    console.log(
+      `Patched compat for provider "${runtimeProviderKey}" model entries (${Object.keys(compat).join(', ')})`,
+    );
+  });
+}
+
+/**
  * Get a set of all active provider IDs configured in openclaw.json.
  * Reads the file ONCE and extracts both models.providers and plugins.entries.
  */
@@ -1741,11 +1814,193 @@ export async function batchSyncConfigFields(token: string): Promise<void> {
       modified = true;
     }
 
+    // ── LLM idle timeout (CPU-only laptops need >>120s for cold prefill) ──
+    // Pilot hardware (Intel Iris Xe, no GPU) prefills 7.5K-token contexts at
+    // ~13 tok/s, which puts hermes3:8b cold-start past the 120s default.
+    // Raise to 600s so first-prompt-after-unload completes; warm follow-ups
+    // are sub-3s so this only kicks in on the cold path.
+    const agents = (
+      config.agents && typeof config.agents === 'object'
+        ? { ...(config.agents as Record<string, unknown>) }
+        : {}
+    ) as Record<string, unknown>;
+    const agentDefaults = (
+      agents.defaults && typeof agents.defaults === 'object'
+        ? { ...(agents.defaults as Record<string, unknown>) }
+        : {}
+    ) as Record<string, unknown>;
+    const llmDefaults = (
+      agentDefaults.llm && typeof agentDefaults.llm === 'object'
+        ? { ...(agentDefaults.llm as Record<string, unknown>) }
+        : {}
+    ) as Record<string, unknown>;
+    if (llmDefaults.idleTimeoutSeconds === undefined) {
+      llmDefaults.idleTimeoutSeconds = 600;
+      agentDefaults.llm = llmDefaults;
+      agents.defaults = agentDefaults;
+      config.agents = agents;
+      modified = true;
+    }
+
+    // ── Channel allowlist: WhatsApp only for the principals' pilot ──
+    // The bundled gateway loads ~25 channel extensions (telegram, msteams,
+    // signal, etc.). For the Ministry of Education deployment, only
+    // WhatsApp is in scope. We mark the rest as disabled so the gateway
+    // does not attempt to start them at boot.
+    if (disableNonWhatsAppChannels(config)) {
+      modified = true;
+    }
+
+    // ── ClawX-bundled plugin paths ──
+    // Our three openclaw plugins (microsoft-graph, whisper-asr,
+    // moe-principal-assistant) live in `<repo>/extensions/<name>/` and need to
+    // be registered in `plugins.load.paths` for the gateway to discover them.
+    // Skip silently when the directory does not exist (packaged builds may
+    // place these elsewhere or omit them entirely).
+    if (registerClawXBundledPluginPaths(config)) {
+      modified = true;
+    }
+
     if (modified) {
       await writeOpenClawJson(config);
       console.log('Synced gateway token, browser config, and session idle to openclaw.json');
     }
   });
+}
+
+/**
+ * Discover ClawX-bundled openclaw plugins under `<repo>/extensions/` and
+ * register their absolute paths in `plugins.load.paths`. Returns true if the
+ * config was modified.
+ *
+ * Idempotent: existing entries are preserved; only missing paths are added.
+ * The sanitizer's bundled-path detector deliberately does not match this
+ * location, so entries persist across restarts.
+ */
+function registerClawXBundledPluginPaths(config: Record<string, unknown>): boolean {
+  const candidates = [
+    'microsoft-graph',
+    'moe-principal-assistant',
+  ];
+  const appPath = (() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const electron = require('electron') as typeof import('electron');
+      return electron.app?.getAppPath?.() ?? process.cwd();
+    } catch {
+      return process.cwd();
+    }
+  })();
+  const wantedPaths: string[] = [];
+  for (const name of candidates) {
+    const dir = join(appPath, 'extensions', name);
+    const manifest = join(dir, 'openclaw.plugin.json');
+    if (existsSync(manifest)) wantedPaths.push(dir);
+  }
+  if (wantedPaths.length === 0) return false;
+
+  const plugins = (
+    config.plugins && typeof config.plugins === 'object' && !Array.isArray(config.plugins)
+      ? { ...(config.plugins as Record<string, unknown>) }
+      : {}
+  ) as Record<string, unknown>;
+  const load = (
+    plugins.load && typeof plugins.load === 'object' && !Array.isArray(plugins.load)
+      ? { ...(plugins.load as Record<string, unknown>) }
+      : {}
+  ) as Record<string, unknown>;
+  const existing = Array.isArray(load.paths)
+    ? (load.paths as unknown[]).filter((v): v is string => typeof v === 'string')
+    : [];
+  const existingSet = new Set(existing);
+  const merged = [...existing];
+  let added = false;
+  for (const p of wantedPaths) {
+    if (!existingSet.has(p)) {
+      merged.push(p);
+      existingSet.add(p);
+      added = true;
+    }
+  }
+  if (!added) return false;
+  load.paths = merged;
+  plugins.load = load;
+  config.plugins = plugins;
+  return true;
+}
+
+/**
+ * Mark every bundled channel plugin except WhatsApp (and a handful of always-on
+ * runtime plugins) as `enabled: false`. This prevents the gateway from
+ * starting telegram/msteams/signal/etc. at boot for the principals' pilot.
+ *
+ * Returns true if the config was modified. Idempotent: existing `enabled: false`
+ * entries are left as-is; entries that don't already exist are created.
+ */
+function disableNonWhatsAppChannels(config: Record<string, unknown>): boolean {
+  // Channel-protocol plugins shipped by the bundled openclaw runtime that
+  // the principals' pilot does not want active. `voice-call` is included
+  // (PSTN — out of scope per user). Always-on infrastructure plugins
+  // (browser, device-pair, memory-*, speech-core) are NOT in this list and
+  // remain enabled by default.
+  const channelsToDisable = [
+    'bluebubbles',
+    'discord',
+    'feishu',
+    'googlechat',
+    'imessage',
+    'irc',
+    'line',
+    'matrix',
+    'mattermost',
+    'msteams',
+    'nextcloud-talk',
+    'nostr',
+    'phone-control',
+    'qqbot',
+    'signal',
+    'slack',
+    'synology-chat',
+    'telegram',
+    'tlon',
+    'twitch',
+    'voice-call',
+    'webhooks',
+    'wecom',
+    'wechat',
+    'xiaomi',
+    'zalo',
+    'zalouser',
+  ];
+
+  const plugins = (
+    config.plugins && typeof config.plugins === 'object' && !Array.isArray(config.plugins)
+      ? { ...(config.plugins as Record<string, unknown>) }
+      : {}
+  ) as Record<string, unknown>;
+  const entries = (
+    plugins.entries && typeof plugins.entries === 'object' && !Array.isArray(plugins.entries)
+      ? { ...(plugins.entries as Record<string, unknown>) }
+      : {}
+  ) as Record<string, unknown>;
+
+  let modified = false;
+  for (const id of channelsToDisable) {
+    const existing = entries[id];
+    if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+      const obj = existing as Record<string, unknown>;
+      if (obj.enabled === false) continue;
+      entries[id] = { ...obj, enabled: false };
+      modified = true;
+    } else {
+      entries[id] = { enabled: false };
+      modified = true;
+    }
+  }
+  if (!modified) return false;
+  plugins.entries = entries;
+  config.plugins = plugins;
+  return true;
 }
 
 /**

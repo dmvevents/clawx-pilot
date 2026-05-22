@@ -17,6 +17,13 @@ interface ExecutionGraphCardProps {
    */
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
+  /**
+   * Reasoning visibility policy resolved from Settings + per-message override.
+   *   - 'hidden'   → render nothing
+   *   - 'condensed'→ collapsed chip the user can click to expand (default)
+   *   - 'expanded' → start expanded; user can still collapse
+   */
+  reasoningVisibility?: 'hidden' | 'condensed' | 'expanded';
 }
 
 const TOOL_ROW_EXTRA_INDENT_PX = 8;
@@ -173,18 +180,31 @@ export function ExecutionGraphCard({
   suppressThinking = false,
   expanded: controlledExpanded,
   onExpandedChange,
+  reasoningVisibility = 'condensed',
 }: ExecutionGraphCardProps) {
   const { t } = useTranslation('chat');
+
+  // Reasoning visibility policy.
+  //   hidden    → render nothing; the user has opted out of seeing reasoning.
+  //   expanded  → default to expanded on each run; user can still collapse.
+  //   condensed → existing behaviour (expand-while-active, collapse-when-done).
+  // Hooks must run on every render (rules-of-hooks); we compute the "should
+  // render" decision BELOW the hook calls and short-circuit at the JSX layer.
+  const defaultExpanded = reasoningVisibility === 'expanded' ? true : active;
 
   // Active runs should stay expanded by default so the user can follow the
   // execution live. Once the run completes, the default state returns to
   // collapsed. Explicit user toggles remain controlled by the parent override.
-  const [uncontrolledExpanded, setUncontrolledExpanded] = useState(active);
+  const [uncontrolledExpanded, setUncontrolledExpanded] = useState(defaultExpanded);
   const [prevActive, setPrevActive] = useState(active);
+
+  if (reasoningVisibility === 'hidden') {
+    return null;
+  }
   if (prevActive !== active) {
     setPrevActive(active);
-    if (controlledExpanded == null && uncontrolledExpanded !== active) {
-      setUncontrolledExpanded(active);
+    if (controlledExpanded == null && uncontrolledExpanded !== defaultExpanded) {
+      setUncontrolledExpanded(defaultExpanded);
     }
   }
 

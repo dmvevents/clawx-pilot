@@ -1,9 +1,27 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { getAllSkillConfigs, updateSkillConfig } from '../../utils/skill-config';
-import { collectQuickAccessSkills, filterEnabledQuickAccessSkills, type QuickAccessRuntimeSkillStatus } from '../../utils/skill-quick-access';
+import { collectQuickAccessSkills, filterEnabledQuickAccessSkills, type QuickAccessRuntimeSkillStatus, type QuickAccessSkill } from '../../utils/skill-quick-access';
 import type { ClawHubInstallParams, ClawHubSearchParams, ClawHubUninstallParams } from '../../gateway/clawhub';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
+import { FILTER_SKILLS_TO_ALLOWLIST, PRINCIPAL_SKILL_ALLOWLIST } from '../../../shared/feature-flags';
+
+/**
+ * Pilot-mode filter for the chat composer's slash-command picker.
+ *
+ * The Skills page already filters to PRINCIPAL_SKILL_ALLOWLIST in
+ * src/stores/skills.ts, but the composer reads from this REST endpoint
+ * directly (no Zustand store), so we apply the same filter here.
+ *
+ * Hidden skills remain installed and reachable by the agent through the
+ * gateway RPC (skills.run / skills.status) — only the picker UI surface is
+ * narrowed. To restore the full list, set CLAWX_FILTER_SKILLS=false or
+ * CLAWX_PILOT_MODE=false at build time, or edit shared/feature-flags.ts.
+ */
+function applyPrincipalAllowlist(skills: QuickAccessSkill[]): QuickAccessSkill[] {
+  if (!FILTER_SKILLS_TO_ALLOWLIST) return skills;
+  return skills.filter((skill) => PRINCIPAL_SKILL_ALLOWLIST.has(skill.name));
+}
 
 export async function handleSkillRoutes(
   req: IncomingMessage,
@@ -55,7 +73,7 @@ export async function handleSkillRoutes(
       }
       sendJson(res, 200, {
         success: true,
-        skills: filterEnabledQuickAccessSkills(scannedSkills, runtimeSkills, configs),
+        skills: applyPrincipalAllowlist(filterEnabledQuickAccessSkills(scannedSkills, runtimeSkills, configs)),
       });
     } catch (error) {
       sendJson(res, 500, { success: false, error: error instanceof Error ? error.message : String(error) });

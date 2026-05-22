@@ -49,6 +49,7 @@ vi.mock('react-i18next', () => ({
       return key;
     },
   }),
+  initReactI18next: { type: '3rdParty', init: () => undefined },
 }));
 
 vi.mock('@/hooks/use-stick-to-bottom-instant', () => ({

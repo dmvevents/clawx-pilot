@@ -11,6 +11,8 @@ import { buildBaselineRunKey, getBaseline } from '@/stores/baseline-cache';
 import { useGatewayStore } from '@/stores/gateway';
 import { useAgentsStore } from '@/stores/agents';
 import { useArtifactPanel } from '@/stores/artifact-panel';
+import { useSettingsStore } from '@/stores/settings';
+import { DEFAULT_REASONING_VISIBILITY, type ReasoningVisibility } from '../../../shared/feature-flags';
 import { hostApiFetch } from '@/lib/host-api';
 import { invokeIpc } from '@/lib/api-client';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
@@ -18,6 +20,7 @@ import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { ExecutionGraphCard } from './ExecutionGraphCard';
 import { ChatToolbar } from './ChatToolbar';
+import { LatencyTimelinePanel } from '@/components/chat/LatencyTimelinePanel';
 import { extractImages, extractText, extractThinking, extractToolUse, stripProcessMessagePrefix } from './message-utils';
 import { deriveTaskSteps, findReplyMessageIndex, parseSubagentCompletionInfo, type TaskStep } from './task-visualization';
 import { useTranslation } from 'react-i18next';
@@ -101,6 +104,14 @@ export function Chat() {
   const { t } = useTranslation('chat');
   const gatewayStatus = useGatewayStore((s) => s.status);
   const isGatewayRunning = gatewayStatus.state === 'running';
+
+  // User-level reasoning visibility preference. 'auto' falls through to the
+  // build-time default (`condensed` for the pilot). Per-message override
+  // happens in the composer via BrainButton; per-session override flows
+  // through chat-store thinkingLevel; this is the user-default rung.
+  const userReasoningVisibility = useSettingsStore((s) => s.reasoningVisibility);
+  const resolvedReasoningVisibility: ReasoningVisibility =
+    userReasoningVisibility === 'auto' ? DEFAULT_REASONING_VISIBILITY : userReasoningVisibility;
 
   const messages = useChatStore((s) => s.messages);
   const currentSessionKey = useChatStore((s) => s.currentSessionKey);
@@ -775,6 +786,7 @@ export function Chat() {
                                 onExpandedChange={(next) =>
                                   setGraphExpandedOverrides((prev) => ({ ...prev, [runKey]: next }))
                                 }
+                                reasoningVisibility={resolvedReasoningVisibility}
                               />
                               {generatedFiles.length > 0 && (
                                 <GeneratedFilesPanel
@@ -923,6 +935,9 @@ export function Chat() {
           </div>
         </div>
       )}
+
+      {/* Dev-mode latency timeline (hidden when devMode is locked) */}
+      <LatencyTimelinePanel />
     </div>
   );
 }

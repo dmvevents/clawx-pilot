@@ -11,7 +11,7 @@
         "devConsole": "Developer Console",
         "models": "Models",
         "deleteSessionConfirm": "Delete \"{{label}}\"?",
-        "openClawPage": "OpenClaw Page",
+        "openClawPage": "Service Page",
         "openClawDreams": "Dreams",
         "renameSession": "Rename",
         "deleteSession": "Delete",
@@ -59,7 +59,7 @@
     },
     "gateway": {
         "notRunning": "Gateway Not Running",
-        "notRunningDesc": "The OpenClaw Gateway needs to be running to use this feature. It will start automatically, or you can start it from Settings.",
+        "notRunningDesc": "The Gateway needs to be running to use this feature. It will start automatically, or you can start it from Settings.",
         "warning": "Gateway is not running."
     }
 }

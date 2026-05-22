@@ -10,9 +10,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useChatStore } from '@/stores/chat';
 import { useAgentsStore } from '@/stores/agents';
 import { useArtifactPanel } from '@/stores/artifact-panel';
+import { useSettingsStore } from '@/stores/settings';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { WORKSPACE_BROWSER_ENABLED } from '@/components/file-preview/workspace-browser-config';
+import { ConnectionStatus } from '@/components/chat/ConnectionStatus';
 
 export function ChatToolbar() {
   const refresh = useChatStore((s) => s.refresh);
@@ -24,20 +26,30 @@ export function ChatToolbar() {
   const panelTab = useArtifactPanel((s) => s.tab);
   const closePanel = useArtifactPanel((s) => s.close);
   const { t } = useTranslation('chat');
+  const devModeUnlocked = useSettingsStore((s) => s.devModeUnlocked);
   const currentAgent = useMemo(
     () => (agents ?? []).find((agent) => agent.id === currentAgentId) ?? null,
     [agents, currentAgentId],
   );
   const currentAgentName = currentAgent?.name ?? currentAgentId;
+  // Dev-mode tooltip surfaces the underlying model name; principal-facing
+  // pill stays anonymised — see provider-display.ts.
+  const agentTooltip = devModeUnlocked && currentAgent?.modelRef
+    ? `${currentAgentName} · ${currentAgent.modelRef}`
+    : undefined;
 
   const browserActive = WORKSPACE_BROWSER_ENABLED && panelOpen && panelTab === 'browser';
 
   return (
     <div className="flex items-center gap-2">
-      <div className="hidden sm:flex items-center gap-1.5 rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-foreground/80 dark:border-white/10 dark:bg-white/5">
+      <div
+        className="hidden sm:flex items-center gap-1.5 rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-foreground/80 dark:border-white/10 dark:bg-white/5"
+        title={agentTooltip}
+      >
         <Bot className="h-3.5 w-3.5 text-primary" />
         <span>{t('toolbar.currentAgent', { agent: currentAgentName })}</span>
       </div>
+      <ConnectionStatus />
       {WORKSPACE_BROWSER_ENABLED && (
         <Tooltip>
           <TooltipTrigger asChild>

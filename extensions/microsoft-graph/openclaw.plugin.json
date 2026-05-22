@@ -1,0 +1,59 @@
+{
+  "id": "microsoft-graph",
+  "name": "Microsoft Graph (Outlook)",
+  "description": "Read, draft, and send Outlook mail and read calendar via Microsoft Graph using OAuth2 device-code or auth-code-PKCE flow against the host's Entra ID tenant.",
+  "enabledByDefault": false,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "tenantId": {
+        "type": "string",
+        "description": "Entra ID tenant ID or domain (e.g. moe.gov.tt). Required."
+      },
+      "clientId": {
+        "type": "string",
+        "description": "Application (client) ID from the Entra ID app registration. Required."
+      },
+      "redirectUri": {
+        "type": "string",
+        "description": "Redirect URI registered in Entra (auth-code flow only). Default: http://localhost:53682/callback",
+        "default": "http://localhost:53682/callback"
+      },
+      "authFlow": {
+        "type": "string",
+        "enum": ["device-code", "auth-code-pkce"],
+        "default": "auth-code-pkce",
+        "description": "Sign-in flow. device-code is best for headless/server hosts; auth-code-pkce for the desktop app."
+      },
+      "scopes": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [
+          "offline_access",
+          "User.Read",
+          "Mail.Read",
+          "Mail.ReadWrite",
+          "Mail.Send",
+          "Calendars.Read"
+        ],
+        "description": "Delegated Graph scopes requested at sign-in. Tenant admin must consent to scopes touching tenant data."
+      }
+    },
+    "required": ["tenantId", "clientId"]
+  },
+  "uiHints": {
+    "tenantId": {
+      "label": "Entra Tenant",
+      "help": "GUID or verified domain (e.g. moe.gov.tt). Provided by the tenant admin."
+    },
+    "clientId": {
+      "label": "App (client) ID",
+      "help": "From the App registration in the Entra admin portal."
+    },
+    "redirectUri": {
+      "label": "Redirect URI",
+      "help": "Must exactly match a redirect URI on the app registration."
+    }
+  }
+}

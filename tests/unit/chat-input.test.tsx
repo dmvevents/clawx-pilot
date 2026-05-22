@@ -104,6 +104,7 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: translate,
   }),
+  initReactI18next: { type: '3rdParty', init: () => undefined },
 }));
 
 function renderChatInput(onSend = vi.fn()) {

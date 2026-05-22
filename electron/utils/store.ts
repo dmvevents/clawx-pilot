@@ -56,6 +56,16 @@ export interface AppSettings {
   selectedBundles: string[];
   enabledSkills: string[];
   disabledSkills: string[];
+
+  // Reasoning display
+  // 'auto' = inherit from DEFAULT_REASONING_VISIBILITY (feature flag).
+  // Other values override the global default for this user.
+  reasoningVisibility: 'auto' | 'hidden' | 'condensed' | 'expanded';
+
+  // Preferred chat channel — Online (cloud) vs On this device (local Ollama).
+  // Maps to a concrete provider account at send time via pickAccountForChannel.
+  // Default 'on-device' for the principals' pilot (Hermes 3 8B).
+  preferredChannel: 'online' | 'on-device';
 }
 
 /**
@@ -104,9 +114,15 @@ function createDefaultSettings(): AppSettings {
     devModeUnlocked: false,
 
     // Presets
-    selectedBundles: ['productivity', 'developer'],
+    selectedBundles: ['principal'],
     enabledSkills: [],
     disabledSkills: [],
+
+    // Reasoning display — auto inherits from feature-flag default.
+    reasoningVisibility: 'auto',
+
+    // Preferred chat channel — defaults to local for the pilot.
+    preferredChannel: 'on-device',
   };
 }
 

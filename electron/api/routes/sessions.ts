@@ -345,6 +345,93 @@ export async function handleSessionRoutes(
     return true;
   }
 
+  // GET /api/sessions/trajectory — read the OpenClaw runtime "flight recorder"
+  // for a given session. Returns parsed events (session.started,
+  // context.compiled, prompt.submitted, model.completed, trace.metadata,
+  // trace.artifacts, session.ended) with timestamps so the latency-timeline
+  // panel can show where each turn spent its wall-clock time.
+  if (url.pathname === '/api/sessions/trajectory' && req.method === 'GET') {
+    try {
+      const agentId = url.searchParams.get('agentId')?.trim() || 'main';
+      const sessionId = url.searchParams.get('sessionId')?.trim() || '';
+      const limitRaw = Number(url.searchParams.get('limit') ?? '500');
+      const limit = Number.isFinite(limitRaw) && limitRaw > 0
+        ? Math.min(Math.floor(limitRaw), 5000)
+        : 500;
+
+      if (!sessionId) {
+        sendJson(res, 400, { success: false, error: 'sessionId is required' });
+        return true;
+      }
+      if (!SAFE_SESSION_SEGMENT.test(agentId) || !SAFE_SESSION_SEGMENT.test(sessionId)) {
+        sendJson(res, 400, { success: false, error: 'Invalid trajectory identifier' });
+        return true;
+      }
+
+      const sessionsDir = join(getOpenClawConfigDir(), 'agents', agentId, 'sessions');
+      const fsP = await import('node:fs/promises');
+      const path = await import('node:path');
+
+      // Prefer the pointer (OPENCLAW_TRAJECTORY_DIR override) when present,
+      // otherwise fall back to the in-sessions sidecar.
+      let trajectoryPath = join(sessionsDir, `${sessionId}.trajectory.jsonl`);
+      try {
+        const pointerRaw = await fsP.readFile(
+          join(sessionsDir, `${sessionId}.trajectory-path.json`),
+          'utf8',
+        );
+        const pointer = JSON.parse(pointerRaw) as { traceSchema?: string; runtimeFile?: string };
+        if (
+          pointer?.traceSchema === 'openclaw-trajectory-pointer'
+          && typeof pointer.runtimeFile === 'string'
+          && pointer.runtimeFile.endsWith('.jsonl')
+          && (path.isAbsolute(pointer.runtimeFile) || path.win32.isAbsolute(pointer.runtimeFile))
+        ) {
+          trajectoryPath = pointer.runtimeFile;
+        }
+      } catch {
+        // No pointer; use the default path.
+      }
+
+      let raw: string;
+      try {
+        raw = await fsP.readFile(trajectoryPath, 'utf8');
+      } catch (error) {
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+          sendJson(res, 404, { success: false, error: 'Trajectory not found' });
+          return true;
+        }
+        throw error;
+      }
+
+      const lines = raw.split(/\r?\n/).filter(Boolean);
+      const tail = lines.slice(-limit);
+      const events: Array<Record<string, unknown>> = [];
+      for (const line of tail) {
+        try {
+          const parsed = JSON.parse(line);
+          if (parsed && typeof parsed === 'object') {
+            events.push(parsed as Record<string, unknown>);
+          }
+        } catch {
+          // Skip malformed lines silently — flight recorder is append-only and
+          // a partial write at the tail is normal during a live turn.
+        }
+      }
+
+      sendJson(res, 200, {
+        success: true,
+        events,
+        truncated: lines.length > tail.length,
+        totalLines: lines.length,
+      });
+    } catch (error) {
+      logger.warn(`[api/sessions/trajectory] Failed: ${String(error)}`);
+      sendJson(res, 500, { success: false, error: 'Failed to load trajectory' });
+    }
+    return true;
+  }
+
   // POST /api/sessions/delete — HTTP mirror of the `session:delete` IPC.
   // Both surfaces share electron/utils/session-files.ts so they sweep the
   // same set of artefacts: the live transcript, legacy `.deleted.jsonl`,

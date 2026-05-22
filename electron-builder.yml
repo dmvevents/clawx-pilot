@@ -1,6 +1,6 @@
 appId: app.clawx.desktop
-productName: ClawX
-copyright: Copyright © 2026 ClawX
+productName: Ministry of Education
+copyright: Copyright © 2026 Ministry of Education, Trinidad & Tobago
 compression: maximum
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 

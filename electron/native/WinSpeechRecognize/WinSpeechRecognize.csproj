@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ClawX Windows-native ASR helper.
+
+    Targets net8.0-windows10.0.19041.0 so we get C# WinRT projections for the
+    Windows.Media.SpeechRecognition namespace via the Microsoft.Windows.SDK.NET
+    metadata that ships with the .NET 8 Windows targeting pack.
+
+    Build (from this folder, on a Windows host with the .NET 8 SDK):
+
+        dotnet publish -c Release -r win-x64 --self-contained false \
+                       -o ../../../resources/bin/win32-x64
+
+    Output: WinSpeechRecognize.exe lands at
+            resources/bin/win32-x64/WinSpeechRecognize.exe
+            which is what asr-native-windows.ts looks for.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <RootNamespace>ClawX.WinSpeechRecognize</RootNamespace>
+    <AssemblyName>WinSpeechRecognize</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!-- We build a console executable; no WinForms / WPF / COM hosting. -->
+    <UseWindowsForms>false</UseWindowsForms>
+    <UseWPF>false</UseWPF>
+    <EnableComHosting>false</EnableComHosting>
+
+    <!-- Single-platform tool; suppress the multi-RID build warning. -->
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+
+    <!--
+      Keep the binary tiny by relying on the user's installed .NET 8 runtime.
+      Set SelfContained=true at publish time (or flip below) if we decide to
+      ship the runtime alongside the helper. See README.md for the tradeoff.
+    -->
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Microsoft.Windows.SDK.Contracts is the fallback projection package for
+      pre-net5 projects. We pin it for compatibility but the
+      net8.0-windows10.0.19041.0 TFM already brings in CsWinRT projections;
+      keeping this reference makes the build resilient on older SDKs.
+    -->
+    <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.19041.1" />
+  </ItemGroup>
+
+</Project>

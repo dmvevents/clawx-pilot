@@ -51,6 +51,20 @@ import { whatsAppLoginManager } from '../utils/whatsapp-login';
 import { getProviderConfig } from '../utils/provider-registry';
 import { deviceOAuthManager, OAuthProviderType } from '../utils/device-oauth';
 import { browserOAuthManager, type BrowserOAuthProviderType } from '../utils/browser-oauth';
+import {
+  registerMicrosoftGraphHandlers,
+  setMicrosoftGraphWindow,
+} from './microsoft-graph-ipc';
+import {
+  registerMoeFormFillerHandlers,
+  setMoeFormFillerWindow,
+} from './moe-form-filler-ipc';
+import { registerAsrIpcHandlers } from './asr-ipc';
+import {
+  registerAzureSpeechHandlers,
+  setAzureSpeechWindow,
+} from './asr-azure-ipc';
+import { registerMoeSeedHandlers } from './moe-seed';
 import { applyProxySettings } from './proxy';
 import { syncLaunchAtStartupSettingFromStore } from './launch-at-startup';
 import { proxyAwareFetch } from '../utils/proxy-fetch';
@@ -149,6 +163,26 @@ export function registerIpcHandlers(
 
   // File preview handlers (sandboxed read/write/list for inline viewer)
   registerFilePreviewHandlers();
+
+  // Microsoft Graph (Outlook) capability
+  setMicrosoftGraphWindow(mainWindow);
+  registerMicrosoftGraphHandlers();
+
+  // MoE form-filler (Microsoft Forms automation via OpenClaw browser plugin)
+  setMoeFormFillerWindow(mainWindow);
+  registerMoeFormFillerHandlers();
+
+  // Azure Speech (optional cloud fallback ASR). Must be registered before
+  // asr-ipc so the Azure streaming hook is available when asr:transcribe-stream
+  // is invoked.
+  setAzureSpeechWindow(mainWindow);
+  registerAzureSpeechHandlers();
+
+  // Whisper ASR (renderer mic → main ffmpeg → whisper.cpp via openclaw tool)
+  registerAsrIpcHandlers();
+
+  // MoE seed (default cron + form URLs)
+  registerMoeSeedHandlers(gatewayManager);
 }
 
 function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {

@@ -12,6 +12,7 @@ import { hostApiFetch } from '@/lib/host-api';
 import { trackUiEvent } from '@/lib/telemetry';
 import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { FeedbackState } from '@/components/common/FeedbackState';
+import { HIDE_COST_IN_UI } from '../../../shared/feature-flags';
 import {
   filterUsageHistoryByWindow,
   groupUsageHistory,
@@ -445,7 +446,13 @@ export function Models() {
                                 : t('dashboard:recentTokenHistory.usageParseError')}
                             </span>
                           )}
-                          {typeof entry.costUsd === 'number' && Number.isFinite(entry.costUsd) && (
+                          {/*
+                            HIDE_COST_IN_UI gates the per-request USD figure for the
+                            principals' pilot build. Backend still computes & logs cost
+                            (electron/utils/token-usage*.ts) for the upcoming MoE metrics
+                            pipeline. Dev-mode unlocks the display for internal debugging.
+                          */}
+                          {(!HIDE_COST_IN_UI || devModeUnlocked) && typeof entry.costUsd === 'number' && Number.isFinite(entry.costUsd) && (
                             <span className="flex items-center gap-1.5 ml-auto text-foreground/80 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-md">{t('dashboard:recentTokenHistory.cost', { amount: entry.costUsd.toFixed(4) })}</span>
                           )}
                           {devModeUnlocked && entry.content && (

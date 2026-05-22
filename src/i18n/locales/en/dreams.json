@@ -1,8 +1,8 @@
 {
     "title": "Dreams",
-    "subtitle": "Review OpenClaw memory signals, diary entries, and dreaming maintenance from ClawX.",
+    "subtitle": "Review memory signals, diary entries, and dreaming maintenance from Ministry of Education.",
     "openFullUi": "Open Full Dreams",
-    "gatewayNotReady": "OpenClaw Gateway is still starting or disconnected. Dreams data will load once the gateway is reachable.",
+    "gatewayNotReady": "The gateway is still starting or disconnected. Dreams data will load once the gateway is reachable.",
     "metrics": {
         "shortTerm": "Short-term entries",
         "grounded": "Grounded signals",
@@ -66,7 +66,7 @@
         "noSnippet": "No snippet available."
     },
     "errors": {
-        "openFullUi": "Unable to open the full OpenClaw Dreams UI.",
+        "openFullUi": "Unable to open the full Dreams UI.",
         "configHashMissing": "Unable to update Dreams because the config base hash is unavailable.",
         "memoryInitializing": "Dreams memory is still initializing. Please retry after Gateway finishes startup."
     }

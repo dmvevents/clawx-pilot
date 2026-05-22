@@ -243,6 +243,11 @@ export class GatewayManager extends EventEmitter {
     });
   }
 
+  /** Read-only accessor for the renderer-side gateway-info route. */
+  public getDeviceIdentity(): DeviceIdentity | null {
+    return this.deviceIdentity;
+  }
+
   private async initDeviceIdentity(): Promise<void> {
     if (this.deviceIdentity) return; // already loaded
     try {
@@ -1098,6 +1103,16 @@ export class GatewayManager extends EventEmitter {
       platform: process.platform,
       pendingRequests: this.pendingRequests,
       getToken: async () => await import('../utils/store').then(({ getSetting }) => getSetting('gatewayToken')),
+      getDeviceToken: async () => {
+        if (!this.deviceIdentity) return null;
+        try {
+          const { readPairedDeviceToken } = await import('../utils/paired-device-token');
+          const paired = await readPairedDeviceToken(this.deviceIdentity.deviceId, 'operator');
+          return paired?.token ?? null;
+        } catch {
+          return null;
+        }
+      },
       onHandshakeComplete: (ws) => {
         this.ws = ws;
         ws.on('pong', () => {

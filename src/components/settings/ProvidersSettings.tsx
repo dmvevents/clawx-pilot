@@ -47,6 +47,7 @@ import {
   isHostApiRouteMissing,
   type ProviderListItem,
 } from '@/lib/provider-accounts';
+import { classifyProvider, publicLabel } from '@/lib/provider-display';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -558,7 +559,13 @@ function ProviderCard({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm">{account.label}</span>
+              {/* Principal-facing label is intentionally anonymised — see
+                  src/lib/provider-display.ts. The user-supplied account.label
+                  and underlying vendor / model identifiers are surfaced only
+                  when dev mode is unlocked. */}
+              <span className="font-semibold text-sm">
+                {devModeUnlocked ? account.label : publicLabel(classifyProvider(account))}
+              </span>
               {isDefault && (
                 <span className="flex items-center gap-1 font-mono text-2xs font-medium px-2 py-0.5 rounded-full bg-black/[0.04] dark:bg-white/[0.08] border-0 shadow-none text-foreground/70">
                   <Check className="h-3 w-3" />
@@ -567,10 +574,14 @@ function ProviderCard({
               )}
             </div>
             <div className="flex items-center gap-2 mt-0.5 text-meta text-muted-foreground">
-              <span className="capitalize">{vendor?.name || account.vendorId}</span>
+              {devModeUnlocked ? (
+                <span className="capitalize">{vendor?.name || account.vendorId}</span>
+              ) : (
+                <span>{publicLabel(classifyProvider(account))}</span>
+              )}
               <span className="w-1 h-1 rounded-full bg-black/20 dark:bg-white/20" />
               <span>{getAuthModeLabel(account.authMode, t)}</span>
-              {account.model && (
+              {devModeUnlocked && account.model && (
                 <>
                   <span className="w-1 h-1 rounded-full bg-black/20 dark:bg-white/20" />
                   <span className="truncate max-w-[200px]">{account.model}</span>
