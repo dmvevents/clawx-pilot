@@ -1,0 +1,85 @@
+/**
+ * Type contracts for the outlook-browser service.
+ *
+ * "Browser-session" Outlook integration: ClawX attaches to the principal's
+ * existing Chrome session via the bundled browser plugin (profile=user) and
+ * drives Outlook Web (https://outlook.office.com/mail/) through the DOM.
+ *
+ * This is the Phase-1 path. Phase-2 will use Microsoft Graph OAuth via
+ * extensions/microsoft-graph/, which is parked until IT returns a client_id.
+ *
+ * Hard rules baked into the type contract:
+ *  - profile is always 'user' — managed Chromium is blocked by Conditional Access.
+ *  - send_email never auto-fires; it must be paired with a confirm flag.
+ *  - No password/token is captured here. If sign-in is needed, we surface
+ *    `needs_signin` and ask the user to complete it interactively in Chrome.
+ */
+
+export type OutlookOpenStatus = 'opened' | 'needs_signin';
+
+export interface OutlookOpenResult {
+  status: OutlookOpenStatus;
+  /** URL the tab is currently parked at (mail folder or sign-in page). */
+  url: string;
+  /** Browser-plugin target id, threaded through subsequent calls. */
+  targetId?: string;
+  /** Surfaced to the agent when status === 'needs_signin'. */
+  message?: string;
+}
+
+export interface InboxMessage {
+  /** Stable-ish DOM-derived id; not a Graph id. */
+  id: string;
+  subject: string;
+  sender: string;
+  /** Short preview/snippet, ~120 chars. */
+  snippet: string;
+  /** Display string from Outlook ("9:42 AM", "Tue", "Mon 5/22"). */
+  receivedAt: string;
+  unread: boolean;
+}
+
+export interface ReadInboxResult {
+  status: 'ok' | 'needs_signin';
+  messages: InboxMessage[];
+  message?: string;
+}
+
+export interface DraftEmailArgs {
+  to: string | string[];
+  subject: string;
+  body: string;
+  cc?: string | string[];
+  bcc?: string | string[];
+}
+
+export interface DraftEmailResult {
+  status: 'drafted' | 'needs_signin';
+  /** True when the New-mail compose pane was filled and left open. */
+  draftLeftOpen: boolean;
+  /** Echo of what we filled, for the agent's "show before you send" hand-off. */
+  preview: {
+    to: string[];
+    cc: string[];
+    bcc: string[];
+    subject: string;
+    body: string;
+  };
+  message?: string;
+}
+
+export interface SendEmailArgs extends DraftEmailArgs {
+  /**
+   * Hard gate. send() refuses unless the caller explicitly sets confirm=true.
+   * The agent must show the user the draft and get a "yes, send" before
+   * passing this flag.
+   */
+  confirm: boolean;
+}
+
+export interface SendEmailResult {
+  status: 'sent' | 'refused' | 'needs_signin';
+  /** Set when status === 'refused' — explains why (typically: confirm not set). */
+  reason?: string;
+  message?: string;
+}

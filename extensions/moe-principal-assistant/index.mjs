@@ -7,12 +7,22 @@
  *   - config()        → resolved openclaw.json plugin config
  *                       (principalName, schoolName, educationDistrict, ...)
  *   - registerTool()  → host's tool-registration hook
+ *   - host.outlook?   → optional handle bound by the Electron main process
+ *                       to the OutlookBrowserManager. When present, this
+ *                       plugin exposes outlook.* tools that drive Outlook
+ *                       Web in the principal's existing Chrome session.
+ *                       Phase-1 path; the Phase-2 Graph OAuth path lives in
+ *                       extensions/microsoft-graph/ and stays parked until
+ *                       IT returns a client_id.
  *
  * The plugin does NOT submit forms. It produces:
  *   - Drafts (prose) from Markdown templates with handlebars-style slots.
  *   - Form payloads (JSON) shaped to match the live MoE Microsoft Forms
  *     fields. Submission is delegated to a browser/Graph plugin under
  *     explicit user confirmation — see README for the composition story.
+ *   - Outlook drafts (when the host wires outlook). Drafts are NEVER auto-
+ *     sent; outlook.send_email refuses unless the agent shows the draft to
+ *     the principal and re-calls with confirm=true.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -65,7 +75,15 @@ function requireNumber(name, value) {
   }
 }
 
-export function register({ config, registerTool, log = console }) {
+/**
+ * PRINCIPAL_SKILL_ALLOWLIST is enforced at the host (electron/api/routes/skills.ts
+ * + src/stores/skills.ts). Tools registered here whose names are not in the
+ * allowlist remain reachable programmatically by the agent but are hidden
+ * from the Skills page. Outlook tools are intentionally agent-callable and
+ * not exposed as user-facing skills, so they don't need to be added.
+ */
+
+export function register({ config, registerTool, log = console, host = {} }) {
   const cfg = config?.() ?? {};
   const required = ['principalName', 'schoolName', 'educationDistrict', 'schoolType'];
   const missing = required.filter((k) => !cfg[k]);
@@ -282,6 +300,80 @@ export function register({ config, registerTool, log = console }) {
       return { matches, total: matches.length, queriedAgainst: all.length };
     },
   });
+
+  // ── Outlook (browser-session) tools ─────────────────────────────────────
+  // Phase-1 path: drives Outlook Web through the bundled browser plugin in
+  // the principal's existing Chrome (profile=user). The host wires this
+  // capability by passing { outlook } on the host handle. Phase-2 (Graph
+  // OAuth) is parked in extensions/microsoft-graph/ until IT returns a
+  // client_id and stays untouched here.
+  const outlook = host?.outlook;
+  if (outlook && typeof outlook.open === 'function') {
+    registerTool({
+      name: 'outlook.open',
+      description:
+        'Open Outlook Web (https://outlook.office.com/mail/) in the principal\'s existing Chrome session. Returns { status: "opened" | "needs_signin", url, message? }. If sign-in is required, ask the principal to sign in to Outlook in the Chrome window that just opened, then call outlook.open again.',
+      handler: async () => {
+        const result = await outlook.open();
+        return result;
+      },
+    });
+
+    registerTool({
+      name: 'outlook.read_inbox',
+      description:
+        'Return the top N unread/recent messages from the principal\'s Outlook inbox by scraping Outlook Web. Args: { top?: number (default 10) }. Returns { status: "ok" | "needs_signin", messages: [{ id, subject, sender, snippet, receivedAt, unread }] }.',
+      handler: async (args = {}) => {
+        const top = typeof args.top === 'number' && args.top > 0 ? args.top : 10;
+        const result = await outlook.readInbox(top);
+        return result;
+      },
+    });
+
+    registerTool({
+      name: 'outlook.draft_email',
+      description:
+        'Compose a new email in Outlook Web and leave the draft open for the principal to review. Does NOT send. Args: { to: string | string[], subject, body, cc?, bcc? }. Returns { status, draftLeftOpen, preview }.',
+      handler: async (args = {}) => {
+        const { to, subject, body, cc, bcc } = args;
+        requireString('subject', subject);
+        if (typeof body !== 'string') {
+          throw new Error('body is required (string).');
+        }
+        if (!to || (Array.isArray(to) && to.length === 0)) {
+          throw new Error('to is required (string or non-empty array).');
+        }
+        return outlook.draftEmail({ to, subject, body, cc, bcc });
+      },
+    });
+
+    registerTool({
+      name: 'outlook.send_email',
+      description:
+        'Send an email via Outlook Web. HARD GATE: refuses unless { confirm: true } is set. The agent MUST show the draft to the principal and obtain explicit confirmation ("yes, send") before passing confirm=true. Default behaviour is to draft and stop. Args: { to, subject, body, cc?, bcc?, confirm: boolean }.',
+      handler: async (args = {}) => {
+        const { to, subject, body, cc, bcc, confirm } = args;
+        requireString('subject', subject);
+        if (typeof body !== 'string') {
+          throw new Error('body is required (string).');
+        }
+        return outlook.sendEmail({
+          to,
+          subject,
+          body,
+          cc,
+          bcc,
+          confirm: confirm === true,
+        });
+      },
+    });
+
+    log.info?.('moe-principal-assistant: outlook (browser-session) tools registered');
+  } else {
+    log.info?.(
+      'moe-principal-assistant: outlook host handle not provided — outlook.* tools skipped',
+    );
+  }
 
   log.info?.(
     `moe-principal-assistant: registered (school=${cfg.schoolName}, district=${cfg.educationDistrict})`,
