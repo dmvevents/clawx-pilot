@@ -700,7 +700,7 @@ export async function setAllAgentsModel(modelRef: string): Promise<AgentsSnapsho
     }
 
     const config = await readOpenClawConfig() as AgentConfigDocument;
-    const { agentsConfig, entries } = normalizeAgentsConfig(config);
+    const { agentsConfig, entries, syntheticMain } = normalizeAgentsConfig(config);
 
     const nextEntries = entries.map((entry) => ({
       ...entry,
@@ -712,14 +712,26 @@ export async function setAllAgentsModel(modelRef: string): Promise<AgentsSnapsho
       model: { primary: modelRef },
     };
 
-    config.agents = {
-      ...agentsConfig,
-      defaults: nextDefaults,
-      list: nextEntries,
-    };
+    // When the on-disk config has no agents.list, normalizeAgentsConfig
+    // returned a synthetic main entry so callers can reason about "the
+    // current agent". We must NOT materialize that synthetic entry back to
+    // disk: doing so converts "no list (gateway uses implicit main)" into
+    // "list with one synthetic entry", producing a smaller-than-expected
+    // file that the gateway's size-based last-good validator interprets as
+    // a partial write and rolls back. Preserve the missing list; the
+    // gateway resolves the model from agents.defaults.model.primary.
+    const nextAgents: AgentsConfig = syntheticMain
+      ? { ...agentsConfig, defaults: nextDefaults }
+      : { ...agentsConfig, defaults: nextDefaults, list: nextEntries };
+    if (syntheticMain) delete (nextAgents as { list?: unknown }).list;
+    config.agents = nextAgents;
 
     await writeOpenClawConfig(config);
-    logger.info('Pinned every agent model.primary', { modelRef, count: nextEntries.length });
+    logger.info('Pinned every agent model.primary', {
+      modelRef,
+      count: nextEntries.length,
+      syntheticMain,
+    });
     return buildSnapshotFromConfig(config);
   });
 }

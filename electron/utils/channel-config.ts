@@ -398,6 +398,42 @@ export async function writeOpenClawConfig(config: OpenClawConfig): Promise<void>
     await ensureConfigDir();
 
     try {
+        // Regression guard: never let a writer silently nuke an existing
+        // agents.list. This was the trigger for the recurring config-clobber
+        // bug — setAllAgentsModel materialized a synthetic agents.list back
+        // as `undefined`-shaped, the gateway's last-good validator saw a
+        // shrunken file and rolled back to a stale (broken) snapshot. Loud
+        // failure here is much cheaper than another 48 hours of silent
+        // rollback. Only fires if the previous on-disk file had a non-empty
+        // list and the new write would erase it.
+        if (await fileExists(CONFIG_FILE)) {
+            try {
+                const previousContent = await readFile(CONFIG_FILE, 'utf-8');
+                const previous = JSON.parse(previousContent) as OpenClawConfig;
+                const previousAgents = (previous as { agents?: { list?: unknown } }).agents;
+                const previousList = previousAgents?.list;
+                const nextAgents = (config as { agents?: { list?: unknown } }).agents;
+                const nextList = nextAgents?.list;
+                if (
+                    Array.isArray(previousList)
+                    && previousList.length > 0
+                    && (nextAgents !== undefined)
+                    && !Array.isArray(nextList)
+                ) {
+                    throw new Error(
+                        'writeOpenClawConfig refuses to clobber agents.list: '
+                        + `previous had ${previousList.length} entries, write would erase`,
+                    );
+                }
+            } catch (parseErr) {
+                if (parseErr instanceof Error && parseErr.message.startsWith('writeOpenClawConfig refuses')) {
+                    throw parseErr;
+                }
+                // Best-effort guard — don't block writes on a corrupt file.
+                logger.warn('writeOpenClawConfig pre-write guard could not parse existing config', parseErr);
+            }
+        }
+
         // Enable graceful in-process reload authorization for SIGUSR1 flows.
         const commands =
             config.commands && typeof config.commands === 'object'

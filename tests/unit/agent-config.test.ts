@@ -226,6 +226,44 @@ describe('agent config lifecycle', () => {
     }
   });
 
+  // Regression: setAllAgentsModel used to materialize a synthetic agents.list
+  // when the on-disk config had none. The shorter resulting file tripped the
+  // gateway's last-good size validator and rolled the config back, freezing
+  // pilots in a stale provider state across 48h of debugging. The fix:
+  // preserve `list: undefined` when normalizeAgentsConfig signaled
+  // syntheticMain. agents.defaults.model.primary still carries the model.
+  it('preserves missing agents.list when setAllAgentsModel runs against a list-less config', async () => {
+    await writeOpenClawJson({
+      agents: {
+        defaults: { llm: { idleTimeoutSeconds: 600 } },
+      },
+      models: {
+        providers: {
+          'ollama-ollamalo': {
+            baseUrl: 'http://127.0.0.1:11434/v1',
+            api: 'openai-completions',
+            models: [{ id: 'qwen2.5:3b-instruct', name: 'qwen2.5:3b-instruct' }],
+          },
+        },
+      },
+    });
+
+    const { setAllAgentsModel } = await import('@electron/utils/agent-config');
+
+    await setAllAgentsModel('ollama-ollamalo/qwen2.5:3b-instruct');
+
+    const config = await readOpenClawJson();
+    const agents = config.agents as {
+      defaults?: { model?: { primary?: string } };
+      list?: unknown;
+    };
+    expect(agents.defaults?.model?.primary).toBe('ollama-ollamalo/qwen2.5:3b-instruct');
+    // The critical assertion: list must remain absent, not get materialized
+    // into a synthetic single-entry array that the gateway would treat as
+    // "shrunken" relative to .last-good and roll back.
+    expect(agents.list).toBeUndefined();
+  });
+
   it('rejects invalid model refs in setAllAgentsModel', async () => {
     await writeOpenClawJson({
       agents: {
