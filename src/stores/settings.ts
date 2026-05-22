@@ -42,6 +42,16 @@ interface SettingsState {
   // Setup
   setupComplete: boolean;
 
+  // Reasoning visibility
+  reasoningVisibility: 'auto' | 'hidden' | 'condensed' | 'expanded';
+
+  // Preferred chat channel (Online vs On this device)
+  // Default 'on-device' to match the Hermes-3 pilot. Switching to 'online'
+  // routes to the best cloud provider account; if none is healthy at send
+  // time, the chat path silently fails over to the other channel and shows
+  // a small toast.
+  preferredChannel: 'online' | 'on-device';
+
   // Actions
   init: () => Promise<void>;
   setTheme: (theme: Theme) => void;
@@ -63,6 +73,8 @@ interface SettingsState {
   setSidebarCollapsed: (value: boolean) => void;
   setSidebarWidth: (value: number) => void;
   setDevModeUnlocked: (value: boolean) => void;
+  setReasoningVisibility: (value: 'auto' | 'hidden' | 'condensed' | 'expanded') => void;
+  setPreferredChannel: (value: 'online' | 'on-device') => Promise<void>;
   markSetupComplete: () => void;
   resetSettings: () => void;
 }
@@ -88,6 +100,8 @@ const defaultSettings = {
   sidebarWidth: 280,
   devModeUnlocked: false,
   setupComplete: false,
+  reasoningVisibility: 'auto' as 'auto' | 'hidden' | 'condensed' | 'expanded',
+  preferredChannel: 'on-device' as 'online' | 'on-device',
 };
 
 const clampSidebarWidth = (value: number) => Math.min(420, Math.max(220, Math.round(value)));
@@ -182,6 +196,30 @@ export const useSettingsStore = create<SettingsState>()(
           method: 'PUT',
           body: JSON.stringify({ value: devModeUnlocked }),
         }).catch(() => { });
+      },
+      setReasoningVisibility: (reasoningVisibility) => {
+        set({ reasoningVisibility });
+        void hostApiFetch('/api/settings/reasoningVisibility', {
+          method: 'PUT',
+          body: JSON.stringify({ value: reasoningVisibility }),
+        }).catch(() => { });
+      },
+      setPreferredChannel: async (preferredChannel) => {
+        set({ preferredChannel });
+        // Channel-toggle is the single source of truth for which model the
+        // agent runtime resolves. The settings PUT runs the four-store
+        // transaction (clawx-providers default, openclaw.json provider entry,
+        // agents.list[*].model.primary, agents.defaults.model). We await it
+        // so the chat composer can't dispatch against a half-applied state.
+        try {
+          await hostApiFetch('/api/settings/preferredChannel', {
+            method: 'PUT',
+            body: JSON.stringify({ value: preferredChannel }),
+          });
+        } catch {
+          // Disk write succeeded earlier in the request; preflight on next
+          // launch will reconcile if the runtime sync failed mid-flight.
+        }
       },
       markSetupComplete: () => set({ setupComplete: true }),
       resetSettings: () => set(defaultSettings),

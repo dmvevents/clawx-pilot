@@ -66,10 +66,21 @@ artifacts/
 docs/pr-session-notes-*.md
 
 .cursor/
-.claude/
+.claude/*
+!.claude/agents/
 .pnpm-store/
 package-lock.json
 
 # Generated extension bridges (created by scripts/generate-ext-bridge.mjs)
 electron/extensions/_ext-bridge.generated.ts
 src/extensions/_ext-bridge.generated.ts
+
+# Local agent/vector state (binary, machine-specific)
+.swarm/
+**/.swarm/
+agentdb.rvf
+agentdb.rvf.lock
+ruvector.db
+**/ruvector.db
+*.db-shm
+*.db-wal

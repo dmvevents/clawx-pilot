@@ -684,6 +684,46 @@ export async function updateAgentModel(agentId: string, modelRef: string | null)
   });
 }
 
+/**
+ * Pin every agent's model.primary to the given modelRef, plus the
+ * `agents.defaults.model.primary` so newly-created agents inherit it.
+ *
+ * This is the channel-toggle authority: when the user picks Online or
+ * On-this-device, we must rewrite every agent's effective model in one
+ * transaction so the runtime can't fall back to a stale provider entry
+ * from `agents/<id>/agent/models.json`.
+ */
+export async function setAllAgentsModel(modelRef: string): Promise<AgentsSnapshot> {
+  return withConfigLock(async () => {
+    if (!isValidModelRef(modelRef)) {
+      throw new Error('modelRef must be in "provider/model" format');
+    }
+
+    const config = await readOpenClawConfig() as AgentConfigDocument;
+    const { agentsConfig, entries } = normalizeAgentsConfig(config);
+
+    const nextEntries = entries.map((entry) => ({
+      ...entry,
+      model: { primary: modelRef },
+    }));
+
+    const nextDefaults: AgentDefaultsConfig = {
+      ...(agentsConfig.defaults ?? {}),
+      model: { primary: modelRef },
+    };
+
+    config.agents = {
+      ...agentsConfig,
+      defaults: nextDefaults,
+      list: nextEntries,
+    };
+
+    await writeOpenClawConfig(config);
+    logger.info('Pinned every agent model.primary', { modelRef, count: nextEntries.length });
+    return buildSnapshotFromConfig(config);
+  });
+}
+
 export async function deleteAgentConfig(agentId: string): Promise<{ snapshot: AgentsSnapshot; removedEntry: AgentListEntry }> {
   return withConfigLock(async () => {
     if (agentId === MAIN_AGENT_ID) {

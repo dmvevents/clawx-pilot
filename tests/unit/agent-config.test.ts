@@ -197,6 +197,49 @@ describe('agent config lifecycle', () => {
     );
   });
 
+  it('pins every agent and the defaults to the given model in setAllAgentsModel', async () => {
+    await writeOpenClawJson({
+      agents: {
+        defaults: {
+          model: { primary: 'ollama/hermes3:8b' },
+        },
+        list: [
+          { id: 'main', name: 'Main', default: true },
+          { id: 'coder', name: 'Coder', model: { primary: 'ark/ark-code-latest' } },
+          { id: 'research', name: 'Research' },
+        ],
+      },
+    });
+
+    const { setAllAgentsModel } = await import('@electron/utils/agent-config');
+
+    await setAllAgentsModel('google-gemini-account/gemini-2.5-pro');
+
+    const config = await readOpenClawJson();
+    const agents = config.agents as {
+      defaults?: { model?: { primary?: string } };
+      list: Array<{ id: string; model?: { primary?: string } }>;
+    };
+    expect(agents.defaults?.model?.primary).toBe('google-gemini-account/gemini-2.5-pro');
+    for (const entry of agents.list) {
+      expect(entry.model?.primary).toBe('google-gemini-account/gemini-2.5-pro');
+    }
+  });
+
+  it('rejects invalid model refs in setAllAgentsModel', async () => {
+    await writeOpenClawJson({
+      agents: {
+        list: [{ id: 'main', name: 'Main', default: true }],
+      },
+    });
+
+    const { setAllAgentsModel } = await import('@electron/utils/agent-config');
+
+    await expect(setAllAgentsModel('not-a-ref')).rejects.toThrow(
+      'modelRef must be in "provider/model" format',
+    );
+  });
+
   it('deletes the config entry, bindings, runtime directory, and managed workspace for a removed agent', async () => {
     await writeOpenClawJson({
       agents: {

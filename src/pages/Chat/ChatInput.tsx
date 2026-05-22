@@ -10,6 +10,11 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { SendHorizontal, Square, X, Paperclip, FileText, Film, Music, FileArchive, File, Loader2, AtSign, Search, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { MicButton } from '@/components/chat/MicButton';
+import { BrainButton, type ReasoningVisibility } from '@/components/chat/BrainButton';
+import { ChannelToggle } from '@/components/chat/ChannelToggle';
+import { classifyProvider, pickAccountForChannel, publicLabel, type ProviderClass } from '@/lib/provider-display';
+import { useSettingsStore } from '@/stores/settings';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { hostApiFetch } from '@/lib/host-api';
 import { invokeIpc } from '@/lib/api-client';
@@ -191,6 +196,28 @@ function readFileAsBase64(file: globalThis.File): Promise<string> {
 export function ChatInput({ onSend, onStop, disabled = false, sending = false, isEmpty = false }: ChatInputProps) {
   const { t } = useTranslation('chat');
   const [input, setInput] = useState('');
+
+  // Per-session reasoning-visibility override. The Settings store holds the
+  // user-level preference (hidden / condensed / expanded / auto); the brain
+  // icon in the composer toggles a session-scoped override that overrides it
+  // until the user navigates away. Effective value resolves: override → user
+  // setting → 'condensed' default.
+  const userReasoningVisibility = useSettingsStore((s) => s.reasoningVisibility);
+  const [sessionReasoningOverride, setSessionReasoningOverrideState] = useState<ReasoningVisibility | null>(null);
+  const userResolved: ReasoningVisibility =
+    userReasoningVisibility === 'auto' ? 'condensed' : userReasoningVisibility;
+  const effectiveReasoningVisibility: ReasoningVisibility =
+    sessionReasoningOverride ?? userResolved;
+  const setSessionReasoningOverride = (next: ReasoningVisibility) => {
+    setSessionReasoningOverrideState(next);
+  };
+
+  // Per-session channel override. The Settings store holds the user-level
+  // preference (online | on-device); the chat composer pill can override it
+  // for the current session. Effective value resolves: override → user
+  // setting → 'on-device' default.
+  const userPreferredChannel = useSettingsStore((s) => s.preferredChannel);
+  const [sessionChannelOverride, setSessionChannelOverride] = useState<ProviderClass | null>(null);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [targetAgentId, setTargetAgentId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -231,6 +258,30 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
   );
   const effectiveModelRef = optimisticModelRef || currentAgent?.modelRef || defaultModelRef || modelOptions[0]?.modelRef || null;
   const currentModelLabel = formatModelRefLabel(effectiveModelRef);
+
+  // Channel routing — derive what's actually possible from the configured
+  // accounts, then resolve the effective channel for this session.
+  const onlineAccount = useMemo(
+    () => pickAccountForChannel(providerAccounts ?? [], 'online'),
+    [providerAccounts],
+  );
+  const onDeviceAccount = useMemo(
+    () => pickAccountForChannel(providerAccounts ?? [], 'on-device'),
+    [providerAccounts],
+  );
+  const channelsAvailable = useMemo(() => ({
+    online: onlineAccount !== null,
+    'on-device': onDeviceAccount !== null,
+  }), [onlineAccount, onDeviceAccount]);
+  const showChannelToggle = channelsAvailable.online && channelsAvailable['on-device'];
+  // Effective channel: session override → user setting (if available) →
+  // whichever channel is actually configured (graceful degrade).
+  const effectiveChannel: ProviderClass = useMemo(() => {
+    if (sessionChannelOverride) return sessionChannelOverride;
+    if (channelsAvailable[userPreferredChannel]) return userPreferredChannel;
+    if (channelsAvailable['on-device']) return 'on-device';
+    return 'online';
+  }, [sessionChannelOverride, userPreferredChannel, channelsAvailable]);
   const mentionableAgents = useMemo(
     () => (agents ?? []).filter((agent) => agent.id !== currentAgentId),
     [agents, currentAgentId],
@@ -429,6 +480,54 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
     if (!skillPickerOpen) return;
     void loadQuickSkills();
   }, [skillPickerOpen, loadQuickSkills]);
+
+  // Channel switcher: user picked Online or On-this-device. The toggle
+  // updates `preferredChannel` which the main process treats as the single
+  // source of truth — it atomically rewrites every agent's model.primary,
+  // the default provider account, and the runtime provider entries
+  // (see electron/services/providers/channel-router.ts). After the
+  // transaction we refresh provider + agent stores so the UI reflects the
+  // newly-pinned model. If the picked channel has no account, fall back to
+  // the other one and toast.
+  const setPreferredChannel = useSettingsStore((s) => s.setPreferredChannel);
+  const refreshAgents = useAgentsStore((s) => s.fetchAgents);
+  const handleSelectChannel = useCallback(async (next: ProviderClass) => {
+    setSessionChannelOverride(next);
+    const target = next === 'online' ? onlineAccount : onDeviceAccount;
+    const fallback = next === 'online' ? onDeviceAccount : onlineAccount;
+    const picked = target ?? fallback;
+    if (!picked || !picked.model) {
+      toast.error('No model is configured on this machine. Add one in Settings → Models.');
+      return;
+    }
+    if (!target && fallback) {
+      toast.message(`${publicLabel(next)} isn't configured — switched to ${publicLabel(classifyProvider(fallback))}.`);
+    }
+    const targetClass = classifyProvider(picked);
+    setSessionChannelOverride(targetClass);
+
+    const ock = String((picked as { id: string }).id);
+    const modelRef = `${ock}/${picked.model}`;
+    setSwitchingModelRef(modelRef);
+    setOptimisticModelRef(modelRef);
+    try {
+      // Single source of truth: this drives the four-store transaction
+      // server-side (preferredChannel, defaultProvider, agents.list[*],
+      // agents.defaults). No more piecemeal updateAgentModel writes.
+      await setPreferredChannel(targetClass);
+      // Refresh dependent stores so the model picker, default model ref,
+      // and provider snapshot reflect the new pinning.
+      await Promise.all([
+        refreshProviderSnapshot(),
+        refreshAgents(),
+      ]);
+    } catch (error) {
+      setOptimisticModelRef(effectiveModelRef);
+      toast.error(t('composer.modelSwitchFailed', { error: String(error) }));
+    } finally {
+      setSwitchingModelRef(null);
+    }
+  }, [onlineAccount, onDeviceAccount, effectiveModelRef, t, setPreferredChannel, refreshProviderSnapshot, refreshAgents]);
 
   const handleSelectModel = useCallback(async (modelRef: string) => {
     if (!currentAgent || switchingModelRef) return;
@@ -850,6 +949,71 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
             >
               <Paperclip className="h-3.5 w-3.5" />
             </Button>
+
+            {/* Microphone — captures audio in renderer, transcribes in main
+                via the local whisper CLI (asr:transcribe IPC), replaces the
+                placeholder with the transcribed text. Falls back to leaving
+                the path in the input if whisper isn't installed. */}
+            <MicButton
+              disabled={inputDisabled || sending}
+              onError={(message) => toast.error(`Mic: ${message}`)}
+              onAudioReady={async ({ path, transcoded, transcodeSkippedReason }) => {
+                const placeholder = '[transcribing voice note…]';
+                setInput((cur) => (cur.length === 0 ? placeholder : `${cur.replace(/\s*$/, '')} ${placeholder}`));
+                textareaRef.current?.focus();
+                const renderer = window.electron?.ipcRenderer;
+                if (!renderer) {
+                  setInput((cur) => cur.replace(placeholder, ''));
+                  toast.error('Electron IPC bridge not available');
+                  return;
+                }
+                let text: string | null = null;
+                let errorMessage: string | null = null;
+                try {
+                  const env = (await renderer.invoke('asr:transcribe', { audioPath: path, language: 'en' })) as {
+                    ok?: boolean;
+                    data?: { text?: string };
+                    error?: { code?: string; message?: string };
+                  };
+                  if (env?.ok && typeof env.data?.text === 'string' && env.data.text.trim()) {
+                    text = env.data.text.trim();
+                  } else if (env?.error) {
+                    errorMessage = env.error.message ?? 'Transcription failed';
+                  } else {
+                    errorMessage = 'Transcription returned no text';
+                  }
+                } catch (err) {
+                  errorMessage = err instanceof Error ? err.message : String(err);
+                }
+                setInput((cur) => {
+                  if (text) {
+                    return cur.replace(placeholder, text);
+                  }
+                  const transcodeNote = transcoded ? '' : ` (raw audio; ffmpeg ${transcodeSkippedReason ?? 'unavailable'})`;
+                  return cur.replace(placeholder, `[voice note: ${path}${transcodeNote}]`);
+                });
+                if (errorMessage) toast.error(`Transcribe: ${errorMessage}`);
+                textareaRef.current?.focus();
+              }}
+            />
+
+            {/* Reasoning visibility — per-session override of the global
+                Settings → Chat behaviour value. Cycles hidden→condensed→expanded. */}
+            <BrainButton
+              value={effectiveReasoningVisibility}
+              onChange={setSessionReasoningOverride}
+              disabled={inputDisabled || sending}
+            />
+
+            {/* Online ↔ On this device channel pick. Hidden when only one
+                channel has accounts; auto-fail-over toast on send if the
+                picked channel is unreachable. */}
+            <ChannelToggle
+              value={effectiveChannel}
+              onChange={(next) => { void handleSelectChannel(next); }}
+              hidden={!showChannelToggle}
+              disabled={inputDisabled || sending || !!switchingModelRef}
+            />
 
             {showAgentPicker && (
               <div ref={pickerRef} className="relative shrink-0">

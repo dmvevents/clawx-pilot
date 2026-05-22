@@ -52,6 +52,9 @@ import { deviceOAuthManager } from '../utils/device-oauth';
 import { browserOAuthManager } from '../utils/browser-oauth';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
 import { syncAllProviderAuthToRuntime } from '../services/providers/provider-runtime-sync';
+import { seedDefaultLocalProvider } from './local-provider-seed';
+import { seedGatewayPluginConfig } from './gateway-plugin-config-seed';
+import { runChannelPreflight } from '../services/providers/channel-router';
 
 const WINDOWS_APP_USER_MODEL_ID = 'app.clawx.desktop';
 const isE2EMode = process.env.CLAWX_E2E === '1';
@@ -491,6 +494,50 @@ async function initialize(): Promise<void> {
   whatsAppLoginManager.on('error', (error) => {
     hostEventBus.emit('channel:whatsapp-error', error);
   });
+
+  // Seed a local OpenAI-compatible provider (Ollama / nora:4b-v3.2) so fresh
+  // installs without cloud keys still get a working chat reply. Idempotent:
+  // skips when any account already targets the local Ollama endpoint, and
+  // only becomes default if no other default exists. Disable via env var
+  // CLAWX_SEED_LOCAL_LLM_PROVIDER=0.
+  if (!isE2EMode) {
+    try {
+      await seedDefaultLocalProvider(gatewayManager);
+    } catch (error) {
+      logger.warn('Local provider seed failed (non-fatal):', error);
+    }
+  }
+
+  // Self-heal gateway plugin config: ensure microsoft-graph + moe-principal-
+  // assistant have schema-valid placeholders so `openclaw doctor repair`
+  // doesn't reject the config and abort gateway startup. See the file's
+  // module docstring for the failure modes this guards against.
+  if (!isE2EMode) {
+    try {
+      await seedGatewayPluginConfig();
+    } catch (error) {
+      logger.warn('Gateway plugin-config seed failed (non-fatal):', error);
+    }
+  }
+
+  // Channel coherence preflight: reconcile the four config stores
+  // (clawx-providers default, openclaw.json runtime providers, openclaw.json
+  // agents.list[*].model.primary, isDefault flags) against the
+  // renderer-persisted preferredChannel. Pilot installs in the field have
+  // accumulated divergence — preferredChannel='online' but
+  // agents.list[main].model.primary still pointing at ollama — and the chat
+  // appears unresponsive because the runtime resolves a different model than
+  // the UI claims. Runs before gateway start so the gateway reads coherent
+  // configs on boot.
+  if (!isE2EMode) {
+    try {
+      const desired = (await getSetting('preferredChannel')) ?? 'on-device';
+      const result = await runChannelPreflight(desired as 'online' | 'on-device', gatewayManager);
+      logger.info('[main] Channel preflight result', result);
+    } catch (error) {
+      logger.warn('Channel preflight failed (non-fatal):', error);
+    }
+  }
 
   // Start Gateway automatically (this seeds missing bootstrap files with full templates)
   const gatewayAutoStart = await getSetting('gatewayAutoStart');
