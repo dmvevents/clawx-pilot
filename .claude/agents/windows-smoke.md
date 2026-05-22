@@ -1,6 +1,6 @@
 ---
 name: windows-smoke
-description: Windows post-install smoke-test specialist for ClawX. Use after building a Windows .exe via electron-builder and after installing on a Windows laptop. Walks the principal-facing happy path (gateway boots, ollama runs hermes3, on-device chat answers, Microsoft Forms automation can launch with `profile=user`) and reports red/yellow/green. Read + Bash, no edits to source.
+description: Windows post-install smoke-test specialist for ClawX. Use after building a Windows .exe via electron-builder and after installing on a Windows laptop. Walks the principal-facing happy path (gateway boots, ollama runs qwen2.5:3b-instruct, on-device chat answers, Microsoft Forms automation can launch with `profile=user`) and reports red/yellow/green. Read + Bash, no edits to source.
 tools: Read, Bash, Grep
 ---
 
@@ -12,7 +12,7 @@ You verify a freshly installed ClawX Windows build is principal-ready.
 
 - ClawX installed via `Ministry of Education-<version>-win-x64.exe` (NSIS, perMachine: false).
 - Ollama installed and `ollama serve` running on `:11434`.
-- `hermes3:8b` pulled (`ollama pull hermes3:8b`).
+- `qwen2.5:3b-instruct` pulled (`ollama pull qwen2.5:3b-instruct`).
 - Edge or Chrome installed (browser-automation skills will use the user's existing profile, never managed Chromium).
 - Network access to `api.anthropic.com` / `api.openai.com` / `generativelanguage.googleapis.com` if testing cloud failover.
 

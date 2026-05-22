@@ -39,29 +39,27 @@ import { patchProviderModelCompat } from '../utils/openclaw-auth';
 // Local Ollama endpoint and model. Keep these here (not in shared/)
 // so the seed remains a single-file concern that's easy to tweak or revert.
 //
-// Why hermes3:8b: 36-prompt agentic bake-off across qwen3:4b/8b, llama3.1:8b,
-// granite3.2:8b, hermes3:8b on tool accuracy, argument grounding, refusal,
-// multi-turn, hang resistance, long context, and Trinidad & Tobago primary-
-// school domain prompts. Real scoreboard:
-//   • hermes3:8b   27/36 (75.0%), 1.5s avg   ← winner
-//   • qwen3:8b     24/36 (66.7%), 26.6s avg, 6 timeouts
-//   • granite3.2:8b 11/36 (30.6%), 1.5s avg — refuses to call tools
-//   • llama3.1:8b   ~80% on light bench but overeager (false-positive tool
-//                   calls for chitchat); regressed on full suite (not re-run)
-//   • qwen3:4b     scored 5/5 light but 12-hour hang on one prompt
-//   • nora:4b-v3.2 0/36 — no native function calling at all.
+// Why qwen2.5:3b-instruct: Hermes 3 8B was the May 2026 winner on a 36-prompt
+// agentic bake-off, but its 30 GB loaded footprint is unworkable on the
+// 16 GB Windows pilot laptop. A focused 12-prompt rerun in May 2026 against
+// Qwen 2.5 3B Instruct showed:
+//   • Accuracy: tied at 11/12 (91.7%) — tool, domain, grounding, multi-step
+//   • Mean latency: 469ms (Qwen) vs 1049ms (Hermes) — 2.2x faster
+//   • P95 cold-start: 1285ms (Qwen) vs 3937ms (Hermes) — 3.1x lower
+//   • Loaded memory: 4.3 GB (Qwen) vs 30 GB (Hermes) — 7x smaller
+//   • Both miss one refusal prompt (different prompts; same search_web bias)
 //
-// Hermes 3 is a Llama-3.1-8B fine-tune by Nous Research, explicitly trained
-// for agentic/tool use. License: Llama-3.1-Community (commercial use allowed).
-// Memory: ~5 GB on disk, ~9-10 GB resident with 8k context. Fits the 16 GB
-// principal-laptop budget with headroom for Electron + Office.
+// Qwen 2.5 3B Instruct is Alibaba's instruction-tuned 3B model with native
+// function calling. License: Apache-2.0 (commercial use allowed).
+// Disk: ~1.9 GB. Loaded: ~4.3 GB with 32k context. Leaves ~11 GB headroom on
+// the 16 GB principal laptop for Electron + Office + Forms.
 //
-// Long-term: revisit when Hermes 4 / xLAM-v2 GGUF / Qwen 3.5 land. The
-// self-test cron at scripts/clawx-selftest.mjs will catch regressions.
+// Long-term: revisit when Qwen 3.5 / Hermes 4 land. The self-test cron at
+// scripts/clawx-selftest.mjs will catch regressions.
 const LOCAL_BASE_URL = 'http://127.0.0.1:11434/v1';
-const LOCAL_MODEL_ID = 'hermes3:8b';
-const LOCAL_ACCOUNT_ID = 'ollama-local-hermes3-8b';
-const LOCAL_ACCOUNT_LABEL = 'On this device (Hermes 3 8B)';
+const LOCAL_MODEL_ID = 'qwen2.5:3b-instruct';
+const LOCAL_ACCOUNT_ID = 'ollama-local-qwen2.5-3b-instruct';
+const LOCAL_ACCOUNT_LABEL = 'On this device (Qwen 2.5 3B Instruct)';
 // Ollama doesn't enforce auth but the secret-store and runtime-sync paths
 // expect a non-empty token — use a recognisable placeholder.
 const LOCAL_PLACEHOLDER_KEY = 'ollama-local';
@@ -102,11 +100,12 @@ export async function seedDefaultLocalProvider(
     await patchProviderModelCompat(
       runtimeProviderKey,
       (id) => id === LOCAL_MODEL_ID
-        || id.startsWith('hermes3:')
+        || id.startsWith('qwen2.5:')
         || id.startsWith('qwen3:')
+        || id.startsWith('hermes3:')
         || id.startsWith('nora:'),
       {
-        // Hermes 3 supports tool-calling natively; reasoning_effort is benign
+        // Qwen 2.5 supports tool-calling natively; reasoning_effort is benign
         // (ignored if unrecognised) and harmless to leave on for forward-compat.
         supportsReasoningEffort: true,
         supportsTools: true,
@@ -158,21 +157,25 @@ export async function seedDefaultLocalProvider(
   try {
     const existingAccounts = await listProviderAccounts();
 
-    // One-time migration: fold any previous local-Ollama seed (Nora 4B, or the
-    // earlier Qwen 3 4B) into the current default (Qwen 3 8B). Nora can't
-    // tool-call (Ollama returns HTTP 400 with a `tools` array); Qwen 3 4B
-    // bench-passed but had a 12-hour hang on one principal-style prompt that
-    // disqualifies it for a chat product. Migrate in-place so the user keeps
-    // their default-flag and existing chat sessions don't break.
+    // One-time migration: fold any previous local-Ollama seed into the
+    // current default (Qwen 2.5 3B Instruct). Each prior model was either
+    // capability-blocked or memory-blocked for the 16 GB pilot laptop:
+    //   • Nora 4B: no native tool-calling (Ollama returns HTTP 400 with `tools`)
+    //   • Qwen 3 4B: 12-hour hang on one principal-style prompt
+    //   • Qwen 3 8B / Hermes 3 8B: 30 GB loaded footprint exceeds 16 GB RAM
+    // Migrate in-place so the user keeps their default-flag and existing chat
+    // sessions don't break.
     const LEGACY_LOCAL_IDS = new Set([
       'ollama-local-nora',
       'ollama-local-qwen3-4b',
       'ollama-local-qwen3-8b',
+      'ollama-local-hermes3-8b',
     ]);
     const LEGACY_LOCAL_MODELS = new Set([
       'nora:4b-v3.2',
       'qwen3:4b',
       'qwen3:8b',
+      'hermes3:8b',
     ]);
     const legacyNora = existingAccounts.find((a) =>
       LEGACY_LOCAL_IDS.has(a.id) || (a.model && LEGACY_LOCAL_MODELS.has(a.model)),
@@ -260,18 +263,17 @@ export async function seedDefaultLocalProvider(
       );
     }
 
-    // Patch the model entry in openclaw.json so the gateway extracts <think>
-    // blocks (Nora emits Apple-style reasoning) and skips tool-calling, which
-    // the local Ollama OpenAI shim does not implement.  Idempotent: re-runs
-    // are no-ops once both compat fields are already set.
+    // Patch the model entry in openclaw.json so the gateway flags Qwen 2.5
+    // as supporting native tool-calling. Idempotent: re-runs are no-ops once
+    // both compat fields are already set.
     try {
       const runtimeProviderKey = getOpenClawProviderKey(account.vendorId, account.id);
       await patchProviderModelCompat(
         runtimeProviderKey,
-        (id) => id === LOCAL_MODEL_ID || id.startsWith('nora:'),
+        (id) => id === LOCAL_MODEL_ID || id.startsWith('qwen2.5:'),
         {
           supportsReasoningEffort: true,
-          supportsTools: false,
+          supportsTools: true,
         },
       );
     } catch (err) {
