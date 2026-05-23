@@ -150,6 +150,13 @@ export class OutlookActions {
       };
     }
 
+    // 0. Dismiss any blocking welcome / promo dialog. Outlook Web shows
+    // a "What's new" dialog on first sign-in whose backdrop intercepts
+    // pointer events — Playwright's click retry will spin until timeout
+    // unless we close it first. Best-effort: try a few common dismiss
+    // affordances; ignore failures (no dialog to close is the happy path).
+    await this.dismissBlockingDialog(page);
+
     // 1. Click New mail.
     await this.clickByRoleOrVlm(page, {
       role: 'button',
@@ -243,6 +250,52 @@ export class OutlookActions {
   }
 
   // ── internals ───────────────────────────────────────────────────────────
+
+  /**
+   * Dismiss any open Outlook welcome/promo dialog whose backdrop blocks
+   * pointer events. Best-effort — failures here are normal (no dialog).
+   */
+  private async dismissBlockingDialog(page: Page): Promise<void> {
+    // Quick check: is there a backdrop visible at all? Skip the work if not.
+    const backdropCount = await page
+      .locator('.fui-DialogSurface__backdrop, [data-tid="dialog-backdrop"]')
+      .count()
+      .catch(() => 0);
+    if (backdropCount === 0) return;
+
+    // Try named close affordances in order. Each gets a short timeout so
+    // we don't burn 30s if none exist.
+    // Order matters: prefer affordances that close-or-continue the dialog
+    // (Continue, Got it, OK) before generic Close, because some Outlook
+    // privacy/welcome dialogs don't have a Close X — only a primary action.
+    const candidates = [
+      page.getByRole('button', { name: /^continue$/i }),
+      page.getByRole('button', { name: /^got it$/i }),
+      page.getByRole('button', { name: /^ok$/i }),
+      page.getByRole('button', { name: /^accept$/i }),
+      page.getByRole('button', { name: /^close$/i }),
+      page.getByRole('button', { name: /^skip( for now)?$/i }),
+      page.getByRole('button', { name: /^maybe later$/i }),
+      page.getByRole('button', { name: /^no thanks$/i }),
+      page.getByRole('button', { name: /^dismiss$/i }),
+      page.locator('button[aria-label="Close"]'),
+    ];
+    for (const c of candidates) {
+      try {
+        const first = c.first();
+        if ((await first.count()) > 0) {
+          await first.click({ timeout: 3_000 });
+          // Tiny pause so the backdrop fade-out completes before next click.
+          await this.driver.sleep(400);
+          return;
+        }
+      } catch {
+        // try next
+      }
+    }
+    // Final fallback: press Escape, which closes most Fluent dialogs.
+    try { await this.driver.pressKey('Escape'); await this.driver.sleep(300); } catch { /* ignore */ }
+  }
 
   private async looksLikeSignin(page: Page): Promise<boolean> {
     const url = page.url();

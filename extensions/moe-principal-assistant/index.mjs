@@ -84,7 +84,11 @@ function requireNumber(name, value) {
  */
 
 export function register({ config, registerTool, log = console, host = {} }) {
-  const cfg = config?.() ?? {};
+  // Older OpenClaw gateway versions pass `config` as a getter function;
+  // newer versions pass it as the already-resolved object. Tolerate both
+  // so the plugin doesn't crash with "config is not a function" on
+  // version drift.
+  const cfg = (typeof config === 'function' ? config() : config) ?? {};
   const required = ['principalName', 'schoolName', 'educationDistrict', 'schoolType'];
   const missing = required.filter((k) => !cfg[k]);
   if (missing.length) {

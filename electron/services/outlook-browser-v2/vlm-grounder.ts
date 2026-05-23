@@ -28,7 +28,6 @@
  * the grounder instance, so tests can inject a mock without touching the
  * network. See tests/unit/outlook-vlm-grounder.test.ts.
  */
-import Anthropic from '@anthropic-ai/sdk';
 import { createHash } from 'crypto';
 import { logger } from '../../utils/logger';
 
@@ -74,8 +73,21 @@ export type VlmCaller = (args: {
   mediaType: 'image/png';
 }) => Promise<{ text: string }>;
 
-/** Default model. Overridable per-instance for cost-tier experiments. */
-const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
+/**
+ * Default model. We use Gemini 2.5 Flash for vision grounding because:
+ *  - It's fast (sub-second typical) and cheap (~0.1¢ per call vs ~0.5¢ for Sonnet).
+ *  - It's already authenticated in this dev environment via GEMINI_API_KEY,
+ *    whereas direct Anthropic API access is fronted by a local router.
+ *  - UI-grounding is a relatively easy vision task; we don't need the
+ *    extra accuracy headroom of Sonnet 4.5 for "where is the New mail
+ *    button" queries that have one unambiguous answer.
+ *  - Bedrock-hosted Sonnet is also reachable but requires AWS creds,
+ *    which we don't want to thread into this dev-time path.
+ *
+ * Override per-instance for experiments (e.g. gemini-2.5-pro for hard cases).
+ */
+const DEFAULT_MODEL = 'gemini-2.5-flash';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
 const SYSTEM_PROMPT = `You are a UI grounding model. The user shows you a
 screenshot of a web page and asks where to find a specific element.
@@ -112,44 +124,64 @@ export class VlmGrounder {
     if (opts?.caller) {
       this.caller = opts.caller;
     } else {
-      const apiKey = opts?.apiKey ?? process.env.ANTHROPIC_API_KEY;
+      const apiKey = opts?.apiKey ?? process.env.GEMINI_API_KEY;
       if (!apiKey) {
         // Defer the throw until first call — instantiating the grounder is
         // fine, it's only when we try to ground without a key that we
-        // should fail. This lets the rest of v2 boot in dev without an
-        // API key while still failing loudly when actually used.
+        // should fail. This lets the rest of v2 boot in dev without a
+        // key while still failing loudly when actually used.
         this.caller = () => {
           return Promise.reject(
             new Error(
-              'VlmGrounder: ANTHROPIC_API_KEY not set. Set it in env or pass apiKey to the constructor.',
+              'VlmGrounder: GEMINI_API_KEY not set. Set it in env or pass apiKey to the constructor.',
             ),
           );
         };
       } else {
-        const client = new Anthropic({ apiKey });
+        // Gemini's generateContent endpoint takes inline base64 image
+        // parts. We assemble system + user prompts as a single user turn
+        // (Gemini's "system" support varies by model version; folding
+        // both into one message is portable across 2.5-flash / 2.5-pro
+        // and matches how the rest of ClawX talks to Gemini).
         this.caller = async ({ systemPrompt, userPrompt, screenshotBase64, mediaType }) => {
-          const resp = await client.messages.create({
-            model: this.model,
-            max_tokens: 256,
-            system: systemPrompt,
-            messages: [
+          const url = `${GEMINI_BASE_URL}/models/${this.model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+          const body = {
+            contents: [
               {
                 role: 'user',
-                content: [
-                  {
-                    type: 'image',
-                    source: { type: 'base64', media_type: mediaType, data: screenshotBase64 },
-                  },
-                  { type: 'text', text: userPrompt },
+                parts: [
+                  { text: systemPrompt + '\n\n' + userPrompt },
+                  { inlineData: { mimeType: mediaType, data: screenshotBase64 } },
                 ],
               },
             ],
+            generationConfig: {
+              maxOutputTokens: 256,
+              // Gemini 2.5 supports a native JSON mode which is exactly
+              // what our parser wants. Saves us markdown-fence stripping.
+              responseMimeType: 'application/json',
+            },
+          };
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+            // Per-call timeout so a hung Gemini doesn't hang the whole
+            // Outlook action chain.
+            signal: AbortSignal.timeout(20_000),
           });
-          const block = resp.content[0];
-          if (!block || block.type !== 'text') {
-            throw new Error('VlmGrounder: unexpected response shape from Anthropic SDK');
+          if (!resp.ok) {
+            const errText = await resp.text().catch(() => '');
+            throw new Error(`Gemini ${resp.status}: ${errText.slice(0, 200)}`);
           }
-          return { text: block.text };
+          const data = await resp.json() as {
+            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+          };
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (typeof text !== 'string') {
+            throw new Error('VlmGrounder: unexpected Gemini response shape');
+          }
+          return { text };
         };
       }
     }

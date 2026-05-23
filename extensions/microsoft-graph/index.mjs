@@ -17,7 +17,9 @@
 import { createGraphClient } from './graph-client.mjs';
 
 export function register({ config, getAccessToken, registerTool, log = console }) {
-  const cfg = config?.() ?? {};
+  // Tolerate config-as-function (older gateway API) AND config-as-object
+  // (newer gateway API). See sister fix in moe-principal-assistant/index.mjs.
+  const cfg = (typeof config === 'function' ? config() : config) ?? {};
   if (!cfg.tenantId || !cfg.clientId) {
     log.warn?.('microsoft-graph: tenantId and clientId not configured — tools will not be registered.');
     return { registered: false };
