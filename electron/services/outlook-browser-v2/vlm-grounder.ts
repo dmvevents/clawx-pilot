@@ -74,19 +74,27 @@ export type VlmCaller = (args: {
 }) => Promise<{ text: string }>;
 
 /**
- * Default model. We use Gemini 2.5 Flash for vision grounding because:
- *  - It's fast (sub-second typical) and cheap (~0.1¢ per call vs ~0.5¢ for Sonnet).
- *  - It's already authenticated in this dev environment via GEMINI_API_KEY,
- *    whereas direct Anthropic API access is fronted by a local router.
- *  - UI-grounding is a relatively easy vision task; we don't need the
- *    extra accuracy headroom of Sonnet 4.5 for "where is the New mail
- *    button" queries that have one unambiguous answer.
- *  - Bedrock-hosted Sonnet is also reachable but requires AWS creds,
- *    which we don't want to thread into this dev-time path.
+ * VLM provider selection.
  *
- * Override per-instance for experiments (e.g. gemini-2.5-pro for hard cases).
+ * Default: Bedrock-hosted Claude Sonnet 4.5 vision. It's the strongest
+ * UI-grounding model right now and the dev environment has AWS_PROFILE=bedrock
+ * already configured. Sonnet is preferred over Gemini Flash because:
+ *  - Better at ambiguous Outlook DOM (custom themes, localised labels).
+ *  - The "anthropic-tools-100..." computer-use lineage was trained on
+ *    UI-screenshot-to-coordinate tasks specifically.
+ *  - No cost ceiling on this project; we can spend the extra ~$0.005/call
+ *    in exchange for fewer false negatives.
+ *
+ * Fallback: Gemini 2.5 Flash via GEMINI_API_KEY. Used when CLAWX_VLM_PROVIDER
+ * is set to 'gemini', or when Bedrock creds are unavailable. Cheaper, faster,
+ * but less accurate on ambiguous targets.
+ *
+ * Override the model per-instance for experiments.
  */
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+type VlmProvider = 'bedrock' | 'gemini';
+
+const BEDROCK_DEFAULT_MODEL = 'us.anthropic.claude-sonnet-4-5-20250929-v1:0';
+const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
 const SYSTEM_PROMPT = `You are a UI grounding model. The user shows you a
@@ -119,11 +127,70 @@ export class VlmGrounder {
     model?: string;
     caller?: VlmCaller;
     apiKey?: string;
+    provider?: VlmProvider;
   }) {
-    this.model = opts?.model ?? DEFAULT_MODEL;
+    const provider: VlmProvider =
+      opts?.provider ?? (process.env.CLAWX_VLM_PROVIDER === 'gemini' ? 'gemini' : 'bedrock');
+    this.model = opts?.model
+      ?? (provider === 'bedrock' ? BEDROCK_DEFAULT_MODEL : GEMINI_DEFAULT_MODEL);
+
     if (opts?.caller) {
       this.caller = opts.caller;
-    } else {
+      return;
+    }
+
+    if (provider === 'bedrock') {
+      // Bedrock InvokeModel: image + text in the Anthropic messages format.
+      // The AWS SDK auto-resolves credentials from env / AWS_PROFILE / SSO.
+      this.caller = async ({ systemPrompt, userPrompt, screenshotBase64, mediaType }) => {
+        // Lazy import so the SDK is only loaded when actually used (saves
+        // ~50ms on every test run that mocks the caller).
+        const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime');
+        const region = process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? 'us-east-2';
+        const client = new BedrockRuntimeClient({ region });
+        const body = {
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 256,
+          system: systemPrompt,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: mediaType, data: screenshotBase64 },
+                },
+                { type: 'text', text: userPrompt },
+              ],
+            },
+          ],
+        };
+        const cmd = new InvokeModelCommand({
+          modelId: this.model,
+          contentType: 'application/json',
+          accept: 'application/json',
+          body: new TextEncoder().encode(JSON.stringify(body)),
+        });
+        const resp = await client.send(cmd);
+        const textBytes = resp.body;
+        if (!textBytes) {
+          throw new Error('VlmGrounder: empty Bedrock response body');
+        }
+        const decoded = new TextDecoder().decode(textBytes);
+        const parsed = JSON.parse(decoded) as {
+          content?: Array<{ type?: string; text?: string }>;
+        };
+        const block = parsed.content?.find((c) => c.type === 'text');
+        if (!block || typeof block.text !== 'string') {
+          throw new Error('VlmGrounder: unexpected Bedrock response shape');
+        }
+        return { text: block.text };
+      };
+      return;
+    }
+
+    // Gemini fallback path.
+    {
       const apiKey = opts?.apiKey ?? process.env.GEMINI_API_KEY;
       if (!apiKey) {
         // Defer the throw until first call — instantiating the grounder is
