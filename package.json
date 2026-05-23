@@ -79,6 +79,7 @@
         "postversion": "node scripts/post-version-push.mjs"
     },
     "dependencies": {
+        "@anthropic-ai/sdk": "^0.98.0",
         "@monaco-editor/react": "^4.7.0",
         "@sinclair/typebox": "^0.34.48",
         "@types/diff": "^8.0.0",

@@ -110,6 +110,19 @@ export const SEED_LOCAL_LLM_PROVIDER = flagFromEnv('CLAWX_SEED_LOCAL_LLM_PROVIDE
 export const ENABLE_AUTO_UPDATE = flagFromEnv('CLAWX_ENABLE_AUTO_UPDATE', !PILOT_MODE);
 
 /**
+ * Use the v2 Outlook integration (Playwright + Claude Sonnet 4.5 vision
+ * grounding) instead of the v1 hand-rolled DOM selectors. v1 had several
+ * critical issues catalogued in /tmp/outlook-deep-audit.md, including a
+ * wrong-email-sent risk on confirm. v2 reuses the same public manager
+ * surface so IPC handlers and host-API routes don't change.
+ *
+ * Default is OFF — v2 needs ANTHROPIC_API_KEY in env, and we want a
+ * deliberate dev-side test before flipping for pilots. Set
+ * CLAWX_OUTLOOK_V2=1 in your shell to enable.
+ */
+export const OUTLOOK_BROWSER_V2 = flagFromEnv('CLAWX_OUTLOOK_V2', false);
+
+/**
  * Agents and Cron stay visible by request — principals may need to manage
  * scheduled tasks and switch agents. Models is the only nav item we hide.
  * These flags remain for future tightening; default false keeps them shown.

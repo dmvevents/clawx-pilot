@@ -23,14 +23,20 @@
  *    sees the same shape as if the host hadn't wired outlook at all.
  */
 import type { IncomingMessage, ServerResponse } from 'http';
-import { PRINCIPAL_SKILL_ALLOWLIST } from '../../../shared/feature-flags';
+import { OUTLOOK_BROWSER_V2, PRINCIPAL_SKILL_ALLOWLIST } from '../../../shared/feature-flags';
 import { logger } from '../../utils/logger';
-import { outlookBrowserManager } from '../../services/outlook-browser/manager';
+import { outlookBrowserManager as outlookBrowserManagerV1 } from '../../services/outlook-browser/manager';
+import { outlookBrowserManagerV2 } from '../../services/outlook-browser-v2/manager';
 import type {
   DraftEmailArgs,
   SendEmailArgs,
 } from '../../services/outlook-browser/types';
 import { parseJsonBody, sendJson } from '../route-utils';
+
+// Same flag-gated swap as outlook-browser-ipc.ts. Both surfaces (IPC and
+// host-API HTTP) point at the same singleton implementation, so the manager
+// is shared across renderer + agent calls.
+const outlookBrowserManager = OUTLOOK_BROWSER_V2 ? outlookBrowserManagerV2 : outlookBrowserManagerV1;
 
 function asArray(v: string | string[] | undefined): string[] {
   if (!v) return [];

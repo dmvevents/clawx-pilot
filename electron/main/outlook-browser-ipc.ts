@@ -23,11 +23,24 @@
  */
 import { ipcMain } from 'electron';
 import { logger } from '../utils/logger';
-import { outlookBrowserManager } from '../services/outlook-browser/manager';
+import { OUTLOOK_BROWSER_V2 } from '../../shared/feature-flags';
+import { outlookBrowserManager as outlookBrowserManagerV1 } from '../services/outlook-browser/manager';
+import { outlookBrowserManagerV2 } from '../services/outlook-browser-v2/manager';
 import type {
   DraftEmailArgs,
   SendEmailArgs,
 } from '../services/outlook-browser/types';
+
+/**
+ * Pick implementation at module load time. CLAWX_OUTLOOK_V2=1 selects the
+ * Playwright + Sonnet 4.5 vision grounder; default keeps v1 (hand-rolled
+ * selectors via the openclaw browser plugin) so existing pilots don't see
+ * a behaviour change without an explicit opt-in.
+ */
+const outlookBrowserManager = OUTLOOK_BROWSER_V2 ? outlookBrowserManagerV2 : outlookBrowserManagerV1;
+if (OUTLOOK_BROWSER_V2) {
+  logger.info('[outlook-ipc] OUTLOOK_BROWSER_V2 enabled — using Playwright/Sonnet manager');
+}
 
 function asArray(v: string | string[] | undefined): string[] {
   if (!v) return [];
