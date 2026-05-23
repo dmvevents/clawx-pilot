@@ -35,6 +35,8 @@ import { logger } from '../utils/logger';
 import { prependPathEntry } from '../utils/env-path';
 import { copyPluginFromNodeModules, fixupPluginManifest, cpSyncSafe } from '../utils/plugin-install';
 import { stripSystemdSupervisorEnv } from './config-sync-env';
+import { getPort } from '../utils/config';
+import { getHostApiToken } from '../api/host-api-token';
 import { cleanupAgentsSymlinkedSkills, cleanupStalePluginRuntimeDeps } from './skills-symlink-cleanup';
 import {
   buildPrelaunchMaintenanceCacheKey,
@@ -609,11 +611,26 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
   const baseEnvPatched = binPathExists
     ? prependPathEntry(baseEnvRecord, binPath).env
     : baseEnvRecord;
+  // Allow ClawX-bundled gateway plugins (moe-principal-assistant,
+  // microsoft-graph) to call the ClawX host-API by reading these env vars
+  // and constructing http://127.0.0.1:<port>/api/... with the bearer token.
+  // Compute defensively: if either is missing, omit both so the plugin
+  // gracefully degrades to "outlook host handle not provided" rather than
+  // crashing the gateway with an empty-token call attempt later.
+  const hostApiToken = getHostApiToken();
+  const hostApiEnv: Record<string, string> = hostApiToken
+    ? {
+        CLAWX_HOST_API_PORT: String(getPort('CLAWX_HOST_API')),
+        CLAWX_HOST_API_TOKEN: hostApiToken,
+      }
+    : {};
+
   const forkEnv: Record<string, string | undefined> = {
     ...stripSystemdSupervisorEnv(baseEnvPatched),
     ...providerEnv,
     ...uvEnv,
     ...proxyEnv,
+    ...hostApiEnv,
     OPENCLAW_GATEWAY_TOKEN: appSettings.gatewayToken,
     OPENCLAW_SKIP_CHANNELS: skipChannels ? '1' : '',
     CLAWDBOT_SKIP_CHANNELS: skipChannels ? '1' : '',

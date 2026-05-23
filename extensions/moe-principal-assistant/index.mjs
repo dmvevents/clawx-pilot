@@ -83,12 +83,24 @@ function requireNumber(name, value) {
  * not exposed as user-facing skills, so they don't need to be added.
  */
 
-export function register({ config, registerTool, log = console, host = {} }) {
-  // Older OpenClaw gateway versions pass `config` as a getter function;
-  // newer versions pass it as the already-resolved object. Tolerate both
-  // so the plugin doesn't crash with "config is not a function" on
-  // version drift.
-  const cfg = (typeof config === 'function' ? config() : config) ?? {};
+export function register(api) {
+  // Gateway register-API contract (build/openclaw/dist/api-builder-d3jBS7ML.js):
+  //   api.pluginConfig — THIS plugin's `plugins.entries[<id>].config` (validated)
+  //   api.config       — the WHOLE resolved openclaw.json
+  //   api.registerTool, api.runtime, api.logger, api.host, ...
+  //
+  // Earlier code destructured `{ config }` and treated it as the plugin's own
+  // config — but that's the entire openclaw.json, so cfg.principalName was
+  // always undefined and the missing-keys check fired, and tools never
+  // registered. The fix: read api.pluginConfig.
+  //
+  // Fallbacks: tolerate config-as-function (very old gateway API) and
+  // config-as-direct-object (a custom host that bypasses the gateway loader).
+  const { pluginConfig, config, registerTool, log = console, host = {} } = api;
+  const cfg =
+    (pluginConfig && typeof pluginConfig === 'object' ? pluginConfig : null) ??
+    (typeof config === 'function' ? config() : config) ??
+    {};
   const required = ['principalName', 'schoolName', 'educationDistrict', 'schoolType'];
   const missing = required.filter((k) => !cfg[k]);
   if (missing.length) {
@@ -307,25 +319,33 @@ export function register({ config, registerTool, log = console, host = {} }) {
 
   // ── Outlook (browser-session) tools ─────────────────────────────────────
   // Phase-1 path: drives Outlook Web through the bundled browser plugin in
-  // the principal's existing Chrome (profile=user). The host wires this
-  // capability by passing { outlook } on the host handle. Phase-2 (Graph
-  // OAuth) is parked in extensions/microsoft-graph/ until IT returns a
-  // client_id and stays untouched here.
+  // the principal's existing Chrome (profile=user). Phase-2 (Graph OAuth)
+  // is parked in extensions/microsoft-graph/ until IT returns a client_id.
   //
-  // Allowlist gate: outlook.* tools are only registered when the host both
-  //   (a) provides a usable outlook facade AND
-  //   (b) declares the 'outlook' capability in host.skillAllowlist.
-  // ClawX's PRINCIPAL_SKILL_ALLOWLIST in shared/feature-flags.ts is the
-  // authoritative list; the host is expected to forward it on the handle.
-  // If skillAllowlist is absent we fall back to opt-in: tools register only
-  // when host.outlook was explicitly wired by the host (the existing
-  // contract), so removing 'outlook' from the allowlist disables the tools
-  // without changing this plugin.
-  const outlook = host?.outlook;
+  // Implementation: the plugin runs in the OpenClaw gateway process, NOT
+  // in ClawX's main process — the gateway register API doesn't expose a
+  // `host` handle for IPC. Instead we talk to ClawX's host-API at
+  // 127.0.0.1:$CLAWX_HOST_API_PORT/api/outlook/* using a bearer token.
+  // ClawX threads CLAWX_HOST_API_PORT and CLAWX_HOST_API_TOKEN into the
+  // gateway's spawn env (electron/gateway/config-sync.ts:612).
+  //
+  // The host-API routes already gate by PRINCIPAL_SKILL_ALLOWLIST (see
+  // electron/api/routes/outlook.ts), so removing 'outlook' from the
+  // allowlist disables the tools without changing this plugin — the
+  // routes return 404 and the tool handlers surface that error.
+  const hostApiPort = process.env.CLAWX_HOST_API_PORT;
+  const hostApiToken = process.env.CLAWX_HOST_API_TOKEN;
+  const outlook =
+    hostApiPort && hostApiToken
+      ? createHostApiOutlookFacade(hostApiPort, hostApiToken)
+      : null;
+  // Honour explicit host.skillAllowlist override (legacy contract). When the
+  // gateway exposes neither host.outlook nor host.skillAllowlist (current
+  // state), gate purely on whether we have host-API creds in env.
   const allowlist = host?.skillAllowlist;
   const allowlistGate =
     allowlist == null
-      ? true // opt-in via host.outlook presence (legacy contract)
+      ? true
       : (typeof allowlist.has === 'function' ? allowlist.has('outlook') : false) ||
         (Array.isArray(allowlist) && allowlist.includes('outlook'));
   if (outlook && typeof outlook.open === 'function' && allowlistGate) {
@@ -403,4 +423,74 @@ export function register({ config, registerTool, log = console, host = {} }) {
     `moe-principal-assistant: registered (school=${cfg.schoolName}, district=${cfg.educationDistrict})`,
   );
   return { registered: true };
+}
+
+/**
+ * Build an outlook facade that proxies the four agent-callable methods
+ * (open, readInbox, draftEmail, sendEmail) over HTTP to ClawX's host-API.
+ *
+ * The host-API auth token lives in process.env.CLAWX_HOST_API_TOKEN; the
+ * port in CLAWX_HOST_API_PORT. ClawX populates both on gateway spawn
+ * (electron/gateway/config-sync.ts forkEnv block).
+ *
+ * Each method maps to a host-API route:
+ *   open()                       → POST /api/outlook/open       (no body)
+ *   readInbox(top)               → POST /api/outlook/read-inbox { top }
+ *   draftEmail({to,subject,...}) → POST /api/outlook/draft      { ...args }
+ *   sendEmail({to,...,confirm})  → POST /api/outlook/send       { ...args }
+ *
+ * Errors:
+ *   - 404 from the host-API → 'outlook' was removed from the allowlist;
+ *     surface a clear error so the agent can tell the user.
+ *   - Network / timeout       → wrap as { status: 'error', message }
+ *     so the agent can retry or fall back gracefully.
+ */
+function createHostApiOutlookFacade(port, token) {
+  const base = `http://127.0.0.1:${port}/api/outlook`;
+  const REQUEST_TIMEOUT_MS = 60_000; // generous: drafts can include slow DOM waits.
+
+  async function call(path, body) {
+    const url = `${base}${path}`;
+    const init = {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: body == null ? '{}' : JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    };
+    let resp;
+    try {
+      resp = await fetch(url, init);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`outlook host-API ${path} unreachable: ${msg}`);
+    }
+    if (resp.status === 404) {
+      throw new Error(
+        `outlook capability disabled: ${path} returned 404 — check that 'outlook' is in PRINCIPAL_SKILL_ALLOWLIST.`,
+      );
+    }
+    const text = await resp.text().catch(() => '');
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { /* fall through */ }
+    if (!resp.ok) {
+      const errMsg = (data && (data.error || data.message)) || text.slice(0, 200) || `HTTP ${resp.status}`;
+      throw new Error(`outlook host-API ${path}: ${errMsg}`);
+    }
+    // The host-API wraps results as { success: true, result } or returns
+    // the result directly depending on the route — be tolerant of both.
+    if (data && typeof data === 'object' && 'success' in data && 'result' in data) {
+      return data.result;
+    }
+    return data;
+  }
+
+  return {
+    open: () => call('/open'),
+    readInbox: (top) => call('/read-inbox', typeof top === 'number' ? { top } : {}),
+    draftEmail: (args) => call('/draft', args),
+    sendEmail: (args) => call('/send', args),
+  };
 }

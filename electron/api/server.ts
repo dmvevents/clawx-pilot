@@ -1,5 +1,5 @@
-import { randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { generateHostApiToken } from './host-api-token';
 import { getPort } from '../utils/config';
 import { logger } from '../utils/logger';
 import { extensionRegistry } from '../extensions/registry';
@@ -51,23 +51,15 @@ function buildRouteHandlers(): RouteHandler[] {
   return [...coreRouteHandlers, ...extensionHandlers];
 }
 
-/**
- * Per-session secret token used to authenticate Host API requests.
- * Generated once at server start and shared with the renderer via IPC.
- * This prevents cross-origin attackers from reading sensitive data even
- * if they can reach 127.0.0.1:13210 (the CORS wildcard alone is not
- * sufficient because browsers attach the Origin header but not a secret).
- */
-let hostApiToken: string = '';
-
-/** Retrieve the current Host API auth token (for use by IPC proxy). */
-export function getHostApiToken(): string {
-  return hostApiToken;
-}
+// Token storage moved to ./host-api-token.ts so other modules (e.g.
+// gateway/config-sync) can read the token without importing the entire
+// host-API server file (and its full route-handler dependency chain).
+// Re-export here so existing callers (ipc/host-api-proxy.ts) keep working.
+export { getHostApiToken } from './host-api-token';
 
 export function startHostApiServer(ctx: HostApiContext, port = getPort('CLAWX_HOST_API')): Server {
   // Generate a cryptographically random token for this session.
-  hostApiToken = randomBytes(32).toString('hex');
+  const hostApiToken = generateHostApiToken();
 
   const server = createServer(async (req, res) => {
     try {

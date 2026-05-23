@@ -16,10 +16,22 @@
 
 import { createGraphClient } from './graph-client.mjs';
 
-export function register({ config, getAccessToken, registerTool, log = console }) {
-  // Tolerate config-as-function (older gateway API) AND config-as-object
-  // (newer gateway API). See sister fix in moe-principal-assistant/index.mjs.
-  const cfg = (typeof config === 'function' ? config() : config) ?? {};
+export function register(api) {
+  // Gateway register-API: api.pluginConfig is THIS plugin's config block.
+  // api.config is the whole openclaw.json — not what we want. See the
+  // detailed write-up at /tmp/plugin-config-api.md and the matching fix
+  // in moe-principal-assistant/index.mjs.
+  const { pluginConfig, config, registerTool, log = console } = api;
+  const cfg =
+    (pluginConfig && typeof pluginConfig === 'object' ? pluginConfig : null) ??
+    (typeof config === 'function' ? config() : config) ??
+    {};
+  // getAccessToken was never part of the gateway's register API — pull it
+  // from api.runtime (where the gateway threads runtime services) or
+  // api.host (where a custom in-process host can inject one). Until MoE IT
+  // returns the Entra app registration, this whole path is a no-op anyway:
+  // the cfg.tenantId / cfg.clientId check below will fail first.
+  const getAccessToken = api.runtime?.getAccessToken ?? api.host?.getAccessToken;
   if (!cfg.tenantId || !cfg.clientId) {
     log.warn?.('microsoft-graph: tenantId and clientId not configured — tools will not be registered.');
     return { registered: false };
