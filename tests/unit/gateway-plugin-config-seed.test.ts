@@ -7,7 +7,21 @@ vi.mock('../../electron/utils/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-const HOME_OVERRIDE = join(tmpdir(), 'clawx-plugin-seed-test-' + Date.now());
+// Hoisted so vi.mock factories below can reference it. Vitest hoists vi.mock()
+// to the top of the file; non-hoisted constants are then in TDZ when the
+// mock factory runs. After commit 588ab72/d562477 this file's imports now
+// transitively load channel-config.ts which calls homedir() at module-load,
+// surfacing the TDZ. vi.hoisted runs in the same hoisted phase as vi.mock
+// and cannot reference top-level imports, so we re-require what we need.
+const { HOME_OVERRIDE } = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const os = require('node:os') as typeof import('node:os');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const path = require('node:path') as typeof import('node:path');
+  return {
+    HOME_OVERRIDE: path.join(os.tmpdir(), 'clawx-plugin-seed-test-' + Date.now()),
+  };
+});
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os');

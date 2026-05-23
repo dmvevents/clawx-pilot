@@ -29,6 +29,8 @@ import { promises as fs } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { logger } from '../utils/logger';
+import { withConfigLock } from '../utils/config-mutex';
+import { readOpenClawConfig, writeOpenClawConfig } from '../utils/channel-config';
 
 function getConfigPath(): string {
   return join(homedir(), '.openclaw', 'openclaw.json');
@@ -89,92 +91,94 @@ export async function seedGatewayPluginConfig(): Promise<void> {
     return;
   }
 
-  let raw: string;
-  try {
-    raw = await fs.readFile(getConfigPath(), 'utf-8');
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      // First-run-from-zero: write a minimal schema-valid skeleton so the
-      // gateway's `doctor repair` doesn't crash-loop on the very first boot.
-      // The gateway will then merge its own defaults into this file.
-      logger.info('[gateway-plugin-seed] openclaw.json missing; writing first-run skeleton');
-      const dir = join(homedir(), '.openclaw');
-      try {
-        await fs.mkdir(dir, { recursive: true });
-      } catch (mkErr) {
-        logger.warn(`[gateway-plugin-seed] failed to create ${dir}: ${mkErr instanceof Error ? mkErr.message : String(mkErr)}`);
-        return;
-      }
-      raw = '{}';
-    } else {
-      throw err;
+  // Wrap the entire read-modify-write inside withConfigLock so concurrent
+  // boot-time writers (ensureBuiltinSkillsInstalled, seedDefaultLocalProvider,
+  // setOpenClawDefaultModel, ...) cannot interleave between our read and our
+  // write. Pre-fix this function used raw fs.{readFile,writeFile} and would
+  // silently overwrite anything those writers had committed in the gap. The
+  // boot-path audit at /tmp/boot-path-audit.md lists this as the single
+  // CRITICAL race window on every launch.
+  await withConfigLock(async () => {
+    // First-run-from-zero handling: if the file doesn't exist yet, ensure the
+    // directory + create an empty skeleton so the canonical readers don't
+    // explode. readOpenClawConfig itself returns {} on ENOENT, but we need
+    // the directory to exist before writeOpenClawConfig is called.
+    const dir = join(homedir(), '.openclaw');
+    try {
+      await fs.mkdir(dir, { recursive: true });
+    } catch (mkErr) {
+      logger.warn(
+        `[gateway-plugin-seed] failed to create ${dir}: ${mkErr instanceof Error ? mkErr.message : String(mkErr)}`,
+      );
+      return;
     }
-  }
 
-  let cfg: OpenClawConfig;
-  try {
-    cfg = JSON.parse(raw) as OpenClawConfig;
-  } catch (err) {
-    logger.warn(
-      `[gateway-plugin-seed] openclaw.json unreadable; skipping: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+    // Use the canonical reader+writer so we inherit the regression guard
+    // landed in commit 588ab72 (refuses to clobber a populated agents.list).
+    let cfg: OpenClawConfig;
+    try {
+      cfg = (await readOpenClawConfig()) as OpenClawConfig;
+    } catch (err) {
+      logger.warn(
+        `[gateway-plugin-seed] openclaw.json unreadable; skipping: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return;
+    }
+
+    if (!isPlainObject(cfg.plugins)) cfg.plugins = {};
+    const plugins = cfg.plugins as { entries?: Record<string, PluginEntry> };
+    if (!isPlainObject(plugins.entries)) plugins.entries = {};
+    const entries = plugins.entries!;
+
+    let changed = false;
+
+    // microsoft-graph: stub config, keep disabled until Entra packet returns.
+    const mg: PluginEntry = entries['microsoft-graph'] ?? {};
+    if (mg.enabled === undefined) {
+      mg.enabled = false;
+      changed = true;
+    }
+    if (!isPlainObject(mg.config)) {
+      mg.config = {};
+      changed = true;
+    }
+    if (fillMissingKeys(mg.config!, MS_GRAPH_PLACEHOLDER)) changed = true;
+    // authFlow drift fix: enum tightened from 'pkce' to 'auth-code-pkce'
+    if (mg.config!['authFlow'] === 'pkce') {
+      mg.config!['authFlow'] = 'auth-code-pkce';
+      changed = true;
+    }
+    entries['microsoft-graph'] = mg;
+
+    // moe-principal-assistant: stay enabled but harmless until onboarding.
+    const ma: PluginEntry = entries['moe-principal-assistant'] ?? {};
+    if (ma.enabled === undefined) {
+      ma.enabled = true;
+      changed = true;
+    }
+    if (!isPlainObject(ma.config)) {
+      ma.config = {};
+      changed = true;
+    }
+    if (fillMissingKeys(ma.config!, MOE_ASSISTANT_PLACEHOLDER)) changed = true;
+    // schoolType drift fix: enum is {Denominational, Government}, lowercase invalid.
+    const stRaw = ma.config!['schoolType'];
+    if (typeof stRaw === 'string' && stRaw !== 'Denominational' && stRaw !== 'Government') {
+      ma.config!['schoolType'] = 'Government';
+      changed = true;
+    }
+    entries['moe-principal-assistant'] = ma;
+
+    if (!changed) {
+      logger.debug('[gateway-plugin-seed] plugin config already schema-valid; no changes');
+      return;
+    }
+
+    await writeOpenClawConfig(cfg);
+    logger.info(
+      '[gateway-plugin-seed] patched openclaw.json with schema-valid placeholders for microsoft-graph + moe-principal-assistant',
     );
-    return;
-  }
-
-  if (!isPlainObject(cfg.plugins)) cfg.plugins = {};
-  const plugins = cfg.plugins as { entries?: Record<string, PluginEntry> };
-  if (!isPlainObject(plugins.entries)) plugins.entries = {};
-  const entries = plugins.entries!;
-
-  let changed = false;
-
-  // microsoft-graph: stub config, keep disabled until Entra packet returns.
-  const mg: PluginEntry = entries['microsoft-graph'] ?? {};
-  if (mg.enabled === undefined) {
-    mg.enabled = false;
-    changed = true;
-  }
-  if (!isPlainObject(mg.config)) {
-    mg.config = {};
-    changed = true;
-  }
-  if (fillMissingKeys(mg.config!, MS_GRAPH_PLACEHOLDER)) changed = true;
-  // authFlow drift fix: enum tightened from 'pkce' to 'auth-code-pkce'
-  if (mg.config!['authFlow'] === 'pkce') {
-    mg.config!['authFlow'] = 'auth-code-pkce';
-    changed = true;
-  }
-  entries['microsoft-graph'] = mg;
-
-  // moe-principal-assistant: stay enabled but harmless until onboarding.
-  const ma: PluginEntry = entries['moe-principal-assistant'] ?? {};
-  if (ma.enabled === undefined) {
-    ma.enabled = true;
-    changed = true;
-  }
-  if (!isPlainObject(ma.config)) {
-    ma.config = {};
-    changed = true;
-  }
-  if (fillMissingKeys(ma.config!, MOE_ASSISTANT_PLACEHOLDER)) changed = true;
-  // schoolType drift fix: enum is {Denominational, Government}, lowercase invalid.
-  const stRaw = ma.config!['schoolType'];
-  if (typeof stRaw === 'string' && stRaw !== 'Denominational' && stRaw !== 'Government') {
-    ma.config!['schoolType'] = 'Government';
-    changed = true;
-  }
-  entries['moe-principal-assistant'] = ma;
-
-  if (!changed) {
-    logger.debug('[gateway-plugin-seed] plugin config already schema-valid; no changes');
-    return;
-  }
-
-  const next = JSON.stringify(cfg, null, 2) + '\n';
-  await fs.writeFile(getConfigPath(), next, 'utf-8');
-  logger.info(
-    '[gateway-plugin-seed] patched openclaw.json with schema-valid placeholders for microsoft-graph + moe-principal-assistant',
-  );
+  });
 }

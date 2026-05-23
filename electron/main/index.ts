@@ -391,20 +391,28 @@ async function initialize(): Promise<void> {
   }
 
   // Pre-deploy built-in skills (feishu-doc, feishu-drive, feishu-perm, feishu-wiki)
-  // to ~/.openclaw/skills/ so they are immediately available without manual install.
+  // and bundled third-party skills from resources/preinstalled-skills/ to
+  // ~/.openclaw/skills/.
+  //
+  // Both calls take the openclaw.json config-mutex (see utils/skill-config.ts).
+  // Pre-fix they were fire-and-forget which meant they raced against the
+  // awaited seed → preflight → start chain below; the boot-path audit at
+  // /tmp/boot-path-audit.md (§4 Race A) showed the unlocked
+  // seedGatewayPluginConfig writer would clobber whatever the skill installer
+  // had just written. seedGatewayPluginConfig now also takes the lock, so
+  // interleaving is technically safe — but we still hold the promises and
+  // await them before gateway.start() below so the gateway sees a settled
+  // skills.entries map. Errors are non-fatal; we log and continue.
+  let skillsInstallationsPending: Promise<unknown> = Promise.resolve();
   if (!isE2EMode) {
-    void ensureBuiltinSkillsInstalled().catch((error) => {
-      logger.warn('Failed to install built-in skills:', error);
-    });
-  }
-
-  // Pre-deploy bundled third-party skills from resources/preinstalled-skills.
-  // This installs full skill directories (not only SKILL.md) in an idempotent,
-  // non-destructive way and never blocks startup.
-  if (!isE2EMode) {
-    void ensurePreinstalledSkillsInstalled().catch((error) => {
-      logger.warn('Failed to install preinstalled skills:', error);
-    });
+    skillsInstallationsPending = Promise.all([
+      ensureBuiltinSkillsInstalled().catch((error) => {
+        logger.warn('Failed to install built-in skills:', error);
+      }),
+      ensurePreinstalledSkillsInstalled().catch((error) => {
+        logger.warn('Failed to install preinstalled skills:', error);
+      }),
+    ]);
   }
 
   // Plugin installation is now configuration-driven:
@@ -506,6 +514,15 @@ async function initialize(): Promise<void> {
     } catch (error) {
       logger.warn('Local provider seed failed (non-fatal):', error);
     }
+  }
+
+  // Wait for the skill installations kicked off earlier in initialize() to
+  // settle. They take the openclaw.json config-mutex, so they serialize
+  // with seedGatewayPluginConfig (which now also takes the lock); but
+  // letting them finish first means the gateway sees a fully-populated
+  // skills.entries map on startup rather than racing against late writes.
+  if (!isE2EMode) {
+    await skillsInstallationsPending;
   }
 
   // Self-heal gateway plugin config: ensure microsoft-graph + moe-principal-
