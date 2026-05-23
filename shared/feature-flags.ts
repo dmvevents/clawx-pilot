@@ -93,6 +93,23 @@ export const HIDE_COST_IN_UI = flagFromEnv('CLAWX_HIDE_COST_IN_UI', PILOT_MODE);
 export const SEED_LOCAL_LLM_PROVIDER = flagFromEnv('CLAWX_SEED_LOCAL_LLM_PROVIDER', true);
 
 /**
+ * Auto-update is OFF by default in the MoE pilot. Reasons:
+ *   1. The publish target in electron-builder.yml still points at the
+ *      upstream Chinese OSS server (oss.intelli-spectrum.com) and the
+ *      ValueCell-ai/ClawX GitHub repo. Until we own a release channel,
+ *      a remote update could clobber the pilot with non-MoE upstream
+ *      builds.
+ *   2. The pilot binary is unsigned on Windows. SmartScreen will warn
+ *      users on every auto-installed update — confusing and undermines
+ *      trust.
+ *   3. Updates to the pilot are delivered in person over Cat-5 today.
+ *
+ * Override with CLAWX_ENABLE_AUTO_UPDATE=1 for dev sessions where you
+ * actually want to test the updater path.
+ */
+export const ENABLE_AUTO_UPDATE = flagFromEnv('CLAWX_ENABLE_AUTO_UPDATE', !PILOT_MODE);
+
+/**
  * Agents and Cron stay visible by request — principals may need to manage
  * scheduled tasks and switch agents. Models is the only nav item we hide.
  * These flags remain for future tightening; default false keeps them shown.

@@ -1882,6 +1882,14 @@ function registerClawXBundledPluginPaths(config: Record<string, unknown>): boole
     'microsoft-graph',
     'moe-principal-assistant',
   ];
+  // Two roots to probe, in priority order:
+  //   1. app.getAppPath() — `dist`/source-tree location (works in dev mode
+  //      where `extensions/` sits next to `package.json`).
+  //   2. process.resourcesPath — packaged-app location after electron-builder
+  //      copies extensions/ via extraResources. In a packaged Mac app that
+  //      resolves to `<bundle>.app/Contents/Resources/`; on Windows it's
+  //      `<install>/resources/`. The previous code only checked (1), so the
+  //      packaged build silently shipped without the MoE plugins registered.
   const appPath = (() => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1891,11 +1899,22 @@ function registerClawXBundledPluginPaths(config: Record<string, unknown>): boole
       return process.cwd();
     }
   })();
+  const roots = [appPath];
+  if (typeof process.resourcesPath === 'string' && process.resourcesPath) {
+    roots.push(process.resourcesPath);
+  }
   const wantedPaths: string[] = [];
+  const seen = new Set<string>();
   for (const name of candidates) {
-    const dir = join(appPath, 'extensions', name);
-    const manifest = join(dir, 'openclaw.plugin.json');
-    if (existsSync(manifest)) wantedPaths.push(dir);
+    for (const root of roots) {
+      const dir = join(root, 'extensions', name);
+      const manifest = join(dir, 'openclaw.plugin.json');
+      if (existsSync(manifest) && !seen.has(dir)) {
+        wantedPaths.push(dir);
+        seen.add(dir);
+        break; // first match wins per candidate
+      }
+    }
   }
   if (wantedPaths.length === 0) return false;
 

@@ -317,8 +317,14 @@
 
     ; --- Always remove current user's AppData first ---
     ; NOTE: .openclaw directory is intentionally preserved (user configuration & skills)
+    ; NOTE: clears BOTH "clawx" (legacy) and "Ministry of Education" (current MoE
+    ; pilot productName). Without the productName entry, Electron's userData
+    ; (Local Storage, Cache, providers config, gateway tokens) survives a
+    ; reinstall and can carry stale state into the fresh build.
     RMDir /r "$LOCALAPPDATA\clawx"
     RMDir /r "$APPDATA\clawx"
+    RMDir /r "$LOCALAPPDATA\Ministry of Education"
+    RMDir /r "$APPDATA\Ministry of Education"
 
     ; --- Retry: if directories still exist (locked files), wait and try again ---
 
@@ -342,12 +348,36 @@
         Pop $1
     _cu_roamingDone:
 
+    ; Check AppData\Local\Ministry of Education
+    IfFileExists "$LOCALAPPDATA\Ministry of Education\*.*" 0 _cu_moeLocalDone
+      Sleep 3000
+      RMDir /r "$LOCALAPPDATA\Ministry of Education"
+      IfFileExists "$LOCALAPPDATA\Ministry of Education\*.*" 0 _cu_moeLocalDone
+        nsExec::ExecToStack 'cmd.exe /c rd /s /q "$LOCALAPPDATA\Ministry of Education"'
+        Pop $0
+        Pop $1
+    _cu_moeLocalDone:
+
+    ; Check AppData\Roaming\Ministry of Education
+    IfFileExists "$APPDATA\Ministry of Education\*.*" 0 _cu_moeRoamingDone
+      Sleep 3000
+      RMDir /r "$APPDATA\Ministry of Education"
+      IfFileExists "$APPDATA\Ministry of Education\*.*" 0 _cu_moeRoamingDone
+        nsExec::ExecToStack 'cmd.exe /c rd /s /q "$APPDATA\Ministry of Education"'
+        Pop $0
+        Pop $1
+    _cu_moeRoamingDone:
+
     ; --- Final check: warn user if any directories could not be removed ---
     StrCpy $R3 ""
     IfFileExists "$LOCALAPPDATA\clawx\*.*" 0 +2
       StrCpy $R3 "$R3$\r$\n  • $LOCALAPPDATA\clawx"
     IfFileExists "$APPDATA\clawx\*.*" 0 +2
       StrCpy $R3 "$R3$\r$\n  • $APPDATA\clawx"
+    IfFileExists "$LOCALAPPDATA\Ministry of Education\*.*" 0 +2
+      StrCpy $R3 "$R3$\r$\n  • $LOCALAPPDATA\Ministry of Education"
+    IfFileExists "$APPDATA\Ministry of Education\*.*" 0 +2
+      StrCpy $R3 "$R3$\r$\n  • $APPDATA\Ministry of Education"
     StrCmp $R3 "" _cu_cleanupOk
       MessageBox MB_OK|MB_ICONEXCLAMATION \
         "Some data directories could not be removed (files may be in use):$\r$\n$R3$\r$\n$\r$\nPlease delete them manually after restarting your computer."
@@ -368,8 +398,11 @@
     StrCmp $R3 $PROFILE _cu_enumNext
 
     ; NOTE: .openclaw directory is intentionally preserved for all users
+    ; Clear both legacy clawx and current Ministry of Education paths
     RMDir /r "$R3\AppData\Local\clawx"
     RMDir /r "$R3\AppData\Roaming\clawx"
+    RMDir /r "$R3\AppData\Local\Ministry of Education"
+    RMDir /r "$R3\AppData\Roaming\Ministry of Education"
 
   _cu_enumNext:
     IntOp $R0 $R0 + 1

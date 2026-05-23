@@ -11,6 +11,7 @@ import { BrowserWindow, app, ipcMain } from 'electron';
 import { logger } from '../utils/logger';
 import { EventEmitter } from 'events';
 import { setQuitting } from './app-state';
+import { ENABLE_AUTO_UPDATE } from '../../shared/feature-flags';
 
 /** Base CDN URL (without trailing channel path) */
 const OSS_BASE_URL = 'https://oss.intelli-spectrum.com';
@@ -60,7 +61,8 @@ export class AppUpdater extends EventEmitter {
     });
     
     autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = true;
+    // PILOT_MODE: never silently install at quit — see ENABLE_AUTO_UPDATE.
+    autoUpdater.autoInstallOnAppQuit = ENABLE_AUTO_UPDATE;
     
     autoUpdater.logger = {
       info: (msg: string) => logger.info('[Updater]', msg),
@@ -174,6 +176,16 @@ export class AppUpdater extends EventEmitter {
    * final status so the UI never gets stuck in 'checking'.
    */
   async checkForUpdates(): Promise<UpdateInfo | null> {
+    // Pilot kill-switch: when ENABLE_AUTO_UPDATE is off (default in PILOT_MODE),
+    // never contact the upstream feed. The feed URL still points at upstream
+    // ClawX infra; until we own a release channel an auto-update would clobber
+    // the pilot with non-MoE binaries. See shared/feature-flags.ts.
+    if (!ENABLE_AUTO_UPDATE) {
+      logger.info('[Updater] Auto-update disabled (PILOT_MODE) — skipping check');
+      this.updateStatus({ status: 'not-available' });
+      return null;
+    }
+
     try {
       const result = await autoUpdater.checkForUpdates();
 
@@ -205,6 +217,10 @@ export class AppUpdater extends EventEmitter {
    * Download available update
    */
   async downloadUpdate(): Promise<void> {
+    if (!ENABLE_AUTO_UPDATE) {
+      logger.warn('[Updater] downloadUpdate ignored (PILOT_MODE)');
+      return;
+    }
     try {
       await autoUpdater.downloadUpdate();
     } catch (error) {
@@ -225,6 +241,10 @@ export class AppUpdater extends EventEmitter {
    * the window cleanly while ShipIt runs independently to replace the app.
    */
   quitAndInstall(): void {
+    if (!ENABLE_AUTO_UPDATE) {
+      logger.warn('[Updater] quitAndInstall ignored (PILOT_MODE)');
+      return;
+    }
     logger.info('[Updater] quitAndInstall called');
     setQuitting();
     autoUpdater.quitAndInstall();

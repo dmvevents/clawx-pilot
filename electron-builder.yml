@@ -32,6 +32,26 @@ extraResources:
   # NOTE: OpenClaw plugin mirrors (dingtalk, etc.) are bundled by the
   # afterPack hook (after-pack.cjs) directly from node_modules, so they
   # don't need an extraResources entry here.
+  #
+  # MoE-specific local extensions: ship the source tree under the runtime's
+  # extensions root so registerClawXBundledPluginPaths (electron/utils/
+  # openclaw-auth.ts:1880) finds them inside the packaged app. Without this,
+  # /api/outlook/* routes register but the moe-principal-assistant plugin
+  # handlers never load — the gateway returns "no plugin for this skill".
+  - from: extensions/moe-principal-assistant/
+    to: extensions/moe-principal-assistant/
+    filter:
+      - "**/*"
+      - "!node_modules/.cache/**"
+      - "!*.log"
+      - "!.DS_Store"
+  - from: extensions/microsoft-graph/
+    to: extensions/microsoft-graph/
+    filter:
+      - "**/*"
+      - "!node_modules/.cache/**"
+      - "!*.log"
+      - "!.DS_Store"
 
 afterPack: ./scripts/after-pack.cjs
 
