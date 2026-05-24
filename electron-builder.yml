@@ -70,16 +70,22 @@ asarUnpack:
 # own process — @electron/rebuild must NOT touch them.
 npmRebuild: false
 
-# Auto-update configuration
-# Primary: Alibaba Cloud OSS (fast for Chinese users, used for auto-update)
-# Fallback: GitHub Releases (backup, used when OSS is unavailable)
-publish:
-  - provider: generic
-    url: https://oss.intelli-spectrum.com/latest
-    useMultipleRangeRequest: false
-  - provider: github
-    owner: ValueCell-ai
-    repo: ClawX
+# Auto-update configuration — DISABLED for the MoE pilot
+#
+# Defense in depth: ENABLE_AUTO_UPDATE in shared/feature-flags.ts is the
+# runtime kill-switch (defaults to !PILOT_MODE, see commit d562477), but
+# we ALSO scrub the publish: block here so the generated app-update.yml
+# doesn't ship with a URL to upstream ClawX infra. With no `publish`,
+# electron-builder either omits app-update.yml or writes a no-op stub,
+# preventing electron-updater from finding a feed URL even if the runtime
+# flag were flipped accidentally.
+#
+# When we own a release channel (likely dmvevents/clawx-pilot), restore:
+#   publish:
+#     - provider: github
+#       owner: dmvevents
+#       repo: clawx-pilot
+# and flip ENABLE_AUTO_UPDATE default in feature-flags.ts.
 
 # macOS Configuration
 mac:
