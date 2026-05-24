@@ -32,6 +32,8 @@ import type {
   MarkReadResult,
   ListAttachmentsArgs,
   ListAttachmentsResult,
+  DownloadAttachmentArgs,
+  DownloadAttachmentResult,
 } from './types';
 
 class OutlookBrowserManagerV2 {
@@ -86,6 +88,10 @@ class OutlookBrowserManagerV2 {
 
   async listAttachments(args: ListAttachmentsArgs): Promise<ListAttachmentsResult> {
     return this.ensureActions().listAttachments(args);
+  }
+
+  async downloadAttachment(args: DownloadAttachmentArgs): Promise<DownloadAttachmentResult> {
+    return this.ensureActions().downloadAttachment(args);
   }
 
   async close(): Promise<void> {

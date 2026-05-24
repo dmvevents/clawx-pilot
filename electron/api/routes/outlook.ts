@@ -36,6 +36,7 @@ import type {
   ForwardArgs,
   MarkReadArgs,
   ListAttachmentsArgs,
+  DownloadAttachmentArgs,
 } from '../../services/outlook-browser/types';
 import { parseJsonBody, sendJson } from '../route-utils';
 
@@ -177,6 +178,19 @@ export async function handleOutlookRoutes(
       const result = await outlookBrowserManager.listAttachments(body);
       logger.info(
         `[host-api outlook/list-attachments] id=${body.id} status=${result.status} count=${result.attachments.length}`,
+      );
+      sendJson(res, 200, { success: true, data: result });
+      return true;
+    }
+
+    if (url.pathname === '/api/outlook/download-attachment') {
+      const body = await parseJsonBody<DownloadAttachmentArgs>(req);
+      logger.info(
+        `[host-api outlook/download-attachment] attempt id=${body.id} filename=${body.filename?.slice(0, 40)} confirm=${body.confirm === true}`,
+      );
+      const result = await outlookBrowserManager.downloadAttachment(body);
+      logger.info(
+        `[host-api outlook/download-attachment] result=${result.status} savedPath=${result.savedPath ? '[set]' : '[unset]'}`,
       );
       sendJson(res, 200, { success: true, data: result });
       return true;

@@ -44,6 +44,8 @@ import type {
   MarkReadResult,
   ListAttachmentsArgs,
   ListAttachmentsResult,
+  DownloadAttachmentArgs,
+  DownloadAttachmentResult,
 } from './types';
 
 const OUTLOOK_INBOX_URL = 'https://outlook.office.com/mail/';
@@ -576,6 +578,131 @@ export class OutlookActions {
       status: 'ok',
       id: args.id,
       attachments: detail.attachments ?? [],
+    };
+  }
+
+  /**
+   * Download a specific attachment from a message. HARD-GATED: refuses
+   * unless `confirm: true` is set. Mirrors the send_email guard — the
+   * agent must surface a confirmation to the principal first.
+   *
+   * Implementation:
+   *   1. Open the message via openMessageById.
+   *   2. Verify the requested filename exists on the message (defense
+   *      against the agent passing a stale/wrong filename — refuse with
+   *      reason='not_found' rather than blindly downloading whatever
+   *      Outlook hands back).
+   *   3. Use Playwright's page.waitForEvent('download') pattern to
+   *      intercept the file save. We let Playwright save it to its
+   *      default download dir; the saved path is what we return.
+   *   4. Trigger the click on the attachment chip. Outlook usually
+   *      offers a "Download" submenu; we try the explicit Download
+   *      button first, fall back to the chip's main click which most
+   *      themes treat as download.
+   */
+  async downloadAttachment(args: DownloadAttachmentArgs): Promise<DownloadAttachmentResult> {
+    if (args.confirm !== true) {
+      return {
+        status: 'refused',
+        filename: args.filename,
+        reason: 'Download blocked: confirm flag not set. Show the principal what attachment will be downloaded and re-call with confirm=true after they say yes.',
+      };
+    }
+
+    const page = await this.driver.ensureOutlookTab();
+    if (await this.looksLikeSignin(page)) {
+      return {
+        status: 'needs_signin',
+        filename: args.filename,
+        message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
+      };
+    }
+
+    const opened = await this.openMessageById(page, args.id);
+    if (!opened) {
+      return {
+        status: 'not_found',
+        filename: args.filename,
+        reason: `Could not locate message with id "${args.id}".`,
+      };
+    }
+
+    // Verify the attachment exists on the open message before triggering
+    // any download. Outlook's attachment chip aria-label is the same
+    // format readEmail's parser uses, so we can grep visible attachments
+    // by filename.
+    const attachmentExists = await page.evaluate(`
+      (() => {
+        const wantedFilename = ${JSON.stringify(args.filename)};
+        const atts = document.querySelectorAll('[aria-label^="Attached file" i], [aria-label^="Attachment" i]');
+        for (const a of Array.from(atts)) {
+          const label = a.getAttribute('aria-label') || '';
+          if (label.toLowerCase().includes(wantedFilename.toLowerCase())) return true;
+        }
+        return false;
+      })()
+    `);
+    if (!attachmentExists) {
+      return {
+        status: 'not_found',
+        filename: args.filename,
+        reason: `Attachment "${args.filename}" not found on this message. Call list_attachments first.`,
+      };
+    }
+
+    // Set up the download listener BEFORE the click so we don't miss it.
+    // Playwright's waitForEvent('download') resolves when the browser
+    // initiates a download.
+    const downloadPromise = page.waitForEvent('download', { timeout: 30_000 });
+
+    // Click the attachment chip. Try Download submenu first, then chip itself.
+    const downloadTarget = page.getByRole('menuitem', { name: /^download$/i }).first();
+    const chip = page.locator(`[aria-label*="${args.filename.replace(/"/g, '\\"')}" i]`).first();
+
+    // Open chip's context menu via a right-click (Outlook adds a menu),
+    // then click "Download".
+    try {
+      if ((await chip.count()) > 0) {
+        await chip.click({ timeout: 5_000, button: 'right' }).catch(() => null);
+        await this.driver.sleep(300);
+        if ((await downloadTarget.count()) > 0) {
+          await downloadTarget.click({ timeout: 5_000 });
+        } else {
+          // Fall back to a plain click on the chip — many themes treat
+          // single-click on the chip as "open preview" but download is
+          // accessible via a small download icon adjacent to the chip.
+          await chip.click({ timeout: 5_000 });
+        }
+      }
+    } catch (err) {
+      logger.warn?.(
+        `[outlook-v2] downloadAttachment click chain failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    // Wait for the download to land.
+    let download;
+    try {
+      download = await downloadPromise;
+    } catch {
+      return {
+        status: 'refused',
+        filename: args.filename,
+        reason: 'Download did not start within 30s. The attachment chip may not have surfaced a download action; ask the principal to download it manually.',
+      };
+    }
+
+    // Save to Playwright's default download path (set by the browser
+    // context). We don't control where this lives — it's typically
+    // under <user data dir>/Downloads or the system Downloads folder.
+    const savedPath = await download.path().catch(() => undefined);
+    return {
+      status: 'downloaded',
+      filename: args.filename,
+      savedPath: savedPath ?? undefined,
+      message: savedPath
+        ? `Downloaded to ${savedPath}.`
+        : 'Download completed but the path was not retrievable from the driver.',
     };
   }
 

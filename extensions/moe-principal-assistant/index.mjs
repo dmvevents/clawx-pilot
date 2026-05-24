@@ -483,6 +483,22 @@ export function register(api) {
       },
     });
 
+    registerTool({
+      name: 'outlook.download_attachment',
+      description:
+        'Download a specific attachment from a message to disk. HARD GATE: refuses unless { confirm: true } is set. The agent MUST show the principal which file will be downloaded (filename + sender + subject) and obtain explicit confirmation before passing confirm=true. Args: { id, filename, confirm: boolean }. Returns { status, filename, savedPath?, reason? }.',
+      handler: async (args = {}) => {
+        const { id, filename, confirm } = args;
+        requireString('id', id);
+        requireString('filename', filename);
+        return outlook.downloadAttachment({
+          id,
+          filename,
+          confirm: confirm === true,
+        });
+      },
+    });
+
     log.info?.('moe-principal-assistant: outlook (browser-session) tools registered');
   } else if (outlook && typeof outlook.open === 'function' && !allowlistGate) {
     log.info?.(
@@ -575,5 +591,6 @@ function createHostApiOutlookFacade(port, token) {
     forward: (args) => call('/forward', args),
     markRead: (args) => call('/mark-read', args),
     listAttachments: (args) => call('/list-attachments', args),
+    downloadAttachment: (args) => call('/download-attachment', args),
   };
 }

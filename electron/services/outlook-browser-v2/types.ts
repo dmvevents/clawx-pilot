@@ -31,4 +31,6 @@ export type {
   MarkReadResult,
   ListAttachmentsArgs,
   ListAttachmentsResult,
+  DownloadAttachmentArgs,
+  DownloadAttachmentResult,
 } from '../outlook-browser/types';

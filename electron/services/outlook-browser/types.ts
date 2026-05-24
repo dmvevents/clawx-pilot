@@ -189,3 +189,26 @@ export interface ListAttachmentsResult {
   attachments: EmailAttachmentInfo[];
   message?: string;
 }
+
+export interface DownloadAttachmentArgs {
+  id: string;
+  /** Filename of the attachment to download. Must match an entry returned
+   *  by list_attachments / read_email. */
+  filename: string;
+  /** Hard gate. Like send_email, the agent MUST surface a confirmation
+   *  to the principal before flipping this. Without confirm:true the
+   *  download is refused. */
+  confirm: boolean;
+}
+
+export interface DownloadAttachmentResult {
+  status: 'downloaded' | 'refused' | 'not_found' | 'needs_signin';
+  /** Absolute path the file was saved to (Mac/Linux) or Windows path. Only
+   *  populated when status === 'downloaded'. */
+  savedPath?: string;
+  /** Echo of the requested filename for audit. */
+  filename: string;
+  /** Set when status === 'refused' or status === 'not_found'. */
+  reason?: string;
+  message?: string;
+}
