@@ -63,11 +63,34 @@ async function main() {
 
   console.log('=== outlook-browser-v2 eval ===\n');
 
+  // Inter-run cleanup: dismiss any open compose/dialog and navigate the
+  // Outlook tab back to the inbox. Without this, the W4.1 'click New
+  // mail' step fails when a previous eval's draft is still open. Best-
+  // effort — failures here aren't fatal.
+  try {
+    await driver.ensureBrowser();
+    const page = await driver.ensureOutlookTab();
+    await driver.pressKey('Escape').catch(() => null);
+    await driver.sleep(300);
+    await driver.pressKey('Escape').catch(() => null);
+    await driver.sleep(300);
+    const inboxLink = page.getByRole('treeitem', { name: /^inbox/i }).first();
+    if ((await inboxLink.count().catch(() => 0)) > 0) {
+      await inboxLink.click({ timeout: 3_000 }).catch(() => null);
+      await driver.sleep(500);
+    }
+  } catch (err) {
+    console.log(`(cleanup warmup non-fatal: ${err instanceof Error ? err.message : String(err)})`);
+  }
+
   // W1 — open
   await runRow('W1', 'open', 'open() returns opened with mail URL', async () => {
     const r = await actions.open();
+    // Microsoft is migrating outlook.office.com → outlook.cloud.microsoft;
+    // accept both. (The driver's OUTLOOK_HOST_PATTERNS matches both.)
+    const validHost = /outlook\.(office\.com|office365\.com|cloud\.microsoft|live\.com)\/mail/.test(r.url);
     return {
-      ok: r.status === 'opened' && /outlook\.office\.com\/mail/.test(r.url),
+      ok: r.status === 'opened' && validHost,
       notes: `status=${r.status} url=${r.url}`,
     };
   });
