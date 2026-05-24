@@ -84,11 +84,17 @@ async function readConfig(): Promise<OpenClawConfig> {
 }
 
 /**
- * Write the OpenClaw config
+ * Write the OpenClaw config. Delegates to the canonical writer
+ * (utils/channel-config.ts::writeOpenClawConfig) so this path inherits
+ * the regression guard (refuses to clobber a populated agents.list).
+ *
+ * Pre-fix this used a raw writeFile and was flagged as a MEDIUM-risk
+ * writer in /tmp/boot-path-audit.md. setSkillsEnabled and the
+ * preinstalled-skills installer both back through this function.
  */
 async function writeConfig(config: OpenClawConfig): Promise<void> {
-    const json = JSON.stringify(config, null, 2);
-    await writeFile(OPENCLAW_CONFIG_PATH, json, 'utf-8');
+    const { writeOpenClawConfig } = await import('./channel-config');
+    await writeOpenClawConfig(config);
 }
 
 async function setSkillsEnabled(skillKeys: string[], enabled: boolean): Promise<void> {

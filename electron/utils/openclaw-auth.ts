@@ -799,16 +799,22 @@ function normalizeAgentsDefaultsCompactionMode(config: Record<string, unknown>):
 async function writeOpenClawJson(config: Record<string, unknown>): Promise<void> {
   normalizeAgentsDefaultsCompactionMode(config);
 
-  // Ensure SIGUSR1 graceful reload is authorized by OpenClaw config.
-  const commands = (
-    config.commands && typeof config.commands === 'object'
-      ? { ...(config.commands as Record<string, unknown>) }
-      : {}
-  ) as Record<string, unknown>;
-  commands.restart = true;
-  config.commands = commands;
-
-  await writeJsonFile(OPENCLAW_CONFIG_PATH, config);
+  // Delegate to the canonical writer (utils/channel-config.ts) so this
+  // path inherits the regression guard — pre-this-fix it bypassed it.
+  // The boot-path audit (/tmp/boot-path-audit.md) flagged this as a
+  // HIGH-risk writer that backs ~12 functions including
+  // setOpenClawDefaultModel, syncProviderConfigToOpenClaw, and
+  // patchProviderModelCompat. Without delegation, any of those could
+  // silently erase a populated agents.list and trigger the gateway's
+  // last-good validator rollback loop.
+  //
+  // Lazy import to avoid a circular dependency: channel-config.ts
+  // imports from this file at module-load time.
+  const { writeOpenClawConfig } = await import('./channel-config');
+  // The canonical writer already handles `commands.restart = true`,
+  // so we don't duplicate it here. (Kept the comment / behaviour
+  // single-sourced.)
+  await writeOpenClawConfig(config as Parameters<typeof writeOpenClawConfig>[0]);
 }
 
 // ── Exported Functions (all async) ───────────────────────────────
