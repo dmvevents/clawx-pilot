@@ -122,12 +122,23 @@ export class VlmGrounder {
   private readonly cacheTtlMs = 60_000;
   private readonly model: string;
   private readonly caller: VlmCaller;
+  /**
+   * Optional fallback caller. When the primary caller throws, we try
+   * this one before giving up. Used in production to fall through
+   * Bedrock → Gemini if AWS auth fails or the region is unreachable.
+   * In test paths (where caller is injected directly) the fallback
+   * stays null.
+   */
+  private readonly fallbackCaller: VlmCaller | null = null;
+  private readonly fallbackModel: string | null = null;
 
   constructor(opts?: {
     model?: string;
     caller?: VlmCaller;
     apiKey?: string;
     provider?: VlmProvider;
+    /** Set false to disable the auto Bedrock→Gemini fallback. Default true. */
+    enableFallback?: boolean;
   }) {
     const provider: VlmProvider =
       opts?.provider ?? (process.env.CLAWX_VLM_PROVIDER === 'gemini' ? 'gemini' : 'bedrock');
@@ -139,10 +150,42 @@ export class VlmGrounder {
       return;
     }
 
+    // Build a Gemini fallback caller when:
+    //   - primary is Bedrock (Bedrock can fail on auth / region issues
+    //     more often than Gemini's API-key path)
+    //   - GEMINI_API_KEY is present in env
+    //   - opts.enableFallback isn't explicitly false
+    // This makes the agent gracefully degrade rather than blow up the
+    // whole Outlook flow when AWS SSO has expired or the laptop is
+    // offline-ish.
+    const wantFallback = opts?.enableFallback !== false
+      && provider === 'bedrock'
+      && Boolean(process.env.GEMINI_API_KEY);
+    if (wantFallback) {
+      this.fallbackModel = GEMINI_DEFAULT_MODEL;
+      this.fallbackCaller = this.buildGeminiCaller(process.env.GEMINI_API_KEY!);
+    }
+
     if (provider === 'bedrock') {
-      // Bedrock InvokeModel: image + text in the Anthropic messages format.
-      // The AWS SDK auto-resolves credentials from env / AWS_PROFILE / SSO.
-      this.caller = async ({ systemPrompt, userPrompt, screenshotBase64, mediaType }) => {
+      this.caller = this.buildBedrockCaller();
+      return;
+    }
+
+    // Gemini path (kept inline below; should match buildGeminiCaller).
+    {
+      const apiKey = opts?.apiKey ?? process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        this.caller = () => Promise.reject(
+          new Error('VlmGrounder: GEMINI_API_KEY not set. Set it in env or pass apiKey to the constructor.'),
+        );
+      } else {
+        this.caller = this.buildGeminiCaller(apiKey);
+      }
+    }
+  }
+
+  private buildBedrockCaller(): VlmCaller {
+    return async ({ systemPrompt, userPrompt, screenshotBase64, mediaType }) => {
         // Lazy import so the SDK is only loaded when actually used (saves
         // ~50ms on every test run that mocks the caller).
         const { BedrockRuntimeClient, InvokeModelCommand } = await import('@aws-sdk/client-bedrock-runtime');
@@ -184,74 +227,51 @@ export class VlmGrounder {
         if (!block || typeof block.text !== 'string') {
           throw new Error('VlmGrounder: unexpected Bedrock response shape');
         }
-        return { text: block.text };
-      };
-      return;
-    }
+      return { text: block.text };
+    };
+  }
 
-    // Gemini fallback path.
-    {
-      const apiKey = opts?.apiKey ?? process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        // Defer the throw until first call — instantiating the grounder is
-        // fine, it's only when we try to ground without a key that we
-        // should fail. This lets the rest of v2 boot in dev without a
-        // key while still failing loudly when actually used.
-        this.caller = () => {
-          return Promise.reject(
-            new Error(
-              'VlmGrounder: GEMINI_API_KEY not set. Set it in env or pass apiKey to the constructor.',
-            ),
-          );
-        };
-      } else {
-        // Gemini's generateContent endpoint takes inline base64 image
-        // parts. We assemble system + user prompts as a single user turn
-        // (Gemini's "system" support varies by model version; folding
-        // both into one message is portable across 2.5-flash / 2.5-pro
-        // and matches how the rest of ClawX talks to Gemini).
-        this.caller = async ({ systemPrompt, userPrompt, screenshotBase64, mediaType }) => {
-          const url = `${GEMINI_BASE_URL}/models/${this.model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-          const body = {
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  { text: systemPrompt + '\n\n' + userPrompt },
-                  { inlineData: { mimeType: mediaType, data: screenshotBase64 } },
-                ],
-              },
+  private buildGeminiCaller(apiKey: string): VlmCaller {
+    return async ({ systemPrompt, userPrompt, screenshotBase64, mediaType }) => {
+      // The fallback uses the Gemini default model regardless of what
+      // this.model says — so when Bedrock fails over to Gemini, we
+      // don't accidentally pass a Bedrock model id to the Gemini API.
+      const modelToUse = this.fallbackModel ?? this.model;
+      const url = `${GEMINI_BASE_URL}/models/${modelToUse}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const body = {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: systemPrompt + '\n\n' + userPrompt },
+              { inlineData: { mimeType: mediaType, data: screenshotBase64 } },
             ],
-            generationConfig: {
-              maxOutputTokens: 256,
-              // Gemini 2.5 supports a native JSON mode which is exactly
-              // what our parser wants. Saves us markdown-fence stripping.
-              responseMimeType: 'application/json',
-            },
-          };
-          const resp = await fetch(url, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(body),
-            // Per-call timeout so a hung Gemini doesn't hang the whole
-            // Outlook action chain.
-            signal: AbortSignal.timeout(20_000),
-          });
-          if (!resp.ok) {
-            const errText = await resp.text().catch(() => '');
-            throw new Error(`Gemini ${resp.status}: ${errText.slice(0, 200)}`);
-          }
-          const data = await resp.json() as {
-            candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-          };
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (typeof text !== 'string') {
-            throw new Error('VlmGrounder: unexpected Gemini response shape');
-          }
-          return { text };
-        };
+          },
+        ],
+        generationConfig: {
+          maxOutputTokens: 256,
+          responseMimeType: 'application/json',
+        },
+      };
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '');
+        throw new Error(`Gemini ${resp.status}: ${errText.slice(0, 200)}`);
       }
-    }
+      const data = await resp.json() as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (typeof text !== 'string') {
+        throw new Error('VlmGrounder: unexpected Gemini response shape');
+      }
+      return { text };
+    };
   }
 
   /**
@@ -269,26 +289,54 @@ export class VlmGrounder {
     }
 
     const userPrompt = `Find: "${query.question}". Reply with the JSON object only.`;
+    const screenshotBase64 = query.screenshotPng.toString('base64');
+    const callArgs = {
+      systemPrompt: SYSTEM_PROMPT,
+      userPrompt,
+      screenshotBase64,
+      mediaType: 'image/png' as const,
+    };
     let parsed: GroundResult;
     try {
-      const screenshotBase64 = query.screenshotPng.toString('base64');
-      const { text } = await this.caller({
-        systemPrompt: SYSTEM_PROMPT,
-        userPrompt,
-        screenshotBase64,
-        mediaType: 'image/png',
-      });
+      const { text } = await this.caller(callArgs);
       parsed = this.parseResponse(text, query);
-    } catch (err) {
-      logger.warn(
-        `[outlook-v2] VlmGrounder.ground failed for "${query.question}": ${err instanceof Error ? err.message : String(err)}`,
-      );
-      parsed = {
-        found: false,
-        confidence: 0,
-        reasoning: 'VLM call failed',
-        question: query.question,
-      };
+    } catch (primaryErr) {
+      const primaryMsg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+      // Fallback path: when primary (typically Bedrock) fails AND we have
+      // a Gemini fallback configured. Production-grade graceful
+      // degradation: AWS SSO expired? Region temporarily unreachable?
+      // Bedrock rate-limited? Don't blow up the whole Outlook flow —
+      // try Gemini and only fail if it ALSO breaks.
+      if (this.fallbackCaller) {
+        logger.warn(
+          `[outlook-v2] primary VLM caller failed (${primaryMsg}) — trying Gemini fallback`,
+        );
+        try {
+          const { text } = await this.fallbackCaller(callArgs);
+          parsed = this.parseResponse(text, query);
+        } catch (fallbackErr) {
+          const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+          logger.warn(
+            `[outlook-v2] VLM fallback ALSO failed for "${query.question}": primary=${primaryMsg} fallback=${fbMsg}`,
+          );
+          parsed = {
+            found: false,
+            confidence: 0,
+            reasoning: 'VLM call failed (both primary and fallback)',
+            question: query.question,
+          };
+        }
+      } else {
+        logger.warn(
+          `[outlook-v2] VlmGrounder.ground failed for "${query.question}": ${primaryMsg}`,
+        );
+        parsed = {
+          found: false,
+          confidence: 0,
+          reasoning: 'VLM call failed',
+          question: query.question,
+        };
+      }
     }
 
     this.cache.set(cacheKey, { value: parsed, expiresAt: Date.now() + this.cacheTtlMs });

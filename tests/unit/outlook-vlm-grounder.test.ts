@@ -156,6 +156,53 @@ describe('VlmGrounder', () => {
     expect(r.confidence).toBeCloseTo(0.2);
   });
 
+  it('falls back to gemini caller when primary throws', async () => {
+    // Production-grade graceful degradation: when Bedrock fails (AWS auth
+    // expired, region unreachable, rate-limited) and a Gemini fallback is
+    // configured, ground() retries through the fallback rather than
+    // bubbling the error to the user.
+    const primary = vi.fn().mockRejectedValue(new Error('Bedrock SSO expired'));
+    const fallback = vi.fn().mockResolvedValue({
+      text: '{"found": true, "bbox": {"x": 50, "y": 50, "width": 20, "height": 20}, "confidence": 0.85, "reasoning": "via gemini"}',
+    });
+    const grounder = new VlmGrounder({ caller: primary });
+    // Inject the fallback caller directly — the public constructor only
+    // attaches one based on env, but the wiring inside ground() is what
+    // matters.
+    (grounder as unknown as { fallbackCaller: typeof fallback }).fallbackCaller = fallback;
+
+    const result = await grounder.ground({
+      screenshotPng: PNG,
+      imageWidth: 200,
+      imageHeight: 200,
+      question: 'test fallback',
+    });
+
+    expect(primary).toHaveBeenCalledOnce();
+    expect(fallback).toHaveBeenCalledOnce();
+    expect(result.found).toBe(true);
+    expect(result.bbox).toEqual({ x: 50, y: 50, width: 20, height: 20 });
+  });
+
+  it('returns found=false when both primary AND fallback fail', async () => {
+    const primary = vi.fn().mockRejectedValue(new Error('Bedrock 503'));
+    const fallback = vi.fn().mockRejectedValue(new Error('Gemini 429'));
+    const grounder = new VlmGrounder({ caller: primary });
+    (grounder as unknown as { fallbackCaller: typeof fallback }).fallbackCaller = fallback;
+
+    const result = await grounder.ground({
+      screenshotPng: PNG,
+      imageWidth: 200,
+      imageHeight: 200,
+      question: 'both broken',
+    });
+
+    expect(primary).toHaveBeenCalledOnce();
+    expect(fallback).toHaveBeenCalledOnce();
+    expect(result.found).toBe(false);
+    expect(result.reasoning).toMatch(/both primary and fallback/i);
+  });
+
   it('bboxCentre rounds to integer pixel coords', () => {
     expect(bboxCentre({ x: 100, y: 50, width: 80, height: 32 })).toEqual({ x: 140, y: 66 });
     expect(bboxCentre({ x: 0, y: 0, width: 1, height: 1 })).toEqual({ x: 1, y: 1 });
