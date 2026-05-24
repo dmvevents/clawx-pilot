@@ -196,4 +196,30 @@ describe('seedGatewayPluginConfig', () => {
     const after2 = await fs.readFile(CFG_PATH, 'utf-8');
     expect(after2).toBe(after1);
   });
+
+  it('prunes stale plugin entries (wechat, wecom, etc.) the gateway warns about every boot', async () => {
+    // Seed a config that has the leftover-fork plugin entries the
+    // gateway emits "plugin not found" warns for. After
+    // seedGatewayPluginConfig runs they should be gone.
+    await writeCfg({
+      plugins: {
+        entries: {
+          wechat: { enabled: false },
+          wecom: { enabled: false },
+          'phone-control': { enabled: false },
+          telegram: { enabled: false },
+        },
+      },
+    });
+    await seedGatewayPluginConfig();
+    const cfg = await readCfg();
+    const entries = (cfg as { plugins?: { entries?: Record<string, unknown> } }).plugins?.entries ?? {};
+    expect(entries.wechat).toBeUndefined();
+    expect(entries.wecom).toBeUndefined();
+    expect(entries['phone-control']).toBeUndefined();
+    expect(entries.telegram).toBeUndefined();
+    // The MoE plugins should still be added (the seed's primary job).
+    expect(entries['microsoft-graph']).toBeDefined();
+    expect(entries['moe-principal-assistant']).toBeDefined();
+  });
 });

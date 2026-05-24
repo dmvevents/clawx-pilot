@@ -4,7 +4,7 @@
  *
  * All file I/O uses async fs/promises to avoid blocking the main thread.
  */
-import { access, mkdir, readFile, writeFile, readdir, stat, rm } from 'fs/promises';
+import { access, mkdir, readFile, writeFile, readdir, stat, rm, rename, unlink } from 'fs/promises';
 import { constants } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -442,7 +442,26 @@ export async function writeOpenClawConfig(config: OpenClawConfig): Promise<void>
         commands.restart = true;
         config.commands = commands;
 
-        await writeFile(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+        // Atomic write: serialize FIRST (catches stringify errors before we
+        // touch the disk), write to a temp file in the same dir, then rename
+        // over CONFIG_FILE. rename(2) is atomic on the same filesystem on
+        // every OS we ship to (macOS APFS, Linux ext4, Windows NTFS — Win
+        // uses MoveFileExW with REPLACE_EXISTING semantics under the hood).
+        //
+        // Pre-fix this used a plain writeFile which is NOT atomic — a
+        // process kill or another writer landing mid-write produced the
+        // "Unexpected end of JSON input" failures we were seeing in
+        // /tmp/clawx-dev-v2.log every few hours.
+        const serialized = JSON.stringify(config, null, 2);
+        const tempPath = `${CONFIG_FILE}.tmp.${process.pid}.${Date.now()}`;
+        try {
+            await writeFile(tempPath, serialized, 'utf-8');
+            await rename(tempPath, CONFIG_FILE);
+        } catch (writeErr) {
+            // Best-effort cleanup of the temp file on failure.
+            await unlink(tempPath).catch(() => undefined);
+            throw writeErr;
+        }
     } catch (error) {
         logger.error('Failed to write OpenClaw config', error);
         console.error('Failed to write OpenClaw config:', error);

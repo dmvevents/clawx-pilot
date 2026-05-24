@@ -171,6 +171,61 @@ export async function seedGatewayPluginConfig(): Promise<void> {
     }
     entries['moe-principal-assistant'] = ma;
 
+    // Prune stale plugin entries the gateway warns about every boot.
+    // The gateway log emits lines like:
+    //   plugins.entries.wechat: plugin not found: wechat (stale config
+    //     entry ignored; remove it from plugins config)
+    // for entries the user (or a previous build) configured but for
+    // which no plugin code exists in the current bundle. The gateway
+    // ignores them at runtime, but logs the warn every restart, which
+    // becomes noise that masks real problems.
+    //
+    // We can't dynamically detect every available plugin from this
+    // process (the gateway owns that knowledge), but we CAN evict a
+    // small known list of upstream-fork plugins that the MoE pilot
+    // build never ships. Keep this list narrow — adding a plugin name
+    // here permanently disables it for the pilot.
+    const STALE_PLUGIN_NAMES = [
+      'wechat',
+      'wecom',
+      'feishu',
+      'qqbot',
+      'discord',
+      'telegram',
+      'whatsapp',
+      'slack',
+      'signal',
+      'imessage',
+      'matrix',
+      'line',
+      'msteams',
+      'googlechat',
+      'mattermost',
+      'tlon',
+      'twitch',
+      'voice-call',
+      'webhooks',
+      'xiaomi',
+      'zalo',
+      'zalouser',
+      'nostr',
+      'nextcloud-talk',
+      'phone-control',
+      'synology-chat',
+      'irc',
+      'bluebubbles',
+      'browser',
+      'google',
+      'dingtalk',
+    ];
+    for (const name of STALE_PLUGIN_NAMES) {
+      if (entries[name]) {
+        delete entries[name];
+        changed = true;
+        logger.info(`[gateway-plugin-seed] pruned stale plugins.entries.${name}`);
+      }
+    }
+
     // One-shot migration: scan models.providers.*.api and rewrite any
     // ClawX-side auth-protocol values that snuck into the runtime-side
     // field. This repairs configs written before commit ef9801c, when

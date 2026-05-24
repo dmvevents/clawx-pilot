@@ -289,10 +289,33 @@ async function readJsonFile<T>(filePath: string): Promise<T | null> {
   }
 }
 
-/** Write a JSON file, creating parent directories if needed. */
+/**
+ * Write a JSON file atomically: serialize → temp file → rename. Same
+ * pattern as channel-config.ts's writeOpenClawConfig. Without this,
+ * a process kill or concurrent writer mid-write produces truncated
+ * JSON that fails the next read with "Unexpected end of JSON input"
+ * (we saw this in /tmp/clawx-dev-v2.log every few hours during
+ * sustained dev sessions). rename(2) is atomic on the same filesystem
+ * on every OS we ship to.
+ *
+ * Backs auth-profiles.json (per-agent OAuth tokens) and per-agent
+ * models.json files — both critical, both non-recoverable if
+ * corrupted (the gateway's last-good guard only protects openclaw.json).
+ */
 async function writeJsonFile(filePath: string, data: unknown): Promise<void> {
   await ensureDir(join(filePath, '..'));
-  await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+  const serialized = JSON.stringify(data, null, 2);
+  const tempPath = `${filePath}.tmp.${process.pid}.${Date.now()}`;
+  try {
+    await writeFile(tempPath, serialized, 'utf-8');
+    const { rename, unlink: _unlink } = await import('fs/promises');
+    void _unlink;
+    await rename(tempPath, filePath);
+  } catch (writeErr) {
+    const { unlink } = await import('fs/promises');
+    await unlink(tempPath).catch(() => undefined);
+    throw writeErr;
+  }
 }
 
 // ── Types ────────────────────────────────────────────────────────
