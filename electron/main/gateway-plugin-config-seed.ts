@@ -171,6 +171,37 @@ export async function seedGatewayPluginConfig(): Promise<void> {
     }
     entries['moe-principal-assistant'] = ma;
 
+    // One-shot migration: scan models.providers.*.api and rewrite any
+    // ClawX-side auth-protocol values that snuck into the runtime-side
+    // field. This repairs configs written before commit ef9801c, when
+    // provider-runtime-sync.ts wrote `apiProtocol` verbatim into `api`.
+    // The gateway's enum doesn't accept google-query-key / anthropic-
+    // header / openrouter / openai-bearer / none, and rejecting the
+    // config crash-loops the gateway. Map them to the runtime-side
+    // equivalent the gateway does accept.
+    const runtimeApiMigration: Record<string, string> = {
+      'google-query-key': 'openai-completions',
+      'anthropic-header': 'anthropic-messages',
+      'openrouter': 'openai-completions',
+      'openai-bearer': 'openai-completions',
+      'none': 'ollama',
+    };
+    const models = (cfg as { models?: { providers?: Record<string, { api?: unknown }> } }).models;
+    const providers = models?.providers;
+    if (providers && typeof providers === 'object') {
+      for (const [name, pCfg] of Object.entries(providers)) {
+        if (!pCfg || typeof pCfg !== 'object') continue;
+        const currentApi = pCfg.api;
+        if (typeof currentApi === 'string' && runtimeApiMigration[currentApi]) {
+          pCfg.api = runtimeApiMigration[currentApi];
+          changed = true;
+          logger.info(
+            `[gateway-plugin-seed] migrated models.providers.${name}.api: "${currentApi}" → "${pCfg.api}"`,
+          );
+        }
+      }
+    }
+
     if (!changed) {
       logger.debug('[gateway-plugin-seed] plugin config already schema-valid; no changes');
       return;

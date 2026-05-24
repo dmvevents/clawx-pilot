@@ -659,21 +659,29 @@ export async function syncDefaultProviderToRuntime(
       : undefined;
 
     if (isUnregisteredProviderType(provider.type)) {
+      const normalizedApi = normalizeRuntimeApi(provider.apiProtocol, 'openai-completions') ?? 'openai-completions';
       await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
-        baseUrl: normalizeProviderBaseUrl(provider, provider.baseUrl, provider.apiProtocol || 'openai-completions'),
-        api: provider.apiProtocol || 'openai-completions',
+        baseUrl: normalizeProviderBaseUrl(provider, provider.baseUrl, normalizedApi),
+        api: normalizedApi,
         headers: provider.headers,
       }, fallbackModels);
     } else if (shouldUseExplicitDefaultOverride(provider, ock)) {
+      const meta = getProviderConfig(provider.type);
+      // Same auth-protocol → runtime-protocol normalization as
+      // resolveRuntimeSyncContext (the reason: provider.apiProtocol may
+      // be google-query-key / anthropic-header / etc which the gateway
+      // enum doesn't accept). Without this, the gateway crash-loops on
+      // boot for Google/Anthropic-keyed default providers.
+      const normalizedApi = normalizeRuntimeApi(provider.apiProtocol, meta?.api) ?? 'openai-completions';
       await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
         baseUrl: normalizeProviderBaseUrl(
           provider,
-          provider.baseUrl || getProviderConfig(provider.type)?.baseUrl,
-          provider.apiProtocol || getProviderConfig(provider.type)?.api,
+          provider.baseUrl || meta?.baseUrl,
+          normalizedApi,
         ),
-        api: provider.apiProtocol || getProviderConfig(provider.type)?.api,
-        apiKeyEnv: getProviderConfig(provider.type)?.apiKeyEnv,
-        headers: provider.headers ?? getProviderConfig(provider.type)?.headers,
+        api: normalizedApi,
+        apiKeyEnv: meta?.apiKeyEnv,
+        headers: provider.headers ?? meta?.headers,
       }, fallbackModels);
     } else {
       await setOpenClawDefaultModel(ock, modelOverride, fallbackModels);
