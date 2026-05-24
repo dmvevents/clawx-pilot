@@ -766,10 +766,35 @@ exports.default = async function afterPack(context) {
     console.log(`[after-pack] ✅ koffi: removed ${koffiRemoved} non-target platform binaries (kept ${platform}_${arch}).`);
   }
 
-  // 4. Platform-specific: strip wrong-platform native packages
-  const nativeRemoved = cleanupNativePlatformPackages(dest, platform, arch);
+  // 4. Platform-specific: strip wrong-platform native packages.
+  // Pass over THREE node_modules trees:
+  //   a) resources/openclaw/node_modules (the openclaw bundle)
+  //   b) resources/app.asar.unpacked/node_modules (asar'd-out natives —
+  //      e.g. @napi-rs/canvas-darwin-* hide here, ~55 MB on Win)
+  //   c) every nested node_modules under openclaw/dist/extensions
+  //      (codex extension ships @mariozechner/clipboard-darwin-* etc,
+  //      ~12 MB on Win)
+  // Pre-fix the Win bundle was carrying ~67 MB of dead Mac/Linux binaries.
+  let nativeRemoved = cleanupNativePlatformPackages(dest, platform, arch);
+  const asarUnpackedNM = join(resourcesDir, 'app.asar.unpacked', 'node_modules');
+  if (existsSync(asarUnpackedNM)) {
+    nativeRemoved += cleanupNativePlatformPackages(asarUnpackedNM, platform, arch);
+  }
+  // Walk openclaw/dist/extensions/*/node_modules.
+  const extensionsRoot = join(openclawRoot, 'dist', 'extensions');
+  if (existsSync(extensionsRoot)) {
+    let extEntries = [];
+    try { extEntries = readdirSync(extensionsRoot, { withFileTypes: true }); } catch { /* */ }
+    for (const ent of extEntries) {
+      if (!ent.isDirectory()) continue;
+      const extNM = join(extensionsRoot, ent.name, 'node_modules');
+      if (existsSync(extNM)) {
+        nativeRemoved += cleanupNativePlatformPackages(extNM, platform, arch);
+      }
+    }
+  }
   if (nativeRemoved > 0) {
-    console.log(`[after-pack] ✅ Removed ${nativeRemoved} non-target native platform packages.`);
+    console.log(`[after-pack] ✅ Removed ${nativeRemoved} non-target native platform packages (across openclaw + asar.unpacked + extensions).`);
   }
 
   // 5. Patch lru-cache in app.asar.unpacked
