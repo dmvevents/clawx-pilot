@@ -72,20 +72,24 @@ npmRebuild: false
 
 # Auto-update configuration — DISABLED for the MoE pilot
 #
-# Defense in depth: ENABLE_AUTO_UPDATE in shared/feature-flags.ts is the
-# runtime kill-switch (defaults to !PILOT_MODE, see commit d562477), but
-# we ALSO scrub the publish: block here so the generated app-update.yml
-# doesn't ship with a URL to upstream ClawX infra. With no `publish`,
-# electron-builder either omits app-update.yml or writes a no-op stub,
-# preventing electron-updater from finding a feed URL even if the runtime
-# flag were flipped accidentally.
+# Three layers of defense:
+#  1. Runtime: ENABLE_AUTO_UPDATE in shared/feature-flags.ts defaults to
+#     !PILOT_MODE so the running app never tries to check for updates
+#     (commit d562477).
+#  2. Build: explicit `publish: null` here suppresses electron-builder's
+#     auto-detection of the git remote (which currently points at
+#     ValueCell-ai/ClawX from the upstream fork) and prevents it from
+#     writing a usable app-update.yml.
+#  3. Operational: deployment is still in-person over Cat-5 / shared
+#     folder; pilot installs do not have any path to phone home.
 #
-# When we own a release channel (likely dmvevents/clawx-pilot), restore:
+# When we own a release channel, replace `publish: null` with:
 #   publish:
 #     - provider: github
 #       owner: dmvevents
 #       repo: clawx-pilot
 # and flip ENABLE_AUTO_UPDATE default in feature-flags.ts.
+publish: null
 
 # macOS Configuration
 mac:
