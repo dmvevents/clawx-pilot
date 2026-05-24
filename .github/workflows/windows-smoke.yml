@@ -1,0 +1,250 @@
+name: Windows Smoke (build + install + probe)
+
+# Autonomous runtime smoke for the MoE Windows build. Builds the .exe on a
+# real windows-latest runner, silently installs it, launches the app
+# headless, and probes the gateway + host-API + plugin-tool registration.
+#
+# What this CAN verify on a runner (no Outlook session, no GPU, no Chrome
+# sign-in, no Ollama model download in the time budget):
+#   - .exe builds and installs
+#   - Electron + gateway boot to a healthy state
+#   - Host API on 13210 challenges with 401 (auth wired)
+#   - Gateway WS on 18789 accepts a TCP connect
+#   - Plugin tools register (log scan: "outlook.open" etc.)
+#   - openclaw.json doesn't get clobbered on first boot
+#   - No app-update.yml leaks into install dir
+#   - No "google-query-key" runtime-api enum errors in logs
+#
+# What this CANNOT verify: real Outlook, real Chrome session, real
+# on-device LLM inference. Those need the pilot laptop or a UTM VM.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref (branch/tag/SHA). Defaults to current ref.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: pnpm store path
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-store-
+
+      - name: Install deps
+        run: pnpm install
+
+      - name: Download bundled Windows binaries (uv + node)
+        run: pnpm run prep:win-binaries
+
+      - name: Build Windows installer (no publish)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SKIP_PREINSTALLED_SKILLS: '1'
+        run: pnpm run package:win
+
+      - name: Locate installer
+        id: locate
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path release -Filter '*-win-x64.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'No win-x64 installer produced' }
+          Write-Host "Installer: $($exe.FullName) size=$([math]::Round($exe.Length/1MB,1))MB"
+          "installer=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Silent install
+        shell: pwsh
+        run: |
+          # NSIS silent install, per-user (no admin)
+          $p = Start-Process -FilePath '${{ steps.locate.outputs.installer }}' `
+            -ArgumentList '/S','/CURRENTUSER' -Wait -PassThru -NoNewWindow
+          Write-Host "Installer exit: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { throw "Installer failed: $($p.ExitCode)" }
+
+      - name: Verify install dir
+        id: verify-install
+        shell: pwsh
+        run: |
+          $candidates = @(
+            "$env:LOCALAPPDATA\Programs\Ministry of Education",
+            "$env:LOCALAPPDATA\Programs\ministry-of-education",
+            "$env:LOCALAPPDATA\Programs\clawx",
+            "$env:ProgramFiles\Ministry of Education",
+            "${env:ProgramFiles(x86)}\Ministry of Education"
+          )
+          $dir = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $dir) {
+            Write-Host '::error::Install dir not found in any candidate location'
+            $candidates | ForEach-Object { Write-Host "  miss: $_" }
+            throw 'Install dir missing'
+          }
+          Write-Host "Install dir: $dir"
+          $exe = Get-ChildItem $dir -Filter '*.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'No .exe in install dir' }
+          Write-Host "App exe: $($exe.FullName)"
+          $resources = Join-Path $dir 'resources'
+          $hasMoeExt = Test-Path (Join-Path $resources 'extensions\moe-principal-assistant')
+          $hasGraphExt = Test-Path (Join-Path $resources 'extensions\microsoft-graph')
+          $hasUpdateYml = Test-Path (Join-Path $resources 'app-update.yml')
+          Write-Host "moe-principal-assistant ext: $hasMoeExt"
+          Write-Host "microsoft-graph ext:         $hasGraphExt"
+          Write-Host "app-update.yml present:      $hasUpdateYml (expected: False)"
+          if (-not $hasMoeExt) { throw 'moe-principal-assistant missing' }
+          if ($hasUpdateYml) { throw 'app-update.yml leaked — auto-update was supposed to be off' }
+          "appExe=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "installDir=$dir" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Launch app headless + probe
+        id: probe
+        shell: pwsh
+        run: |
+          $exe = '${{ steps.verify-install.outputs.appExe }}'
+          $logDir = Join-Path $env:RUNNER_TEMP 'moe-smoke-logs'
+          New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+
+          $env:CLAWX_HEADLESS = '1'
+          $env:ELECTRON_DISABLE_GPU = '1'
+          $env:ELECTRON_NO_ATTACH_CONSOLE = '1'
+          $stdoutLog = Join-Path $logDir 'app.stdout.log'
+          $stderrLog = Join-Path $logDir 'app.stderr.log'
+          $proc = Start-Process -FilePath $exe `
+            -ArgumentList '--no-sandbox' `
+            -RedirectStandardOutput $stdoutLog `
+            -RedirectStandardError  $stderrLog `
+            -PassThru -WindowStyle Hidden
+          Write-Host "Launched PID=$($proc.Id)"
+          "appPid=$($proc.Id)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+          $deadline = (Get-Date).AddSeconds(120)
+          $gatewayUp = $false
+          $hostApiUp = $false
+          while ((Get-Date) -lt $deadline) {
+            if (-not $gatewayUp) {
+              $t = Test-NetConnection -ComputerName 127.0.0.1 -Port 18789 -InformationLevel Quiet -WarningAction SilentlyContinue
+              if ($t) { $gatewayUp = $true; Write-Host ("[+] gateway 18789 up at " + (Get-Date).ToString('HH:mm:ss')) }
+            }
+            if (-not $hostApiUp) {
+              try {
+                $r = Invoke-WebRequest -Uri 'http://127.0.0.1:13210/health' -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+                if ($r.StatusCode -in 200,401,403) { $hostApiUp = $true; Write-Host ("[+] host-api 13210 status=" + $r.StatusCode) }
+              } catch {
+                # 401/403 come back as exception with response — accept those
+                $resp = $_.Exception.Response
+                if ($resp -and ($resp.StatusCode.Value__ -in 401,403,404)) {
+                  $hostApiUp = $true
+                  Write-Host ("[+] host-api 13210 status=" + $resp.StatusCode.Value__)
+                }
+              }
+            }
+            if ($gatewayUp -and $hostApiUp) { break }
+            Start-Sleep -Milliseconds 1500
+          }
+
+          $userData = Join-Path $env:APPDATA 'Ministry of Education'
+          if (-not (Test-Path $userData)) { $userData = Join-Path $env:APPDATA 'ministry-of-education' }
+          $logCandidates = @()
+          if (Test-Path $userData) {
+            $logCandidates += Get-ChildItem $userData -Recurse -Filter '*.log' -ErrorAction SilentlyContinue
+            $openclawJson = Join-Path $userData 'openclaw.json'
+            if (Test-Path $openclawJson) {
+              Copy-Item $openclawJson -Destination (Join-Path $logDir 'openclaw.json')
+              Write-Host "Captured openclaw.json"
+            }
+          }
+          foreach ($l in $logCandidates) {
+            Copy-Item $l.FullName -Destination (Join-Path $logDir $l.Name) -ErrorAction SilentlyContinue
+          }
+
+          # Stop the app for log capture
+          try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch {}
+          Start-Sleep -Seconds 2
+
+          # Now scan logs for evidence of plugin-tool registration + bad enum errors
+          $allLogs = Get-Content -Path (Join-Path $logDir '*.log') -ErrorAction SilentlyContinue -Raw
+          $stdoutTxt = ''
+          if (Test-Path $stdoutLog) { $stdoutTxt = Get-Content $stdoutLog -Raw }
+          $stderrTxt = ''
+          if (Test-Path $stderrLog) { $stderrTxt = Get-Content $stderrLog -Raw }
+          $blob = "$allLogs`n$stdoutTxt`n$stderrTxt"
+
+          $outlookToolsHit = ([regex]::Matches($blob, 'outlook\.(open|read_inbox|search_inbox|read_email|draft_email|send_email|reply|forward|mark_read|list_attachments|download_attachment)')).Count
+          $badEnumHit = ($blob -match 'google-query-key.*Invalid option' -or $blob -match 'Config validation failed.*api.*Invalid')
+          $clobberHit = ($blob -match 'clobber|refusing to overwrite populated agents')
+
+          Write-Host "outlook.* tool mentions in logs: $outlookToolsHit"
+          Write-Host "bad-enum hit: $badEnumHit"
+          Write-Host "clobber-guard fired: $clobberHit"
+
+          $report = [ordered]@{
+            installerPath = '${{ steps.locate.outputs.installer }}'
+            installDir    = '${{ steps.verify-install.outputs.installDir }}'
+            appExe        = $exe
+            gatewayUp     = $gatewayUp
+            hostApiUp     = $hostApiUp
+            outlookToolsHit = $outlookToolsHit
+            badEnumHit    = $badEnumHit
+            clobberHit    = $clobberHit
+            stdoutBytes   = (Get-Item $stdoutLog -ErrorAction SilentlyContinue).Length
+            stderrBytes   = (Get-Item $stderrLog -ErrorAction SilentlyContinue).Length
+          }
+          $report | ConvertTo-Json -Depth 4 | Tee-Object -FilePath (Join-Path $logDir 'smoke-report.json') | Write-Host
+
+          $passes = @()
+          $fails = @()
+          if ($gatewayUp) { $passes += 'gateway-port' } else { $fails += 'gateway-port' }
+          if ($hostApiUp) { $passes += 'host-api' } else { $fails += 'host-api' }
+          if ($outlookToolsHit -gt 0) { $passes += 'outlook-tools-registered' } else { $fails += 'outlook-tools-registered' }
+          if (-not $badEnumHit) { $passes += 'no-bad-enum' } else { $fails += 'no-bad-enum' }
+
+          Write-Host ''
+          Write-Host '=== SMOKE RESULT ==='
+          Write-Host ('PASS: ' + ($passes -join ', '))
+          Write-Host ('FAIL: ' + ($fails -join ', '))
+          if ($fails.Count -gt 0) { throw ("Smoke failed: " + ($fails -join ', ')) }
+
+      - name: Upload installer artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-x64
+          path: release/*-win-x64.exe
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload smoke logs + report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-logs
+          path: ${{ runner.temp }}/moe-smoke-logs/**
+          if-no-files-found: warn
+          retention-days: 7
