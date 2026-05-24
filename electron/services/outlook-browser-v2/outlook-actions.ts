@@ -22,6 +22,7 @@ import type { Page } from 'playwright-core';
 import { logger } from '../../utils/logger';
 import { PlaywrightDriver } from './playwright-driver';
 import { VlmGrounder, bboxCentre } from './vlm-grounder';
+import { matchesSearchArgsForTests } from './search-helpers';
 import type {
   OutlookOpenResult,
   ReadInboxResult,
@@ -30,6 +31,19 @@ import type {
   DraftEmailResult,
   SendEmailArgs,
   SendEmailResult,
+  SearchInboxArgs,
+  SearchInboxResult,
+  ReadEmailArgs,
+  ReadEmailResult,
+  EmailAttachmentInfo,
+  ReplyArgs,
+  ReplyResult,
+  ForwardArgs,
+  ForwardResult,
+  MarkReadArgs,
+  MarkReadResult,
+  ListAttachmentsArgs,
+  ListAttachmentsResult,
 } from './types';
 
 const OUTLOOK_INBOX_URL = 'https://outlook.office.com/mail/';
@@ -39,6 +53,9 @@ function asArray(v: string | string[] | undefined): string[] {
   if (Array.isArray(v)) return v;
   return [v];
 }
+
+// Predicate moved to ./search-helpers.ts for unit testing without Playwright.
+const matchesSearchArgs = matchesSearchArgsForTests;
 
 export class OutlookActions {
   constructor(
@@ -315,7 +332,320 @@ export class OutlookActions {
     return { status: 'sent', message: 'Email sent via Outlook Web.' };
   }
 
+  // ── Phase 3 actions: search, read, reply, forward, mark, attachments ────
+
+  /**
+   * Search the inbox client-side. Outlook's search bar is heavyweight (it
+   * reflows the inbox view, requires waiting for results, and its DOM is
+   * unstable). For predicates that fit a "load top N rows then filter"
+   * model — which covers all of the OKR's W2.x / W7.x / W8.x rows — we
+   * just call readInbox(top) and filter the result set in JS. This is
+   * cheap, deterministic, and parallelisable across multiple agent calls.
+   *
+   * For larger inboxes where the desired message isn't in the top 100
+   * rows, we'd need real Outlook search; that's a Phase 7+ enhancement.
+   */
+  async searchInbox(args: SearchInboxArgs): Promise<SearchInboxResult> {
+    const top = typeof args.top === 'number' && args.top > 0 ? args.top : 25;
+    // Pull a generous slice of recent rows. The cap below trims to args.top
+    // post-filter, but we need to read *more* than top to filter usefully.
+    const fetchN = Math.min(Math.max(top * 4, 50), 200);
+    const inbox = await this.readInbox(fetchN);
+    if (inbox.status === 'needs_signin') {
+      return { status: 'needs_signin', messages: [], message: inbox.message };
+    }
+    const filtered = inbox.messages.filter((m) => matchesSearchArgs(m, args));
+    const capped = filtered.length > top;
+    return {
+      status: 'ok',
+      messages: filtered.slice(0, top),
+      capped,
+    };
+  }
+
+  /**
+   * Open a specific message and extract its full body + recipients +
+   * attachments. id is the InboxMessage.id from read_inbox/search_inbox
+   * (sender|subject|received fingerprint).
+   */
+  async readEmail(args: ReadEmailArgs): Promise<ReadEmailResult> {
+    const page = await this.driver.ensureOutlookTab();
+    if (await this.looksLikeSignin(page)) {
+      return {
+        status: 'needs_signin',
+        id: args.id,
+        message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
+      };
+    }
+
+    const opened = await this.openMessageById(page, args.id);
+    if (!opened) {
+      return {
+        status: 'not_found',
+        id: args.id,
+        message: `Could not locate message with id "${args.id}". Re-call read_inbox first.`,
+      };
+    }
+
+    // The message reading pane uses role="region" with an aria-label of
+    // "Message body" or "Reading pane". We pull innerText, which gives us
+    // a clean text-only view.
+    await page
+      .waitForSelector(
+        '[aria-label="Message body" i], [role="region"][aria-label*="reading pane" i], [aria-label*="message preview" i]',
+        { timeout: 10_000 },
+      )
+      .catch(() => null);
+
+    const detail = await page.evaluate(`
+      (() => {
+        const out = { subject: '', sender: '', receivedAt: '', body: '', recipients: { to: [], cc: [] }, attachments: [] };
+        const subjEl = document.querySelector('[role="heading"][aria-level="2"], [class*="subject"][role="heading"], h2, h1');
+        if (subjEl) out.subject = (subjEl.textContent || '').trim().slice(0, 300);
+        const senderEl = document.querySelector('[role="button"][aria-label*="@"], [aria-label*="From "]');
+        if (senderEl) {
+          const al = senderEl.getAttribute('aria-label') || senderEl.textContent || '';
+          out.sender = al.replace(/^From\\s*/i, '').trim().slice(0, 200);
+        }
+        const timeEl = document.querySelector('time, [class*="receivedTime"]');
+        if (timeEl) out.receivedAt = (timeEl.getAttribute('datetime') || timeEl.textContent || '').trim().slice(0, 80);
+        const body = document.querySelector('[aria-label="Message body" i], [role="region"][aria-label*="reading pane" i]');
+        if (body) out.body = (body.innerText || body.textContent || '').trim().slice(0, 12000);
+        // Attachments: Outlook renders them as buttons/divs with role="button" and aria-label like "Attached file: Foo.pdf, 12 KB".
+        const atts = document.querySelectorAll('[aria-label^="Attached file" i], [aria-label^="Attachment" i]');
+        for (const a of Array.from(atts).slice(0, 30)) {
+          const label = a.getAttribute('aria-label') || '';
+          const m = label.match(/(?:Attached file|Attachment)[:\\s]+(.+?)(?:,\\s*([\\d.]+\\s*[KMG]?B))?(?:,|$)/i);
+          if (m) {
+            const filename = (m[1] || '').trim();
+            const size = m[2] ? parseSize(m[2]) : undefined;
+            out.attachments.push({ filename: filename, sizeBytes: size, mimeType: guessMime(filename) });
+          }
+        }
+        function parseSize(s) {
+          const n = parseFloat(s);
+          if (!isFinite(n)) return undefined;
+          const u = (s.match(/[KMG]?B/i) || [''])[0].toUpperCase();
+          const mult = u === 'KB' ? 1024 : u === 'MB' ? 1048576 : u === 'GB' ? 1073741824 : 1;
+          return Math.round(n * mult);
+        }
+        function guessMime(fn) {
+          const ext = (fn.toLowerCase().match(/\\.[a-z0-9]+$/) || [''])[0];
+          const map = { '.pdf': 'application/pdf', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.zip': 'application/zip' };
+          return map[ext] || undefined;
+        }
+        return out;
+      })()
+    `) as {
+      subject: string;
+      sender: string;
+      receivedAt: string;
+      body: string;
+      recipients: { to: string[]; cc: string[] };
+      attachments: EmailAttachmentInfo[];
+    };
+
+    return {
+      status: 'ok',
+      id: args.id,
+      subject: detail.subject || undefined,
+      sender: detail.sender || undefined,
+      receivedAt: detail.receivedAt || undefined,
+      body: detail.body || undefined,
+      recipients: detail.recipients,
+      attachments: detail.attachments,
+    };
+  }
+
+  /**
+   * Reply (or reply-all) to a specific message. Opens the reply pane in the
+   * Outlook compose UI, fills the body, leaves the draft open. Outlook
+   * pre-fills To/Cc/Subject for us.
+   */
+  async reply(args: ReplyArgs): Promise<ReplyResult> {
+    const page = await this.driver.ensureOutlookTab();
+    if (await this.looksLikeSignin(page)) {
+      return {
+        status: 'needs_signin',
+        draftLeftOpen: false,
+        message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
+      };
+    }
+
+    const opened = await this.openMessageById(page, args.id);
+    if (!opened) {
+      return {
+        status: 'not_found',
+        draftLeftOpen: false,
+        message: `Could not locate message with id "${args.id}".`,
+      };
+    }
+
+    // Click Reply / Reply All on the open message.
+    const targetName = args.replyAll ? /^reply all$/i : /^reply$/i;
+    await this.dismissBlockingDialog(page);
+    await this.clickByRoleOrVlm(page, {
+      role: 'button',
+      nameRegex: targetName,
+      vlmQuestion: args.replyAll
+        ? 'The "Reply all" button on the open Outlook message reading pane toolbar.'
+        : 'The "Reply" button on the open Outlook message reading pane toolbar.',
+    });
+    await this.waitForComposePane(page);
+    await this.fillBody(page, args.body);
+
+    const previewSubject = (await this.readOpenSubject(page)) || '';
+    return {
+      status: 'drafted',
+      draftLeftOpen: true,
+      preview: { to: [], subject: previewSubject, body: args.body },
+      message: 'Reply draft prepared and left open in Outlook for your review.',
+    };
+  }
+
+  async forward(args: ForwardArgs): Promise<ForwardResult> {
+    const page = await this.driver.ensureOutlookTab();
+    if (await this.looksLikeSignin(page)) {
+      return {
+        status: 'needs_signin',
+        draftLeftOpen: false,
+        message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
+      };
+    }
+    const opened = await this.openMessageById(page, args.id);
+    if (!opened) {
+      return { status: 'not_found', draftLeftOpen: false, message: `Could not locate message with id "${args.id}".` };
+    }
+
+    await this.dismissBlockingDialog(page);
+    await this.clickByRoleOrVlm(page, {
+      role: 'button',
+      nameRegex: /^forward$/i,
+      vlmQuestion: 'The "Forward" button on the open Outlook message reading pane toolbar.',
+    });
+    await this.waitForComposePane(page);
+
+    const toList = asArray(args.to);
+    if (toList.length === 0) {
+      return {
+        status: 'drafted',
+        draftLeftOpen: true,
+        preview: { to: [], subject: (await this.readOpenSubject(page)) || '', body: args.body ?? '' },
+        message: 'Forward pane opened but no recipient supplied; fill it manually before sending.',
+      };
+    }
+    await this.fillField(page, 'To', toList.join('; '));
+    if (args.body) await this.fillBody(page, args.body);
+
+    return {
+      status: 'drafted',
+      draftLeftOpen: true,
+      preview: { to: toList, subject: (await this.readOpenSubject(page)) || '', body: args.body ?? '' },
+      message: 'Forward draft prepared and left open in Outlook for your review.',
+    };
+  }
+
+  /** Toggle a message's unread state. */
+  async markRead(args: MarkReadArgs): Promise<MarkReadResult> {
+    const page = await this.driver.ensureOutlookTab();
+    if (await this.looksLikeSignin(page)) {
+      return { status: 'needs_signin', message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.' };
+    }
+    const opened = await this.openMessageById(page, args.id);
+    if (!opened) return { status: 'not_found', message: `Could not locate message with id "${args.id}".` };
+
+    // Right-click on the row would be more reliable but harder to drive
+    // cross-theme. Use Outlook's keyboard shortcut: Q = mark read, U = mark unread.
+    // (See https://support.microsoft.com/en-us/office/keyboard-shortcuts-for-outlook-on-the-web)
+    await this.driver.pressKey(args.read ? 'q' : 'u');
+    await this.driver.sleep(400);
+    return { status: 'ok', message: args.read ? 'Marked as read.' : 'Marked as unread.' };
+  }
+
+  async listAttachments(args: ListAttachmentsArgs): Promise<ListAttachmentsResult> {
+    const detail = await this.readEmail({ id: args.id });
+    if (detail.status !== 'ok') {
+      return {
+        status: detail.status,
+        id: args.id,
+        attachments: [],
+        message: detail.message,
+      };
+    }
+    return {
+      status: 'ok',
+      id: args.id,
+      attachments: detail.attachments ?? [],
+    };
+  }
+
   // ── internals ───────────────────────────────────────────────────────────
+
+  /**
+   * Find and click the inbox row whose readInbox-id matches `id`. Returns
+   * true on success; false if no row matches (caller surfaces 'not_found').
+   *
+   * The id format is sender|subject|received from the parser, so we walk
+   * each row's text-node fingerprint and match. Then we click. Outlook
+   * loads the message into the reading pane synchronously enough that
+   * subsequent waitForSelector for the body works ~immediately.
+   */
+  private async openMessageById(page: Page, id: string): Promise<boolean> {
+    const targetIdx = await page.evaluate(`
+      (() => {
+        const wantedId = ${JSON.stringify(id)};
+        const isDateLike = function(s) {
+          if (!s) return false;
+          if (s.length > 30) return false;
+          if (/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Yesterday|Today|Tomorrow)\\b/i.test(s)) return true;
+          if (/^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\b/i.test(s)) return true;
+          if (/^\\d{1,2}[:\\/]\\d/.test(s)) return true;
+          return false;
+        };
+        const fingerprint = function(el) {
+          const texts = [];
+          const walk = function(n) {
+            if (n.nodeType === 3) {
+              const t = (n.textContent || '').trim();
+              if (t) texts.push(t);
+            } else if (n.nodeType === 1) {
+              for (const c of Array.from(n.childNodes)) walk(c);
+            }
+          };
+          walk(el);
+          let sender = '', subject = '', receivedAt = '';
+          let phase = 'sender';
+          for (const t of texts) {
+            if (t.length < 3 && phase !== 'snippet') continue;
+            if (phase === 'sender') { sender = t; phase = 'subject'; continue; }
+            if (phase === 'subject') {
+              if (isDateLike(t)) { receivedAt = t; phase = 'snippet'; continue; }
+              subject = subject ? subject + ' ' + t : t;
+              continue;
+            }
+          }
+          return (sender + '|' + subject + '|' + receivedAt).slice(0, 96);
+        };
+        const els = Array.from(document.querySelectorAll('[role="option"][aria-label], [role="row"][aria-label]'));
+        for (let i = 0; i < els.length; i++) {
+          const fp = fingerprint(els[i]);
+          if (fp === wantedId) return i;
+        }
+        return -1;
+      })()
+    `) as number;
+    if (targetIdx < 0) return false;
+    const rowLocator = page.locator('[role="option"][aria-label], [role="row"][aria-label]').nth(targetIdx);
+    try {
+      await rowLocator.click({ timeout: 8_000 });
+    } catch (err) {
+      logger.warn?.(
+        `[outlook-v2] openMessageById click failed for id "${id}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return false;
+    }
+    return true;
+  }
 
   /**
    * Dismiss any open Outlook welcome/promo dialog whose backdrop blocks

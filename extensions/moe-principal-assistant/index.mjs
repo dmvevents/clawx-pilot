@@ -408,6 +408,81 @@ export function register(api) {
       },
     });
 
+    // ── Phase 3 tools: search, read full email, reply, forward, mark read,
+    //                  list attachments. Each is a thin shell over the
+    //                  host-API outlook facade.
+
+    registerTool({
+      name: 'outlook.search_inbox',
+      description:
+        'Filter the principal\'s inbox by sender, subject, date, unread, or attachment presence. Args: { from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top? (default 25) }. Returns { status, messages, capped }. dateGte/dateLt are ISO 8601 strings. Prefer this over read_inbox when the user mentions a sender or date or topic.',
+      handler: async (args = {}) => {
+        return outlook.searchInbox(args);
+      },
+    });
+
+    registerTool({
+      name: 'outlook.read_email',
+      description:
+        'Open a specific message and return its full body, sender, recipients, and attachment list. Args: { id }. id is the InboxMessage.id from read_inbox or search_inbox (sender|subject|received fingerprint). Returns { status, id, subject, sender, receivedAt, body, recipients, attachments: [{ filename, sizeBytes?, mimeType? }] }. Use this when the user asks "what does it say" or "summarise that email".',
+      handler: async (args = {}) => {
+        const { id } = args;
+        requireString('id', id);
+        return outlook.readEmail({ id });
+      },
+    });
+
+    registerTool({
+      name: 'outlook.reply',
+      description:
+        'Reply (or reply-all) to a specific message. Opens the reply pane in Outlook with To/Subject pre-filled by Outlook; we fill the body. Leaves the draft open for the principal to review — does NOT send. Args: { id, body, replyAll? (default false) }.',
+      handler: async (args = {}) => {
+        const { id, body, replyAll } = args;
+        requireString('id', id);
+        if (typeof body !== 'string') throw new Error('body is required (string).');
+        return outlook.reply({ id, body, replyAll: replyAll === true });
+      },
+    });
+
+    registerTool({
+      name: 'outlook.forward',
+      description:
+        'Forward a specific message to a new recipient. Opens the forward pane in Outlook with the original message quoted; we fill To and an optional commentary body. Leaves the draft open. Args: { id, to: string | string[], body? }.',
+      handler: async (args = {}) => {
+        const { id, to, body } = args;
+        requireString('id', id);
+        if (!to || (Array.isArray(to) && to.length === 0)) {
+          throw new Error('to is required (string or non-empty array).');
+        }
+        return outlook.forward({ id, to, body });
+      },
+    });
+
+    registerTool({
+      name: 'outlook.mark_read',
+      description:
+        'Mark a specific message as read or unread. Args: { id, read: boolean }. Returns { status }.',
+      handler: async (args = {}) => {
+        const { id, read } = args;
+        requireString('id', id);
+        if (typeof read !== 'boolean') {
+          throw new Error('read is required (boolean).');
+        }
+        return outlook.markRead({ id, read });
+      },
+    });
+
+    registerTool({
+      name: 'outlook.list_attachments',
+      description:
+        'List metadata for the attachments on a specific message without downloading them. Args: { id }. Returns { status, id, attachments: [{ filename, sizeBytes?, mimeType? }] }. Use this before suggesting any download.',
+      handler: async (args = {}) => {
+        const { id } = args;
+        requireString('id', id);
+        return outlook.listAttachments({ id });
+      },
+    });
+
     log.info?.('moe-principal-assistant: outlook (browser-session) tools registered');
   } else if (outlook && typeof outlook.open === 'function' && !allowlistGate) {
     log.info?.(
@@ -479,10 +554,12 @@ function createHostApiOutlookFacade(port, token) {
       const errMsg = (data && (data.error || data.message)) || text.slice(0, 200) || `HTTP ${resp.status}`;
       throw new Error(`outlook host-API ${path}: ${errMsg}`);
     }
-    // The host-API wraps results as { success: true, result } or returns
-    // the result directly depending on the route — be tolerant of both.
-    if (data && typeof data === 'object' && 'success' in data && 'result' in data) {
-      return data.result;
+    // The host-API wraps results as { success: true, data } (current shape)
+    // or { success: true, result } (older). Tolerate both, plus a bare
+    // result body for forward-compat.
+    if (data && typeof data === 'object' && 'success' in data) {
+      if ('data' in data) return data.data;
+      if ('result' in data) return data.result;
     }
     return data;
   }
@@ -492,5 +569,11 @@ function createHostApiOutlookFacade(port, token) {
     readInbox: (top) => call('/read-inbox', typeof top === 'number' ? { top } : {}),
     draftEmail: (args) => call('/draft', args),
     sendEmail: (args) => call('/send', args),
+    searchInbox: (args) => call('/search-inbox', args ?? {}),
+    readEmail: (args) => call('/read-email', args),
+    reply: (args) => call('/reply', args),
+    forward: (args) => call('/forward', args),
+    markRead: (args) => call('/mark-read', args),
+    listAttachments: (args) => call('/list-attachments', args),
   };
 }

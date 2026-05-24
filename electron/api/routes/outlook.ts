@@ -30,6 +30,12 @@ import { outlookBrowserManagerV2 } from '../../services/outlook-browser-v2/manag
 import type {
   DraftEmailArgs,
   SendEmailArgs,
+  SearchInboxArgs,
+  ReadEmailArgs,
+  ReplyArgs,
+  ForwardArgs,
+  MarkReadArgs,
+  ListAttachmentsArgs,
 } from '../../services/outlook-browser/types';
 import { parseJsonBody, sendJson } from '../route-utils';
 
@@ -116,6 +122,62 @@ export async function handleOutlookRoutes(
       logger.info(`[host-api outlook/send] attempt ${JSON.stringify(logSafeArgs(body))}`);
       const result = await outlookBrowserManager.sendEmail(body);
       logger.info(`[host-api outlook/send] result=${result.status}`);
+      sendJson(res, 200, { success: true, data: result });
+      return true;
+    }
+
+    if (url.pathname === '/api/outlook/search-inbox') {
+      const body = await parseJsonBody<SearchInboxArgs>(req);
+      const result = await outlookBrowserManager.searchInbox(body);
+      logger.info(
+        `[host-api outlook/search-inbox] status=${result.status} count=${result.messages?.length ?? 0} capped=${!!result.capped}`,
+      );
+      sendJson(res, 200, { success: true, data: result });
+      return true;
+    }
+
+    if (url.pathname === '/api/outlook/read-email') {
+      const body = await parseJsonBody<ReadEmailArgs>(req);
+      const result = await outlookBrowserManager.readEmail(body);
+      logger.info(
+        `[host-api outlook/read-email] status=${result.status} bodyLen=${result.body?.length ?? 0} attachments=${result.attachments?.length ?? 0}`,
+      );
+      sendJson(res, 200, { success: true, data: result });
+      return true;
+    }
+
+    if (url.pathname === '/api/outlook/reply') {
+      const body = await parseJsonBody<ReplyArgs>(req);
+      logger.info(`[host-api outlook/reply] ${JSON.stringify({ id: body.id, replyAll: !!body.replyAll, bodyLen: body.body?.length ?? 0 })}`);
+      const result = await outlookBrowserManager.reply(body);
+      logger.info(`[host-api outlook/reply] result=${result.status}`);
+      sendJson(res, 200, { success: true, data: result });
+      return true;
+    }
+
+    if (url.pathname === '/api/outlook/forward') {
+      const body = await parseJsonBody<ForwardArgs>(req);
+      logger.info(`[host-api outlook/forward] ${JSON.stringify({ id: body.id, toCount: asArray(body.to).length })}`);
+      const result = await outlookBrowserManager.forward(body);
+      logger.info(`[host-api outlook/forward] result=${result.status}`);
+      sendJson(res, 200, { success: true, data: result });
+      return true;
+    }
+
+    if (url.pathname === '/api/outlook/mark-read') {
+      const body = await parseJsonBody<MarkReadArgs>(req);
+      const result = await outlookBrowserManager.markRead(body);
+      logger.info(`[host-api outlook/mark-read] id=${body.id} read=${body.read} status=${result.status}`);
+      sendJson(res, 200, { success: true, data: result });
+      return true;
+    }
+
+    if (url.pathname === '/api/outlook/list-attachments') {
+      const body = await parseJsonBody<ListAttachmentsArgs>(req);
+      const result = await outlookBrowserManager.listAttachments(body);
+      logger.info(
+        `[host-api outlook/list-attachments] id=${body.id} status=${result.status} count=${result.attachments.length}`,
+      );
       sendJson(res, 200, { success: true, data: result });
       return true;
     }

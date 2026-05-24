@@ -20,6 +20,18 @@ import type {
   DraftEmailResult,
   SendEmailArgs,
   SendEmailResult,
+  SearchInboxArgs,
+  SearchInboxResult,
+  ReadEmailArgs,
+  ReadEmailResult,
+  ReplyArgs,
+  ReplyResult,
+  ForwardArgs,
+  ForwardResult,
+  MarkReadArgs,
+  MarkReadResult,
+  ListAttachmentsArgs,
+  ListAttachmentsResult,
 } from './types';
 
 class OutlookBrowserManagerV2 {
@@ -50,6 +62,30 @@ class OutlookBrowserManagerV2 {
 
   async sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     return this.ensureActions().sendEmail(args);
+  }
+
+  async searchInbox(args: SearchInboxArgs): Promise<SearchInboxResult> {
+    return this.ensureActions().searchInbox(args);
+  }
+
+  async readEmail(args: ReadEmailArgs): Promise<ReadEmailResult> {
+    return this.ensureActions().readEmail(args);
+  }
+
+  async reply(args: ReplyArgs): Promise<ReplyResult> {
+    return this.ensureActions().reply(args);
+  }
+
+  async forward(args: ForwardArgs): Promise<ForwardResult> {
+    return this.ensureActions().forward(args);
+  }
+
+  async markRead(args: MarkReadArgs): Promise<MarkReadResult> {
+    return this.ensureActions().markRead(args);
+  }
+
+  async listAttachments(args: ListAttachmentsArgs): Promise<ListAttachmentsResult> {
+    return this.ensureActions().listAttachments(args);
   }
 
   async close(): Promise<void> {

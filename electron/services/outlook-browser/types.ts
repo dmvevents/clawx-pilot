@@ -83,3 +83,109 @@ export interface SendEmailResult {
   reason?: string;
   message?: string;
 }
+
+// ── Phase 3 actions ──────────────────────────────────────────────────────
+
+/** Filter args for searchInbox. All optional — at least one should be set. */
+export interface SearchInboxArgs {
+  /** Partial sender match, case-insensitive. */
+  from?: string;
+  /** Partial subject match, case-insensitive. */
+  subjectContains?: string;
+  /** ISO 8601 date string; only return mail received on/after this date. */
+  dateGte?: string;
+  /** ISO 8601 date string; only return mail received before this date. */
+  dateLt?: string;
+  /** Filter by unread state. */
+  unread?: boolean;
+  /** Only messages that have at least one attachment. */
+  hasAttachment?: boolean;
+  /** Cap on results returned. Default 25. */
+  top?: number;
+}
+
+export interface SearchInboxResult {
+  status: 'ok' | 'needs_signin';
+  messages: InboxMessage[];
+  /** True when the result is the cap, not necessarily exhaustive. */
+  capped?: boolean;
+  message?: string;
+}
+
+/** Args for read_email. id is the InboxMessage.id from read_inbox/search_inbox. */
+export interface ReadEmailArgs {
+  id: string;
+}
+
+export interface EmailAttachmentInfo {
+  filename: string;
+  /** Best-effort; Outlook Web doesn't always expose size cleanly. */
+  sizeBytes?: number;
+  /** e.g. 'application/pdf'. May be unknown. */
+  mimeType?: string;
+}
+
+export interface ReadEmailResult {
+  status: 'ok' | 'not_found' | 'needs_signin';
+  /** Echo of the id we were asked for. */
+  id: string;
+  subject?: string;
+  sender?: string;
+  receivedAt?: string;
+  /** Plain-text body. HTML stripped — agents reason over text better. */
+  body?: string;
+  /** Includes To/Cc/Bcc lists when readable. */
+  recipients?: { to: string[]; cc: string[]; bcc?: string[] };
+  attachments?: EmailAttachmentInfo[];
+  message?: string;
+}
+
+export interface ReplyArgs {
+  id: string;
+  body: string;
+  /** When true, opens reply-all instead of reply. */
+  replyAll?: boolean;
+}
+
+export interface ReplyResult {
+  status: 'drafted' | 'not_found' | 'needs_signin';
+  draftLeftOpen: boolean;
+  preview?: { to: string[]; subject: string; body: string };
+  message?: string;
+}
+
+export interface ForwardArgs {
+  id: string;
+  to: string | string[];
+  /** Optional commentary above the forwarded message. */
+  body?: string;
+}
+
+export interface ForwardResult {
+  status: 'drafted' | 'not_found' | 'needs_signin';
+  draftLeftOpen: boolean;
+  preview?: { to: string[]; subject: string; body: string };
+  message?: string;
+}
+
+export interface MarkReadArgs {
+  id: string;
+  /** True = mark as read, false = mark as unread. */
+  read: boolean;
+}
+
+export interface MarkReadResult {
+  status: 'ok' | 'not_found' | 'needs_signin';
+  message?: string;
+}
+
+export interface ListAttachmentsArgs {
+  id: string;
+}
+
+export interface ListAttachmentsResult {
+  status: 'ok' | 'not_found' | 'needs_signin';
+  id: string;
+  attachments: EmailAttachmentInfo[];
+  message?: string;
+}
