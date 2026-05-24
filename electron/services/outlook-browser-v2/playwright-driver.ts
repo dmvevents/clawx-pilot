@@ -40,10 +40,17 @@ import { homedir, platform } from 'os';
 import { existsSync } from 'fs';
 import { logger } from '../../utils/logger';
 
-/** Outlook entrypoints we'll consider "this is Outlook" for tab matching. */
+/**
+ * Outlook entrypoints we'll consider "this is Outlook" for tab matching.
+ * Microsoft is migrating outlook.office.com → outlook.cloud.microsoft;
+ * both work today and we accept both. Some tenants may also redirect
+ * through outlook.office365.com.
+ */
 const OUTLOOK_HOST_PATTERNS = [
   /^https:\/\/outlook\.office\.com\//i,
   /^https:\/\/outlook\.office365\.com\//i,
+  /^https:\/\/outlook\.cloud\.microsoft\//i,
+  /^https:\/\/outlook\.live\.com\//i,
 ];
 
 /** Where the user's Chrome stores its profile, per OS. */

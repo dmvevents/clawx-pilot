@@ -301,10 +301,56 @@ async function syncProviderSecretToRuntime(
   }
 }
 
+/**
+ * ClawX's `apiProtocol` field doubles as both an HTTP-auth identifier
+ * ('google-query-key', 'anthropic-header', etc.) AND, sometimes, an
+ * actual openclaw runtime protocol ('openai-completions'). The gateway
+ * only accepts a fixed enum on `models.providers.<id>.api`:
+ *   openai-completions, openai-responses, openai-codex-responses,
+ *   anthropic-messages, google-generative-ai, github-copilot,
+ *   bedrock-converse-stream, ollama, azure-openai-responses
+ *
+ * Pre-fix, ClawX would write the auth-side string verbatim into the
+ * runtime-side field, causing OpenClaw doctor to reject the config and
+ * crash-loop the gateway. Map auth identifiers to their corresponding
+ * runtime protocols so the two schemas stay in sync.
+ */
+function normalizeRuntimeApi(apiProtocol: string | undefined, fallback: string | undefined): string | undefined {
+  if (!apiProtocol) return fallback;
+  switch (apiProtocol) {
+    // Auth-side identifiers — pick the matching runtime protocol.
+    case 'google-query-key':
+      // ClawX uses Google's OpenAI-compatible /v1beta/openai endpoint by default.
+      return 'openai-completions';
+    case 'anthropic-header':
+      return 'anthropic-messages';
+    case 'openrouter':
+    case 'openai-bearer':
+      return 'openai-completions';
+    case 'none':
+      // Local-only providers like Ollama.
+      return 'ollama';
+    // Already a valid runtime protocol — pass through.
+    case 'openai-completions':
+    case 'openai-responses':
+    case 'openai-codex-responses':
+    case 'anthropic-messages':
+    case 'google-generative-ai':
+    case 'github-copilot':
+    case 'bedrock-converse-stream':
+    case 'ollama':
+    case 'azure-openai-responses':
+      return apiProtocol;
+    default:
+      return fallback ?? 'openai-completions';
+  }
+}
+
 async function resolveRuntimeSyncContext(config: ProviderConfig): Promise<RuntimeProviderSyncContext | null> {
   const runtimeProviderKey = await resolveRuntimeProviderKey(config);
   const meta = getProviderConfig(config.type);
-  const api = config.apiProtocol || (isUnregisteredProviderType(config.type) ? 'openai-completions' : meta?.api);
+  const fallbackApi = isUnregisteredProviderType(config.type) ? 'openai-completions' : meta?.api;
+  const api = normalizeRuntimeApi(config.apiProtocol, fallbackApi);
   if (!api) {
     return null;
   }
@@ -344,8 +390,8 @@ async function syncCustomProviderAgentModel(
 
   const modelId = config.model;
   await updateAgentModelProvider(runtimeProviderKey, {
-    baseUrl: normalizeProviderBaseUrl(config, config.baseUrl, config.apiProtocol || 'openai-completions'),
-    api: config.apiProtocol || 'openai-completions',
+    baseUrl: normalizeProviderBaseUrl(config, config.baseUrl, normalizeRuntimeApi(config.apiProtocol, 'openai-completions') ?? 'openai-completions'),
+    api: normalizeRuntimeApi(config.apiProtocol, 'openai-completions') ?? 'openai-completions',
     models: modelId ? [piAiModelsJsonModelEntry(modelId)] : [],
     apiKey: resolvedKey,
   });
@@ -537,9 +583,10 @@ export async function syncUpdatedProviderToRuntime(
         await setOpenClawDefaultModel(ock, modelOverride, fallbackModels);
       }
     } else {
+      const normalizedApi = normalizeRuntimeApi(config.apiProtocol, 'openai-completions') ?? 'openai-completions';
       await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
-        baseUrl: normalizeProviderBaseUrl(config, config.baseUrl, config.apiProtocol || 'openai-completions'),
-        api: config.apiProtocol || 'openai-completions',
+        baseUrl: normalizeProviderBaseUrl(config, config.baseUrl, normalizedApi),
+        api: normalizedApi,
         headers: config.headers,
       }, fallbackModels);
     }
