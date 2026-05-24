@@ -192,16 +192,16 @@ linux:
         - x64
   category: Utility
   maintainer: ClawX Team <public@valuecell.ai>
-  vendor: ClawX
-  synopsis: AI Assistant powered by OpenClaw
-  description: ClawX is a graphical AI assistant application that integrates with OpenClaw Gateway to provide intelligent automation and assistance across multiple messaging platforms.
+  vendor: Ministry of Education, Trinidad and Tobago
+  synopsis: Administrative assistant for primary-school principals
+  description: Ministry of Education is the AI-supported administrative assistant for Trinidad & Tobago primary-school principals (built on ClawX/OpenClaw).
   desktop:
     entry:
-      Name: ClawX
-      Comment: AI Assistant powered by OpenClaw
-      Categories: Utility;Network;
-      Keywords: ai;assistant;automation;chat;
-      StartupWMClass: clawx
+      Name: Ministry of Education
+      Comment: Administrative assistant for primary-school principals
+      Categories: Utility;Office;
+      Keywords: ai;assistant;email;outlook;school;principal;moe;
+      StartupWMClass: ministry-of-education
 
 appImage:
   license: LICENSE
