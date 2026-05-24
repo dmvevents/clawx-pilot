@@ -157,13 +157,21 @@ export class PlaywrightDriver {
         'Could not find Google Chrome on this system. Install Chrome or set CLAWX_CHROME_EXECUTABLE.',
       );
     }
-    const persistent = await chromium.launchPersistentContext(this.cfg.userDataDir, {
-      executablePath: this.cfg.chromeExecutable,
-      headless: false,
-      channel: 'chrome',
-      args: [`--remote-debugging-port=${this.cfg.selfLaunchDebugPort}`],
-      viewport: null,
-    });
+    // Wrap launchPersistentContext in a timeout — production crashes
+    // are the silent ones, and this call has been observed to hang
+    // indefinitely when Chrome is in a weird state (e.g. profile lock
+    // file leftover from an earlier crash). 30s is generous for a
+    // healthy Chrome launch.
+    const persistent = await this.withTimeout(
+      chromium.launchPersistentContext(this.cfg.userDataDir, {
+        executablePath: this.cfg.chromeExecutable,
+        headless: false,
+        channel: 'chrome',
+        args: [`--remote-debugging-port=${this.cfg.selfLaunchDebugPort}`],
+        viewport: null,
+      }),
+      'launchPersistentContext',
+    );
     this.context = persistent;
     // launchPersistentContext returns a BrowserContext directly; the Browser
     // object isn't used downstream but we keep a non-null marker so
@@ -221,9 +229,25 @@ export class PlaywrightDriver {
   /** Take a PNG screenshot of the visible viewport. Used by the VLM grounder. */
   async screenshotViewport(): Promise<{ png: Buffer; width: number; height: number }> {
     const page = this.requirePage();
-    const png = await page.screenshot({ type: 'png', fullPage: false });
+    const png = await this.withTimeout(
+      page.screenshot({ type: 'png', fullPage: false }),
+      'screenshotViewport',
+    );
     const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
     return { png, width: viewport.width, height: viewport.height };
+  }
+
+  /**
+   * Evaluate a string JS expression in the page context with a timeout.
+   * outlook-actions.ts uses this for the row-fingerprint walks and the
+   * read-email body extraction — both can hang if the page is in a
+   * weird state (auth challenge mid-load, modal block, etc). Wrapping
+   * in withTimeout ensures the IPC chain can't be hung by a stuck
+   * renderer.
+   */
+  async evaluate<T = unknown>(script: string, label = 'evaluate'): Promise<T> {
+    const page = this.requirePage();
+    return this.withTimeout(page.evaluate(script) as Promise<T>, label);
   }
 
   /**
