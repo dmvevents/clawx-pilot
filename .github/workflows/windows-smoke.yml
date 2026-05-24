@@ -127,26 +127,38 @@ jobs:
         id: probe
         shell: pwsh
         run: |
+          # Strategy: launch the win-unpacked .exe via cmd /c with stdout
+          # redirection from a fresh cmd context so stdio gets attached.
+          # Electron GUI binaries detach Console subsystem under PowerShell
+          # Start-Process; piping through cmd works around it.
           $exe = '${{ steps.verify-install.outputs.appExe }}'
+          $unpackedDir = Get-ChildItem -Path release -Filter 'win-unpacked' -Directory | Select-Object -First 1
+          if ($unpackedDir) {
+            $unpackedExe = Join-Path $unpackedDir.FullName 'Ministry of Education.exe'
+            if (Test-Path $unpackedExe) {
+              Write-Host "Using win-unpacked exe (skips installer/SmartScreen): $unpackedExe"
+              $exe = $unpackedExe
+            }
+          }
           $logDir = Join-Path $env:RUNNER_TEMP 'moe-smoke-logs'
           New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
-          # Force Electron to write to stdout. Without these the GUI subsystem
-          # detaches stdout and we get an empty log even on a successful boot.
           $env:ELECTRON_ENABLE_LOGGING = '1'
           $env:ELECTRON_ENABLE_STACK_DUMPING = '1'
           $env:CLAWX_HEADLESS = '1'
           $env:CLAWX_NO_AUTO_UPDATE = '1'
-          $env:DEBUG = 'clawx*,openclaw*'
+          $env:CLAWX_SMOKE_TEST = '1'
 
           $stdoutLog = Join-Path $logDir 'app.stdout.log'
           $stderrLog = Join-Path $logDir 'app.stderr.log'
-          $proc = Start-Process -FilePath $exe `
-            -ArgumentList '--no-sandbox','--enable-logging=stderr','--v=1' `
-            -RedirectStandardOutput $stdoutLog `
-            -RedirectStandardError  $stderrLog `
-            -PassThru -WindowStyle Hidden
-          Write-Host "Launched PID=$($proc.Id)"
+
+          # cmd-launch with redirection — captures Electron's main-process
+          # console output even when the GUI subsystem detaches stdio under
+          # PowerShell's Start-Process.
+          $cmdLine = "`"$exe`" --no-sandbox --enable-logging=stderr --v=1 > `"$stdoutLog`" 2> `"$stderrLog`""
+          Write-Host "cmd line: $cmdLine"
+          $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $cmdLine -PassThru -WindowStyle Hidden
+          Write-Host "Launched cmd wrapper PID=$($proc.Id)"
           "appPid=$($proc.Id)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
           $deadline = (Get-Date).AddSeconds(180)
