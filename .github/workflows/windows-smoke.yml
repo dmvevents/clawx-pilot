@@ -131,23 +131,41 @@ jobs:
           $logDir = Join-Path $env:RUNNER_TEMP 'moe-smoke-logs'
           New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
+          # Force Electron to write to stdout. Without these the GUI subsystem
+          # detaches stdout and we get an empty log even on a successful boot.
+          $env:ELECTRON_ENABLE_LOGGING = '1'
+          $env:ELECTRON_ENABLE_STACK_DUMPING = '1'
           $env:CLAWX_HEADLESS = '1'
-          $env:ELECTRON_DISABLE_GPU = '1'
-          $env:ELECTRON_NO_ATTACH_CONSOLE = '1'
+          $env:CLAWX_NO_AUTO_UPDATE = '1'
+          $env:DEBUG = 'clawx*,openclaw*'
+
           $stdoutLog = Join-Path $logDir 'app.stdout.log'
           $stderrLog = Join-Path $logDir 'app.stderr.log'
           $proc = Start-Process -FilePath $exe `
-            -ArgumentList '--no-sandbox' `
+            -ArgumentList '--no-sandbox','--enable-logging=stderr','--v=1' `
             -RedirectStandardOutput $stdoutLog `
             -RedirectStandardError  $stderrLog `
             -PassThru -WindowStyle Hidden
           Write-Host "Launched PID=$($proc.Id)"
           "appPid=$($proc.Id)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-          $deadline = (Get-Date).AddSeconds(120)
+          $deadline = (Get-Date).AddSeconds(180)
           $gatewayUp = $false
           $hostApiUp = $false
+          $procDiedAt = $null
           while ((Get-Date) -lt $deadline) {
+            $alive = $false
+            try {
+              $p = Get-Process -Id $proc.Id -ErrorAction Stop
+              $alive = $true
+            } catch {
+              $alive = $false
+            }
+            if (-not $alive -and -not $procDiedAt) {
+              $procDiedAt = (Get-Date)
+              Write-Host ("[!] app process exited at " + $procDiedAt.ToString('HH:mm:ss'))
+            }
+
             if (-not $gatewayUp) {
               $t = Test-NetConnection -ComputerName 127.0.0.1 -Port 18789 -InformationLevel Quiet -WarningAction SilentlyContinue
               if ($t) { $gatewayUp = $true; Write-Host ("[+] gateway 18789 up at " + (Get-Date).ToString('HH:mm:ss')) }
@@ -157,7 +175,6 @@ jobs:
                 $r = Invoke-WebRequest -Uri 'http://127.0.0.1:13210/health' -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
                 if ($r.StatusCode -in 200,401,403) { $hostApiUp = $true; Write-Host ("[+] host-api 13210 status=" + $r.StatusCode) }
               } catch {
-                # 401/403 come back as exception with response — accept those
                 $resp = $_.Exception.Response
                 if ($resp -and ($resp.StatusCode.Value__ -in 401,403,404)) {
                   $hostApiUp = $true
@@ -166,35 +183,90 @@ jobs:
               }
             }
             if ($gatewayUp -and $hostApiUp) { break }
-            Start-Sleep -Milliseconds 1500
+            if ($procDiedAt -and ((Get-Date) - $procDiedAt).TotalSeconds -gt 10) { break }
+            Start-Sleep -Milliseconds 2000
           }
 
-          $userData = Join-Path $env:APPDATA 'Ministry of Education'
-          if (-not (Test-Path $userData)) { $userData = Join-Path $env:APPDATA 'ministry-of-education' }
-          $logCandidates = @()
-          if (Test-Path $userData) {
-            $logCandidates += Get-ChildItem $userData -Recurse -Filter '*.log' -ErrorAction SilentlyContinue
-            $openclawJson = Join-Path $userData 'openclaw.json'
-            if (Test-Path $openclawJson) {
-              Copy-Item $openclawJson -Destination (Join-Path $logDir 'openclaw.json')
-              Write-Host "Captured openclaw.json"
+          # Snapshot ALL listening ports for forensic context
+          Write-Host ''
+          Write-Host '=== Listening ports ==='
+          Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+            Where-Object { $_.LocalPort -lt 50000 -and $_.LocalAddress -in '127.0.0.1','0.0.0.0','::','::1' } |
+            Select-Object LocalAddress, LocalPort, OwningProcess |
+            Format-Table | Out-String | Write-Host
+
+          # Dump the userData dir tree (find anything we created)
+          $userDataCandidates = @(
+            (Join-Path $env:APPDATA 'Ministry of Education'),
+            (Join-Path $env:APPDATA 'ministry-of-education'),
+            (Join-Path $env:APPDATA 'clawx'),
+            (Join-Path $env:LOCALAPPDATA 'Ministry of Education'),
+            (Join-Path $env:USERPROFILE '.openclaw'),
+            (Join-Path $env:APPDATA '.openclaw')
+          )
+          $userData = $null
+          foreach ($cand in $userDataCandidates) {
+            if (Test-Path $cand) {
+              if (-not $userData) { $userData = $cand }
+              Write-Host ('Found userData candidate: ' + $cand)
+              Get-ChildItem -Path $cand -Recurse -ErrorAction SilentlyContinue |
+                Select-Object FullName, Length, LastWriteTime |
+                Format-Table | Out-String | Write-Host
             }
           }
-          foreach ($l in $logCandidates) {
-            Copy-Item $l.FullName -Destination (Join-Path $logDir $l.Name) -ErrorAction SilentlyContinue
+          if (-not $userData) { Write-Host '!! NO userData dir found in any candidate location' }
+
+          if ($userData) {
+            # Copy everything small enough (cap each file at 2 MB) into the artifact
+            Get-ChildItem -Path $userData -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object {
+              if ($_.Length -le 2MB) {
+                $rel = $_.FullName.Substring($userData.Length).TrimStart('\','/').Replace('\','_')
+                $target = Join-Path $logDir ('userData_' + $rel)
+                Copy-Item $_.FullName -Destination $target -ErrorAction SilentlyContinue
+              }
+            }
           }
+
+          # Windows Application Event Log entries for our exe (last 5 min)
+          Write-Host ''
+          Write-Host '=== Application Event Log (last 5 min, our exe) ==='
+          try {
+            Get-WinEvent -FilterHashtable @{
+              LogName='Application'; StartTime=(Get-Date).AddMinutes(-5)
+            } -ErrorAction SilentlyContinue |
+              Where-Object { $_.Message -match 'Ministry of Education' -or $_.ProviderName -eq 'Application Error' } |
+              Select-Object -First 20 TimeCreated, ProviderName, Id, LevelDisplayName, Message |
+              Format-List | Out-String | Write-Host
+          } catch { Write-Host "(event log query failed: $_)" }
 
           # Stop the app for log capture
           try { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue } catch {}
           Start-Sleep -Seconds 2
 
-          # Now scan logs for evidence of plugin-tool registration + bad enum errors
-          $allLogs = Get-Content -Path (Join-Path $logDir '*.log') -ErrorAction SilentlyContinue -Raw
+          # Scan logs for evidence
+          $logBlob = ''
+          $userDataLogs = @()
+          if ($userData) {
+            $userDataLogs = Get-ChildItem -Path $userData -Recurse -Filter '*.log' -ErrorAction SilentlyContinue
+          }
+          foreach ($l in $userDataLogs) {
+            try { $logBlob += "`n=== $($l.FullName) ===`n" + (Get-Content $l.FullName -Raw -ErrorAction SilentlyContinue) } catch {}
+          }
           $stdoutTxt = ''
           if (Test-Path $stdoutLog) { $stdoutTxt = Get-Content $stdoutLog -Raw }
           $stderrTxt = ''
           if (Test-Path $stderrLog) { $stderrTxt = Get-Content $stderrLog -Raw }
-          $blob = "$allLogs`n$stdoutTxt`n$stderrTxt"
+          $blob = "$logBlob`n$stdoutTxt`n$stderrTxt"
+
+          Write-Host ''
+          Write-Host '=== app.stdout.log (head 100 lines) ==='
+          if ($stdoutTxt) { ($stdoutTxt -split "`n" | Select-Object -First 100) -join "`n" | Write-Host } else { Write-Host '(empty)' }
+          Write-Host ''
+          Write-Host '=== app.stderr.log (head 100 lines) ==='
+          if ($stderrTxt) { ($stderrTxt -split "`n" | Select-Object -First 100) -join "`n" | Write-Host } else { Write-Host '(empty)' }
+          Write-Host ''
+          Write-Host ('=== userData log files: ' + $userDataLogs.Count + ' ===')
+          foreach ($l in $userDataLogs) { Write-Host ('  ' + $l.FullName + ' (' + $l.Length + ' bytes)') }
 
           $outlookToolsHit = ([regex]::Matches($blob, 'outlook\.(open|read_inbox|search_inbox|read_email|draft_email|send_email|reply|forward|mark_read|list_attachments|download_attachment)')).Count
           $badEnumHit = ($blob -match 'google-query-key.*Invalid option' -or $blob -match 'Config validation failed.*api.*Invalid')
