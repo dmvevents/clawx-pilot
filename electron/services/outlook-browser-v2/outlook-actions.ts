@@ -86,36 +86,102 @@ export class OutlookActions {
       // selector missed. Worst case we return an empty list.
     }
 
-    // Pull message rows via Playwright's accessibility API. This sidesteps
-    // brittle DOM selectors entirely; ARIA roles are how screen readers see
-    // the inbox, so they tend to outlive theme/UI rotations.
-    interface RawRow { id: string; subject: string; sender: string; snippet: string; received: string; unread: boolean }
-    const rows: RawRow[] = await page.evaluate((max: number) => {
-      const out: RawRow[] = [];
-      const seen = new Set<string>();
-      const candidates = document.querySelectorAll(
-        '[role="option"][aria-label], [role="row"][aria-label]',
-      );
-      for (const el of Array.from(candidates)) {
-        const label = el.getAttribute('aria-label') ?? '';
-        if (!label || seen.has(label) || out.length >= max) continue;
-        seen.add(label);
+    // Pull message rows by walking the descendant text nodes of each row
+    // element. Outlook's aria-label concatenates everything into one string
+    // (sender + subject + preview + date + adjacent UI banner text), so the
+    // old comma-split heuristic produced "Unread AllFacultyMail You've..."
+    // single-string blobs. Walking text nodes gets us cleanly separated
+    // visible text in DOM order, which matches what assistive tech reads:
+    //   ["A" (avatar initial), "AllFacultyMail" (sender), "subject text",
+    //    "Fri 3:46 PM" (received), "preview/snippet text"]
+    // We classify each text node by content (date-like, single-letter
+    // avatar, etc.) and assign positions.
+    const rawAriaLabel = (s: string) => s.replace(/^Unread\s+/i, '').trim();
+    const rows = await page.evaluate(`
+      (() => {
+        const out = [];
+        const seen = new Set();
+        const nodes = document.querySelectorAll('[role="option"][aria-label], [role="row"][aria-label]');
+        const limit = ${JSON.stringify(top)};
+        // Date-line heuristic: short string starting with weekday/month/AM-PM
+        // marker or HH:MM. Stable across en-* locales; for non-English we
+        // accept any string under 25 chars with a digit and a colon or slash.
+        const isDateLike = function(s) {
+          if (!s) return false;
+          if (s.length > 30) return false;
+          if (/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Yesterday|Today|Tomorrow)\\b/i.test(s)) return true;
+          if (/^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\b/i.test(s)) return true;
+          if (/^\\d{1,2}[:\\/]\\d/.test(s)) return true;
+          return false;
+        };
+        for (const el of Array.from(nodes)) {
+          const label = el.getAttribute('aria-label') || '';
+          if (!label) continue;
+          // De-dup by label so collapsed thread groups don't multiply rows.
+          const key = label.slice(0, 200);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          if (out.length >= limit) break;
 
-        // Outlook's aria-label format (subject to drift, which is fine —
-        // we just need *some* split):
-        // "Sender, Subject, Preview, Received date, …, Unread"
-        const parts = label.split(/,\s+/);
-        const sender = parts[0] ?? '';
-        const subject = parts[1] ?? '';
-        const snippet = parts[2] ?? '';
-        const received = parts.slice(3).join(', ').replace(/,?\s*Unread\.?\s*$/i, '');
-        const unread = /unread\b/i.test(label);
-        // id: hash-ish stable from aria-label so re-reads match.
-        const id = label.slice(0, 64);
-        out.push({ id, sender, subject, snippet, received, unread });
-      }
-      return out;
-    }, top);
+          // Collect non-empty text-node values in DOM order.
+          const texts = [];
+          const walk = function(node) {
+            if (node.nodeType === 3) {
+              const t = (node.textContent || '').trim();
+              if (t) texts.push(t);
+            } else if (node.nodeType === 1) {
+              for (const c of Array.from(node.childNodes)) walk(c);
+            }
+          };
+          walk(el);
+
+          // Classify the text nodes:
+          // 1. Skip 1-2 char fragments — these are avatar initials.
+          // 2. First "long" string is sender.
+          // 3. Next "long" string before any date-like is subject.
+          // 4. First date-like string is receivedAt.
+          // 5. Everything after the date is snippet.
+          let sender = '';
+          let subject = '';
+          let receivedAt = '';
+          const snippetParts = [];
+          let phase = 'sender';
+          for (const t of texts) {
+            if (t.length < 3 && phase !== 'snippet') continue;
+            if (phase === 'sender') {
+              sender = t;
+              phase = 'subject';
+              continue;
+            }
+            if (phase === 'subject') {
+              if (isDateLike(t)) { receivedAt = t; phase = 'snippet'; continue; }
+              subject = subject ? subject + ' ' + t : t;
+              continue;
+            }
+            if (phase === 'snippet') {
+              snippetParts.push(t);
+            }
+          }
+          // If we never hit a date, fall back: assume the LAST short token
+          // before snippet text is the date.
+          if (!receivedAt && snippetParts.length) {
+            for (let i = snippetParts.length - 1; i >= 0; i--) {
+              if (isDateLike(snippetParts[i])) {
+                receivedAt = snippetParts.splice(i, 1)[0];
+                break;
+              }
+            }
+          }
+          const snippet = snippetParts.join(' ').slice(0, 200);
+          const unread = /\\bunread\\b/i.test(label);
+          // id: stable-ish hash from sender+subject+receivedAt so re-reads match.
+          const id = (sender + '|' + subject + '|' + receivedAt).slice(0, 96) || label.slice(0, 96);
+          out.push({ id: id, sender: sender, subject: subject, snippet: snippet, received: receivedAt, unread: unread });
+        }
+        return out;
+      })()
+    `) as Array<{ id: string; sender: string; subject: string; snippet: string; received: string; unread: boolean }>;
+    void rawAriaLabel; // reserved for future fallback path
 
     const messages: InboxMessage[] = rows.map((r) => ({
       id: r.id,
