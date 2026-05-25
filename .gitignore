@@ -84,3 +84,4 @@ ruvector.db
 **/ruvector.db
 *.db-shm
 *.db-wal
+docs/ui-snapshots/**/ruvector.db

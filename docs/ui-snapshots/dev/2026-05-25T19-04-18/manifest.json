@@ -1,0 +1,66 @@
+{
+  "mode": "dev",
+  "capturedAt": "2026-05-25T19:04:42.579Z",
+  "baseUrl": "http://localhost:5173/",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "routes": [
+    {
+      "name": "01-chat",
+      "ok": true,
+      "bytes": 5854
+    },
+    {
+      "name": "02-models",
+      "ok": true,
+      "bytes": 5854
+    },
+    {
+      "name": "03-agents",
+      "ok": true,
+      "bytes": 5854
+    },
+    {
+      "name": "04-channels",
+      "ok": true,
+      "bytes": 5854
+    },
+    {
+      "name": "05-skills",
+      "ok": true,
+      "bytes": 5854
+    },
+    {
+      "name": "06-cron",
+      "ok": true,
+      "bytes": 5854
+    },
+    {
+      "name": "07-settings",
+      "ok": true,
+      "bytes": 5854
+    },
+    {
+      "name": "08-settings-general",
+      "ok": true,
+      "bytes": 5854
+    },
+    {
+      "name": "09-settings-providers",
+      "ok": true,
+      "bytes": 5854
+    },
+    {
+      "name": "10-settings-outlook",
+      "ok": true,
+      "bytes": 5854
+    },
+    {
+      "name": "11-settings-microsoft-graph",
+      "ok": true,
+      "bytes": 5854
+    }
+  ]
+}
