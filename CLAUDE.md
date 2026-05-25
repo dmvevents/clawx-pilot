@@ -32,6 +32,17 @@ These are operational constraints learned the hard way. Each one has a real inci
 | **Don't push to upstream `ValueCell-ai/ClawX` without confirmation.** Push to `dmvevents/clawx-pilot` (SSH) is OK. | We're a fork. Don't pollute upstream. |
 | **Don't run destructive git ops** without explicit confirmation. | force-push, reset --hard, branch -D — ask first. |
 
+### Engineering invariants (regression classes)
+
+These rules close systemic bug patterns we hit repeatedly during moe.4 → moe.10. Each is enforced by a `.claude/agents/*-auditor.md` sub-agent.
+
+| Rule | Why | Auditor |
+|---|---|---|
+| **Four-store channel coherence is non-negotiable.** All of `~/.openclaw/openclaw.json` (defaults + agents.list[0]), `~/.openclaw/agents/*/agent/models.json`, `clawx-providers.json`, and `localStorage preferredChannel` must agree on the same provider/model pair. | When one drifts, the user sees silence on send. We hit this 3+ times before adding the auditor. | `config-coherence-auditor` |
+| **No misclassified dependencies.** Any module imported synchronously by code under `electron/` or `extensions/` MUST be in `dependencies`, not `devDependencies`. electron-builder strips devDeps from the asar. | moe.9 shipped broken because `playwright-core` was in devDeps. The fix is a lockfile move; the auditor is the prevention. | `dependency-class-auditor` |
+| **DOM selectors must have fallbacks for vendor-rotated UIs.** Every selector against Microsoft / Google / Apple surfaces must classify itself stable (role+aria) or rotated (CSS class, data-automation-id, aria-substring). Rotated selectors require 3+ fallback strategies. | MS Forms editor automation died in <a week because `data-automation-id` values rotated. We pivoted to the response page (more stable surface) and codified the rule. | `dom-selector-regression-tester` |
+| **State writers must be atomic + idempotent.** Every function that writes to `~/.openclaw/*.json` or `clawx-providers.json` must (a) write via temp-file + `rename()` and (b) produce identical state when called twice. All writers delegate to the canonical writer (`channel-config.ts::writeOpenClawConfig`). No `chflags uchg` workarounds in production paths. | The `google-query-key` enum kept getting re-seeded because multiple writers raced. The `chflags uchg` band-aid was the smell that exposed the deeper invariant violation. | `state-idempotency-auditor` |
+
 ---
 
 ## Architecture (one diagram)
