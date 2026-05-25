@@ -23,13 +23,24 @@
  */
 import { ipcMain } from 'electron';
 import { logger } from '../utils/logger';
-import { OUTLOOK_BROWSER_V2 } from '../../shared/feature-flags';
+import { OUTLOOK_BROWSER_V2, PRINCIPAL_SKILL_ALLOWLIST } from '../../shared/feature-flags';
 import { outlookBrowserManager as outlookBrowserManagerV1 } from '../services/outlook-browser/manager';
 import { outlookBrowserManagerV2 } from '../services/outlook-browser-v2/manager';
 import type {
   DraftEmailArgs,
   SendEmailArgs,
 } from '../services/outlook-browser/types';
+
+/**
+ * Defence-in-depth gate. The host-API routes already 404 when 'outlook' is
+ * removed from the allowlist; we now apply the same check at the IPC layer
+ * so a renderer-side call can't bypass the kill-switch either.
+ */
+function assertOutlookEnabled(): void {
+  if (!PRINCIPAL_SKILL_ALLOWLIST.has('outlook')) {
+    throw new Error('outlook capability disabled (kill-switch via PRINCIPAL_SKILL_ALLOWLIST).');
+  }
+}
 
 /**
  * Pick implementation at module load time. CLAWX_OUTLOOK_V2=1 selects the
@@ -66,12 +77,14 @@ function logSafeArgs(
 
 export function registerOutlookBrowserHandlers(): void {
   ipcMain.handle('outlook:open', async () => {
+    assertOutlookEnabled();
     const result = await outlookBrowserManager.open();
     logger.info(`[outlook:open] status=${result.status}`);
     return result;
   });
 
   ipcMain.handle('outlook:readInbox', async (_event, args?: { top?: number }) => {
+    assertOutlookEnabled();
     const top =
       typeof args?.top === 'number' && Number.isFinite(args.top) && args.top > 0
         ? Math.floor(args.top)
@@ -84,6 +97,7 @@ export function registerOutlookBrowserHandlers(): void {
   });
 
   ipcMain.handle('outlook:draft', async (_event, args: DraftEmailArgs) => {
+    assertOutlookEnabled();
     // Subjects + counts only — bodies must never appear in logs.
     logger.info(`[outlook:draft] ${JSON.stringify(logSafeArgs(args))}`);
     const result = await outlookBrowserManager.draftEmail(args);
@@ -92,6 +106,7 @@ export function registerOutlookBrowserHandlers(): void {
   });
 
   ipcMain.handle('outlook:send', async (_event, args: SendEmailArgs) => {
+    assertOutlookEnabled();
     // We deliberately do NOT enforce confirm here — the manager has the
     // hard gate. Doing it twice risks drift. We do, however, log that we
     // saw a send attempt (with confirm value) so audit trails capture it.
