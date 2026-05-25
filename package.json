@@ -1,7 +1,7 @@
 {
     "name": "clawx",
     "productName": "Ministry of Education",
-    "version": "0.4.3-moe.9",
+    "version": "0.4.3-moe.10",
     "pnpm": {
         "onlyBuiltDependencies": [
             "@discordjs/opus",
@@ -99,6 +99,7 @@
         "rehype-katex": "^7.0.1",
         "remark-frontmatter": "^5.0.0",
         "remark-math": "^6.0.0",
+        "playwright-core": "1.59.1",
         "tar": "^6.2.1",
         "ws": "^8.19.0",
         "xlsx": "^0.18.5"
@@ -159,7 +160,6 @@
         "mpg123-decoder": "^1.0.3",
         "openclaw": "2026.4.23",
         "opusscript": "^0.1.1",
-        "playwright-core": "1.59.1",
         "png2icons": "^2.0.1",
         "postcss": "^8.5.6",
         "qrcode-terminal": "0.12.0",
@@ -185,5 +185,6 @@
         "zustand": "^5.0.11",
         "zx": "^8.8.5"
     },
+    "//runtime-deps-note": "playwright-core is a runtime dep (used by electron/services/outlook-browser-v2/playwright-driver.ts). Do not move back to devDependencies — electron-builder strips devDeps when packaging, breaking the moe.X build with 'Cannot find module playwright-core'.",
     "packageManager": "pnpm@10.33.4+sha512.1c67b3b359b2d408119ba1ed289f34b8fc3c6873412bec6fd264fbdc82489e510fcbecb9ce9d22dae7f3b76269d8441046014bdca53b9979cd7a561ad631b800"
 }
