@@ -18,6 +18,7 @@ import { handleSessionRoutes } from './routes/sessions';
 import { handleCronRoutes } from './routes/cron';
 import { handleDiagnosticsRoutes } from './routes/diagnostics';
 import { handleOutlookRoutes } from './routes/outlook';
+import { handleFormsRoutes } from './routes/forms';
 import { sendJson, setCorsHeaders, requireJsonContentType } from './route-utils';
 
 type RouteHandler = (
@@ -44,6 +45,8 @@ const coreRouteHandlers: RouteHandler[] = [
   // Outlook (browser-session) routes for the moe-principal-assistant plugin
   // running inside the OpenClaw gateway. Allowlist-gated inside the handler.
   (req, res, url) => handleOutlookRoutes(req, res, url),
+  // Forms (browser-session) routes — same pattern as outlook. Allowlist-gated.
+  (req, res) => handleFormsRoutes(req, res),
 ];
 
 function buildRouteHandlers(): RouteHandler[] {

@@ -510,10 +510,99 @@ export function register(api) {
     );
   }
 
+  // ── Forms (Microsoft Forms via browser-session, MoE suspension form) ──────
+  // Same pattern as outlook above: build a host-API HTTP facade so the plugin
+  // running inside the gateway can call back to the Electron main process,
+  // which owns the FormsBrowserManager singleton + the Playwright driver.
+  const forms =
+    hostApiPort && hostApiToken
+      ? createHostApiFormsFacade(hostApiPort, hostApiToken)
+      : null;
+  if (forms) {
+    registerTool({
+      name: 'forms.list',
+      description:
+        'List the MoE forms ClawX can fill. Returns { status, forms: [{ id, title, status: "available" | "not_configured" }] }. Call this first if the user mentions filling a form, so you know which forms are available.',
+      handler: async () => forms.list(),
+    });
+
+    registerTool({
+      name: 'forms.preview_suspension',
+      description:
+        'Open the Suspensions form in the principal\'s browser and fill every field from a typed payload. Does NOT submit. Returns { status: "previewed", url, filledCount, skippedCount, errors[] }. Use this AFTER the user has reviewed the extracted fields and asked you to fill the form. Always call this before forms.submit_suspension.',
+      handler: async (args = {}) => {
+        if (!args.payload || typeof args.payload !== 'object') {
+          throw new Error('payload object required (32 fields, see suspensions-schema.json).');
+        }
+        return forms.previewSuspension({ payload: args.payload });
+      },
+    });
+
+    registerTool({
+      name: 'forms.submit_suspension',
+      description:
+        'Submit the Suspensions form. HARD GATE: refuses unless { confirm: true }. The agent MUST show the principal the filled form (forms.preview_suspension first) and obtain explicit confirmation ("yes, submit") before passing confirm=true. Returns { status: "submitted" | "refused" | "error", message?, reason? }.',
+      handler: async (args = {}) => forms.submitSuspension({ confirm: args.confirm === true }),
+    });
+
+    log.info?.('moe-principal-assistant: forms (browser-session) tools registered');
+  } else {
+    log.info?.('moe-principal-assistant: forms host handle not provided — forms.* tools skipped');
+  }
+
   log.info?.(
     `moe-principal-assistant: registered (school=${cfg.schoolName}, district=${cfg.educationDistrict})`,
   );
   return { registered: true };
+}
+
+/**
+ * Build a forms facade that proxies the three agent-callable methods over
+ * HTTP to ClawX's host-API. Same shape as createHostApiOutlookFacade.
+ */
+function createHostApiFormsFacade(port, token) {
+  const base = `http://127.0.0.1:${port}/api/forms`;
+  const REQUEST_TIMEOUT_MS = 90_000; // generous: filling 32 fields can take a moment.
+
+  async function call(path, body) {
+    const url = `${base}${path}`;
+    const init = {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: body == null ? '{}' : JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    };
+    let resp;
+    try {
+      resp = await fetch(url, init);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`forms host-API ${path} unreachable: ${msg}`);
+    }
+    if (resp.status === 404) {
+      throw new Error(
+        `forms capability disabled: ${path} returned 404 — check that 'forms' is in PRINCIPAL_SKILL_ALLOWLIST.`,
+      );
+    }
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      throw new Error(`forms host-API ${path} failed ${resp.status}: ${text.slice(0, 200)}`);
+    }
+    const json = await resp.json();
+    if (!json || json.success !== true) {
+      throw new Error(`forms host-API ${path}: ${json?.error ?? 'unknown error'}`);
+    }
+    return json.data;
+  }
+
+  return {
+    list: () => call('/list'),
+    previewSuspension: (args) => call('/preview-suspension', args),
+    submitSuspension: (args) => call('/submit-suspension', args),
+  };
 }
 
 /**

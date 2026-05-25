@@ -169,6 +169,10 @@ export const PRINCIPAL_SKILL_ALLOWLIST = new Set<string>([
   // gated on this slug being present; remove it to disable outlook.* end
   // to end without changing code in the plugin.
   'outlook',
+  // Forms (browser-session) — Phase-2 MoE Forms integration. Same gating
+  // pattern as outlook. Remove this slug to disable forms.* tools and
+  // /api/forms/* routes (404) without code changes.
+  'forms',
 ]);
 
 /**
