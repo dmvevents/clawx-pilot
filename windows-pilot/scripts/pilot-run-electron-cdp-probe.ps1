@@ -7,6 +7,8 @@
 param(
     [string]$Endpoint = "http://127.0.0.1:9223",
     [switch]$SafeChat,
+    [ValidateSet("outlook-open", "forms-list")]
+    [string]$SafeChatMode = "outlook-open",
     [switch]$OutlookSmoke,
     [switch]$FormsSmoke,
     [int]$WaitMs = 5000,
@@ -69,6 +71,7 @@ if (-not (Test-Endpoint -Url $Endpoint)) {
 "Script:      $scriptPath"
 "ArtifactDir: $ArtifactDir"
 "SafeChat:    $($SafeChat.IsPresent)"
+"SafeChatMode:$SafeChatMode"
 "OutlookSmoke:$($OutlookSmoke.IsPresent)"
 "FormsSmoke:  $($FormsSmoke.IsPresent)"
 
@@ -80,6 +83,8 @@ $argsList = @(
 )
 if ($SafeChat) {
     $argsList += "--safe-chat"
+    $argsList += "--safe-chat-mode"
+    $argsList += $SafeChatMode
 }
 if ($OutlookSmoke) {
     $argsList += "--outlook-smoke"

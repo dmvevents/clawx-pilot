@@ -21,6 +21,7 @@ function parseArgs(argv) {
     endpoint: 'http://127.0.0.1:9223',
     artifactDir: path.join(os.homedir(), 'Downloads'),
     safeChat: false,
+    safeChatMode: 'outlook-open',
     outlookSmoke: false,
     formsSmoke: false,
     waitMs: 5000,
@@ -30,11 +31,12 @@ function parseArgs(argv) {
     if (arg === '--endpoint') out.endpoint = argv[++i] || out.endpoint;
     else if (arg === '--artifact-dir') out.artifactDir = argv[++i] || out.artifactDir;
     else if (arg === '--safe-chat') out.safeChat = true;
+    else if (arg === '--safe-chat-mode') out.safeChatMode = argv[++i] || out.safeChatMode;
     else if (arg === '--outlook-smoke') out.outlookSmoke = true;
     else if (arg === '--forms-smoke') out.formsSmoke = true;
     else if (arg === '--wait-ms') out.waitMs = Number(argv[++i] || out.waitMs);
     else if (arg === '--help' || arg === '-h') {
-      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--artifact-dir DIR] [--safe-chat] [--outlook-smoke] [--forms-smoke] [--wait-ms N]');
+      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--outlook-smoke] [--forms-smoke] [--wait-ms N]');
       process.exit(0);
     }
   }
@@ -190,10 +192,26 @@ async function invokeHostApi(page, pathName, body = {}) {
   }, { pathName, body });
 }
 
-async function sendSafeChat(page) {
-  const prompt = [
+function safeChatPrompt(mode, verificationToken) {
+  if (mode === 'forms-list') {
+    return [
+      'Verification only.',
+      `Verification token: ${verificationToken}.`,
+      'Use the forms.list tool exactly once, then report the returned status and available form ids.',
+      'Include the verification token in the final answer.',
+      'Do not preview a form.',
+      'Do not submit forms.',
+      'Do not draft email.',
+      'Do not send email.',
+      'Do not read inbox contents.',
+      'Do not use any other tool.',
+    ].join(' ');
+  }
+  return [
     'Verification only.',
+    `Verification token: ${verificationToken}.`,
     'Use the outlook.open tool exactly once, then report the returned status.',
+    'Include the verification token in the final answer.',
     'Do not draft email.',
     'Do not send email.',
     'Do not reply or forward.',
@@ -201,6 +219,14 @@ async function sendSafeChat(page) {
     'Do not submit forms.',
     'Do not use any other tool.',
   ].join(' ');
+}
+
+function safeChatExpectedTool(mode) {
+  return mode === 'forms-list' ? 'forms.list' : 'outlook.open';
+}
+
+async function sendSafeChat(page, mode, verificationToken) {
+  const prompt = safeChatPrompt(mode, verificationToken);
 
   return page.evaluate(async ({ prompt: innerPrompt }) => {
     const invoke = window.electron?.ipcRenderer?.invoke;
@@ -220,6 +246,101 @@ async function sendSafeChat(page) {
       120_000,
     );
   }, { prompt });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function loadChatHistory(page) {
+  return page.evaluate(async () => {
+    const invoke = window.electron?.ipcRenderer?.invoke;
+    if (typeof invoke !== 'function') {
+      return { success: false, error: 'window.electron.ipcRenderer.invoke unavailable' };
+    }
+    return invoke(
+      'gateway:rpc',
+      'chat.history',
+      { sessionKey: 'agent:main:main', limit: 40 },
+      35_000,
+    );
+  });
+}
+
+function messageText(message) {
+  const content = Array.isArray(message?.content) ? message.content : [];
+  return content
+    .filter((part) => part?.type === 'text')
+    .map((part) => String(part.text || ''))
+    .join(' ');
+}
+
+function summarizeMessage(message) {
+  const content = Array.isArray(message?.content) ? message.content : [];
+  const toolCalls = content
+    .filter((part) => part?.type === 'toolCall')
+    .map((part) => ({ name: part.name, id: part.id }));
+  const text = content
+    .filter((part) => part?.type === 'text')
+    .map((part) => String(part.text || '').replace(/\s+/g, ' ').slice(0, 220));
+  return {
+    role: message?.role,
+    toolName: message?.toolName,
+    toolCallId: message?.toolCallId,
+    isError: message?.isError,
+    stopReason: message?.stopReason,
+    toolCalls,
+    text,
+  };
+}
+
+function summarizeChatHistory(result, mode, verificationToken) {
+  if (!result?.success) {
+    return {
+      ok: false,
+      error: result?.error ?? 'chat.history failed',
+    };
+  }
+  const messages = Array.isArray(result.result?.messages) ? result.result.messages : [];
+  const expectedTool = safeChatExpectedTool(mode);
+  const marker = verificationToken;
+  let startIndex = -1;
+  messages.forEach((message, index) => {
+    if (message?.role === 'user' && messageText(message).includes(marker)) startIndex = index;
+  });
+  const scoped = startIndex >= 0 ? messages.slice(startIndex) : messages.slice(-12);
+  const expectedToolResult = scoped.find((message) => message?.role === 'toolResult' && message.toolName === expectedTool);
+  const finalAssistant = scoped.find((message) => message?.role === 'assistant' && message.stopReason === 'stop');
+  return {
+    ok: true,
+    messageCount: messages.length,
+    mode,
+    verificationToken,
+    expectedTool,
+    scopedToCurrentPrompt: startIndex >= 0,
+    completed: Boolean(finalAssistant),
+    expectedToolResultOk: Boolean(expectedToolResult && expectedToolResult.isError !== true),
+    recent: scoped.slice(-12).map(summarizeMessage),
+  };
+}
+
+async function waitForSafeChatHistory(page, mode, verificationToken, timeoutMs = 60_000) {
+  const started = Date.now();
+  let lastSummary = { ok: false, error: 'chat.history not polled yet' };
+  while (Date.now() - started < timeoutMs) {
+    const result = await loadChatHistory(page);
+    lastSummary = summarizeChatHistory(result, mode, verificationToken);
+    if (
+      lastSummary.ok
+      && lastSummary.scopedToCurrentPrompt
+      && lastSummary.completed
+      && lastSummary.expectedToolResultOk
+    ) {
+      return lastSummary;
+    }
+    await sleep(1500);
+  }
+  return lastSummary;
 }
 
 function summarizeHostApiCall(result, summarizeData) {
@@ -388,8 +509,11 @@ async function main() {
     const formsList = await withTimeout('hostapi forms.list', () => invokeHostApi(page, '/api/forms/list'), 75_000)
       .catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
 
+    const safeChatVerificationToken = args.safeChat
+      ? `pilot-safe-chat-${Date.now()}-${Math.random().toString(16).slice(2)}`
+      : null;
     const safeChat = args.safeChat
-      ? await withTimeout('gateway chat.send', () => sendSafeChat(page), 130_000)
+      ? await withTimeout('gateway chat.send', () => sendSafeChat(page, args.safeChatMode, safeChatVerificationToken), 130_000)
         .catch((error) => ({ success: false, error: error instanceof Error ? error.message : String(error) }))
       : { skipped: true };
     const outlookSmoke = args.outlookSmoke
@@ -400,6 +524,10 @@ async function main() {
       : { skipped: true };
 
     await page.waitForTimeout(Math.max(0, args.waitMs));
+    const safeChatHistory = args.safeChat
+      ? await withTimeout('gateway chat.history', () => waitForSafeChatHistory(page, args.safeChatMode, safeChatVerificationToken), 75_000)
+        .catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }))
+      : { skipped: true };
 
     const summary = {
       state: 'ELECTRON_CDP_PROBE_DONE',
@@ -414,7 +542,12 @@ async function main() {
       },
       outlookSmoke,
       formsSmoke,
-      safeChat,
+      safeChat: {
+        mode: args.safeChatMode,
+        verificationToken: safeChatVerificationToken,
+        send: safeChat,
+        history: safeChatHistory,
+      },
       eventCount: events.length,
       events: events.slice(-50),
     };
