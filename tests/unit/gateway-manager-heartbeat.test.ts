@@ -155,7 +155,7 @@ describe('GatewayManager heartbeat recovery', () => {
     (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
   });
 
-  it('keeps heartbeat recovery disabled on windows', async () => {
+  it('keeps non-initial heartbeat recovery disabled on windows', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' });
 
     const { GatewayManager } = await import('@electron/gateway/manager');
@@ -181,6 +181,38 @@ describe('GatewayManager heartbeat recovery', () => {
     vi.advanceTimersByTime(400_000);
 
     expect(restartSpy).not.toHaveBeenCalled();
+
+    (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
+  });
+
+  it('restarts on windows when initial gateway.ready never arrives and heartbeat times out', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+
+    const { GatewayManager } = await import('@electron/gateway/manager');
+    const manager = new GatewayManager();
+
+    const ws = {
+      readyState: 1,
+      ping: vi.fn(),
+      terminate: vi.fn(),
+      on: vi.fn(),
+    };
+
+    (manager as unknown as { ws: typeof ws }).ws = ws;
+    (manager as unknown as { shouldReconnect: boolean }).shouldReconnect = true;
+    (manager as unknown as { status: { state: string; port: number; connectedAt: number; gatewayReady: boolean } }).status = {
+      state: 'running',
+      port: 18789,
+      connectedAt: Date.now(),
+      gatewayReady: false,
+    };
+    const restartSpy = vi.spyOn(manager, 'restart').mockResolvedValue();
+
+    (manager as unknown as { startPing: () => void }).startPing();
+
+    vi.advanceTimersByTime(400_000);
+
+    expect(restartSpy).toHaveBeenCalledTimes(1);
 
     (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
   });

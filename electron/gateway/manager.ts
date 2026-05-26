@@ -173,6 +173,7 @@ export class GatewayManager extends EventEmitter {
   private externalShutdownSupported: boolean | null = null;
   private reconnectAttemptsTotal = 0;
   private reconnectSuccessTotal = 0;
+  private initialReadyRecoveryRequested = false;
   private static readonly RELOAD_POLICY_REFRESH_MS = 15_000;
   private static readonly HEARTBEAT_INTERVAL_MS = 30_000;
   private static readonly HEARTBEAT_TIMEOUT_MS = 12_000;
@@ -230,6 +231,7 @@ export class GatewayManager extends EventEmitter {
     this.on('gateway:ready', () => {
       this.resetGatewayReadyFallback();
       this.clearInitialReadyHeartbeatRecoveryTimer();
+      this.initialReadyRecoveryRequested = false;
       if (this.status.state === 'running' && !this.status.gatewayReady) {
         logger.info('Gateway subsystems ready (event received)');
         this.setStatus({ gatewayReady: true });
@@ -344,6 +346,7 @@ export class GatewayManager extends EventEmitter {
     this.isAutoReconnectStart = false; // consume the flag
     this.setStatus({ state: 'starting', reconnectAttempts: this.reconnectAttempts, gatewayReady: false });
     this.resetGatewayReadyFallback();
+    this.initialReadyRecoveryRequested = false;
 
     // Check if Python environment is ready (self-healing) asynchronously.
     // Fire-and-forget: only needs to run once, not on every retry.
@@ -851,6 +854,9 @@ export class GatewayManager extends EventEmitter {
       });
       logger.warn('Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery:', error);
       if (this.status.state === 'running' && !this.status.gatewayReady) {
+        if (this.requestInitialReadyRecovery('ready-fallback-rpc-timeout', { continueFallbackProbes: true })) {
+          return;
+        }
         this.scheduleGatewayReadyFallback();
       }
     }
@@ -1233,7 +1239,10 @@ export class GatewayManager extends EventEmitter {
         this.recordHeartbeatTimeout(consecutiveMisses);
         const pid = this.process?.pid ?? 'unknown';
         const isWindows = process.platform === 'win32';
-        const shouldAttemptRecovery = !isWindows && this.shouldReconnect && this.status.state === 'running';
+        const initialReadyPending = this.isInitialGatewayReadyPending();
+        const shouldAttemptRecovery = this.shouldReconnect
+          && this.status.state === 'running'
+          && (!isWindows || initialReadyPending);
         logger.warn(
           `Gateway heartbeat: ${consecutiveMisses} consecutive pong misses ` +
             `(timeout=${timeoutMs}ms, pid=${pid}, state=${this.status.state}, autoReconnect=${this.shouldReconnect}).`,
@@ -1245,13 +1254,7 @@ export class GatewayManager extends EventEmitter {
           logger.warn(`Gateway heartbeat recovery skipped (${reason})`);
           return;
         }
-        const initialReadyRecoveryDelayMs = this.getInitialReadyHeartbeatRecoveryDelayMs();
-        if (initialReadyRecoveryDelayMs > 0) {
-          logger.warn(
-            `Gateway heartbeat recovery deferred while waiting for initial gateway.ready ` +
-            `(retryAfterMs=${initialReadyRecoveryDelayMs})`,
-          );
-          this.scheduleInitialReadyHeartbeatRecovery(initialReadyRecoveryDelayMs);
+        if (initialReadyPending && this.requestInitialReadyRecovery('heartbeat-timeout')) {
           return;
         }
         logger.warn('Gateway heartbeat recovery: restarting unresponsive gateway process');
@@ -1273,17 +1276,14 @@ export class GatewayManager extends EventEmitter {
     this.initialReadyHeartbeatRecoveryTimer = setTimeout(() => {
       this.initialReadyHeartbeatRecoveryTimer = null;
       if (
-        process.platform === 'win32'
-        || !this.shouldReconnect
+        !this.shouldReconnect
         || this.status.state !== 'running'
         || this.status.gatewayReady
+        || this.initialReadyRecoveryRequested
       ) {
         return;
       }
-      logger.warn('Gateway heartbeat recovery: initial gateway.ready grace expired, restarting unresponsive gateway process');
-      void this.restart().catch((error) => {
-        logger.warn('Gateway heartbeat recovery failed:', error);
-      });
+      this.requestInitialReadyRecovery('initial-ready-grace-expired');
     }, delayMs);
   }
 
@@ -1291,6 +1291,44 @@ export class GatewayManager extends EventEmitter {
     if (!this.initialReadyHeartbeatRecoveryTimer) return;
     clearTimeout(this.initialReadyHeartbeatRecoveryTimer);
     this.initialReadyHeartbeatRecoveryTimer = null;
+  }
+
+  private isInitialGatewayReadyPending(): boolean {
+    return this.status.state === 'running'
+      && this.status.gatewayReady !== true
+      && typeof this.status.connectedAt === 'number';
+  }
+
+  private requestInitialReadyRecovery(
+    trigger: string,
+    options?: { continueFallbackProbes?: boolean },
+  ): boolean {
+    if (!this.shouldReconnect || !this.isInitialGatewayReadyPending()) {
+      return false;
+    }
+
+    if (this.initialReadyRecoveryRequested) {
+      return true;
+    }
+
+    const retryAfterMs = this.getInitialReadyHeartbeatRecoveryDelayMs();
+    if (retryAfterMs > 0) {
+      logger.warn(
+        `Gateway initial-ready recovery deferred (${trigger}); waiting for gateway.ready ` +
+        `(retryAfterMs=${retryAfterMs})`,
+      );
+      this.scheduleInitialReadyHeartbeatRecovery(retryAfterMs);
+      return options?.continueFallbackProbes !== true;
+    }
+
+    this.initialReadyRecoveryRequested = true;
+    this.clearGatewayReadyFallbackTimer();
+    logger.warn(`Gateway initial-ready recovery: restarting unresponsive gateway process (${trigger})`);
+    void this.restart().catch((error) => {
+      this.initialReadyRecoveryRequested = false;
+      logger.warn('Gateway initial-ready recovery failed:', error);
+    });
+    return true;
   }
 
   /**

@@ -56,8 +56,9 @@ async function setupTarget(id) {
 
   echo(chalk.blue`\n📦 Setting up uv for ${id}...`);
 
-  // Cleanup & Prep
-  await fs.remove(targetDir);
+  // Only replace the uv binary. This directory also carries platform helpers
+  // such as ffmpeg.exe and WinSpeechRecognize.exe for Windows packaging.
+  await fs.remove(path.join(targetDir, target.binName));
   await fs.remove(tempDir);
   await fs.ensureDir(targetDir);
   await fs.ensureDir(tempDir);

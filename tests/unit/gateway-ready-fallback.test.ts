@@ -103,12 +103,13 @@ describe('GatewayManager gatewayReady fallback', () => {
     expect(rpcSpy).toHaveBeenCalledWith('system-presence', {}, 5_000);
   });
 
-  it('keeps gatewayReady=false when fallback RPC router probe fails', async () => {
+  it('restarts once when fallback RPC router probe keeps failing past initial-ready grace', async () => {
     vi.resetModules();
     const { GatewayManager } = await import('@electron/gateway/manager');
     const manager = new GatewayManager();
     vi.spyOn(manager as unknown as { rpc: (method: string, params?: unknown, timeoutMs?: number) => Promise<unknown> }, 'rpc')
       .mockRejectedValue(new Error('RPC timeout: system-presence'));
+    const restartSpy = vi.spyOn(manager, 'restart').mockResolvedValue();
 
     const stateController = (manager as unknown as { stateController: { setStatus: (u: Record<string, unknown>) => void } }).stateController;
     stateController.setStatus({ state: 'running', connectedAt: Date.now() });
@@ -122,6 +123,10 @@ describe('GatewayManager gatewayReady fallback', () => {
 
     await vi.advanceTimersByTimeAsync(2_000);
     expect(statusUpdates.find((u) => u.gatewayReady === true)).toBeUndefined();
+    expect(restartSpy).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(restartSpy).toHaveBeenCalledTimes(1);
   });
 
   it('cancels fallback timer when gateway:ready event arrives first', async () => {
