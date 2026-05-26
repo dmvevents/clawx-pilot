@@ -2,43 +2,42 @@
  * forms-runtime-client: API-only Microsoft Forms response submission.
  *
  * ============================================================================
- * PHASE 1 STATUS — what is confirmed vs what is inferred (2026-05-25)
+ * PHASE 2 STATUS — fully captured and confirmed (2026-05-25 22:27 UTC)
  * ============================================================================
  *
- * CONFIRMED (proven by scripts/forms-bulk-add.ts + forms-list-and-cleanup.ts):
- *   - Auth pattern: session cookie + `__requestverificationtoken` header
- *     pulled from `window.OfficeFormServerInfo.antiForgeryToken` works for
- *     ALL /formapi/api/ calls when invoked via `page.evaluate(inlineJs)`
- *     (NOT via Playwright's `request.post()` ctx — that strips state).
- *   - Design endpoint: `GET /formapi/api/{tenant}/users/{user}/forms('{id}')/questions`
- *     returns the question schema (id, type, title, order, questionInfo).
- *   - questionInfo for `Question.Choice` contains a `Choices` array of
- *     `{ Description, IsGenerated }`. The internal index of the chosen
- *     option (or its Description) is what the runtime side likely echoes back.
- *   - Tenant + user IDs (cached for the test.fac account):
- *       TENANT = 9590bb09-ce2c-40e2-8181-fad0a7edebfe
- *       USER   = 0e48d4db-698a-44ca-ba0b-ae905cd07817
+ * Captured by scripts/forms-auto-fill-and-capture.ts hitting a real submission
+ * (POST 201 Created). Shape preserved at:
+ *   extensions/moe-principal-assistant/forms/.captured-submit-shape.json
  *
- * INFERRED — needs `scripts/forms-capture-submit.ts` to lock in:
- *   - Runtime endpoint URL. Two documented candidates we try:
- *       1. https://forms.office.com/runtime/api/{tenantId}/forms('{formId}')/responses
- *       2. https://forms.office.com/formapi/api/{tenantId}/forms('{formId}')/responses
- *     The plan doc points at /runtime/api/.../responses as the primary.
- *   - Body shape. Inferred from scattered Microsoft references:
- *       {
- *         "startDate":  ISO datetime when the form was opened,
- *         "submitDate": ISO datetime when Submit was clicked,
- *         "answers":    JSON-stringified array of { questionId, answer1, answer2?, ... }
- *       }
- *     `answers` is a STRING (double-encoded JSON) per observed Forms behavior.
- *   - Choice answer encoding. Two plausible options:
- *       A) `answer1` = the option's Description (display text)
- *       B) `answer1` = an internal option-id derived from the Choices array
- *     We send the Description by default (option A); capture will confirm.
+ * CONFIRMED endpoint (NOT /runtime/api/ — same /formapi/ host as design):
+ *   POST https://forms.office.com/formapi/api/{tenantId}/users/{userId}/forms('{formId}')/responses
  *
- * If both candidate endpoints return 404, we throw a CAPTURE_NEEDED error
- * pointing the operator at scripts/forms-capture-submit.ts to lock in the
- * exact runtime POST shape from a real human submission.
+ * CONFIRMED auth (same as design API):
+ *   - Cookie: __RequestVerificationToken (session)
+ *   - Header: __requestverificationtoken = window.OfficeFormServerInfo.antiForgeryToken
+ *   - Header: authorization = Bearer <jwt> (auto-attached when fetch runs in
+ *     the page context with credentials:'include')
+ *
+ * CONFIRMED body shape:
+ *   {
+ *     "startDate":  "2026-05-25T22:26:37.751Z",  // ISO when form opened
+ *     "submitDate": "2026-05-26T00:27:11.781Z",  // ISO when Submit clicked
+ *     "answers":    "[{\"questionId\":\"r{32hex}\",\"answer1\":\"<value>\"}]"
+ *   }
+ *   answers is a JSON-STRINGIFIED string (double-encoded).
+ *
+ * CONFIRMED answer1 encoding by question type:
+ *   - Question.TextField           → literal value string
+ *   - Question.Choice (single)     → option's Description (display text, not an id)
+ *   - Question.Choice (multi)      → JSON-stringified array of Description strings
+ *                                    (e.g. answer1: "[\"Arson\",\"Vandalism\"]")
+ *   - Question.DateTime            → ISO YYYY-MM-DD string (NOT locale m/d/yyyy)
+ *
+ * Tenant + user IDs (cached for the test.fac@fac.edu.tt account):
+ *   TENANT = 9590bb09-ce2c-40e2-8181-fad0a7edebfe
+ *   USER   = 0e48d4db-698a-44ca-ba0b-ae905cd07817
+ * For other accounts these come from window.OfficeFormServerInfo or are
+ * derivable from the form URL's identity prefix.
  *
  * ============================================================================
  *
@@ -78,6 +77,12 @@ export interface SubmitArgs {
   tenantId?: string;
   /** Optional override: user id (form owner). Defaults to the cached test.fac value. */
   userId?: string;
+  /**
+   * Pre-loaded form schema. If provided, we skip the /formapi/api/ schema GET
+   * (which requires the form OWNER's auth — the response page doesn't have it).
+   * Use this when running from a respondent context with a cached schema.
+   */
+  schema?: FormSchema;
 }
 
 export interface SubmitResult {
@@ -447,17 +452,19 @@ function loadCapturedShape(): CapturedShape | null {
 function buildCandidateEndpoints(
   formId: string,
   tenantId: string,
+  userId: string,
   captured: CapturedShape | null,
 ): string[] {
   if (captured?.url) {
     // Substitute the formId from the captured URL with our target formId.
-    // Captured URLs include the form id literally; swap it.
     const subst = captured.url.replace(/forms\('[^']+'\)/, `forms('${formId}')`);
     return [subst];
   }
+  // CONFIRMED via live capture 2026-05-25 22:27 UTC:
+  // POST /formapi/api/{tenant}/users/{user}/forms('{form}')/responses
+  // (NOT /runtime/api/, NOT path-without-users-segment).
   return [
-    `https://forms.office.com/runtime/api/${tenantId}/forms('${formId}')/responses`,
-    `https://forms.office.com/formapi/api/${tenantId}/forms('${formId}')/responses`,
+    `https://forms.office.com/formapi/api/${tenantId}/users/${userId}/forms('${formId}')/responses`,
   ];
 }
 
@@ -522,15 +529,21 @@ export async function submitFormResponse(args: SubmitArgs): Promise<SubmitResult
   const { browser, page } = attached;
 
   try {
-    // 4. Schema fetch.
+    // 4. Schema fetch — skip if caller pre-loaded one (e.g., from a cached
+    // schema file, since the design API requires the form OWNER's auth which
+    // the response page doesn't have).
     let schema: FormSchema;
-    try {
-      schema = await getFormSchema(formId, page, { tenantId, userId });
-    } catch (err) {
-      return {
-        status: 'error',
-        reason: `Schema fetch failed: ${err instanceof Error ? err.message : String(err)}`,
-      };
+    if (args.schema) {
+      schema = args.schema;
+    } else {
+      try {
+        schema = await getFormSchema(formId, page, { tenantId, userId });
+      } catch (err) {
+        return {
+          status: 'error',
+          reason: `Schema fetch failed: ${err instanceof Error ? err.message : String(err)}. If the response page can't reach the design API, pass a pre-loaded schema in args.schema.`,
+        };
+      }
     }
 
     if (schema.questions.length === 0) {
@@ -563,7 +576,7 @@ export async function submitFormResponse(args: SubmitArgs): Promise<SubmitResult
     };
     const bodyJson = JSON.stringify(body);
 
-    const candidates = buildCandidateEndpoints(formId, tenantId, captured);
+    const candidates = buildCandidateEndpoints(formId, tenantId, userId, captured);
     const attempts: Array<{ url: string; status: number; text: string }> = [];
 
     for (const endpoint of candidates) {
