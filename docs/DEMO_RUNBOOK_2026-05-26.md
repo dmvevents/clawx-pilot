@@ -6,6 +6,28 @@ Goal: prove the assistant reads email, drafts replies on demand, extracts a susp
 
 ---
 
+## Platform: Mac is the demo machine. Windows .exe artifact is current.
+
+**Mac:** `/Applications/Ministry of Education.app` v0.4.3-moe.10, end-to-end verified today.
+
+**Windows:** moe.10 .exe is built on every push to `dmvevents/clawx-pilot` via GitHub Actions `package-win-manual.yml`. The current `HEAD` (`6ae18d8`) includes all forms-API work, 4 new regression-auditor sub-agents, and the captured Forms submit shape. To grab the latest .exe:
+
+```bash
+gh run list --repo dmvevents/clawx-pilot --workflow package-win-manual.yml --limit 1
+gh run download <run-id> --repo dmvevents/clawx-pilot --name windows-installer-x64
+```
+
+When the pilot Cat-5 link returns, the `.exe` is the same code path the Mac runs today — same Outlook v2 service, same forms scripts, same plugin tools. Platform-specific code is isolated to `electron/services/outlook-browser-v2/playwright-driver.ts::defaultChromeExecutables` (already covers `%ProgramFiles%\Google\Chrome\Application\chrome.exe`).
+
+**Pre-flight on Windows pilot when link returns:**
+1. Install the .exe → `%LOCALAPPDATA%\Programs\Ministry of Education\`
+2. Ollama must be installed separately (not bundled): `winget install Ollama.Ollama` then `ollama pull qwen2.5:3b-instruct`
+3. Chrome must be running with `--remote-debugging-port=18792` (the openclaw browser plugin starts it; otherwise the user runs `start chrome --remote-debugging-port=18792 --user-data-dir=%LOCALAPPDATA%\Google\Chrome\User Data`)
+4. test.fac (or principal's @moe.gov.tt) must be signed into Outlook in that Chrome
+5. Same `pnpm exec tsx scripts/v2-chatbot-e2e.ts` should pass
+
+---
+
 ## Pre-flight (do these 30 min before the demo)
 
 ### 1. Mac app is running
