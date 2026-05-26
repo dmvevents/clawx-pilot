@@ -72,8 +72,20 @@ function normalizeProviderBaseUrl(
   return normalized;
 }
 
-function shouldUseExplicitDefaultOverride(config: ProviderConfig, runtimeProviderKey: string): boolean {
-  return Boolean(config.baseUrl || config.apiProtocol || runtimeProviderKey !== config.type);
+function shouldUseExplicitDefaultOverride(
+  config: ProviderConfig,
+  runtimeProviderKey: string,
+  meta: ReturnType<typeof getProviderConfig>,
+): boolean {
+  if (config.baseUrl || runtimeProviderKey !== config.type) {
+    return true;
+  }
+
+  // Some field installs have legacy apiProtocol values on built-in providers
+  // such as Google. If there is no explicit provider metadata/baseUrl to write,
+  // use the built-in provider path so setOpenClawDefaultModel can remove any
+  // stale models.providers.<id> entry instead of preserving a bad override.
+  return Boolean(config.apiProtocol && meta?.baseUrl);
 }
 
 export function getOpenClawProviderKey(type: string, providerId: string): string {
@@ -572,7 +584,7 @@ export async function syncUpdatedProviderToRuntime(
   if (defaultProviderId === config.id) {
     const modelOverride = config.model ? `${ock}/${config.model}` : undefined;
     if (!isUnregisteredProviderType(config.type)) {
-      if (shouldUseExplicitDefaultOverride(config, ock)) {
+      if (shouldUseExplicitDefaultOverride(config, ock, context.meta)) {
         await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
           baseUrl: normalizeProviderBaseUrl(config, config.baseUrl || context.meta?.baseUrl, context.api),
           api: context.api,
@@ -580,6 +592,15 @@ export async function syncUpdatedProviderToRuntime(
           headers: config.headers ?? context.meta?.headers,
         }, fallbackModels);
       } else {
+        if (config.apiProtocol) {
+          logger.info('[provider-runtime] Using built-in provider default path; ignoring legacy apiProtocol-only override', {
+            providerId: config.id,
+            providerType: config.type,
+            runtimeProviderKey: ock,
+            apiProtocol: config.apiProtocol,
+            modelRef: modelOverride,
+          });
+        }
         await setOpenClawDefaultModel(ock, modelOverride, fallbackModels);
       }
     } else {
@@ -665,26 +686,37 @@ export async function syncDefaultProviderToRuntime(
         api: normalizedApi,
         headers: provider.headers,
       }, fallbackModels);
-    } else if (shouldUseExplicitDefaultOverride(provider, ock)) {
-      const meta = getProviderConfig(provider.type);
-      // Same auth-protocol → runtime-protocol normalization as
-      // resolveRuntimeSyncContext (the reason: provider.apiProtocol may
-      // be google-query-key / anthropic-header / etc which the gateway
-      // enum doesn't accept). Without this, the gateway crash-loops on
-      // boot for Google/Anthropic-keyed default providers.
-      const normalizedApi = normalizeRuntimeApi(provider.apiProtocol, meta?.api) ?? 'openai-completions';
-      await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
-        baseUrl: normalizeProviderBaseUrl(
-          provider,
-          provider.baseUrl || meta?.baseUrl,
-          normalizedApi,
-        ),
-        api: normalizedApi,
-        apiKeyEnv: meta?.apiKeyEnv,
-        headers: provider.headers ?? meta?.headers,
-      }, fallbackModels);
     } else {
-      await setOpenClawDefaultModel(ock, modelOverride, fallbackModels);
+      const meta = getProviderConfig(provider.type);
+      if (shouldUseExplicitDefaultOverride(provider, ock, meta)) {
+        // Same auth-protocol -> runtime-protocol normalization as
+        // resolveRuntimeSyncContext (the reason: provider.apiProtocol may
+        // be google-query-key / anthropic-header / etc which the gateway
+        // enum doesn't accept). Without this, the gateway crash-loops on
+        // boot for Google/Anthropic-keyed default providers.
+        const normalizedApi = normalizeRuntimeApi(provider.apiProtocol, meta?.api) ?? 'openai-completions';
+        await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
+          baseUrl: normalizeProviderBaseUrl(
+            provider,
+            provider.baseUrl || meta?.baseUrl,
+            normalizedApi,
+          ),
+          api: normalizedApi,
+          apiKeyEnv: meta?.apiKeyEnv,
+          headers: provider.headers ?? meta?.headers,
+        }, fallbackModels);
+      } else {
+        if (provider.apiProtocol) {
+          logger.info('[provider-runtime] Using built-in provider default path; ignoring legacy apiProtocol-only override', {
+            providerId: provider.id,
+            providerType: provider.type,
+            runtimeProviderKey: ock,
+            apiProtocol: provider.apiProtocol,
+            modelRef: modelOverride,
+          });
+        }
+        await setOpenClawDefaultModel(ock, modelOverride, fallbackModels);
+      }
     }
 
     if (providerKey) {

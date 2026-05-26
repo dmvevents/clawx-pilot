@@ -1002,6 +1002,51 @@ describe('syncProviderConfigToOpenClaw', () => {
   });
 });
 
+describe('setOpenClawDefaultModel', () => {
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.restoreAllMocks();
+    await rm(testHome, { recursive: true, force: true });
+    await rm(testUserData, { recursive: true, force: true });
+  });
+
+  it('removes stale explicit Google provider entries so the built-in Gemini runtime is used', async () => {
+    await writeOpenClawJson({
+      models: {
+        providers: {
+          google: {
+            baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+            api: 'openai-completions',
+            apiKey: 'GEMINI_API_KEY',
+            models: [{ id: 'gemini-2.5-pro', name: 'gemini-2.5-pro' }],
+          },
+        },
+      },
+      agents: {
+        defaults: {
+          model: {
+            primary: 'ollama-ollamalo/qwen2.5:3b-instruct',
+            fallbacks: [],
+          },
+        },
+      },
+    });
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { setOpenClawDefaultModel } = await import('@electron/utils/openclaw-auth');
+
+    await setOpenClawDefaultModel('google', 'google/gemini-2.5-pro');
+
+    const result = await readOpenClawJson();
+    const providers = ((result.models as Record<string, unknown>).providers as Record<string, unknown>);
+    const defaultModel = (((result.agents as Record<string, unknown>).defaults as Record<string, unknown>).model as Record<string, unknown>);
+
+    expect(providers.google).toBeUndefined();
+    expect(defaultModel.primary).toBe('google/gemini-2.5-pro');
+    expect(logSpy).toHaveBeenCalledWith('Removed stale models.providers.google (built-in provider)');
+  });
+});
+
 describe('auth-backed provider discovery', () => {
   beforeEach(async () => {
     vi.resetModules();

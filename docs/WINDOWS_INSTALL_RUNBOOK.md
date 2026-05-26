@@ -246,6 +246,7 @@ The SSH-driven steps above are just for IT-side install/verify.
 | Install exits with code 1 | "vc_redist.x64.exe missing" |
 | App launches but no helpers | "Electron Session 0" + "playwright-core" |
 | Gateway logs `Invalid option` | "google-query-key reseed" |
+| Chat stays on "thinking" or model call failed | "Gemini shows thinking" |
 | 0 bytes in stdout, no userData | "userData not created" |
 | `Cannot find module` errors | "playwright-core devDep" |
 | Chrome opens but Outlook tools 404 | "Conditional Access / managed Chromium" |

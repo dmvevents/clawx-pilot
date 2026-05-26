@@ -311,6 +311,39 @@ describe('provider-runtime-sync refresh strategy', () => {
       expect.any(Array),
     );
   });
+
+  it('uses the built-in Google provider path for legacy apiProtocol-only accounts', async () => {
+    const googleProvider = createProvider({
+      id: 'google',
+      type: 'google',
+      name: 'Google',
+      model: 'gemini-2.5-pro',
+      apiProtocol: 'openai-completions',
+    });
+
+    mocks.getProvider.mockResolvedValue(googleProvider);
+    mocks.getDefaultProvider.mockResolvedValue('google');
+    mocks.getProviderConfig.mockImplementation((providerType: string) => {
+      if (providerType === 'google') return undefined;
+      return {
+        api: 'openai-completions',
+        baseUrl: 'https://api.moonshot.cn/v1',
+        apiKeyEnv: 'MOONSHOT_API_KEY',
+      };
+    });
+    mocks.getApiKey.mockResolvedValue('AIza-test');
+
+    const gateway = createGateway('running');
+    await syncDefaultProviderToRuntime('google', gateway as GatewayManager);
+
+    expect(mocks.setOpenClawDefaultModel).toHaveBeenCalledWith(
+      'google',
+      'google/gemini-2.5-pro',
+      expect.any(Array),
+    );
+    expect(mocks.setOpenClawDefaultModelWithOverride).not.toHaveBeenCalled();
+  });
+
   it('syncs updated Ollama provider as default with correct override config', async () => {
     const ollamaProvider = createProvider({
       id: 'ollamafd',

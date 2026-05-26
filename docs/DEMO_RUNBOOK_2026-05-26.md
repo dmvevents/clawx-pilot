@@ -96,25 +96,14 @@ grep '"primary"' ~/.openclaw/openclaw.json
 # expect "google/gemini-2.5-pro"
 ```
 
-If it shows Flash, edit the file, lock it, restart the app:
+If it does not show `google/gemini-2.5-pro`, do not lock the file. Switch the app to **Online** in Settings so channel preflight rewrites all provider stores, then restart the app. On the Windows pilot, confirm the network and model path from SSH:
 
-```bash
-python3 -c "
-import json
-p='/Users/antonalexander/.openclaw/openclaw.json'
-d=json.load(open(p))
-for a in d.get('agents',{}).get('list',[]):
-  if a.get('model',{}).get('primary'): a['model']['primary']='google/gemini-2.5-pro'
-defaults=d.get('agents',{}).get('defaults',{})
-if defaults.get('model',{}).get('primary'): defaults['model']['primary']='google/gemini-2.5-pro'
-json.dump(d,open(p,'w'),indent=2)
-"
-chflags uchg ~/.openclaw/openclaw.json
-pkill -9 -f "Ministry of Education"; sleep 3
-open -a "Ministry of Education"
-sleep 22
-chflags nouchg ~/.openclaw/openclaw.json
+```powershell
+Test-NetConnection generativelanguage.googleapis.com -Port 443
+Select-String "$env:USERPROFILE\.openclaw\openclaw.json" -Pattern '"primary"'
 ```
+
+If chat still shows "thinking", see `docs/WINDOWS_PROBLEMS_ATLAS.md` §13. The working proof is an actual Gateway `chat.send` whose transcript records `api:"google-generative-ai"`, `provider:"google"`, and `model:"gemini-2.5-pro"`.
 
 ---
 

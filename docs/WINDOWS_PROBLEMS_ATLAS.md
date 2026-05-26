@@ -159,6 +159,23 @@ Every Windows-specific bug we hit during the moe.1→moe.10 build sequence, with
 
 ---
 
+## §13. Gemini shows "thinking" or model call failed after Windows deploy
+
+**Symptom:** The Windows app opens, Gateway is live, and the UI shows Google/Gemini, but chat either sits at "thinking" or the transcript records `LLM request failed: network connection error`. A second failure mode after network recovery is a Gemini `400 status code (no body)` while `models.providers.google.api` is still `openai-completions`.
+
+**Root cause:** There are two distinct causes that look similar in the UI:
+
+- Wi-Fi disabled or no route to `generativelanguage.googleapis.com:443`. The runtime has a valid Gemini key/model but cannot reach Google.
+- Stale explicit `~/.openclaw/openclaw.json.models.providers.google` config left over from older writer paths. Google is a built-in OpenClaw provider; retaining an explicit OpenAI-compatible override can route Gemini through the wrong runtime API even when `agents.defaults.model.primary` says `google/gemini-2.5-pro`.
+
+**Fix:** First verify network (`Test-NetConnection generativelanguage.googleapis.com -Port 443`). Then let channel preflight re-run the four-store transaction. The app now treats built-in providers with only a legacy `apiProtocol` as built-in defaults, so `setOpenClawDefaultModel('google', 'google/gemini-2.5-pro')` removes stale `models.providers.google` entries instead of preserving the bad override.
+
+**Detection:** Probe both the direct Gemini endpoint and the exact app-facing Gateway RPC. A passing Windows check is: direct Gemini endpoint returns HTTP 200, raw Gateway `chat.send` returns `status:"started"`, and the session transcript records `api:"google-generative-ai"`, `provider:"google"`, `model:"gemini-2.5-pro"`, with assistant text such as `OK`.
+
+**Never:** Do not judge key presence from a config UI alone. Host/Gateway config surfaces may be redacted or split across `%APPDATA%\Ministry of Education\clawx-providers.json`, OS keychain, and `~\.openclaw\openclaw.json`. Confirm with sanitized key-presence checks and a real Gateway `chat.send`.
+
+---
+
 ## How to extend this atlas
 
 When you hit a new Windows-specific issue:
