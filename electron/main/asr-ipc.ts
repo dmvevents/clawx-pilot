@@ -60,6 +60,13 @@ interface SaveBlobResult {
 }
 
 let cachedFfmpegPath: string | null | undefined;
+let cachedWhisperPath: string | null | undefined;
+
+/** Reset binary resolver caches. Test-only. */
+export function _resetAsrIpcCaches(): void {
+  cachedFfmpegPath = undefined;
+  cachedWhisperPath = undefined;
+}
 
 export function parsePathLookupOutput(stdout: string): string | null {
   for (const line of stdout.split(/\r?\n/)) {
@@ -156,7 +163,7 @@ export function registerAsrIpcHandlers(): void {
       const tmpRoot = path.join(app.getPath('temp'), 'clawx-asr-');
       const dir = await mkdtemp(tmpRoot);
       const ext = sanitiseExt(args.suggestedExt);
-      const rawPath = path.join(dir, `clip.${ext}`);
+      const rawPath = path.join(dir, ext === 'wav' ? 'clip-input.wav' : `clip.${ext}`);
       await writeFile(rawPath, buf, { mode: 0o600 });
 
       if (args.transcode === false) {
@@ -431,7 +438,6 @@ export function registerAsrIpcHandlers(): void {
   );
 }
 
-let cachedWhisperPath: string | null | undefined;
 async function resolveWhisperBinary(): Promise<string | null> {
   if (cachedWhisperPath !== undefined) return cachedWhisperPath;
   const fromEnv = process.env.WHISPER_PATH?.trim();
