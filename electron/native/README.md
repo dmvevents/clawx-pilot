@@ -84,5 +84,8 @@ refuse to launch the helper on locked-down corporate Macs.
 
 ## Windows — `WinSpeechRecognize.exe`
 
-Tracked in a sibling sub-agent's PR; see
-`electron/native/WinSpeechRecognize/README.md` if it exists.
+Builds through `pnpm run win-asr:build:x64` and is included by
+`pnpm run prep:win-binaries`. The helper targets .NET Framework 4.8 through
+System.Speech so the Windows installer does not depend on a separately
+installed .NET 8 runtime. See `electron/native/WinSpeechRecognize/README.md`
+for diagnostics and tradeoffs.

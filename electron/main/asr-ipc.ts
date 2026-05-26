@@ -61,6 +61,35 @@ interface SaveBlobResult {
 
 let cachedFfmpegPath: string | null | undefined;
 
+export function parsePathLookupOutput(stdout: string): string | null {
+  for (const line of stdout.split(/\r?\n/)) {
+    const found = line.trim();
+    if (found.length > 0) return found;
+  }
+  return null;
+}
+
+export function getPathLookupCommand(
+  binaryName: string,
+  platform: NodeJS.Platform = process.platform,
+): { command: string; args: string[] } {
+  return platform === 'win32'
+    ? { command: 'where.exe', args: [binaryName] }
+    : { command: '/usr/bin/which', args: [binaryName] };
+}
+
+async function resolveBinaryFromPath(binaryName: string): Promise<string | null> {
+  const lookup = getPathLookupCommand(binaryName);
+  try {
+    const { stdout } = await execFileP(lookup.command, lookup.args, { windowsHide: true });
+    const found = parsePathLookupOutput(stdout);
+    if (found && existsSync(found)) return found;
+  } catch {
+    /* not on PATH */
+  }
+  return null;
+}
+
 async function resolveFfmpegBinary(): Promise<string | null> {
   if (cachedFfmpegPath !== undefined) return cachedFfmpegPath;
   const fromEnv = process.env.FFMPEG_PATH?.trim();
@@ -79,10 +108,9 @@ async function resolveFfmpegBinary(): Promise<string | null> {
   } catch {
     /* not installed — fine */
   }
-  // Fall back to PATH probe.
   const candidates =
     process.platform === 'win32'
-      ? ['ffmpeg.exe']
+      ? []
       : ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg', 'ffmpeg'];
   for (const candidate of candidates) {
     if (path.isAbsolute(candidate) && existsSync(candidate)) {
@@ -90,18 +118,10 @@ async function resolveFfmpegBinary(): Promise<string | null> {
       return cachedFfmpegPath;
     }
   }
-  // Try `which` (POSIX) as a last resort.
-  if (process.platform !== 'win32') {
-    try {
-      const { stdout } = await execFileP('/usr/bin/which', ['ffmpeg']);
-      const found = stdout.trim();
-      if (found && existsSync(found)) {
-        cachedFfmpegPath = found;
-        return cachedFfmpegPath;
-      }
-    } catch {
-      /* not on PATH — fine */
-    }
+  const pathBinary = await resolveBinaryFromPath(process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+  if (pathBinary) {
+    cachedFfmpegPath = pathBinary;
+    return cachedFfmpegPath;
   }
   cachedFfmpegPath = null;
   return null;
@@ -270,15 +290,11 @@ export function registerAsrIpcHandlers(): void {
         }
       }
 
-      // Windows analogue of the darwin branch above. Uses the WinRT
-      // Windows.Media.SpeechRecognition API via a small C# helper at
-      // resources/bin/win32-x64/WinSpeechRecognize.exe. Same fallback
+      // Windows analogue of the darwin branch above. Uses the desktop
+      // System.Speech recognition engine via a small C# helper at
+      // resources/bin/WinSpeechRecognize.exe in packaged builds. Same fallback
       // semantics as macOS: MIC_PERMISSION propagates so the user can flip
       // the privacy gate; everything else falls through to the whisper CLI.
-      // Until the helper binary is compiled (see
-      // electron/native/WinSpeechRecognize/README.md), MIC_BINARY_MISSING
-      // is treated as a soft failure and we fall back silently — the
-      // whisper CLI keeps working on the macOS-first prototype.
       if (process.platform === 'win32' && PREFER_NATIVE_ASR) {
         try {
           const native = await transcribeWindowsNative(audioPath, {
@@ -293,11 +309,7 @@ export function registerAsrIpcHandlers(): void {
             return { ok: false, error: { code: 'MIC_PERMISSION', message } };
           }
           if (code === WINDOWS_ASR_ERROR_CODES.BINARY_MISSING) {
-            // Expected during the macOS-first prototype: the .exe hasn't
-            // shipped yet. Log at info, not warn.
-            logger.info(
-              `[asr] Windows native helper not built yet; using whisper fallback: ${message}`,
-            );
+            logger.warn(`[asr] Windows native helper missing; using whisper fallback: ${message}`);
           } else {
             logger.warn(
               `[asr] Windows native ASR failed (${code}); falling back to whisper: ${message}`,
@@ -314,7 +326,9 @@ export function registerAsrIpcHandlers(): void {
           ok: false,
           error: {
             code: 'NO_WHISPER',
-            message: 'Whisper CLI not found. Install with: brew install openai-whisper',
+            message: process.platform === 'win32'
+              ? 'No Windows speech recognizer or Whisper fallback is available. Rebuild with pnpm run prep:win-binaries so WinSpeechRecognize.exe is packaged, or install whisper.exe and ffmpeg.exe on PATH.'
+              : 'Whisper CLI not found. Install with: brew install openai-whisper',
           },
         };
       }
@@ -426,7 +440,7 @@ async function resolveWhisperBinary(): Promise<string | null> {
     return cachedWhisperPath;
   }
   const candidates = process.platform === 'win32'
-    ? ['whisper.exe']
+    ? []
     : ['/opt/homebrew/bin/whisper', '/usr/local/bin/whisper', '/usr/bin/whisper'];
   for (const c of candidates) {
     if (path.isAbsolute(c) && existsSync(c)) {
@@ -434,17 +448,10 @@ async function resolveWhisperBinary(): Promise<string | null> {
       return cachedWhisperPath;
     }
   }
-  if (process.platform !== 'win32') {
-    try {
-      const { stdout } = await execFileP('/usr/bin/which', ['whisper']);
-      const found = stdout.trim();
-      if (found && existsSync(found)) {
-        cachedWhisperPath = found;
-        return cachedWhisperPath;
-      }
-    } catch {
-      /* not on PATH */
-    }
+  const pathBinary = await resolveBinaryFromPath(process.platform === 'win32' ? 'whisper.exe' : 'whisper');
+  if (pathBinary) {
+    cachedWhisperPath = pathBinary;
+    return cachedWhisperPath;
   }
   cachedWhisperPath = null;
   return null;

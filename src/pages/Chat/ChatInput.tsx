@@ -950,10 +950,7 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
               <Paperclip className="h-3.5 w-3.5" />
             </Button>
 
-            {/* Microphone — captures audio in renderer, transcribes in main
-                via the local whisper CLI (asr:transcribe IPC), replaces the
-                placeholder with the transcribed text. Falls back to leaving
-                the path in the input if whisper isn't installed. */}
+            {/* Microphone captures audio in renderer and transcribes in main. */}
             <MicButton
               disabled={inputDisabled || sending}
               onError={(message) => toast.error(`Mic: ${message}`)}

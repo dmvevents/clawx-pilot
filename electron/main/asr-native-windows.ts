@@ -2,9 +2,9 @@
  * Windows-native ASR provider.
  *
  * Wraps a small C# helper (`WinSpeechRecognize.exe`) that we ship at
- * `resources/bin/win32-x64/WinSpeechRecognize.exe`. The helper uses the WinRT
- * `Windows.Media.SpeechRecognition.SpeechRecognizer` API with a Dictation
- * topic constraint to transcribe a 16-kHz mono WAV file and prints a single
+ * `resources/bin/WinSpeechRecognize.exe` in packaged builds. The helper uses
+ * the Windows desktop `System.Speech.Recognition` engine with a Dictation
+ * grammar to transcribe a PCM WAV file and prints a single
  * JSON object `{"text": "...", "language": "en-US"}` to stdout.
  *
  * The helper is built from C# sources at `electron/native/WinSpeechRecognize/`
@@ -67,8 +67,8 @@ let cachedBinaryPath: string | null | undefined;
 /**
  * Resolve the path to the bundled WinSpeechRecognize.exe.
  *
- * Mirrors uv-setup.ts: in packaged mode we look in `process.resourcesPath/bin/`,
- * in dev mode we look at `<repo>/resources/bin/win32-x64/`.
+ * Mirrors uv-setup.ts: in packaged mode we look in `process.resourcesPath/bin/`.
+ * In dev mode we look at `<repo>/resources/bin/win32-x64/`.
  */
 export function resolveWindowsAsrBinary(): string | null {
   if (cachedBinaryPath !== undefined) return cachedBinaryPath;
@@ -127,9 +127,12 @@ export async function transcribeWindowsNative(
 
   const binary = options.binaryPath ?? resolveWindowsAsrBinary();
   if (!binary) {
+    const expected = app.isPackaged
+      ? path.join(process.resourcesPath, 'bin', BINARY_NAME)
+      : path.join('resources', 'bin', 'win32-x64', BINARY_NAME);
     throw new WindowsAsrError(
       WINDOWS_ASR_ERROR_CODES.BINARY_MISSING,
-      `Windows speech-recognition helper not found. Expected at resources/bin/win32-x64/${BINARY_NAME}. ` +
+      `Windows speech-recognition helper not found. Expected at ${expected}. ` +
         `See electron/native/WinSpeechRecognize/README.md to build it.`,
     );
   }

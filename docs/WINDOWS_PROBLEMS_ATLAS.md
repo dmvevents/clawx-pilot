@@ -176,6 +176,20 @@ Every Windows-specific bug we hit during the moe.1→moe.10 build sequence, with
 
 ---
 
+## §14. Voice transcription says Whisper not found on Windows
+
+**Symptom:** The Windows chat mic records audio, then the renderer reports Whisper/`whisper.exe` not found. Logs show `Windows native helper not built yet; using whisper fallback`, followed by a missing Whisper CLI error.
+
+**Root cause:** The Windows ASR flow is native-first, Whisper-second. The installer copied `node.exe` and `uv.exe` into `<install-dir>\resources\bin`, but did not build/package `WinSpeechRecognize.exe`. The original WinRT helper source also did not compile for file input, and the pilot had no `whisper.exe` or `ffmpeg.exe` fallback.
+
+**Fix:** `pnpm run prep:win-binaries` now builds a .NET Framework/System.Speech `WinSpeechRecognize.exe` into `resources/bin/win32-x64` before Windows packaging, and the renderer records WAV directly so the native helper does not need ffmpeg. Packaged Electron looks for it at `<install-dir>\resources\bin\WinSpeechRecognize.exe`; if an intentional diagnostic build skips it, the fallback resolver now uses `where.exe` so PATH-installed `whisper.exe`/`ffmpeg.exe` can still be found on Windows. For the already-installed pilot build, we copied `WinSpeechRecognize.exe`, `WinSpeechRecognize.exe.config`, and `ffmpeg.exe`, then restarted Electron with `FFMPEG_PATH` set so the old WebM recorder can still transcode to WAV.
+
+**Detection:** On a Windows install, verify `Test-Path "$env:LOCALAPPDATA\Programs\Ministry of Education\resources\bin\WinSpeechRecognize.exe"` is true and that a WAV smoke returns JSON: `WinSpeechRecognize.exe <wav> en-US` exits 0 with `{"text":"","language":"en-US"}` for silence. If the helper is absent, `pnpm run prep:win-binaries` must fail unless `SKIP_WIN_ASR_HELPER=1` was deliberately set. Logs should no longer contain the native-helper-missing line in packaged builds.
+
+**Never:** Do not ship WinRT `SpeechRecognizer` file-input code without a real Windows publish/smoke. The API does not expose the file overload this helper needs.
+
+---
+
 ## How to extend this atlas
 
 When you hit a new Windows-specific issue:

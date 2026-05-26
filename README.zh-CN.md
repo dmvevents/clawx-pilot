@@ -363,6 +363,9 @@ pnpm package:win          # 为 Windows 打包
 pnpm package:linux        # 为 Linux 打包
 ```
 
+Windows 打包需要 .NET SDK；`pnpm package:win` 会先构建
+`WinSpeechRecognize.exe` 语音辅助程序，再运行 electron-builder。
+
 在无头 Linux 环境下，Electron 测试需要显示服务；可使用 `xvfb-run -a pnpm run test:e2e`。
 
 ### 通信回归检查

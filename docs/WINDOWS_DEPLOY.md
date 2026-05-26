@@ -9,6 +9,7 @@
 The Windows installer is built **on macOS** via electron-builder cross-platform compile. Anton's Mac is the canonical build host.
 
 - Node.js (matches `package.json` `engines` if pinned)
+- .NET SDK, used to publish the `WinSpeechRecognize.exe` ASR helper
 - pnpm via corepack: `corepack enable && corepack prepare`
 - Wine **not required** (we ship NSIS through electron-builder's bundled binaries; native rebuilds are off).
 - Disk: ~6 GB free for `release/` + `build/`.
@@ -18,13 +19,13 @@ The Windows installer is built **on macOS** via electron-builder cross-platform 
 ```bash
 cd ~/Github/moe-tt/ClawX
 pnpm run init                   # installs deps + downloads bundled uv
-pnpm run prep:win-binaries      # downloads Windows-native uv + node into resources/bin/win32-x64
+pnpm run prep:win-binaries      # downloads Windows uv/node and builds WinSpeechRecognize.exe
 ```
 
 Verify Windows binaries landed:
 
 ```bash
-ls resources/bin/win32-x64/     # should contain uv.exe and node.exe (or similar)
+ls resources/bin/win32-x64/     # should contain uv.exe, node.exe, WinSpeechRecognize.exe, and its .config
 ```
 
 ## Build the Windows installer

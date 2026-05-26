@@ -359,6 +359,9 @@ pnpm package:win          # Windows向けにパッケージ化
 pnpm package:linux        # Linux向けにパッケージ化
 ```
 
+Windows パッケージングには .NET SDK が必要です。`pnpm package:win` は
+electron-builder の前に `WinSpeechRecognize.exe` 音声ヘルパーをビルドします。
+
 ヘッドレス Linux では Electron テストに表示サーバーが必要です。`xvfb-run -a pnpm run test:e2e` を利用してください。
 
 ### 通信回帰チェック

@@ -1,17 +1,17 @@
 /**
  * Microphone button for the chat composer.
  *
- * Captures audio via getUserMedia + MediaRecorder, ships the blob to the
+ * Captures audio via getUserMedia + Web Audio, ships a WAV blob to the
  * Electron main process via `asr:saveBlob`, and hands the file path to the
  * caller for transcription.
  *
- * Transcription itself is done by the gateway-side `asr.transcribe` openclaw
- * tool (whisper.cpp). This component is intentionally dumb about what happens
- * after the file lands on disk — its job is mic capture + handoff.
+ * Transcription itself is handled by main-process ASR providers. This component
+ * is intentionally dumb about what happens after the file lands on disk - its
+ * job is mic capture + handoff.
  *
  * Three error classes are surfaced inline; nothing throws past the boundary:
  *   - mic permission denied
- *   - MediaRecorder unsupported
+ *   - Web Audio unsupported
  *   - IPC failure
  */
 import { useRef, useState } from 'react';
@@ -19,22 +19,8 @@ import { Mic, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-const DEFAULT_MIME_CANDIDATES = [
-  'audio/webm;codecs=opus',
-  'audio/webm',
-  'audio/ogg;codecs=opus',
-  'audio/mp4',
-];
-
-function pickSupportedMime(): string | null {
-  if (typeof MediaRecorder === 'undefined') return null;
-  for (const m of DEFAULT_MIME_CANDIDATES) {
-    if (MediaRecorder.isTypeSupported?.(m)) return m;
-  }
-  return null;
-}
-
 function extForMime(mime: string): string {
+  if (mime.includes('wav')) return 'wav';
   if (mime.includes('webm')) return 'webm';
   if (mime.includes('ogg')) return 'ogg';
   if (mime.includes('mp4') || mime.includes('m4a')) return 'm4a';
@@ -51,6 +37,70 @@ async function blobToBase64(blob: Blob): Promise<string> {
     binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)));
   }
   return btoa(binary);
+}
+
+type AudioContextCtor = typeof AudioContext;
+type WindowWithWebkitAudio = Window & typeof globalThis & {
+  webkitAudioContext?: AudioContextCtor;
+};
+
+function createAudioContext(): AudioContext | null {
+  const win = window as WindowWithWebkitAudio;
+  const Ctor = win.AudioContext ?? win.webkitAudioContext;
+  if (!Ctor) return null;
+  try {
+    return new Ctor({ sampleRate: 16000 });
+  } catch {
+    return new Ctor();
+  }
+}
+
+function mergeSamples(chunks: Float32Array[]): Float32Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const merged = new Float32Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return merged;
+}
+
+function encodeWav(samples: Float32Array, sampleRate: number): Blob {
+  const bytesPerSample = 2;
+  const channelCount = 1;
+  const dataSize = samples.length * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  const writeString = (offset: number, value: string) => {
+    for (let i = 0; i < value.length; i += 1) {
+      view.setUint8(offset + i, value.charCodeAt(i));
+    }
+  };
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, channelCount, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * channelCount * bytesPerSample, true);
+  view.setUint16(32, channelCount * bytesPerSample, true);
+  view.setUint16(34, 16, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (const sample of samples) {
+    const clamped = Math.max(-1, Math.min(1, sample));
+    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+    offset += bytesPerSample;
+  }
+
+  return new Blob([buffer], { type: 'audio/wav' });
 }
 
 interface SaveBlobEnvelope {
@@ -84,18 +134,27 @@ export function MicButton({
 }: MicButtonProps) {
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
-  const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const stoppedResolveRef = useRef<((blob: Blob) => void) | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const mutedGainRef = useRef<GainNode | null>(null);
+  const sampleChunksRef = useRef<Float32Array[]>([]);
 
   const fail = (msg: string) => {
     setBusy(false);
     setRecording(false);
+    processorRef.current?.disconnect();
+    sourceRef.current?.disconnect();
+    mutedGainRef.current?.disconnect();
+    void audioContextRef.current?.close().catch(() => undefined);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
-    recorderRef.current = null;
-    chunksRef.current = [];
+    audioContextRef.current = null;
+    sourceRef.current = null;
+    processorRef.current = null;
+    mutedGainRef.current = null;
+    sampleChunksRef.current = [];
     onError?.(msg);
   };
 
@@ -105,33 +164,31 @@ export function MicButton({
       fail('Microphone not available in this context');
       return;
     }
-    if (typeof MediaRecorder === 'undefined') {
-      fail('MediaRecorder not supported in this Electron build');
-      return;
-    }
     try {
+      const audioContext = createAudioContext();
+      if (!audioContext) {
+        fail('Web Audio recording is not supported in this Electron build');
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const mime = pickSupportedMime() ?? undefined;
-      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-      recorderRef.current = recorder;
-      chunksRef.current = [];
-      recorder.ondataavailable = (ev) => {
-        if (ev.data && ev.data.size > 0) chunksRef.current.push(ev.data);
+      audioContextRef.current = audioContext;
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      const mutedGain = audioContext.createGain();
+      mutedGain.gain.value = 0;
+      sampleChunksRef.current = [];
+      processor.onaudioprocess = (event) => {
+        const input = event.inputBuffer.getChannelData(0);
+        sampleChunksRef.current.push(new Float32Array(input));
       };
-      recorder.onerror = (ev: Event) => {
-        const err = (ev as ErrorEvent).error ?? new Error('MediaRecorder error');
-        fail(err instanceof Error ? err.message : String(err));
-      };
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, {
-          type: recorder.mimeType || mime || 'audio/webm',
-        });
-        const r = stoppedResolveRef.current;
-        stoppedResolveRef.current = null;
-        if (r) r(blob);
-      };
-      recorder.start();
+      source.connect(processor);
+      processor.connect(mutedGain);
+      mutedGain.connect(audioContext.destination);
+      sourceRef.current = source;
+      processorRef.current = processor;
+      mutedGainRef.current = mutedGain;
+      await audioContext.resume();
       setRecording(true);
     } catch (err) {
       fail(err instanceof Error ? err.message : 'Failed to start recording');
@@ -139,20 +196,36 @@ export function MicButton({
   };
 
   const stop = async () => {
-    const recorder = recorderRef.current;
-    if (!recorder || recorder.state === 'inactive') {
+    const audioContext = audioContextRef.current;
+    if (!audioContext) {
       fail('No active recording');
       return;
     }
     setBusy(true);
     setRecording(false);
-    const blob = await new Promise<Blob>((resolve) => {
-      stoppedResolveRef.current = resolve;
-      recorder.stop();
-    });
+    processorRef.current?.disconnect();
+    sourceRef.current?.disconnect();
+    mutedGainRef.current?.disconnect();
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
-    recorderRef.current = null;
+    const samples = mergeSamples(sampleChunksRef.current);
+    sampleChunksRef.current = [];
+    if (samples.length === 0) {
+      await audioContext.close().catch(() => undefined);
+      audioContextRef.current = null;
+      sourceRef.current = null;
+      processorRef.current = null;
+      mutedGainRef.current = null;
+      fail('Recording was empty');
+      return;
+    }
+    const sampleRate = audioContext.sampleRate;
+    await audioContext.close().catch(() => undefined);
+    audioContextRef.current = null;
+    sourceRef.current = null;
+    processorRef.current = null;
+    mutedGainRef.current = null;
+    const blob = encodeWav(samples, sampleRate);
     if (blob.size === 0) {
       fail('Recording was empty');
       return;

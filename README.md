@@ -363,6 +363,9 @@ pnpm package:win          # Package for Windows
 pnpm package:linux        # Package for Linux
 ```
 
+Windows packaging requires a .NET SDK; `pnpm package:win` builds the
+`WinSpeechRecognize.exe` speech helper before running electron-builder.
+
 On headless Linux, run Electron tests under a display server such as `xvfb-run -a pnpm run test:e2e`.
 
 ### Communication Regression Checks
