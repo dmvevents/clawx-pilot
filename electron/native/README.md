@@ -6,16 +6,43 @@ second. The bundled Python `whisper` CLI takes 30-60 s on a CPU-only laptop —
 unacceptable for the principals' pilot — so we lean on Apple/Windows ML
 instead.
 
-## macOS — `macSpeechRecognize`
+## macOS — `whisper-cli` fast path
+
+The current macOS fast path uses `whisper-cli` from whisper.cpp, not the Swift
+Speech.framework helper. This keeps audio on device and avoids the unsigned
+helper / app-bundle entitlement problem described below.
+
+`electron/main/asr-native-mac.ts::transcribeMacNative` searches:
+
+1. `$WHISPER_CPP_BIN` (explicit `whisper-cli` override)
+2. `/opt/homebrew/bin/whisper-cli`
+3. `/usr/local/bin/whisper-cli`
+
+It also needs a whisper.cpp model. It searches `$WHISPER_CPP_MODEL`, then
+common cache paths such as `~/.cache/whisper.cpp/ggml-base.en.bin`.
+
+Install/check the fast path:
+
+```bash
+brew install whisper-cpp
+whisper-cli --model base.en
+```
+
+If `whisper-cli` or the model is missing, `transcribeMacNative` throws
+`MacAsrError` with `BINARY_MISSING` or `MODEL_MISSING`.
+`electron/main/asr-ipc.ts` logs the native failure and falls through to the
+legacy Python `whisper` CLI if it is available.
+
+### Dormant Swift helper
 
 Source: `macSpeechRecognize.swift`
 Output: `resources/bin/darwin-arm64/macSpeechRecognize`
 
-Wraps `SFSpeechURLRecognitionRequest` from `Speech.framework`. Requests
-on-device recognition when the host CPU supports it (true on every Apple
-Silicon Mac) which keeps audio off Apple's servers.
+The Swift helper wraps `SFSpeechURLRecognitionRequest` from `Speech.framework`
+and is kept for a future signed-bundle path. The current main-process ASR path
+does not call it for transcription.
 
-### Build
+Build it only when revisiting the signed Speech.framework path:
 
 ```bash
 swiftc -O -o resources/bin/darwin-arm64/macSpeechRecognize \
@@ -26,50 +53,15 @@ Verify:
 
 ```bash
 file resources/bin/darwin-arm64/macSpeechRecognize
-# → Mach-O 64-bit executable arm64
+# -> Mach-O 64-bit executable arm64
 ```
-
-### What fails when it's missing
-
-`electron/main/asr-native-mac.ts::resolveMacSpeechBinary` searches:
-
-1. `$MAC_SPEECH_BIN` (explicit override; useful in CI/dev)
-2. `<resourcesPath>/bin/macSpeechRecognize` (electron-builder packaged layout)
-3. `<resourcesPath>/bin/darwin-arm64/macSpeechRecognize` (verbatim layout)
-4. `<cwd>/resources/bin/darwin-arm64/macSpeechRecognize` (dev mode)
-
-If none exist, `transcribeMacNative` throws `MacAsrError` with code
-`BINARY_MISSING`. `electron/main/asr-ipc.ts` catches that and falls through
-to the Python whisper CLI, so the app keeps working but loses the speed
-boost. Logs (`logger.warn`) make the fallback visible so you can spot it in
-the field.
-
-### Permissions
-
-First run triggers the macOS *Speech Recognition* permission prompt. The
-prompt copy comes from the host process's `Info.plist` —
-`NSSpeechRecognitionUsageDescription` should already be set in the Electron
-app bundle. If it isn't, the prompt still appears but with a generic
-"requested by app" message.
-
-If the user clicks **Don't Allow**, every subsequent invocation returns
-`{ ok: false, code: "MIC_PERMISSION" }`. The IPC handler propagates that to
-the renderer unchanged so we can surface a *Privacy & Security → Speech
-Recognition* deep-link.
-
-To force the prompt again during testing:
-
-```bash
-tccutil reset SpeechRecognition com.clawx.app
-```
-
-(Substitute the bundle id you ship under.)
 
 ### TODO — code-signing
 
 The Swift binary is currently `ad-hoc` signed by `swiftc`. For Gatekeeper-
 clean distribution it must be signed and notarised alongside the rest of the
-app. Add to the electron-builder afterPack hook:
+app before it can become the default ASR path. Add to the electron-builder
+afterPack hook:
 
 ```js
 // scripts/sign-mac-helpers.mjs (TODO)

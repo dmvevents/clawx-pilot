@@ -270,12 +270,10 @@ export function registerAsrIpcHandlers(): void {
         }
       }
 
-      // Prefer Apple Speech.framework on darwin when the feature flag is on
-      // (default true). This is ~100x faster than the Python whisper CLI on
-      // CPU-only laptops and keeps audio fully on-device. We only fall back
-      // to whisper if the Swift helper itself errors *and* the legacy CLI is
-      // available — a MIC_PERMISSION error must propagate to the renderer
-      // unchanged so the user can grant access in System Settings.
+      // Prefer the macOS whisper.cpp fast path when the feature flag is on
+      // (default true). This is much faster than the Python whisper CLI on
+      // Apple Silicon and keeps audio fully on-device. We only fall back to
+      // legacy Python whisper if the fast path errors and that CLI is available.
       let nativeFailedFallback = false;
       if (process.platform === 'darwin' && PREFER_NATIVE_ASR) {
         try {

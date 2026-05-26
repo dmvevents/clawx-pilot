@@ -112,9 +112,9 @@ The persona is shaped by `extensions/moe-principal-assistant/PERSONA.md` — Tri
 ## 6. Generating Meeting Minutes and Memos — ● Live (transcription) / ◐ Built (drafting)
 
 **Transcription path is live:**
-- `openai-whisper` skill is bundled (opt-in; needs OpenAI API key OR can swap to local whisper.cpp — research at `docs/research-asr.md`).
-- Renderer-side mic capture is wired (`MicButton.tsx` + `asr:saveBlob` IPC).
-- Audio file → text via the Whisper skill.
+- Renderer-side mic capture is wired (`MicButton.tsx` + `asr:saveBlob` IPC) and records WAV directly.
+- Main-process ASR tries the platform fast path first: `whisper-cli` on macOS and `WinSpeechRecognize.exe` on Windows.
+- Python/OpenAI Whisper remains a fallback only when the fast path is unavailable.
 
 **Drafting path is built but un-templated:**
 - The agent can take a transcript + meeting metadata (date, attendees, agenda) and produce minutes/memo output.

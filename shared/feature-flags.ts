@@ -24,10 +24,10 @@ function flagFromEnv(name: string, defaultValue: boolean): boolean {
 export const PILOT_MODE = flagFromEnv('CLAWX_PILOT_MODE', true);
 
 /**
- * Prefer OS-native ASR (Apple Speech.framework on macOS, Windows.Media.SpeechRecognition
+ * Prefer the platform fast ASR path (whisper.cpp on macOS, System.Speech helper
  * on Windows) over the Python whisper CLI. On supported platforms this is faster
- * and keeps audio on-device with no extra dependencies. Falls back to the whisper
- * CLI automatically if the native helper binary is missing or fails.
+ * and keeps audio on-device. Falls back to the whisper CLI automatically if the
+ * fast path is missing or fails.
  *
  * Default: true on darwin and win32 (the platforms we ship native helpers for),
  * false elsewhere (linux still goes through whisper).
