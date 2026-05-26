@@ -13,7 +13,7 @@
  * which is why we only automate this side and ask humans to build forms by
  * hand.
  */
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright-core';
+import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright-core';
 import { logger } from '../../utils/logger';
 
 const CDP_DEFAULT = 'http://127.0.0.1:18792';
@@ -118,11 +118,8 @@ export class FormsDriver {
     type: 'text' | 'number' | 'date' | 'single_choice' | 'multi_choice',
   ): Promise<{ ok: boolean; reason?: string }> {
     if (!this.page) return { ok: false, reason: 'no page' };
-    const labelLc = label.toLowerCase().slice(0, 80);
-    // Each question is in a list item; find by visible text.
-    const item = this.page.locator('[role="listitem"]').filter({ hasText: new RegExp(escapeRegex(labelLc.slice(0, 40)), 'i') }).first();
-    const found = await item.count().catch(() => 0);
-    if (found === 0) return { ok: false, reason: `field not found by label match: "${label.slice(0, 60)}"` };
+    const item = await this.findQuestionItem(label);
+    if (!item) return { ok: false, reason: `field not found by label match: "${label.slice(0, 60)}"` };
 
     try {
       switch (type) {
@@ -185,6 +182,17 @@ export class FormsDriver {
     return { ok: false, reason: 'unhandled type' };
   }
 
+  private async findQuestionItem(label: string): Promise<Locator | null> {
+    if (!this.page) return null;
+    const questionItems = this.page.locator('[data-automation-id="questionItem"], [role="listitem"]');
+    const needles = labelNeedles(label);
+    for (const needle of needles) {
+      const item = questionItems.filter({ hasText: new RegExp(escapeRegex(needle), 'i') }).first();
+      if ((await item.count().catch(() => 0)) > 0) return item;
+    }
+    return null;
+  }
+
   /** Hard-confirm submit. Refuses unless confirm:true AND visible title matches expectedTitle. */
   async submit({
     confirm,
@@ -237,4 +245,19 @@ export class FormsDriver {
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function labelNeedles(label: string): string[] {
+  const compact = label.replace(/\s+/g, ' ').trim();
+  const withoutParentheticals = compact.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  const beforeParenthetical = compact.split('(')[0]?.trim() ?? '';
+  const beforeComma = compact.split(',')[0]?.trim() ?? '';
+  return [
+    compact,
+    withoutParentheticals,
+    beforeParenthetical,
+    beforeComma,
+  ]
+    .map((needle) => needle.slice(0, 80).trim())
+    .filter((needle, index, all) => needle.length >= 3 && all.indexOf(needle) === index);
 }

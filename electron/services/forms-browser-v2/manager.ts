@@ -4,12 +4,12 @@
  * SuspensionsActions, exposed to both the IPC bridge and the host-API.
  */
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { FormsDriver, type FillResult, type SubmitResult } from './forms-driver';
 import { SuspensionsActions, type SuspensionsPayload } from './suspensions-actions';
+import { resolveFormsResourcePath } from './paths';
 import { logger } from '../../utils/logger';
 
-const URL_PATH = join(process.cwd(), 'extensions/moe-principal-assistant/forms/suspensions-test-fac-url.txt');
+const URL_RELATIVE_PATH = 'extensions/moe-principal-assistant/forms/suspensions-test-fac-url.txt';
 
 export class FormsBrowserManager {
   private driver: FormsDriver | null = null;
@@ -25,8 +25,9 @@ export class FormsBrowserManager {
 
   /** Load the cloned-form URL from disk. */
   private getSuspensionsFormUrl(): string | null {
-    if (!existsSync(URL_PATH)) return null;
-    const v = readFileSync(URL_PATH, 'utf-8').trim();
+    const urlPath = resolveFormsResourcePath(URL_RELATIVE_PATH);
+    if (!urlPath || !existsSync(urlPath)) return null;
+    const v = readFileSync(urlPath, 'utf-8').trim();
     return v && /forms\.(office|cloud\.microsoft)\.com/.test(v) ? v : null;
   }
 

@@ -4,11 +4,11 @@
  * with the hard-confirm gate.
  */
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { FormsDriver, type FillResult, type SubmitResult } from './forms-driver';
+import { formsResourcePath } from './paths';
 import { logger } from '../../utils/logger';
 
-const SCHEMA_PATH = join(process.cwd(), 'extensions/moe-principal-assistant/forms/suspensions-schema.json');
+const SCHEMA_PATH = formsResourcePath('extensions/moe-principal-assistant/forms/suspensions-schema.json');
 
 export interface SuspensionsPayload {
   respondent_name: string;
@@ -54,6 +54,12 @@ interface SchemaField {
   showWhen?: Record<string, string>;
 }
 
+const AUTO_RECORDED_FIELD_IDS = new Set(['respondent_name']);
+
+const FIELD_LABEL_OVERRIDES: Record<string, string> = {
+  term_suspension_count: 'this student has been suspended',
+};
+
 export class SuspensionsActions {
   private readonly driver: FormsDriver;
 
@@ -79,6 +85,10 @@ export class SuspensionsActions {
     let skippedCount = 0;
 
     for (const field of fields) {
+      if (AUTO_RECORDED_FIELD_IDS.has(field.id)) {
+        skippedCount++;
+        continue;
+      }
       const value = (payload as Record<string, unknown>)[field.id];
       // Skip fields that aren't applicable (showWhen) or not provided + not required
       if (field.showWhen) {
@@ -93,7 +103,7 @@ export class SuspensionsActions {
         skippedCount++;
         continue;
       }
-      const r = await this.driver.fillField(field.label, value as any, field.type);
+      const r = await this.driver.fillField(FIELD_LABEL_OVERRIDES[field.id] ?? field.label, value as any, field.type);
       if (r.ok) {
         filledCount++;
       } else {
