@@ -152,12 +152,42 @@ release/                                  — signed/unsigned installers
 
 If you've just been started on this project:
 
-1. **Read this file and `docs/PRODUCT_PRINCIPAL_ASSISTANT.md`.** They are kept current.
-2. **Check the running app:** `pgrep -fl "Ministry of Education"` and `lsof -nP -iTCP -sTCP:LISTEN | grep -E "18789|13210"`. Both ports listening means the gateway is healthy.
-3. **Check the live test inbox:** Chrome on `:18792` should be on `test.fac@fac.edu.tt`. If not, the user runs `scripts/v2-signin.ts` (manual login first time, persists).
-4. **Run the live smoke** to know everything still works: `pnpm exec tsx scripts/v2-chatbot-e2e.ts`. Three turns, ALL PASS expected.
-5. **Demo plan above.** Execute around it.
+1. **Read this file** and these three doc trees (in priority order):
+   - `docs/PRODUCT_PRINCIPAL_ASSISTANT.md` (what we're building, feature status)
+   - `docs/WINDOWS_INSTALL_RUNBOOK.md` (how to install/verify on the pilot)
+   - `docs/WINDOWS_PROBLEMS_ATLAS.md` (every Windows bug we already solved — DO NOT re-debug)
+2. **Check Mac dev state:** `pgrep -fl "Ministry of Education"` + `lsof -nP -iTCP -sTCP:LISTEN | grep -E "18789|13210"`. Both ports listening = gateway healthy.
+3. **Check pilot Windows state:** `ssh pilot 'powershell -NoProfile -c "Get-Process | Where-Object { $_.ProcessName -match \"Ministry|Education\" } | Select Id"'` (uses the SSH multiplexer config in `~/.ssh/config`; first call ~0.3s, subsequent calls ~50ms).
+4. **Check the live test inbox:** Chrome on `:18792` should be on `test.fac@fac.edu.tt`. If not: `pnpm exec tsx scripts/forms-relogin-helper.ts` auto-fills `Education@2000` (test account password explicitly authorised by user 2026-05-25).
+5. **Run the live smoke:** `pnpm exec tsx scripts/v2-chatbot-e2e.ts`. Three turns, ALL PASS expected.
 6. **Memory pointers** are in `~/.claude/projects/-Users-antonalexander-Github-moe-tt-ClawX/memory/`. Read `MEMORY.md` first.
+
+---
+
+## Move fast in this codebase
+
+**SSH multiplexer for pilot Windows:** the Cat-5 link is link-local (`169.254.46.90`) and high-latency. `~/.ssh/config` has a `Host pilot` block with `ControlMaster auto` + `ControlPersist 30m`. First connect ~0.3s, subsequent calls ~50ms. Use `ssh pilot '<command>'` instead of `ssh vyonix@169.254.46.90`.
+
+**Sub-agent parallelism:** when a task has 3+ independent threads (e.g. "extract Daily Report schema" + "build runtime client" + "audit regression-class"), spawn them as parallel `Agent` calls in a single message. Each runs in its own context window. See the four-agent regression investigation in this session's history for the pattern. **Never** ask a sub-agent to "search the conversation" — they start with empty context. Pass them the actual text or a path.
+
+**Sub-agent coverage we already have:**
+- `clawx-config-doctor` — channel/model coherence repair (read-write)
+- `config-coherence-auditor` — early-warning when 4 stores drift (read-only)
+- `dependency-class-auditor` — catch playwright-core-style devDep mistakes
+- `dom-selector-regression-tester` — flag rotated selectors without fallbacks
+- `state-idempotency-auditor` — catch chflags-band-aid-class bugs
+- `gateway-recovery` — boot crash-loop repair
+- `production-readiness` — pre-release audit
+- `skill-audit` — skill-bundle drift detector
+- `windows-smoke` — Windows post-install smoke runner
+
+**Instead of re-debugging, look in `docs/WINDOWS_PROBLEMS_ATLAS.md`.** Every Windows-specific bug from moe.1→moe.10 is catalogued with symptom → root cause → fix → commit → detection-agent. Twelve §-entries cover ~90% of the install/runtime issues we've ever seen.
+
+**For commands on the pilot, ALWAYS use single quotes around the powershell -c argument.** Bash + zsh expand `$env:` and `$_.` differently from each other; double-quoting causes the shell to eat them. `ssh pilot 'powershell -c "Get-Process | Select Name"'` is the safe form.
+
+**Don't manually delete user state.** `~/.openclaw/` and `%APPDATA%\Ministry of Education\` are sacred — they hold sessions, openclaw.json, agent state. Always backup before reinstall (`docs/WINDOWS_INSTALL_RUNBOOK.md` step 3 has the one-liner). The NSIS uninstaller is designed to keep these.
+
+**Test changes locally before pushing builds.** `pnpm typecheck` + `pnpm exec tsx scripts/v2-chatbot-e2e.ts` together catch ~80% of regressions in <30s. Run them before `package:mac:local` (~6 min build cycle).
 
 ---
 
