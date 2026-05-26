@@ -59,6 +59,27 @@ function stripAssistantMediaTags(text: string): string {
     .trim();
 }
 
+function stripAssistantProviderWrappers(text: string): string {
+  if (!text) return text;
+  let result = text.trim();
+
+  result = result
+    .replace(/^\s*(?:<think>|\[think\])[\s\S]*?(?:<\/think>|\[\/think\])\s*/i, '')
+    .trim();
+
+  if (/^\s*(?:<think>|\[think\])/i.test(result)) {
+    const finalMatch = result.match(/(?:<final>|\[final\])\s*([\s\S]*?)\s*(?:<\/final>|\[\/final\])/i);
+    // Unclosed thinking wrappers are contaminated provider reasoning; hide
+    // them unless a bounded final block can be recovered safely.
+    return finalMatch?.[1]?.trim() ?? '';
+  }
+
+  return result
+    .replace(/^\s*(?:<final>|\[final\])\s*/i, '')
+    .replace(/\s*(?:<\/final>|\[\/final\])\s*$/i, '')
+    .trim();
+}
+
 function normalizeProgressiveText(text: string | undefined): string {
   return typeof text === 'string' ? text.replace(/\r\n/g, '\n').trim() : '';
 }
@@ -182,7 +203,7 @@ export function extractText(message: RawMessage | unknown): string {
     // that the runtime emits to point at produced artifacts.  The same
     // path is surfaced as a clickable file card via `_attachedFiles`,
     // so leaving it inline would duplicate the artifact.
-    result = stripAssistantMediaTags(result);
+    result = stripAssistantMediaTags(stripAssistantProviderWrappers(result));
   }
 
   return result;
@@ -214,7 +235,7 @@ export function extractTextSegments(message: RawMessage | unknown): string[] {
 
   if (!isUser) {
     return segments
-      .map((segment) => stripAssistantMediaTags(segment))
+      .map((segment) => stripAssistantMediaTags(stripAssistantProviderWrappers(segment)))
       .filter((segment) => segment.length > 0);
   }
 

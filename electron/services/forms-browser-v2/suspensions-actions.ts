@@ -60,6 +60,18 @@ const FIELD_LABEL_OVERRIDES: Record<string, string> = {
   term_suspension_count: 'this student has been suspended',
 };
 
+const SUSPENSIONS_FORM_FINGERPRINT_LABELS = [
+  'Education District',
+  'School Type',
+  'Name of primary school',
+  'Name of perpetrator',
+  'Student birth certificate PIN',
+  'Date of issue of suspension',
+  'Type of infraction committed',
+  'Were there any written reports',
+  'Was the parent/ guardian present',
+];
+
 export class SuspensionsActions {
   private readonly driver: FormsDriver;
 
@@ -115,6 +127,10 @@ export class SuspensionsActions {
   }
 
   async submit({ confirm }: { confirm: boolean }): Promise<SubmitResult> {
-    return this.driver.submit({ confirm, expectedTitle: 'Primary School Student Suspensions' });
+    return this.driver.submit({
+      confirm,
+      expectedTitle: 'Primary School Student Suspensions',
+      expectedQuestionLabels: SUSPENSIONS_FORM_FINGERPRINT_LABELS,
+    });
   }
 }

@@ -3,6 +3,7 @@
 # Read-only against user data except screenshots/JSON artifacts in Downloads.
 # Safe app calls only: outlook.open, forms.list, optional safe chat prompt that
 # instructs the model not to send, draft, reply, forward, read inbox, or submit.
+# Explicit -SendEmail and -SubmitForms flags perform real side effects.
 
 param(
     [string]$Endpoint = "http://127.0.0.1:9223",
@@ -11,6 +12,11 @@ param(
     [string]$SafeChatMode = "outlook-open",
     [switch]$OutlookSmoke,
     [switch]$FormsSmoke,
+    [switch]$SendEmail,
+    [string]$EmailTo,
+    [string]$EmailSubject,
+    [string]$EmailBody,
+    [switch]$SubmitForms,
     [int]$WaitMs = 5000,
     [string]$ArtifactDir = "$env:USERPROFILE\Downloads"
 )
@@ -74,6 +80,8 @@ if (-not (Test-Endpoint -Url $Endpoint)) {
 "SafeChatMode:$SafeChatMode"
 "OutlookSmoke:$($OutlookSmoke.IsPresent)"
 "FormsSmoke:  $($FormsSmoke.IsPresent)"
+"SendEmail:   $($SendEmail.IsPresent)"
+"SubmitForms: $($SubmitForms.IsPresent)"
 
 $argsList = @(
     $scriptPath,
@@ -91,6 +99,26 @@ if ($OutlookSmoke) {
 }
 if ($FormsSmoke) {
     $argsList += "--forms-smoke"
+}
+if ($SendEmail) {
+    if (-not $EmailTo) {
+        "STATE: EMAIL_TO_REQUIRED"
+        exit 5
+    }
+    $argsList += "--send-email"
+    $argsList += "--email-to"
+    $argsList += $EmailTo
+    if ($EmailSubject) {
+        $argsList += "--email-subject"
+        $argsList += $EmailSubject
+    }
+    if ($EmailBody) {
+        $argsList += "--email-body"
+        $argsList += $EmailBody
+    }
+}
+if ($SubmitForms) {
+    $argsList += "--submit-forms"
 }
 
 & $node @argsList

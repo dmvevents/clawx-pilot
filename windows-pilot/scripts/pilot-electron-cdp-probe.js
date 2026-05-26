@@ -8,6 +8,11 @@
  * - calls forms.list only
  * - never sends email
  * - never submits Forms
+ *
+ * Explicit side-effect flags:
+ * - --send-email drafts and sends only with confirm:true
+ * - --submit-forms previews and submits only with confirm:true
+ *
  * - redacts tokens/passwords/URLs/email addresses from console output
  */
 
@@ -24,6 +29,11 @@ function parseArgs(argv) {
     safeChatMode: 'outlook-open',
     outlookSmoke: false,
     formsSmoke: false,
+    sendEmail: false,
+    emailTo: '',
+    emailSubject: '',
+    emailBody: '',
+    submitForms: false,
     waitMs: 5000,
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -34,9 +44,14 @@ function parseArgs(argv) {
     else if (arg === '--safe-chat-mode') out.safeChatMode = argv[++i] || out.safeChatMode;
     else if (arg === '--outlook-smoke') out.outlookSmoke = true;
     else if (arg === '--forms-smoke') out.formsSmoke = true;
+    else if (arg === '--send-email') out.sendEmail = true;
+    else if (arg === '--email-to') out.emailTo = argv[++i] || out.emailTo;
+    else if (arg === '--email-subject') out.emailSubject = argv[++i] || out.emailSubject;
+    else if (arg === '--email-body') out.emailBody = argv[++i] || out.emailBody;
+    else if (arg === '--submit-forms') out.submitForms = true;
     else if (arg === '--wait-ms') out.waitMs = Number(argv[++i] || out.waitMs);
     else if (arg === '--help' || arg === '-h') {
-      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--outlook-smoke] [--forms-smoke] [--wait-ms N]');
+      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--outlook-smoke] [--forms-smoke] [--send-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--submit-forms] [--wait-ms N]');
       process.exit(0);
     }
   }
@@ -406,13 +421,17 @@ async function runOutlookSmoke(page) {
   };
 }
 
-function sampleSuspensionPayload() {
+function runMarker() {
+  return new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+}
+
+function sampleSuspensionPayload(marker = runMarker()) {
   return {
     respondent_name: 'Demo Principal',
     education_district: 'Victoria',
     school_type: 'Government',
     school_name: 'Arouca Government Primary',
-    perpetrator_name: 'Demo Student',
+    perpetrator_name: `ClawX Test Student ${marker}`,
     perpetrator_sex: 'Male',
     perpetrator_dob: '2016-05-12',
     perpetrator_age: '10',
@@ -423,8 +442,10 @@ function sampleSuspensionPayload() {
     term_suspension_count: 1,
     infraction_when: 'During class time (member of staff present)',
     primary_infraction: 'Disorderly/Disruptive Conduct',
-    additional_infractions_present: 'No',
-    victim_present: 'No',
+    additional_infractions_present: 'Yes',
+    additional_infractions: ['Disrespect/Defiance of Authority'],
+    victim_present: 'Yes',
+    victim_type: 'Student of the same school',
     written_reports_collected: 'Yes',
     length_of_suspension: '2',
     extended_suspension_application: 'No',
@@ -438,6 +459,58 @@ function sampleSuspensionPayload() {
     address_house: '12',
     address_street: 'Demo Street',
     address_city: 'Arima',
+  };
+}
+
+async function runOutlookSend(page, args) {
+  const to = args.emailTo;
+  if (!to) {
+    return { ok: false, error: '--email-to is required with --send-email' };
+  }
+  const subject = args.emailSubject || `ClawX Windows service test ${new Date().toISOString()}`;
+  const body = args.emailBody || [
+    'This is a real end-to-end test email from the ClawX Windows pilot app.',
+    `Timestamp: ${new Date().toISOString()}`,
+    'Purpose: verify Outlook send through the installed app service path.',
+  ].join('\n');
+
+  const draft = await withTimeout(
+    'hostapi outlook.draft',
+    () => invokeHostApi(page, '/api/outlook/draft', { to, subject, body }),
+    180_000,
+  ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+
+  const draftData = draft?.data?.json?.data;
+  if (!draft?.ok || draftData?.status !== 'drafted') {
+    return {
+      draft: summarizeHostApiCall(draft, (data) => ({
+        status: data?.status,
+        draftLeftOpen: data?.draftLeftOpen,
+        message: data?.message,
+      })),
+      send: { skipped: true, reason: 'draft did not reach status=drafted' },
+    };
+  }
+
+  const send = await withTimeout(
+    'hostapi outlook.send confirm true',
+    () => invokeHostApi(page, '/api/outlook/send', { to, subject, body, confirm: true }),
+    180_000,
+  ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+
+  return {
+    subject,
+    bodyLength: body.length,
+    draft: summarizeHostApiCall(draft, (data) => ({
+      status: data?.status,
+      draftLeftOpen: data?.draftLeftOpen,
+      message: data?.message,
+    })),
+    send: summarizeHostApiCall(send, (data) => ({
+      status: data?.status,
+      message: data?.message,
+      reason: data?.reason,
+    })),
   };
 }
 
@@ -466,6 +539,55 @@ async function runFormsSmoke(page) {
     submitWithoutConfirm: summarizeHostApiCall(submitWithoutConfirm, (data) => ({
       status: data?.status,
       refused: data?.status === 'refused',
+      reason: data?.reason,
+    })),
+  };
+}
+
+async function runFormsSubmit(page) {
+  const marker = runMarker();
+  const payload = sampleSuspensionPayload(marker);
+  const preview = await withTimeout(
+    'hostapi forms.preview-suspension',
+    () => invokeHostApi(page, '/api/forms/preview-suspension', { payload }),
+    180_000,
+  ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+
+  const previewData = preview?.data?.json?.data;
+  if (!preview?.ok || previewData?.status !== 'previewed' || (Array.isArray(previewData?.errors) && previewData.errors.length > 0)) {
+    return {
+      marker,
+      preview: summarizeHostApiCall(preview, (data) => ({
+        status: data?.status,
+        filledCount: data?.filledCount,
+        skippedCount: data?.skippedCount,
+        errorCount: Array.isArray(data?.errors) ? data.errors.length : undefined,
+        errors: Array.isArray(data?.errors) ? data.errors.slice(0, 8) : undefined,
+        reason: data?.reason,
+      })),
+      submit: { skipped: true, reason: 'preview did not complete cleanly' },
+    };
+  }
+
+  const submit = await withTimeout(
+    'hostapi forms.submit-suspension confirm true',
+    () => invokeHostApi(page, '/api/forms/submit-suspension', { confirm: true }),
+    120_000,
+  ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+
+  return {
+    marker,
+    preview: summarizeHostApiCall(preview, (data) => ({
+      status: data?.status,
+      filledCount: data?.filledCount,
+      skippedCount: data?.skippedCount,
+      errorCount: Array.isArray(data?.errors) ? data.errors.length : undefined,
+      errors: Array.isArray(data?.errors) ? data.errors.slice(0, 8) : undefined,
+      reason: data?.reason,
+    })),
+    submit: summarizeHostApiCall(submit, (data) => ({
+      status: data?.status,
+      message: data?.message,
       reason: data?.reason,
     })),
   };
@@ -522,6 +644,12 @@ async function main() {
     const formsSmoke = args.formsSmoke
       ? await runFormsSmoke(page)
       : { skipped: true };
+    const emailSend = args.sendEmail
+      ? await runOutlookSend(page, args)
+      : { skipped: true };
+    const formsSubmit = args.submitForms
+      ? await runFormsSubmit(page)
+      : { skipped: true };
 
     await page.waitForTimeout(Math.max(0, args.waitMs));
     const safeChatHistory = args.safeChat
@@ -542,6 +670,8 @@ async function main() {
       },
       outlookSmoke,
       formsSmoke,
+      emailSend,
+      formsSubmit,
       safeChat: {
         mode: args.safeChatMode,
         verificationToken: safeChatVerificationToken,

@@ -44,6 +44,37 @@ export interface SubmitResult {
   message?: string;
 }
 
+function normalizeMatchText(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function titleMatchesExpected(visibleTitle: string, expectedTitle: string): boolean {
+  const visible = normalizeMatchText(visibleTitle);
+  const expected = normalizeMatchText(expectedTitle).slice(0, 60);
+  return visible.includes(expected.slice(0, 30));
+}
+
+export function formatFormsDateInput(value: string | Date): string {
+  const iso = value instanceof Date ? value.toISOString().slice(0, 10) : String(value).trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return iso;
+  const [, year, month, day] = match;
+  return `${Number(month)}/${Number(day)}/${year}`;
+}
+
+export function matchesExpectedQuestionFingerprint(
+  visibleQuestionText: string,
+  expectedQuestionLabels: string[],
+): { ok: boolean; matched: number; required: number } {
+  const text = normalizeMatchText(visibleQuestionText);
+  const labels = expectedQuestionLabels
+    .map(normalizeMatchText)
+    .filter((label, index, all) => label.length >= 8 && all.indexOf(label) === index);
+  const matched = labels.filter((label) => text.includes(label.slice(0, 40))).length;
+  const required = Math.min(labels.length, 4);
+  return { ok: required > 0 && matched >= required, matched, required };
+}
+
 export class FormsDriver {
   private browser: Browser | null = null;
   private page: Page | null = null;
@@ -106,6 +137,18 @@ export class FormsDriver {
     return '';
   }
 
+  async getVisibleQuestionText(): Promise<string> {
+    if (!this.page) throw new Error('no page; call ensureFormsTab first');
+    const items = this.page.locator('[data-automation-id="questionItem"], [role="listitem"]');
+    const count = await items.count().catch(() => 0);
+    const texts: string[] = [];
+    for (let i = 0; i < Math.min(count, 40); i += 1) {
+      const text = await items.nth(i).innerText({ timeout: 1_000 }).catch(() => '');
+      if (text.trim()) texts.push(text.trim());
+    }
+    return texts.join('\n');
+  }
+
   /**
    * Fill a single field by question label (substring match, case-insensitive).
    * The Forms response page renders each question in a list-item with role="listitem".
@@ -134,18 +177,17 @@ export class FormsDriver {
           return { ok: true };
         }
         case 'date': {
-          // Forms shows a date picker; an ISO YYYY-MM-DD typed into the visible
-          // input gets parsed correctly on most locales.
           const input = item.locator('input').first();
-          const dateStr =
-            value instanceof Date
-              ? value.toISOString().slice(0, 10)
-              : String(value);
+          const dateStr = formatFormsDateInput(value as string | Date);
           await input.click({ timeout: this.fieldTimeoutMs });
           await input.fill(dateStr, { timeout: this.fieldTimeoutMs });
-          // Press Escape to dismiss the calendar popover.
-          await this.page.keyboard.press('Escape').catch(() => null);
-          return { ok: true };
+          await input.press('Tab', { timeout: this.fieldTimeoutMs }).catch(() => this.page?.keyboard.press('Tab').catch(() => null));
+          await this.page.waitForTimeout(250);
+          const accepted = await input.inputValue({ timeout: this.fieldTimeoutMs }).catch(() => '');
+          const invalid = await input.evaluate((el) => el.getAttribute('aria-invalid') === 'true').catch(() => false);
+          return accepted.trim() && !invalid
+            ? { ok: true }
+            : { ok: false, reason: `date was not accepted by Microsoft Forms: "${dateStr}"` };
         }
         case 'single_choice': {
           const target = String(value);
@@ -197,9 +239,11 @@ export class FormsDriver {
   async submit({
     confirm,
     expectedTitle,
+    expectedQuestionLabels = [],
   }: {
     confirm: boolean;
     expectedTitle: string;
+    expectedQuestionLabels?: string[];
   }): Promise<SubmitResult> {
     if (!this.page) return { status: 'error', reason: 'no page' };
     if (!confirm) {
@@ -208,12 +252,18 @@ export class FormsDriver {
         reason: 'Submit blocked: confirm:true required. Re-call with confirm:true after the principal has reviewed the filled form.',
       };
     }
-    const visible = (await this.getVisibleTitle()).toLowerCase();
-    const expected = expectedTitle.toLowerCase().slice(0, 60);
-    if (!visible.includes(expected.slice(0, 30))) {
+    const visibleTitle = await this.getVisibleTitle();
+    let matchedByFingerprint = false;
+    let fingerprint = { ok: false, matched: 0, required: 0 };
+    if (!titleMatchesExpected(visibleTitle, expectedTitle)) {
+      const questionText = await this.getVisibleQuestionText().catch(() => '');
+      fingerprint = matchesExpectedQuestionFingerprint(questionText, expectedQuestionLabels);
+      matchedByFingerprint = fingerprint.ok;
+    }
+    if (!titleMatchesExpected(visibleTitle, expectedTitle) && !matchedByFingerprint) {
       return {
         status: 'refused',
-        reason: `Submit blocked: visible form title "${visible.slice(0, 80)}" does not match expected "${expected.slice(0, 60)}". A different form may be open.`,
+        reason: `Submit blocked: visible form title "${normalizeMatchText(visibleTitle).slice(0, 80)}" does not match expected "${normalizeMatchText(expectedTitle).slice(0, 60)}", and question fingerprint matched ${fingerprint.matched}/${fingerprint.required}. A different form may be open.`,
       };
     }
 
