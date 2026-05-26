@@ -580,23 +580,60 @@ export async function submitFormResponse(args: SubmitArgs): Promise<SubmitResult
     const attempts: Array<{ url: string; status: number; text: string }> = [];
 
     for (const endpoint of candidates) {
+      // Get a FRESH Bearer by hijacking window.fetch and waiting for Forms
+      // to make any /formapi/api/ outbound call (its own JS triggers these
+      // every few seconds for state sync). The captured Authorization
+      // header is the fresh JWT — different from the AADAuth.forms cookie.
+      let bearerJwt = '';
+      try {
+        bearerJwt = (await page.evaluate(`
+          (function() {
+            return new Promise(function(resolve) {
+              if (window.__forms_bearer_cache) { resolve(window.__forms_bearer_cache); return; }
+              var origFetch = window.fetch;
+              var timer = setTimeout(function() { resolve(''); }, 8000);
+              window.fetch = function(url, opts) {
+                try {
+                  var u = typeof url === 'string' ? url : (url && url.url) || '';
+                  if (u.indexOf('forms.office.com/formapi/api/') >= 0 && opts && opts.headers) {
+                    var h = opts.headers;
+                    var auth = '';
+                    if (typeof h.get === 'function') auth = h.get('authorization') || h.get('Authorization') || '';
+                    else if (h.authorization) auth = h.authorization;
+                    else if (h.Authorization) auth = h.Authorization;
+                    if (auth && auth.indexOf('Bearer ') === 0) {
+                      window.__forms_bearer_cache = auth.slice(7);
+                      clearTimeout(timer);
+                      window.fetch = origFetch;
+                      resolve(window.__forms_bearer_cache);
+                    }
+                  }
+                } catch(e) {}
+                return origFetch.apply(this, arguments);
+              };
+              // Trigger a refresh by polling something innocuous
+              setTimeout(function() {
+                try { fetch(window.location.href, { method: 'GET', credentials: 'include' }); } catch(e) {}
+              }, 100);
+            });
+          })()
+        `)) as string;
+      } catch { /* */ }
+      if (!bearerJwt) {
+        // Fallback to the cookie (proven 401 but better than nothing for diagnostics)
+        try {
+          const formCookies = await page.context().cookies('https://forms.office.com');
+          const aad = formCookies.find((c) => c.name === 'AADAuth.forms');
+          if (aad?.value) bearerJwt = aad.value;
+        } catch { /* */ }
+      }
+
       const inlineJs = `(async function() {
         var ofi = window.OfficeFormServerInfo || {};
         var headers = { 'content-type': 'application/json', 'accept': 'application/json' };
         if (ofi.antiForgeryToken) headers['__requestverificationtoken'] = ofi.antiForgeryToken;
-        // Best-effort Bearer pull from MSAL cache (same approach as forms-bulk-add.ts).
-        try {
-          for (var i = 0; i < localStorage.length; i++) {
-            var k = localStorage.key(i);
-            if (k && /accesstoken|bearer/i.test(k)) {
-              var v = localStorage.getItem(k);
-              if (v && v.length > 200) {
-                try { var parsed = JSON.parse(v); if (parsed.secret && parsed.secret.length > 200) { headers['authorization'] = 'Bearer ' + parsed.secret; break; } } catch(e) {}
-                if (v.startsWith('eyJ')) { headers['authorization'] = 'Bearer ' + v; break; }
-              }
-            }
-          }
-        } catch(e) {}
+        var bearer = ${JSON.stringify(bearerJwt)};
+        if (bearer) headers['authorization'] = 'Bearer ' + bearer;
         try {
           const r = await fetch(${JSON.stringify(endpoint)}, {
             method: 'POST',
