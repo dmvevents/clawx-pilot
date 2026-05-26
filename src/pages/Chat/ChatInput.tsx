@@ -967,7 +967,7 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
                 let text: string | null = null;
                 let errorMessage: string | null = null;
                 try {
-                  const env = (await renderer.invoke('asr:transcribe', { audioPath: path, language: 'en' })) as {
+                  const env = (await renderer.invoke('asr:transcribe', { audioPath: path })) as {
                     ok?: boolean;
                     data?: { text?: string };
                     error?: { code?: string; message?: string };

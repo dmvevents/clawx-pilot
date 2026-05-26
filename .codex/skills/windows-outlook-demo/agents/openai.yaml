@@ -1,0 +1,4 @@
+interface:
+  display_name: "Windows Outlook Demo"
+  short_description: "Run the ClawX Windows Outlook/Forms demo safely end to end."
+  default_prompt: "Use this skill to verify or fix the ClawX Windows Outlook, Forms, Office, and subagent demo path without exposing secrets or sending/submitting without confirmation."

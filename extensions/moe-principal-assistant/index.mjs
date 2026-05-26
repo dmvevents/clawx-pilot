@@ -75,6 +75,26 @@ function requireNumber(name, value) {
   }
 }
 
+const stringSchema = { type: 'string' };
+const booleanSchema = { type: 'boolean' };
+const nonNegativeNumberSchema = { type: 'number', minimum: 0 };
+const stringArraySchema = { type: 'array', items: stringSchema };
+const stringOrStringArraySchema = {
+  anyOf: [stringSchema, stringArraySchema],
+};
+const looseObjectSchema = { type: 'object', additionalProperties: true };
+
+function toolParameters(properties = {}, required = []) {
+  return {
+    type: 'object',
+    properties,
+    required,
+    additionalProperties: false,
+  };
+}
+
+const emptyParameters = toolParameters();
+
 /**
  * PRINCIPAL_SKILL_ALLOWLIST is enforced at the host (electron/api/routes/skills.ts
  * + src/stores/skills.ts). Tools registered here whose names are not in the
@@ -120,7 +140,16 @@ export function register(api) {
     name: 'principal.draft_letter',
     description:
       'Draft a formal letter on behalf of the principal. Args: { recipient, subject, intent, key_points: string[] }. Returns { text } — prose only.',
-    handler: async (args = {}) => {
+    parameters: toolParameters(
+      {
+        recipient: stringSchema,
+        subject: stringSchema,
+        intent: stringSchema,
+        key_points: stringArraySchema,
+      },
+      ['recipient', 'subject', 'intent'],
+    ),
+    execute: async (_toolCallId, args = {}) => {
       const { recipient, subject, intent, key_points } = args;
       requireString('recipient', recipient);
       requireString('subject', subject);
@@ -152,7 +181,16 @@ export function register(api) {
     name: 'principal.draft_memo',
     description:
       'Draft an internal memo. Args: { to, from?, subject, body_points: string[] }. Returns { text } — prose only.',
-    handler: async (args = {}) => {
+    parameters: toolParameters(
+      {
+        to: stringSchema,
+        from: stringSchema,
+        subject: stringSchema,
+        body_points: stringArraySchema,
+      },
+      ['to', 'subject'],
+    ),
+    execute: async (_toolCallId, args = {}) => {
       const { to, subject, body_points } = args;
       const from = args.from ?? cfg.principalName;
       requireString('to', to);
@@ -177,7 +215,13 @@ export function register(api) {
     name: 'principal.summarise_circular',
     description:
       'Summarise an MoE circular, email, or meeting note. Args: { circular_text }. Returns { summary, action_items: string[], deadline | null }. Stub — handler returns a structurally correct placeholder; the model is expected to fill it in.',
-    handler: async (args = {}) => {
+    parameters: toolParameters(
+      {
+        circular_text: stringSchema,
+      },
+      ['circular_text'],
+    ),
+    execute: async (_toolCallId, args = {}) => {
       const { circular_text } = args;
       requireString('circular_text', circular_text);
       // Intentionally stubbed: the agent layer is responsible for the
@@ -195,7 +239,29 @@ export function register(api) {
     name: 'principal.daily_report_payload',
     description:
       'Build the structured payload for the Primary School Daily Report (Term 3 2025/26). Args: { date, teachers_present, teachers_absent, students_present, students_absent_total, meals_distributed, meals_rated, discipline_incidents?, transport_issues?, notes? }. Returns JSON only.',
-    handler: async (args = {}) => {
+    parameters: toolParameters(
+      {
+        date: stringSchema,
+        teachers_present: nonNegativeNumberSchema,
+        teachers_absent: nonNegativeNumberSchema,
+        students_present: nonNegativeNumberSchema,
+        students_absent_total: nonNegativeNumberSchema,
+        meals_distributed: nonNegativeNumberSchema,
+        meals_rated: nonNegativeNumberSchema,
+        discipline_incidents: stringArraySchema,
+        transport_issues: stringArraySchema,
+        notes: stringSchema,
+      },
+      [
+        'date',
+        'teachers_present',
+        'teachers_absent',
+        'students_present',
+        'students_absent_total',
+        'meals_distributed',
+      ],
+    ),
+    execute: async (_toolCallId, args = {}) => {
       const {
         date,
         teachers_present,
@@ -245,7 +311,29 @@ export function register(api) {
     name: 'principal.suspension_payload',
     description:
       'Build the structured payload for the Primary School Student Suspensions form (one per pupil). Args: { student_first_name_initial, gender, standard, reason, length_days, parent_contacted, date_of_incident, date_of_suspension }. Returns JSON only. Pupil names are not stored — only the first-name initial.',
-    handler: async (args = {}) => {
+    parameters: toolParameters(
+      {
+        student_first_name_initial: stringSchema,
+        gender: { type: 'string', enum: VALID_GENDERS },
+        standard: { type: 'string', enum: VALID_STANDARDS },
+        reason: stringSchema,
+        length_days: nonNegativeNumberSchema,
+        parent_contacted: booleanSchema,
+        date_of_incident: stringSchema,
+        date_of_suspension: stringSchema,
+      },
+      [
+        'student_first_name_initial',
+        'gender',
+        'standard',
+        'reason',
+        'length_days',
+        'parent_contacted',
+        'date_of_incident',
+        'date_of_suspension',
+      ],
+    ),
+    execute: async (_toolCallId, args = {}) => {
       const {
         student_first_name_initial,
         gender,
@@ -303,7 +391,13 @@ export function register(api) {
     name: 'principal.find_school',
     description:
       'Fuzzy-match against the MoE school roster. Args: { query }. Returns up to 10 matches: { name, educationDistrict, schoolType }. Stub roster (~30 schools); production should load the full ~1300-school list.',
-    handler: async (args = {}) => {
+    parameters: toolParameters(
+      {
+        query: stringSchema,
+      },
+      ['query'],
+    ),
+    execute: async (_toolCallId, args = {}) => {
       const { query } = args;
       requireString('query', query);
       const raw = await readFile(path.join(PKG_ROOT, 'data', 'schools.json'), 'utf8');
@@ -353,7 +447,8 @@ export function register(api) {
       name: 'outlook.open',
       description:
         'Open Outlook Web (https://outlook.office.com/mail/) in the principal\'s existing Chrome session. Returns { status: "opened" | "needs_signin", url, message? }. If sign-in is required, ask the principal to sign in to Outlook in the Chrome window that just opened, then call outlook.open again.',
-      handler: async () => {
+      parameters: emptyParameters,
+      execute: async (_toolCallId, _params = {}) => {
         const result = await outlook.open();
         return result;
       },
@@ -363,7 +458,10 @@ export function register(api) {
       name: 'outlook.read_inbox',
       description:
         'Return the top N unread/recent messages from the principal\'s Outlook inbox by scraping Outlook Web. Args: { top?: number (default 10) }. Returns { status: "ok" | "needs_signin", messages: [{ id, subject, sender, snippet, receivedAt, unread }] }.',
-      handler: async (args = {}) => {
+      parameters: toolParameters({
+        top: nonNegativeNumberSchema,
+      }),
+      execute: async (_toolCallId, args = {}) => {
         const top = typeof args.top === 'number' && args.top > 0 ? args.top : 10;
         const result = await outlook.readInbox(top);
         return result;
@@ -374,7 +472,17 @@ export function register(api) {
       name: 'outlook.draft_email',
       description:
         'Compose a new email in Outlook Web and leave the draft open for the principal to review. Does NOT send. Args: { to: string | string[], subject, body, cc?, bcc? }. Returns { status, draftLeftOpen, preview }.',
-      handler: async (args = {}) => {
+      parameters: toolParameters(
+        {
+          to: stringOrStringArraySchema,
+          subject: stringSchema,
+          body: stringSchema,
+          cc: stringOrStringArraySchema,
+          bcc: stringOrStringArraySchema,
+        },
+        ['to', 'subject', 'body'],
+      ),
+      execute: async (_toolCallId, args = {}) => {
         const { to, subject, body, cc, bcc } = args;
         requireString('subject', subject);
         if (typeof body !== 'string') {
@@ -391,7 +499,18 @@ export function register(api) {
       name: 'outlook.send_email',
       description:
         'Send an email via Outlook Web. HARD GATE: refuses unless { confirm: true } is set. The agent MUST show the draft to the principal and obtain explicit confirmation ("yes, send") before passing confirm=true. Default behaviour is to draft and stop. Args: { to, subject, body, cc?, bcc?, confirm: boolean }.',
-      handler: async (args = {}) => {
+      parameters: toolParameters(
+        {
+          to: stringOrStringArraySchema,
+          subject: stringSchema,
+          body: stringSchema,
+          cc: stringOrStringArraySchema,
+          bcc: stringOrStringArraySchema,
+          confirm: booleanSchema,
+        },
+        ['to', 'subject', 'body', 'confirm'],
+      ),
+      execute: async (_toolCallId, args = {}) => {
         const { to, subject, body, cc, bcc, confirm } = args;
         requireString('subject', subject);
         if (typeof body !== 'string') {
@@ -416,7 +535,16 @@ export function register(api) {
       name: 'outlook.search_inbox',
       description:
         'Filter the principal\'s inbox by sender, subject, date, unread, or attachment presence. Args: { from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top? (default 25) }. Returns { status, messages, capped }. dateGte/dateLt are ISO 8601 strings. Prefer this over read_inbox when the user mentions a sender or date or topic.',
-      handler: async (args = {}) => {
+      parameters: toolParameters({
+        from: stringSchema,
+        subjectContains: stringSchema,
+        dateGte: stringSchema,
+        dateLt: stringSchema,
+        unread: booleanSchema,
+        hasAttachment: booleanSchema,
+        top: nonNegativeNumberSchema,
+      }),
+      execute: async (_toolCallId, args = {}) => {
         return outlook.searchInbox(args);
       },
     });
@@ -425,7 +553,13 @@ export function register(api) {
       name: 'outlook.read_email',
       description:
         'Open a specific message and return its full body, sender, recipients, and attachment list. Args: { id }. id is the InboxMessage.id from read_inbox or search_inbox (sender|subject|received fingerprint). Returns { status, id, subject, sender, receivedAt, body, recipients, attachments: [{ filename, sizeBytes?, mimeType? }] }. Use this when the user asks "what does it say" or "summarise that email".',
-      handler: async (args = {}) => {
+      parameters: toolParameters(
+        {
+          id: stringSchema,
+        },
+        ['id'],
+      ),
+      execute: async (_toolCallId, args = {}) => {
         const { id } = args;
         requireString('id', id);
         return outlook.readEmail({ id });
@@ -436,7 +570,15 @@ export function register(api) {
       name: 'outlook.reply',
       description:
         'Reply (or reply-all) to a specific message. Opens the reply pane in Outlook with To/Subject pre-filled by Outlook; we fill the body. Leaves the draft open for the principal to review — does NOT send. Args: { id, body, replyAll? (default false) }.',
-      handler: async (args = {}) => {
+      parameters: toolParameters(
+        {
+          id: stringSchema,
+          body: stringSchema,
+          replyAll: booleanSchema,
+        },
+        ['id', 'body'],
+      ),
+      execute: async (_toolCallId, args = {}) => {
         const { id, body, replyAll } = args;
         requireString('id', id);
         if (typeof body !== 'string') throw new Error('body is required (string).');
@@ -448,7 +590,15 @@ export function register(api) {
       name: 'outlook.forward',
       description:
         'Forward a specific message to a new recipient. Opens the forward pane in Outlook with the original message quoted; we fill To and an optional commentary body. Leaves the draft open. Args: { id, to: string | string[], body? }.',
-      handler: async (args = {}) => {
+      parameters: toolParameters(
+        {
+          id: stringSchema,
+          to: stringOrStringArraySchema,
+          body: stringSchema,
+        },
+        ['id', 'to'],
+      ),
+      execute: async (_toolCallId, args = {}) => {
         const { id, to, body } = args;
         requireString('id', id);
         if (!to || (Array.isArray(to) && to.length === 0)) {
@@ -462,7 +612,14 @@ export function register(api) {
       name: 'outlook.mark_read',
       description:
         'Mark a specific message as read or unread. Args: { id, read: boolean }. Returns { status }.',
-      handler: async (args = {}) => {
+      parameters: toolParameters(
+        {
+          id: stringSchema,
+          read: booleanSchema,
+        },
+        ['id', 'read'],
+      ),
+      execute: async (_toolCallId, args = {}) => {
         const { id, read } = args;
         requireString('id', id);
         if (typeof read !== 'boolean') {
@@ -476,7 +633,13 @@ export function register(api) {
       name: 'outlook.list_attachments',
       description:
         'List metadata for the attachments on a specific message without downloading them. Args: { id }. Returns { status, id, attachments: [{ filename, sizeBytes?, mimeType? }] }. Use this before suggesting any download.',
-      handler: async (args = {}) => {
+      parameters: toolParameters(
+        {
+          id: stringSchema,
+        },
+        ['id'],
+      ),
+      execute: async (_toolCallId, args = {}) => {
         const { id } = args;
         requireString('id', id);
         return outlook.listAttachments({ id });
@@ -487,7 +650,15 @@ export function register(api) {
       name: 'outlook.download_attachment',
       description:
         'Download a specific attachment from a message to disk. HARD GATE: refuses unless { confirm: true } is set. The agent MUST show the principal which file will be downloaded (filename + sender + subject) and obtain explicit confirmation before passing confirm=true. Args: { id, filename, confirm: boolean }. Returns { status, filename, savedPath?, reason? }.',
-      handler: async (args = {}) => {
+      parameters: toolParameters(
+        {
+          id: stringSchema,
+          filename: stringSchema,
+          confirm: booleanSchema,
+        },
+        ['id', 'filename', 'confirm'],
+      ),
+      execute: async (_toolCallId, args = {}) => {
         const { id, filename, confirm } = args;
         requireString('id', id);
         requireString('filename', filename);
@@ -523,14 +694,21 @@ export function register(api) {
       name: 'forms.list',
       description:
         'List the MoE forms ClawX can fill. Returns { status, forms: [{ id, title, status: "available" | "not_configured" }] }. Call this first if the user mentions filling a form, so you know which forms are available.',
-      handler: async () => forms.list(),
+      parameters: emptyParameters,
+      execute: async (_toolCallId, _params = {}) => forms.list(),
     });
 
     registerTool({
       name: 'forms.preview_suspension',
       description:
         'Open the Suspensions form in the principal\'s browser and fill every field from a typed payload. Does NOT submit. Returns { status: "previewed", url, filledCount, skippedCount, errors[] }. Use this AFTER the user has reviewed the extracted fields and asked you to fill the form. Always call this before forms.submit_suspension.',
-      handler: async (args = {}) => {
+      parameters: toolParameters(
+        {
+          payload: looseObjectSchema,
+        },
+        ['payload'],
+      ),
+      execute: async (_toolCallId, args = {}) => {
         if (!args.payload || typeof args.payload !== 'object') {
           throw new Error('payload object required (32 fields, see suspensions-schema.json).');
         }
@@ -542,7 +720,13 @@ export function register(api) {
       name: 'forms.submit_suspension',
       description:
         'Submit the Suspensions form. HARD GATE: refuses unless { confirm: true }. The agent MUST show the principal the filled form (forms.preview_suspension first) and obtain explicit confirmation ("yes, submit") before passing confirm=true. Returns { status: "submitted" | "refused" | "error", message?, reason? }.',
-      handler: async (args = {}) => forms.submitSuspension({ confirm: args.confirm === true }),
+      parameters: toolParameters(
+        {
+          confirm: booleanSchema,
+        },
+        ['confirm'],
+      ),
+      execute: async (_toolCallId, args = {}) => forms.submitSuspension({ confirm: args.confirm === true }),
     });
 
     log.info?.('moe-principal-assistant: forms (browser-session) tools registered');
