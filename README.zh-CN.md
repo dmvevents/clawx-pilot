@@ -365,6 +365,9 @@ pnpm package:linux        # 为 Linux 打包
 
 Windows 打包需要 .NET SDK；`pnpm package:win` 会先构建
 `WinSpeechRecognize.exe` 语音辅助程序，再运行 electron-builder。
+Pilot 构建会在 Settings > Azure Speech 中配置了 region 和订阅 key 时优先使用
+Azure Speech 做 ASR；否则回退到随包的 Windows 语音辅助程序，再回退到本地
+Whisper CLI（如已安装）。
 
 在无头 Linux 环境下，Electron 测试需要显示服务；可使用 `xvfb-run -a pnpm run test:e2e`。
 

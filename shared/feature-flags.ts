@@ -40,20 +40,22 @@ export const PREFER_NATIVE_ASR = flagFromEnv('CLAWX_PREFER_NATIVE_ASR', isNative
 /**
  * Cloud fallback ASR: Azure Speech-to-Text.
  *
- * When `true`, the `asr:transcribe` handler attempts Azure first (assuming a
- * region + apiKey are configured under Settings → Azure Speech) and only falls
- * back to native / whisper if Azure fails or is not configured.
+ * When `true`, the `asr:transcribe` handler attempts Azure first if a region
+ * + apiKey are configured under Settings → Azure Speech. If Azure is not
+ * configured, no network call is made and transcription falls back to native /
+ * whisper. If Azure is configured but temporarily fails, native / whisper still
+ * keeps dictation usable.
  *
- * When `false` (the default), Azure is only invoked via the explicit
+ * When `false`, Azure is only invoked via the explicit
  * `azure-speech:test` channel or via the streaming channel
  * `asr:transcribe-stream`. Existing single-shot `asr:transcribe` callers are
  * unaffected — native (or whisper) remains primary.
  *
- * Opt-in per deployment: set `CLAWX_PREFER_AZURE_SPEECH=1` at build time. The
- * Ministry of Education Trinidad & Tobago pilot will likely flip this on once
- * a Speech resource is provisioned in their Azure tenant.
+ * Pilot builds default to true because Windows System.Speech quality is not
+ * good enough for the demo. Override with `CLAWX_PREFER_AZURE_SPEECH=0` for
+ * fully local/offline deployments.
  */
-export const PREFER_AZURE_SPEECH = flagFromEnv('CLAWX_PREFER_AZURE_SPEECH', false);
+export const PREFER_AZURE_SPEECH = flagFromEnv('CLAWX_PREFER_AZURE_SPEECH', PILOT_MODE);
 
 // Models nav was hidden during early pilot scoping; re-enabled by request so
 // principals (and us) can see which provider/model is actually in play. Set

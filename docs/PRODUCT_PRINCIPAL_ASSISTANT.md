@@ -113,8 +113,8 @@ The persona is shaped by `extensions/moe-principal-assistant/PERSONA.md` — Tri
 
 **Transcription path is live:**
 - Renderer-side mic capture is wired (`MicButton.tsx` + `asr:saveBlob` IPC) and records WAV directly.
-- Main-process ASR tries the platform fast path first: `whisper-cli` on macOS and `WinSpeechRecognize.exe` on Windows.
-- Python/OpenAI Whisper remains a fallback only when the fast path is unavailable.
+- Pilot builds try configured Azure Speech first for higher-quality ASR, then fall back to the platform fast path (`macSpeechRecognize` on macOS and `WinSpeechRecognize.exe` on Windows).
+- Python/OpenAI Whisper remains a final fallback only when the preferred and native paths are unavailable.
 
 **Drafting path is built but un-templated:**
 - The agent can take a transcript + meeting metadata (date, attendees, agenda) and produce minutes/memo output.

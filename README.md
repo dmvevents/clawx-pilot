@@ -365,6 +365,9 @@ pnpm package:linux        # Package for Linux
 
 Windows packaging requires a .NET SDK; `pnpm package:win` builds the
 `WinSpeechRecognize.exe` speech helper before running electron-builder.
+Pilot builds prefer Azure Speech for ASR when Settings > Azure Speech has a
+region and subscription key configured; otherwise they fall back to the bundled
+Windows speech helper and then a local Whisper CLI if present.
 
 On headless Linux, run Electron tests under a display server such as `xvfb-run -a pnpm run test:e2e`.
 

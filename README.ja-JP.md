@@ -361,6 +361,9 @@ pnpm package:linux        # Linux向けにパッケージ化
 
 Windows パッケージングには .NET SDK が必要です。`pnpm package:win` は
 electron-builder の前に `WinSpeechRecognize.exe` 音声ヘルパーをビルドします。
+Pilot ビルドでは Settings > Azure Speech に region とサブスクリプションキーが
+設定されている場合、ASR は Azure Speech を優先します。未設定の場合は同梱の
+Windows 音声ヘルパー、さらに利用可能ならローカル Whisper CLI にフォールバックします。
 
 ヘッドレス Linux では Electron テストに表示サーバーが必要です。`xvfb-run -a pnpm run test:e2e` を利用してください。
 

@@ -39,6 +39,7 @@ import {
   AzureSpeechNotConfigured,
 } from './asr-azure';
 import { runAzureStreamingForRenderer } from './asr-azure-ipc';
+import { getAzureSpeechConfig, isAzureSpeechConfigured } from '../services/azure-speech/store';
 
 const execFileP = promisify(execFile);
 
@@ -62,6 +63,8 @@ interface SaveBlobResult {
 let cachedFfmpegPath: string | null | undefined;
 let cachedWhisperPath: string | null | undefined;
 
+type AsrBackend = 'azure-speech' | 'mac-whisper-cpp' | 'windows-native' | 'whisper-cli';
+
 /** Reset binary resolver caches. Test-only. */
 export function _resetAsrIpcCaches(): void {
   cachedFfmpegPath = undefined;
@@ -83,6 +86,35 @@ export function getPathLookupCommand(
   return platform === 'win32'
     ? { command: 'where.exe', args: [binaryName] }
     : { command: '/usr/bin/which', args: [binaryName] };
+}
+
+async function transcribeAzureIfPreferred(
+  audioPath: string,
+  language?: string,
+): Promise<{ text: string; language: string; backend: AsrBackend } | null> {
+  if (!PREFER_AZURE_SPEECH) return null;
+  let config;
+  try {
+    config = await getAzureSpeechConfig();
+  } catch (err) {
+    logger.warn(
+      `[asr] Azure Speech config unavailable; using local ASR fallback: ${(err as Error).message}`,
+    );
+    return null;
+  }
+  if (!isAzureSpeechConfigured(config)) {
+    logger.info('[asr] Azure Speech preferred but not configured; using local ASR fallback');
+    return null;
+  }
+  try {
+    const azure = await transcribeAzureShort(audioPath, { language });
+    return { text: azure.text, language: azure.language, backend: 'azure-speech' };
+  } catch (err) {
+    logger.warn(
+      `[asr] Azure ASR failed; falling back to native/whisper: ${(err as Error).message}`,
+    );
+    return null;
+  }
 }
 
 async function resolveBinaryFromPath(binaryName: string): Promise<string | null> {
@@ -236,10 +268,11 @@ export function registerAsrIpcHandlers(): void {
     }
   });
 
-  // Direct transcription via local whisper CLI. The bundled openai-whisper
-  // skill ultimately wraps the same binary; calling it from main keeps the
-  // round-trip out of the agent loop so the chat composer can replace its
-  // own placeholder with the transcribed text directly.
+  // Direct transcription from the chat composer. Pilot builds try configured
+  // Azure Speech first for quality, then fall back to native platform speech
+  // and finally the local whisper CLI when available. Calling from main keeps
+  // the round-trip out of the agent loop so the composer can replace its own
+  // placeholder with the transcribed text directly.
   ipcMain.handle('asr:transcribe', async (_event, args: { audioPath?: string; language?: string }) => {
     try {
       const audioPath = (args?.audioPath ?? '').trim();
@@ -250,24 +283,9 @@ export function registerAsrIpcHandlers(): void {
         };
       }
 
-      // Cloud fallback: try Azure first when PREFER_AZURE_SPEECH is set AND
-      // Azure has been configured (region+apiKey present). Native is still
-      // attempted on Azure failure so a flaky network doesn't break dictation.
-      // When PREFER_AZURE_SPEECH is false (the default), Azure is skipped here
-      // and only reachable via `azure-speech:test` or `asr:transcribe-stream`.
-      if (PREFER_AZURE_SPEECH) {
-        try {
-          const azure = await transcribeAzureShort(audioPath, { language: args?.language });
-          return { ok: true, data: { text: azure.text, language: azure.language } };
-        } catch (err) {
-          if (err instanceof AzureSpeechNotConfigured) {
-            // No credentials yet — silently fall through to native/whisper.
-          } else {
-            logger.warn(
-              `[asr] Azure ASR failed; falling back to native/whisper: ${(err as Error).message}`,
-            );
-          }
-        }
+      const azure = await transcribeAzureIfPreferred(audioPath, args?.language);
+      if (azure) {
+        return { ok: true, data: azure };
       }
 
       // Prefer the macOS whisper.cpp fast path when the feature flag is on
@@ -281,7 +299,10 @@ export function registerAsrIpcHandlers(): void {
             locale: args?.language,
             timeoutMs: 30_000,
           });
-          return { ok: true, data: { text: native.text, language: native.language } };
+          return {
+            ok: true,
+            data: { text: native.text, language: native.language, backend: 'mac-whisper-cpp' },
+          };
         } catch (err) {
           const code = err instanceof MacAsrError ? err.code : 'RECOGNITION_FAILED';
           const message = err instanceof Error ? err.message : String(err);
@@ -306,7 +327,10 @@ export function registerAsrIpcHandlers(): void {
             language: args?.language,
             timeoutMs: 30_000,
           });
-          return { ok: true, data: { text: native.text, language: native.language } };
+          return {
+            ok: true,
+            data: { text: native.text, language: native.language, backend: 'windows-native' },
+          };
         } catch (err) {
           const code = err instanceof WindowsAsrError ? err.code : WINDOWS_ASR_ERROR_CODES.FAILED;
           const message = err instanceof Error ? err.message : String(err);
@@ -385,7 +409,7 @@ export function registerAsrIpcHandlers(): void {
       }
       return {
         ok: true,
-        data: { text, language: parsed.language ?? language },
+        data: { text, language: parsed.language ?? language, backend: 'whisper-cli' },
       };
     } catch (err) {
       return {

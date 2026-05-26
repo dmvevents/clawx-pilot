@@ -12,9 +12,9 @@
  * preload).
  *
  * Settings page consumes get-config / set-config / test. The Azure path is
- * never auto-attempted from the existing `asr:transcribe` handler unless the
- * `PREFER_AZURE_SPEECH` feature flag is true; otherwise native is primary and
- * Azure is only reachable via `azure-speech:test` or the streaming channel.
+ * attempted automatically from `asr:transcribe` when `PREFER_AZURE_SPEECH` is
+ * true and region+key are configured; otherwise native is primary and Azure is
+ * only reachable via `azure-speech:test` or the streaming channel.
  */
 import { BrowserWindow, ipcMain, app } from 'electron';
 import path from 'node:path';
