@@ -22,6 +22,7 @@ function parseArgs(argv) {
     artifactDir: path.join(os.homedir(), 'Downloads'),
     safeChat: false,
     outlookSmoke: false,
+    formsSmoke: false,
     waitMs: 5000,
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -30,9 +31,10 @@ function parseArgs(argv) {
     else if (arg === '--artifact-dir') out.artifactDir = argv[++i] || out.artifactDir;
     else if (arg === '--safe-chat') out.safeChat = true;
     else if (arg === '--outlook-smoke') out.outlookSmoke = true;
+    else if (arg === '--forms-smoke') out.formsSmoke = true;
     else if (arg === '--wait-ms') out.waitMs = Number(argv[++i] || out.waitMs);
     else if (arg === '--help' || arg === '-h') {
-      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--artifact-dir DIR] [--safe-chat] [--outlook-smoke] [--wait-ms N]');
+      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--artifact-dir DIR] [--safe-chat] [--outlook-smoke] [--forms-smoke] [--wait-ms N]');
       process.exit(0);
     }
   }
@@ -283,6 +285,71 @@ async function runOutlookSmoke(page) {
   };
 }
 
+function sampleSuspensionPayload() {
+  return {
+    respondent_name: 'Demo Principal',
+    education_district: 'Victoria',
+    school_type: 'Government',
+    school_name: 'Arouca Government Primary',
+    perpetrator_name: 'Demo Student',
+    perpetrator_sex: 'Male',
+    perpetrator_dob: '2016-05-12',
+    perpetrator_age: '10',
+    student_birth_certificate_pin: 'TEST123456',
+    class: 'Standard 4',
+    date_of_infraction: '2026-05-25',
+    date_of_issue_of_suspension: '2026-05-26',
+    term_suspension_count: 1,
+    infraction_when: 'During class time (member of staff present)',
+    primary_infraction: 'Disorderly/Disruptive Conduct',
+    additional_infractions_present: 'No',
+    victim_present: 'No',
+    written_reports_collected: 'Yes',
+    length_of_suspension: '2',
+    extended_suspension_application: 'No',
+    sssd_referral: 'No',
+    parent_present_at_issue: 'Yes',
+    parent_signed_notice: 'Yes',
+    discipline_matrix_followed: 'Yes',
+    level_of_offence: 'Minor',
+    parent_name: 'Demo Guardian',
+    parent_phone_1: 8685550100,
+    address_house: '12',
+    address_street: 'Demo Street',
+    address_city: 'Arima',
+  };
+}
+
+async function runFormsSmoke(page) {
+  const preview = await withTimeout(
+    'hostapi forms.preview-suspension',
+    () => invokeHostApi(page, '/api/forms/preview-suspension', { payload: sampleSuspensionPayload() }),
+    120_000,
+  ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+
+  const submitWithoutConfirm = await withTimeout(
+    'hostapi forms.submit-suspension confirm false',
+    () => invokeHostApi(page, '/api/forms/submit-suspension', { confirm: false }),
+    60_000,
+  ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+
+  return {
+    preview: summarizeHostApiCall(preview, (data) => ({
+      status: data?.status,
+      filledCount: data?.filledCount,
+      skippedCount: data?.skippedCount,
+      errorCount: Array.isArray(data?.errors) ? data.errors.length : undefined,
+      errors: Array.isArray(data?.errors) ? data.errors.slice(0, 8) : undefined,
+      reason: data?.reason,
+    })),
+    submitWithoutConfirm: summarizeHostApiCall(submitWithoutConfirm, (data) => ({
+      status: data?.status,
+      refused: data?.status === 'refused',
+      reason: data?.reason,
+    })),
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   fs.mkdirSync(args.artifactDir, { recursive: true });
@@ -328,6 +395,9 @@ async function main() {
     const outlookSmoke = args.outlookSmoke
       ? await runOutlookSmoke(page)
       : { skipped: true };
+    const formsSmoke = args.formsSmoke
+      ? await runFormsSmoke(page)
+      : { skipped: true };
 
     await page.waitForTimeout(Math.max(0, args.waitMs));
 
@@ -343,6 +413,7 @@ async function main() {
         formsList,
       },
       outlookSmoke,
+      formsSmoke,
       safeChat,
       eventCount: events.length,
       events: events.slice(-50),

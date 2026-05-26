@@ -8,6 +8,7 @@ param(
     [string]$Endpoint = "http://127.0.0.1:9223",
     [switch]$SafeChat,
     [switch]$OutlookSmoke,
+    [switch]$FormsSmoke,
     [int]$WaitMs = 5000,
     [string]$ArtifactDir = "$env:USERPROFILE\Downloads"
 )
@@ -69,6 +70,7 @@ if (-not (Test-Endpoint -Url $Endpoint)) {
 "ArtifactDir: $ArtifactDir"
 "SafeChat:    $($SafeChat.IsPresent)"
 "OutlookSmoke:$($OutlookSmoke.IsPresent)"
+"FormsSmoke:  $($FormsSmoke.IsPresent)"
 
 $argsList = @(
     $scriptPath,
@@ -81,6 +83,9 @@ if ($SafeChat) {
 }
 if ($OutlookSmoke) {
     $argsList += "--outlook-smoke"
+}
+if ($FormsSmoke) {
+    $argsList += "--forms-smoke"
 }
 
 & $node @argsList

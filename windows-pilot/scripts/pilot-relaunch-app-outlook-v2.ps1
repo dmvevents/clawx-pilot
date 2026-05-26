@@ -28,9 +28,16 @@ if (-not (Test-Path $appExe)) {
     "Missing: $appExe"
     exit 30
 }
+$resourcesDir = Join-Path (Split-Path -Parent $appExe) "resources"
+if (-not (Test-Path $resourcesDir)) {
+    "STATE: RESOURCES_NOT_FOUND"
+    "Missing: $resourcesDir"
+    exit 31
+}
 
 "=== App relaunch: Outlook V2 ==="
 "App: $appExe"
+"WorkingDirectory: $resourcesDir"
 "Electron CDP: 127.0.0.1:$ElectronDebugPort"
 
 $procs = @(Get-Process "Ministry of Education" -ErrorAction SilentlyContinue)
@@ -56,7 +63,7 @@ Start-Sleep -Seconds 2
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 $appArgs = "--remote-debugging-port=$ElectronDebugPort"
-$launch = "`$env:CLAWX_OUTLOOK_V2='1'; [Environment]::SetEnvironmentVariable('CLAWX_OUTLOOK_V2','1','User'); Start-Process -FilePath '$appExe' -ArgumentList '$appArgs'"
+$launch = "`$env:CLAWX_OUTLOOK_V2='1'; [Environment]::SetEnvironmentVariable('CLAWX_OUTLOOK_V2','1','User'); Start-Process -FilePath '$appExe' -ArgumentList '$appArgs' -WorkingDirectory '$resourcesDir'"
 $args = "-NoProfile -ExecutionPolicy Bypass -Command `"$launch`""
 
 $action = New-ScheduledTaskAction -Execute $psExe -Argument $args
