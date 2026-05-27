@@ -23,6 +23,7 @@ import { logger } from '../../utils/logger';
 import { PlaywrightDriver } from './playwright-driver';
 import { VlmGrounder, bboxCentre } from './vlm-grounder';
 import { matchesSearchArgsForTests } from './search-helpers';
+import { readOutlookDomState } from './dom-heuristics';
 import type {
   OutlookOpenResult,
   ReadInboxResult,
@@ -879,7 +880,43 @@ export class OutlookActions {
       }
     }
 
+    if (await this.resetComposeSurfaceToInbox(page)) {
+      if (await this.tryClickByRoleOrDom(page, opts)) {
+        return;
+      }
+    }
+
     await this.clickByRoleOrVlm(page, opts);
+  }
+
+  private async resetComposeSurfaceToInbox(page: Page): Promise<boolean> {
+    const state = await page.evaluate(readOutlookDomState).catch(() => ({
+      hasNewMailControl: false,
+      hasOpenComposeSurface: false,
+    }));
+    if (state.hasNewMailControl || !state.hasOpenComposeSurface) {
+      return false;
+    }
+
+    logger.info('[outlook-v2] New mail hidden behind compose surface; resetting Outlook tab to inbox');
+    await page.goto('https://outlook.office.com/mail/inbox', {
+      timeout: 30_000,
+      waitUntil: 'domcontentloaded',
+    });
+    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+    await page.waitForSelector(
+      [
+        'div[role="listbox"]',
+        '[role="region"][aria-label*="Message list" i]',
+        '[aria-label*="Inbox" i]',
+        'button[aria-label*="New mail" i]',
+        '[role="button"][aria-label*="New mail" i]',
+        'button[aria-label*="New message" i]',
+        '[role="button"][aria-label*="New message" i]',
+      ].join(','),
+      { timeout: 15_000 },
+    ).catch(() => undefined);
+    return true;
   }
 
   private async clickHomeRibbonTab(page: Page): Promise<boolean> {
