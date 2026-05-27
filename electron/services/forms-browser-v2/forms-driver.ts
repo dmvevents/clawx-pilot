@@ -26,6 +26,17 @@ const RESPONSE_HOST_PATTERNS = [
   /^https:\/\/forms\.cloud\.microsoft\/r\//i,
 ];
 
+const MICROSOFT_AUTHENTICATED_PAGE_PATTERNS = [
+  /^https:\/\/forms\.office\.com\//i,
+  /^https:\/\/forms\.cloud\.microsoft\//i,
+  /^https:\/\/outlook\.office\.com\//i,
+  /^https:\/\/outlook\.office365\.com\//i,
+  /^https:\/\/outlook\.cloud\.microsoft\//i,
+];
+
+const SUBMIT_CONFIRMATION_RE = /thanks|thank you|your response (?:has been|was)(?: successfully)? submitted|response (?:has been|was)(?: successfully)? submitted|submit another response|response has been recorded/i;
+const SUBMIT_VALIDATION_RE = /this question is required|please answer|enter a valid|invalid answer|required question/i;
+
 function isFormsResponseUrl(url: string): boolean {
   return RESPONSE_HOST_PATTERNS.some((re) => re.test(url));
 }
@@ -45,6 +56,16 @@ function responsePageMatchesFormUrl(pageUrl: string, formUrl: string): boolean {
   const formId = responseFormId(formUrl);
   if (pageId && formId) return pageId === formId;
   return pageUrl.split('#')[0] === formUrl.split('#')[0];
+}
+
+function contextHasMicrosoftSession(context: BrowserContext): boolean {
+  return context.pages().some((page) => MICROSOFT_AUTHENTICATED_PAGE_PATTERNS.some((re) => re.test(page.url())));
+}
+
+function chooseFormsContext(contexts: BrowserContext[], formUrl: string): BrowserContext | undefined {
+  return contexts.find((ctx) => ctx.pages().some((page) => responsePageMatchesFormUrl(page.url(), formUrl)))
+    ?? contexts.find(contextHasMicrosoftSession)
+    ?? contexts[0];
 }
 
 async function waitForResponseQuestions(page: Page): Promise<void> {
@@ -78,6 +99,13 @@ export interface SubmitResult {
   status: 'submitted' | 'refused' | 'error';
   reason?: string;
   message?: string;
+}
+
+export interface FieldInspection {
+  visible: boolean;
+  hasValue: boolean;
+  required: boolean;
+  text: string;
 }
 
 function normalizeMatchText(value: string): string {
@@ -150,19 +178,130 @@ export class FormsDriver {
     const allPages = contexts.flatMap((c) => c.pages());
     let page = allPages.find((p) => responsePageMatchesFormUrl(p.url(), formUrl));
     if (!page) {
-      const ctx: BrowserContext | undefined = contexts[0];
+      const ctx: BrowserContext | undefined = chooseFormsContext(contexts, formUrl);
       if (!ctx) throw new Error('no browser contexts available');
       page = await ctx.newPage();
     }
-    if (!responsePageMatchesFormUrl(page.url(), formUrl)) {
-      await page.goto(formUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-      // Forms response page lazy-loads questions; wait for one to appear.
-      await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => null);
-    }
+    await page.goto(formUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    // Forms response page lazy-loads questions; wait for one to appear.
+    await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => null);
     await waitForResponseQuestions(page);
     await page.bringToFront().catch(() => null);
     this.page = page;
     return page;
+  }
+
+  async inspectField(label: string): Promise<FieldInspection> {
+    if (!this.page) return { visible: false, hasValue: false, required: false, text: '' };
+    const item = await this.findQuestionItem(label);
+    if (!item) return { visible: false, hasValue: false, required: false, text: '' };
+    const visible = await item.isVisible({ timeout: 1_000 }).catch(() => false);
+    const text = await item.innerText({ timeout: 1_000 }).catch(() => '');
+    if (!visible) return { visible: false, hasValue: false, required: false, text };
+    const inputValue = await item.locator('input, textarea').evaluateAll((elements) => elements.some((element) => {
+      const input = element as HTMLInputElement | HTMLTextAreaElement;
+      if (input instanceof HTMLInputElement && (input.type === 'radio' || input.type === 'checkbox')) {
+        return input.checked;
+      }
+      return Boolean(input.value?.trim());
+    })).catch(() => false);
+    const ariaChecked = await item
+      .locator('[role="radio"][aria-checked="true"], [role="checkbox"][aria-checked="true"]')
+      .count()
+      .then((count) => count > 0)
+      .catch(() => false);
+    const required = /this question is required|required/i.test(text)
+      || await item
+        .locator('[aria-required="true"], input[required], textarea[required]')
+        .count()
+        .then((count) => count > 0)
+        .catch(() => false);
+    return { visible, hasValue: inputValue || ariaChecked, required, text };
+  }
+
+  private async visibleValidationMessages(): Promise<string[]> {
+    if (!this.page) return [];
+    return this.page
+      .locator('text=/This question is required|Please answer|Enter a valid|Invalid answer|Required question/i')
+      .evaluateAll((nodes) => nodes
+        .filter((node) => {
+          if (!(node instanceof HTMLElement)) return false;
+          const rect = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        })
+        .map((node) => node.textContent?.replace(/\s+/g, ' ').trim() ?? '')
+        .filter(Boolean)
+        .slice(0, 8))
+      .catch(() => []);
+  }
+
+  private async waitForSubmitOutcome(timeoutMs: number, networkPromise?: Promise<boolean>): Promise<SubmitResult | null> {
+    if (!this.page) return { status: 'error', reason: 'no page' };
+    let networkDone = false;
+    let networkSubmitted = false;
+    networkPromise
+      ?.then((ok) => {
+        networkDone = true;
+        networkSubmitted = ok;
+      })
+      .catch(() => {
+        networkDone = true;
+      });
+
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (networkSubmitted) {
+        return { status: 'submitted', message: 'Form submitted via Microsoft Forms.' };
+      }
+
+      const bodyText = await this.page.locator('body').innerText({ timeout: 1_000 }).catch(() => '');
+      if (SUBMIT_CONFIRMATION_RE.test(bodyText)) {
+        return { status: 'submitted', message: 'Form submitted via Microsoft Forms.' };
+      }
+
+      const validationMessages = await this.visibleValidationMessages();
+      if (validationMessages.length > 0 || SUBMIT_VALIDATION_RE.test(bodyText)) {
+        return {
+          status: 'error',
+          reason: `Microsoft Forms kept the response open with validation errors: ${
+            validationMessages.length > 0 ? validationMessages.join(' | ') : 'validation text detected'
+          }`,
+        };
+      }
+
+      const submitStillVisible = await this.page
+        .getByRole('button', { name: /^submit$/i })
+        .first()
+        .isVisible({ timeout: 500 })
+        .catch(() => false);
+      if (!submitStillVisible && /microsoft forms/i.test(bodyText)) {
+        return { status: 'submitted', message: 'Form submitted via Microsoft Forms.' };
+      }
+
+      if (networkDone && networkSubmitted) {
+        return { status: 'submitted', message: 'Form submitted via Microsoft Forms.' };
+      }
+      await this.page.waitForTimeout(500);
+    }
+    if (networkSubmitted || await networkPromise?.catch(() => false)) {
+      return { status: 'submitted', message: 'Form submitted via Microsoft Forms.' };
+    }
+    return null;
+  }
+
+  private async waitForFormsSubmitResponse(timeoutMs: number): Promise<boolean> {
+    if (!this.page) return false;
+    return this.page
+      .waitForResponse((response) => {
+        const method = response.request().method().toUpperCase();
+        if (method !== 'POST' && method !== 'PUT') return false;
+        const status = response.status();
+        if (status < 200 || status >= 300) return false;
+        return /\/(?:runtime|formapi)\/api\/.*\/responses\b/i.test(response.url());
+      }, { timeout: timeoutMs })
+      .then(() => true)
+      .catch(() => false);
   }
 
   /** Read the visible form title — used by the hard-confirm submit gate. */
@@ -322,13 +461,10 @@ export class FormsDriver {
       return { status: 'error', reason: 'Submit button not found on page.' };
     }
     try {
+      const networkOutcome = this.waitForFormsSubmitResponse(30_000);
       await submitBtn.click({ timeout: 10_000 });
-      // Wait for the "Thanks" confirmation that Forms shows after submission.
-      const thanks = this.page.getByText(/thanks|your response was submitted|response submitted/i).first();
-      const ok = await thanks.waitFor({ timeout: 15_000 }).then(() => true).catch(() => false);
-      return ok
-        ? { status: 'submitted', message: 'Form submitted via Microsoft Forms.' }
-        : { status: 'error', reason: 'Submit clicked but no confirmation appeared in 15s.' };
+      const outcome = await this.waitForSubmitOutcome(30_000, networkOutcome);
+      return outcome ?? { status: 'error', reason: 'Submit clicked but no confirmation or validation result appeared in 30s.' };
     } catch (err) {
       return { status: 'error', reason: err instanceof Error ? err.message : String(err) };
     }

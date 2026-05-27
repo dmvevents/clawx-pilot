@@ -43,6 +43,14 @@ export class FormsBrowserManager {
     return this.getFormUrl(SUSPENSIONS_URL_RELATIVE_PATH);
   }
 
+  private formatFillError(formName: string, result: FillResult): string {
+    const sample = result.errors
+      .slice(0, 5)
+      .map((err) => `${err.fieldId}: ${err.reason}`)
+      .join('; ');
+    return `${formName} preview has ${result.errors.length} unfilled or invalid field(s). ${sample}`;
+  }
+
   async listSupportedForms(): Promise<{ status: 'ok'; forms: Array<{ id: string; title: string; status: 'available' | 'not_configured' }> }> {
     const dailyReportUrl = this.getDailyReportFormUrl();
     const suspensionsUrl = this.getSuspensionsFormUrl();
@@ -65,7 +73,7 @@ export class FormsBrowserManager {
 
   async previewDailyReport(payload: DailyReportPayload): Promise<
     | { status: 'previewed'; url: string; filledCount: number; skippedCount: number; errors: FillResult['errors'] }
-    | { status: 'error'; reason: string }
+    | { status: 'error'; reason: string; filledCount?: number; skippedCount?: number; errors?: FillResult['errors'] }
   > {
     const url = this.getDailyReportFormUrl();
     if (!url) {
@@ -80,6 +88,15 @@ export class FormsBrowserManager {
       return { status: 'error', reason: o.reason ?? 'open failed' };
     }
     const f = await dailyReport.fill(payload);
+    if (f.status === 'error') {
+      return {
+        status: 'error',
+        reason: this.formatFillError('Daily report', f),
+        filledCount: f.filledCount,
+        skippedCount: f.skippedCount,
+        errors: f.errors,
+      };
+    }
     return {
       status: 'previewed',
       url,
@@ -91,7 +108,7 @@ export class FormsBrowserManager {
 
   async previewSuspension(payload: SuspensionsPayload): Promise<
     | { status: 'previewed'; url: string; filledCount: number; skippedCount: number; errors: FillResult['errors'] }
-    | { status: 'error'; reason: string }
+    | { status: 'error'; reason: string; filledCount?: number; skippedCount?: number; errors?: FillResult['errors'] }
   > {
     const url = this.getSuspensionsFormUrl();
     if (!url) {
@@ -106,6 +123,15 @@ export class FormsBrowserManager {
       return { status: 'error', reason: o.reason ?? 'open failed' };
     }
     const f = await suspensions.fill(payload);
+    if (f.status === 'error') {
+      return {
+        status: 'error',
+        reason: this.formatFillError('Suspensions form', f),
+        filledCount: f.filledCount,
+        skippedCount: f.skippedCount,
+        errors: f.errors,
+      };
+    }
     return {
       status: 'previewed',
       url,

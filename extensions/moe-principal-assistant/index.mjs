@@ -240,6 +240,17 @@ function digitsOrDefault(value, fallback) {
   return digits ? Number(digits) : fallback;
 }
 
+function optionalDigits(value) {
+  const digits = String(coalesce(value, '')).replace(/\D/g, '');
+  return digits ? Number(digits) : undefined;
+}
+
+function optionalArray(value) {
+  if (Array.isArray(value)) return value.filter((v) => v !== undefined && v !== null && String(v).trim() !== '').map(String);
+  if (value === undefined || value === null || value === '') return undefined;
+  return String(value).split(/[;,]/).map((v) => v.trim()).filter(Boolean);
+}
+
 function normalizeSuspensionClass(value) {
   const v = stringOr(value, 'Standard 4').trim();
   return SUSPENSION_CLASS_ALIASES[v] ?? v;
@@ -293,6 +304,7 @@ function normalizeSuspensionPreviewPayload(rawPayload, cfg) {
   const incident = isObject(root.incident) ? root.incident : {};
   const suspension = isObject(root.suspension) ? root.suspension : {};
   const parent = isObject(root.parent) ? root.parent : {};
+  const victim = isObject(root.victim) ? root.victim : {};
   const address = isObject(parent.address) ? parent.address : {};
   const {
     school: _school,
@@ -309,8 +321,10 @@ function normalizeSuspensionPreviewPayload(rawPayload, cfg) {
   ).trim().slice(0, 1).toUpperCase();
   const lengthDays = coalesce(root.length_of_suspension, root.length_days, suspension.lengthDays);
   const reason = coalesce(root.primary_infraction, root.reason, incident.reason);
+  const additionalInfractions = optionalArray(coalesce(root.additional_infractions, incident.additionalInfractions));
+  const parentPhone2 = optionalDigits(coalesce(root.parent_phone_2, parent.phone2, parent.secondaryPhone));
 
-  return {
+  const normalized = {
     ...flatBase,
     education_district: stringOr(
       coalesce(root.education_district, school.educationDistrict, cfg.educationDistrict),
@@ -319,12 +333,12 @@ function normalizeSuspensionPreviewPayload(rawPayload, cfg) {
     school_type: stringOr(coalesce(root.school_type, school.schoolType, cfg.schoolType), 'Government'),
     school_name: normalizeSuspensionSchoolName(coalesce(root.school_name, school.name, cfg.schoolName)),
     perpetrator_name: stringOr(
-      coalesce(root.perpetrator_name, student.name, student.fullName),
+      coalesce(root.perpetrator_name, student.name, student.fullName, root.student_name),
       `${studentInitial}. Test`,
     ),
     perpetrator_sex: stringOr(coalesce(root.perpetrator_sex, root.gender, student.gender), 'Male'),
-    perpetrator_dob: stringOr(coalesce(root.perpetrator_dob, student.dateOfBirth, student.dob), '2016-01-15'),
-    perpetrator_age: String(coalesce(root.perpetrator_age, student.age, '10')),
+    perpetrator_dob: stringOr(coalesce(root.perpetrator_dob, root.date_of_birth, student.dateOfBirth, student.dob), '2016-01-15'),
+    perpetrator_age: String(coalesce(root.perpetrator_age, root.age, student.age, '10')),
     student_birth_certificate_pin: stringOr(
       coalesce(root.student_birth_certificate_pin, student.birthCertificatePin, student.pin),
       'TEST-PIN-0001',
@@ -340,6 +354,7 @@ function normalizeSuspensionPreviewPayload(rawPayload, cfg) {
     primary_infraction: normalizeSuspensionPrimaryInfraction(reason),
     additional_infractions_present: yesNo(root.additional_infractions_present, 'No'),
     victim_present: yesNo(root.victim_present, 'No'),
+    victim_type: stringOr(coalesce(root.victim_type, victim.type), ''),
     written_reports_collected: yesNo(root.written_reports_collected, 'Yes'),
     length_of_suspension: normalizeSuspensionLength(lengthDays),
     extended_suspension_application: yesNo(root.extended_suspension_application, 'No'),
@@ -348,12 +363,19 @@ function normalizeSuspensionPreviewPayload(rawPayload, cfg) {
     parent_signed_notice: yesNo(root.parent_signed_notice, 'Yes'),
     discipline_matrix_followed: yesNo(root.discipline_matrix_followed, 'Yes'),
     level_of_offence: normalizeSuspensionLevel(root.level_of_offence, lengthDays),
-    parent_name: stringOr(coalesce(root.parent_name, parent.name), 'Test Parent'),
+    parent_name: stringOr(coalesce(root.parent_name, parent.name, parent.guardianName), 'Test Parent'),
     parent_phone_1: digitsOrDefault(coalesce(root.parent_phone_1, parent.phone1, parent.phone), 8681234567),
     address_house: stringOr(coalesce(root.address_house, address.house), '12'),
     address_street: stringOr(coalesce(root.address_street, address.street), 'Test Street'),
     address_city: stringOr(coalesce(root.address_city, address.city), 'Aranguez'),
   };
+  if (additionalInfractions && additionalInfractions.length > 0) {
+    normalized.additional_infractions = additionalInfractions;
+  }
+  if (parentPhone2 !== undefined) {
+    normalized.parent_phone_2 = parentPhone2;
+  }
+  return normalized;
 }
 
 /**
@@ -820,10 +842,11 @@ export function register(api) {
   registerTool({
     name: 'principal.suspension_payload',
     description:
-      'Build the structured payload for the Primary School Student Suspensions form (one per pupil). Args: { student_first_name_initial, gender, standard, reason, length_days, parent_contacted, date_of_incident, date_of_suspension }. Returns JSON only. Pass this result as-is to forms.preview_suspension; the preview tool maps it to the live form fields. Pupil names are not stored — only the first-name initial.',
+      'Build the structured payload for the Primary School Student Suspensions form (one per pupil). Include every field found in the source document, not only the short verbal summary. Common args: { student_first_name_initial, perpetrator_name, gender, standard, reason, length_days, parent_contacted, date_of_incident, date_of_suspension, date_of_birth, age, student_birth_certificate_pin, parent_name, parent_phone_1, parent_phone_2, address_house, address_street, address_city, additional_infractions_present, additional_infractions, victim_present, victim_type }. Returns JSON only. Pass this result as-is to forms.preview_suspension; the preview tool maps it to the live form fields. Pupil names are not stored in long-term memory — only this form payload.',
     parameters: toolParameters(
       {
         student_first_name_initial: stringSchema,
+        perpetrator_name: stringSchema,
         gender: { type: 'string', enum: VALID_GENDERS },
         standard: { type: 'string', enum: VALID_STANDARDS },
         reason: stringSchema,
@@ -831,6 +854,31 @@ export function register(api) {
         parent_contacted: booleanSchema,
         date_of_incident: stringSchema,
         date_of_suspension: stringSchema,
+        date_of_birth: stringSchema,
+        age: stringSchema,
+        student_birth_certificate_pin: stringSchema,
+        school_name: stringSchema,
+        education_district: stringSchema,
+        school_type: stringSchema,
+        suspensions_this_term: nonNegativeNumberSchema,
+        infraction_when: stringSchema,
+        additional_infractions_present: yesNoSchema,
+        additional_infractions: stringOrStringArraySchema,
+        victim_present: yesNoSchema,
+        victim_type: stringSchema,
+        written_reports_collected: yesNoSchema,
+        extended_suspension_application: yesNoSchema,
+        sssd_referral: yesNoSchema,
+        parent_present_at_issue: yesNoSchema,
+        parent_signed_notice: yesNoSchema,
+        discipline_matrix_followed: yesNoSchema,
+        level_of_offence: stringSchema,
+        parent_name: stringSchema,
+        parent_phone_1: stringSchema,
+        parent_phone_2: stringSchema,
+        address_house: stringSchema,
+        address_street: stringSchema,
+        address_city: stringSchema,
       },
       [
         'student_first_name_initial',
@@ -846,6 +894,7 @@ export function register(api) {
     execute: async (_toolCallId, args = {}) => {
       const {
         student_first_name_initial,
+        perpetrator_name,
         gender,
         standard,
         reason,
@@ -853,6 +902,31 @@ export function register(api) {
         parent_contacted,
         date_of_incident,
         date_of_suspension,
+        date_of_birth,
+        age,
+        student_birth_certificate_pin,
+        school_name,
+        education_district,
+        school_type,
+        suspensions_this_term,
+        infraction_when,
+        additional_infractions_present,
+        additional_infractions,
+        victim_present,
+        victim_type,
+        written_reports_collected,
+        extended_suspension_application,
+        sssd_referral,
+        parent_present_at_issue,
+        parent_signed_notice,
+        discipline_matrix_followed,
+        level_of_offence,
+        parent_name,
+        parent_phone_1,
+        parent_phone_2,
+        address_house,
+        address_street,
+        address_city,
       } = args;
 
       requireString('student_first_name_initial', student_first_name_initial);
@@ -874,25 +948,58 @@ export function register(api) {
         form: 'primary_school_student_suspensions',
         term: 'Term 3 2025/26',
         school: {
-          name: cfg.schoolName,
-          educationDistrict: cfg.educationDistrict,
-          schoolType: cfg.schoolType,
+          name: stringOr(school_name, cfg.schoolName),
+          educationDistrict: stringOr(education_district, cfg.educationDistrict),
+          schoolType: stringOr(school_type, cfg.schoolType),
         },
         principal: cfg.principalName,
         student: {
           firstNameInitial: student_first_name_initial.trim().slice(0, 1).toUpperCase(),
+          fullName: perpetrator_name,
           gender,
           standard,
+          dateOfBirth: date_of_birth,
+          age,
+          birthCertificatePin: student_birth_certificate_pin,
         },
         incident: {
           dateOfIncident: date_of_incident,
           reason,
+          when: infraction_when,
+          additionalInfractions: optionalArray(additional_infractions),
         },
         suspension: {
           dateOfSuspension: date_of_suspension,
           lengthDays: length_days,
           parentContacted: Boolean(parent_contacted),
+          termSuspensionCount: suspensions_this_term,
         },
+        school_name,
+        education_district,
+        school_type,
+        perpetrator_name,
+        perpetrator_dob: date_of_birth,
+        perpetrator_age: age,
+        student_birth_certificate_pin,
+        term_suspension_count: suspensions_this_term,
+        infraction_when,
+        additional_infractions_present,
+        additional_infractions,
+        victim_present,
+        victim_type,
+        written_reports_collected,
+        extended_suspension_application,
+        sssd_referral,
+        parent_present_at_issue,
+        parent_signed_notice,
+        discipline_matrix_followed,
+        level_of_offence,
+        parent_name,
+        parent_phone_1,
+        parent_phone_2,
+        address_house,
+        address_street,
+        address_city,
       };
     },
   });

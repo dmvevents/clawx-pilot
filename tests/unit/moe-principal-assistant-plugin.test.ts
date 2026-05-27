@@ -241,6 +241,7 @@ describe('moe-principal-assistant plugin registration', () => {
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
       const nested = await byName['principal.suspension_payload'].execute('call-suspension-payload', {
         student_first_name_initial: 'a',
+        perpetrator_name: 'A. Test Student',
         gender: 'Male',
         standard: 'Standard 5',
         reason: 'Disrespect to a member of staff',
@@ -248,6 +249,26 @@ describe('moe-principal-assistant plugin registration', () => {
         parent_contacted: true,
         date_of_incident: '2026-05-26',
         date_of_suspension: '2026-05-27',
+        date_of_birth: '2015-09-14',
+        age: '10',
+        student_birth_certificate_pin: 'TEST-PIN-0001',
+        suspensions_this_term: 1,
+        infraction_when: 'During class time (member of staff present)',
+        additional_infractions_present: 'No',
+        victim_present: 'No',
+        written_reports_collected: 'Yes',
+        extended_suspension_application: 'No',
+        sssd_referral: 'No',
+        parent_present_at_issue: 'Yes',
+        parent_signed_notice: 'Yes',
+        discipline_matrix_followed: 'Yes',
+        level_of_offence: 'Major',
+        parent_name: 'Pat Test',
+        parent_phone_1: '8681234567',
+        parent_phone_2: '8687654321',
+        address_house: '12',
+        address_street: 'Test Street',
+        address_city: 'Aranguez',
       });
 
       const result = await byName['forms.preview_suspension'].execute('call-preview-suspension', {
@@ -261,8 +282,10 @@ describe('moe-principal-assistant plugin registration', () => {
         education_district: 'Victoria',
         school_type: 'Government',
         school_name: 'Aranguez GPS',
-        perpetrator_name: 'A. Test',
+        perpetrator_name: 'A. Test Student',
         perpetrator_sex: 'Male',
+        perpetrator_dob: '2015-09-14',
+        perpetrator_age: '10',
         student_birth_certificate_pin: 'TEST-PIN-0001',
         class: 'Standard 5',
         date_of_infraction: '2026-05-26',
@@ -273,6 +296,8 @@ describe('moe-principal-assistant plugin registration', () => {
         length_of_suspension: '5',
         level_of_offence: 'Major',
         parent_phone_1: 8681234567,
+        parent_phone_2: 8687654321,
+        parent_name: 'Pat Test',
         address_city: 'Aranguez',
       });
       expect(previewPayload.school).toBeUndefined();

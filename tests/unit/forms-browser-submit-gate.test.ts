@@ -4,6 +4,7 @@ import {
   formatFormsDateInput,
   matchesExpectedQuestionFingerprint,
 } from '../../electron/services/forms-browser-v2/forms-driver';
+import { SuspensionsActions, type SuspensionsPayload } from '../../electron/services/forms-browser-v2/suspensions-actions';
 
 describe('forms-browser-v2 submit gate fingerprint', () => {
   const labels = [
@@ -81,5 +82,62 @@ describe('forms-browser-v2 date formatting', () => {
 
   it('leaves already-formatted dates unchanged', () => {
     expect(formatFormsDateInput('5/26/2026')).toBe('5/26/2026');
+  });
+});
+
+describe('suspensions live required-field validation', () => {
+  const completePayload: SuspensionsPayload = {
+    respondent_name: 'Auto Recorded',
+    education_district: 'North Eastern',
+    school_type: 'Government',
+    school_name: 'Aranguez GPS',
+    perpetrator_name: 'A. Test Student',
+    perpetrator_sex: 'Male',
+    perpetrator_dob: '2015-09-14',
+    perpetrator_age: '10',
+    student_birth_certificate_pin: 'TEST-PIN-0001',
+    class: 'Standard 5',
+    date_of_infraction: '2026-05-26',
+    date_of_issue_of_suspension: '2026-05-27',
+    term_suspension_count: 1,
+    infraction_when: 'During class time (member of staff present)',
+    primary_infraction: 'Disrespect/Defiance of Authority',
+    additional_infractions_present: 'No',
+    victim_present: 'No',
+    written_reports_collected: 'Yes',
+    length_of_suspension: '5',
+    extended_suspension_application: 'No',
+    sssd_referral: 'No',
+    parent_present_at_issue: 'Yes',
+    parent_signed_notice: 'Yes',
+    discipline_matrix_followed: 'Yes',
+    level_of_offence: 'Major',
+    parent_name: 'Pat Test',
+    parent_phone_1: 8681234567,
+    parent_phone_2: 8687654321,
+    address_house: '12',
+    address_street: 'Test Street',
+    address_city: 'Aranguez',
+  };
+
+  it('reports conditional fields that remain visible and required on the live form', async () => {
+    const driver = {
+      fillField: async () => ({ ok: true }),
+      inspectField: async (label: string) => ({
+        visible: /Additional infractions|victim was/i.test(label),
+        hasValue: false,
+        required: true,
+        text: label,
+      }),
+    };
+    const actions = new SuspensionsActions(driver as never);
+
+    const result = await actions.fill(completePayload);
+
+    expect(result.status).toBe('error');
+    expect(result.errors.map((error) => error.fieldId)).toEqual([
+      'additional_infractions',
+      'victim_type',
+    ]);
   });
 });

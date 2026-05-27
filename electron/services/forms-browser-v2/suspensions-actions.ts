@@ -106,6 +106,13 @@ export class SuspensionsActions {
       if (field.showWhen) {
         const [k, v] = Object.entries(field.showWhen)[0];
         if ((payload as Record<string, unknown>)[k] !== v) {
+          const liveField = await this.driver.inspectField(field.label);
+          if (field.required && liveField.visible && liveField.required && !liveField.hasValue) {
+            errors.push({
+              fieldId: field.id,
+              reason: `required field is visible on the live Microsoft Form even though ${k}=${String((payload as Record<string, unknown>)[k] ?? '')}; provide an explicit value or fix the form branching`,
+            });
+          }
           skippedCount++;
           continue;
         }
@@ -115,7 +122,11 @@ export class SuspensionsActions {
         skippedCount++;
         continue;
       }
-      const r = await this.driver.fillField(FIELD_LABEL_OVERRIDES[field.id] ?? field.label, value as any, field.type);
+      const r = await this.driver.fillField(
+        FIELD_LABEL_OVERRIDES[field.id] ?? field.label,
+        value as string | string[] | number | Date,
+        field.type,
+      );
       if (r.ok) {
         filledCount++;
       } else {

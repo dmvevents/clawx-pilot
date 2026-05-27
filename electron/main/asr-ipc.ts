@@ -108,7 +108,12 @@ async function transcribeAzureIfPreferred(
   }
   try {
     const azure = await transcribeAzureShort(audioPath, { language });
-    return { text: azure.text, language: azure.language, backend: 'azure-speech' };
+    const text = azure.text.trim();
+    if (!text) {
+      logger.info('[asr] Azure ASR returned no text; using local ASR fallback');
+      return null;
+    }
+    return { text, language: azure.language, backend: 'azure-speech' };
   } catch (err) {
     logger.warn(
       `[asr] Azure ASR failed; falling back to native/whisper: ${(err as Error).message}`,
