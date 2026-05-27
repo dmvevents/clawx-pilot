@@ -5,9 +5,11 @@
  * so the moe-principal-assistant gateway plugin can call it.
  *
  * Endpoints (all return JSON; allowlist-gated by PRINCIPAL_SKILL_ALLOWLIST):
- *   POST /api/forms/list                 → { forms: [...] }
- *   POST /api/forms/preview-suspension   → { status, filledCount, skippedCount, errors }
- *   POST /api/forms/submit-suspension    → SubmitResult, body: { confirm: boolean }
+ *   POST /api/forms/list                 -> { forms: [...] }
+ *   POST /api/forms/preview-daily-report -> { status, filledCount, skippedCount, errors }
+ *   POST /api/forms/submit-daily-report  -> SubmitResult, body: { confirm: boolean }
+ *   POST /api/forms/preview-suspension   -> { status, filledCount, skippedCount, errors }
+ *   POST /api/forms/submit-suspension    -> SubmitResult, body: { confirm: boolean }
  *
  * Hard rules:
  *  - Submit endpoint delegates straight to the manager which holds the
@@ -19,6 +21,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { PRINCIPAL_SKILL_ALLOWLIST } from '../../../shared/feature-flags';
 import { logger } from '../../utils/logger';
 import { formsBrowserManagerV2 } from '../../services/forms-browser-v2/manager';
+import type { DailyReportPayload } from '../../services/forms-browser-v2/daily-report-actions';
 import type { SuspensionsPayload } from '../../services/forms-browser-v2/suspensions-actions';
 import { parseJsonBody, sendJson } from '../route-utils';
 
@@ -42,6 +45,28 @@ export async function handleFormsRoutes(req: IncomingMessage, res: ServerRespons
   try {
     if (url.pathname === '/api/forms/list') {
       const result = await formsBrowserManagerV2.listSupportedForms();
+      sendJson(res, 200, { success: true, data: result });
+      return true;
+    }
+
+    if (url.pathname === '/api/forms/preview-daily-report') {
+      const body = await parseJsonBody<{ payload: DailyReportPayload }>(req);
+      if (!body?.payload) {
+        sendJson(res, 400, { success: false, error: 'payload required' });
+        return true;
+      }
+      const result = await formsBrowserManagerV2.previewDailyReport(body.payload);
+      logger.info(`[host-api forms/preview-daily-report] status=${result.status}`);
+      sendJson(res, 200, { success: true, data: result });
+      return true;
+    }
+
+    if (url.pathname === '/api/forms/submit-daily-report') {
+      const body = await parseJsonBody<{ confirm?: boolean }>(req);
+      const confirm = body?.confirm === true;
+      logger.info(`[host-api forms/submit-daily-report] attempt confirm=${confirm}`);
+      const result = await formsBrowserManagerV2.submitDailyReport({ confirm });
+      logger.info(`[host-api forms/submit-daily-report] result=${result.status}`);
       sendJson(res, 200, { success: true, data: result });
       return true;
     }

@@ -26,6 +26,42 @@ const RESPONSE_HOST_PATTERNS = [
   /^https:\/\/forms\.cloud\.microsoft\/r\//i,
 ];
 
+function isFormsResponseUrl(url: string): boolean {
+  return RESPONSE_HOST_PATTERNS.some((re) => re.test(url));
+}
+
+function responseFormId(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.searchParams.get('id');
+  } catch {
+    return null;
+  }
+}
+
+function responsePageMatchesFormUrl(pageUrl: string, formUrl: string): boolean {
+  if (!isFormsResponseUrl(pageUrl)) return false;
+  const pageId = responseFormId(pageUrl);
+  const formId = responseFormId(formUrl);
+  if (pageId && formId) return pageId === formId;
+  return pageUrl.split('#')[0] === formUrl.split('#')[0];
+}
+
+async function waitForResponseQuestions(page: Page): Promise<void> {
+  const questionSelector = '[data-automation-id="questionItem"], [role="listitem"]';
+  try {
+    await page.waitForSelector(questionSelector, { state: 'visible', timeout: 30_000 });
+    await page.waitForTimeout(500);
+  } catch (err) {
+    throw new Error(
+      `Microsoft Forms response page did not render question items within 30s: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+      { cause: err },
+    );
+  }
+}
+
 export interface FormsDriverOptions {
   cdpEndpoint?: string;
   fieldTimeoutMs?: number;
@@ -88,7 +124,12 @@ export class FormsDriver {
 
   /** Connect (or re-connect) to the user's running Chrome via CDP. */
   async ensureBrowser(): Promise<void> {
-    if (this.browser) return;
+    if (this.browser?.isConnected() && this.browser.contexts().length > 0) return;
+    if (this.browser) {
+      await this.browser.close().catch(() => null);
+      this.browser = null;
+      this.page = null;
+    }
     logger.info(`[forms-v2] Connecting via CDP at ${this.cdp}`);
     this.browser = await chromium.connectOverCDP(this.cdp);
   }
@@ -97,19 +138,28 @@ export class FormsDriver {
   async ensureFormsTab(formUrl: string): Promise<Page> {
     await this.ensureBrowser();
     if (!this.browser) throw new Error('CDP attach failed');
-    const allPages = this.browser.contexts().flatMap((c) => c.pages());
-    let page = allPages.find((p) => RESPONSE_HOST_PATTERNS.some((re) => re.test(p.url())));
+    let contexts = this.browser.contexts();
+    if (contexts.length === 0) {
+      await this.browser.close().catch(() => null);
+      this.browser = null;
+      this.page = null;
+      await this.ensureBrowser();
+      if (!this.browser) throw new Error('CDP attach failed');
+      contexts = this.browser.contexts();
+    }
+    const allPages = contexts.flatMap((c) => c.pages());
+    let page = allPages.find((p) => responsePageMatchesFormUrl(p.url(), formUrl));
     if (!page) {
-      const ctx: BrowserContext | undefined = this.browser.contexts()[0];
+      const ctx: BrowserContext | undefined = contexts[0];
       if (!ctx) throw new Error('no browser contexts available');
       page = await ctx.newPage();
     }
-    if (page.url() !== formUrl) {
+    if (!responsePageMatchesFormUrl(page.url(), formUrl)) {
       await page.goto(formUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       // Forms response page lazy-loads questions; wait for one to appear.
       await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => null);
-      await page.waitForTimeout(1_500);
     }
+    await waitForResponseQuestions(page);
     await page.bringToFront().catch(() => null);
     this.page = page;
     return page;

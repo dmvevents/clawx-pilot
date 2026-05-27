@@ -45,6 +45,16 @@ const VALID_DISTRICTS = [
 const VALID_SCHOOL_TYPES = ['Denominational', 'Government'];
 const VALID_GENDERS = ['Male', 'Female'];
 const VALID_STANDARDS = ['Infant 1', 'Infant 2', 'Standard 1', 'Standard 2', 'Standard 3', 'Standard 4', 'Standard 5'];
+const YES_NO = ['Yes', 'No'];
+const DAILY_REPORT_YEAR_GROUPS = [
+  ['first_year', 'students_enrolled_first_year', 'first_year_students_present'],
+  ['second_year', 'students_enrolled_second_year', 'second_year_students_present'],
+  ['standard_1', 'students_enrolled_standard_1', 'standard_1_students_present'],
+  ['standard_2', 'students_enrolled_standard_2', 'standard_2_students_present'],
+  ['standard_3', 'students_enrolled_standard_3', 'standard_3_students_present'],
+  ['standard_4', 'students_enrolled_standard_4', 'standard_4_students_present'],
+  ['standard_5', 'students_enrolled_standard_5', 'standard_5_students_present'],
+];
 
 async function readTemplate(name) {
   return readFile(path.join(PKG_ROOT, 'templates', name), 'utf8');
@@ -75,6 +85,44 @@ function requireNumber(name, value) {
   }
 }
 
+function numberValue(name, value) {
+  requireNumber(name, value);
+  return value;
+}
+
+function optionalNumber(name, value, fallback = 0) {
+  if (value === undefined || value === null || value === '') return fallback;
+  requireNumber(name, value);
+  return value;
+}
+
+function choice(name, value, allowed, fallback) {
+  const v = value === undefined || value === null || value === '' ? fallback : value;
+  if (!allowed.includes(v)) {
+    throw new Error(`${name} must be one of ${allowed.join(', ')}.`);
+  }
+  return v;
+}
+
+function requireChoice(name, value, allowed) {
+  if (value === undefined || value === null || value === '') {
+    throw new Error(`${name} is required (${allowed.join(', ')}).`);
+  }
+  return choice(name, value, allowed);
+}
+
+function getGroupCounts(args, groupKey) {
+  const groups = args.year_groups;
+  const value = groups && typeof groups === 'object' ? groups[groupKey] : null;
+  if (!value || typeof value !== 'object') {
+    throw new Error(`year_groups.${groupKey} is required.`);
+  }
+  const { enrolled, present } = value;
+  requireNumber(`year_groups.${groupKey}.enrolled`, enrolled);
+  requireNumber(`year_groups.${groupKey}.present`, present);
+  return { enrolled, present };
+}
+
 const stringSchema = { type: 'string' };
 const booleanSchema = { type: 'boolean' };
 const nonNegativeNumberSchema = { type: 'number', minimum: 0 };
@@ -83,6 +131,31 @@ const stringOrStringArraySchema = {
   anyOf: [stringSchema, stringArraySchema],
 };
 const looseObjectSchema = { type: 'object', additionalProperties: true };
+const yesNoSchema = { type: 'string', enum: YES_NO };
+const dailyReportYearGroupSchema = {
+  type: 'object',
+  properties: {
+    enrolled: nonNegativeNumberSchema,
+    present: nonNegativeNumberSchema,
+  },
+  required: ['enrolled', 'present'],
+  additionalProperties: false,
+};
+const dailyReportYearGroupsSchema = {
+  type: 'object',
+  properties: Object.fromEntries(
+    DAILY_REPORT_YEAR_GROUPS.map(([groupKey]) => [groupKey, dailyReportYearGroupSchema]),
+  ),
+  required: DAILY_REPORT_YEAR_GROUPS.map(([groupKey]) => groupKey),
+  additionalProperties: false,
+};
+const dailyReportAbsentTermSchema = {
+  type: 'object',
+  properties: Object.fromEntries(
+    DAILY_REPORT_YEAR_GROUPS.map(([groupKey]) => [groupKey, nonNegativeNumberSchema]),
+  ),
+  additionalProperties: false,
+};
 
 function toolParameters(properties = {}, required = []) {
   return {
@@ -303,6 +376,255 @@ export function register(api) {
         discipline: { incidents: Array.isArray(discipline_incidents) ? discipline_incidents : [] },
         transport: { issues: Array.isArray(transport_issues) ? transport_issues : [] },
         notes: String(notes ?? ''),
+      };
+    },
+  });
+
+  registerTool({
+    name: 'principal.daily_report_form_payload',
+    description:
+      'Build the exact Microsoft Forms field payload for the Primary School Daily Report. Use this before forms.preview_daily_report. "Nothing to report" means no discipline, transport, meal illness, or whole-term absentee issues; do not invent attendance, teacher, meal, PTSC, or branch-specific counts. Required: date, teacher counts including MOH quarantine/other leave, and year_groups enrolled/present counts. Returns { form, payload }.',
+    parameters: toolParameters(
+      {
+        date: stringSchema,
+        did_you_have_school_today: yesNoSchema,
+        reason_no_school: stringSchema,
+        principal_status: {
+          type: 'string',
+          enum: [
+            'Physically present at school',
+            'Conducting official school business off the compound',
+            'Absent',
+            'On MOH issued quarantine',
+          ],
+        },
+        vice_principal_status: {
+          type: 'string',
+          enum: [
+            'Physically present at school',
+            'Conducting official school business off the compound',
+            'Absent',
+            'On MOH issued quarantine',
+            'School does not have a VP/Senior Teacher',
+          ],
+        },
+        number_of_teachers_on_staff: nonNegativeNumberSchema,
+        number_of_teachers_present: nonNegativeNumberSchema,
+        number_of_teachers_absent: nonNegativeNumberSchema,
+        number_of_teachers_on_moh_quarantine: nonNegativeNumberSchema,
+        number_of_teachers_other_leave: nonNegativeNumberSchema,
+        year_groups: dailyReportYearGroupsSchema,
+        school_receives_nsdsl_meals: yesNoSchema,
+        received_nsdsl_breakfasts: yesNoSchema,
+        breakfasts_delivered: nonNegativeNumberSchema,
+        breakfasts_left_after_distribution: nonNegativeNumberSchema,
+        breakfast_portion_size_rating: {
+          type: 'string',
+          enum: ['Too much', 'Enough', 'Too little'],
+        },
+        children_satisfied_with_breakfast: yesNoSchema,
+        students_fell_ill_after_nsdsl_breakfast: nonNegativeNumberSchema,
+        received_nsdsl_lunches: yesNoSchema,
+        lunches_delivered: nonNegativeNumberSchema,
+        lunches_left_after_distribution: nonNegativeNumberSchema,
+        lunch_portion_size_rating: {
+          type: 'string',
+          enum: ['Too much', 'Enough', 'Too little'],
+        },
+        children_satisfied_with_lunch: yesNoSchema,
+        students_fell_ill_after_nsdsl_lunch: nonNegativeNumberSchema,
+        students_suspended_today: yesNoSchema,
+        number_of_students_suspended: nonNegativeNumberSchema,
+        suspension_recorded_on_form: yesNoSchema,
+        school_serviced_by_ptsc_maxi_taxi: yesNoSchema,
+        ptsc_approved_routes_count: nonNegativeNumberSchema,
+        ptsc_morning_trips_count: nonNegativeNumberSchema,
+        last_day_of_week: yesNoSchema,
+        students_absent_entire_term: yesNoSchema,
+        absent_entire_term_counts: dailyReportAbsentTermSchema,
+      },
+      [
+        'date',
+        'number_of_teachers_on_staff',
+        'number_of_teachers_present',
+        'number_of_teachers_absent',
+        'number_of_teachers_on_moh_quarantine',
+        'number_of_teachers_other_leave',
+        'year_groups',
+      ],
+    ),
+    execute: async (_toolCallId, args = {}) => {
+      const { date } = args;
+      requireString('date', date);
+      requireNumber('number_of_teachers_on_staff', args.number_of_teachers_on_staff);
+      requireNumber('number_of_teachers_present', args.number_of_teachers_present);
+      requireNumber('number_of_teachers_absent', args.number_of_teachers_absent);
+
+      const payload = {
+        date_being_reported_on: date,
+        education_district: cfg.educationDistrict,
+        school_type: cfg.schoolType,
+        name_of_school: cfg.schoolName,
+        did_you_have_school_today: choice('did_you_have_school_today', args.did_you_have_school_today, YES_NO, 'Yes'),
+        principal_status: choice(
+          'principal_status',
+          args.principal_status,
+          [
+            'Physically present at school',
+            'Conducting official school business off the compound',
+            'Absent',
+            'On MOH issued quarantine',
+          ],
+          'Physically present at school',
+        ),
+        vice_principal_status: choice(
+          'vice_principal_status',
+          args.vice_principal_status,
+          [
+            'Physically present at school',
+            'Conducting official school business off the compound',
+            'Absent',
+            'On MOH issued quarantine',
+            'School does not have a VP/Senior Teacher',
+          ],
+          'Physically present at school',
+        ),
+        number_of_teachers_on_staff: args.number_of_teachers_on_staff,
+        number_of_teachers_present: args.number_of_teachers_present,
+        number_of_teachers_absent: args.number_of_teachers_absent,
+        number_of_teachers_on_moh_quarantine: numberValue(
+          'number_of_teachers_on_moh_quarantine',
+          args.number_of_teachers_on_moh_quarantine,
+        ),
+        number_of_teachers_other_leave: numberValue(
+          'number_of_teachers_other_leave',
+          args.number_of_teachers_other_leave,
+        ),
+        school_receives_nsdsl_meals: choice('school_receives_nsdsl_meals', args.school_receives_nsdsl_meals, YES_NO, 'No'),
+        students_suspended_today: choice('students_suspended_today', args.students_suspended_today, YES_NO, 'No'),
+        school_serviced_by_ptsc_maxi_taxi: choice(
+          'school_serviced_by_ptsc_maxi_taxi',
+          args.school_serviced_by_ptsc_maxi_taxi,
+          YES_NO,
+          'No',
+        ),
+        last_day_of_week: choice('last_day_of_week', args.last_day_of_week, YES_NO, 'No'),
+      };
+
+      if (payload.did_you_have_school_today === 'No') {
+        requireString('reason_no_school', args.reason_no_school);
+        payload.reason_no_school = args.reason_no_school;
+      }
+
+      for (const [groupKey, enrolledField, presentField] of DAILY_REPORT_YEAR_GROUPS) {
+        const group = getGroupCounts(args, groupKey);
+        payload[enrolledField] = group.enrolled;
+        payload[presentField] = group.present;
+      }
+
+      if (payload.school_receives_nsdsl_meals === 'Yes') {
+        payload.received_nsdsl_breakfasts = requireChoice(
+          'received_nsdsl_breakfasts',
+          args.received_nsdsl_breakfasts,
+          YES_NO,
+        );
+        if (payload.received_nsdsl_breakfasts === 'Yes') {
+          payload.breakfasts_delivered = numberValue('breakfasts_delivered', args.breakfasts_delivered);
+          payload.breakfasts_left_after_distribution = numberValue(
+            'breakfasts_left_after_distribution',
+            args.breakfasts_left_after_distribution,
+          );
+          payload.breakfast_portion_size_rating = requireChoice(
+            'breakfast_portion_size_rating',
+            args.breakfast_portion_size_rating,
+            ['Too much', 'Enough', 'Too little'],
+          );
+          payload.children_satisfied_with_breakfast = requireChoice(
+            'children_satisfied_with_breakfast',
+            args.children_satisfied_with_breakfast,
+            YES_NO,
+          );
+          payload.students_fell_ill_after_nsdsl_breakfast = numberValue(
+            'students_fell_ill_after_nsdsl_breakfast',
+            args.students_fell_ill_after_nsdsl_breakfast,
+          );
+        }
+
+        payload.received_nsdsl_lunches = requireChoice(
+          'received_nsdsl_lunches',
+          args.received_nsdsl_lunches,
+          YES_NO,
+        );
+        if (payload.received_nsdsl_lunches === 'Yes') {
+          payload.lunches_delivered = numberValue('lunches_delivered', args.lunches_delivered);
+          payload.lunches_left_after_distribution = numberValue(
+            'lunches_left_after_distribution',
+            args.lunches_left_after_distribution,
+          );
+          payload.lunch_portion_size_rating = requireChoice(
+            'lunch_portion_size_rating',
+            args.lunch_portion_size_rating,
+            ['Too much', 'Enough', 'Too little'],
+          );
+          payload.children_satisfied_with_lunch = requireChoice(
+            'children_satisfied_with_lunch',
+            args.children_satisfied_with_lunch,
+            YES_NO,
+          );
+          payload.students_fell_ill_after_nsdsl_lunch = numberValue(
+            'students_fell_ill_after_nsdsl_lunch',
+            args.students_fell_ill_after_nsdsl_lunch,
+          );
+        }
+      }
+
+      if (payload.students_suspended_today === 'Yes') {
+        payload.number_of_students_suspended = numberValue(
+          'number_of_students_suspended',
+          args.number_of_students_suspended,
+        );
+        payload.suspension_recorded_on_form = requireChoice(
+          'suspension_recorded_on_form',
+          args.suspension_recorded_on_form,
+          YES_NO,
+        );
+      }
+
+      if (payload.school_serviced_by_ptsc_maxi_taxi === 'Yes') {
+        payload.ptsc_approved_routes_count = numberValue(
+          'ptsc_approved_routes_count',
+          args.ptsc_approved_routes_count,
+        );
+        payload.ptsc_morning_trips_count = numberValue(
+          'ptsc_morning_trips_count',
+          args.ptsc_morning_trips_count,
+        );
+      }
+
+      if (payload.last_day_of_week === 'Yes') {
+        payload.students_absent_entire_term = requireChoice(
+          'students_absent_entire_term',
+          args.students_absent_entire_term,
+          YES_NO,
+        );
+        if (payload.students_absent_entire_term === 'Yes') {
+          const counts = args.absent_entire_term_counts ?? {};
+          payload.total_students_absent_entire_term = DAILY_REPORT_YEAR_GROUPS.reduce((sum, [groupKey]) => {
+            return sum + numberValue(`absent_entire_term_counts.${groupKey}`, counts[groupKey]);
+          }, 0);
+          for (const [groupKey] of DAILY_REPORT_YEAR_GROUPS) {
+            payload[`${groupKey}_students_absent_entire_term`] = numberValue(
+              `absent_entire_term_counts.${groupKey}`,
+              counts[groupKey],
+            );
+          }
+        }
+      }
+
+      return {
+        form: 'primary_school_daily_report',
+        term: 'Term 3 2025/26',
+        payload,
       };
     },
   });
@@ -681,7 +1003,7 @@ export function register(api) {
     );
   }
 
-  // ── Forms (Microsoft Forms via browser-session, MoE suspension form) ──────
+  // ── Forms (Microsoft Forms via browser-session, MoE daily + suspension forms)
   // Same pattern as outlook above: build a host-API HTTP facade so the plugin
   // running inside the gateway can call back to the Electron main process,
   // which owns the FormsBrowserManager singleton + the Playwright driver.
@@ -717,6 +1039,24 @@ export function register(api) {
     });
 
     registerTool({
+      name: 'forms.preview_daily_report',
+      description:
+        'Open the Primary School Daily Report form in the principal\'s browser and fill every visible field from a typed payload. Does NOT submit. Returns { status: "previewed", filledCount, skippedCount, errors[] }. Use principal.daily_report_form_payload first, show the result to the principal, then call this for browser preview.',
+      parameters: toolParameters(
+        {
+          payload: looseObjectSchema,
+        },
+        ['payload'],
+      ),
+      execute: async (_toolCallId, args = {}) => {
+        if (!args.payload || typeof args.payload !== 'object') {
+          throw new Error('payload object required (field ids from daily-report-schema.vlm.json).');
+        }
+        return forms.previewDailyReport({ payload: args.payload });
+      },
+    });
+
+    registerTool({
       name: 'forms.submit_suspension',
       description:
         'Submit the Suspensions form. HARD GATE: refuses unless { confirm: true }. The agent MUST show the principal the filled form (forms.preview_suspension first) and obtain explicit confirmation ("yes, submit") before passing confirm=true. Returns { status: "submitted" | "refused" | "error", message?, reason? }.',
@@ -727,6 +1067,19 @@ export function register(api) {
         ['confirm'],
       ),
       execute: async (_toolCallId, args = {}) => forms.submitSuspension({ confirm: args.confirm === true }),
+    });
+
+    registerTool({
+      name: 'forms.submit_daily_report',
+      description:
+        'Submit the Primary School Daily Report form. HARD GATE: refuses unless { confirm: true }. The agent MUST show the filled form (forms.preview_daily_report first) and obtain explicit confirmation ("yes, submit") before passing confirm=true. Returns { status: "submitted" | "refused" | "error", message?, reason? }.',
+      parameters: toolParameters(
+        {
+          confirm: booleanSchema,
+        },
+        ['confirm'],
+      ),
+      execute: async (_toolCallId, args = {}) => forms.submitDailyReport({ confirm: args.confirm === true }),
     });
 
     log.info?.('moe-principal-assistant: forms (browser-session) tools registered');
@@ -741,7 +1094,7 @@ export function register(api) {
 }
 
 /**
- * Build a forms facade that proxies the three agent-callable methods over
+ * Build a forms facade that proxies the agent-callable methods over
  * HTTP to ClawX's host-API. Same shape as createHostApiOutlookFacade.
  */
 function createHostApiFormsFacade(port, token) {
@@ -784,6 +1137,8 @@ function createHostApiFormsFacade(port, token) {
 
   return {
     list: () => call('/list'),
+    previewDailyReport: (args) => call('/preview-daily-report', args),
+    submitDailyReport: (args) => call('/submit-daily-report', args),
     previewSuspension: (args) => call('/preview-suspension', args),
     submitSuspension: (args) => call('/submit-suspension', args),
   };

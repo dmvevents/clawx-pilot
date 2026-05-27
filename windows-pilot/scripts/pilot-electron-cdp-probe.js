@@ -27,6 +27,7 @@ function parseArgs(argv) {
     artifactDir: path.join(os.homedir(), 'Downloads'),
     safeChat: false,
     safeChatMode: 'outlook-open',
+    safeChatPrompt: '',
     outlookSmoke: false,
     formsSmoke: false,
     sendEmail: false,
@@ -42,6 +43,11 @@ function parseArgs(argv) {
     else if (arg === '--artifact-dir') out.artifactDir = argv[++i] || out.artifactDir;
     else if (arg === '--safe-chat') out.safeChat = true;
     else if (arg === '--safe-chat-mode') out.safeChatMode = argv[++i] || out.safeChatMode;
+    else if (arg === '--safe-chat-prompt') {
+      out.safeChat = true;
+      out.safeChatMode = 'custom';
+      out.safeChatPrompt = argv[++i] || out.safeChatPrompt;
+    }
     else if (arg === '--outlook-smoke') out.outlookSmoke = true;
     else if (arg === '--forms-smoke') out.formsSmoke = true;
     else if (arg === '--send-email') out.sendEmail = true;
@@ -51,7 +57,7 @@ function parseArgs(argv) {
     else if (arg === '--submit-forms') out.submitForms = true;
     else if (arg === '--wait-ms') out.waitMs = Number(argv[++i] || out.waitMs);
     else if (arg === '--help' || arg === '-h') {
-      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--outlook-smoke] [--forms-smoke] [--send-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--submit-forms] [--wait-ms N]');
+      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--safe-chat-prompt TEXT] [--outlook-smoke] [--forms-smoke] [--send-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--submit-forms] [--wait-ms N]');
       process.exit(0);
     }
   }
@@ -130,6 +136,8 @@ function redact(value, key = '') {
   }
   if (typeof value === 'string') {
     return value
+      .replace(/https?:\/\/forms\.(?:office\.com|cloud\.microsoft)\/\S+/gi, '[redacted-forms-url]')
+      .replace(/https?:\/\/[^\s"'<>]+/gi, '[redacted-url]')
       .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
       .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/g, 'Bearer [redacted]');
   }
@@ -207,7 +215,22 @@ async function invokeHostApi(page, pathName, body = {}) {
   }, { pathName, body });
 }
 
-function safeChatPrompt(mode, verificationToken) {
+function safeChatPrompt(mode, verificationToken, customPrompt = '') {
+  if (mode === 'custom') {
+    return [
+      'Verification only.',
+      `Verification token: ${verificationToken}.`,
+      'Run this user command through the normal agent path:',
+      customPrompt,
+      'Safety constraints for this probe:',
+      'Include the verification token in the final answer.',
+      'Do not send email.',
+      'Do not submit forms.',
+      'Do not download attachments.',
+      'Do not print secrets, tokens, full email addresses, or Microsoft Forms URLs.',
+      'If the command would require sending or submitting, stop at draft or preview and report that confirmation is required.',
+    ].join(' ');
+  }
   if (mode === 'forms-list') {
     return [
       'Verification only.',
@@ -237,11 +260,21 @@ function safeChatPrompt(mode, verificationToken) {
 }
 
 function safeChatExpectedTool(mode) {
+  if (mode === 'custom') return null;
   return mode === 'forms-list' ? 'forms.list' : 'outlook.open';
 }
 
-async function sendSafeChat(page, mode, verificationToken) {
-  const prompt = safeChatPrompt(mode, verificationToken);
+function safeChatBannedTools() {
+  return new Set([
+    'forms.submit_daily_report',
+    'forms.submit_suspension',
+    'outlook.send_email',
+    'outlook.download_attachment',
+  ]);
+}
+
+async function sendSafeChat(page, mode, verificationToken, customPrompt = '') {
+  const prompt = safeChatPrompt(mode, verificationToken, customPrompt);
 
   return page.evaluate(async ({ prompt: innerPrompt }) => {
     const invoke = window.electron?.ipcRenderer?.invoke;
@@ -324,8 +357,25 @@ function summarizeChatHistory(result, mode, verificationToken) {
     if (message?.role === 'user' && messageText(message).includes(marker)) startIndex = index;
   });
   const scoped = startIndex >= 0 ? messages.slice(startIndex) : messages.slice(-12);
-  const expectedToolResult = scoped.find((message) => message?.role === 'toolResult' && message.toolName === expectedTool);
+  const expectedToolResult = expectedTool
+    ? scoped.find((message) => message?.role === 'toolResult' && message.toolName === expectedTool)
+    : null;
+  const bannedTools = safeChatBannedTools();
+  const bannedToolCalls = [];
+  const bannedToolResults = [];
+  for (const message of scoped) {
+    const content = Array.isArray(message?.content) ? message.content : [];
+    for (const part of content) {
+      if (part?.type === 'toolCall' && bannedTools.has(part.name)) {
+        bannedToolCalls.push({ name: part.name, id: part.id });
+      }
+    }
+    if (message?.role === 'toolResult' && bannedTools.has(message.toolName)) {
+      bannedToolResults.push({ name: message.toolName, id: message.toolCallId, isError: message.isError === true });
+    }
+  }
   const finalAssistant = scoped.find((message) => message?.role === 'assistant' && message.stopReason === 'stop');
+  const noBannedSideEffects = bannedToolCalls.length === 0 && bannedToolResults.length === 0;
   return {
     ok: true,
     messageCount: messages.length,
@@ -334,7 +384,10 @@ function summarizeChatHistory(result, mode, verificationToken) {
     expectedTool,
     scopedToCurrentPrompt: startIndex >= 0,
     completed: Boolean(finalAssistant),
-    expectedToolResultOk: Boolean(expectedToolResult && expectedToolResult.isError !== true),
+    expectedToolResultOk: expectedTool ? Boolean(expectedToolResult && expectedToolResult.isError !== true) : true,
+    noBannedSideEffects,
+    bannedToolCalls,
+    bannedToolResults,
     recent: scoped.slice(-12).map(summarizeMessage),
   };
 }
@@ -350,6 +403,7 @@ async function waitForSafeChatHistory(page, mode, verificationToken, timeoutMs =
       && lastSummary.scopedToCurrentPrompt
       && lastSummary.completed
       && lastSummary.expectedToolResultOk
+      && lastSummary.noBannedSideEffects
     ) {
       return lastSummary;
     }
@@ -462,6 +516,41 @@ function sampleSuspensionPayload(marker = runMarker()) {
   };
 }
 
+function sampleDailyReportPayload() {
+  return {
+    date_being_reported_on: '2026-05-26',
+    education_district: 'Victoria',
+    school_type: 'Government',
+    name_of_school: 'Arouca Government Primary',
+    did_you_have_school_today: 'Yes',
+    principal_status: 'Physically present at school',
+    vice_principal_status: 'Physically present at school',
+    number_of_teachers_on_staff: 12,
+    number_of_teachers_present: 11,
+    number_of_teachers_absent: 1,
+    number_of_teachers_on_moh_quarantine: 0,
+    number_of_teachers_other_leave: 0,
+    students_enrolled_first_year: 20,
+    first_year_students_present: 19,
+    students_enrolled_second_year: 18,
+    second_year_students_present: 18,
+    students_enrolled_standard_1: 22,
+    standard_1_students_present: 20,
+    students_enrolled_standard_2: 21,
+    standard_2_students_present: 21,
+    students_enrolled_standard_3: 20,
+    standard_3_students_present: 20,
+    students_enrolled_standard_4: 19,
+    standard_4_students_present: 19,
+    students_enrolled_standard_5: 17,
+    standard_5_students_present: 16,
+    school_receives_nsdsl_meals: 'No',
+    students_suspended_today: 'No',
+    school_serviced_by_ptsc_maxi_taxi: 'No',
+    last_day_of_week: 'No',
+  };
+}
+
 async function runOutlookSend(page, args) {
   const to = args.emailTo;
   if (!to) {
@@ -515,6 +604,18 @@ async function runOutlookSend(page, args) {
 }
 
 async function runFormsSmoke(page) {
+  const dailyPreview = await withTimeout(
+    'hostapi forms.preview-daily-report',
+    () => invokeHostApi(page, '/api/forms/preview-daily-report', { payload: sampleDailyReportPayload() }),
+    120_000,
+  ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+
+  const dailySubmitWithoutConfirm = await withTimeout(
+    'hostapi forms.submit-daily-report confirm false',
+    () => invokeHostApi(page, '/api/forms/submit-daily-report', { confirm: false }),
+    60_000,
+  ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+
   const preview = await withTimeout(
     'hostapi forms.preview-suspension',
     () => invokeHostApi(page, '/api/forms/preview-suspension', { payload: sampleSuspensionPayload() }),
@@ -528,6 +629,19 @@ async function runFormsSmoke(page) {
   ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
 
   return {
+    dailyPreview: summarizeHostApiCall(dailyPreview, (data) => ({
+      status: data?.status,
+      filledCount: data?.filledCount,
+      skippedCount: data?.skippedCount,
+      errorCount: Array.isArray(data?.errors) ? data.errors.length : undefined,
+      errors: Array.isArray(data?.errors) ? data.errors.slice(0, 8) : undefined,
+      reason: data?.reason,
+    })),
+    dailySubmitWithoutConfirm: summarizeHostApiCall(dailySubmitWithoutConfirm, (data) => ({
+      status: data?.status,
+      refused: data?.status === 'refused',
+      reason: data?.reason,
+    })),
     preview: summarizeHostApiCall(preview, (data) => ({
       status: data?.status,
       filledCount: data?.filledCount,
@@ -635,7 +749,7 @@ async function main() {
       ? `pilot-safe-chat-${Date.now()}-${Math.random().toString(16).slice(2)}`
       : null;
     const safeChat = args.safeChat
-      ? await withTimeout('gateway chat.send', () => sendSafeChat(page, args.safeChatMode, safeChatVerificationToken), 130_000)
+      ? await withTimeout('gateway chat.send', () => sendSafeChat(page, args.safeChatMode, safeChatVerificationToken, args.safeChatPrompt), 130_000)
         .catch((error) => ({ success: false, error: error instanceof Error ? error.message : String(error) }))
       : { skipped: true };
     const outlookSmoke = args.outlookSmoke

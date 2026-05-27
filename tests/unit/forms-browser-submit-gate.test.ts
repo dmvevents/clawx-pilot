@@ -32,6 +32,32 @@ describe('forms-browser-v2 submit gate fingerprint', () => {
     });
   });
 
+  it('accepts the daily report question fingerprint when the response title is generic', () => {
+    const text = [
+      '1. Date being reported on',
+      '2. Education district',
+      '3. School type',
+      '4. Name of school',
+      '10. Number of teachers on staff',
+      '15. Number of students enrolled in First Year',
+      '29. Does your school receive NSDSL meals',
+    ].join('\n');
+
+    expect(matchesExpectedQuestionFingerprint(text, [
+      'Date being reported on',
+      'Education district',
+      'School type',
+      'Name of school',
+      'Number of teachers on staff',
+      'Number of students enrolled in First Year',
+      'Does your school receive NSDSL meals',
+    ])).toEqual({
+      ok: true,
+      matched: 7,
+      required: 4,
+    });
+  });
+
   it('refuses unrelated forms that do not match enough expected questions', () => {
     const text = [
       '1. Staff name',
