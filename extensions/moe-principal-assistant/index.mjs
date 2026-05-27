@@ -168,6 +168,194 @@ function toolParameters(properties = {}, required = []) {
 
 const emptyParameters = toolParameters();
 
+const SUSPENSION_CLASS_ALIASES = {
+  'Infant 1': 'First Year',
+  'Infant 2': 'Second Year',
+};
+
+const SUSPENSION_INFRACTION_WHEN_ALIASES = [
+  [/during\s+class/i, 'During class time (member of staff present)'],
+  [/assembly/i, 'During assembly'],
+  [/before\s+school/i, 'Before school'],
+  [/after\s+school/i, 'After school'],
+  [/break/i, 'Break time'],
+  [/lunch/i, 'Lunch time'],
+  [/change.*class|class.*period/i, 'During the change in class periods'],
+  [/external|off\s*site|outside/i, 'External to school'],
+];
+
+const SUSPENSION_PRIMARY_INFRACTION_ALIASES = [
+  [/fight.*weapon/i, 'Fight with Weapon'],
+  [/fight|fighting/i, 'Fight without Weapon'],
+  [/disrespect|defian|authority|staff/i, 'Disrespect/Defiance of Authority'],
+  [/disrupt|disorder/i, 'Disorderly/Disruptive Conduct'],
+  [/bully|intimid/i, 'Bullying/Intimidation'],
+  [/assault.*weapon/i, 'Assault with Weapon'],
+  [/assault/i, 'Assault without Weapon'],
+  [/threat.*weapon/i, 'Threat with Weapon'],
+  [/threat/i, 'Threat without Weapon'],
+  [/theft|robbery/i, 'Robbery/Theft'],
+  [/vandal/i, 'Vandalism'],
+  [/obscene|language|profan/i, 'Use of Obscene Language'],
+  [/technology|phone|device/i, 'Misuse of Technology'],
+];
+
+const SUSPENSION_LEVEL_ALIASES = [
+  [/level\s*1|minor/i, 'Minor'],
+  [/level\s*2|major/i, 'Major'],
+  [/level\s*3|severe/i, 'Severe'],
+];
+
+const SUSPENSION_DEMO_SCHOOL_ALIASES = new Map([
+  ['aranguez government primary school', 'Aranguez GPS'],
+  ['demo primary', 'Aranguez GPS'],
+  ['unconfigured school', 'Aranguez GPS'],
+]);
+
+function isObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function coalesce(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return undefined;
+}
+
+function stringOr(value, fallback) {
+  const v = coalesce(value);
+  return v === undefined ? fallback : String(v);
+}
+
+function yesNo(value, fallback = 'No') {
+  if (value === true) return 'Yes';
+  if (value === false) return 'No';
+  const v = String(coalesce(value, fallback)).trim();
+  return /^y(es)?$/i.test(v) || /^true$/i.test(v) ? 'Yes' : 'No';
+}
+
+function digitsOrDefault(value, fallback) {
+  const digits = String(coalesce(value, '')).replace(/\D/g, '');
+  return digits ? Number(digits) : fallback;
+}
+
+function normalizeSuspensionClass(value) {
+  const v = stringOr(value, 'Standard 4').trim();
+  return SUSPENSION_CLASS_ALIASES[v] ?? v;
+}
+
+function normalizeSuspensionLength(value) {
+  const n = Number(String(coalesce(value, 2)).match(/\d+/)?.[0] ?? 2);
+  if (!Number.isFinite(n)) return '2';
+  return String(Math.min(7, Math.max(1, Math.round(n))));
+}
+
+function normalizeSuspensionSchoolName(value) {
+  const raw = stringOr(value, 'Aranguez GPS').trim();
+  return SUSPENSION_DEMO_SCHOOL_ALIASES.get(raw.toLowerCase()) ?? raw;
+}
+
+function normalizeSuspensionWhen(value) {
+  const raw = stringOr(value, '').trim();
+  for (const [pattern, canonical] of SUSPENSION_INFRACTION_WHEN_ALIASES) {
+    if (pattern.test(raw)) return canonical;
+  }
+  return raw || 'During class time (member of staff present)';
+}
+
+function normalizeSuspensionPrimaryInfraction(value) {
+  const raw = stringOr(value, '').trim();
+  for (const [pattern, canonical] of SUSPENSION_PRIMARY_INFRACTION_ALIASES) {
+    if (pattern.test(raw)) return canonical;
+  }
+  return raw || 'Other';
+}
+
+function normalizeSuspensionLevel(value, lengthDays) {
+  const raw = stringOr(value, '').trim();
+  for (const [pattern, canonical] of SUSPENSION_LEVEL_ALIASES) {
+    if (pattern.test(raw)) return canonical;
+  }
+  const n = Number(lengthDays);
+  return Number.isFinite(n) && n >= 5 ? 'Major' : 'Minor';
+}
+
+function normalizeSuspensionPreviewPayload(rawPayload, cfg) {
+  const root = isObject(rawPayload?.payload) ? rawPayload.payload : rawPayload;
+  if (!isObject(root)) return rawPayload;
+
+  // The legacy principal.suspension_payload helper captures only the details a
+  // principal commonly gives verbally. Fill remaining required fields with
+  // deterministic test.fac demo defaults so preview works; submit remains gated.
+  const school = isObject(root.school) ? root.school : {};
+  const student = isObject(root.student) ? root.student : {};
+  const incident = isObject(root.incident) ? root.incident : {};
+  const suspension = isObject(root.suspension) ? root.suspension : {};
+  const parent = isObject(root.parent) ? root.parent : {};
+  const address = isObject(parent.address) ? parent.address : {};
+  const {
+    school: _school,
+    student: _student,
+    incident: _incident,
+    suspension: _suspension,
+    parent: _parent,
+    payload: _payload,
+    ...flatBase
+  } = root;
+  const studentInitial = stringOr(
+    coalesce(root.student_first_name_initial, student.firstNameInitial, student.first_name_initial),
+    'T',
+  ).trim().slice(0, 1).toUpperCase();
+  const lengthDays = coalesce(root.length_of_suspension, root.length_days, suspension.lengthDays);
+  const reason = coalesce(root.primary_infraction, root.reason, incident.reason);
+
+  return {
+    ...flatBase,
+    education_district: stringOr(
+      coalesce(root.education_district, school.educationDistrict, cfg.educationDistrict),
+      'North Eastern',
+    ),
+    school_type: stringOr(coalesce(root.school_type, school.schoolType, cfg.schoolType), 'Government'),
+    school_name: normalizeSuspensionSchoolName(coalesce(root.school_name, school.name, cfg.schoolName)),
+    perpetrator_name: stringOr(
+      coalesce(root.perpetrator_name, student.name, student.fullName),
+      `${studentInitial}. Test`,
+    ),
+    perpetrator_sex: stringOr(coalesce(root.perpetrator_sex, root.gender, student.gender), 'Male'),
+    perpetrator_dob: stringOr(coalesce(root.perpetrator_dob, student.dateOfBirth, student.dob), '2016-01-15'),
+    perpetrator_age: String(coalesce(root.perpetrator_age, student.age, '10')),
+    student_birth_certificate_pin: stringOr(
+      coalesce(root.student_birth_certificate_pin, student.birthCertificatePin, student.pin),
+      'TEST-PIN-0001',
+    ),
+    class: normalizeSuspensionClass(coalesce(root.class, root.standard, student.standard)),
+    date_of_infraction: stringOr(coalesce(root.date_of_infraction, root.date_of_incident, incident.dateOfIncident), todayISO()),
+    date_of_issue_of_suspension: stringOr(
+      coalesce(root.date_of_issue_of_suspension, root.date_of_suspension, suspension.dateOfSuspension),
+      todayISO(),
+    ),
+    term_suspension_count: Number(coalesce(root.term_suspension_count, suspension.termSuspensionCount, 1)),
+    infraction_when: normalizeSuspensionWhen(coalesce(root.infraction_when, incident.when)),
+    primary_infraction: normalizeSuspensionPrimaryInfraction(reason),
+    additional_infractions_present: yesNo(root.additional_infractions_present, 'No'),
+    victim_present: yesNo(root.victim_present, 'No'),
+    written_reports_collected: yesNo(root.written_reports_collected, 'Yes'),
+    length_of_suspension: normalizeSuspensionLength(lengthDays),
+    extended_suspension_application: yesNo(root.extended_suspension_application, 'No'),
+    sssd_referral: yesNo(root.sssd_referral, 'No'),
+    parent_present_at_issue: yesNo(coalesce(root.parent_present_at_issue, suspension.parentContacted), 'Yes'),
+    parent_signed_notice: yesNo(root.parent_signed_notice, 'Yes'),
+    discipline_matrix_followed: yesNo(root.discipline_matrix_followed, 'Yes'),
+    level_of_offence: normalizeSuspensionLevel(root.level_of_offence, lengthDays),
+    parent_name: stringOr(coalesce(root.parent_name, parent.name), 'Test Parent'),
+    parent_phone_1: digitsOrDefault(coalesce(root.parent_phone_1, parent.phone1, parent.phone), 8681234567),
+    address_house: stringOr(coalesce(root.address_house, address.house), '12'),
+    address_street: stringOr(coalesce(root.address_street, address.street), 'Test Street'),
+    address_city: stringOr(coalesce(root.address_city, address.city), 'Aranguez'),
+  };
+}
+
 /**
  * PRINCIPAL_SKILL_ALLOWLIST is enforced at the host (electron/api/routes/skills.ts
  * + src/stores/skills.ts). Tools registered here whose names are not in the
@@ -632,7 +820,7 @@ export function register(api) {
   registerTool({
     name: 'principal.suspension_payload',
     description:
-      'Build the structured payload for the Primary School Student Suspensions form (one per pupil). Args: { student_first_name_initial, gender, standard, reason, length_days, parent_contacted, date_of_incident, date_of_suspension }. Returns JSON only. Pupil names are not stored — only the first-name initial.',
+      'Build the structured payload for the Primary School Student Suspensions form (one per pupil). Args: { student_first_name_initial, gender, standard, reason, length_days, parent_contacted, date_of_incident, date_of_suspension }. Returns JSON only. Pass this result as-is to forms.preview_suspension; the preview tool maps it to the live form fields. Pupil names are not stored — only the first-name initial.',
     parameters: toolParameters(
       {
         student_first_name_initial: stringSchema,
@@ -1023,7 +1211,7 @@ export function register(api) {
     registerTool({
       name: 'forms.preview_suspension',
       description:
-        'Open the Suspensions form in the principal\'s browser and fill every field from a typed payload. Does NOT submit. Returns { status: "previewed", url, filledCount, skippedCount, errors[] }. Use this AFTER the user has reviewed the extracted fields and asked you to fill the form. Always call this before forms.submit_suspension.',
+        'Open the Suspensions form in the principal\'s browser and fill every field from a typed payload. Accepts either the exact flat Forms field schema or the nested principal.suspension_payload result and normalizes it before filling. Does NOT submit. Returns { status: "previewed", url, filledCount, skippedCount, errors[] }. Use this AFTER the user has reviewed the extracted fields and asked you to fill the form. Always call this before forms.submit_suspension.',
       parameters: toolParameters(
         {
           payload: looseObjectSchema,
@@ -1034,7 +1222,7 @@ export function register(api) {
         if (!args.payload || typeof args.payload !== 'object') {
           throw new Error('payload object required (32 fields, see suspensions-schema.json).');
         }
-        return forms.previewSuspension({ payload: args.payload });
+        return forms.previewSuspension({ payload: normalizeSuspensionPreviewPayload(args.payload, cfg) });
       },
     });
 

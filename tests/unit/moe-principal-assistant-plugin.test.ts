@@ -214,4 +214,140 @@ describe('moe-principal-assistant plugin registration', () => {
     expect(result.payload.number_of_students_suspended).toBeUndefined();
     expect(result.payload.ptsc_morning_trips_count).toBeUndefined();
   });
+
+  it('normalizes nested suspension payloads before previewing the browser form', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+
+    const calls: Array<{ url: string; body: unknown }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
+      const body = typeof init.body === 'string' ? JSON.parse(init.body) : {};
+      calls.push({ url: String(url), body });
+      return jsonResponse({ success: true, data: { status: 'previewed', filledCount: 29, skippedCount: 1, errors: [] } });
+    }));
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      const nested = await byName['principal.suspension_payload'].execute('call-suspension-payload', {
+        student_first_name_initial: 'a',
+        gender: 'Male',
+        standard: 'Standard 5',
+        reason: 'Disrespect to a member of staff',
+        length_days: 5,
+        parent_contacted: true,
+        date_of_incident: '2026-05-26',
+        date_of_suspension: '2026-05-27',
+      });
+
+      const result = await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+        payload: nested as Record<string, unknown>,
+      });
+
+      expect(result).toMatchObject({ status: 'previewed' });
+      expect(new URL(calls[0].url).pathname).toBe('/api/forms/preview-suspension');
+      const previewPayload = (calls[0].body as { payload: Record<string, unknown> }).payload;
+      expect(previewPayload).toMatchObject({
+        education_district: 'Victoria',
+        school_type: 'Government',
+        school_name: 'Aranguez GPS',
+        perpetrator_name: 'A. Test',
+        perpetrator_sex: 'Male',
+        student_birth_certificate_pin: 'TEST-PIN-0001',
+        class: 'Standard 5',
+        date_of_infraction: '2026-05-26',
+        date_of_issue_of_suspension: '2026-05-27',
+        term_suspension_count: 1,
+        infraction_when: 'During class time (member of staff present)',
+        primary_infraction: 'Disrespect/Defiance of Authority',
+        length_of_suspension: '5',
+        level_of_offence: 'Major',
+        parent_phone_1: 8681234567,
+        address_city: 'Aranguez',
+      });
+      expect(previewPayload.school).toBeUndefined();
+      expect(previewPayload.student).toBeUndefined();
+      expect(previewPayload.incident).toBeUndefined();
+      expect(previewPayload.suspension).toBeUndefined();
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
+      else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
+      else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+    }
+  });
+
+  it('canonicalizes common suspension dropdown aliases before previewing', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+
+    const calls: Array<{ body: unknown }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit = {}) => {
+      const body = typeof init.body === 'string' ? JSON.parse(init.body) : {};
+      calls.push({ body });
+      return jsonResponse({ success: true, data: { status: 'previewed', filledCount: 29, skippedCount: 1, errors: [] } });
+    }));
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+        payload: {
+          education_district: 'Victoria',
+          school_type: 'Government',
+          school_name: 'Demo Primary',
+          perpetrator_name: 'T. Test',
+          perpetrator_sex: 'Male',
+          perpetrator_dob: '2016-01-15',
+          perpetrator_age: 10,
+          student_birth_certificate_pin: 'TEST-PIN-123',
+          class: 'Infant 1',
+          date_of_infraction: '2026-05-26',
+          date_of_issue_of_suspension: '2026-05-27',
+          term_suspension_count: 1,
+          infraction_when: 'During class',
+          primary_infraction: 'Disruptive Behaviour',
+          length_of_suspension: '1 Day',
+          level_of_offence: 'Level 1',
+          parent_phone_1: '555-0123',
+        },
+      });
+
+      const previewPayload = (calls[0].body as { payload: Record<string, unknown> }).payload;
+      expect(previewPayload).toMatchObject({
+        school_name: 'Aranguez GPS',
+        class: 'First Year',
+        infraction_when: 'During class time (member of staff present)',
+        primary_infraction: 'Disorderly/Disruptive Conduct',
+        length_of_suspension: '1',
+        level_of_offence: 'Minor',
+        parent_phone_1: 5550123,
+      });
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
+      else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
+      else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+    }
+  });
 });
