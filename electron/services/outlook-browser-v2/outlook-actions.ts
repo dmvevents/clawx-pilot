@@ -48,8 +48,6 @@ import type {
   DownloadAttachmentResult,
 } from './types';
 
-const OUTLOOK_INBOX_URL = 'https://outlook.office.com/mail/';
-
 function asArray(v: string | string[] | undefined): string[] {
   if (!v) return [];
   if (Array.isArray(v)) return v;
@@ -243,12 +241,7 @@ export class OutlookActions {
     await this.dismissBlockingDialog(page);
 
     // 1. Click New mail.
-    await this.clickByRoleOrVlm(page, {
-      role: 'button',
-      nameRegex: /^new (mail|message)$/i,
-      vlmQuestion:
-        'The "New mail" or "New message" button that opens a blank compose pane. It is usually near the top-left of the Outlook inbox toolbar.',
-    });
+    await this.clickNewMail(page);
 
     // 2. Wait for a compose pane to appear before filling.
     await this.waitForComposePane(page);
@@ -842,17 +835,8 @@ export class OutlookActions {
     page: Page,
     opts: { role: 'button' | 'link' | 'menuitem'; nameRegex: RegExp; vlmQuestion: string },
   ): Promise<void> {
-    const locator = page.getByRole(opts.role, { name: opts.nameRegex }).first();
-    try {
-      const count = await locator.count();
-      if (count > 0) {
-        await locator.click({ timeout: 8_000 });
-        return;
-      }
-    } catch (err) {
-      logger.debug?.(
-        `[outlook-v2] semantic click missed, falling back to VLM: ${err instanceof Error ? err.message : String(err)}`,
-      );
+    if (await this.tryClickByRoleOrDom(page, opts)) {
+      return;
     }
 
     // VLM fallback.
@@ -874,6 +858,136 @@ export class OutlookActions {
     await this.driver.clickAt(centre.x, centre.y);
   }
 
+  private async clickNewMail(page: Page): Promise<void> {
+    const opts = {
+      role: 'button' as const,
+      nameRegex: /\bnew\s+(mail|message)\b/i,
+      vlmQuestion:
+        'The "New mail" or "New message" button that opens a blank compose pane. It is usually near the top-left of the Outlook inbox toolbar.',
+    };
+    if (await this.tryClickByRoleOrDom(page, opts)) {
+      return;
+    }
+
+    // Outlook hides New mail when the reading pane has an existing draft in
+    // focus. Switching the ribbon back to Home reveals the same button without
+    // discarding or modifying that draft.
+    if (await this.clickHomeRibbonTab(page)) {
+      await page.waitForTimeout(250);
+      if (await this.tryClickByRoleOrDom(page, opts)) {
+        return;
+      }
+    }
+
+    await this.clickByRoleOrVlm(page, opts);
+  }
+
+  private async clickHomeRibbonTab(page: Page): Promise<boolean> {
+    const candidates = [
+      page.getByRole('tab', { name: /^home$/i }).first(),
+      page.locator('button[role="tab"]').filter({ hasText: /^Home$/i }).first(),
+      page.locator('[role="tab"]').filter({ hasText: /^Home$/i }).first(),
+    ];
+    for (const candidate of candidates) {
+      try {
+        if ((await candidate.count()) > 0) {
+          await candidate.click({ timeout: 5_000 });
+          return true;
+        }
+      } catch {
+        // Try the next candidate.
+      }
+    }
+    return false;
+  }
+
+  private async tryClickByRoleOrDom(
+    page: Page,
+    opts: { role: 'button' | 'link' | 'menuitem'; nameRegex: RegExp; vlmQuestion: string },
+  ): Promise<boolean> {
+    const locator = page.getByRole(opts.role, { name: opts.nameRegex }).first();
+    try {
+      const count = await locator.count();
+      if (count > 0) {
+        await locator.click({ timeout: 8_000 });
+        return true;
+      }
+    } catch (err) {
+      logger.debug?.(
+        `[outlook-v2] semantic click missed, falling back to VLM: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    if (await this.clickByDomAccessibleName(page, opts)) {
+      return true;
+    }
+    return false;
+  }
+
+  private async clickByDomAccessibleName(
+    page: Page,
+    opts: { role: 'button' | 'link' | 'menuitem'; nameRegex: RegExp; vlmQuestion: string },
+  ): Promise<boolean> {
+    const selector = opts.role === 'button'
+      ? [
+        'button',
+        '[role="button"]',
+        '[role="menuitem"]',
+        'a[role="button"]',
+        '[aria-label]',
+        '[title]',
+        '[data-automation-id]',
+        '[data-automationid]',
+      ].join(',')
+      : opts.role === 'link'
+        ? 'a,[role="link"]'
+        : '[role="menuitem"],button,[role="button"]';
+    const index = await page.evaluate(
+      ({ selector: selectorText, source, ignoreCase }) => {
+        const re = new RegExp(source, ignoreCase ? 'i' : '');
+        const isVisible = (el: Element) => {
+          const rect = el.getBoundingClientRect();
+          const style = window.getComputedStyle(el);
+          return rect.width > 0
+            && rect.height > 0
+            && style.visibility !== 'hidden'
+            && style.display !== 'none';
+        };
+        const elements = Array.from(document.querySelectorAll(selectorText));
+        for (let i = 0; i < elements.length; i += 1) {
+          const el = elements[i];
+          if (!isVisible(el)) continue;
+          const label = [
+            el.getAttribute('aria-label'),
+            el.getAttribute('title'),
+            el.getAttribute('data-automation-id'),
+            el.getAttribute('data-automationid'),
+            el.textContent,
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (label && re.test(label)) return i;
+        }
+        return -1;
+      },
+      { selector, source: opts.nameRegex.source, ignoreCase: opts.nameRegex.ignoreCase },
+    ).catch(() => -1);
+    if (index < 0) return false;
+    try {
+      await page.locator(selector).nth(index).click({ timeout: 8_000 });
+      return true;
+    } catch (err) {
+      logger.debug?.(
+        `[outlook-v2] DOM accessible-name click missed, falling back to VLM: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return false;
+    }
+  }
+
   private async waitForComposePane(page: Page): Promise<void> {
     // The compose pane uses role="dialog" or aria-label="Message body".
     await page.waitForSelector(
@@ -888,8 +1002,12 @@ export class OutlookActions {
     const candidates = [
       page.getByLabel(label, { exact: true }),
       page.locator(`[aria-label="${label}"]`),
+      page.locator(`[aria-label*="${label}" i]`),
       page.locator(`[placeholder="${label}"]`),
+      page.locator(`[placeholder*="${label}" i]`),
       page.locator(`[placeholder="Add a ${label.toLowerCase()}"]`),
+      page.locator(`[role="textbox"][aria-label*="${label}" i]`),
+      page.locator(`[contenteditable="true"][aria-label*="${label}" i]`),
     ];
     for (const c of candidates) {
       try {
@@ -922,7 +1040,10 @@ export class OutlookActions {
     const candidates = [
       page.getByLabel('Message body', { exact: true }),
       page.locator('[aria-label="Message body"]'),
+      page.locator('[aria-label*="Message body" i]'),
       page.locator('[role="textbox"][aria-label*="body" i]'),
+      page.locator('[contenteditable="true"][aria-label*="body" i]'),
+      page.locator('[contenteditable="true"][role="textbox"]'),
     ];
     for (const c of candidates) {
       try {

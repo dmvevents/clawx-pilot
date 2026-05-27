@@ -10,6 +10,7 @@
  * - never submits Forms
  *
  * Explicit side-effect flags:
+ * - --draft-email drafts only and leaves the compose pane open
  * - --send-email drafts and sends only with confirm:true
  * - --submit-forms previews and submits only with confirm:true
  *
@@ -30,6 +31,7 @@ function parseArgs(argv) {
     safeChatPrompt: '',
     outlookSmoke: false,
     formsSmoke: false,
+    draftEmail: false,
     sendEmail: false,
     emailTo: '',
     emailSubject: '',
@@ -50,6 +52,7 @@ function parseArgs(argv) {
     }
     else if (arg === '--outlook-smoke') out.outlookSmoke = true;
     else if (arg === '--forms-smoke') out.formsSmoke = true;
+    else if (arg === '--draft-email') out.draftEmail = true;
     else if (arg === '--send-email') out.sendEmail = true;
     else if (arg === '--email-to') out.emailTo = argv[++i] || out.emailTo;
     else if (arg === '--email-subject') out.emailSubject = argv[++i] || out.emailSubject;
@@ -57,7 +60,7 @@ function parseArgs(argv) {
     else if (arg === '--submit-forms') out.submitForms = true;
     else if (arg === '--wait-ms') out.waitMs = Number(argv[++i] || out.waitMs);
     else if (arg === '--help' || arg === '-h') {
-      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--safe-chat-prompt TEXT] [--outlook-smoke] [--forms-smoke] [--send-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--submit-forms] [--wait-ms N]');
+      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--safe-chat-prompt TEXT] [--outlook-smoke] [--forms-smoke] [--draft-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--send-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--submit-forms] [--wait-ms N]');
       process.exit(0);
     }
   }
@@ -551,10 +554,10 @@ function sampleDailyReportPayload() {
   };
 }
 
-async function runOutlookSend(page, args) {
+function buildEmailDraftArgs(args, mode) {
   const to = args.emailTo;
   if (!to) {
-    return { ok: false, error: '--email-to is required with --send-email' };
+    return { ok: false, error: `--email-to is required with ${mode}` };
   }
   const subject = args.emailSubject || `ClawX Windows service test ${new Date().toISOString()}`;
   const body = args.emailBody || [
@@ -562,21 +565,49 @@ async function runOutlookSend(page, args) {
     `Timestamp: ${new Date().toISOString()}`,
     'Purpose: verify Outlook send through the installed app service path.',
   ].join('\n');
+  return { ok: true, to, subject, body };
+}
+
+async function draftTestEmail(page, args, mode = '--draft-email') {
+  const email = buildEmailDraftArgs(args, mode);
+  if (!email.ok) return email;
 
   const draft = await withTimeout(
     'hostapi outlook.draft',
-    () => invokeHostApi(page, '/api/outlook/draft', { to, subject, body }),
+    () => invokeHostApi(page, '/api/outlook/draft', { to: email.to, subject: email.subject, body: email.body }),
     180_000,
   ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
 
+  return {
+    subject: email.subject,
+    bodyLength: email.body.length,
+    toCount: email.to.split(/[;,]/).filter((part) => part.trim()).length,
+    draft: summarizeHostApiCall(draft, (data) => ({
+      status: data?.status,
+      draftLeftOpen: data?.draftLeftOpen,
+      message: data?.message,
+    })),
+    draftRaw: draft,
+    email,
+  };
+}
+
+async function runOutlookDraft(page, args) {
+  const result = await draftTestEmail(page, args, '--draft-email');
+  if (!result?.ok && result?.error) return result;
+  const { draftRaw: _draftRaw, email: _email, ...safeResult } = result;
+  return safeResult;
+}
+
+async function runOutlookSend(page, args) {
+  const draftResult = await draftTestEmail(page, args, '--send-email');
+  if (!draftResult?.ok && draftResult?.error) return draftResult;
+  const draft = draftResult.draftRaw;
+  const { to, subject, body } = draftResult.email;
   const draftData = draft?.data?.json?.data;
   if (!draft?.ok || draftData?.status !== 'drafted') {
     return {
-      draft: summarizeHostApiCall(draft, (data) => ({
-        status: data?.status,
-        draftLeftOpen: data?.draftLeftOpen,
-        message: data?.message,
-      })),
+      draft: draftResult.draft,
       send: { skipped: true, reason: 'draft did not reach status=drafted' },
     };
   }
@@ -587,14 +618,12 @@ async function runOutlookSend(page, args) {
     180_000,
   ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
 
+  const { draftRaw: _draftRaw, email: _email, ...safeDraftResult } = draftResult;
   return {
-    subject,
-    bodyLength: body.length,
-    draft: summarizeHostApiCall(draft, (data) => ({
-      status: data?.status,
-      draftLeftOpen: data?.draftLeftOpen,
-      message: data?.message,
-    })),
+    subject: safeDraftResult.subject,
+    bodyLength: safeDraftResult.bodyLength,
+    toCount: safeDraftResult.toCount,
+    draft: safeDraftResult.draft,
     send: summarizeHostApiCall(send, (data) => ({
       status: data?.status,
       message: data?.message,
@@ -758,6 +787,9 @@ async function main() {
     const formsSmoke = args.formsSmoke
       ? await runFormsSmoke(page)
       : { skipped: true };
+    const emailDraft = args.draftEmail
+      ? await runOutlookDraft(page, args)
+      : { skipped: true };
     const emailSend = args.sendEmail
       ? await runOutlookSend(page, args)
       : { skipped: true };
@@ -784,6 +816,7 @@ async function main() {
       },
       outlookSmoke,
       formsSmoke,
+      emailDraft,
       emailSend,
       formsSubmit,
       safeChat: {

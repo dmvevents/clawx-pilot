@@ -14,6 +14,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.98.0
         version: 0.98.0(zod@4.3.6)
+      '@aws-crypto/crc32':
+        specifier: 5.2.0
+        version: 5.2.0
       '@aws-sdk/client-bedrock-runtime':
         specifier: ^3.1053.0
         version: 3.1053.0

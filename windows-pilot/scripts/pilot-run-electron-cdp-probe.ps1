@@ -4,6 +4,7 @@
 # Safe app calls only: outlook.open, forms.list, optional safe chat prompt that
 # instructs the model not to send, draft, reply, forward, read inbox, or submit.
 # Explicit -SendEmail and -SubmitForms flags perform real side effects.
+# -DraftEmail drafts only and leaves the compose pane open for inspection.
 
 param(
     [string]$Endpoint = "http://127.0.0.1:9223",
@@ -13,6 +14,7 @@ param(
     [string]$SafeChatPrompt,
     [switch]$OutlookSmoke,
     [switch]$FormsSmoke,
+    [switch]$DraftEmail,
     [switch]$SendEmail,
     [string]$EmailTo,
     [string]$EmailSubject,
@@ -82,6 +84,7 @@ if (-not (Test-Endpoint -Url $Endpoint)) {
 "SafeChatCustom:$([bool]$SafeChatPrompt)"
 "OutlookSmoke:$($OutlookSmoke.IsPresent)"
 "FormsSmoke:  $($FormsSmoke.IsPresent)"
+"DraftEmail:  $($DraftEmail.IsPresent)"
 "SendEmail:   $($SendEmail.IsPresent)"
 "SubmitForms: $($SubmitForms.IsPresent)"
 
@@ -105,6 +108,23 @@ if ($OutlookSmoke) {
 }
 if ($FormsSmoke) {
     $argsList += "--forms-smoke"
+}
+if ($DraftEmail) {
+    if (-not $EmailTo) {
+        "STATE: EMAIL_TO_REQUIRED"
+        exit 5
+    }
+    $argsList += "--draft-email"
+    $argsList += "--email-to"
+    $argsList += $EmailTo
+    if ($EmailSubject) {
+        $argsList += "--email-subject"
+        $argsList += $EmailSubject
+    }
+    if ($EmailBody) {
+        $argsList += "--email-body"
+        $argsList += $EmailBody
+    }
 }
 if ($SendEmail) {
     if (-not $EmailTo) {
