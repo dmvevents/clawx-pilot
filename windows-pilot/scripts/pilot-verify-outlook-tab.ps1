@@ -8,7 +8,7 @@ function Redact-Text([string]$Value) {
     if ([string]::IsNullOrWhiteSpace($Value)) { return $Value }
     $redacted = $Value -replace '#token=[^&\s"]+', '#token=<redacted>'
     $redacted = $redacted -replace '([?&]token=)[^&\s"]+', '$1<redacted>'
-    $redacted = $redacted -replace 'https://forms\.office\.com/Pages/ResponsePage\.aspx\?id=[^&\s"]+', 'https://forms.office.com/Pages/ResponsePage.aspx?id=<redacted>'
+    $redacted = $redacted -replace 'https://forms\.(office\.com|cloud\.microsoft)/Pages/ResponsePage\.aspx\?id=[^&\s"]+', 'https://forms.$1/Pages/ResponsePage.aspx?id=<redacted>'
     return $redacted
 }
 
@@ -64,7 +64,7 @@ if ($outlook) {
 }
 
 "`n=== FORMS TAB DETECTION ==="
-$forms = $pages | Where-Object { $_.url -match "forms\.office\.com" }
+$forms = $pages | Where-Object { $_.url -match "forms\.(office\.com|cloud\.microsoft)" }
 if ($forms) {
     $f = $forms[0]
     "FORMS_TAB_FOUND: yes"

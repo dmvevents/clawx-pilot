@@ -31,7 +31,7 @@ function loadResponseUrl() {
 
 function redactUrl(url: string) {
   return url
-    .replace(/(https:\/\/forms\.office\.com\/Pages\/ResponsePage\.aspx\?id=)[^&\s]+/i, '$1<redacted>')
+    .replace(/(https:\/\/forms\.(?:office\.com|cloud\.microsoft)\/Pages\/ResponsePage\.aspx\?id=)[^&\s]+/i, '$1<redacted>')
     .replace(/(#token=)[^&\s]+/i, '$1<redacted>');
 }
 
@@ -44,7 +44,7 @@ async function main() {
   const browser = await chromium.connectOverCDP('http://127.0.0.1:18792');
   const all = browser.contexts().flatMap((c) => c.pages());
   let page = all.find(
-    (p) => /forms\.office\.com/i.test(p.url()) || /login\.microsoftonline\.com/i.test(p.url()),
+    (p) => /forms\.(office\.com|cloud\.microsoft)/i.test(p.url()) || /login\.microsoftonline\.com/i.test(p.url()),
   );
   if (!page) {
     const ctx = browser.contexts()[0];
@@ -95,7 +95,7 @@ async function main() {
       console.log('Waiting up to 90s for redirect back to forms.office.com...');
       const start = Date.now();
       while (Date.now() - start < 90_000) {
-        if (/forms\.office\.com/i.test(page.url())) break;
+        if (/forms\.(office\.com|cloud\.microsoft)/i.test(page.url())) break;
         await page.waitForTimeout(1_000);
       }
     }
@@ -103,9 +103,9 @@ async function main() {
 
   url = page.url();
   console.log(`\nFinal URL: ${redactUrl(url)}`);
-  if (/forms\.office\.com\/.*ResponsePage/i.test(url)) {
+  if (/forms\.(office\.com|cloud\.microsoft)\/.*ResponsePage/i.test(url)) {
     console.log('✓ Logged in and on the response page.');
-  } else if (/forms\.office\.com/i.test(url)) {
+  } else if (/forms\.(office\.com|cloud\.microsoft)/i.test(url)) {
     console.log('✓ Logged in. May need to navigate to the response URL manually.');
   } else {
     console.log('? Not on Forms yet. Continue manually if needed.');

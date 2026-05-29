@@ -35,7 +35,7 @@ function Redact-Text([string]$Value) {
     if ([string]::IsNullOrWhiteSpace($Value)) { return $Value }
     $redacted = $Value -replace '#token=[^&\s"]+', '#token=<redacted>'
     $redacted = $redacted -replace '([?&]token=)[^&\s"]+', '$1<redacted>'
-    $redacted = $redacted -replace 'https://forms\.office\.com/Pages/ResponsePage\.aspx\?id=[^&\s"]+', 'https://forms.office.com/Pages/ResponsePage.aspx?id=<redacted>'
+    $redacted = $redacted -replace 'https://forms\.(office\.com|cloud\.microsoft)/Pages/ResponsePage\.aspx\?id=[^&\s"]+', 'https://forms.$1/Pages/ResponsePage.aspx?id=<redacted>'
     return $redacted
 }
 

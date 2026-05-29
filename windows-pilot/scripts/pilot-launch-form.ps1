@@ -15,7 +15,7 @@ if ([string]::IsNullOrWhiteSpace($formUrl)) {
     $formUrl = (Get-Content -Raw -Path $formUrlPath).Trim()
 }
 
-if ($formUrl -notmatch "^https://forms\.office\.com/") {
+if ($formUrl -notmatch "^https://forms\.(office\.com|cloud\.microsoft)/") {
     "ABORT: configured form URL is not a Microsoft Forms response URL."
     exit 1
 }
@@ -52,7 +52,7 @@ try {
 "`n=== Verifying form tab landed ==="
 Start-Sleep -Seconds 2
 $tabs = (Invoke-WebRequest -Uri "http://127.0.0.1:18792/json" -UseBasicParsing -TimeoutSec 3).Content | ConvertFrom-Json
-$formTab = $tabs | Where-Object { $_.url -match "forms\.office\.com" -and $_.type -eq "page" } | Select-Object -First 1
+$formTab = $tabs | Where-Object { $_.url -match "forms\.(office\.com|cloud\.microsoft)" -and $_.type -eq "page" } | Select-Object -First 1
 if ($formTab) {
     "FORM_TAB:"
     "  Title: $($formTab.title)"
