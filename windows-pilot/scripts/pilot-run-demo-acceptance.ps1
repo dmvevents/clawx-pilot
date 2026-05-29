@@ -118,6 +118,8 @@ if (-not (Test-Path $Repo)) {
 }
 
 Set-Location $Repo
+$repoNodeModulesReady = Test-Path (Join-Path $Repo "node_modules")
+$repoTypecheckMode = "pending"
 
 Invoke-Step "git-status" { git status --short }
 Invoke-Step "tool-versions" {
@@ -184,6 +186,7 @@ Invoke-Step "office-runtime-check" {
 }
 
 if ($RunRegressionTests) {
+  $repoTypecheckMode = "required_with_regression_tests"
   Invoke-Step "provider-tests" {
     pnpm exec vitest run tests/unit/channel-router.test.ts tests/unit/provider-runtime-sync.test.ts
   }
@@ -197,7 +200,17 @@ if ($RunRegressionTests) {
   Invoke-Step "comms-compare" { pnpm run comms:compare }
   Invoke-Step "typecheck" { pnpm run typecheck }
 } else {
-  Invoke-Step "typecheck" { pnpm run typecheck }
+  if ($repoNodeModulesReady) {
+    $repoTypecheckMode = "ran"
+    Invoke-Step "typecheck" { pnpm run typecheck }
+  } else {
+    $repoTypecheckMode = "skipped_node_modules_missing"
+    Invoke-Step "typecheck-skipped-node-modules-missing" {
+      Write-Output "SKIPPED: node_modules is missing in this clean release worktree."
+      Write-Output "Runtime acceptance can still pass because the installed Electron app is already packaged."
+      Write-Output "Run pnpm install --frozen-lockfile in the repo worktree to enable repo typecheck here."
+    }
+  }
 }
 
 Invoke-Step "gateway-tail-final" {
@@ -220,6 +233,8 @@ $report = @(
   "- evidence: $script:Evidence",
   "- repo: $Repo",
   "- generated: $(Get-Date -Format o)",
+  "- repo_node_modules: $repoNodeModulesReady",
+  "- repo_typecheck: $repoTypecheckMode",
   "- chrome_cdp_18792: $chromeCdpUp",
   "- electron_cdp_9223: $electronCdpUp",
   "- failed_steps: $($failed.Count)",
