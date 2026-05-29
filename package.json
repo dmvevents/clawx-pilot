@@ -43,7 +43,7 @@
         "bundle:preinstalled-skills": "zx scripts/bundle-preinstalled-skills.mjs",
         "lint": "eslint . --fix",
         "lint:check": "eslint .",
-        "typecheck": "tsc --noEmit",
+        "typecheck": "node scripts/generate-ext-bridge.mjs && tsc --noEmit",
         "test": "vitest run",
         "test:e2e": "pnpm run build:vite && playwright test",
         "test:e2e:headed": "pnpm run build:vite && playwright test --headed",
