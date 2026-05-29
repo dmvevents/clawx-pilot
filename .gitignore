@@ -59,6 +59,10 @@ __pycache__/
 
 resources/bin
 
+# Native helper build intermediates
+electron/native/**/bin/
+electron/native/**/obj/
+
 # Secrets
 *.p12
 *.pem
