@@ -46,6 +46,9 @@ test-results/
 .cache/
 .turbo/
 *.tsbuildinfo
+__pycache__/
+**/__pycache__/
+*.py[cod]
 
 # Electron
 *.dmg
@@ -68,6 +71,9 @@ docs/pr-session-notes-*.md
 .cursor/
 .claude/*
 !.claude/agents/
+!.claude/commands/
+!.claude/skills/
+.omc/
 .pnpm-store/
 package-lock.json
 

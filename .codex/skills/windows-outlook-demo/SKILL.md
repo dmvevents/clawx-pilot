@@ -29,6 +29,8 @@ Required state:
 - Outlook tab title indicates signed-in mailbox.
 - App config points to `google/gemini-2.5-pro` or Claude, not a local model.
 
+If chat is stuck on "thinking", Gateway goes down, Excel prompts stall, or the model/provider appears to have changed, switch to the `windows-runtime-recovery` skill before changing Outlook/Forms code. Those symptoms usually indicate provider/runtime drift or cloud network failure, not a DOM automation bug.
+
 ## Live App Probe
 
 Use the reusable CDP probe for safe UI-path evidence:
@@ -77,5 +79,7 @@ Leader owns final evidence and never delegates the immediate blocking fix if wai
 
 Load only as needed:
 
+- `docs/NEXT_AGENT_WINDOWS_DEMO_HANDOFF_2026-05-29.md` for the full current handoff, status, and next-agent execution order.
 - `references/outlook-forms-critical-path.md` for route/file map and acceptance criteria.
 - `references/subagent-memory.md` for OMX and agentmemory coordination.
+- `.codex/skills/windows-runtime-recovery/SKILL.md` for Gateway/model coherence, Office-parser isolation, ASR fallback, and Mac/VM Windows test strategy.

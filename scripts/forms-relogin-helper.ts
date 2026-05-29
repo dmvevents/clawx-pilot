@@ -13,13 +13,34 @@
  * then resumes.
  */
 import { chromium } from 'playwright-core';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const TEST_USER = 'test.fac@fac.edu.tt';
-const TEST_PASS = 'Education@2000';
-const RESPONSE_URL =
-  'https://forms.office.com/Pages/ResponsePage.aspx?id=CbuQlSzO4kCBgfrQp-3r_tvUSA6KacpEuguukFzQeBdUN0hITFc3U0pWMTYxRENMMU9BM0NDTjk1VC4u';
+const TEST_PASS = process.env.PILOT_TEST_PASSWORD;
+const RESPONSE_URL_PATH = join(
+  process.cwd(),
+  'extensions/moe-principal-assistant/forms/suspensions-test-fac-url.txt',
+);
+
+function loadResponseUrl() {
+  const fromEnv = process.env.CLAWX_SUSPENSIONS_FORM_URL?.trim();
+  if (fromEnv) return fromEnv;
+  return readFileSync(RESPONSE_URL_PATH, 'utf8').trim();
+}
+
+function redactUrl(url: string) {
+  return url
+    .replace(/(https:\/\/forms\.office\.com\/Pages\/ResponsePage\.aspx\?id=)[^&\s]+/i, '$1<redacted>')
+    .replace(/(#token=)[^&\s]+/i, '$1<redacted>');
+}
 
 async function main() {
+  if (!TEST_PASS) {
+    throw new Error('PILOT_TEST_PASSWORD is required for the test.fac relogin helper.');
+  }
+  const responseUrl = loadResponseUrl();
+
   const browser = await chromium.connectOverCDP('http://127.0.0.1:18792');
   const all = browser.contexts().flatMap((c) => c.pages());
   let page = all.find(
@@ -31,12 +52,12 @@ async function main() {
   }
   await page.bringToFront();
 
-  console.log(`Navigating to: ${RESPONSE_URL.slice(0, 90)}...`);
-  await page.goto(RESPONSE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  console.log(`Navigating to: ${redactUrl(responseUrl)}`);
+  await page.goto(responseUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   await page.waitForTimeout(2_500);
 
   let url = page.url();
-  console.log(`After nav: ${url.slice(0, 100)}`);
+  console.log(`After nav: ${redactUrl(url)}`);
 
   // STEP 1: Email
   if (/login\.microsoftonline\.com/i.test(url)) {
@@ -81,7 +102,7 @@ async function main() {
   }
 
   url = page.url();
-  console.log(`\nFinal URL: ${url.slice(0, 120)}`);
+  console.log(`\nFinal URL: ${redactUrl(url)}`);
   if (/forms\.office\.com\/.*ResponsePage/i.test(url)) {
     console.log('✓ Logged in and on the response page.');
   } else if (/forms\.office\.com/i.test(url)) {
