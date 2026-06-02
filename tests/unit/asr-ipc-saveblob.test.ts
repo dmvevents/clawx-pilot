@@ -3,6 +3,70 @@ import { app, ipcMain } from 'electron';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { access, mkdtemp, writeFile } from 'node:fs/promises';
+
+// Mock node:child_process before importing the module under test so that
+// the real ffmpeg binary is never invoked. This keeps the test runnable on
+// Windows hosts where the previous shell-script shim could not be exec'd
+// (Node's CVE-2024-27980 mitigation refuses to launch .cmd/.bat via
+// execFile without shell:true, and a plain .exe shim isn't available).
+// The behaviour under test -- asr:saveBlob must not ask ffmpeg to overwrite
+// its own input WAV (see WINDOWS_PROBLEMS_ATLAS §14) -- is platform-agnostic
+// application logic, so a fake exec that asserts the invariant directly is
+// stronger than spawning a real subprocess.
+//
+// vi.hoisted ensures the fake is created before vi.mock factories run, since
+// vi.mock is hoisted above all imports. The require() inside the fake helper
+// is necessary because static imports are not yet evaluated at hoist time;
+// the resulting module is the same object the real production code receives.
+const { fakeExecFile } = vi.hoisted(() => {
+  type ExecFileCallback = (err: Error | null, stdout: string, stderr: string) => void;
+  return {
+    fakeExecFile: (
+      _file: string,
+      args: readonly string[] | undefined,
+      options: unknown,
+      callback?: ExecFileCallback,
+    ): unknown => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- hoisted helper runs before imports are evaluated.
+      const { copyFile } = require('node:fs/promises') as typeof import('node:fs/promises');
+      const cb: ExecFileCallback | null =
+        typeof callback === 'function'
+          ? callback
+          : typeof options === 'function'
+            ? (options as ExecFileCallback)
+            : null;
+      const argv = Array.from(args ?? []);
+      const inputIdx = argv.indexOf('-i');
+      const input = inputIdx !== -1 ? argv[inputIdx + 1] : '';
+      const output = argv[argv.length - 1] ?? '';
+      if (!input || !output) {
+        cb?.(new Error('missing input or output'), '', 'missing input or output');
+        return {};
+      }
+      if (input === output) {
+        cb?.(new Error('input and output must differ'), '', 'in-place edit blocked');
+        return {};
+      }
+      copyFile(input, output)
+        .then(() => cb?.(null, '', ''))
+        .catch((err: unknown) => cb?.(err as Error, '', String(err)));
+      return {};
+    },
+  };
+});
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  const stub = { ...actual, execFile: fakeExecFile as unknown as typeof actual.execFile };
+  return { ...stub, default: stub };
+});
+
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('child_process')>();
+  const stub = { ...actual, execFile: fakeExecFile as unknown as typeof actual.execFile };
+  return { ...stub, default: stub };
+});
+
 import { _resetAsrIpcCaches, registerAsrIpcHandlers } from '@electron/main/asr-ipc';
 
 type IpcHandler = (_event: unknown, args: unknown) => Promise<unknown>;
@@ -16,36 +80,6 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-async function writeFakeFfmpeg(dir: string): Promise<string> {
-  const scriptPath = path.join(dir, 'fake-ffmpeg.sh');
-  await writeFile(
-    scriptPath,
-    `#!/bin/sh
-input=""
-previous=""
-output=""
-for arg in "$@"; do
-  if [ "$previous" = "-i" ]; then
-    input="$arg"
-  fi
-  previous="$arg"
-  output="$arg"
-done
-if [ -z "$input" ] || [ -z "$output" ]; then
-  echo "missing input or output" >&2
-  exit 2
-fi
-if [ "$input" = "$output" ]; then
-  echo "input and output must differ" >&2
-  exit 64
-fi
-cp "$input" "$output"
-`,
-    { mode: 0o755 },
-  );
-  return scriptPath;
-}
-
 function getRegisteredHandler(channel: string): IpcHandler {
   const handleMock = ipcMain.handle as unknown as Mock;
   const call = handleMock.mock.calls.find(([name]) => name === channel);
@@ -56,9 +90,14 @@ function getRegisteredHandler(channel: string): IpcHandler {
 describe('ASR saveBlob IPC', () => {
   const originalFfmpegPath = process.env.FFMPEG_PATH;
   let tempRoot: string;
+  let fakeFfmpegPath: string;
 
   beforeEach(async () => {
     tempRoot = await mkdtemp(path.join(tmpdir(), 'clawx-asr-saveblob-test-'));
+    fakeFfmpegPath = path.join(tempRoot, 'fake-ffmpeg-marker');
+    // resolveFfmpegBinary() requires the path to exist on disk before it
+    // accepts FFMPEG_PATH. The mocked execFile never actually runs it.
+    await writeFile(fakeFfmpegPath, '');
     vi.mocked(app.getPath).mockReturnValue(tempRoot);
     vi.mocked(ipcMain.handle).mockClear();
     _resetAsrIpcCaches();
@@ -73,13 +112,8 @@ describe('ASR saveBlob IPC', () => {
     _resetAsrIpcCaches();
   });
 
-  // The fake ffmpeg shim is a POSIX shell script; execFile on Windows can't
-  // launch shell scripts directly (the real prod ffmpeg is an .exe). The
-  // behaviour exercised here -- not asking ffmpeg to overwrite its own input --
-  // is platform-agnostic application logic, but the test harness needs a
-  // POSIX-capable host to drive it.
-  it.skipIf(process.platform === 'win32')('normalizes renderer WAV captures without asking ffmpeg to overwrite the input file', async () => {
-    process.env.FFMPEG_PATH = await writeFakeFfmpeg(tempRoot);
+  it('normalizes renderer WAV captures without asking ffmpeg to overwrite the input file', async () => {
+    process.env.FFMPEG_PATH = fakeFfmpegPath;
     _resetAsrIpcCaches();
     registerAsrIpcHandlers();
 
