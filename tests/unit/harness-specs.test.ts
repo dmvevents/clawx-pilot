@@ -30,6 +30,13 @@ Body`);
     expect(spec.data.docs).toEqual({ required: false });
   });
 
+  it('parses Markdown frontmatter with CRLF line endings (Windows checkouts)', () => {
+    const spec = parseFrontmatter('---\r\nid: example\r\nrequiredProfiles:\r\n  - fast\r\n---\r\n\r\nBody');
+    expect(spec.data.id).toBe('example');
+    expect(spec.data.requiredProfiles).toEqual(['fast']);
+    expect(spec.body).toBe('Body');
+  });
+
   it('matches repository glob paths', () => {
     expect(pathMatchesAny('src/stores/chat/history-actions.ts', ['src/stores/chat/**'])).toBe(true);
     expect(pathMatchesAny('src/lib/api-client.ts', ['src/lib/api-client.ts'])).toBe(true);
