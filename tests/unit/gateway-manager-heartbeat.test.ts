@@ -27,6 +27,8 @@ describe('GatewayManager heartbeat recovery', () => {
   });
 
   it('restarts after consecutive heartbeat misses reach threshold', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+
     const { GatewayManager } = await import('@electron/gateway/manager');
     const manager = new GatewayManager();
 
@@ -57,6 +59,8 @@ describe('GatewayManager heartbeat recovery', () => {
   });
 
   it('defers heartbeat restart while initial gateway.ready is still within grace', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+
     const { GatewayManager } = await import('@electron/gateway/manager');
     const manager = new GatewayManager();
 

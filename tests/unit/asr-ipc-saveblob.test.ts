@@ -73,7 +73,12 @@ describe('ASR saveBlob IPC', () => {
     _resetAsrIpcCaches();
   });
 
-  it('normalizes renderer WAV captures without asking ffmpeg to overwrite the input file', async () => {
+  // The fake ffmpeg shim is a POSIX shell script; execFile on Windows can't
+  // launch shell scripts directly (the real prod ffmpeg is an .exe). The
+  // behaviour exercised here -- not asking ffmpeg to overwrite its own input --
+  // is platform-agnostic application logic, but the test harness needs a
+  // POSIX-capable host to drive it.
+  it.skipIf(process.platform === 'win32')('normalizes renderer WAV captures without asking ffmpeg to overwrite the input file', async () => {
     process.env.FFMPEG_PATH = await writeFakeFfmpeg(tempRoot);
     _resetAsrIpcCaches();
     registerAsrIpcHandlers();
