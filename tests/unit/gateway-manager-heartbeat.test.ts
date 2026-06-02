@@ -97,6 +97,8 @@ describe('GatewayManager heartbeat recovery', () => {
   });
 
   it('does not restart when heartbeat is recovered by incoming messages', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+
     const { GatewayManager } = await import('@electron/gateway/manager');
     const manager = new GatewayManager();
 
@@ -127,6 +129,11 @@ describe('GatewayManager heartbeat recovery', () => {
 
     expect(ws.terminate).not.toHaveBeenCalled();
     expect(restartSpy).not.toHaveBeenCalled();
+    // Sanity-check the timing scaffolding: with the non-Windows constants, the
+    // 150_000ms window above must drive at least 4 pings. If the Windows
+    // constants ever leak in, ping count would drop and this assertion would
+    // catch the regression instead of the test passing vacuously.
+    expect(ws.ping.mock.calls.length).toBeGreaterThanOrEqual(4);
 
     (manager as unknown as { connectionMonitor: { clear: () => void } }).connectionMonitor.clear();
   });
