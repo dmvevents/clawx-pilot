@@ -13,15 +13,20 @@ async function git(cwd: string, args: string[]): Promise<void> {
   await execFileAsync('git', args, { cwd });
 }
 
+// Best-effort cleanup that tolerates Windows holding pack/idx handles open
+// briefly after `git` exits. We never let temp-dir cleanup fail the test;
+// the assertion above is the contract under test, the temp dir is housekeeping.
+async function cleanupRepo(dir: string): Promise<void> {
+  try {
+    await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`harness-git test: temp dir cleanup failed (non-fatal): ${dir}`, err);
+  }
+}
+
 describe('harness git changed files', () => {
-  // The test spins up a real temp git repo and then deletes it. On Windows
-  // git keeps handles open on .git/objects pack/idx files for a brief window
-  // after the child exits, so the recursive rm in the finally block hangs
-  // (observed: 5s test-timeout, then a 9000s+ stuck rm on this demo laptop).
-  // The behaviour under test (getChangedFiles picks up staged tracked paths)
-  // is platform-agnostic application logic and is exercised by the POSIX CI
-  // runners, so we skip the harness on Windows instead.
-  it.skipIf(process.platform === 'win32')('includes staged tracked files when collecting changed paths', async () => {
+  it('includes staged tracked files when collecting changed paths', async () => {
     const repo = await mkdtemp(path.join(tmpdir(), 'clawx-harness-git-'));
     const harnessDir = path.join(repo, 'harness', 'src');
 
@@ -41,7 +46,7 @@ describe('harness git changed files', () => {
 
       expect(changed).toContain('tracked.txt');
     } finally {
-      await rm(repo, { recursive: true, force: true });
+      await cleanupRepo(repo);
     }
-  });
+  }, 30_000);
 });
