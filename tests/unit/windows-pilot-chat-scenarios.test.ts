@@ -146,11 +146,16 @@ describe('Windows pilot chat procedure scenarios', () => {
     const macWatcher = readFileSync(macWaitRunDemoScriptPath, 'utf8');
 
     expect(seedScript).toContain('moe-demo-attendance-results.csv');
+    expect(seedScript).toContain('moe-demo-attendance-results.xlsx');
     expect(seedScript).toContain('moe-demo-daily-report-source.txt');
     expect(seedScript).toContain('moe-demo-suspension-source.txt');
     expect(seedScript).toContain('moe-demo-suspension-source.docx');
     expect(seedScript).toContain('Daily Report Demo Source');
     expect(seedScript).toContain('Student Suspension Demo Source');
+    expect(seedScript).toContain('System.IO.Compression.ZipFile');
+    expect(seedScript).toContain('Write-DemoWorkbook');
+    expect(seedScript).toContain('Write-DemoWordDocument');
+    expect(seedScript).not.toContain('New-Object -ComObject Word.Application');
     expect(seedScript).toContain('STATE:');
 
     expect(chatRunner).toContain('[switch] $SeedDemoDocuments');
