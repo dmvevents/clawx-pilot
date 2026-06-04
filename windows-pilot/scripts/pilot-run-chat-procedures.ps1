@@ -253,7 +253,7 @@ function Test-SafeChatResult {
     if ($history.ok -ne $true) { Add-Reason $Reasons "safe chat history was not ok" }
     if ($history.scopedToCurrentPrompt -ne $true) { Add-Reason $Reasons "safe chat did not scope to current prompt" }
     if ($history.completed -ne $true) { Add-Reason $Reasons "safe chat did not complete" }
-    if ($Type -ne "safe-chat-custom" -and $history.finalAnswerEchoedMarker -ne $true) { Add-Reason $Reasons "safe chat final answer did not echo verification token" }
+    if ($history.finalAnswerEchoedMarker -ne $true) { Add-Reason $Reasons "safe chat final answer did not echo verification token" }
     if ($history.expectedToolResultOk -ne $true) { Add-Reason $Reasons "expected tool result was not ok" }
     if ($history.noBannedSideEffects -ne $true) { Add-Reason $Reasons "banned send/download/submit tool was observed" }
     if ($Type -eq "safe-chat-custom") {

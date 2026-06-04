@@ -385,7 +385,9 @@ function summarizeChatHistory(result, mode, verificationToken) {
       bannedToolResults.push({ name: message.toolName, id: message.toolCallId, isError: message.isError === true });
     }
   }
-  const finalAssistant = scoped.find((message) => message?.role === 'assistant' && message.stopReason === 'stop');
+  const finalAssistant = scoped
+    .filter((message) => message?.role === 'assistant' && message.stopReason === 'stop')
+    .at(-1);
   const finalAnswerTextSample = finalAssistant
     ? messageText(finalAssistant).replaceAll(verificationToken, '[verification-token]').replace(/\s+/g, ' ').slice(0, 1200)
     : '';
@@ -420,6 +422,7 @@ async function waitForSafeChatHistory(page, mode, verificationToken, timeoutMs =
       lastSummary.ok
       && lastSummary.scopedToCurrentPrompt
       && lastSummary.completed
+      && lastSummary.finalAnswerEchoedMarker
       && lastSummary.expectedToolResultOk
       && lastSummary.noBannedSideEffects
     ) {
