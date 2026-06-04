@@ -16,7 +16,7 @@ ACTIVE_LOG="${PILOT_LOG_FILE:-$LOG_ROOT/pilot-mac-wait-run-demo-active.log}"
 STDOUT_LOG="$LOG_ROOT/pilot-mac-wait-run-demo-launchd.out.log"
 STDERR_LOG="$LOG_ROOT/pilot-mac-wait-run-demo-launchd.err.log"
 
-SSH_HOSTS_VALUE="${SSH_HOSTS:-pilot VYONIX VYONIX.local 169.254.46.90}"
+SSH_HOSTS_VALUE="${SSH_HOSTS:-pilot VYONIX.local 169.254.46.90}"
 SSH_USER_VALUE="${SSH_USER:-vyonix}"
 EXPECTED_HOSTNAME_VALUE="${EXPECTED_HOSTNAME:-VYONIX}"
 DISCOVER_CIDRS_VALUE="${DISCOVER_CIDRS:-169.254.46.0/24}"
