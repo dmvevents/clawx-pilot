@@ -77,10 +77,29 @@ $runner = @"
 `$AllowedToolsValue = $allowedToolsLiteral
 Set-Location -LiteralPath `$RepoPath
 `$rawPrompt = Get-Content -Raw -LiteralPath `$PromptFile
-if (`$rawPrompt -match '(?s)```(?:text|markdown)?\s*(.*?)\s*```') {
-  `$promptBody = `$Matches[1]
-} else {
+`$promptLines = `$rawPrompt -split "`r?`n"
+`$fenceStart = -1
+`$fenceEnd = -1
+for (`$i = 0; `$i -lt `$promptLines.Count; `$i++) {
+  if (`$promptLines[`$i].Trim().StartsWith("```")) {
+    if (`$fenceStart -lt 0) {
+      `$fenceStart = `$i
+    } else {
+      `$fenceEnd = `$i
+      break
+    }
+  }
+}
+if (`$fenceStart -ge 0 -and `$fenceEnd -gt `$fenceStart + 1) {
+  `$bodyLines = `$promptLines[(`$fenceStart + 1)..(`$fenceEnd - 1)]
+  `$promptBody = `$bodyLines -join "`r`n"
+} elseif (`$rawPrompt.Trim().Length -gt 0) {
   `$promptBody = `$rawPrompt
+} else {
+  throw "Prompt file was empty: `$PromptFile"
+}
+if (`$promptBody.Trim().Length -lt 200) {
+  throw "Prompt body extraction produced an unexpectedly short prompt (`$(`$promptBody.Trim().Length) chars): `$PromptFile"
 }
 `$prompt = "Execute the following instructions now from this Windows laptop session. Do not summarize the instructions, ask which option, or wait for a human unless a hard blocker or safety rule requires it. Start by running the First command and proceed through the recursive improvement loop.`r`n`r`n" + `$promptBody
 `$started = Get-Date -Format o

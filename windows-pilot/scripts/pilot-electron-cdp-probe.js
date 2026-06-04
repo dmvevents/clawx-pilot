@@ -219,6 +219,7 @@ async function invokeHostApi(page, pathName, body = {}) {
 }
 
 function safeChatPrompt(mode, verificationToken, customPrompt = '') {
+  const finalTokenInstruction = `End the final answer with this exact line: Verification token: ${verificationToken}`;
   if (mode === 'custom') {
     return [
       'Verification only.',
@@ -226,7 +227,9 @@ function safeChatPrompt(mode, verificationToken, customPrompt = '') {
       'Run this user command through the normal agent path:',
       customPrompt,
       'Safety constraints for this probe:',
-      'Include the verification token in the final answer.',
+      'Use only direct tools in this session; do not use sessions_spawn, sessions_yield, subagents, or background sessions.',
+      'Do not answer with a result from an earlier prompt or another session.',
+      finalTokenInstruction,
       'Do not send email.',
       'Do not submit forms.',
       'Do not download attachments.',
@@ -239,7 +242,7 @@ function safeChatPrompt(mode, verificationToken, customPrompt = '') {
       'Verification only.',
       `Verification token: ${verificationToken}.`,
       'Use the forms.list tool exactly once, then report the returned status and available form ids.',
-      'Include the verification token in the final answer.',
+      finalTokenInstruction,
       'Do not preview a form.',
       'Do not submit forms.',
       'Do not draft email.',
@@ -252,7 +255,7 @@ function safeChatPrompt(mode, verificationToken, customPrompt = '') {
     'Verification only.',
     `Verification token: ${verificationToken}.`,
     'Use the outlook.open tool exactly once, then report the returned status.',
-    'Include the verification token in the final answer.',
+    finalTokenInstruction,
     'Do not draft email.',
     'Do not send email.',
     'Do not reply or forward.',
@@ -273,13 +276,15 @@ function safeChatBannedTools() {
     'forms.submit_suspension',
     'outlook.send_email',
     'outlook.download_attachment',
+    'sessions_spawn',
+    'sessions_yield',
   ]);
 }
 
-async function sendSafeChat(page, mode, verificationToken, customPrompt = '') {
+async function sendSafeChat(page, mode, verificationToken, customPrompt = '', sessionKey = 'agent:main:main') {
   const prompt = safeChatPrompt(mode, verificationToken, customPrompt);
 
-  return page.evaluate(async ({ prompt: innerPrompt }) => {
+  return page.evaluate(async ({ prompt: innerPrompt, sessionKey: innerSessionKey }) => {
     const invoke = window.electron?.ipcRenderer?.invoke;
     if (typeof invoke !== 'function') {
       return { success: false, error: 'window.electron.ipcRenderer.invoke unavailable' };
@@ -289,22 +294,22 @@ async function sendSafeChat(page, mode, verificationToken, customPrompt = '') {
       'gateway:rpc',
       'chat.send',
       {
-        sessionKey: 'agent:main:main',
+        sessionKey: innerSessionKey,
         message: innerPrompt,
         deliver: false,
         idempotencyKey,
       },
       120_000,
     );
-  }, { prompt });
+  }, { prompt, sessionKey });
 }
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function loadChatHistory(page) {
-  return page.evaluate(async () => {
+async function loadChatHistory(page, sessionKey = 'agent:main:main') {
+  return page.evaluate(async ({ sessionKey: innerSessionKey }) => {
     const invoke = window.electron?.ipcRenderer?.invoke;
     if (typeof invoke !== 'function') {
       return { success: false, error: 'window.electron.ipcRenderer.invoke unavailable' };
@@ -312,10 +317,10 @@ async function loadChatHistory(page) {
     return invoke(
       'gateway:rpc',
       'chat.history',
-      { sessionKey: 'agent:main:main', limit: 40 },
+      { sessionKey: innerSessionKey, limit: 40 },
       35_000,
     );
-  });
+  }, { sessionKey });
 }
 
 function messageText(message) {
@@ -385,9 +390,9 @@ function summarizeChatHistory(result, mode, verificationToken) {
       bannedToolResults.push({ name: message.toolName, id: message.toolCallId, isError: message.isError === true });
     }
   }
-  const finalAssistant = scoped
-    .filter((message) => message?.role === 'assistant' && message.stopReason === 'stop')
-    .at(-1);
+  const finalAssistantMessages = scoped
+    .filter((message) => message?.role === 'assistant' && message.stopReason === 'stop');
+  const finalAssistant = finalAssistantMessages[finalAssistantMessages.length - 1];
   const finalAnswerTextSample = finalAssistant
     ? messageText(finalAssistant).replaceAll(verificationToken, '[verification-token]').replace(/\s+/g, ' ').slice(0, 1200)
     : '';
@@ -412,11 +417,11 @@ function summarizeChatHistory(result, mode, verificationToken) {
   };
 }
 
-async function waitForSafeChatHistory(page, mode, verificationToken, timeoutMs = 60_000) {
+async function waitForSafeChatHistory(page, mode, verificationToken, timeoutMs = 60_000, sessionKey = 'agent:main:main') {
   const started = Date.now();
   let lastSummary = { ok: false, error: 'chat.history not polled yet' };
   while (Date.now() - started < timeoutMs) {
-    const result = await loadChatHistory(page);
+    const result = await loadChatHistory(page, sessionKey);
     lastSummary = summarizeChatHistory(result, mode, verificationToken);
     if (
       lastSummary.ok
@@ -795,8 +800,11 @@ async function main() {
     const safeChatVerificationToken = args.safeChat
       ? `pilot-safe-chat-${Date.now()}-${Math.random().toString(16).slice(2)}`
       : null;
+    const safeChatSessionKey = args.safeChat
+      ? `agent:main:pilot-${Date.now()}-${Math.random().toString(16).slice(2)}`
+      : null;
     const safeChat = args.safeChat
-      ? await withTimeout('gateway chat.send', () => sendSafeChat(page, args.safeChatMode, safeChatVerificationToken, args.safeChatPrompt), 130_000)
+      ? await withTimeout('gateway chat.send', () => sendSafeChat(page, args.safeChatMode, safeChatVerificationToken, args.safeChatPrompt, safeChatSessionKey), 130_000)
         .catch((error) => ({ success: false, error: error instanceof Error ? error.message : String(error) }))
       : { skipped: true };
     const outlookSmoke = args.outlookSmoke
@@ -817,7 +825,7 @@ async function main() {
 
     await page.waitForTimeout(Math.max(0, args.waitMs));
     const safeChatHistory = args.safeChat
-      ? await withTimeout('gateway chat.history', () => waitForSafeChatHistory(page, args.safeChatMode, safeChatVerificationToken), 75_000)
+      ? await withTimeout('gateway chat.history', () => waitForSafeChatHistory(page, args.safeChatMode, safeChatVerificationToken, 120_000, safeChatSessionKey), 130_000)
         .catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }))
       : { skipped: true };
 
@@ -839,6 +847,7 @@ async function main() {
       formsSubmit,
       safeChat: {
         mode: args.safeChatMode,
+        sessionKey: safeChatSessionKey,
         verificationToken: safeChatVerificationToken,
         send: safeChat,
         history: safeChatHistory,

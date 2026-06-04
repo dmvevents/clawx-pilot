@@ -255,7 +255,7 @@ function Test-SafeChatResult {
     if ($history.completed -ne $true) { Add-Reason $Reasons "safe chat did not complete" }
     if ($history.finalAnswerEchoedMarker -ne $true) { Add-Reason $Reasons "safe chat final answer did not echo verification token" }
     if ($history.expectedToolResultOk -ne $true) { Add-Reason $Reasons "expected tool result was not ok" }
-    if ($history.noBannedSideEffects -ne $true) { Add-Reason $Reasons "banned send/download/submit tool was observed" }
+    if ($history.noBannedSideEffects -ne $true) { Add-Reason $Reasons "banned send/download/submit/background-session tool was observed" }
     if ($Type -eq "safe-chat-custom") {
       Test-CustomScenarioAssertions $Scenario $history $Reasons
     }
