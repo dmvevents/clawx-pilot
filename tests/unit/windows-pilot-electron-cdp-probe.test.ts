@@ -1,5 +1,10 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { runInNewContext } from 'node:vm';
+
 import { describe, expect, it } from 'vitest';
+import { isDailyReportFieldVisible } from '@electron/services/forms-browser-v2/daily-report-actions';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- the probe is a CommonJS Windows CLI script.
 const probeModule = require('../../windows-pilot/scripts/pilot-electron-cdp-probe.js') as {
@@ -23,6 +28,52 @@ const {
   summarizeChatHistory,
   validateProbeSummary,
 } = probeModule;
+
+type ProbeSamples = {
+  sampleDailyReportPayload: () => Record<string, unknown>;
+  sampleSuspensionPayload: (marker?: string) => Record<string, unknown>;
+};
+
+type DailySchemaField = {
+  id: string;
+  required?: boolean;
+  showWhen?: Record<string, string>;
+};
+
+type SuspensionSchemaField = {
+  id: string;
+  required?: boolean;
+  showWhen?: Record<string, string>;
+};
+
+const probeScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-electron-cdp-probe.js');
+const dailyReportSchemaPath = join(process.cwd(), 'extensions', 'moe-principal-assistant', 'forms', 'daily-report-schema.vlm.json');
+const suspensionsSchemaPath = join(process.cwd(), 'extensions', 'moe-principal-assistant', 'forms', 'suspensions-schema.json');
+
+function loadProbeSamples(): ProbeSamples {
+  const source = readFileSync(probeScriptPath, 'utf8');
+  const moduleShim = { exports: {} as Record<string, unknown> };
+  runInNewContext(`${source}\nmodule.exports.__samples = { sampleDailyReportPayload, sampleSuspensionPayload };`, {
+    Buffer,
+    __dirname: dirname(probeScriptPath),
+    __filename: probeScriptPath,
+    console,
+    exports: moduleShim.exports,
+    module: moduleShim,
+    process,
+    require,
+  });
+  const samples = (moduleShim.exports as { __samples?: ProbeSamples }).__samples;
+  if (!samples) {
+    throw new Error('failed to load probe sample payload helpers');
+  }
+  return samples;
+}
+
+function visibleForPayload(rule: Record<string, string> | undefined, payload: Record<string, unknown>) {
+  if (!rule) return true;
+  return Object.entries(rule).every(([key, expected]) => payload[key] === expected);
+}
 
 function textMessage(role: string, text: string) {
   return {
@@ -65,6 +116,35 @@ function history(messages: unknown[]) {
 }
 
 describe('Windows Electron CDP probe transcript evaluator', () => {
+  it('keeps the daily report smoke payload aligned with visible required schema fields', () => {
+    const payload = loadProbeSamples().sampleDailyReportPayload();
+    const schema = JSON.parse(readFileSync(dailyReportSchemaPath, 'utf8')) as { fields: DailySchemaField[] };
+    const expectedFieldIds = schema.fields
+      .filter((field) => field.required)
+      .filter((field) => isDailyReportFieldVisible(field, payload))
+      .map((field) => field.id);
+
+    expect(expectedFieldIds).toHaveLength(30);
+    expect(Object.keys(payload)).toEqual(expect.arrayContaining(expectedFieldIds));
+    expect(expectedFieldIds.filter((fieldId) => payload[fieldId] === undefined || payload[fieldId] === null || payload[fieldId] === '')).toEqual([]);
+  });
+
+  it('keeps the suspension smoke payload aligned with visible required schema fields', () => {
+    const payload = loadProbeSamples().sampleSuspensionPayload('TESTMARKER');
+    const schema = JSON.parse(readFileSync(suspensionsSchemaPath, 'utf8')) as { sections: Array<{ fields: SuspensionSchemaField[] }> };
+    const expectedFieldIds = schema.sections
+      .flatMap((section) => section.fields)
+      .filter((field) => field.required)
+      .filter((field) => visibleForPayload(field.showWhen, payload))
+      .map((field) => field.id);
+    const browserFilledFieldIds = expectedFieldIds.filter((fieldId) => fieldId !== 'respondent_name');
+
+    expect(expectedFieldIds).toHaveLength(32);
+    expect(browserFilledFieldIds).toHaveLength(31);
+    expect(Object.keys(payload)).toEqual(expect.arrayContaining(expectedFieldIds));
+    expect(expectedFieldIds.filter((fieldId) => payload[fieldId] === undefined || payload[fieldId] === null || payload[fieldId] === '')).toEqual([]);
+  });
+
   it('scopes to the current verification token after a long history', () => {
     const token = 'pilot-safe-chat-token';
     const olderMessages = Array.from({ length: 75 }, (_item, index) => textMessage('assistant', `older ${index}`));

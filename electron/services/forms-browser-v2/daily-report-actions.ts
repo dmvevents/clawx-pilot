@@ -37,7 +37,7 @@ const DAILY_REPORT_FORM_FINGERPRINT_LABELS = [
   'Is your school serviced by PTSC',
 ];
 
-const CONDITIONAL_VISIBILITY: Record<string, Record<string, string>> = {
+export const DAILY_REPORT_CONDITIONAL_VISIBILITY: Record<string, Record<string, string>> = {
   reason_no_school: { did_you_have_school_today: 'No' },
   received_nsdsl_breakfasts: { school_receives_nsdsl_meals: 'Yes' },
   breakfasts_delivered: { received_nsdsl_breakfasts: 'Yes' },
@@ -95,7 +95,7 @@ export class DailyReportActions {
         skippedCount++;
         continue;
       }
-      if (!isVisible(field, payload)) {
+      if (!isDailyReportFieldVisible(field, payload)) {
         skippedCount++;
         continue;
       }
@@ -128,8 +128,11 @@ export class DailyReportActions {
   }
 }
 
-function isVisible(field: SchemaField, payload: DailyReportPayload): boolean {
-  const rule = field.showWhen ?? CONDITIONAL_VISIBILITY[field.id];
+export function isDailyReportFieldVisible(
+  field: Pick<SchemaField, 'id' | 'showWhen'>,
+  payload: DailyReportPayload,
+): boolean {
+  const rule = field.showWhen ?? DAILY_REPORT_CONDITIONAL_VISIBILITY[field.id];
   if (!rule) return true;
   return Object.entries(rule).every(([key, expected]) => payload[key] === expected);
 }

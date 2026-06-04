@@ -2,10 +2,29 @@
 import { describe, expect, it, vi } from 'vitest';
 import { OutlookActions } from '@electron/services/outlook-browser-v2/outlook-actions';
 
+type OpenDraftSnapshot = {
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string;
+  body: string;
+  searchableText: string;
+};
+
 type TestActions = OutlookActions & {
   looksLikeSignin: () => Promise<boolean>;
-  readOpenSubject: () => Promise<string | null>;
+  readOpenDraftSnapshot: () => Promise<OpenDraftSnapshot | null>;
+  clickSendInVerifiedDraft: () => Promise<boolean>;
   clickByRoleOrVlm: () => Promise<void>;
+};
+
+const matchingDraft: OpenDraftSnapshot = {
+  to: ['recipient@example.invalid'],
+  cc: [],
+  bcc: [],
+  subject: 'Demo subject',
+  body: 'Body is not logged by this test.',
+  searchableText: 'recipient@example.invalid Demo subject Body is not logged by this test.',
 };
 
 function createActions() {
@@ -19,7 +38,8 @@ function createActions() {
   };
   const actions = new OutlookActions(driver as never, grounder as never) as TestActions;
   actions.looksLikeSignin = vi.fn(async () => false);
-  actions.readOpenSubject = vi.fn(async () => 'Demo subject');
+  actions.readOpenDraftSnapshot = vi.fn(async () => matchingDraft);
+  actions.clickSendInVerifiedDraft = vi.fn(async () => true);
   actions.clickByRoleOrVlm = vi.fn(async () => undefined);
   return { actions, driver, grounder };
 }
@@ -43,7 +63,7 @@ describe('OutlookActions safety gates', () => {
 
   it('refuses confirmed send when no draft subject is open', async () => {
     const { actions } = createActions();
-    actions.readOpenSubject = vi.fn(async () => null);
+    actions.readOpenDraftSnapshot = vi.fn(async () => null);
 
     const result = await actions.sendEmail({
       to: 'recipient@example.invalid',
@@ -54,12 +74,16 @@ describe('OutlookActions safety gates', () => {
 
     expect(result).toMatchObject({ status: 'refused' });
     expect(result.reason).toMatch(/No open draft/i);
-    expect(actions.clickByRoleOrVlm).not.toHaveBeenCalled();
+    expect(actions.clickSendInVerifiedDraft).not.toHaveBeenCalled();
   });
 
   it('refuses confirmed send when open draft subject differs', async () => {
     const { actions } = createActions();
-    actions.readOpenSubject = vi.fn(async () => 'Different subject');
+    actions.readOpenDraftSnapshot = vi.fn(async () => ({
+      ...matchingDraft,
+      subject: 'Different subject',
+      searchableText: 'recipient@example.invalid Different subject Body is not logged by this test.',
+    }));
 
     const result = await actions.sendEmail({
       to: 'recipient@example.invalid',
@@ -70,10 +94,65 @@ describe('OutlookActions safety gates', () => {
 
     expect(result).toMatchObject({ status: 'refused' });
     expect(result.reason).toMatch(/subject does not match/i);
-    expect(actions.clickByRoleOrVlm).not.toHaveBeenCalled();
+    expect(actions.clickSendInVerifiedDraft).not.toHaveBeenCalled();
   });
 
-  it('sends confirmed mail only when the open draft subject matches', async () => {
+  it('refuses confirmed send when open draft recipients differ', async () => {
+    const { actions } = createActions();
+    actions.readOpenDraftSnapshot = vi.fn(async () => ({
+      ...matchingDraft,
+      to: ['other@example.invalid'],
+      searchableText: 'other@example.invalid Demo subject Body is not logged by this test.',
+    }));
+
+    const result = await actions.sendEmail({
+      to: 'recipient@example.invalid',
+      subject: 'Demo subject',
+      body: 'Body is not logged by this test.',
+      confirm: true,
+    });
+
+    expect(result).toMatchObject({ status: 'refused' });
+    expect(result.reason).toMatch(/To recipients/i);
+    expect(actions.clickSendInVerifiedDraft).not.toHaveBeenCalled();
+  });
+
+  it('refuses confirmed send when open draft body differs', async () => {
+    const { actions } = createActions();
+    actions.readOpenDraftSnapshot = vi.fn(async () => ({
+      ...matchingDraft,
+      body: 'Different body.',
+      searchableText: 'recipient@example.invalid Demo subject Different body.',
+    }));
+
+    const result = await actions.sendEmail({
+      to: 'recipient@example.invalid',
+      subject: 'Demo subject',
+      body: 'Body is not logged by this test.',
+      confirm: true,
+    });
+
+    expect(result).toMatchObject({ status: 'refused' });
+    expect(result.reason).toMatch(/body does not match/i);
+    expect(actions.clickSendInVerifiedDraft).not.toHaveBeenCalled();
+  });
+
+  it('refuses confirmed send when the matching draft send button is not found', async () => {
+    const { actions } = createActions();
+    actions.clickSendInVerifiedDraft = vi.fn(async () => false);
+
+    const result = await actions.sendEmail({
+      to: 'recipient@example.invalid',
+      subject: 'Demo subject',
+      body: 'Body is not logged by this test.',
+      confirm: true,
+    });
+
+    expect(result).toMatchObject({ status: 'refused' });
+    expect(result.reason).toMatch(/Send button inside the verified open draft/i);
+  });
+
+  it('sends confirmed mail only when the verified open draft matches', async () => {
     const { actions } = createActions();
 
     const result = await actions.sendEmail({
@@ -84,7 +163,8 @@ describe('OutlookActions safety gates', () => {
     });
 
     expect(result).toEqual({ status: 'sent', message: 'Email sent via Outlook Web.' });
-    expect(actions.clickByRoleOrVlm).toHaveBeenCalledTimes(1);
+    expect(actions.clickSendInVerifiedDraft).toHaveBeenCalledTimes(1);
+    expect(actions.clickByRoleOrVlm).not.toHaveBeenCalled();
   });
 
   it('refuses attachment download without confirm before touching Outlook', async () => {

@@ -12,11 +12,11 @@
  *      reporting success.
  *
  * Send protection: sendEmail with confirm=true does NOT re-draft. It uses
- * the already-open compose pane the user just confirmed. If the pane is
- * gone (closed by user, navigated away), it returns
- * { status: 'refused', reason: 'no draft' } instead of opening a new one
- * and clicking Send blindly. This closes the wrong-email-sent risk
- * identified in /tmp/outlook-deep-audit.md (C1, C2).
+ * the already-open compose pane the user just confirmed, verifies the
+ * recipients/subject/body in that pane, then clicks Send inside the matching
+ * pane. If the pane is gone or drifted, it refuses instead of clicking Send
+ * blindly. This closes the wrong-email-sent risk identified in
+ * /tmp/outlook-deep-audit.md (C1, C2).
  */
 import type { Page } from 'playwright-core';
 import { logger } from '../../utils/logger';
@@ -55,8 +55,62 @@ function asArray(v: string | string[] | undefined): string[] {
   return [v];
 }
 
+type OpenDraftSnapshot = {
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string;
+  body: string;
+  searchableText: string;
+};
+
+type ExpectedDraftForSend = {
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string;
+  body: string;
+};
+
+type OpenDraftDomProbe = {
+  snapshot: OpenDraftSnapshot | null;
+  clickedSend: boolean;
+};
+
 // Predicate moved to ./search-helpers.ts for unit testing without Playwright.
 const matchesSearchArgs = matchesSearchArgsForTests;
+
+function normalizeComparableText(value: string | undefined): string {
+  return (value ?? '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeSearchText(value: string | undefined): string {
+  return normalizeComparableText(value).toLowerCase();
+}
+
+function expectedRecipientNeedles(values: string[]): string[] {
+  return values
+    .map((value) => {
+      const email = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
+      return normalizeSearchText(email ?? value);
+    })
+    .filter(Boolean);
+}
+
+function missingRecipientNeedles(values: string[], snapshot: OpenDraftSnapshot): string[] {
+  const searchable = normalizeSearchText(
+    [
+      snapshot.searchableText,
+      snapshot.to.join(' '),
+      snapshot.cc.join(' '),
+      snapshot.bcc.join(' '),
+    ].join(' '),
+  );
+  return expectedRecipientNeedles(values).filter((needle) => !searchable.includes(needle));
+}
 
 export class OutlookActions {
   constructor(
@@ -272,8 +326,8 @@ export class OutlookActions {
 
   /**
    * Send the email. Hard refuses unless confirm=true. Crucially, does NOT
-   * re-draft — uses the already-open compose pane and verifies its subject
-   * matches what the agent intends to send.
+   * re-draft. It verifies the user-reviewed compose pane still matches the
+   * confirmed recipients, subject, and body, then clicks Send inside that pane.
    */
   async sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     if (args.confirm !== true) {
@@ -292,38 +346,32 @@ export class OutlookActions {
       };
     }
 
-    // Verify the open compose pane's subject matches args.subject. This
-    // protects against a drifted state where another draft is open and we
-    // would otherwise click Send on the wrong pane.
-    const openSubject = await this.readOpenSubject(page);
-    if (openSubject == null) {
+    const snapshot = await this.readOpenDraftSnapshot(page);
+    if (snapshot == null) {
       return {
         status: 'refused',
         reason:
           'No open draft found. Call draftEmail first and confirm with the user before retrying send.',
       };
     }
-    if (openSubject.trim() !== (args.subject ?? '').trim()) {
-      logger.warn(
-        `[outlook-v2] Send refused: open subject "${openSubject.slice(0, 40)}…" does not match args.subject "${(args.subject ?? '').slice(0, 40)}…"`,
-      );
+
+    const mismatch = this.describeDraftMismatch(snapshot, args);
+    if (mismatch) {
+      logger.warn(`[outlook-v2] Send refused: verified draft mismatch (${mismatch})`);
       return {
         status: 'refused',
-        reason:
-          'Send blocked: the open draft\'s subject does not match the requested subject. The user may have edited a different draft. Re-draft and try again.',
+        reason: `Send blocked: ${mismatch}. The user may have edited a different draft. Re-draft and try again.`,
       };
     }
 
-    // Click Send, scoped to the active compose pane via aria-label.
-    await this.clickByRoleOrVlm(page, {
-      role: 'button',
-      nameRegex: /^send$/i,
-      // Ground only on the compose-pane region. The VLM hint biases the
-      // model toward the toolbar inside the compose pane, not a global
-      // "Send" button in some unrelated rail.
-      vlmQuestion:
-        'The "Send" button inside the open Outlook compose pane (the New Mail dialog the user just reviewed). Avoid any "Send" button outside that pane.',
-    });
+    const clicked = await this.clickSendInVerifiedDraft(page, args);
+    if (!clicked) {
+      return {
+        status: 'refused',
+        reason:
+          'Send blocked: could not identify the Send button inside the verified open draft. Re-draft and try again.',
+      };
+    }
 
     return { status: 'sent', message: 'Email sent via Outlook Web.' };
   }
@@ -1132,6 +1180,225 @@ export class OutlookActions {
     // It's normal for Outlook to show Cc by default in some themes. If we
     // can't find the trigger, the field may already be visible; the
     // subsequent fillField will surface the real problem if not.
+  }
+
+  private describeDraftMismatch(snapshot: OpenDraftSnapshot, args: SendEmailArgs): string | null {
+    if (normalizeComparableText(snapshot.subject) !== normalizeComparableText(args.subject)) {
+      return 'the open draft subject does not match the requested subject';
+    }
+    if (missingRecipientNeedles(asArray(args.to), snapshot).length > 0) {
+      return 'the open draft does not contain all requested To recipients';
+    }
+    if (missingRecipientNeedles(asArray(args.cc), snapshot).length > 0) {
+      return 'the open draft does not contain all requested Cc recipients';
+    }
+    if (missingRecipientNeedles(asArray(args.bcc), snapshot).length > 0) {
+      return 'the open draft does not contain all requested Bcc recipients';
+    }
+
+    const expectedBody = normalizeSearchText(args.body);
+    const actualBody = normalizeSearchText(`${snapshot.body} ${snapshot.searchableText}`);
+    if (expectedBody && !actualBody.includes(expectedBody)) {
+      return 'the open draft body does not match the requested body';
+    }
+    return null;
+  }
+
+  private async readOpenDraftSnapshot(page: Page): Promise<OpenDraftSnapshot | null> {
+    const probe = await this.evaluateOpenDraftDom(page, null);
+    return probe.snapshot;
+  }
+
+  private async clickSendInVerifiedDraft(page: Page, args: SendEmailArgs): Promise<boolean> {
+    const expected: ExpectedDraftForSend = {
+      to: asArray(args.to),
+      cc: asArray(args.cc),
+      bcc: asArray(args.bcc),
+      subject: args.subject,
+      body: args.body,
+    };
+    const probe = await this.evaluateOpenDraftDom(page, expected);
+    return probe.clickedSend;
+  }
+
+  private async evaluateOpenDraftDom(
+    page: Page,
+    expected: ExpectedDraftForSend | null,
+  ): Promise<OpenDraftDomProbe> {
+    return page.evaluate((expectedDraft) => {
+      const normalize = (value: string | undefined | null) => (value ?? '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const normalizeSearch = (value: string | undefined | null) => normalize(value).toLowerCase();
+      const isVisible = (el: Element | null) => {
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        return rect.width > 0
+          && rect.height > 0
+          && style.visibility !== 'hidden'
+          && style.display !== 'none';
+      };
+      const valueText = (el: Element | null) => {
+        if (!el) return '';
+        const value = 'value' in el && typeof el.value === 'string' ? el.value : '';
+        const text = (el.textContent || '').trim();
+        return normalize([value, text].filter(Boolean).join(' '));
+      };
+      const searchableText = (root: Element) => {
+        const parts = [
+          root.textContent || '',
+          root.getAttribute('aria-label') || '',
+          root.getAttribute('title') || '',
+        ];
+        for (const el of Array.from(root.querySelectorAll('*'))) {
+          const value = 'value' in el && typeof el.value === 'string' ? el.value : '';
+          parts.push(
+            value,
+            el.getAttribute('aria-label') || '',
+            el.getAttribute('title') || '',
+            el.getAttribute('data-automation-id') || '',
+            el.getAttribute('data-automationid') || '',
+          );
+        }
+        return normalize(parts.filter(Boolean).join(' '));
+      };
+      const fieldText = (root: Element, label: 'Subject') => {
+        const selectors = [
+          '[aria-label="Subject"]',
+          '[aria-label*="Subject" i]',
+          '[placeholder="Add a subject"]',
+          '[placeholder*="subject" i]',
+        ];
+        for (const selector of selectors) {
+          for (const el of Array.from(root.querySelectorAll(selector))) {
+            if (!isVisible(el)) continue;
+            const text = valueText(el);
+            if (text && text.toLowerCase() !== label.toLowerCase()) return text;
+          }
+        }
+        return '';
+      };
+      const bodyText = (root: Element) => {
+        const selectors = [
+          '[aria-label="Message body"]',
+          '[aria-label*="Message body" i]',
+          '[role="textbox"][aria-label*="body" i]',
+          '[contenteditable="true"][aria-label*="body" i]',
+          '[contenteditable="true"][role="textbox"]',
+        ];
+        for (const selector of selectors) {
+          for (const el of Array.from(root.querySelectorAll(selector))) {
+            if (!isVisible(el)) continue;
+            const text = valueText(el);
+            if (text) return text;
+          }
+        }
+        return '';
+      };
+      const expectedNeedles = (values: string[]) => values
+        .map((value) => {
+          const email = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
+          return normalizeSearch(email ?? value);
+        })
+        .filter(Boolean);
+      const containsAll = (haystack: string, values: string[]) => {
+        const text = normalizeSearch(haystack);
+        return expectedNeedles(values).every((needle) => text.includes(needle));
+      };
+      const hasSubjectField = (root: Element) => Boolean(root.querySelector(
+        '[aria-label="Subject"], [aria-label*="Subject" i], [placeholder="Add a subject"], [placeholder*="subject" i]',
+      ));
+      const sendButton = (root: Element) => Array.from(
+        root.querySelectorAll('button, [role="button"], [aria-label], [title]'),
+      ).find((el) => {
+        if (!isVisible(el)) return false;
+        const label = normalize([
+          el.getAttribute('aria-label') || '',
+          el.getAttribute('title') || '',
+          el.textContent || '',
+        ].join(' '));
+        return /^send$/i.test(label);
+      }) as HTMLElement | undefined;
+      const hasSendButton = (root: Element) => Boolean(sendButton(root));
+      const splitRecipients = (value: string) => normalize(value)
+        .split(/[;,\n]+/)
+        .map((part) => normalize(part))
+        .filter((part) => part && !/^(to|cc|bcc)$/i.test(part));
+      const recipientFieldText = (root: Element, label: 'To' | 'Cc' | 'Bcc') => {
+        const selectors = [
+          `[aria-label="${label}"]`,
+          `[aria-label*="${label}" i]`,
+          `[placeholder="${label}"]`,
+          `[placeholder*="${label}" i]`,
+          `[role="textbox"][aria-label*="${label}" i]`,
+          `[contenteditable="true"][aria-label*="${label}" i]`,
+        ];
+        for (const selector of selectors) {
+          for (const el of Array.from(root.querySelectorAll(selector))) {
+            if (!isVisible(el)) continue;
+            const text = valueText(el);
+            if (text && text.toLowerCase() !== label.toLowerCase()) return text;
+          }
+        }
+        return '';
+      };
+      const rootForBody = (body: Element) => {
+        let current: Element | null = body;
+        for (let depth = 0; current && depth < 10; depth += 1) {
+          if (hasSubjectField(current) && hasSendButton(current)) return current;
+          current = current.parentElement;
+        }
+        return body.closest('div[role="dialog"]')
+          || body.closest('[aria-label*="Compose" i]')
+          || body.parentElement
+          || body;
+      };
+      const bodyNodes = Array.from(document.querySelectorAll(
+        [
+          '[aria-label="Message body"]',
+          '[aria-label*="Message body" i]',
+          '[role="textbox"][aria-label*="body" i]',
+          '[contenteditable="true"][aria-label*="body" i]',
+          '[contenteditable="true"][role="textbox"]',
+        ].join(','),
+      )).filter(isVisible);
+      const roots = bodyNodes.map(rootForBody).filter(isVisible);
+      let firstSnapshot: OpenDraftSnapshot | null = null;
+      for (const root of roots) {
+        const subject = fieldText(root, 'Subject');
+        const body = bodyText(root);
+        const text = searchableText(root);
+        if (!subject && !body && !text) continue;
+        const snapshot = {
+          to: splitRecipients(recipientFieldText(root, 'To')),
+          cc: splitRecipients(recipientFieldText(root, 'Cc')),
+          bcc: splitRecipients(recipientFieldText(root, 'Bcc')),
+          subject,
+          body,
+          searchableText: text,
+        };
+        firstSnapshot ??= snapshot;
+        if (!expectedDraft) continue;
+        if (normalize(subject) !== normalize(expectedDraft.subject)) continue;
+        if (!containsAll(text, expectedDraft.to)) continue;
+        if (!containsAll(text, expectedDraft.cc)) continue;
+        if (!containsAll(text, expectedDraft.bcc)) continue;
+        const expectedBody = normalizeSearch(expectedDraft.body);
+        if (expectedBody && !normalizeSearch(`${body} ${text}`).includes(expectedBody)) continue;
+        const button = sendButton(root);
+        if (!button) continue;
+        button.click();
+        return { snapshot, clickedSend: true };
+      }
+      return { snapshot: firstSnapshot, clickedSend: false };
+    }, expected).catch((err) => {
+      logger.debug?.(
+        `[outlook-v2] evaluateOpenDraftDom failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return { snapshot: null, clickedSend: false };
+    });
   }
 
   private async readOpenSubject(page: Page): Promise<string | null> {
