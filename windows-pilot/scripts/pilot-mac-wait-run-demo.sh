@@ -25,8 +25,13 @@ EVIDENCE_ROOT_WIN="${EVIDENCE_ROOT_WIN:-C:\\Users\\VYONIX\\Downloads}"
 LOG_ROOT="${LOG_ROOT:-$HOME/Library/Logs/clawx}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="${LOG_FILE:-$LOG_ROOT/pilot-mac-wait-run-demo-$STAMP.log}"
+TRUNCATE_LOG_ON_START="${TRUNCATE_LOG_ON_START:-0}"
+RUN_ID="${RUN_ID:-$STAMP-$$}"
 
 mkdir -p "$LOG_ROOT"
+if [[ "$TRUNCATE_LOG_ON_START" == "1" ]]; then
+  : >"$LOG_FILE"
+fi
 
 SSH_OPTS=(
   -o ControlMaster=no
@@ -280,6 +285,8 @@ CURRENT_SSH_TARGET="$SSH_HOST"
 LAST_DISCOVERY_SECONDS=-999999
 log "Waiting for SSH host(s) '$SSH_HOSTS' for up to ${DEADLINE_SECONDS}s"
 log "Log file: $LOG_FILE"
+log "Run id: $RUN_ID"
+log "Repo commit: $(git -C "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
 
 while (( SECONDS < deadline )); do
   connected=0
