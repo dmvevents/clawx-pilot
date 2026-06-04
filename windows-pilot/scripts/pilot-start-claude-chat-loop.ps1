@@ -11,8 +11,9 @@ param(
   [string] $Repo = "$env:USERPROFILE\Github\ClawX-release-moe10",
   [string] $PromptPath,
   [string] $LogRoot = "$env:USERPROFILE\Downloads",
-  [string] $PermissionMode = "auto",
+  [string] $PermissionMode = "default",
   [string] $Effort = "high",
+  [string] $AllowedTools = "Bash(powershell.exe *),Bash(git *),Bash(node *),Bash(pnpm *),Bash(npm *),Bash(npx *),Read,Edit,Write,Glob,Grep",
   [string] $TaskName = "ClawX Claude Chat Loop",
   [int] $WaitSeconds = 12,
   [int] $ExecutionHours = 9
@@ -64,6 +65,7 @@ $debugLiteral = ConvertTo-PowerShellSingleQuotedLiteral $debugPath
 $claudeLiteral = ConvertTo-PowerShellSingleQuotedLiteral $claudePath
 $permissionLiteral = ConvertTo-PowerShellSingleQuotedLiteral $PermissionMode
 $effortLiteral = ConvertTo-PowerShellSingleQuotedLiteral $Effort
+$allowedToolsLiteral = ConvertTo-PowerShellSingleQuotedLiteral $AllowedTools
 
 $runner = @"
 `$ErrorActionPreference = "Continue"
@@ -72,6 +74,7 @@ $runner = @"
 `$StdoutFile = $stdoutLiteral
 `$DebugFile = $debugLiteral
 `$ClaudeExe = $claudeLiteral
+`$AllowedToolsValue = $allowedToolsLiteral
 Set-Location -LiteralPath `$RepoPath
 `$rawPrompt = Get-Content -Raw -LiteralPath `$PromptFile
 if (`$rawPrompt -match '(?s)```(?:text|markdown)?\s*(.*?)\s*```') {
@@ -82,7 +85,15 @@ if (`$rawPrompt -match '(?s)```(?:text|markdown)?\s*(.*?)\s*```') {
 `$prompt = "Execute the following instructions now from this Windows laptop session. Do not summarize the instructions, ask which option, or wait for a human unless a hard blocker or safety rule requires it. Start by running the First command and proceed through the recursive improvement loop.`r`n`r`n" + `$promptBody
 `$started = Get-Date -Format o
 "STARTED=`$started" | Set-Content -LiteralPath `$StdoutFile -Encoding UTF8
-& `$ClaudeExe -p --permission-mode $permissionLiteral --effort $effortLiteral --debug-file `$DebugFile `$prompt *>> `$StdoutFile
+`$claudeArgs = @(
+  "-p",
+  "--permission-mode", $permissionLiteral,
+  "--effort", $effortLiteral,
+  "--debug-file", `$DebugFile,
+  "--allowedTools", `$AllowedToolsValue,
+  `$prompt
+)
+& `$ClaudeExe @claudeArgs *>> `$StdoutFile
 `$exitCode = `$LASTEXITCODE
 `$ended = Get-Date -Format o
 "ENDED=`$ended" | Add-Content -LiteralPath `$StdoutFile
@@ -95,6 +106,16 @@ $runner | Set-Content -Path $runnerPath -Encoding UTF8
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 $taskArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$runnerPath`""
+
+$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if ($existingTask -and $existingTask.State -eq "Running") {
+  Stop-ScheduledTask -TaskName $TaskName
+  $stopDeadline = (Get-Date).AddSeconds(10)
+  do {
+    Start-Sleep -Milliseconds 500
+    $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+  } while ($existingTask -and $existingTask.State -eq "Running" -and (Get-Date) -lt $stopDeadline)
+}
 
 $action = New-ScheduledTaskAction -Execute $psExe -Argument $taskArgs
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
