@@ -341,7 +341,7 @@ function summarizeMessage(message) {
   const content = Array.isArray(message?.content) ? message.content : [];
   const toolCalls = content
     .filter((part) => part?.type === 'toolCall')
-    .map((part) => ({ name: part.name, id: part.id }));
+    .map((part) => ({ name: part.name, id: part.id, inputTextSample: summarizeToolInput(part.input) }));
   const text = content
     .filter((part) => part?.type === 'text')
     .map((part) => String(part.text || '').replace(/\s+/g, ' ').slice(0, 220));
@@ -354,6 +354,15 @@ function summarizeMessage(message) {
     toolCalls,
     text,
   };
+}
+
+function summarizeToolInput(input) {
+  if (input == null) return '';
+  try {
+    return JSON.stringify(redact(input)).replace(/\s+/g, ' ').slice(0, 1200);
+  } catch {
+    return String(input).replace(/\s+/g, ' ').slice(0, 1200);
+  }
 }
 
 function summarizeChatHistory(result, mode, verificationToken) {
@@ -384,9 +393,9 @@ function summarizeChatHistory(result, mode, verificationToken) {
     const content = Array.isArray(message?.content) ? message.content : [];
     for (const part of content) {
       if (part?.type === 'toolCall' && part.name) {
-        observedToolCalls.push({ name: part.name, id: part.id });
+        observedToolCalls.push({ name: part.name, id: part.id, inputTextSample: summarizeToolInput(part.input) });
         if (expectedTool && part.name !== expectedTool) {
-          unexpectedToolCalls.push({ name: part.name, id: part.id });
+          unexpectedToolCalls.push({ name: part.name, id: part.id, inputTextSample: summarizeToolInput(part.input) });
         }
       }
       if (part?.type === 'toolCall' && bannedTools.has(part.name)) {

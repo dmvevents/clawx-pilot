@@ -10,7 +10,7 @@ const probeModule = require('../../windows-pilot/scripts/pilot-electron-cdp-prob
     expectedToolResultOk: boolean;
     expectedToolOnly: boolean;
     noBannedSideEffects: boolean;
-    observedToolCalls: Array<{ name: string }>;
+    observedToolCalls: Array<{ name: string; inputTextSample?: string }>;
     observedToolResults: Array<{ name: string; isError: boolean }>;
   };
   validateProbeSummary: (summary: unknown, args?: Record<string, unknown>) => {
@@ -31,11 +31,11 @@ function textMessage(role: string, text: string) {
   };
 }
 
-function toolCallMessage(name: string, id = `${name}-1`) {
+function toolCallMessage(name: string, id = `${name}-1`, input?: Record<string, unknown>) {
   return {
     role: 'assistant',
     stopReason: 'toolUse',
-    content: [{ type: 'toolCall', name, id }],
+    content: [{ type: 'toolCall', name, id, input }],
   };
 }
 
@@ -111,6 +111,28 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     expect(summary.completed).toBe(true);
     expect(summary.finalAnswerEchoedMarker).toBe(true);
     expect(summary.noBannedSideEffects).toBe(false);
+  });
+
+  it('records redacted tool input samples for document write audits', () => {
+    const token = 'pilot-safe-chat-token';
+    const summary = summarizeChatHistory(history([
+      textMessage('user', `Verification token: ${token}`),
+      toolCallMessage('exec', 'exec-1', {
+        command: 'Set-Content -Path summarize_excel.py -Value "print(1)"',
+        token: 'secret-token',
+      }),
+      toolResultMessage('exec', false, 'exec-1'),
+      finalMessage(token),
+    ]), 'custom', token);
+
+    expect(summary.observedToolCalls).toEqual([
+      expect.objectContaining({
+        name: 'exec',
+        inputTextSample: expect.stringContaining('Set-Content'),
+      }),
+    ]);
+    expect(summary.observedToolCalls[0]?.inputTextSample).toContain('[redacted]');
+    expect(summary.observedToolCalls[0]?.inputTextSample).not.toContain('secret-token');
   });
 
   it('requires the expected tool result to be non-error', () => {

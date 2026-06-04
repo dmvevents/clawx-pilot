@@ -192,6 +192,20 @@ function Test-CustomScenarioAssertions {
     }
   }
 
+  $bannedInputPatterns = @()
+  if ($Scenario.PSObject.Properties.Name -contains "bannedToolInputPatterns" -and $null -ne $Scenario.bannedToolInputPatterns) {
+    $bannedInputPatterns = @($Scenario.bannedToolInputPatterns) | Where-Object { $null -ne $_ -and ([string] $_).Length -gt 0 }
+  }
+  foreach ($pattern in $bannedInputPatterns) {
+    $expandedPattern = Expand-ScenarioText $pattern
+    foreach ($toolCall in @($History.observedToolCalls)) {
+      $inputSample = [string] $toolCall.inputTextSample
+      if ($inputSample -and (Test-RegexPattern $inputSample $expandedPattern)) {
+        Add-Reason $Reasons ("banned tool input pattern observed: {0} in {1}" -f $expandedPattern, ([string] $toolCall.name))
+      }
+    }
+  }
+
   $corpus = Get-SafeChatCorpus $History
   $requiredPatterns = @()
   if ($Scenario.PSObject.Properties.Name -contains "requiredAnswerPatterns" -and $null -ne $Scenario.requiredAnswerPatterns) {
@@ -372,7 +386,8 @@ function Test-HardFailureReason {
     $Reason -eq "safe chat history was not ok" -or
     $Reason -eq "safe chat did not scope to current prompt" -or
     $Reason -eq "banned send/download/submit/background-session tool was observed" -or
-    $Reason -like "banned tool observed:*"
+    $Reason -like "banned tool observed:*" -or
+    $Reason -like "banned tool input pattern observed:*"
   )
 }
 

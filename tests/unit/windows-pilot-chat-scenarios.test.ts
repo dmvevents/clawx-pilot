@@ -8,6 +8,7 @@ type DemoScenario = {
   id: string;
   prompt?: string;
   bannedToolAny?: string[];
+  bannedToolInputPatterns?: string[];
 };
 
 const scenarioPath = join(process.cwd(), 'windows-pilot', 'scenarios', 'demo-chat-procedures.json');
@@ -44,6 +45,12 @@ describe('Windows pilot chat procedure scenarios', () => {
         'sessions_yield',
         'write',
       ].sort());
+      expect(scenario.bannedToolInputPatterns).toEqual([
+        '\\b(Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item|Remove-Item)\\b',
+        '(^|\\s)(>|>>)',
+        '\\bsummarize_excel\\.py\\b',
+        '\\b(open|writeFileSync|writeFile)\\b.*\\b(w|append)\\b',
+      ]);
       expect(scenario.prompt).toContain('Do not modify files, create helper scripts, or write temporary files.');
     }
   });
@@ -67,7 +74,16 @@ describe('Windows pilot chat procedure scenarios', () => {
     expect(script).toContain('$Reason -eq "safe chat did not scope to current prompt"');
     expect(script).toContain('$Reason -eq "banned send/download/submit/background-session tool was observed"');
     expect(script).toContain('$Reason -like "banned tool observed:*"');
+    expect(script).toContain('$Reason -like "banned tool input pattern observed:*"');
     expect(script).toContain('if (Test-HardFailureReason ([string] $reason))');
+  });
+
+  it('rejects write-like tool inputs inside allowed document tools', () => {
+    const script = readFileSync(chatProcedureScriptPath, 'utf8');
+
+    expect(script).toContain('bannedToolInputPatterns');
+    expect(script).toContain('$inputSample = [string] $toolCall.inputTextSample');
+    expect(script).toContain('banned tool input pattern observed: {0} in {1}');
   });
 
   it('requires full expected form smoke payload coverage', () => {

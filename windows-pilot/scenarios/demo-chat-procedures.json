@@ -40,6 +40,12 @@
         "sessions_spawn",
         "sessions_yield"
       ],
+      "bannedToolInputPatterns": [
+        "\\b(Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item|Remove-Item)\\b",
+        "(^|\\s)(>|>>)",
+        "\\bsummarize_excel\\.py\\b",
+        "\\b(open|writeFileSync|writeFile)\\b.*\\b(w|append)\\b"
+      ],
       "requiredAnswerPatterns": [
         "filename|file",
         "extension|\\.xlsx|\\.docx|\\.pdf|\\.csv|\\.txt|\\.md",
@@ -68,6 +74,12 @@
         "sessions_spawn",
         "sessions_yield"
       ],
+      "bannedToolInputPatterns": [
+        "\\b(Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item|Remove-Item)\\b",
+        "(^|\\s)(>|>>)",
+        "\\bsummarize_excel\\.py\\b",
+        "\\b(open|writeFileSync|writeFile)\\b.*\\b(w|append)\\b"
+      ],
       "requiredAnswerPatterns": [
         "xlsx|xls|csv|spreadsheet|workbook",
         "sheet|column|row",
@@ -95,6 +107,12 @@
         "write",
         "sessions_spawn",
         "sessions_yield"
+      ],
+      "bannedToolInputPatterns": [
+        "\\b(Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item|Remove-Item)\\b",
+        "(^|\\s)(>|>>)",
+        "\\bsummarize_excel\\.py\\b",
+        "\\b(open|writeFileSync|writeFile)\\b.*\\b(w|append)\\b"
       ],
       "requiredAnswerPatterns": [
         "suspension|discipline|attendance|report|source document|no suitable source",
