@@ -18,7 +18,8 @@ param(
   [string] $ElectronEndpoint = "http://127.0.0.1:9223",
   [int] $WaitMs = 10000,
   [switch] $SkipRelaunch,
-  [switch] $RunRegressionTests
+  [switch] $RunRegressionTests,
+  [switch] $RunChatProcedures
 )
 
 $ErrorActionPreference = "Continue"
@@ -183,6 +184,17 @@ Invoke-Step "hostapi-outlook-forms-smoke" {
 
 Invoke-Step "office-runtime-check" {
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\windows-pilot\scripts\pilot-office-runtime-check.ps1"
+}
+
+if ($RunChatProcedures) {
+  Invoke-Step "chat-procedures" {
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\windows-pilot\scripts\pilot-run-chat-procedures.ps1" `
+      -Repo $Repo `
+      -EvidenceRoot $script:Evidence `
+      -DownloadsPath (Join-Path $env:USERPROFILE "Downloads") `
+      -ElectronEndpoint $ElectronEndpoint `
+      -DefaultWaitMs $WaitMs
+  }
 }
 
 if ($RunRegressionTests) {

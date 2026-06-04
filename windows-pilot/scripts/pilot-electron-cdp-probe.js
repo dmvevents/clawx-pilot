@@ -366,18 +366,29 @@ function summarizeChatHistory(result, mode, verificationToken) {
   const bannedTools = safeChatBannedTools();
   const bannedToolCalls = [];
   const bannedToolResults = [];
+  const observedToolCalls = [];
+  const observedToolResults = [];
   for (const message of scoped) {
     const content = Array.isArray(message?.content) ? message.content : [];
     for (const part of content) {
+      if (part?.type === 'toolCall' && part.name) {
+        observedToolCalls.push({ name: part.name, id: part.id });
+      }
       if (part?.type === 'toolCall' && bannedTools.has(part.name)) {
         bannedToolCalls.push({ name: part.name, id: part.id });
       }
+    }
+    if (message?.role === 'toolResult' && message.toolName) {
+      observedToolResults.push({ name: message.toolName, id: message.toolCallId, isError: message.isError === true });
     }
     if (message?.role === 'toolResult' && bannedTools.has(message.toolName)) {
       bannedToolResults.push({ name: message.toolName, id: message.toolCallId, isError: message.isError === true });
     }
   }
   const finalAssistant = scoped.find((message) => message?.role === 'assistant' && message.stopReason === 'stop');
+  const finalAnswerTextSample = finalAssistant
+    ? messageText(finalAssistant).replaceAll(verificationToken, '[verification-token]').replace(/\s+/g, ' ').slice(0, 1200)
+    : '';
   const noBannedSideEffects = bannedToolCalls.length === 0 && bannedToolResults.length === 0;
   return {
     ok: true,
@@ -387,6 +398,10 @@ function summarizeChatHistory(result, mode, verificationToken) {
     expectedTool,
     scopedToCurrentPrompt: startIndex >= 0,
     completed: Boolean(finalAssistant),
+    finalAnswerEchoedMarker: finalAssistant ? messageText(finalAssistant).includes(verificationToken) : false,
+    finalAnswerTextSample,
+    observedToolCalls,
+    observedToolResults,
     expectedToolResultOk: expectedTool ? Boolean(expectedToolResult && expectedToolResult.isError !== true) : true,
     noBannedSideEffects,
     bannedToolCalls,

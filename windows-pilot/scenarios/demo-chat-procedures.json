@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "name": "ClawX Windows demo chat procedures",
+  "description": "Safe, repeatable app-path chat procedures for Outlook, Forms, and Downloads document handling. These scenarios must not send email, download attachments, or submit Microsoft Forms.",
+  "scenarios": [
+    {
+      "id": "safechat-outlook-open",
+      "title": "Chat can open Outlook through the normal tool path",
+      "type": "safe-chat-mode",
+      "mode": "outlook-open",
+      "required": true,
+      "waitMs": 12000
+    },
+    {
+      "id": "safechat-forms-list",
+      "title": "Chat can list configured Microsoft Forms through the normal tool path",
+      "type": "safe-chat-mode",
+      "mode": "forms-list",
+      "required": true,
+      "waitMs": 12000
+    },
+    {
+      "id": "downloads-document-inventory",
+      "title": "Chat can find document files in Downloads",
+      "type": "safe-chat-custom",
+      "required": true,
+      "waitMs": 16000,
+      "expectedToolAny": ["exec", "process", "read"],
+      "requiredAnswerPatterns": [
+        "filename|file",
+        "extension|\\.xlsx|\\.docx|\\.pdf|\\.csv|\\.txt|\\.md",
+        "purpose|size|bytes"
+      ],
+      "prompt": "List the document files in {{DOWNLOADS_PATH}} with extensions .xlsx, .xls, .docx, .doc, .pdf, .csv, .txt, and .md. Return a concise table with filename, extension, approximate size, and likely purpose if obvious from the filename. Do not modify files. Do not send email. Do not submit forms. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
+    },
+    {
+      "id": "downloads-excel-summary",
+      "title": "Chat can select and summarize a spreadsheet from Downloads",
+      "type": "safe-chat-custom",
+      "required": true,
+      "waitMs": 22000,
+      "expectedToolAny": ["exec", "process", "read", "sessions_spawn"],
+      "requiredAnswerPatterns": [
+        "xlsx|xls|csv|spreadsheet|workbook",
+        "sheet|column|row",
+        "school|result|attendance|SEA|trend|total"
+      ],
+      "prompt": "Find the most relevant Excel or CSV file in {{DOWNLOADS_PATH}}, preferring a school-results or attendance workbook if present. Read only enough to summarize sheet names, column headers, row counts, and any obvious totals or trends. If no spreadsheet is present, say exactly that. Do not modify files. Do not send email. Do not submit forms. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
+    },
+    {
+      "id": "downloads-word-suspension-fields",
+      "title": "Chat can inspect a Word/PDF/text source for suspension-form fields",
+      "type": "safe-chat-custom",
+      "required": false,
+      "waitMs": 22000,
+      "expectedToolAny": ["exec", "process", "read"],
+      "requiredAnswerPatterns": [
+        "suspension|discipline|attendance|report|source document|no suitable source",
+        "school|class|incident|reason|parent|missing"
+      ],
+      "prompt": "Find a Word, PDF, text, or markdown file in {{DOWNLOADS_PATH}} that looks like a suspension report, discipline note, attendance report, or demo source document. Read only enough to extract possible form fields: school, class, incident date, student initials or placeholder name, reason, suspension length, parent contact, and missing fields. If no such document exists, state that no suitable source document was found. Do not preview or submit any form. Do not send email. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
+    },
+    {
+      "id": "outlook-and-forms-hostapi-smoke",
+      "title": "Host API Outlook and Forms smoke with safety gates",
+      "type": "hostapi-smoke",
+      "required": true,
+      "waitMs": 12000
+    }
+  ]
+}
