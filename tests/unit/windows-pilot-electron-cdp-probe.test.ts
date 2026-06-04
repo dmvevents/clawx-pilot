@@ -271,6 +271,20 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     expect(validation.reasons).toContain('outlook draft was not left open');
   });
 
+  it('passes draft validation when Outlook leaves the draft open', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      emailDraft: {
+        subject: 'Demo draft',
+        toCount: 1,
+        draft: { ok: true, result: { status: 'drafted', draftLeftOpen: true } },
+      },
+    }, { draftEmail: true });
+
+    expect(validation).toEqual({ ok: true, reasons: [] });
+  });
+
   it('fails confirmed send validation when draft or send results are incomplete', () => {
     const validation = validateProbeSummary({
       state: 'ELECTRON_CDP_PROBE_DONE',
@@ -287,6 +301,21 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     expect(validation.reasons).toContain('outlook confirmed send status was refused');
   });
 
+  it('passes confirmed send validation when draft and send both complete', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      emailSend: {
+        subject: 'Demo send',
+        toCount: 1,
+        draft: { ok: true, result: { status: 'drafted', draftLeftOpen: true } },
+        send: { ok: true, result: { status: 'sent' } },
+      },
+    }, { sendEmail: true });
+
+    expect(validation).toEqual({ ok: true, reasons: [] });
+  });
+
   it('fails confirmed form submit validation when preview is incomplete', () => {
     const validation = validateProbeSummary({
       state: 'ELECTRON_CDP_PROBE_DONE',
@@ -299,5 +328,18 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
 
     expect(validation.ok).toBe(false);
     expect(validation.reasons).toContain('suspension submit preview filledCount was 30, expected at least 31');
+  });
+
+  it('passes confirmed form submit validation when preview and submit both complete', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      formsSubmit: {
+        preview: { ok: true, result: { status: 'previewed', filledCount: 31, errorCount: 0 } },
+        submit: { ok: true, result: { status: 'submitted' } },
+      },
+    }, { submitForms: true });
+
+    expect(validation).toEqual({ ok: true, reasons: [] });
   });
 });
