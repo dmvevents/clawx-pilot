@@ -19,6 +19,7 @@ Current known facts:
 - Outlook is expected to already be signed in in Chrome.
 - The harness writes evidence under C:\Users\VYONIX\Downloads\clawx-chat-procedures-*.
 - WiFi being off previously caused model/gateway failures. Check network before changing code.
+- The broad acceptance runner now includes chat procedures by default; use -SkipChatProcedures only for infrastructure-only checks.
 
 Hard safety rules:
 1. Do not print or store secrets: provider keys, AWS keys, Host API bearer tokens, passwords, cookies, full email bodies, full recipient lists, or Microsoft Forms response URLs.
@@ -28,10 +29,11 @@ Hard safety rules:
 5. Do not run destructive git commands. Never reset hard, clean untracked files, or overwrite unrelated work.
 
 First command:
+git pull --ff-only
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows-pilot\scripts\pilot-run-chat-procedures.ps1 -Repo C:\Users\VYONIX\Github\ClawX-release-moe10 -EvidenceRoot C:\Users\VYONIX\Downloads -DownloadsPath C:\Users\VYONIX\Downloads -RunPreflight -Relaunch
 
 Broader acceptance command after the chat procedure harness is green:
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows-pilot\scripts\pilot-run-demo-acceptance.ps1 -Repo C:\Users\VYONIX\Github\ClawX-release-moe10 -EvidenceRoot C:\Users\VYONIX\Downloads -RunChatProcedures
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows-pilot\scripts\pilot-run-demo-acceptance.ps1 -Repo C:\Users\VYONIX\Github\ClawX-release-moe10 -EvidenceRoot C:\Users\VYONIX\Downloads
 
 Acceptance criteria:
 - Chrome CDP 18792 is up and Outlook is signed in.
@@ -50,7 +52,7 @@ Acceptance criteria:
 - No email is sent, no attachment is downloaded, and no form is submitted.
 
 Recursive improvement loop:
-1. Run the first command and wait for completion.
+1. Pull latest code, run the first harness command, and wait for completion.
 2. Read the newest final-report.md and scenario-results.json under C:\Users\VYONIX\Downloads\clawx-chat-procedures-*.
 3. Classify each failure as one of:
    - network/WiFi/cloud reachability

@@ -20,9 +20,10 @@ To include it inside the broader acceptance suite:
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\windows-pilot\scripts\pilot-run-demo-acceptance.ps1" `
   -Repo "C:\Users\VYONIX\Github\ClawX-release-moe10" `
-  -EvidenceRoot "C:\Users\VYONIX\Downloads" `
-  -RunChatProcedures
+  -EvidenceRoot "C:\Users\VYONIX\Downloads"
 ```
+
+`pilot-run-demo-acceptance.ps1` runs the chat procedures by default. Use `-SkipChatProcedures` only for a fast infrastructure-only probe that must not be treated as full demo readiness.
 
 ## Scenario Source
 
@@ -70,7 +71,19 @@ The pass condition is:
 - `scenario-results.json` contains per-scenario artifact paths.
 - The Downloads inventory is captured as `downloads-inventory.json`.
 - Safe chat scenarios prove `chat.send`, current-prompt scoping, final verification-token echo, no banned side effects, expected tool evidence, and required answer patterns.
+- Exact-tool safe chat scenarios fail if the model calls extra tools.
+- Custom document scenarios fail if expected file-reading tools only return errors or if a scenario-level banned tool is used.
 - Forms smoke proves `status=previewed`, meaningful filled-field counts, zero preview errors, and refusal status for submit without confirmation.
+
+## Local Regression
+
+The transcript evaluator has deterministic unit coverage that runs without Windows, Electron, Outlook, or Forms:
+
+```bash
+pnpm exec vitest run tests/unit/windows-pilot-electron-cdp-probe.test.ts
+```
+
+This covers long-history scoping, exact-tool enforcement, banned side-effect detection, and expected tool result errors.
 
 ## When It Fails
 
