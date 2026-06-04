@@ -90,10 +90,9 @@ if (`$rawPrompt -match '(?s)```(?:text|markdown)?\s*(.*?)\s*```') {
   "--permission-mode", $permissionLiteral,
   "--effort", $effortLiteral,
   "--debug-file", `$DebugFile,
-  "--allowedTools", `$AllowedToolsValue,
-  `$prompt
+  "--allowedTools", `$AllowedToolsValue
 )
-& `$ClaudeExe @claudeArgs *>> `$StdoutFile
+`$prompt | & `$ClaudeExe @claudeArgs *>> `$StdoutFile
 `$exitCode = `$LASTEXITCODE
 `$ended = Get-Date -Format o
 "ENDED=`$ended" | Add-Content -LiteralPath `$StdoutFile
