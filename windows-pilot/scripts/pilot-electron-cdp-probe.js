@@ -877,20 +877,28 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  const failure = {
-    state: 'ELECTRON_CDP_PROBE_FAILED',
-    error: error instanceof Error ? error.message : String(error),
-    stack: error instanceof Error ? error.stack : undefined,
-  };
-  try {
-    const args = parseArgs(process.argv.slice(2));
-    fs.mkdirSync(args.artifactDir, { recursive: true });
-    const summaryPath = path.join(args.artifactDir, `clawx-electron-probe-failed-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
-    fs.writeFileSync(summaryPath, JSON.stringify(redact(failure), null, 2));
-    console.error(JSON.stringify(redact({ ...failure, summaryPath }), null, 2));
-  } catch {
-    console.error(JSON.stringify(redact(failure), null, 2));
-  }
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    const failure = {
+      state: 'ELECTRON_CDP_PROBE_FAILED',
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    };
+    try {
+      const args = parseArgs(process.argv.slice(2));
+      fs.mkdirSync(args.artifactDir, { recursive: true });
+      const summaryPath = path.join(args.artifactDir, `clawx-electron-probe-failed-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+      fs.writeFileSync(summaryPath, JSON.stringify(redact(failure), null, 2));
+      console.error(JSON.stringify(redact({ ...failure, summaryPath }), null, 2));
+    } catch {
+      console.error(JSON.stringify(redact(failure), null, 2));
+    }
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  safeChatBannedTools,
+  safeChatExpectedTool,
+  summarizeChatHistory,
+};
