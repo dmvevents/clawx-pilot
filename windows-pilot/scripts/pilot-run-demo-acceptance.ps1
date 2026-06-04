@@ -19,7 +19,8 @@ param(
   [int] $WaitMs = 10000,
   [switch] $SkipRelaunch,
   [switch] $RunRegressionTests,
-  [switch] $RunChatProcedures
+  [switch] $RunChatProcedures,
+  [switch] $SkipChatProcedures
 )
 
 $ErrorActionPreference = "Continue"
@@ -186,7 +187,7 @@ Invoke-Step "office-runtime-check" {
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\windows-pilot\scripts\pilot-office-runtime-check.ps1"
 }
 
-if ($RunChatProcedures) {
+if ($RunChatProcedures -or -not $SkipChatProcedures) {
   Invoke-Step "chat-procedures" {
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\windows-pilot\scripts\pilot-run-chat-procedures.ps1" `
       -Repo $Repo `

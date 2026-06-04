@@ -274,8 +274,14 @@ function safeChatBannedTools() {
   return new Set([
     'forms.submit_daily_report',
     'forms.submit_suspension',
+    'forms.submit-daily-report',
+    'forms.submit-suspension',
     'outlook.send_email',
+    'outlook.send-email',
     'outlook.download_attachment',
+    'outlook.download-attachment',
+    'outlook.reply',
+    'outlook.forward',
     'sessions_spawn',
     'sessions_yield',
   ]);
@@ -317,7 +323,7 @@ async function loadChatHistory(page, sessionKey = 'agent:main:main') {
     return invoke(
       'gateway:rpc',
       'chat.history',
-      { sessionKey: innerSessionKey, limit: 40 },
+      { sessionKey: innerSessionKey, limit: 200 },
       35_000,
     );
   }, { sessionKey });
@@ -371,6 +377,7 @@ function summarizeChatHistory(result, mode, verificationToken) {
   const bannedTools = safeChatBannedTools();
   const bannedToolCalls = [];
   const bannedToolResults = [];
+  const unexpectedToolCalls = [];
   const observedToolCalls = [];
   const observedToolResults = [];
   for (const message of scoped) {
@@ -378,6 +385,9 @@ function summarizeChatHistory(result, mode, verificationToken) {
     for (const part of content) {
       if (part?.type === 'toolCall' && part.name) {
         observedToolCalls.push({ name: part.name, id: part.id });
+        if (expectedTool && part.name !== expectedTool) {
+          unexpectedToolCalls.push({ name: part.name, id: part.id });
+        }
       }
       if (part?.type === 'toolCall' && bannedTools.has(part.name)) {
         bannedToolCalls.push({ name: part.name, id: part.id });
@@ -410,6 +420,8 @@ function summarizeChatHistory(result, mode, verificationToken) {
     observedToolCalls,
     observedToolResults,
     expectedToolResultOk: expectedTool ? Boolean(expectedToolResult && expectedToolResult.isError !== true) : true,
+    expectedToolOnly: expectedTool ? unexpectedToolCalls.length === 0 : true,
+    unexpectedToolCalls,
     noBannedSideEffects,
     bannedToolCalls,
     bannedToolResults,
@@ -429,6 +441,7 @@ async function waitForSafeChatHistory(page, mode, verificationToken, timeoutMs =
       && lastSummary.completed
       && lastSummary.finalAnswerEchoedMarker
       && lastSummary.expectedToolResultOk
+      && lastSummary.expectedToolOnly
       && lastSummary.noBannedSideEffects
     ) {
       return lastSummary;
@@ -823,7 +836,7 @@ async function main() {
       ? await runFormsSubmit(page)
       : { skipped: true };
 
-    await page.waitForTimeout(Math.max(0, args.waitMs));
+    await sleep(Math.max(0, args.waitMs));
     const safeChatHistory = args.safeChat
       ? await withTimeout('gateway chat.history', () => waitForSafeChatHistory(page, args.safeChatMode, safeChatVerificationToken, 120_000, safeChatSessionKey), 130_000)
         .catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }))
@@ -865,10 +878,19 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(JSON.stringify(redact({
+  const failure = {
     state: 'ELECTRON_CDP_PROBE_FAILED',
     error: error instanceof Error ? error.message : String(error),
     stack: error instanceof Error ? error.stack : undefined,
-  }), null, 2));
+  };
+  try {
+    const args = parseArgs(process.argv.slice(2));
+    fs.mkdirSync(args.artifactDir, { recursive: true });
+    const summaryPath = path.join(args.artifactDir, `clawx-electron-probe-failed-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+    fs.writeFileSync(summaryPath, JSON.stringify(redact(failure), null, 2));
+    console.error(JSON.stringify(redact({ ...failure, summaryPath }), null, 2));
+  } catch {
+    console.error(JSON.stringify(redact(failure), null, 2));
+  }
   process.exit(1);
 });

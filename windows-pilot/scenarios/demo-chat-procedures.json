@@ -26,6 +26,17 @@
       "required": true,
       "waitMs": 16000,
       "expectedToolAny": ["exec", "process", "read"],
+      "bannedToolAny": [
+        "outlook.draft_email",
+        "outlook.send_email",
+        "outlook.download_attachment",
+        "forms.preview_daily_report",
+        "forms.preview_suspension",
+        "forms.submit_daily_report",
+        "forms.submit_suspension",
+        "sessions_spawn",
+        "sessions_yield"
+      ],
       "requiredAnswerPatterns": [
         "filename|file",
         "extension|\\.xlsx|\\.docx|\\.pdf|\\.csv|\\.txt|\\.md",
@@ -40,6 +51,17 @@
       "required": true,
       "waitMs": 45000,
       "expectedToolAny": ["exec", "process", "read"],
+      "bannedToolAny": [
+        "outlook.draft_email",
+        "outlook.send_email",
+        "outlook.download_attachment",
+        "forms.preview_daily_report",
+        "forms.preview_suspension",
+        "forms.submit_daily_report",
+        "forms.submit_suspension",
+        "sessions_spawn",
+        "sessions_yield"
+      ],
       "requiredAnswerPatterns": [
         "xlsx|xls|csv|spreadsheet|workbook",
         "sheet|column|row",
@@ -54,6 +76,17 @@
       "required": false,
       "waitMs": 22000,
       "expectedToolAny": ["exec", "process", "read"],
+      "bannedToolAny": [
+        "outlook.draft_email",
+        "outlook.send_email",
+        "outlook.download_attachment",
+        "forms.preview_daily_report",
+        "forms.preview_suspension",
+        "forms.submit_daily_report",
+        "forms.submit_suspension",
+        "sessions_spawn",
+        "sessions_yield"
+      ],
       "requiredAnswerPatterns": [
         "suspension|discipline|attendance|report|source document|no suitable source",
         "school|class|incident|reason|parent|missing"

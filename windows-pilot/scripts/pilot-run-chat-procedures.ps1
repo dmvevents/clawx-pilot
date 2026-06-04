@@ -79,7 +79,7 @@ function Invoke-LoggedCommand {
 }
 
 function Get-LatestProbeJson($dir) {
-  $json = Get-ChildItem $dir -Filter "clawx-electron-probe-*.json" -ErrorAction SilentlyContinue |
+  $json = Get-ChildItem $dir -Filter "clawx-electron-probe*.json" -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
   if ($json) { return $json.FullName }
@@ -162,13 +162,33 @@ function Test-CustomScenarioAssertions {
   }
   if ($expectedAny.Count -gt 0) {
     $matched = $false
+    $matchedNonErrorResult = $false
     foreach ($expectedTool in $expectedAny) {
-      if ($observedToolNames -contains ([string] $expectedTool)) {
+      $expectedName = [string] $expectedTool
+      if ($observedToolNames -contains $expectedName) {
         $matched = $true
+      }
+      foreach ($toolResult in @($History.observedToolResults)) {
+        if ([string] $toolResult.name -eq $expectedName -and $toolResult.isError -ne $true) {
+          $matchedNonErrorResult = $true
+        }
       }
     }
     if (-not $matched) {
       Add-Reason $Reasons ("expected at least one tool from [{0}], observed [{1}]" -f (($expectedAny | ForEach-Object { [string] $_ }) -join ", "), ($observedToolNames -join ", "))
+    }
+    if (-not $matchedNonErrorResult) {
+      Add-Reason $Reasons ("expected at least one non-error tool result from [{0}]" -f (($expectedAny | ForEach-Object { [string] $_ }) -join ", "))
+    }
+  }
+
+  $bannedAny = @()
+  if ($Scenario.PSObject.Properties.Name -contains "bannedToolAny" -and $null -ne $Scenario.bannedToolAny) {
+    $bannedAny = @($Scenario.bannedToolAny) | Where-Object { $null -ne $_ -and ([string] $_).Length -gt 0 }
+  }
+  foreach ($bannedTool in $bannedAny) {
+    if ($observedToolNames -contains ([string] $bannedTool)) {
+      Add-Reason $Reasons ("banned tool observed: {0}" -f ([string] $bannedTool))
     }
   }
 
@@ -255,6 +275,10 @@ function Test-SafeChatResult {
     if ($history.completed -ne $true) { Add-Reason $Reasons "safe chat did not complete" }
     if ($history.finalAnswerEchoedMarker -ne $true) { Add-Reason $Reasons "safe chat final answer did not echo verification token" }
     if ($history.expectedToolResultOk -ne $true) { Add-Reason $Reasons "expected tool result was not ok" }
+    if ($Type -eq "safe-chat-mode" -and $history.expectedToolOnly -ne $true) {
+      $unexpected = @($history.unexpectedToolCalls | ForEach-Object { [string] $_.name }) -join ", "
+      Add-Reason $Reasons ("safe chat used unexpected tool(s): {0}" -f $unexpected)
+    }
     if ($history.noBannedSideEffects -ne $true) { Add-Reason $Reasons "banned send/download/submit/background-session tool was observed" }
     if ($Type -eq "safe-chat-custom") {
       Test-CustomScenarioAssertions $Scenario $history $Reasons
