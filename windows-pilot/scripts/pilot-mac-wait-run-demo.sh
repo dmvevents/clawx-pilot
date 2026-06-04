@@ -135,6 +135,11 @@ Write-Output ('EvidenceRoot=' + \$EvidenceRoot)
 Write-Output ('Started=' + (Get-Date -Format o))
 
 Set-Location -LiteralPath \$Repo
+\$GeneratedHelper = Join-Path \$Repo 'summarize_excel.py'
+if (Test-Path -LiteralPath \$GeneratedHelper) {
+  Remove-Item -LiteralPath \$GeneratedHelper -Force
+  Write-Output 'Removed generated helper: summarize_excel.py'
+}
 git status --short --branch
 git pull --ff-only
 git rev-parse --short HEAD
