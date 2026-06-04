@@ -416,19 +416,29 @@ function Invoke-Scenario {
   $probePath = Get-LatestProbeJson $scenarioDir
   $probe = Read-JsonFile $probePath
   $reasons = New-Object System.Collections.ArrayList
+  $hardFailure = $false
   if ($exitCode -ne 0) {
+    $hardFailure = $true
     Add-Reason $reasons ("probe command exited {0}" -f $exitCode)
+  }
+  if (-not $probePath -or $null -eq $probe) {
+    $hardFailure = $true
+    Add-Reason $reasons "probe JSON missing or invalid"
+  } elseif ($probe.state -ne "ELECTRON_CDP_PROBE_DONE") {
+    $hardFailure = $true
+    Add-Reason $reasons ("probe state was {0}" -f $probe.state)
   }
   if ($type -eq "hostapi-smoke") {
     [void] (Test-HostApiSmokeResult $probe $reasons)
   } elseif ($type -eq "safe-chat-mode" -or $type -eq "safe-chat-custom") {
     [void] (Test-SafeChatResult $probe $Scenario $type $reasons)
   } else {
+    $hardFailure = $true
     Add-Reason $reasons ("unknown scenario type {0}" -f $type)
   }
 
   $passed = ($reasons.Count -eq 0)
-  $status = if ($passed) { "PASS" } elseif ($required) { "FAIL" } else { "WARN" }
+  $status = if ($passed) { "PASS" } elseif ($required -or $hardFailure) { "FAIL" } else { "WARN" }
   Write-Line ("SCENARIO_RESULT {0} {1}" -f $id, $status)
 
   return [ordered]@{
@@ -438,6 +448,7 @@ function Invoke-Scenario {
     required = $required
     status = $status
     passed = $passed
+    hardFailure = $hardFailure
     exitCode = $exitCode
     reasons = @($reasons)
     artifactDir = $scenarioDir
@@ -532,9 +543,10 @@ foreach ($scenario in @($scenarioDoc.scenarios)) {
 $jsonPath = Join-Path $script:Evidence "scenario-results.json"
 $script:Results | ConvertTo-Json -Depth 8 | Set-Content -Path $jsonPath -Encoding UTF8
 
+$hardFailures = @($script:Results | Where-Object { $_.hardFailure -eq $true })
 $failedRequired = @($script:Results | Where-Object { $_.required -eq $true -and $_.passed -ne $true })
 $warnings = @($script:Results | Where-Object { $_.required -ne $true -and $_.passed -ne $true })
-$status = if ($failedRequired.Count -eq 0) { "READY_SAFE_CHAT_PROCEDURES" } else { "NOT_READY" }
+$status = if ($hardFailures.Count -eq 0 -and $failedRequired.Count -eq 0) { "READY_SAFE_CHAT_PROCEDURES" } else { "NOT_READY" }
 
 $reportPath = Join-Path $script:Evidence "final-report.md"
 $report = @(
@@ -547,6 +559,7 @@ $report = @(
   "- generated: $(Get-Date -Format o)",
   "- chrome_cdp_18792: $(Test-HttpOk 'http://127.0.0.1:18792/json/version')",
   "- electron_cdp_9223: $(Test-HttpOk "$ElectronEndpoint/json/version")",
+  "- hard_failures: $($hardFailures.Count)",
   "- required_failures: $($failedRequired.Count)",
   "- optional_warnings: $($warnings.Count)",
   "",

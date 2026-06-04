@@ -11,6 +11,7 @@ type DemoScenario = {
 };
 
 const scenarioPath = join(process.cwd(), 'windows-pilot', 'scenarios', 'demo-chat-procedures.json');
+const chatProcedureScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-run-chat-procedures.ps1');
 
 function loadScenarios(): DemoScenario[] {
   const parsed = JSON.parse(readFileSync(scenarioPath, 'utf8')) as { scenarios?: DemoScenario[] };
@@ -44,5 +45,15 @@ describe('Windows pilot chat procedure scenarios', () => {
       ].sort());
       expect(scenario.prompt).toContain('Do not modify files, create helper scripts, or write temporary files.');
     }
+  });
+
+  it('keeps probe execution failures hard-failing even for optional scenarios', () => {
+    const script = readFileSync(chatProcedureScriptPath, 'utf8');
+
+    expect(script).toMatch(/\$hardFailure\s*=\s*\$true\s*\n\s*Add-Reason \$reasons \("probe command exited/);
+    expect(script).toMatch(/\$hardFailure\s*=\s*\$true\s*\n\s*Add-Reason \$reasons "probe JSON missing or invalid"/);
+    expect(script).toContain('$status = if ($passed) { "PASS" } elseif ($required -or $hardFailure) { "FAIL" } else { "WARN" }');
+    expect(script).toContain('$hardFailures = @($script:Results | Where-Object { $_.hardFailure -eq $true })');
+    expect(script).toContain('$status = if ($hardFailures.Count -eq 0 -and $failedRequired.Count -eq 0) { "READY_SAFE_CHAT_PROCEDURES" } else { "NOT_READY" }');
   });
 });
