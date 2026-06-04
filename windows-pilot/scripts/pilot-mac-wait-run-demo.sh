@@ -5,6 +5,11 @@
 
 set -u
 
+# launchctl submits jobs with a minimal PATH, which hides Homebrew tools such as
+# nmap. Keep discovery self-contained so the laptop watcher works from launchd.
+PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH
+
 SSH_HOST="${SSH_HOST:-pilot}"
 SSH_HOSTS="${SSH_HOSTS:-$SSH_HOST}"
 SSH_USER="${SSH_USER:-vyonix}"
