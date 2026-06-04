@@ -73,7 +73,13 @@ $runner = @"
 `$DebugFile = $debugLiteral
 `$ClaudeExe = $claudeLiteral
 Set-Location -LiteralPath `$RepoPath
-`$prompt = Get-Content -Raw -LiteralPath `$PromptFile
+`$rawPrompt = Get-Content -Raw -LiteralPath `$PromptFile
+if (`$rawPrompt -match '(?s)```(?:text|markdown)?\s*(.*?)\s*```') {
+  `$promptBody = `$Matches[1]
+} else {
+  `$promptBody = `$rawPrompt
+}
+`$prompt = "Execute the following instructions now from this Windows laptop session. Do not summarize the instructions, ask which option, or wait for a human unless a hard blocker or safety rule requires it. Start by running the First command and proceed through the recursive improvement loop.`r`n`r`n" + `$promptBody
 `$started = Get-Date -Format o
 "STARTED=`$started" | Set-Content -LiteralPath `$StdoutFile -Encoding UTF8
 & `$ClaudeExe -p --permission-mode $permissionLiteral --effort $effortLiteral --debug-file `$DebugFile `$prompt *>> `$StdoutFile
