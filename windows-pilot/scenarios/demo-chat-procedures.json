@@ -38,14 +38,14 @@
       "title": "Chat can select and summarize a spreadsheet from Downloads",
       "type": "safe-chat-custom",
       "required": true,
-      "waitMs": 22000,
+      "waitMs": 45000,
       "expectedToolAny": ["exec", "process", "read"],
       "requiredAnswerPatterns": [
         "xlsx|xls|csv|spreadsheet|workbook",
         "sheet|column|row",
         "school|result|attendance|SEA|trend|total"
       ],
-      "prompt": "Find the most relevant Excel or CSV file in {{DOWNLOADS_PATH}}, preferring a school-results or attendance workbook if present. Read only enough to summarize sheet names, column headers, row counts, and any obvious totals or trends. If no spreadsheet is present, say exactly that. Do not spawn subagents or background sessions; finish the summary in this chat. Do not modify files. Do not send email. Do not submit forms. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
+      "prompt": "Find the most relevant Excel or CSV file in {{DOWNLOADS_PATH}}, preferring a school-results or attendance workbook if present. The exec tool runs PowerShell on Windows; use 'Get-ChildItem -Path \"{{DOWNLOADS_PATH}}\" -Filter *.xlsx' and similar filters for .csv and .xls rather than cmd-style 'dir /b'. Read only enough to summarize sheet names, column headers, row counts, and any obvious totals or trends. If no spreadsheet is present, say exactly that. Do not spawn subagents or background sessions; finish the summary in this chat. Do not modify files. Do not send email. Do not submit forms. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
     },
     {
       "id": "downloads-word-suspension-fields",
