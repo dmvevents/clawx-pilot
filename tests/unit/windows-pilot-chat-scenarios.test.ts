@@ -26,6 +26,17 @@ function loadScenarios(): DemoScenario[] {
 }
 
 describe('Windows pilot chat procedure scenarios', () => {
+  it('keeps safe-chat Outlook open as a required exact-tool scenario', () => {
+    const outlookOpen = loadScenarios().find((scenario) => scenario.id === 'safechat-outlook-open');
+
+    expect(outlookOpen).toMatchObject({
+      type: 'safe-chat-mode',
+      mode: 'outlook-open',
+      required: true,
+    });
+    expect(outlookOpen?.prompt).toBeUndefined();
+  });
+
   it('requires the Downloads inventory prompt to cover every demo document extension', () => {
     const inventory = loadScenarios().find((scenario) => scenario.id === 'downloads-document-inventory');
 
@@ -153,8 +164,13 @@ describe('Windows pilot chat procedure scenarios', () => {
     expect(seedScript).toContain('Daily Report Demo Source');
     expect(seedScript).toContain('Student Suspension Demo Source');
     expect(seedScript).toContain('System.IO.Compression.ZipFile');
+    expect(seedScript).toContain('Assert-OpenXmlPackage');
+    expect(seedScript).toContain('[System.IO.File]::Replace($tempPackage, $PackagePath, $null, $true)');
     expect(seedScript).toContain('Write-DemoWorkbook');
     expect(seedScript).toContain('Write-DemoWordDocument');
+    expect(seedScript).toContain('Write-State "DEMO_DOCUMENTS_SEEDED" "false"');
+    expect(seedScript).toContain('exit 6');
+    expect(seedScript).not.toContain('Remove-Item -LiteralPath $PackagePath');
     expect(seedScript).not.toContain('New-Object -ComObject Word.Application');
     expect(seedScript).toContain('STATE:');
 

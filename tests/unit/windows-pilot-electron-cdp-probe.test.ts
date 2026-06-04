@@ -220,6 +220,23 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     expect(validation.reasons).toContain('suspension preview filledCount was 30, expected at least 31');
   });
 
+  it('fails forms smoke validation when previews report field errors', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      formsSmoke: {
+        dailyPreview: { ok: true, result: { status: 'previewed', filledCount: 30, errorCount: 1 } },
+        dailySubmitWithoutConfirm: { ok: true, result: { status: 'refused', refused: true } },
+        preview: { ok: true, result: { status: 'previewed', filledCount: 31, errorCount: 2 } },
+        submitWithoutConfirm: { ok: true, result: { status: 'refused', refused: true } },
+      },
+    }, { formsSmoke: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('daily report preview errorCount was 1');
+    expect(validation.reasons).toContain('suspension preview errorCount was 2');
+  });
+
   it('fails forms smoke validation when submit without confirm is accepted', () => {
     const validation = validateProbeSummary({
       state: 'ELECTRON_CDP_PROBE_DONE',
@@ -237,5 +254,50 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     expect(validation.reasons).toContain('daily report submit without confirm was not refused');
     expect(validation.reasons).toContain('suspension submit without confirm status was submitted');
     expect(validation.reasons).toContain('suspension submit without confirm was not refused');
+  });
+
+  it('fails draft validation when Outlook draft is not left open', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      emailDraft: {
+        subject: 'Demo draft',
+        toCount: 1,
+        draft: { ok: true, result: { status: 'drafted', draftLeftOpen: false } },
+      },
+    }, { draftEmail: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('outlook draft was not left open');
+  });
+
+  it('fails confirmed send validation when draft or send results are incomplete', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      emailSend: {
+        subject: 'Demo send',
+        toCount: 1,
+        draft: { ok: true, result: { status: 'drafted', draftLeftOpen: true } },
+        send: { ok: true, result: { status: 'refused' } },
+      },
+    }, { sendEmail: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('outlook confirmed send status was refused');
+  });
+
+  it('fails confirmed form submit validation when preview is incomplete', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      formsSubmit: {
+        preview: { ok: true, result: { status: 'previewed', filledCount: 30, errorCount: 0 } },
+        submit: { ok: true, result: { status: 'submitted' } },
+      },
+    }, { submitForms: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('suspension submit preview filledCount was 30, expected at least 31');
   });
 });

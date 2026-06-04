@@ -135,6 +135,11 @@ describe('moe-principal-assistant plugin registration', () => {
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
 
       await byName['outlook.open'].execute('call-open', {});
+      await byName['outlook.draft_email'].execute('call-draft', {
+        to: 'recipient@example.invalid',
+        subject: 'Safety gate smoke',
+        body: 'Body is not logged by this test.',
+      });
       await byName['outlook.send_email'].execute('call-send', {
         to: 'recipient@example.invalid',
         subject: 'Safety gate smoke',
@@ -149,6 +154,7 @@ describe('moe-principal-assistant plugin registration', () => {
 
       expect(calls.map((call) => new URL(call.url).pathname)).toEqual([
         '/api/outlook/open',
+        '/api/outlook/draft',
         '/api/outlook/send',
         '/api/outlook/download-attachment',
         '/api/forms/submit-daily-report',
@@ -157,10 +163,11 @@ describe('moe-principal-assistant plugin registration', () => {
       for (const call of calls) {
         expect(call.headers.Authorization).toBe('Bearer test-token');
       }
-      expect(calls[1].body).toMatchObject({ confirm: false });
+      expect(calls[1].body).not.toMatchObject({ confirm: expect.any(Boolean) });
       expect(calls[2].body).toMatchObject({ confirm: false });
       expect(calls[3].body).toMatchObject({ confirm: false });
       expect(calls[4].body).toMatchObject({ confirm: false });
+      expect(calls[5].body).toMatchObject({ confirm: false });
     } finally {
       if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
       else process.env.CLAWX_HOST_API_PORT = previousPort;

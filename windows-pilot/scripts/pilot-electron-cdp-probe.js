@@ -535,6 +535,32 @@ function validateFormsSmoke(summary, reasons) {
   addValidationReason(reasons, forms?.submitWithoutConfirm?.result?.refused === true, 'suspension submit without confirm was not refused');
 }
 
+function validateOutlookDraft(summary, reasons) {
+  const draft = summary?.emailDraft;
+  addValidationReason(reasons, draft && draft.skipped !== true, 'outlook draft skipped or missing');
+  addValidationReason(reasons, draft?.draft?.ok === true, 'outlook draft call was not ok');
+  addValidationReason(reasons, statusOf(draft?.draft) === 'drafted', `outlook draft status was ${statusOf(draft?.draft) ?? 'missing'}`);
+  addValidationReason(reasons, draft?.draft?.result?.draftLeftOpen === true, 'outlook draft was not left open');
+}
+
+function validateOutlookSend(summary, reasons) {
+  const emailSend = summary?.emailSend;
+  addValidationReason(reasons, emailSend && emailSend.skipped !== true, 'outlook send skipped or missing');
+  addValidationReason(reasons, emailSend?.draft?.ok === true, 'outlook send draft call was not ok');
+  addValidationReason(reasons, statusOf(emailSend?.draft) === 'drafted', `outlook send draft status was ${statusOf(emailSend?.draft) ?? 'missing'}`);
+  addValidationReason(reasons, emailSend?.draft?.result?.draftLeftOpen === true, 'outlook send draft was not left open before send');
+  addValidationReason(reasons, emailSend?.send?.ok === true, 'outlook confirmed send call was not ok');
+  addValidationReason(reasons, statusOf(emailSend?.send) === 'sent', `outlook confirmed send status was ${statusOf(emailSend?.send) ?? 'missing'}`);
+}
+
+function validateFormsSubmit(summary, reasons) {
+  const formsSubmit = summary?.formsSubmit;
+  addValidationReason(reasons, formsSubmit && formsSubmit.skipped !== true, 'forms submit skipped or missing');
+  validatePreview(formsSubmit?.preview, 'suspension submit', EXPECTED_SUSPENSION_SMOKE_FILLED_COUNT, reasons);
+  addValidationReason(reasons, formsSubmit?.submit?.ok === true, 'forms confirmed submit call was not ok');
+  addValidationReason(reasons, statusOf(formsSubmit?.submit) === 'submitted', `forms confirmed submit status was ${statusOf(formsSubmit?.submit) ?? 'missing'}`);
+}
+
 function validateProbeSummary(summary, args = {}) {
   const reasons = [];
   addValidationReason(reasons, summary?.state === 'ELECTRON_CDP_PROBE_DONE', `probe state was ${summary?.state ?? 'missing'}`);
@@ -555,6 +581,9 @@ function validateProbeSummary(summary, args = {}) {
   if (args.safeChat) validateSafeChat(summary, reasons);
   if (args.outlookSmoke) validateOutlookSmoke(summary, reasons);
   if (args.formsSmoke) validateFormsSmoke(summary, reasons);
+  if (args.draftEmail) validateOutlookDraft(summary, reasons);
+  if (args.sendEmail) validateOutlookSend(summary, reasons);
+  if (args.submitForms) validateFormsSubmit(summary, reasons);
 
   return {
     ok: reasons.length === 0,

@@ -39,32 +39,84 @@ function Write-PackageText {
   [System.IO.File]::WriteAllText($path, $content, $encoding)
 }
 
+function Add-ZipAssembly {
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+}
+
+function Assert-OpenXmlPackage {
+  param(
+    [string] $PackagePath,
+    [string[]] $RequiredEntries
+  )
+
+  $zip = $null
+  try {
+    Add-ZipAssembly
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($PackagePath)
+    foreach ($requiredEntry in $RequiredEntries) {
+      $normalizedRequired = $requiredEntry -replace "\\", "/"
+      $found = $false
+      foreach ($entry in $zip.Entries) {
+        $normalizedEntry = $entry.FullName -replace "\\", "/"
+        if ($normalizedEntry -eq $normalizedRequired) {
+          $found = $true
+          break
+        }
+      }
+      if (-not $found) {
+        throw ("missing OpenXML entry: {0}" -f $normalizedRequired)
+      }
+    }
+    return $true
+  } catch {
+    Write-State "OPENXML_PACKAGE_INVALID" ("{0}: {1}" -f $PackagePath, $_.Exception.Message)
+    return $false
+  } finally {
+    if ($zip) {
+      $zip.Dispose()
+    }
+  }
+}
+
 function New-OpenXmlPackage {
   param(
     [string] $PackagePath,
+    [string[]] $RequiredEntries,
     [scriptblock] $WriteFiles
   )
 
   $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("clawx-demo-openxml-" + [System.Guid]::NewGuid().ToString("N"))
+  $destinationDir = Split-Path -Parent $PackagePath
+  $tempPackage = Join-Path $destinationDir (".{0}.{1}.tmp" -f [System.IO.Path]::GetFileName($PackagePath), [System.Guid]::NewGuid().ToString("N"))
   try {
     New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
     & $WriteFiles $tempDir
-    if (Test-Path -LiteralPath $PackagePath) {
-      Remove-Item -LiteralPath $PackagePath -Force
+    Add-ZipAssembly
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $tempPackage)
+    if (-not (Assert-OpenXmlPackage -PackagePath $tempPackage -RequiredEntries $RequiredEntries)) {
+      return $false
     }
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $PackagePath)
-    return $true
+    if (Test-Path -LiteralPath $PackagePath) {
+      [System.IO.File]::Replace($tempPackage, $PackagePath, $null, $true)
+    } else {
+      [System.IO.File]::Move($tempPackage, $PackagePath)
+    }
+    return (Assert-OpenXmlPackage -PackagePath $PackagePath -RequiredEntries $RequiredEntries)
   } catch {
     Write-State "OPENXML_PACKAGE_FAILED" $_.Exception.Message
     return $false
   } finally {
     Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $tempPackage -Force -ErrorAction SilentlyContinue
   }
 }
 
 function Write-DemoWordDocument($path, $lines) {
-  return (New-OpenXmlPackage -PackagePath $path -WriteFiles {
+  return (New-OpenXmlPackage -PackagePath $path -RequiredEntries @(
+    "[Content_Types].xml",
+    "_rels/.rels",
+    "word/document.xml"
+  ) -WriteFiles {
     param($root)
     Write-PackageText -Root $root -RelativePath "[Content_Types].xml" -Content @'
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -106,7 +158,14 @@ function Get-ExcelColumnName([int] $index) {
 }
 
 function Write-DemoWorkbook($path, $rows) {
-  return (New-OpenXmlPackage -PackagePath $path -WriteFiles {
+  return (New-OpenXmlPackage -PackagePath $path -RequiredEntries @(
+    "[Content_Types].xml",
+    "_rels/.rels",
+    "xl/workbook.xml",
+    "xl/_rels/workbook.xml.rels",
+    "xl/styles.xml",
+    "xl/worksheets/sheet1.xml"
+  ) -WriteFiles {
     param($root)
     Write-PackageText -Root $root -RelativePath "[Content_Types].xml" -Content @'
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -246,10 +305,24 @@ Write-Utf8File $suspensionSource $suspensionLines
 
 $docxCreated = Write-DemoWordDocument $suspensionDocx $suspensionLines
 
-Write-State "DEMO_DOCUMENTS_SEEDED" "true"
+$requiredPlainFilesReady = $true
+foreach ($requiredPlainFile in @($attendanceCsv, $dailySource, $suspensionSource)) {
+  if (-not (Test-Path -LiteralPath $requiredPlainFile)) {
+    $requiredPlainFilesReady = $false
+    Write-State "REQUIRED_DEMO_FILE_MISSING" $requiredPlainFile
+  }
+}
+
 Write-State "DOWNLOADS_PATH" $DownloadsPath
 Write-State "ATTENDANCE_CSV" $attendanceCsv
 Write-State "ATTENDANCE_XLSX" $(if ($xlsxCreated) { $attendanceXlsx } else { "failed" })
 Write-State "DAILY_SOURCE" $dailySource
 Write-State "SUSPENSION_SOURCE" $suspensionSource
 Write-State "SUSPENSION_DOCX" $(if ($docxCreated) { $suspensionDocx } else { "failed" })
+
+if (-not ($requiredPlainFilesReady -and $xlsxCreated -and $docxCreated)) {
+  Write-State "DEMO_DOCUMENTS_SEEDED" "false"
+  exit 6
+}
+
+Write-State "DEMO_DOCUMENTS_SEEDED" "true"
