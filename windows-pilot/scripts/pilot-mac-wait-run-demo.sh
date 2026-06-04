@@ -272,7 +272,7 @@ git rev-parse --short HEAD
 node --check .\\windows-pilot\\scripts\\pilot-electron-cdp-probe.js
 node -e "JSON.parse(require('fs').readFileSync('windows-pilot/scenarios/demo-chat-procedures.json','utf8')); console.log('SCENARIO_JSON_OK')"
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\windows-pilot\\scripts\\pilot-run-chat-procedures.ps1 -Repo \$Repo -EvidenceRoot \$EvidenceRoot -DownloadsPath \$EvidenceRoot -RunPreflight -Relaunch
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\windows-pilot\\scripts\\pilot-run-chat-procedures.ps1 -Repo \$Repo -EvidenceRoot \$EvidenceRoot -DownloadsPath \$EvidenceRoot -RunPreflight -Relaunch -SeedDemoDocuments
 if (\$LASTEXITCODE -ne 0) {
   throw "chat procedures failed with exit code \$LASTEXITCODE"
 }

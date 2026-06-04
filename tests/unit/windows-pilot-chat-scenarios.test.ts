@@ -18,6 +18,7 @@ const demoAcceptanceScriptPath = join(process.cwd(), 'windows-pilot', 'scripts',
 const macWaitRunDemoScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-mac-wait-run-demo.sh');
 const claudeChatLoopScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-start-claude-chat-loop.ps1');
 const pilotWatcherInstallerPath = join(process.cwd(), 'windows-pilot', 'scripts', 'install-pilot-watcher-launchd.sh');
+const seedDemoDocumentsScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-seed-demo-documents.ps1');
 
 function loadScenarios(): DemoScenario[] {
   const parsed = JSON.parse(readFileSync(scenarioPath, 'utf8')) as { scenarios?: DemoScenario[] };
@@ -136,6 +137,27 @@ describe('Windows pilot chat procedure scenarios', () => {
 
     expect(script).toContain('Invoke-Step "windows-pilot-harness-tests"');
     expect(script).toContain('tests/unit/windows-pilot-electron-cdp-probe.test.ts tests/unit/windows-pilot-chat-scenarios.test.ts');
+  });
+
+  it('seeds sanitized Downloads demo documents before chat procedures when requested', () => {
+    const seedScript = readFileSync(seedDemoDocumentsScriptPath, 'utf8');
+    const chatRunner = readFileSync(chatProcedureScriptPath, 'utf8');
+    const demoAcceptance = readFileSync(demoAcceptanceScriptPath, 'utf8');
+    const macWatcher = readFileSync(macWaitRunDemoScriptPath, 'utf8');
+
+    expect(seedScript).toContain('moe-demo-attendance-results.csv');
+    expect(seedScript).toContain('moe-demo-daily-report-source.txt');
+    expect(seedScript).toContain('moe-demo-suspension-source.txt');
+    expect(seedScript).toContain('moe-demo-suspension-source.docx');
+    expect(seedScript).toContain('Daily Report Demo Source');
+    expect(seedScript).toContain('Student Suspension Demo Source');
+    expect(seedScript).toContain('STATE:');
+
+    expect(chatRunner).toContain('[switch] $SeedDemoDocuments');
+    expect(chatRunner).toContain('pilot-seed-demo-documents.ps1');
+    expect(chatRunner).toContain('BLOCKED seed-demo-documents failed');
+    expect(demoAcceptance).toContain('-SeedDemoDocuments');
+    expect(macWatcher).toContain('-SeedDemoDocuments');
   });
 
   it('keeps the Mac watcher biased toward safe laptop rediscovery', () => {

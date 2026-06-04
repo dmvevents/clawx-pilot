@@ -194,7 +194,8 @@ if ($RunChatProcedures -or -not $SkipChatProcedures) {
       -EvidenceRoot $script:Evidence `
       -DownloadsPath (Join-Path $env:USERPROFILE "Downloads") `
       -ElectronEndpoint $ElectronEndpoint `
-      -DefaultWaitMs $WaitMs
+      -DefaultWaitMs $WaitMs `
+      -SeedDemoDocuments
   }
 }
 

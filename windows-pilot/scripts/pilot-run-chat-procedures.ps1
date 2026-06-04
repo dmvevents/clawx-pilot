@@ -10,6 +10,7 @@
 # Optional mutation:
 # - -Relaunch may relaunch the installed Electron app with CDP 9223 enabled
 # - -RunPreflight may launch the separate demo Chrome CDP profile on 18792
+# - -SeedDemoDocuments writes sanitized local demo files into Downloads
 
 [CmdletBinding()]
 param(
@@ -20,7 +21,8 @@ param(
   [string] $ElectronEndpoint = "http://127.0.0.1:9223",
   [int] $DefaultWaitMs = 15000,
   [switch] $Relaunch,
-  [switch] $RunPreflight
+  [switch] $RunPreflight,
+  [switch] $SeedDemoDocuments
 )
 
 $ErrorActionPreference = "Continue"
@@ -564,6 +566,18 @@ if (-not (Test-HttpOk "$ElectronEndpoint/json/version")) {
     "- evidence: $script:Evidence"
   ) | Set-Content -Path $reportPath -Encoding UTF8
   exit 5
+}
+
+if ($SeedDemoDocuments) {
+  $seedOut = Join-Path $script:Evidence "00-seed-demo-documents.txt"
+  $seedExit = Invoke-LoggedCommand "seed-demo-documents" $seedOut {
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\windows-pilot\scripts\pilot-seed-demo-documents.ps1" `
+      -DownloadsPath $script:DownloadsPath
+  }
+  if ($seedExit -ne 0) {
+    Write-Line ("BLOCKED seed-demo-documents failed exit={0}" -f $seedExit)
+    exit 6
+  }
 }
 
 $downloadInventory = Join-Path $script:Evidence "downloads-inventory.json"
