@@ -100,16 +100,37 @@ function expectedRecipientNeedles(values: string[]): string[] {
     .filter(Boolean);
 }
 
-function missingRecipientNeedles(values: string[], snapshot: OpenDraftSnapshot): string[] {
-  const searchable = normalizeSearchText(
-    [
-      snapshot.searchableText,
-      snapshot.to.join(' '),
-      snapshot.cc.join(' '),
-      snapshot.bcc.join(' '),
-    ].join(' '),
-  );
+function recipientEmails(values: string[]): string[] {
+  return values
+    .flatMap((value) => value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? [])
+    .map((value) => normalizeSearchText(value))
+    .filter(Boolean);
+}
+
+function missingRecipientNeedles(values: string[], actualBucket: string[]): string[] {
+  const searchable = normalizeSearchText(actualBucket.join(' '));
   return expectedRecipientNeedles(values).filter((needle) => !searchable.includes(needle));
+}
+
+function hasUnexpectedRecipient(values: string[], actualBucket: string[]): boolean {
+  const expectedEmails = new Set(recipientEmails(values));
+  if (expectedEmails.size === 0) {
+    return actualBucket.some((value) => normalizeSearchText(value).length > 0);
+  }
+  return recipientEmails(actualBucket).some((email) => !expectedEmails.has(email));
+}
+
+function validateConfirmedSendArgs(args: SendEmailArgs): string | null {
+  if (asArray(args.to).map(normalizeComparableText).filter(Boolean).length === 0) {
+    return 'Send blocked: at least one To recipient is required.';
+  }
+  if (!normalizeComparableText(args.subject)) {
+    return 'Send blocked: subject is required.';
+  }
+  if (!normalizeComparableText(args.body)) {
+    return 'Send blocked: body is required.';
+  }
+  return null;
 }
 
 export class OutlookActions {
@@ -336,6 +357,10 @@ export class OutlookActions {
         reason:
           'Send blocked: confirm flag not set. Show the draft to the principal and re-call with confirm=true after they say yes.',
       };
+    }
+    const invalidArgsReason = validateConfirmedSendArgs(args);
+    if (invalidArgsReason) {
+      return { status: 'refused', reason: invalidArgsReason };
     }
 
     const page = await this.driver.ensureOutlookTab();
@@ -1186,19 +1211,22 @@ export class OutlookActions {
     if (normalizeComparableText(snapshot.subject) !== normalizeComparableText(args.subject)) {
       return 'the open draft subject does not match the requested subject';
     }
-    if (missingRecipientNeedles(asArray(args.to), snapshot).length > 0) {
+    if (missingRecipientNeedles(asArray(args.to), snapshot.to).length > 0
+      || hasUnexpectedRecipient(asArray(args.to), snapshot.to)) {
       return 'the open draft does not contain all requested To recipients';
     }
-    if (missingRecipientNeedles(asArray(args.cc), snapshot).length > 0) {
+    if (missingRecipientNeedles(asArray(args.cc), snapshot.cc).length > 0
+      || hasUnexpectedRecipient(asArray(args.cc), snapshot.cc)) {
       return 'the open draft does not contain all requested Cc recipients';
     }
-    if (missingRecipientNeedles(asArray(args.bcc), snapshot).length > 0) {
+    if (missingRecipientNeedles(asArray(args.bcc), snapshot.bcc).length > 0
+      || hasUnexpectedRecipient(asArray(args.bcc), snapshot.bcc)) {
       return 'the open draft does not contain all requested Bcc recipients';
     }
 
     const expectedBody = normalizeSearchText(args.body);
-    const actualBody = normalizeSearchText(`${snapshot.body} ${snapshot.searchableText}`);
-    if (expectedBody && !actualBody.includes(expectedBody)) {
+    const actualBody = normalizeSearchText(snapshot.body);
+    if (actualBody !== expectedBody) {
       return 'the open draft body does not match the requested body';
     }
     return null;
@@ -1303,9 +1331,20 @@ export class OutlookActions {
           return normalizeSearch(email ?? value);
         })
         .filter(Boolean);
-      const containsAll = (haystack: string, values: string[]) => {
-        const text = normalizeSearch(haystack);
-        return expectedNeedles(values).every((needle) => text.includes(needle));
+      const emailNeedles = (values: string[]) => values
+        .flatMap((value) => value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? [])
+        .map((value) => normalizeSearch(value))
+        .filter(Boolean);
+      const recipientBucketMatches = (expectedValues: string[], actualValues: string[]) => {
+        const actualText = normalizeSearch(actualValues.join(' '));
+        const missing = expectedNeedles(expectedValues).some((needle) => !actualText.includes(needle));
+        if (missing) return false;
+        const expectedEmails = new Set(emailNeedles(expectedValues));
+        const actualEmails = emailNeedles(actualValues);
+        if (expectedEmails.size === 0) {
+          return actualValues.every((value) => normalizeSearch(value).length === 0);
+        }
+        return actualEmails.every((email) => expectedEmails.has(email));
       };
       const hasSubjectField = (root: Element) => Boolean(root.querySelector(
         '[aria-label="Subject"], [aria-label*="Subject" i], [placeholder="Add a subject"], [placeholder*="subject" i]',
@@ -1314,12 +1353,12 @@ export class OutlookActions {
         root.querySelectorAll('button, [role="button"], [aria-label], [title]'),
       ).find((el) => {
         if (!isVisible(el)) return false;
-        const label = normalize([
+        const labels = [
           el.getAttribute('aria-label') || '',
           el.getAttribute('title') || '',
           el.textContent || '',
-        ].join(' '));
-        return /^send$/i.test(label);
+        ].map(normalize).filter(Boolean);
+        return labels.some((label) => /^send$/i.test(label));
       }) as HTMLElement | undefined;
       const hasSendButton = (root: Element) => Boolean(sendButton(root));
       const splitRecipients = (value: string) => normalize(value)
@@ -1366,6 +1405,7 @@ export class OutlookActions {
       )).filter(isVisible);
       const roots = bodyNodes.map(rootForBody).filter(isVisible);
       let firstSnapshot: OpenDraftSnapshot | null = null;
+      const matchingRoots: Array<{ root: Element; snapshot: OpenDraftSnapshot; button: HTMLElement }> = [];
       for (const root of roots) {
         const subject = fieldText(root, 'Subject');
         const body = bodyText(root);
@@ -1382,15 +1422,22 @@ export class OutlookActions {
         firstSnapshot ??= snapshot;
         if (!expectedDraft) continue;
         if (normalize(subject) !== normalize(expectedDraft.subject)) continue;
-        if (!containsAll(text, expectedDraft.to)) continue;
-        if (!containsAll(text, expectedDraft.cc)) continue;
-        if (!containsAll(text, expectedDraft.bcc)) continue;
+        if (!recipientBucketMatches(expectedDraft.to, snapshot.to)) continue;
+        if (!recipientBucketMatches(expectedDraft.cc, snapshot.cc)) continue;
+        if (!recipientBucketMatches(expectedDraft.bcc, snapshot.bcc)) continue;
         const expectedBody = normalizeSearch(expectedDraft.body);
-        if (expectedBody && !normalizeSearch(`${body} ${text}`).includes(expectedBody)) continue;
+        if (normalizeSearch(body) !== expectedBody) continue;
         const button = sendButton(root);
         if (!button) continue;
-        button.click();
-        return { snapshot, clickedSend: true };
+        if (root !== rootForBody(button)) continue;
+        matchingRoots.push({ root, snapshot, button });
+      }
+      if (matchingRoots.length === 1) {
+        matchingRoots[0].button.click();
+        return { snapshot: matchingRoots[0].snapshot, clickedSend: true };
+      }
+      if (matchingRoots.length > 1) {
+        return { snapshot: matchingRoots[0].snapshot, clickedSend: false };
       }
       return { snapshot: firstSnapshot, clickedSend: false };
     }, expected).catch((err) => {

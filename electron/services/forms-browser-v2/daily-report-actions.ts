@@ -37,7 +37,7 @@ const DAILY_REPORT_FORM_FINGERPRINT_LABELS = [
   'Is your school serviced by PTSC',
 ];
 
-export const DAILY_REPORT_CONDITIONAL_VISIBILITY: Record<string, Record<string, string>> = {
+const DAILY_REPORT_CONDITIONAL_VISIBILITY: Record<string, Record<string, string>> = {
   reason_no_school: { did_you_have_school_today: 'No' },
   received_nsdsl_breakfasts: { school_receives_nsdsl_meals: 'Yes' },
   breakfasts_delivered: { received_nsdsl_breakfasts: 'Yes' },
