@@ -4,7 +4,7 @@
 # Safe by default:
 # - uses the committed prompt with explicit no-send/no-download/no-submit rules
 # - writes stdout/debug logs under Downloads
-# - does not mutate app state by itself; Claude decides from prompt + repo evidence
+# - can reuse an already-running scheduled task instead of interrupting it
 
 [CmdletBinding()]
 param(
@@ -15,6 +15,7 @@ param(
   [string] $Effort = "high",
   [string] $AllowedTools = "Bash(powershell.exe *),Bash(git *),Bash(node *),Bash(pnpm *),Bash(npm *),Bash(npx *),Read,Edit,Write,Glob,Grep",
   [string] $TaskName = "ClawX Claude Chat Loop",
+  [switch] $ReuseIfRunning,
   [int] $WaitSeconds = 12,
   [int] $ExecutionHours = 9
 )
@@ -48,6 +49,19 @@ if (-not $claudeCommand) {
 $claudePath = if ($claudeCommand.Path) { $claudeCommand.Path } else { $claudeCommand.Source }
 if (-not $claudePath) {
   throw "Claude Code command path could not be resolved."
+}
+
+$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if ($existingTask -and $existingTask.State -eq "Running" -and $ReuseIfRunning) {
+  $taskInfo = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
+  Write-State "STARTED" "CLAUDE_CHAT_LOOP_REUSED"
+  Write-State "TASK_NAME" $TaskName
+  Write-State "TASK_USER" $user
+  Write-State "TASK_STATE" $existingTask.State
+  Write-State "TASK_LAST_RESULT" $(if ($taskInfo) { $taskInfo.LastTaskResult } else { "unknown" })
+  Write-State "REUSE_IF_RUNNING" $true
+  exit 0
 }
 
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -121,7 +135,6 @@ exit `$exitCode
 
 $runner | Set-Content -Path $runnerPath -Encoding UTF8
 
-$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 $taskArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$runnerPath`""
 

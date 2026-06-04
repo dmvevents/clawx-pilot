@@ -15,9 +15,11 @@ SSH_HOSTS="${SSH_HOSTS:-$SSH_HOST}"
 SSH_USER="${SSH_USER:-vyonix}"
 EXPECTED_HOSTNAME="${EXPECTED_HOSTNAME:-VYONIX}"
 DISCOVER_CIDRS="${DISCOVER_CIDRS:-}"
-DISCOVER_ARP="${DISCOVER_ARP:-0}"
+DISCOVER_ARP="${DISCOVER_ARP:-1}"
 DISCOVER_INTERVAL_SECONDS="${DISCOVER_INTERVAL_SECONDS:-300}"
 AUTO_DISCOVER_CIDRS="${AUTO_DISCOVER_CIDRS:-1}"
+AUTO_DISCOVER_MIN_PREFIX="${AUTO_DISCOVER_MIN_PREFIX:-24}"
+ARP_SCAN_LIMIT="${ARP_SCAN_LIMIT:-64}"
 DEADLINE_SECONDS="${DEADLINE_SECONDS:-28800}"
 SLEEP_SECONDS="${SLEEP_SECONDS:-60}"
 REPO_WIN="${REPO_WIN:-C:\\Users\\VYONIX\\Github\\ClawX-release-moe10}"
@@ -107,6 +109,12 @@ network_cidr_from_ip_mask() {
   if (( i1 == 127 || (i1 == 169 && i2 == 254) || prefix < 20 )); then
     return 1
   fi
+  if (( prefix < AUTO_DISCOVER_MIN_PREFIX )); then
+    if (( AUTO_DISCOVER_MIN_PREFIX == 24 )); then
+      printf '%s.%s.%s.0/24\n' "$i1" "$i2" "$i3"
+    fi
+    return 0
+  fi
   printf '%s.%s.%s.%s/%s\n' \
     "$((i1 & m1))" \
     "$((i2 & m2))" \
@@ -144,9 +152,20 @@ auto_candidate_cidrs() {
 }
 
 effective_discover_cidrs() {
-  { printf '%s\n' $DISCOVER_CIDRS; auto_candidate_cidrs; } |
+  { printf '%s\n' $DISCOVER_CIDRS; configured_link_local_cidrs; auto_candidate_cidrs; } |
     awk 'NF && !seen[$0]++ { print }' |
     tr '\n' ' '
+}
+
+configured_link_local_cidrs() {
+  local host ip
+  for host in $SSH_HOSTS $SSH_HOST; do
+    ip="${host#*@}"
+    ip="${ip%%:*}"
+    if [[ "$ip" =~ ^169\.254\.([0-9]{1,3})\.([0-9]{1,3})$ ]]; then
+      printf '169.254.%s.0/24\n' "${BASH_REMATCH[1]}"
+    fi
+  done
 }
 
 try_target() {
@@ -172,14 +191,26 @@ candidate_hosts_from_arp() {
   if [[ "$DISCOVER_ARP" != "1" ]]; then
     return 0
   fi
-  arp -an 2>/dev/null |
+  local ips
+  ips="$(
+    arp -an 2>/dev/null |
     awk '/\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)/ && $0 !~ /incomplete/ { gsub(/[()]/, "", $2); print $2 }' |
     sort -u |
-    while read -r ip; do
-      if nc -G 1 -z "$ip" 22 >/dev/null 2>&1; then
-        printf '%s\n' "$ip"
-      fi
-    done
+    head -n "$ARP_SCAN_LIMIT" |
+    tr '\n' ' '
+  )"
+  [[ -n "$ips" ]] || return 0
+  if [[ -n "$(command -v nmap || true)" ]]; then
+    nmap -n -Pn -p 22 --open --max-retries 0 --host-timeout 2s --min-rate 2000 $ips 2>/dev/null |
+      awk '/Nmap scan report for / { print $NF }'
+    return 0
+  fi
+  local ip
+  for ip in $ips; do
+    if nc -G 1 -z "$ip" 22 >/dev/null 2>&1; then
+      printf '%s\n' "$ip"
+    fi
+  done
 }
 
 candidate_hosts_from_cidrs() {
@@ -251,7 +282,7 @@ if (\$LASTEXITCODE -ne 0) {
   throw "demo acceptance failed with exit code \$LASTEXITCODE"
 }
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\windows-pilot\\scripts\\pilot-start-claude-chat-loop.ps1 -Repo \$Repo -LogRoot \$EvidenceRoot -WaitSeconds 25
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\windows-pilot\\scripts\\pilot-start-claude-chat-loop.ps1 -Repo \$Repo -LogRoot \$EvidenceRoot -WaitSeconds 25 -ReuseIfRunning
 
 \$ChatDir = Get-ChildItem -Path \$EvidenceRoot -Directory -Filter 'clawx-chat-procedures-*' -ErrorAction SilentlyContinue |
   Sort-Object LastWriteTime -Descending |

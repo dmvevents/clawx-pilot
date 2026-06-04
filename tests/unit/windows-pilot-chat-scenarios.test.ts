@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 type DemoScenario = {
   id: string;
   prompt?: string;
+  requiredAnswerPatterns?: string[];
   bannedToolAny?: string[];
   bannedToolInputPatterns?: string[];
 };
@@ -14,6 +15,9 @@ type DemoScenario = {
 const scenarioPath = join(process.cwd(), 'windows-pilot', 'scenarios', 'demo-chat-procedures.json');
 const chatProcedureScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-run-chat-procedures.ps1');
 const demoAcceptanceScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-run-demo-acceptance.ps1');
+const macWaitRunDemoScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-mac-wait-run-demo.sh');
+const claudeChatLoopScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-start-claude-chat-loop.ps1');
+const pilotWatcherInstallerPath = join(process.cwd(), 'windows-pilot', 'scripts', 'install-pilot-watcher-launchd.sh');
 
 function loadScenarios(): DemoScenario[] {
   const parsed = JSON.parse(readFileSync(scenarioPath, 'utf8')) as { scenarios?: DemoScenario[] };
@@ -21,6 +25,38 @@ function loadScenarios(): DemoScenario[] {
 }
 
 describe('Windows pilot chat procedure scenarios', () => {
+  it('requires the Downloads inventory prompt to cover every demo document extension', () => {
+    const inventory = loadScenarios().find((scenario) => scenario.id === 'downloads-document-inventory');
+
+    expect(inventory?.prompt).toBeTruthy();
+    for (const extension of ['.xlsx', '.xls', '.docx', '.doc', '.pdf', '.csv', '.txt', '.md']) {
+      expect(inventory?.prompt).toContain(extension);
+    }
+  });
+
+  it('keeps Excel and Word document prompts specific enough for the demo files', () => {
+    const scenarios = loadScenarios();
+    const excel = scenarios.find((scenario) => scenario.id === 'downloads-excel-summary');
+    const word = scenarios.find((scenario) => scenario.id === 'downloads-word-suspension-fields');
+
+    expect(excel?.prompt).toContain('Get-ChildItem -Path');
+    expect(excel?.prompt).toContain('rather than cmd-style \'dir /b\'');
+    expect(excel?.requiredAnswerPatterns).toEqual([
+      'xlsx|xls|csv|spreadsheet|workbook',
+      'sheet|column|row',
+      'school|result|attendance|SEA|trend|total',
+    ]);
+
+    const wordPrompt = word?.prompt?.toLowerCase() ?? '';
+    for (const term of ['incident date', 'suspension length', 'parent contact', 'missing fields']) {
+      expect(wordPrompt).toContain(term);
+    }
+    expect(word?.requiredAnswerPatterns).toEqual([
+      'suspension|discipline|attendance|report|source document|no suitable source',
+      'school|class|incident|reason|parent|missing',
+    ]);
+  });
+
   it('keeps Downloads document scenarios read-only at the tool layer', () => {
     const documentScenarios = loadScenarios().filter((scenario) => scenario.id.startsWith('downloads-'));
 
@@ -100,5 +136,41 @@ describe('Windows pilot chat procedure scenarios', () => {
 
     expect(script).toContain('Invoke-Step "windows-pilot-harness-tests"');
     expect(script).toContain('tests/unit/windows-pilot-electron-cdp-probe.test.ts tests/unit/windows-pilot-chat-scenarios.test.ts');
+  });
+
+  it('keeps the Mac watcher biased toward safe laptop rediscovery', () => {
+    const script = readFileSync(macWaitRunDemoScriptPath, 'utf8');
+
+    expect(script).toContain('DISCOVER_ARP="${DISCOVER_ARP:-1}"');
+    expect(script).toContain('AUTO_DISCOVER_MIN_PREFIX="${AUTO_DISCOVER_MIN_PREFIX:-24}"');
+    expect(script).toContain('ARP_SCAN_LIMIT="${ARP_SCAN_LIMIT:-64}"');
+    expect(script).toContain('configured_link_local_cidrs');
+    expect(script).toContain("printf '169.254.%s.0/24");
+    expect(script).toContain("printf '%s.%s.%s.0/24");
+    expect(script).toContain('candidate_hosts_from_arp; candidate_hosts_from_cidrs');
+    expect(script).toContain('-ReuseIfRunning');
+  });
+
+  it('reuses a running Claude loop instead of stopping it from the watcher path', () => {
+    const script = readFileSync(claudeChatLoopScriptPath, 'utf8');
+
+    expect(script).toContain('[switch] $ReuseIfRunning');
+    expect(script).toContain('$existingTask.State -eq "Running" -and $ReuseIfRunning');
+    expect(script).toContain('CLAUDE_CHAT_LOOP_REUSED');
+    expect(script).toContain('Write-State "REUSE_IF_RUNNING" $true');
+  });
+
+  it('ships a reproducible launchd installer for the pilot watcher', () => {
+    const script = readFileSync(pilotWatcherInstallerPath, 'utf8');
+
+    expect(script).toContain('com.clawx.pilot.wait-run-demo');
+    expect(script).toContain('pilot-mac-wait-run-demo.sh');
+    expect(script).toContain('<key>RunAtLoad</key><true/>');
+    expect(script).toContain('<key>SuccessfulExit</key><false/>');
+    expect(script).toContain('<key>DISCOVER_ARP</key>');
+    expect(script).toContain('<key>AUTO_DISCOVER_MIN_PREFIX</key>');
+    expect(script).toContain('<key>ARP_SCAN_LIMIT</key>');
+    expect(script).toContain('<key>TRUNCATE_LOG_ON_START</key>');
+    expect(script).toContain('plutil -lint "$PLIST"');
   });
 });
