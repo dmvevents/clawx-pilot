@@ -467,6 +467,85 @@ function summarizeHostApiCall(result, summarizeData) {
   };
 }
 
+function statusOf(call) {
+  return call?.result?.status;
+}
+
+function addValidationReason(reasons, condition, reason) {
+  if (!condition) reasons.push(reason);
+}
+
+function validatePreview(call, label, minFilledCount, reasons) {
+  addValidationReason(reasons, call?.ok === true, `${label} preview call was not ok`);
+  addValidationReason(reasons, statusOf(call) === 'previewed', `${label} preview status was ${statusOf(call) ?? 'missing'}`);
+  addValidationReason(reasons, Number(call?.result?.filledCount ?? 0) >= minFilledCount, `${label} preview filledCount was ${call?.result?.filledCount ?? 'missing'}`);
+  addValidationReason(reasons, Number(call?.result?.errorCount ?? 0) === 0, `${label} preview errorCount was ${call?.result?.errorCount ?? 'missing'}`);
+}
+
+function validateSafeChat(summary, reasons) {
+  const send = summary?.safeChat?.send;
+  addValidationReason(reasons, send && send.skipped !== true, 'safe chat send missing or skipped');
+  addValidationReason(reasons, send?.success === true, 'safe chat send was not successful');
+
+  const history = summary?.safeChat?.history;
+  addValidationReason(reasons, history && history.skipped !== true, 'safe chat history missing or skipped');
+  addValidationReason(reasons, history?.ok === true, 'safe chat history was not ok');
+  addValidationReason(reasons, history?.scopedToCurrentPrompt === true, 'safe chat did not scope to current prompt');
+  addValidationReason(reasons, history?.completed === true, 'safe chat did not complete');
+  addValidationReason(reasons, history?.finalAnswerEchoedMarker === true, 'safe chat final answer did not echo verification token');
+  addValidationReason(reasons, history?.expectedToolResultOk === true, 'expected tool result was not ok');
+  addValidationReason(reasons, history?.expectedToolOnly === true, 'safe chat used unexpected tool(s)');
+  addValidationReason(reasons, history?.noBannedSideEffects === true, 'banned send/download/submit/background-session tool was observed');
+}
+
+function validateOutlookSmoke(summary, reasons) {
+  const outlook = summary?.outlookSmoke;
+  addValidationReason(reasons, outlook && outlook.skipped !== true, 'outlook smoke skipped or missing');
+  addValidationReason(reasons, outlook?.readInbox?.ok === true, 'outlook readInbox was not ok');
+  addValidationReason(reasons, statusOf(outlook?.sendWithoutConfirm) === 'refused', `outlook send without confirm status was ${statusOf(outlook?.sendWithoutConfirm) ?? 'missing'}`);
+  addValidationReason(reasons, outlook?.sendWithoutConfirm?.result?.refused === true, 'outlook send without confirm was not refused');
+  addValidationReason(reasons, statusOf(outlook?.downloadWithoutConfirm) === 'refused', `outlook download without confirm status was ${statusOf(outlook?.downloadWithoutConfirm) ?? 'missing'}`);
+  addValidationReason(reasons, outlook?.downloadWithoutConfirm?.result?.refused === true, 'outlook download without confirm was not refused');
+}
+
+function validateFormsSmoke(summary, reasons) {
+  const forms = summary?.formsSmoke;
+  addValidationReason(reasons, forms && forms.skipped !== true, 'forms smoke skipped or missing');
+  validatePreview(forms?.dailyPreview, 'daily report', 20, reasons);
+  addValidationReason(reasons, statusOf(forms?.dailySubmitWithoutConfirm) === 'refused', `daily report submit without confirm status was ${statusOf(forms?.dailySubmitWithoutConfirm) ?? 'missing'}`);
+  addValidationReason(reasons, forms?.dailySubmitWithoutConfirm?.result?.refused === true, 'daily report submit without confirm was not refused');
+  validatePreview(forms?.preview, 'suspension', 20, reasons);
+  addValidationReason(reasons, statusOf(forms?.submitWithoutConfirm) === 'refused', `suspension submit without confirm status was ${statusOf(forms?.submitWithoutConfirm) ?? 'missing'}`);
+  addValidationReason(reasons, forms?.submitWithoutConfirm?.result?.refused === true, 'suspension submit without confirm was not refused');
+}
+
+function validateProbeSummary(summary, args = {}) {
+  const reasons = [];
+  addValidationReason(reasons, summary?.state === 'ELECTRON_CDP_PROBE_DONE', `probe state was ${summary?.state ?? 'missing'}`);
+  addValidationReason(reasons, summary?.renderer?.hasElectronInvoke === true, 'renderer did not expose electron ipc invoke');
+
+  const requested = Boolean(
+    args.safeChat
+    || args.outlookSmoke
+    || args.formsSmoke
+    || args.draftEmail
+    || args.sendEmail
+    || args.submitForms
+  );
+  if (!requested) {
+    addValidationReason(reasons, summary?.hostApi?.outlookOpen?.ok === true, 'hostapi outlook.open was not ok');
+    addValidationReason(reasons, summary?.hostApi?.formsList?.ok === true, 'hostapi forms.list was not ok');
+  }
+  if (args.safeChat) validateSafeChat(summary, reasons);
+  if (args.outlookSmoke) validateOutlookSmoke(summary, reasons);
+  if (args.formsSmoke) validateFormsSmoke(summary, reasons);
+
+  return {
+    ok: reasons.length === 0,
+    reasons,
+  };
+}
+
 async function runOutlookSmoke(page) {
   const readInbox = await withTimeout(
     'hostapi outlook.read-inbox',
@@ -868,10 +947,15 @@ async function main() {
       eventCount: events.length,
       events: events.slice(-50),
     };
+    summary.validation = validateProbeSummary(summary, args);
 
     const summaryPath = path.join(args.artifactDir, `clawx-electron-probe-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
     fs.writeFileSync(summaryPath, JSON.stringify(redact(summary), null, 2));
     console.log(JSON.stringify(redact({ ...summary, summaryPath }), null, 2));
+    if (!summary.validation.ok) {
+      console.error(JSON.stringify(redact({ state: 'ELECTRON_CDP_PROBE_NOT_READY', reasons: summary.validation.reasons, summaryPath }), null, 2));
+      process.exitCode = 1;
+    }
   } finally {
     await browser.close().catch(() => {});
   }
@@ -901,4 +985,5 @@ module.exports = {
   safeChatBannedTools,
   safeChatExpectedTool,
   summarizeChatHistory,
+  validateProbeSummary,
 };

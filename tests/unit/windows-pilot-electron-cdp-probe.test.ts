@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const {
   summarizeChatHistory,
+  validateProbeSummary,
 } = require('../../windows-pilot/scripts/pilot-electron-cdp-probe.js') as {
   summarizeChatHistory: (result: unknown, mode: string, verificationToken: string) => {
     scopedToCurrentPrompt: boolean;
@@ -13,6 +14,10 @@ const {
     noBannedSideEffects: boolean;
     observedToolCalls: Array<{ name: string }>;
     observedToolResults: Array<{ name: string; isError: boolean }>;
+  };
+  validateProbeSummary: (summary: unknown, args?: Record<string, unknown>) => {
+    ok: boolean;
+    reasons: string[];
   };
 };
 
@@ -118,5 +123,58 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     expect(summary.observedToolResults).toEqual([
       expect.objectContaining({ name: 'forms.list', isError: true }),
     ]);
+  });
+
+  it('fails default validation when safe Host API checks fail', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      hostApi: {
+        outlookOpen: { ok: false, error: 'timeout' },
+        formsList: { ok: true },
+      },
+    });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('hostapi outlook.open was not ok');
+  });
+
+  it('fails safe chat validation when the model never completes the requested tool call', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      safeChat: {
+        send: { success: true },
+        history: {
+          ok: true,
+          scopedToCurrentPrompt: true,
+          completed: false,
+          finalAnswerEchoedMarker: false,
+          expectedToolResultOk: false,
+          expectedToolOnly: true,
+          noBannedSideEffects: true,
+        },
+      },
+    }, { safeChat: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('safe chat did not complete');
+    expect(validation.reasons).toContain('expected tool result was not ok');
+  });
+
+  it('fails smoke validation when refusal gates do not refuse', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      outlookSmoke: {
+        readInbox: { ok: true },
+        sendWithoutConfirm: { ok: true, result: { status: 'sent', refused: false } },
+        downloadWithoutConfirm: { ok: true, result: { status: 'refused', refused: true } },
+      },
+    }, { outlookSmoke: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('outlook send without confirm status was sent');
+    expect(validation.reasons).toContain('outlook send without confirm was not refused');
   });
 });
