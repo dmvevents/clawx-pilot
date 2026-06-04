@@ -311,6 +311,9 @@ function Test-PreviewResult {
   }
 }
 
+$ExpectedDailyReportSmokeFilledCount = 30
+$ExpectedSuspensionSmokeFilledCount = 31
+
 function Test-HostApiSmokeResult {
   param(
     $Probe,
@@ -347,15 +350,30 @@ function Test-HostApiSmokeResult {
   if ($null -eq $forms -or $forms.skipped -eq $true) {
     Add-Reason $Reasons "forms smoke skipped or missing"
   } else {
-    Test-PreviewResult $forms.dailyPreview "daily report" 20 $Reasons
+    Test-PreviewResult $forms.dailyPreview "daily report" $ExpectedDailyReportSmokeFilledCount $Reasons
     if ($forms.dailySubmitWithoutConfirm.result.status -ne "refused") { Add-Reason $Reasons ("daily report submit without confirm status was {0}" -f $forms.dailySubmitWithoutConfirm.result.status) }
     if ($forms.dailySubmitWithoutConfirm.result.refused -ne $true) { Add-Reason $Reasons "daily report submit without confirm was not refused" }
-    Test-PreviewResult $forms.preview "suspension" 20 $Reasons
+    Test-PreviewResult $forms.preview "suspension" $ExpectedSuspensionSmokeFilledCount $Reasons
     if ($forms.submitWithoutConfirm.result.status -ne "refused") { Add-Reason $Reasons ("suspension submit without confirm status was {0}" -f $forms.submitWithoutConfirm.result.status) }
     if ($forms.submitWithoutConfirm.result.refused -ne $true) { Add-Reason $Reasons "suspension submit without confirm was not refused" }
   }
 
   return ($Reasons.Count -eq 0)
+}
+
+function Test-HardFailureReason {
+  param([string] $Reason)
+
+  return (
+    $Reason -like "blocking renderer events observed:*" -or
+    $Reason -eq "safe chat send missing or skipped" -or
+    $Reason -eq "safe chat send was not successful" -or
+    $Reason -eq "safe chat history missing" -or
+    $Reason -eq "safe chat history was not ok" -or
+    $Reason -eq "safe chat did not scope to current prompt" -or
+    $Reason -eq "banned send/download/submit/background-session tool was observed" -or
+    $Reason -like "banned tool observed:*"
+  )
 }
 
 function Invoke-Scenario {
@@ -435,6 +453,11 @@ function Invoke-Scenario {
   } else {
     $hardFailure = $true
     Add-Reason $reasons ("unknown scenario type {0}" -f $type)
+  }
+  foreach ($reason in @($reasons)) {
+    if (Test-HardFailureReason ([string] $reason)) {
+      $hardFailure = $true
+    }
   }
 
   $passed = ($reasons.Count -eq 0)

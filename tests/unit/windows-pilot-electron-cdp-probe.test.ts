@@ -180,4 +180,40 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     expect(validation.reasons).toContain('outlook send without confirm status was sent');
     expect(validation.reasons).toContain('outlook send without confirm was not refused');
   });
+
+  it('fails forms smoke validation when previews do not fill the full smoke payload', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      formsSmoke: {
+        dailyPreview: { ok: true, result: { status: 'previewed', filledCount: 29, errorCount: 0 } },
+        dailySubmitWithoutConfirm: { ok: true, result: { status: 'refused', refused: true } },
+        preview: { ok: true, result: { status: 'previewed', filledCount: 30, errorCount: 0 } },
+        submitWithoutConfirm: { ok: true, result: { status: 'refused', refused: true } },
+      },
+    }, { formsSmoke: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('daily report preview filledCount was 29, expected at least 30');
+    expect(validation.reasons).toContain('suspension preview filledCount was 30, expected at least 31');
+  });
+
+  it('fails forms smoke validation when submit without confirm is accepted', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      formsSmoke: {
+        dailyPreview: { ok: true, result: { status: 'previewed', filledCount: 30, errorCount: 0 } },
+        dailySubmitWithoutConfirm: { ok: true, result: { status: 'submitted', refused: false } },
+        preview: { ok: true, result: { status: 'previewed', filledCount: 31, errorCount: 0 } },
+        submitWithoutConfirm: { ok: true, result: { status: 'submitted', refused: false } },
+      },
+    }, { formsSmoke: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('daily report submit without confirm status was submitted');
+    expect(validation.reasons).toContain('daily report submit without confirm was not refused');
+    expect(validation.reasons).toContain('suspension submit without confirm status was submitted');
+    expect(validation.reasons).toContain('suspension submit without confirm was not refused');
+  });
 });

@@ -17,6 +17,7 @@ EXPECTED_HOSTNAME="${EXPECTED_HOSTNAME:-VYONIX}"
 DISCOVER_CIDRS="${DISCOVER_CIDRS:-}"
 DISCOVER_ARP="${DISCOVER_ARP:-0}"
 DISCOVER_INTERVAL_SECONDS="${DISCOVER_INTERVAL_SECONDS:-300}"
+AUTO_DISCOVER_CIDRS="${AUTO_DISCOVER_CIDRS:-1}"
 DEADLINE_SECONDS="${DEADLINE_SECONDS:-28800}"
 SLEEP_SECONDS="${SLEEP_SECONDS:-60}"
 REPO_WIN="${REPO_WIN:-C:\\Users\\VYONIX\\Github\\ClawX-release-moe10}"
@@ -63,6 +64,86 @@ target_for_host() {
   fi
 }
 
+cidr_prefix_from_netmask() {
+  local mask="$1"
+  local prefix=0
+  local octet bit
+  IFS=. read -r o1 o2 o3 o4 <<<"$mask"
+  for octet in "$o1" "$o2" "$o3" "$o4"; do
+    [[ "$octet" =~ ^[0-9]+$ ]] || return 1
+    for bit in 128 64 32 16 8 4 2 1; do
+      if (( (octet & bit) != 0 )); then
+        prefix=$((prefix + 1))
+      fi
+    done
+  done
+  printf '%s\n' "$prefix"
+}
+
+hex_netmask_to_dotted() {
+  local hex="${1#0x}"
+  local value
+  [[ "$hex" =~ ^[0-9a-fA-F]{8}$ ]] || return 1
+  value=$((16#$hex))
+  printf '%s.%s.%s.%s\n' \
+    "$(((value >> 24) & 255))" \
+    "$(((value >> 16) & 255))" \
+    "$(((value >> 8) & 255))" \
+    "$((value & 255))"
+}
+
+network_cidr_from_ip_mask() {
+  local ip="$1"
+  local mask="$2"
+  local prefix
+  IFS=. read -r i1 i2 i3 i4 <<<"$ip"
+  IFS=. read -r m1 m2 m3 m4 <<<"$mask"
+  prefix="$(cidr_prefix_from_netmask "$mask")" || return 1
+  if (( i1 == 127 || (i1 == 169 && i2 == 254) || prefix < 20 )); then
+    return 1
+  fi
+  printf '%s.%s.%s.%s/%s\n' \
+    "$((i1 & m1))" \
+    "$((i2 & m2))" \
+    "$((i3 & m3))" \
+    "$((i4 & m4))" \
+    "$prefix"
+}
+
+auto_candidate_cidrs() {
+  [[ "$AUTO_DISCOVER_CIDRS" == "1" ]] || return 0
+  command -v ifconfig >/dev/null 2>&1 || return 0
+
+  ifconfig 2>/dev/null |
+    awk '
+      /^[a-zA-Z0-9_.-]+: / { iface=$1; sub(/:$/, "", iface) }
+      /status: active/ { active[iface]=1 }
+      /inet / && iface !~ /^lo/ {
+        ip=$2
+        mask=$4
+        if (ip && mask && mask ~ /^0x/) print iface, ip, mask
+      }
+      END {
+        for (iface in active) {
+          # active[] is used above only to force awk to keep the table in POSIX awk.
+        }
+      }
+    ' |
+    while read -r iface ip hexmask; do
+      if ! ifconfig "$iface" 2>/dev/null | grep -q 'status: active'; then
+        continue
+      fi
+      mask="$(hex_netmask_to_dotted "$hexmask")" || continue
+      network_cidr_from_ip_mask "$ip" "$mask" || true
+    done
+}
+
+effective_discover_cidrs() {
+  { printf '%s\n' $DISCOVER_CIDRS; auto_candidate_cidrs; } |
+    awk 'NF && !seen[$0]++ { print }' |
+    tr '\n' ' '
+}
+
 try_target() {
   local target="$1"
   local output
@@ -97,11 +178,14 @@ candidate_hosts_from_arp() {
 }
 
 candidate_hosts_from_cidrs() {
-  if [[ -z "$DISCOVER_CIDRS" || -z "$(command -v nmap || true)" ]]; then
+  local cidrs
+  cidrs="$(effective_discover_cidrs)"
+  if [[ -z "$cidrs" || -z "$(command -v nmap || true)" ]]; then
     return 0
   fi
   # Port 22 only; hostname validation happens before any discovered target is accepted.
-  nmap -n -Pn -p 22 --open --max-retries 0 --host-timeout 3s --min-rate 2000 $DISCOVER_CIDRS 2>/dev/null |
+  log "Scanning SSH CIDRs: $cidrs" >&2
+  nmap -n -Pn -p 22 --open --max-retries 0 --host-timeout 3s --min-rate 2000 $cidrs 2>/dev/null |
     awk '/Nmap scan report for / { print $NF }'
 }
 

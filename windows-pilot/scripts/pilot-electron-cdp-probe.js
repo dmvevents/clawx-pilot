@@ -471,6 +471,9 @@ function statusOf(call) {
   return call?.result?.status;
 }
 
+const EXPECTED_DAILY_REPORT_SMOKE_FILLED_COUNT = 30;
+const EXPECTED_SUSPENSION_SMOKE_FILLED_COUNT = 31;
+
 function addValidationReason(reasons, condition, reason) {
   if (!condition) reasons.push(reason);
 }
@@ -478,7 +481,11 @@ function addValidationReason(reasons, condition, reason) {
 function validatePreview(call, label, minFilledCount, reasons) {
   addValidationReason(reasons, call?.ok === true, `${label} preview call was not ok`);
   addValidationReason(reasons, statusOf(call) === 'previewed', `${label} preview status was ${statusOf(call) ?? 'missing'}`);
-  addValidationReason(reasons, Number(call?.result?.filledCount ?? 0) >= minFilledCount, `${label} preview filledCount was ${call?.result?.filledCount ?? 'missing'}`);
+  addValidationReason(
+    reasons,
+    Number(call?.result?.filledCount ?? 0) >= minFilledCount,
+    `${label} preview filledCount was ${call?.result?.filledCount ?? 'missing'}, expected at least ${minFilledCount}`,
+  );
   addValidationReason(reasons, Number(call?.result?.errorCount ?? 0) === 0, `${label} preview errorCount was ${call?.result?.errorCount ?? 'missing'}`);
 }
 
@@ -511,10 +518,10 @@ function validateOutlookSmoke(summary, reasons) {
 function validateFormsSmoke(summary, reasons) {
   const forms = summary?.formsSmoke;
   addValidationReason(reasons, forms && forms.skipped !== true, 'forms smoke skipped or missing');
-  validatePreview(forms?.dailyPreview, 'daily report', 20, reasons);
+  validatePreview(forms?.dailyPreview, 'daily report', EXPECTED_DAILY_REPORT_SMOKE_FILLED_COUNT, reasons);
   addValidationReason(reasons, statusOf(forms?.dailySubmitWithoutConfirm) === 'refused', `daily report submit without confirm status was ${statusOf(forms?.dailySubmitWithoutConfirm) ?? 'missing'}`);
   addValidationReason(reasons, forms?.dailySubmitWithoutConfirm?.result?.refused === true, 'daily report submit without confirm was not refused');
-  validatePreview(forms?.preview, 'suspension', 20, reasons);
+  validatePreview(forms?.preview, 'suspension', EXPECTED_SUSPENSION_SMOKE_FILLED_COUNT, reasons);
   addValidationReason(reasons, statusOf(forms?.submitWithoutConfirm) === 'refused', `suspension submit without confirm status was ${statusOf(forms?.submitWithoutConfirm) ?? 'missing'}`);
   addValidationReason(reasons, forms?.submitWithoutConfirm?.result?.refused === true, 'suspension submit without confirm was not refused');
 }

@@ -206,6 +206,9 @@ if ($RunRegressionTests) {
   Invoke-Step "forms-tests" {
     pnpm exec vitest run tests/unit/forms-browser-driver-cdp.test.ts tests/unit/forms-browser-submit-gate.test.ts
   }
+  Invoke-Step "windows-pilot-harness-tests" {
+    pnpm exec vitest run tests/unit/windows-pilot-electron-cdp-probe.test.ts tests/unit/windows-pilot-chat-scenarios.test.ts
+  }
   Invoke-Step "asr-tests" {
     pnpm exec vitest run tests/unit/asr-ipc-provider-selection.test.ts tests/unit/asr-feature-flags.test.ts
   }
