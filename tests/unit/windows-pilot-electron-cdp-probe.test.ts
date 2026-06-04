@@ -1,10 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-const {
-  summarizeChatHistory,
-  validateProbeSummary,
-} = require('../../windows-pilot/scripts/pilot-electron-cdp-probe.js') as {
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- the probe is a CommonJS Windows CLI script.
+const probeModule = require('../../windows-pilot/scripts/pilot-electron-cdp-probe.js') as {
   summarizeChatHistory: (result: unknown, mode: string, verificationToken: string) => {
     scopedToCurrentPrompt: boolean;
     completed: boolean;
@@ -20,6 +18,11 @@ const {
     reasons: string[];
   };
 };
+
+const {
+  summarizeChatHistory,
+  validateProbeSummary,
+} = probeModule;
 
 function textMessage(role: string, text: string) {
   return {
