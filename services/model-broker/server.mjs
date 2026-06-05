@@ -5,6 +5,10 @@ import { pathToFileURL } from 'node:url';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const BROKER_OWNER = 'clawx-model-broker';
+const GOOGLE_ADC_AUTH = 'google-adc';
+const BEARER_KEY_AUTH = 'bearer-key';
+const GOOGLE_METADATA_TOKEN_URL = 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token';
+const GOOGLE_TOKEN_REFRESH_SKEW_MS = 60_000;
 
 function parseCsv(value) {
   return String(value || '')
@@ -41,8 +45,10 @@ export function buildConfig(env = process.env) {
   return {
     clientKeys: parseCsv(env.MODEL_BROKER_CLIENT_KEYS || env.MODEL_BROKER_PUBLIC_KEYS),
     upstreamBaseUrl: String(env.MODEL_BROKER_UPSTREAM_BASE_URL || '').replace(/\/+$/, ''),
+    upstreamAuth: String(env.MODEL_BROKER_UPSTREAM_AUTH || BEARER_KEY_AUTH).trim().toLowerCase(),
     upstreamApiKey: String(env.MODEL_BROKER_UPSTREAM_API_KEY || ''),
     upstreamHeaders: parseJsonObject(env.MODEL_BROKER_UPSTREAM_HEADERS, 'MODEL_BROKER_UPSTREAM_HEADERS'),
+    googleTokenUrl: String(env.MODEL_BROKER_GOOGLE_TOKEN_URL || GOOGLE_METADATA_TOKEN_URL),
     modelMap: parseModelMap(env.MODEL_BROKER_MODEL_MAP),
     defaultModel: String(env.MODEL_BROKER_DEFAULT_MODEL || '').trim(),
     timeoutMs: Number.parseInt(String(env.MODEL_BROKER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS), 10) || DEFAULT_TIMEOUT_MS,
@@ -57,7 +63,10 @@ export function validateConfig(config) {
   if (!config.upstreamBaseUrl) {
     errors.push('MODEL_BROKER_UPSTREAM_BASE_URL is required');
   }
-  if (!config.upstreamApiKey) {
+  if (![BEARER_KEY_AUTH, GOOGLE_ADC_AUTH].includes(config.upstreamAuth)) {
+    errors.push(`MODEL_BROKER_UPSTREAM_AUTH must be "${BEARER_KEY_AUTH}" or "${GOOGLE_ADC_AUTH}"`);
+  }
+  if (config.upstreamAuth !== GOOGLE_ADC_AUTH && !config.upstreamApiKey) {
     errors.push('MODEL_BROKER_UPSTREAM_API_KEY is required');
   }
   if (!config.modelMap || Object.keys(config.modelMap).length === 0) {
@@ -152,7 +161,42 @@ async function pipeFetchResponse(upstreamResponse, res) {
   Readable.fromWeb(upstreamResponse.body).pipe(res);
 }
 
-async function proxyModelRequest(req, res, path, config) {
+function createUpstreamAuthHeaderResolver(config) {
+  if (config.upstreamAuth !== GOOGLE_ADC_AUTH) {
+    return async () => ({ Authorization: `Bearer ${config.upstreamApiKey}` });
+  }
+
+  let cachedToken = null;
+
+  return async () => {
+    const now = Date.now();
+    if (cachedToken && cachedToken.expiresAt > now) {
+      return { Authorization: `Bearer ${cachedToken.accessToken}` };
+    }
+
+    const response = await fetch(config.googleTokenUrl || GOOGLE_METADATA_TOKEN_URL, {
+      headers: { 'Metadata-Flavor': 'Google' },
+    });
+    if (!response.ok) {
+      throw new Error(`Google ADC token request failed with ${response.status}`);
+    }
+
+    const tokenPayload = await response.json();
+    const accessToken = typeof tokenPayload.access_token === 'string' ? tokenPayload.access_token : '';
+    const expiresInSeconds = Number.parseInt(String(tokenPayload.expires_in || '0'), 10);
+    if (!accessToken) {
+      throw new Error('Google ADC token response did not include access_token');
+    }
+
+    cachedToken = {
+      accessToken,
+      expiresAt: now + Math.max(0, expiresInSeconds * 1000 - GOOGLE_TOKEN_REFRESH_SKEW_MS),
+    };
+    return { Authorization: `Bearer ${cachedToken.accessToken}` };
+  };
+}
+
+async function proxyModelRequest(req, res, path, config, resolveUpstreamAuthHeaders) {
   const body = await readJsonBody(req);
   const resolved = resolveModel(body, config);
   if (resolved.error) {
@@ -168,11 +212,12 @@ async function proxyModelRequest(req, res, path, config) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
   try {
+    const authHeaders = await resolveUpstreamAuthHeaders();
     const upstreamResponse = await fetch(upstreamUrl(config, path), {
       method: 'POST',
       headers: {
         ...config.upstreamHeaders,
-        Authorization: `Bearer ${config.upstreamApiKey}`,
+        ...authHeaders,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(upstreamBody),
@@ -186,6 +231,7 @@ async function proxyModelRequest(req, res, path, config) {
 
 export function createBrokerServer(config = buildConfig()) {
   const configErrors = validateConfig(config);
+  const resolveUpstreamAuthHeaders = createUpstreamAuthHeaderResolver(config);
 
   return createServer(async (req, res) => {
     try {
@@ -224,7 +270,7 @@ export function createBrokerServer(config = buildConfig()) {
       }
 
       if (req.method === 'POST' && (url.pathname === '/v1/chat/completions' || url.pathname === '/v1/responses')) {
-        await proxyModelRequest(req, res, url.pathname, config);
+        await proxyModelRequest(req, res, url.pathname, config, resolveUpstreamAuthHeaders);
         return;
       }
 

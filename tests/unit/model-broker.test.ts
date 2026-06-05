@@ -39,8 +39,10 @@ function brokerConfig(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     clientKeys: ['client-key'],
     upstreamBaseUrl: 'http://127.0.0.1:1/v1',
+    upstreamAuth: 'bearer-key',
     upstreamApiKey: 'provider-key',
     upstreamHeaders: {},
+    googleTokenUrl: 'http://127.0.0.1:1/token',
     modelMap: { 'moe-demo': 'gemini-2.5-pro' },
     defaultModel: 'moe-demo',
     timeoutMs: 5_000,
@@ -156,5 +158,57 @@ describe('model broker', () => {
       error: { code: 'MODEL_NOT_ALLOWED' },
     });
     expect(upstreamCalls).toBe(0);
+  });
+
+  it('uses Google ADC metadata tokens for Vertex upstream auth', async () => {
+    let tokenCalls = 0;
+    const metadata = await listen(createServer((req, res) => {
+      tokenCalls += 1;
+      expect(req.headers['metadata-flavor']).toBe('Google');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        access_token: 'google-access-token',
+        expires_in: 3600,
+        token_type: 'Bearer',
+      }));
+    }));
+
+    const upstreamRequests: Array<{ authorization: string | undefined; body: Record<string, unknown> }> = [];
+    const upstream = await listen(createServer(async (req, res) => {
+      upstreamRequests.push({
+        authorization: req.headers.authorization,
+        body: JSON.parse(await readBody(req)) as Record<string, unknown>,
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ id: 'chatcmpl-vertex-test', choices: [] }));
+    }));
+
+    const broker = await listen(createBrokerServer(brokerConfig({
+      upstreamBaseUrl: `${upstream.url}/v1`,
+      upstreamAuth: 'google-adc',
+      upstreamApiKey: '',
+      googleTokenUrl: `${metadata.url}/token`,
+      modelMap: { 'moe-demo': 'google/gemini-2.5-flash' },
+    })));
+
+    const response = await fetch(`${broker.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer client-key',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'moe-demo',
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(tokenCalls).toBe(1);
+    expect(upstreamRequests).toHaveLength(1);
+    expect(upstreamRequests[0]).toMatchObject({
+      authorization: 'Bearer google-access-token',
+      body: { model: 'google/gemini-2.5-flash' },
+    });
   });
 });
