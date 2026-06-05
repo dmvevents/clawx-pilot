@@ -83,17 +83,17 @@
       "requiredAnswerPatterns": [
         "xlsx|xls|csv|spreadsheet|workbook",
         "sheet|column|row",
-        "school|result|attendance|SEA|trend|total"
+        "school|attendance|enrolled|present|absent|total"
       ],
-      "prompt": "Find the most relevant Excel or CSV file in {{DOWNLOADS_PATH}}, preferring a school-results or attendance workbook if present. The exec tool runs PowerShell on Windows; use 'Get-ChildItem -Path \"{{DOWNLOADS_PATH}}\" -Filter *.xlsx' and similar filters for .csv and .xls rather than cmd-style 'dir /b'. Read only enough to summarize sheet names, column headers, row counts, and any obvious totals or trends. If no spreadsheet is present, say exactly that. Do not spawn subagents or background sessions; finish the summary in this chat. Do not modify files, create helper scripts, or write temporary files. Do not send email. Do not submit forms. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
+      "prompt": "Summarize the seeded attendance spreadsheet data in {{DOWNLOADS_PATH}}. First run one read-only PowerShell listing command equivalent to: Get-ChildItem -LiteralPath \"{{DOWNLOADS_PATH}}\" -File | Where-Object { $_.Name -in 'moe-demo-attendance-results.csv','moe-demo-attendance-results.xlsx','SEA Typical School Results_2024 (1).xlsx' } | Select-Object Name,Extension,Length,LastWriteTime. Prefer moe-demo-attendance-results.csv because it is the CSV companion to the seeded workbook and can be read directly with Import-Csv. Read only enough to report the file name, sheet/table name if obvious, column headers, row count, total enrolled, total present, total absent, and the class with the highest absences. If neither moe-demo-attendance-results.csv nor moe-demo-attendance-results.xlsx is present, say exactly that. Do not spawn subagents or background sessions; finish the summary in this chat. Do not modify files, create helper scripts, or write temporary files. Do not send email. Do not submit forms. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
     },
     {
       "id": "downloads-word-suspension-fields",
-      "title": "Chat can inspect a Word/PDF/text source for suspension-form fields",
+      "title": "Chat can inspect the seeded suspension source for form fields",
       "type": "safe-chat-custom",
       "required": false,
-      "waitMs": 22000,
-      "expectedToolAny": ["exec", "process", "read"],
+      "waitMs": 16000,
+      "expectedToolAny": ["read"],
       "bannedToolAny": [
         "outlook.draft_email",
         "outlook.send_email",
@@ -118,7 +118,7 @@
         "suspension|discipline|attendance|report|source document|no suitable source",
         "school|class|incident|reason|parent|missing"
       ],
-      "prompt": "Find a Word, PDF, text, or markdown file in {{DOWNLOADS_PATH}} that looks like a suspension report, discipline note, attendance report, or demo source document. Read only enough to extract possible form fields: school, class, incident date, student initials or placeholder name, reason, suspension length, parent contact, and missing fields. If no such document exists, state that no suitable source document was found. Do not spawn subagents or background sessions; finish in this chat. Do not modify files, create helper scripts, or write temporary files. Do not preview or submit any form. Do not send email. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
+      "prompt": "Read the seeded plain-text suspension source at {{DOWNLOADS_PATH}}\\moe-demo-suspension-source.txt. Do not inspect the .docx copy and do not use docx conversion tools for this scenario. Extract these possible form fields: school, class, incident date, student placeholder name or initials, reason, suspension length, parent contact, and missing fields. Finish with the requested verification token in the final answer. Do not spawn subagents or background sessions; finish in this chat. Do not modify files, create helper scripts, or write temporary files. Do not preview or submit any form. Do not send email. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
     },
     {
       "id": "outlook-and-forms-hostapi-smoke",

@@ -8,6 +8,7 @@ type DemoScenario = {
   id: string;
   prompt?: string;
   requiredAnswerPatterns?: string[];
+  expectedToolAny?: string[];
   bannedToolAny?: string[];
   bannedToolInputPatterns?: string[];
 };
@@ -51,15 +52,19 @@ describe('Windows pilot chat procedure scenarios', () => {
     const excel = scenarios.find((scenario) => scenario.id === 'downloads-excel-summary');
     const word = scenarios.find((scenario) => scenario.id === 'downloads-word-suspension-fields');
 
-    expect(excel?.prompt).toContain('Get-ChildItem -Path');
-    expect(excel?.prompt).toContain('rather than cmd-style \'dir /b\'');
+    expect(excel?.prompt).toContain('moe-demo-attendance-results.csv');
+    expect(excel?.prompt).toContain('Get-ChildItem -LiteralPath');
+    expect(excel?.prompt).toContain('total enrolled, total present, total absent');
     expect(excel?.requiredAnswerPatterns).toEqual([
       'xlsx|xls|csv|spreadsheet|workbook',
       'sheet|column|row',
-      'school|result|attendance|SEA|trend|total',
+      'school|attendance|enrolled|present|absent|total',
     ]);
 
     const wordPrompt = word?.prompt?.toLowerCase() ?? '';
+    expect(wordPrompt).toContain('moe-demo-suspension-source.txt');
+    expect(wordPrompt).toContain('do not inspect the .docx copy');
+    expect(word?.expectedToolAny).toEqual(['read']);
     for (const term of ['incident date', 'suspension length', 'parent contact', 'missing fields']) {
       expect(wordPrompt).toContain(term);
     }
