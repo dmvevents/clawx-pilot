@@ -4,7 +4,7 @@
 >
 > **Used by**: the `production-readiness` sub-agent and any human on-call before a release tag.
 >
-> Last reviewed: **2026-05-20**.
+> Last reviewed: **2026-06-05**.
 
 ## Legend
 
@@ -66,9 +66,11 @@
 | # | Check | How to verify | State |
 |---|---|---|---|
 | 6.1 | Vitest green | `pnpm test` → 781 pass, 5 skipped — channel-routes flake fixed in `electron/utils/gateway-health.ts` (failure>=ok comparison) | ✅ |
-| 6.2 | Typecheck clean | `pnpm run typecheck` | ✅ |
-| 6.3 | Harness CI green | `pnpm run harness:ci` | ✅ |
+| 6.2 | Typecheck clean | `pnpm run typecheck` passed 2026-06-05 | ✅ |
+| 6.3 | Harness CI green | `pnpm run harness:ci` passed 2026-06-05 | ✅ |
 | 6.4 | E2E (Playwright) green | `pnpm run test:e2e` | ⚠️ run before release |
+| 6.5 | Windows installed-app chat procedures | Latest evidence reached `READY_SAFE_CHAT_PROCEDURES` with Outlook open, Forms list, Downloads inventory, Excel summary, suspension-source extraction, and Host API Outlook/Forms safety smoke | ✅ |
+| 6.6 | Teacher Daily Report guardrail | `teacher-daily-report-missing-counts` safe-chat scenario asks for missing required counts instead of inventing them | ⚠️ added; rerun on Windows |
 
 ## 7 · Self-test cron
 
@@ -108,9 +110,19 @@ See `docs/WINDOWS_DEPLOY.md` for the full plan and `docs/FIRST_RUN_GUIDE.md` for
 |---|---|---|---|
 | 10.1 | Entra app-registration packet sent to MoE IT | `/tmp/moe-entra-app-registration-request.md` | ⚠️ pending |
 | 10.2 | At least one cloud upstream key rotated | `/tmp/router-key-rotation.md` | ⚠️ pending |
-| 10.3 | Windows laptop available for smoke test | Anton | ⚠️ pending |
+| 10.3 | Windows laptop available for smoke test | Windows RC harness produced installed-app evidence on 2026-06-05 | ✅ |
 | 10.4 | Ollama installable on target laptop | https://ollama.com/download/windows | ✅ available |
 | 10.5 | `hermes3:8b` reachable from target network | network policy | ⚠️ verify |
+
+## 11 · Online model broker
+
+| # | Check | How to verify | State |
+|---|---|---|---|
+| 11.1 | Broker code exists | `services/model-broker/server.mjs`; `node --check services/model-broker/server.mjs` | ✅ |
+| 11.2 | Broker unit tests green | `pnpm exec vitest run tests/unit/model-broker.test.ts` | ✅ |
+| 11.3 | Provider keys stay server-side | Desktop stores only a broker-issued client key; upstream key lives in broker env | ✅ design verified |
+| 11.4 | Broker deployed to a controlled endpoint | `/healthz` from deployed URL; logs redacted | ❌ pending |
+| 11.5 | Installed Windows app chat through broker | Custom provider points at `https://<broker>/v1` and completes one chat | ❌ pending |
 
 ---
 
@@ -126,3 +138,4 @@ After every audit, append a one-line verdict:
 
 - 2026-05-20 — VERDICT: **YELLOW** — gateway self-heal shipped + skill manifest expanded; logo asset and telemetry pipeline still pending; Entra packet still with MoE IT. Pilot-deployable, fleet-deployable when 8.8, 9.2, 10.1 close.
 - 2026-05-20 (PM) — VERDICT: **YELLOW** — channel-routes flake closed (full vitest 781/781), seeder hardened for first-run-from-zero (writes skeleton instead of skipping ENOENT), bluebubbles removed from manifest+bundles (not present upstream — was the Windows build blocker). Skill count down to 17. Logo, telemetry, Entra still pending. Pilot-deployable.
+- 2026-06-05 — VERDICT: **YELLOW** — Windows installed-app RC evidence is green for safe Outlook/Forms/Downloads procedures, and model-broker code/tests are present. Pilot production is still blocked on deployed broker configuration, rerun of the new teacher Daily Report guardrail scenario, clean installer smoke, logo, telemetry, and Entra/fleet items.

@@ -37,6 +37,7 @@ The current set covers:
 
 - `safechat-outlook-open`: chat invokes `outlook.open`.
 - `safechat-forms-list`: chat invokes `forms.list`.
+- `teacher-daily-report-missing-counts`: chat handles "nothing unusual" by asking for missing Daily Report counts instead of inventing values or previewing.
 - `downloads-document-inventory`: chat lists document-like files in Downloads.
 - `downloads-excel-summary`: chat selects and summarizes a spreadsheet from Downloads.
 - `downloads-word-suspension-fields`: optional chat inspection for suspension/report source documents.
