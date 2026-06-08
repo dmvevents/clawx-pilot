@@ -12,7 +12,7 @@ Installer asset:
 
 Expected SHA-256:
 
-`5e66e59476bf510cd2dcf605b999b1c9b525563822f2316a48b96f3902b738b7`
+`b981bde084340bcfafb6d527aba1a963118a82873a3c0b1b0c531eaf63cc8ecd`
 
 ## Before Installing
 
@@ -287,13 +287,13 @@ Windows laptop Outlook-only smoke:
 - Unsafe send/download calls without confirmation:
   correctly refused.
 
-Final installer copied to the Windows laptop:
+Credentialed release installer built locally:
 
-`C:\Users\Public\Downloads\Ministry.of.Education-0.4.3-moe.10-current-win-x64.exe`
+`release/Ministry of Education-0.4.3-moe.10-win-x64.exe`
 
-Laptop hash matched:
+Local hash verified:
 
-`5E66E59476BF510CD2DCF605B999B1C9B525563822F2316A48B96F3902B738B7`
+`B981BDE084340BCFAFB6D527ABA1A963118A82873A3C0B1B0C531EAF63CC8ECD`
 
 ## Logs and Diagnostics
 

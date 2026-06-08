@@ -60,6 +60,28 @@ function readInstalledPackageVersion(packageDir) {
   return typeof pkg?.version === 'string' ? pkg.version.trim() : null;
 }
 
+function copyReleaseGatewaySeed(resourcesDir) {
+  const projectResourcesDir = join(__dirname, '..', 'resources');
+  const packagedResourcesDir = join(resourcesDir, 'resources');
+  const seedFiles = ['cloud-gateway.json', 'cloud-gateway.key'];
+  const present = seedFiles.filter((file) => existsSync(join(projectResourcesDir, file)));
+
+  if (present.length === 0) return;
+
+  if (present.length !== seedFiles.length) {
+    throw new Error(
+      `[after-pack] Incomplete cloud gateway seed: found ${present.join(', ') || 'none'}, expected ${seedFiles.join(' and ')}`
+    );
+  }
+
+  mkdirSync(normWin(packagedResourcesDir), { recursive: true });
+  for (const file of seedFiles) {
+    cpSync(normWin(join(projectResourcesDir, file)), normWin(join(packagedResourcesDir, file)));
+  }
+
+  console.log(`[after-pack] ✅ Copied release cloud gateway seed files: ${seedFiles.join(', ')}`);
+}
+
 // ── General cleanup ──────────────────────────────────────────────────────────
 
 function cleanupUnnecessaryFiles(dir) {
@@ -578,6 +600,8 @@ exports.default = async function afterPack(context) {
   const dest = join(openclawRoot, 'node_modules');
   const nodeModulesRoot = join(__dirname, '..', 'node_modules');
   const pluginsDestRoot = join(resourcesDir, 'openclaw-plugins');
+
+  copyReleaseGatewaySeed(resourcesDir);
 
   if (!existsSync(src)) {
     console.warn('[after-pack] ⚠️  build/openclaw/node_modules not found. Run bundle-openclaw first.');

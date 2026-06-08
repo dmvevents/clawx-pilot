@@ -9,9 +9,9 @@ See the GitHub release tag target commit.
 ## Assets
 
 - `Ministry.of.Education-0.4.3-moe.10-win-x64.exe`
-  - SHA-256: `5e66e59476bf510cd2dcf605b999b1c9b525563822f2316a48b96f3902b738b7`
+  - SHA-256: `b981bde084340bcfafb6d527aba1a963118a82873a3c0b1b0c531eaf63cc8ecd`
 - `Ministry.of.Education-0.4.3-moe.10-win-x64.exe.blockmap`
-  - SHA-256: `6b107a020b0ffb54540cf03e0d5090985420222e070fbf89e4ed89cf4f592424`
+  - SHA-256: `c06534f6a47fc3a1a4313803f41063a3b82c053df210e112f0941fc115ace703`
 - `MOE-Windows-RC-2026-06-08-End-to-End-Instructions.md`
   - Full download, install, first-launch, email, Forms, and diagnostic instructions.
 
@@ -27,8 +27,8 @@ See the GitHub release tag target commit.
   - Result: `STATE:RESULT=COMPLETE`
   - `outlookSmoke.readInbox`: HTTP `200`, result `status: ok`
   - Unsafe send/download calls without confirmation were refused.
-- Final installer copied to the Windows laptop and hash matched:
-  - `5E66E59476BF510CD2DCF605B999B1C9B525563822F2316A48B96F3902B738B7`
+- Credentialed release installer local hash verified:
+  - `B981BDE084340BCFAFB6D527ABA1A963118A82873A3C0B1B0C531EAF63CC8ECD`
 
 ## Important Install Notes
 
