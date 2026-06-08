@@ -12,6 +12,9 @@ Production-shaped AI gateway for the online model path. The desktop app should p
 - Testing scale: `min-instances=0`, `max-instances=2`, `concurrency=20`.
 - Memory: `2Gi`. LiteLLM exceeded `1Gi` during Cloud Run startup in RC testing.
 - Demo scale: raise to `min-instances=1`, `max-instances=10`, `concurrency=40` after smoke testing.
+- Observability: Phoenix/OpenTelemetry callback is wired in config but remains
+  inert until the Phoenix/OTLP env vars below are set. Message body capture is
+  off by default.
 
 ## Deploy
 
@@ -50,9 +53,82 @@ SERVICE_URL="$(gcloud run services describe clawx-litellm-gateway --region us-ce
 curl -fsS "$SERVICE_URL/v1/models" -H "Authorization: Bearer $LITELLM_KEY"
 ```
 
+## Phoenix Tracing
+
+LiteLLM is configured with the `arize_phoenix` callback and should be enabled
+through the Phoenix collector env vars on the Cloud Run service. Keep the
+default `turn_off_message_logging: true` for real users; only enable content
+capture for a controlled internal demo account.
+
+Self-hosted Phoenix example:
+
+```bash
+gcloud run services update clawx-litellm-gateway \
+  --region us-central1 \
+  --set-env-vars PHOENIX_COLLECTOR_HTTP_ENDPOINT=https://<phoenix-host>/v1/traces,PHOENIX_PROJECT_NAME=clawx-litellm
+```
+
+Phoenix Cloud example:
+
+```bash
+gcloud secrets create clawx-phoenix-api-key --data-file=-
+gcloud run services update clawx-litellm-gateway \
+  --region us-central1 \
+  --set-env-vars PHOENIX_COLLECTOR_HTTP_ENDPOINT=https://app.phoenix.arize.com/v1/traces,PHOENIX_PROJECT_NAME=clawx-litellm \
+  --set-secrets PHOENIX_API_KEY=clawx-phoenix-api-key:latest
+```
+
+LiteLLM also has an opt-in OpenTelemetry v2 path for full-request proxy traces
+(`LITELLM_OTEL_V2=true`), but this RC keeps the simpler Phoenix callback path
+first because the config already uses `arize_phoenix`.
+
+Controlled demo content capture only:
+
+```bash
+gcloud run services update clawx-litellm-gateway \
+  --region us-central1 \
+  --set-env-vars OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_only
+```
+
+Turn content capture back off after the demo:
+
+```bash
+gcloud run services update clawx-litellm-gateway \
+  --region us-central1 \
+  --remove-env-vars OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
+```
+
 ## Desktop Configuration
 
-In Settings > AI Providers, add a custom provider:
+The app now supports first-launch seeding for this gateway. Put
+`cloud-gateway.json` in the packaged resources directory
+(`resources/cloud-gateway.json` before packaging, which lands at
+`process.resourcesPath/resources/cloud-gateway.json`) or in the user's app data
+directory, or pass equivalent `CLAWX_CLOUD_GATEWAY_*` environment variables.
+
+Recommended config shape:
+
+```json
+{
+  "enabled": true,
+  "providerId": "moe-cloud-gateway",
+  "label": "MOE Cloud Gateway",
+  "baseUrl": "https://<clawx-litellm-gateway-url>/v1",
+  "apiKeyFile": "cloud-gateway.key",
+  "model": "moe-demo-pro",
+  "models": ["moe-demo-pro", "moe-demo"],
+  "setDefault": true,
+  "setPreferredChannel": true
+}
+```
+
+Use `apiKeyFile` for packaged/fresh-install tests so the key is not committed to
+Git. `apiKey` and env var `CLAWX_CLOUD_GATEWAY_API_KEY` are supported for local
+smoke tests only. On successful seed, ClawX writes the custom account, sets the
+Online channel, and syncs OpenClaw with `authHeader: true` so LiteLLM receives
+`Authorization: Bearer <client-key>`.
+
+Manual fallback in Settings > AI Providers:
 
 - Base URL: `https://<clawx-litellm-gateway-url>/v1`
 - Protocol: OpenAI-compatible chat completions/responses

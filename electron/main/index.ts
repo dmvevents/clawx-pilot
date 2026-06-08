@@ -52,6 +52,7 @@ import { deviceOAuthManager } from '../utils/device-oauth';
 import { browserOAuthManager } from '../utils/browser-oauth';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
 import { syncAllProviderAuthToRuntime } from '../services/providers/provider-runtime-sync';
+import { seedCloudGatewayProvider } from './cloud-gateway-provider-seed';
 import { seedDefaultLocalProvider } from './local-provider-seed';
 import { seedGatewayPluginConfig } from './gateway-plugin-config-seed';
 import { runChannelPreflight } from '../services/providers/channel-router';
@@ -503,11 +504,21 @@ async function initialize(): Promise<void> {
     hostEventBus.emit('channel:whatsapp-error', error);
   });
 
-  // Seed a local OpenAI-compatible provider (Ollama / nora:4b-v3.2) so fresh
-  // installs without cloud keys still get a working chat reply. Idempotent:
-  // skips when any account already targets the local Ollama endpoint, and
-  // only becomes default if no other default exists. Disable via env var
-  // CLAWX_SEED_LOCAL_LLM_PROVIDER=0.
+  // Seed the managed online gateway first when a bundled/user/env config is
+  // available. The local seed below remains the no-cloud fallback.
+  if (!isE2EMode) {
+    try {
+      await seedCloudGatewayProvider(gatewayManager);
+    } catch (error) {
+      logger.warn('Cloud gateway provider seed failed (non-fatal):', error);
+    }
+  }
+
+  // Seed a local OpenAI-compatible provider (Ollama / Qwen 2.5 3B) so fresh
+  // installs without cloud gateway config still get a working chat reply.
+  // Idempotent: skips when any account already targets the local Ollama
+  // endpoint, and only becomes default if no other default exists. Disable via
+  // env var CLAWX_SEED_LOCAL_LLM_PROVIDER=0.
   if (!isE2EMode) {
     try {
       await seedDefaultLocalProvider(gatewayManager);

@@ -15,8 +15,9 @@
  */
 import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright-core';
 import { logger } from '../../utils/logger';
+import { CHROME_CDP_ENDPOINT, ensureChromeCdpReady } from '../chrome-cdp';
 
-const CDP_DEFAULT = 'http://127.0.0.1:18792';
+const CDP_DEFAULT = CHROME_CDP_ENDPOINT;
 
 const RESPONSE_HOST_PATTERNS = [
   /^https:\/\/forms\.office\.com\/.*ResponsePage/i,
@@ -159,7 +160,18 @@ export class FormsDriver {
       this.page = null;
     }
     logger.info(`[forms-v2] Connecting via CDP at ${this.cdp}`);
-    this.browser = await chromium.connectOverCDP(this.cdp);
+    try {
+      this.browser = await chromium.connectOverCDP(this.cdp);
+    } catch (err) {
+      logger.warn(
+        `[forms-v2] CDP attach failed (${err instanceof Error ? err.message : String(err)}) — attempting Chrome CDP repair`,
+      );
+      const status = await ensureChromeCdpReady({ cdpEndpoint: this.cdp });
+      if (status.state !== 'cdp_ready') {
+        throw new Error(`[${status.state}] ${status.message}`, { cause: err });
+      }
+      this.browser = await chromium.connectOverCDP(this.cdp);
+    }
   }
 
   /** Find an existing Forms response tab, or open one at the given URL. */

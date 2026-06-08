@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "providerId": "moe-cloud-gateway",
+  "label": "MOE Cloud Gateway",
+  "baseUrl": "https://<clawx-litellm-gateway-url>/v1",
+  "apiKeyFile": "cloud-gateway.key",
+  "model": "moe-demo-pro",
+  "models": ["moe-demo-pro", "moe-demo"],
+  "fallbackModels": ["moe-demo"],
+  "apiProtocol": "openai-completions",
+  "setDefault": true,
+  "setPreferredChannel": true
+}

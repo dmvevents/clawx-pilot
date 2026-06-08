@@ -58,6 +58,30 @@ interface MicrosoftGraphStoreShape {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let storeInstance: any = null;
 
+export function readMicrosoftGraphConfigFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): MicrosoftGraphConfig | null {
+  const tenantId = env.CLAWX_MICROSOFT_GRAPH_TENANT_ID?.trim()
+    || env.CLAWX_MS_GRAPH_TENANT_ID?.trim()
+    || '';
+  const clientId = env.CLAWX_MICROSOFT_GRAPH_CLIENT_ID?.trim()
+    || env.CLAWX_MS_GRAPH_CLIENT_ID?.trim()
+    || '';
+  if (!tenantId || !clientId) return null;
+
+  const scopesRaw = env.CLAWX_MICROSOFT_GRAPH_SCOPES?.trim()
+    || env.CLAWX_MS_GRAPH_SCOPES?.trim()
+    || '';
+  const scopes = scopesRaw
+    ? scopesRaw.split(/[,\s]+/).map((scope) => scope.trim()).filter(Boolean)
+    : undefined;
+  const redirectUri = env.CLAWX_MICROSOFT_GRAPH_REDIRECT_URI?.trim()
+    || env.CLAWX_MS_GRAPH_REDIRECT_URI?.trim()
+    || undefined;
+
+  return { tenantId, clientId, scopes, redirectUri };
+}
+
 async function getStore(): Promise<Store<MicrosoftGraphStoreShape>> {
   if (!storeInstance) {
     const Module = (await import('electron-store')).default;
@@ -77,7 +101,7 @@ async function getStore(): Promise<Store<MicrosoftGraphStoreShape>> {
 
 export async function getMicrosoftGraphConfig(): Promise<MicrosoftGraphConfig | null> {
   const store = await getStore();
-  return store.get('config');
+  return store.get('config') ?? readMicrosoftGraphConfigFromEnv();
 }
 
 export async function setMicrosoftGraphConfig(

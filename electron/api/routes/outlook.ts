@@ -27,6 +27,14 @@ import { OUTLOOK_BROWSER_V2, PRINCIPAL_SKILL_ALLOWLIST } from '../../../shared/f
 import { logger } from '../../utils/logger';
 import { outlookBrowserManager as outlookBrowserManagerV1 } from '../../services/outlook-browser/manager';
 import { outlookBrowserManagerV2 } from '../../services/outlook-browser-v2/manager';
+import {
+  draftEmailWithGraph,
+  isGraphOutlookAvailable,
+  readEmailWithGraph,
+  readInboxWithGraph,
+  searchInboxWithGraph,
+  sendEmailWithGraph,
+} from '../../services/microsoft-graph/outlook-adapter';
 import type {
   DraftEmailArgs,
   SendEmailArgs,
@@ -40,9 +48,9 @@ import type {
 } from '../../services/outlook-browser/types';
 import { parseJsonBody, sendJson } from '../route-utils';
 
-// Same flag-gated swap as outlook-browser-ipc.ts. Both surfaces (IPC and
-// host-API HTTP) point at the same singleton implementation, so the manager
-// is shared across renderer + agent calls.
+// Same flag-gated swap as outlook-browser-ipc.ts. Pilot builds default to the
+// v2 Chrome-CDP implementation; CLAWX_OUTLOOK_V2=0 keeps the legacy browser
+// plugin path available for regression comparison.
 const outlookBrowserManager = OUTLOOK_BROWSER_V2 ? outlookBrowserManagerV2 : outlookBrowserManagerV1;
 
 function asArray(v: string | string[] | undefined): string[] {
@@ -65,6 +73,17 @@ function logSafeArgs(
 
 function isOutlookEnabled(): boolean {
   return PRINCIPAL_SKILL_ALLOWLIST.has('outlook');
+}
+
+async function shouldUseGraphOutlook(): Promise<boolean> {
+  try {
+    return await isGraphOutlookAvailable();
+  } catch (error) {
+    logger.debug(
+      `[host-api outlook] Graph availability check failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return false;
+  }
 }
 
 export async function handleOutlookRoutes(
@@ -100,9 +119,12 @@ export async function handleOutlookRoutes(
         typeof body.top === 'number' && Number.isFinite(body.top) && body.top > 0
           ? Math.floor(body.top)
           : 10;
-      const result = await outlookBrowserManager.readInbox(top);
+      const graphAvailable = await shouldUseGraphOutlook();
+      const result = graphAvailable
+        ? await readInboxWithGraph(top)
+        : await outlookBrowserManager.readInbox(top);
       logger.info(
-        `[host-api outlook/read-inbox] status=${result.status} top=${top} count=${result.messages?.length ?? 0}`,
+        `[host-api outlook/read-inbox] transport=${graphAvailable ? 'graph' : 'browser'} status=${result.status} top=${top} count=${result.messages?.length ?? 0}`,
       );
       sendJson(res, 200, { success: true, data: result });
       return true;
@@ -111,8 +133,11 @@ export async function handleOutlookRoutes(
     if (url.pathname === '/api/outlook/draft') {
       const body = await parseJsonBody<DraftEmailArgs>(req);
       logger.info(`[host-api outlook/draft] ${JSON.stringify(logSafeArgs(body))}`);
-      const result = await outlookBrowserManager.draftEmail(body);
-      logger.info(`[host-api outlook/draft] result=${result.status}`);
+      const graphAvailable = await shouldUseGraphOutlook();
+      const result = graphAvailable
+        ? await draftEmailWithGraph(body)
+        : await outlookBrowserManager.draftEmail(body);
+      logger.info(`[host-api outlook/draft] transport=${graphAvailable ? 'graph' : 'browser'} result=${result.status}`);
       sendJson(res, 200, { success: true, data: result });
       return true;
     }
@@ -121,17 +146,23 @@ export async function handleOutlookRoutes(
       const body = await parseJsonBody<SendEmailArgs>(req);
       // Manager has the hard gate; we don't pre-check confirm here.
       logger.info(`[host-api outlook/send] attempt ${JSON.stringify(logSafeArgs(body))}`);
-      const result = await outlookBrowserManager.sendEmail(body);
-      logger.info(`[host-api outlook/send] result=${result.status}`);
+      const graphAvailable = await shouldUseGraphOutlook();
+      const result = graphAvailable
+        ? await sendEmailWithGraph(body)
+        : await outlookBrowserManager.sendEmail(body);
+      logger.info(`[host-api outlook/send] transport=${graphAvailable ? 'graph' : 'browser'} result=${result.status}`);
       sendJson(res, 200, { success: true, data: result });
       return true;
     }
 
     if (url.pathname === '/api/outlook/search-inbox') {
       const body = await parseJsonBody<SearchInboxArgs>(req);
-      const result = await outlookBrowserManager.searchInbox(body);
+      const graphAvailable = await shouldUseGraphOutlook();
+      const result = graphAvailable
+        ? await searchInboxWithGraph(body)
+        : await outlookBrowserManager.searchInbox(body);
       logger.info(
-        `[host-api outlook/search-inbox] status=${result.status} count=${result.messages?.length ?? 0} capped=${!!result.capped}`,
+        `[host-api outlook/search-inbox] transport=${graphAvailable ? 'graph' : 'browser'} status=${result.status} count=${result.messages?.length ?? 0} capped=${!!result.capped}`,
       );
       sendJson(res, 200, { success: true, data: result });
       return true;
@@ -139,9 +170,12 @@ export async function handleOutlookRoutes(
 
     if (url.pathname === '/api/outlook/read-email') {
       const body = await parseJsonBody<ReadEmailArgs>(req);
-      const result = await outlookBrowserManager.readEmail(body);
+      const graphAvailable = await shouldUseGraphOutlook();
+      const result = graphAvailable
+        ? await readEmailWithGraph(body)
+        : await outlookBrowserManager.readEmail(body);
       logger.info(
-        `[host-api outlook/read-email] status=${result.status} bodyLen=${result.body?.length ?? 0} attachments=${result.attachments?.length ?? 0}`,
+        `[host-api outlook/read-email] transport=${graphAvailable ? 'graph' : 'browser'} status=${result.status} bodyLen=${result.body?.length ?? 0} attachments=${result.attachments?.length ?? 0}`,
       );
       sendJson(res, 200, { success: true, data: result });
       return true;

@@ -1002,6 +1002,11 @@ async function main() {
       process.exitCode = 1;
     }
   } finally {
+    // This probe attaches to an already-running packaged Electron instance.
+    // close() is required here so Playwright releases the CDP connection and
+    // the harness exits. Persistence of a GUI process launched from SSH is
+    // tested by a separate same-session watcher because Windows may tear down
+    // SSH-started GUI children when the job/session ends.
     await browser.close().catch(() => {});
   }
 }

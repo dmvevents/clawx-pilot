@@ -2,11 +2,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { chromium } from 'playwright-core';
 import { FormsDriver } from '../../electron/services/forms-browser-v2/forms-driver';
+import { ensureChromeCdpReady } from '../../electron/services/chrome-cdp';
 
 vi.mock('playwright-core', () => ({
   chromium: {
     connectOverCDP: vi.fn(),
   },
+}));
+
+vi.mock('../../electron/services/chrome-cdp', () => ({
+  CHROME_CDP_ENDPOINT: 'http://127.0.0.1:18792',
+  ensureChromeCdpReady: vi.fn(),
 }));
 
 function fakeBrowser({ connected, contexts }: { connected: boolean; contexts: unknown[] }) {
@@ -34,6 +40,7 @@ function fakePage(initialUrl: string) {
 describe('FormsDriver CDP connection lifecycle', () => {
   beforeEach(() => {
     vi.mocked(chromium.connectOverCDP).mockReset();
+    vi.mocked(ensureChromeCdpReady).mockReset();
   });
 
   it('reconnects when the cached CDP browser has no contexts', async () => {
@@ -49,6 +56,33 @@ describe('FormsDriver CDP connection lifecycle', () => {
     expect(stale.close).toHaveBeenCalledTimes(1);
     expect(chromium.connectOverCDP).toHaveBeenCalledWith('http://127.0.0.1:18792');
     expect((driver as unknown as { browser: unknown }).browser).toBe(fresh);
+  });
+
+  it('repairs Chrome CDP once when the initial attach fails', async () => {
+    const browser = fakeBrowser({ connected: true, contexts: [{}] });
+    vi.mocked(chromium.connectOverCDP)
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+      .mockResolvedValueOnce(browser as never);
+    vi.mocked(ensureChromeCdpReady).mockResolvedValue({
+      state: 'cdp_ready',
+      cdpEndpoint: 'http://127.0.0.1:18792',
+      debugPort: 18792,
+      userDataDir: 'C:\\Users\\Teacher\\AppData\\Local\\Google\\Chrome\\User Data',
+      chromeExecutable: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      chromeProcessCount: 0,
+      targetProfileProcessCount: 0,
+      remoteDebugProcessCount: 0,
+      message: 'ready',
+      action: 'none',
+    });
+
+    const driver = new FormsDriver({ cdpEndpoint: 'http://127.0.0.1:18792' });
+
+    await driver.ensureBrowser();
+
+    expect(ensureChromeCdpReady).toHaveBeenCalledWith({ cdpEndpoint: 'http://127.0.0.1:18792' });
+    expect(chromium.connectOverCDP).toHaveBeenCalledTimes(2);
+    expect((driver as unknown as { browser: unknown }).browser).toBe(browser);
   });
 
   it('opens a fresh tab instead of reusing a different Forms response page', async () => {

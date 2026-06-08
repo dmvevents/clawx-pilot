@@ -24,17 +24,17 @@ Outlook and Forms are already integrated through the app, not standalone scripts
 - Main-process Outlook or Forms manager
 - User Chrome session over CDP
 
-For full Outlook tool coverage, launch the app with `CLAWX_OUTLOOK_V2=1`. V1 is useful for the narrow open/read/draft/send path but does not cover the full self-test surface.
+Current pilot builds default to the Outlook v2 Chrome/CDP manager for full tool coverage. Keep `CLAWX_OUTLOOK_V2=1` only as an explicit compatibility setting for older installed builds; use `CLAWX_OUTLOOK_V2=0` when deliberately testing the legacy browser-plugin path.
 
 Forms uses the v2 browser driver already. `forms.preview_suspension` fills the test form without submitting. `forms.submit_suspension` requires `confirm:true` and the expected title.
 
 ## Windows Configuration Plan
 
 1. Install/refresh pilot scripts in `%USERPROFILE%`.
-2. Run `pilot-install-demo-shortcuts.ps1 -SetOutlookV2UserEnv`.
+2. Run `pilot-install-demo-shortcuts.ps1`. Add `-SetOutlookV2UserEnv` only when repairing an older installed build that does not default to Outlook v2.
 3. Use the desktop shortcut `Ministry Demo - CDP Chrome` to open a separate Chrome demo profile with CDP on `18792`.
 4. Sign into Outlook in that CDP Chrome profile using the authorized test account.
-5. Restart the Ministry app from `Ministry Demo - App Outlook V2` so the full Outlook manager is selected.
+5. Restart the Ministry app from `Ministry Demo - App Outlook V2` if you need to force the v2 manager on an older build; current pilot builds select it by default.
 6. Run `Ministry Demo - Probe State`; required state is `INSTALLED | GATEWAY_UP | API_UP | CDP_UP`.
 7. Run `Ministry Demo - Outlook Check`; required state is `OUTLOOK_READY`.
 8. Execute the desktop self-test prompts. Do not send real email or submit the form during self-test.

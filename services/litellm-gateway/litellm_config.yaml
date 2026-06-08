@@ -11,8 +11,13 @@ model_list:
       vertex_location: us-central1
 
 litellm_settings:
+  callbacks:
+    - arize_phoenix
   drop_params: true
   set_verbose: false
+  # Privacy default for Phoenix/OpenTelemetry: keep message bodies out of
+  # traces unless a controlled demo explicitly opts into content capture.
+  turn_off_message_logging: true
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

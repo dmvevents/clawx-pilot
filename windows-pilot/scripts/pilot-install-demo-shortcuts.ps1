@@ -4,7 +4,8 @@
 # Idempotent: yes - re-running refreshes the same shortcuts.
 #
 # Optional:
-#   -SetOutlookV2UserEnv sets CLAWX_OUTLOOK_V2=1 for future app launches.
+#   -SetOutlookV2UserEnv sets CLAWX_OUTLOOK_V2=1 for future app launches on
+#     older installed builds. Current pilot builds default to Outlook v2/CDP.
 #     The already-running app still needs a restart to observe that env var.
 
 param(
@@ -43,7 +44,7 @@ function New-Shortcut {
 
 if ($SetOutlookV2UserEnv) {
     [Environment]::SetEnvironmentVariable("CLAWX_OUTLOOK_V2", "1", "User")
-    "CONFIG: set user env CLAWX_OUTLOOK_V2=1 for future app launches"
+    "CONFIG: set user env CLAWX_OUTLOOK_V2=1 for future app launches (legacy compatibility override)"
 }
 
 New-Shortcut `

@@ -1,6 +1,7 @@
 # pilot-relaunch-app-outlook-v2.ps1 - restart the installed Ministry app with
-# CLAWX_OUTLOOK_V2=1 and Electron remote debugging so Outlook tools use the
-# Playwright/CDP manager and SSH probes can attach to the installed app.
+# Electron remote debugging for SSH probes. It also sets CLAWX_OUTLOOK_V2=1 as
+# a compatibility override for older installed builds; current pilot builds
+# default to the Playwright/CDP Outlook manager.
 #
 # Read-only: NO - closes/restarts the app. Does not delete data and does not
 # touch Chrome/CDP.
@@ -11,7 +12,8 @@ param(
     [int]$WaitSeconds = 45,
     [string]$TaskName = "ClawX Launch App Outlook V2",
     [int]$ElectronDebugPort = 9223,
-    [string]$KeepaliveTaskName = "ClawX App Keepalive"
+    [string]$KeepaliveTaskName = "ClawX App Keepalive",
+    [switch]$UseKeepalive
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,22 +35,27 @@ function Test-CDPHttp($port) {
 function Repair-KeepaliveDebugPort($port) {
     $keepalivePath = Join-Path $env:USERPROFILE "Downloads\clawx-autonomous\clawx-app-keepalive.ps1"
     if (-not (Test-Path $keepalivePath)) {
-        "KEEPALIVE_SCRIPT: missing"
-        return
+        Write-Host "KEEPALIVE_SCRIPT: missing"
+        return $false
     }
 
     $content = Get-Content -LiteralPath $keepalivePath -Raw
+    if ($content -match "--remote-debugging-port=$port") {
+        Write-Host "KEEPALIVE_SCRIPT: already has debug port $port"
+        return $true
+    }
     if ($content -notmatch "--remote-debugging-port=18792") {
-        "KEEPALIVE_SCRIPT: no 18792 app debug flag found"
-        return
+        Write-Host "KEEPALIVE_SCRIPT: no app debug flag found; will use explicit debug launch"
+        return $false
     }
 
     $backup = "$keepalivePath.bak-$(Get-Date -Format yyyyMMdd-HHmmss)"
     Copy-Item -LiteralPath $keepalivePath -Destination $backup -Force
     $content.Replace("--remote-debugging-port=18792", "--remote-debugging-port=$port") |
         Set-Content -LiteralPath $keepalivePath -Encoding UTF8
-    "KEEPALIVE_SCRIPT: patched app debug port to $port"
-    "KEEPALIVE_SCRIPT_BACKUP: $backup"
+    Write-Host "KEEPALIVE_SCRIPT: patched app debug port to $port"
+    Write-Host "KEEPALIVE_SCRIPT_BACKUP: $backup"
+    return $true
 }
 
 function Get-AppDebugCommandLines($exePath) {
@@ -70,6 +77,10 @@ function Restore-KeepaliveTask($taskName, $wasEnabled) {
     }
 }
 
+function Escape-ForSingleQuotedPowerShell([string]$value) {
+    return $value.Replace("'", "''")
+}
+
 $appExe = Join-Path $env:LOCALAPPDATA "Programs\Ministry of Education\Ministry of Education.exe"
 if (-not (Test-Path $appExe)) {
     "STATE: APP_NOT_FOUND"
@@ -89,6 +100,7 @@ if (-not (Test-Path $resourcesDir)) {
 "Electron CDP: 127.0.0.1:$ElectronDebugPort"
 
 $keepaliveWasEnabled = $false
+$keepaliveCanLaunchWithDebug = $false
 $keepaliveTask = Get-ScheduledTask -TaskName $KeepaliveTaskName -ErrorAction SilentlyContinue
 if ($keepaliveTask) {
     $keepaliveWasEnabled = $keepaliveTask.Settings.Enabled
@@ -100,7 +112,7 @@ if ($keepaliveTask) {
         "Disabling keepalive task during controlled relaunch: $KeepaliveTaskName"
         Disable-ScheduledTask -TaskName $KeepaliveTaskName | Out-Null
     }
-    Repair-KeepaliveDebugPort $ElectronDebugPort
+    $keepaliveCanLaunchWithDebug = Repair-KeepaliveDebugPort $ElectronDebugPort
 } else {
     "Keepalive task not found: $KeepaliveTaskName"
 }
@@ -130,23 +142,71 @@ $appArgs = "--remote-debugging-port=$ElectronDebugPort"
 [Environment]::SetEnvironmentVariable('CLAWX_OUTLOOK_V2','1','User')
 
 $usedKeepaliveLaunch = $false
-if ($keepaliveTask) {
+if ($UseKeepalive -and $keepaliveTask -and $keepaliveCanLaunchWithDebug) {
     Enable-ScheduledTask -TaskName $KeepaliveTaskName | Out-Null
     Start-ScheduledTask -TaskName $KeepaliveTaskName
     $usedKeepaliveLaunch = $true
     "STATE: KEEPALIVE_TASK_STARTED"
 } else {
+    if ($keepaliveTask -and -not $UseKeepalive) {
+        "STATE: KEEPALIVE_SKIPPED_BY_DEFAULT"
+    } elseif ($keepaliveTask -and -not $keepaliveCanLaunchWithDebug) {
+        "STATE: KEEPALIVE_SKIPPED_FOR_DEBUG_LAUNCH"
+    }
     $psExe = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-    $launch = "`$env:CLAWX_OUTLOOK_V2='1'; [Environment]::SetEnvironmentVariable('CLAWX_OUTLOOK_V2','1','User'); Start-Process -FilePath '$appExe' -ArgumentList '$appArgs' -WorkingDirectory '$resourcesDir'"
-    $args = "-NoProfile -ExecutionPolicy Bypass -Command `"$launch`""
+    $launcherDir = Join-Path $env:PUBLIC "Downloads"
+    if (-not (Test-Path $launcherDir)) {
+        New-Item -ItemType Directory -Force -Path $launcherDir | Out-Null
+    }
+    $launcherPath = Join-Path $launcherDir "clawx-app-debug-launcher.ps1"
+    $launcherLog = Join-Path $launcherDir "clawx-app-debug-launcher.log"
+    $escapedAppExe = Escape-ForSingleQuotedPowerShell $appExe
+    $escapedResourcesDir = Escape-ForSingleQuotedPowerShell $resourcesDir
+    $escapedAppArgs = Escape-ForSingleQuotedPowerShell $appArgs
+    $escapedLauncherLog = Escape-ForSingleQuotedPowerShell $launcherLog
+    $launcherBody = @"
+`$ErrorActionPreference = "Continue"
+function Write-LaunchLog([string]`$message) {
+  Add-Content -LiteralPath '$escapedLauncherLog' -Value ("[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), `$message)
+}
+Write-LaunchLog "launcher start user=`$env:USERNAME"
+`$env:CLAWX_OUTLOOK_V2 = '1'
+[Environment]::SetEnvironmentVariable('CLAWX_OUTLOOK_V2', '1', 'User')
+Write-LaunchLog "app=$escapedAppExe"
+Write-LaunchLog "args=$escapedAppArgs"
+Write-LaunchLog "cwd=$escapedResourcesDir"
+try {
+  `$proc = Start-Process -FilePath '$escapedAppExe' -ArgumentList '$escapedAppArgs' -WorkingDirectory '$escapedResourcesDir' -PassThru
+  Write-LaunchLog "started pid=`$(`$proc.Id)"
+} catch {
+  Write-LaunchLog "start error=`$(`$_.Exception.Message)"
+  exit 1
+}
+"@
+    Set-Content -LiteralPath $launcherPath -Value $launcherBody -Encoding UTF8
+    if (Test-Path $launcherLog) {
+        Remove-Item -LiteralPath $launcherLog -Force -ErrorAction SilentlyContinue
+    }
+    "LAUNCHER_SCRIPT: $launcherPath"
+    "LAUNCHER_LOG: $launcherLog"
+    $args = "-NoProfile -ExecutionPolicy Bypass -File `"$launcherPath`""
     $action = New-ScheduledTaskAction -Execute $psExe -Argument $args
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 3)
     $task = New-ScheduledTask -Action $action -Principal $principal -Settings $settings
 
     Register-ScheduledTask -TaskName $TaskName -InputObject $task -Force | Out-Null
-    Start-ScheduledTask -TaskName $TaskName
-    "STATE: TASK_STARTED"
+    $runOutput = & schtasks.exe "/Run" "/TN" $TaskName 2>&1
+    "SCHTASKS_RUN_EXIT: $LASTEXITCODE"
+    if ($runOutput) {
+        $runOutput | ForEach-Object { "SCHTASKS_RUN_OUTPUT: $_" }
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Start-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+        "STATE: TASK_STARTED_FALLBACK_START_SCHEDULED_TASK"
+    } else {
+        "STATE: TASK_STARTED"
+    }
 }
 
 $deadline = (Get-Date).AddSeconds($WaitSeconds)
@@ -166,6 +226,8 @@ while ((Get-Date) -lt $deadline) {
         }
         if ($usedKeepaliveLaunch) {
             Restore-KeepaliveTask $KeepaliveTaskName $keepaliveWasEnabled
+        } elseif ($keepaliveTask) {
+            Restore-KeepaliveTask $KeepaliveTaskName $keepaliveWasEnabled
         }
         "STATE: APP_V2_RELAUNCHED"
         exit 0
@@ -177,6 +239,11 @@ $info = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($info) {
     "TASK_LAST_RUN: $($info.LastRunTime)"
     "TASK_LAST_RESULT: $($info.LastTaskResult)"
+}
+$launcherLog = Join-Path $env:PUBLIC "Downloads\clawx-app-debug-launcher.log"
+if (Test-Path $launcherLog) {
+    "=== LAUNCHER LOG ==="
+    Get-Content -LiteralPath $launcherLog -Tail 80 -ErrorAction SilentlyContinue
 }
 Get-AppDebugCommandLines $appExe | ForEach-Object { "APP_CMD[$($_.ProcessId)]: $($_.CommandLine)" }
 if ($usedKeepaliveLaunch) {

@@ -52,6 +52,8 @@ windows-pilot/
 │
 ├── scripts/                            ← powershell + tsx helpers, all idempotent
 │   ├── pilot-attach-chrome-cdp.ps1     ← turn on --remote-debugging-port=18792 on pilot
+│   ├── pilot-clean-slate-cdp-harness.ps1 ← temp-profile CDP smoke/profile-lock simulation
+│   ├── pilot-fresh-install-environment.ps1 ← safe fresh-install probe/sandbox package
 │   ├── pilot-probe-state.ps1           ← read-only audit (procs, ports, version, config)
 │   ├── pilot-tail-gateway-log.ps1      ← live tail of latest clawx-*.log
 │   ├── pilot-verify-outlook-tab.ps1    ← prove Outlook tab is signed in via CDP /json
@@ -85,6 +87,47 @@ ssh pilot 'powershell -NoProfile -ExecutionPolicy Bypass -File C:/Users/vyonix/p
 # 4. Drive the demo from the GUI (principal sits at the laptop directly).
 #    The execution plan has the chat composer text verbatim.
 ```
+
+Non-destructive clean-slate CDP test (no uninstall, no real Chrome profile
+touch):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File windows-pilot/scripts/pilot-clean-slate-cdp-harness.ps1 -Scenario ready
+powershell -NoProfile -ExecutionPolicy Bypass -File windows-pilot/scripts/pilot-clean-slate-cdp-harness.ps1 -Scenario profileLock
+```
+
+Fresh install test package (no uninstall, no real profile mutation):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File windows-pilot/scripts/pilot-fresh-install-environment.ps1 -Mode Probe
+powershell -NoProfile -ExecutionPolicy Bypass -File windows-pilot/scripts/pilot-fresh-install-environment.ps1 -Mode CreateSandbox
+```
+
+Fresh-profile cloud model and gateway setup (verified 2026-06-07 on
+`ClawXFreshTest`):
+
+```bash
+# Immediate demo-safe fallback: copy the known-good Gemini provider from VYONIX
+# into a fresh Windows profile, then restart only the gateway utility process.
+scp windows-pilot/scripts/pilot-copy-provider-from-user.ps1 pilot:/Users/Public/Downloads/
+ssh pilot 'powershell -NoProfile -ExecutionPolicy Bypass -File C:/Users/Public/Downloads/pilot-copy-provider-from-user.ps1 -SourceUser VYONIX -TargetUser ClawXFreshTest -ProviderId google -Model gemini-2.5-pro'
+
+# Production-shaped path: configure the LiteLLM Cloud Run gateway as a custom
+# provider. This requires non-expired gcloud auth on the Mac side.
+WINDOWS_USER=ClawXFreshTest windows-pilot/scripts/pilot-configure-cloud-gateway-from-gcloud.sh
+```
+
+Notes:
+- `pilot-copy-provider-from-user.ps1` and
+  `pilot-configure-cloud-gateway.ps1` write JSON with UTF-8 no BOM. Do not
+  replace this with `Set-Content -Encoding UTF8` on Windows PowerShell 5; that
+  reintroduces Electron Store parse failures like `Unexpected token`.
+- The fresh profile should show `defaultProviderAccountId=google` and
+  `agents.defaults.model.primary=google/gemini-2.5-pro` until the LiteLLM
+  gateway URL/key is available.
+- The LiteLLM gateway configurator writes a custom runtime provider
+  `custom-moecloud/moe-demo-pro` and stores only the LiteLLM client key on the
+  laptop.
 
 Everything else (skills, agent specs, demo script) is reference material the runtime agent picks up at chat time.
 

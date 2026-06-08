@@ -358,6 +358,13 @@ function normalizeRuntimeApi(apiProtocol: string | undefined, fallback: string |
   }
 }
 
+function shouldUseBearerAuthHeader(config: ProviderConfig, api: string | undefined): boolean {
+  if (config.type !== 'custom') {
+    return false;
+  }
+  return api === 'openai-completions' || api === 'openai-responses';
+}
+
 async function resolveRuntimeSyncContext(config: ProviderConfig): Promise<RuntimeProviderSyncContext | null> {
   const runtimeProviderKey = await resolveRuntimeProviderKey(config);
   const meta = getProviderConfig(config.type);
@@ -383,6 +390,7 @@ async function syncRuntimeProviderConfig(
     api: context.api,
     apiKeyEnv: context.meta?.apiKeyEnv,
     headers: config.headers ?? context.meta?.headers,
+    authHeader: shouldUseBearerAuthHeader(config, context.api),
   });
 }
 
@@ -400,12 +408,15 @@ async function syncCustomProviderAgentModel(
     return;
   }
 
-  const modelId = config.model;
+  const modelIds = [config.model, ...(config.fallbackModels ?? [])]
+    .filter((modelId): modelId is string => Boolean(modelId?.trim()));
+  const api = normalizeRuntimeApi(config.apiProtocol, 'openai-completions') ?? 'openai-completions';
   await updateAgentModelProvider(runtimeProviderKey, {
-    baseUrl: normalizeProviderBaseUrl(config, config.baseUrl, normalizeRuntimeApi(config.apiProtocol, 'openai-completions') ?? 'openai-completions'),
-    api: normalizeRuntimeApi(config.apiProtocol, 'openai-completions') ?? 'openai-completions',
-    models: modelId ? [piAiModelsJsonModelEntry(modelId)] : [],
+    baseUrl: normalizeProviderBaseUrl(config, config.baseUrl, api),
+    api,
+    models: modelIds.map((modelId) => piAiModelsJsonModelEntry(modelId)),
     apiKey: resolvedKey,
+    authHeader: shouldUseBearerAuthHeader(config, api),
   });
 }
 
@@ -489,6 +500,7 @@ async function buildAgentModelProviderEntry(
 
   if (isUnregisteredProviderType(config.type)) {
     apiKey = (await getApiKey(config.id)) || undefined;
+    authHeader = shouldUseBearerAuthHeader(config, api);
   } else if (config.type === 'minimax-portal' || config.type === 'minimax-portal-cn') {
     const accountApiKey = await getApiKey(config.id);
     if (accountApiKey) {
@@ -609,6 +621,7 @@ export async function syncUpdatedProviderToRuntime(
         baseUrl: normalizeProviderBaseUrl(config, config.baseUrl, normalizedApi),
         api: normalizedApi,
         headers: config.headers,
+        authHeader: shouldUseBearerAuthHeader(config, normalizedApi),
       }, fallbackModels);
     }
   }
@@ -685,6 +698,7 @@ export async function syncDefaultProviderToRuntime(
         baseUrl: normalizeProviderBaseUrl(provider, provider.baseUrl, normalizedApi),
         api: normalizedApi,
         headers: provider.headers,
+        authHeader: shouldUseBearerAuthHeader(provider, normalizedApi),
       }, fallbackModels);
     } else {
       const meta = getProviderConfig(provider.type);

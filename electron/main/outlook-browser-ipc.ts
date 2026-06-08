@@ -43,10 +43,10 @@ function assertOutlookEnabled(): void {
 }
 
 /**
- * Pick implementation at module load time. CLAWX_OUTLOOK_V2=1 selects the
- * Playwright + Sonnet 4.5 vision grounder; default keeps v1 (hand-rolled
- * selectors via the openclaw browser plugin) so existing pilots don't see
- * a behaviour change without an explicit opt-in.
+ * Pick implementation at module load time. Pilot builds default to v2
+ * (Playwright + Chrome CDP + vision grounding) so clean installs don't
+ * depend on the legacy browser plugin/MCP path. CLAWX_OUTLOOK_V2=0 forces v1
+ * for regression comparison.
  */
 const outlookBrowserManager = OUTLOOK_BROWSER_V2 ? outlookBrowserManagerV2 : outlookBrowserManagerV1;
 if (OUTLOOK_BROWSER_V2) {

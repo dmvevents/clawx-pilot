@@ -1046,6 +1046,28 @@ export function register(api) {
   // routes return 404 and the tool handlers surface that error.
   const hostApiPort = process.env.CLAWX_HOST_API_PORT;
   const hostApiToken = process.env.CLAWX_HOST_API_TOKEN;
+  const browser =
+    hostApiPort && hostApiToken
+      ? createHostApiBrowserFacade(hostApiPort, hostApiToken)
+      : null;
+  if (browser) {
+    registerTool({
+      name: 'browser.diagnose',
+      description:
+        'Diagnose browser automation readiness for Outlook and Microsoft Forms. Returns Chrome/CDP state such as cdp_ready, chrome_not_found, profile_locked_close_chrome, or cdp_down_chrome_closed, plus the next safe action. Call this before asking a principal to change Chrome settings.',
+      parameters: emptyParameters,
+      execute: async (_toolCallId, _params = {}) => browser.diagnose(),
+    });
+
+    registerTool({
+      name: 'browser.repair_chrome_cdp',
+      description:
+        'Repair Chrome browser automation by launching the system Chrome profile with remote debugging on port 18792 when safe. Never force-closes Chrome. If Chrome is already open without CDP, returns profile_locked_close_chrome so the principal can close Chrome and retry.',
+      parameters: emptyParameters,
+      execute: async (_toolCallId, _params = {}) => browser.repairChromeCdp(),
+    });
+  }
+
   const outlook =
     hostApiPort && hostApiToken
       ? createHostApiOutlookFacade(hostApiPort, hostApiToken)
@@ -1063,7 +1085,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.open',
       description:
-        'Open Outlook Web (https://outlook.office.com/mail/) in the principal\'s existing Chrome session. Returns { status: "opened" | "needs_signin", url, message? }. If sign-in is required, ask the principal to sign in to Outlook in the Chrome window that just opened, then call outlook.open again.',
+        'Open Outlook Web (https://outlook.office.com/mail/) in the principal\'s existing Chrome session. Returns { status: "opened" | "needs_signin", url, message? }. If a Chrome/CDP attach error occurs, call browser.diagnose then browser.repair_chrome_cdp before asking the principal to do anything manually. If sign-in is required, ask the principal to sign in to Outlook in the Chrome window that just opened, then call outlook.open again.',
       parameters: emptyParameters,
       execute: async (_toolCallId, _params = {}) => {
         const result = await outlook.open();
@@ -1318,7 +1340,7 @@ export function register(api) {
     registerTool({
       name: 'forms.preview_suspension',
       description:
-        'Open the Suspensions form in the principal\'s browser and fill every field from a typed payload. Accepts either the exact flat Forms field schema or the nested principal.suspension_payload result and normalizes it before filling. Does NOT submit. Returns { status: "previewed", url, filledCount, skippedCount, errors[] }. Use this AFTER the user has reviewed the extracted fields and asked you to fill the form. Always call this before forms.submit_suspension.',
+        'Open the Suspensions form in the principal\'s browser and fill every field from a typed payload. Accepts either the exact flat Forms field schema or the nested principal.suspension_payload result and normalizes it before filling. Does NOT submit. Returns { status: "previewed", url, filledCount, skippedCount, errors[] }. If a Chrome/CDP attach error occurs, call browser.diagnose then browser.repair_chrome_cdp before asking the principal to do anything manually. Use this AFTER the user has reviewed the extracted fields and asked you to fill the form. Always call this before forms.submit_suspension.',
       parameters: toolParameters(
         {
           payload: looseObjectSchema,
@@ -1336,7 +1358,7 @@ export function register(api) {
     registerTool({
       name: 'forms.preview_daily_report',
       description:
-        'Open the Primary School Daily Report form in the principal\'s browser and fill every visible field from a typed payload. Does NOT submit. Returns { status: "previewed", filledCount, skippedCount, errors[] }. Use principal.daily_report_form_payload first, show the result to the principal, then call this for browser preview.',
+        'Open the Primary School Daily Report form in the principal\'s browser and fill every visible field from a typed payload. Does NOT submit. Returns { status: "previewed", filledCount, skippedCount, errors[] }. If a Chrome/CDP attach error occurs, call browser.diagnose then browser.repair_chrome_cdp before asking the principal to do anything manually. Use principal.daily_report_form_payload first, show the result to the principal, then call this for browser preview.',
       parameters: toolParameters(
         {
           payload: looseObjectSchema,
@@ -1386,6 +1408,51 @@ export function register(api) {
     `moe-principal-assistant: registered (school=${cfg.schoolName}, district=${cfg.educationDistrict})`,
   );
   return { registered: true };
+}
+
+/**
+ * Build a browser automation facade for shared Outlook/Forms diagnostics.
+ */
+function createHostApiBrowserFacade(port, token) {
+  const base = `http://127.0.0.1:${port}/api/browser`;
+  const REQUEST_TIMEOUT_MS = 30_000;
+
+  async function call(path, body) {
+    const url = `${base}${path}`;
+    const init = {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: body == null ? '{}' : JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    };
+    let resp;
+    try {
+      resp = await fetch(url, init);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`browser host-API ${path} unreachable: ${msg}`);
+    }
+    const text = await resp.text().catch(() => '');
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { /* fall through */ }
+    if (!resp.ok) {
+      const errMsg = (data && (data.error || data.message)) || text.slice(0, 200) || `HTTP ${resp.status}`;
+      throw new Error(`browser host-API ${path}: ${errMsg}`);
+    }
+    if (data && typeof data === 'object' && 'success' in data) {
+      if ('data' in data) return data.data;
+      if ('result' in data) return data.result;
+    }
+    return data;
+  }
+
+  return {
+    diagnose: () => call('/diagnose'),
+    repairChromeCdp: () => call('/repair-chrome-cdp'),
+  };
 }
 
 /**

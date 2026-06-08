@@ -67,10 +67,13 @@ electron/native/**/obj/
 *.p12
 *.pem
 *.key
+cloud-gateway.json
+resources/cloud-gateway.json
 
 build/
 artifacts/
 docs/pr-session-notes-*.md
+docs/reports/multi-llm/outputs/
 
 .cursor/
 .claude/*

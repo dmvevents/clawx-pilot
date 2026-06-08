@@ -137,8 +137,9 @@ Response envelope: `{ success: true, data: <result> }`.
 
 # Sign in to your test account in that Chrome window.
 
-# Start dev mode with v2 enabled
-CLAWX_OUTLOOK_V2=1 pnpm dev > /tmp/clawx-dev-v2.log 2>&1 &
+# Start dev mode. Pilot builds default to v2; set CLAWX_OUTLOOK_V2=0 only
+# when deliberately testing the legacy browser-plugin path.
+pnpm dev > /tmp/clawx-dev-v2.log 2>&1 &
 ```
 
 ### Smoke scripts
@@ -172,6 +173,7 @@ pnpm exec tsx scripts/v2-eval.ts
 | `Could not find target (semantic locator missed and VLM grounding failed)` | Outlook DOM changed OR a dialog blocking | Run v2-page-state.ts; if dialog, dismissBlockingDialog may need a new affordance |
 | `Send refused: open subject "X" does not match args.subject "Y"` | Working as designed | Agent passed wrong subject; refuse + retry |
 | `outlook capability disabled: ... 404` | `outlook` removed from PRINCIPAL_SKILL_ALLOWLIST | Add it back |
+| `[profile_locked_close_chrome]` | Chrome is already open without the CDP port on the target profile | Close Chrome, then retry so ClawX can reopen it with remote debugging |
 | `Outlook is on the sign-in page` | MS session expired | Sign in manually in Chrome window |
 
 ## Pending work

@@ -167,6 +167,8 @@ async function runPythonInstall(
   });
 }
 
+let managedPythonSetupPromise: Promise<void> | null = null;
+
 /**
  * Use bundled uv to install a managed Python version (default 3.12).
  *
@@ -174,7 +176,27 @@ async function runPythonInstall(
  * if the first attempt fails, to rule out mirror-specific issues.
  */
 export async function setupManagedPython(): Promise<void> {
+  if (managedPythonSetupPromise) {
+    logger.info('Managed Python setup already in progress, waiting for existing setup');
+    return managedPythonSetupPromise;
+  }
+
+  managedPythonSetupPromise = setupManagedPythonOnce()
+    .finally(() => {
+      managedPythonSetupPromise = null;
+    });
+
+  return managedPythonSetupPromise;
+}
+
+async function setupManagedPythonOnce(): Promise<void> {
   const { bin: uvBin, source } = resolveUvBin();
+
+  if (await isPythonReady()) {
+    logger.info(`Managed Python 3.12 already available (uv=${uvBin}, source=${source})`);
+    return;
+  }
+
   const uvEnv = await getUvMirrorEnv();
   const hasMirror = Object.keys(uvEnv).length > 0;
 
