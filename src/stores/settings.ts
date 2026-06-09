@@ -221,7 +221,13 @@ export const useSettingsStore = create<SettingsState>()(
           // launch will reconcile if the runtime sync failed mid-flight.
         }
       },
-      markSetupComplete: () => set({ setupComplete: true }),
+      markSetupComplete: () => {
+        set({ setupComplete: true });
+        void hostApiFetch('/api/settings/setupComplete', {
+          method: 'PUT',
+          body: JSON.stringify({ value: true }),
+        }).catch(() => { });
+      },
       resetSettings: () => set(defaultSettings),
     }),
     {

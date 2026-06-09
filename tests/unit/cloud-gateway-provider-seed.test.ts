@@ -113,7 +113,9 @@ describe('cloud-gateway-provider-seed', () => {
     mocks.syncSavedProviderToRuntime.mockResolvedValue(undefined);
     mocks.syncDefaultProviderToRuntime.mockResolvedValue(undefined);
     mocks.getOpenClawProviderKey.mockReturnValue('custom-moecloud');
-    mocks.getSetting.mockResolvedValue('on-device');
+    mocks.getSetting.mockImplementation(async (key: string) => (
+      key === 'preferredChannel' ? 'on-device' : false
+    ));
     mocks.setSetting.mockResolvedValue(undefined);
   });
 
@@ -176,6 +178,7 @@ describe('cloud-gateway-provider-seed', () => {
     expect(mocks.setDefaultProviderAccount).toHaveBeenCalledWith('moe-cloud-gateway');
     expect(mocks.syncDefaultProviderToRuntime).toHaveBeenCalledWith('moe-cloud-gateway', undefined);
     expect(mocks.setSetting).toHaveBeenCalledWith('preferredChannel', 'online');
+    expect(mocks.setSetting).toHaveBeenCalledWith('setupComplete', true);
   });
 
   it('can seed without taking default when explicitly configured that way', async () => {

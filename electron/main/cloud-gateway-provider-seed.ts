@@ -320,6 +320,17 @@ export async function seedCloudGatewayProvider(
     }
   }
 
+  // A packaged cloud gateway seed means the Ministry demo build already has
+  // the required model route. Skip the generic setup wizard on first launch so
+  // principals land directly in the usable assistant instead of a misleading
+  // "ready to be configured" flow.
+  if (shouldBecomeDefault && seed.setPreferredChannel) {
+    const setupComplete = await getSetting('setupComplete').catch(() => false);
+    if (!setupComplete) {
+      await setSetting('setupComplete', true);
+    }
+  }
+
   const runtimeProviderKey = getOpenClawProviderKey(account.vendorId, account.id);
   logger.info('[cloud-gateway-seed] Seeded cloud gateway provider', {
     providerId: account.id,

@@ -413,6 +413,46 @@ async function launchChromeForCdp(
   );
 }
 
+async function launchManagedProfileForCdp(
+  opts: ChromeCdpOptions,
+  cfg: ChromeCdpConfig,
+  runtime: ChromeCdpRuntime,
+): Promise<ChromeCdpStatus> {
+  const fallbackOpts: ChromeCdpOptions = {
+    ...opts,
+    userDataDir: cfg.fallbackUserDataDir,
+    fallbackUserDataDir: cfg.fallbackUserDataDir,
+    allowManagedProfileFallback: false,
+  };
+  const fallbackCfg = resolveConfig(fallbackOpts, runtime);
+  const fallback = await diagnoseChromeCdp(fallbackOpts, runtime);
+
+  if (fallback.state === 'cdp_ready') {
+    return {
+      ...fallback,
+      message:
+        'Chrome browser automation is reachable on the ClawX-managed browser profile.',
+    };
+  }
+
+  if (fallback.state === 'cdp_down_chrome_closed') {
+    logger.info(
+      `[chrome-cdp] launching managed profile for CDP at ${fallbackCfg.userDataDir}`,
+    );
+    const launched = await launchChromeForCdp(fallbackCfg, runtime, fallback.error);
+    if (launched.state === 'cdp_ready') {
+      return {
+        ...launched,
+        message:
+          'Chrome browser automation is reachable on a ClawX-managed browser profile. Sign in to Microsoft there once if Outlook or Forms asks.',
+      };
+    }
+    return launched;
+  }
+
+  return fallback;
+}
+
 export async function ensureChromeCdpReady(
   opts: ChromeCdpOptions = {},
   runtime: ChromeCdpRuntime = {},
@@ -422,42 +462,19 @@ export async function ensureChromeCdpReady(
   if (initial.state === 'cdp_ready') return initial;
 
   if (initial.state === 'profile_locked_close_chrome' && cfg.allowManagedProfileFallback) {
-    const fallbackOpts: ChromeCdpOptions = {
-      ...opts,
-      userDataDir: cfg.fallbackUserDataDir,
-      fallbackUserDataDir: cfg.fallbackUserDataDir,
-      allowManagedProfileFallback: false,
-    };
-    const fallbackCfg = resolveConfig(fallbackOpts, runtime);
-    const fallback = await diagnoseChromeCdp(fallbackOpts, runtime);
-
-    if (fallback.state === 'cdp_ready') {
-      return {
-        ...fallback,
-        message:
-          'Chrome browser automation is reachable on the ClawX-managed browser profile because the default Chrome profile is already open.',
-      };
-    }
-
-    if (fallback.state === 'cdp_down_chrome_closed') {
-      logger.info(
-        `[chrome-cdp] default Chrome profile is locked; launching managed profile at ${fallbackCfg.userDataDir}`,
-      );
-      const launched = await launchChromeForCdp(fallbackCfg, runtime, fallback.error ?? initial.error);
-      if (launched.state === 'cdp_ready') {
-        return {
-          ...launched,
-          message:
-            'Chrome browser automation is reachable on a ClawX-managed browser profile. Sign in to Microsoft there once if Outlook or Forms asks.',
-        };
-      }
-      return launched;
-    }
-
-    return fallback;
+    logger.info('[chrome-cdp] default Chrome profile is locked; trying managed profile fallback');
+    return launchManagedProfileForCdp(opts, cfg, runtime);
   }
 
   if (initial.state !== 'cdp_down_chrome_closed') return initial;
 
-  return launchChromeForCdp(cfg, runtime, initial.error);
+  const launched = await launchChromeForCdp(cfg, runtime, initial.error);
+  if (
+    cfg.allowManagedProfileFallback
+    && (launched.state === 'port_bind_timeout' || launched.state === 'launch_failed')
+  ) {
+    logger.info(`[chrome-cdp] default Chrome profile launch ended with ${launched.state}; trying managed profile fallback`);
+    return launchManagedProfileForCdp(opts, cfg, runtime);
+  }
+  return launched;
 }

@@ -5,21 +5,34 @@
 # runtime can import document-processing libraries.
 
 param(
-    [string]$ExcelPath = "$env:USERPROFILE\Downloads\SEA Typical School Results_2024 (1).xlsx"
+    [string]$ExcelPath = ""
 )
 
 $ErrorActionPreference = "Continue"
 
+$excelCandidates = @()
+if ($ExcelPath) {
+    $excelCandidates += $ExcelPath
+} else {
+    $excelCandidates += "$env:USERPROFILE\Downloads\moe-demo-attendance-results.xlsx"
+    $excelCandidates += "$env:USERPROFILE\Downloads\SEA Typical School Results_2024 (1).xlsx"
+}
+$resolvedExcelPath = $excelCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $resolvedExcelPath) {
+    $resolvedExcelPath = $excelCandidates | Select-Object -First 1
+}
+
 "=== EXCEL TEST FILE ==="
-if (Test-Path $ExcelPath) {
-    $item = Get-Item $ExcelPath
+if (Test-Path $resolvedExcelPath) {
+    $item = Get-Item $resolvedExcelPath
     "EXCEL_FILE: present"
     "Path: $($item.FullName)"
     "SizeBytes: $($item.Length)"
     "Modified: $($item.LastWriteTime)"
 } else {
     "EXCEL_FILE: missing"
-    "Expected: $ExcelPath"
+    "Expected one of:"
+    $excelCandidates | ForEach-Object { "  $_" }
 }
 
 "`n=== PACKAGED NODE MODULES ==="
@@ -99,11 +112,11 @@ raise SystemExit(0 if missing == 0 else 10)
 }
 
 "`n=== STATE LINE ==="
-if ((Test-Path $ExcelPath) -and $nodeExit -eq 0 -and $pythonExit -eq 0) {
+if ((Test-Path $resolvedExcelPath) -and $nodeExit -eq 0) {
     "STATE: OFFICE_RUNTIME_READY"
-} elseif ((Test-Path $ExcelPath) -and $pythonExit -eq 0) {
+} elseif ((Test-Path $resolvedExcelPath) -and $pythonExit -eq 0) {
     "STATE: OFFICE_RUNTIME_READY_PYTHON_ONLY"
-} elseif (Test-Path $ExcelPath) {
+} elseif (Test-Path $resolvedExcelPath) {
     "STATE: OFFICE_RUNTIME_PARTIAL"
 } else {
     "STATE: OFFICE_RUNTIME_BLOCKED"

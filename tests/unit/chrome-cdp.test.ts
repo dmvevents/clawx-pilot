@@ -156,6 +156,45 @@ describe('chrome-cdp diagnostics', () => {
     ]));
   });
 
+  it('falls back to a managed Chrome profile when the default profile launch never binds CDP', async () => {
+    let now = 0;
+    const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const spawnDetached = vi.fn();
+    const fetchJson = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('ECONNREFUSED initial'))
+      .mockRejectedValueOnce(new Error('ECONNREFUSED default profile launch'))
+      .mockRejectedValueOnce(new Error('ECONNREFUSED managed profile diagnose'))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: { Browser: 'Chrome/149.0.0.0' },
+      });
+    const runtime = baseRuntime({
+      spawnDetached,
+      fetchJson,
+      listChromeProcesses: vi.fn(async () => []),
+      sleep: vi.fn(async (ms: number) => {
+        now += ms;
+      }),
+    });
+
+    try {
+      const result = await ensureChromeCdpReady({ userDataDir, chromeExecutable, waitMs: 1 }, runtime);
+
+      expect(result.state).toBe('cdp_ready');
+      expect(result.message).toContain('ClawX-managed browser profile');
+      expect(spawnDetached).toHaveBeenNthCalledWith(1, chromeExecutable, expect.arrayContaining([
+        `--user-data-dir=${userDataDir}`,
+      ]));
+      expect(spawnDetached).toHaveBeenNthCalledWith(2, chromeExecutable, expect.arrayContaining([
+        '--user-data-dir=C:\\Users\\Teacher\\AppData\\Roaming\\Ministry of Education\\Chrome CDP Profile',
+      ]));
+    } finally {
+      dateNow.mockRestore();
+    }
+  });
+
   it('derives the launch debug port from a custom CDP endpoint', async () => {
     const spawnDetached = vi.fn();
     const fetchJson = vi

@@ -75,6 +75,10 @@ async function waitForResponseQuestions(page: Page): Promise<void> {
     await page.waitForSelector(questionSelector, { state: 'visible', timeout: 30_000 });
     await page.waitForTimeout(500);
   } catch (err) {
+    const pageDiagnosis = await diagnoseFormsLoadPage(page);
+    if (pageDiagnosis) {
+      throw new Error(pageDiagnosis, { cause: err });
+    }
     throw new Error(
       `Microsoft Forms response page did not render question items within 30s: ${
         err instanceof Error ? err.message : String(err)
@@ -82,6 +86,33 @@ async function waitForResponseQuestions(page: Page): Promise<void> {
       { cause: err },
     );
   }
+}
+
+function summarizePageLocation(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    return `${parsed.host}${parsed.pathname}`;
+  } catch {
+    return 'unknown page';
+  }
+}
+
+async function diagnoseFormsLoadPage(page: Page): Promise<string | null> {
+  const url = page.url();
+  const location = summarizePageLocation(url);
+  const title = (await page.title().catch(() => '')).trim();
+  const body = (await page.locator('body').innerText({ timeout: 1_500 }).catch(() => '')).replace(/\s+/g, ' ').trim();
+  const visibleText = `${title}\n${body}`;
+
+  if (/login\.microsoftonline\.com/i.test(url) || /sign in to your account|can't access your account|sign-in options/i.test(visibleText)) {
+    return `Microsoft Forms sign-in required before questions can render. Chrome landed on ${location} with title "${title || 'unknown'}". Sign in to Microsoft in the Chrome profile that ClawX opened, then retry the form preview.`;
+  }
+
+  if (/you don't have permission|access denied|request access|account doesn't have access|not authorized/i.test(visibleText)) {
+    return `Microsoft Forms access blocked before questions could render. Chrome landed on ${location} with title "${title || 'unknown'}". Confirm the signed-in Microsoft account has permission to respond to this form.`;
+  }
+
+  return null;
 }
 
 export interface FormsDriverOptions {
@@ -168,7 +199,7 @@ export class FormsDriver {
       );
       const status = await ensureChromeCdpReady({
         cdpEndpoint: this.cdp,
-        allowManagedProfileFallback: false,
+        allowManagedProfileFallback: true,
       });
       if (status.state !== 'cdp_ready') {
         throw new Error(`[${status.state}] ${status.message}`, { cause: err });
@@ -449,13 +480,13 @@ export class FormsDriver {
     expectedTitle: string;
     expectedQuestionLabels?: string[];
   }): Promise<SubmitResult> {
-    if (!this.page) return { status: 'error', reason: 'no page' };
     if (!confirm) {
       return {
         status: 'refused',
         reason: 'Submit blocked: confirm:true required. Re-call with confirm:true after the principal has reviewed the filled form.',
       };
     }
+    if (!this.page) return { status: 'error', reason: 'no page' };
     const visibleTitle = await this.getVisibleTitle();
     let matchedByFingerprint = false;
     let fingerprint = { ok: false, matched: 0, required: 0 };

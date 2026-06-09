@@ -253,6 +253,77 @@ The SSH-driven steps above are just for IT-side install/verify.
 
 ---
 
+## Visual VM smoke (GCP Windows)
+
+Use this when a physical laptop is unavailable or when validating a clean
+installer path before sending a download link. The VM proof must still be
+treated as interactive Windows evidence, not CI Session 0 evidence.
+
+Current VM:
+
+- project: `gen-lang-client-0649986230`
+- zone: `us-central1-a`
+- instance: `clawx-win-rc-20260609`
+- Windows user: `clawxtest`
+
+Start the WinRM tunnel from the Mac:
+
+```bash
+gcloud compute start-iap-tunnel clawx-win-rc-20260609 5986 \
+  --local-host-port=localhost:15986 \
+  --zone=us-central1-a \
+  --project=gen-lang-client-0649986230
+```
+
+Run the installed-app visual smoke from the VM:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File "$env:USERPROFILE\Downloads\clawx-e2e-runner\pilot-managed-cdp-visual-smoke.ps1" `
+  -StopExistingApp -StopChrome
+```
+
+Expected artifact directory:
+
+```text
+C:\Users\clawxtest\Downloads\clawx-managed-cdp-visual-smoke-<timestamp>
+```
+
+Minimum evidence:
+
+- screenshot `clawx-electron-*.png` shows the app shell, not the setup wizard;
+- `STATE:CHROME_CDP_READY=True`;
+- `STATE:ELECTRON_CDP_READY=True`;
+- `STATE:HOSTAPI_READY=True`;
+- `STATE:GATEWAY_PORT_READY=True`;
+- `STATE:POST_PROBE_*` still true after the probe;
+- `OFFICE_RUNTIME_READY`;
+- Outlook read and no-send/no-download safety probes return safe statuses;
+- Forms list returns the Daily Report and Suspensions forms;
+- Forms preview either fills the expected fields or returns a precise sign-in/access diagnostic.
+
+Optional visual desktop:
+
+```bash
+gcloud compute start-iap-tunnel clawx-win-rc-20260609 3389 \
+  --local-host-port=localhost:13389 \
+  --zone=us-central1-a \
+  --project=gen-lang-client-0649986230
+```
+
+Then connect Microsoft Remote Desktop to `localhost:13389` as `clawxtest`.
+Credentials stay in the operator vault/local temp file and must not be pasted
+into logs or docs.
+
+2026-06-09 evidence:
+
+- clean install on the GCP Windows VM succeeded with silent install exit `0`;
+- app screenshot confirmed the setup wizard no longer appears after cloud gateway seeding;
+- Host API, Gateway, Chrome CDP, Electron CDP, Office runtime, and Outlook safety probes were green;
+- Forms preview failed because the managed Chrome profile landed on `login.microsoftonline.com`, meaning Microsoft sign-in is required before the tenant Forms questions render.
+
+---
+
 ## Failure-mode escape hatches
 
 | Symptom | Look in PROBLEMS_ATLAS § |
@@ -264,4 +335,5 @@ The SSH-driven steps above are just for IT-side install/verify.
 | 0 bytes in stdout, no userData | "userData not created" |
 | `Cannot find module` errors | "playwright-core devDep" |
 | Chrome opens but Outlook tools 404 | "Conditional Access / managed Chromium" |
+| Forms preview waits 30s for question items | "Forms preview redirects to Microsoft sign-in" |
 | `chflags uchg` urge | NEVER do this on Windows; band-aid is wrong |

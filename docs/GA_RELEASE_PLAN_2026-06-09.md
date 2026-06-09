@@ -4,7 +4,7 @@
 
 Ship ClawX / Ministry of Education as a GA-quality Windows installer for non-technical principals, with a supported online model path, safe Outlook and Forms automation, Office document handling, ASR expectations, and a documented fallback/support process.
 
-Current status: **YELLOW - RC/demo-ready, not GA**.
+Current status: **YELLOW - RC/demo-ready after Microsoft sign-in, not GA**.
 
 ## Current RC Baseline
 
@@ -17,19 +17,29 @@ Current status: **YELLOW - RC/demo-ready, not GA**.
 
 This baseline is acceptable for controlled demo installs. GA requires the gates below.
 
+2026-06-09 local rebuild after VM visual diagnostics:
+
+- installer: `release/Ministry of Education-0.4.3-moe.10-win-x64.exe`
+- installer SHA256: `5566ea55aeadfaba60ecae0aa23fbb9644dceebc1c5f8137c0be3f6d5d11f692`
+- blockmap SHA256: `f5eec5ac89dac542a2758b785c434b11cb0f53e0a23baa1474845d926cc2fc82`
+- GCS prefix: `gs://clawx-rc-artifacts-622687731621/rc-local-20260609-forms-signin-diagnostic/`
+- VM install evidence: `C:\Users\clawxtest\Downloads\clawx-vm-install-forms-signin-diagnostic-20260609-233250`
+- VM visual smoke evidence: `C:\Users\clawxtest\Downloads\clawx-managed-cdp-visual-smoke-20260609-235054`
+- local pulled screenshot/probe evidence: `/tmp/clawx-vm-visual-20260609-235054`
+
 ## GA Gates
 
 | Gate | Required evidence | Current state |
 |---|---|---|
-| Installer reproducibility | `pnpm run build:win`, installer path, SHA256, `playwright-core` still in runtime dependencies | 2026-06-09 GitHub Actions run `27224049264` succeeded from commit `b4e6ccd`; x64 installer SHA256 `2770b1e3f3ab63a9f80613015957fb5b7ab102d804399a73cf3f081ce70ef368`; VM install confirmed `playwright-core=True` |
-| Clean install | fresh Windows user or laptop install, desktop shortcut launch, Gateway/Host API reachable | 2026-06-09 GCP Windows VM `clawx-win-rc-20260609` proof passed: silent install exit `0`, Host API `True`, Gateway `True`, app exe `True`; evidence dir `C:\Users\clawxtest\Downloads\clawx-ci-installer-proof-b4e6ccd-20260609-175123` |
+| Installer reproducibility | `pnpm run build:win`, installer path, SHA256, `playwright-core` still in runtime dependencies | 2026-06-09 local build passed; installer SHA256 `5566ea55aeadfaba60ecae0aa23fbb9644dceebc1c5f8137c0be3f6d5d11f692`; packaged runtime check confirmed `playwright-core`, `xlsx`, `docx`, `mammoth`, `pdf-parse`, ASR helper, `ffmpeg`, `node`, `uv`, and cloud gateway seed files |
+| Clean install | fresh Windows user or laptop install, desktop shortcut launch, Gateway/Host API reachable | 2026-06-09 GCP Windows VM `clawx-win-rc-20260609` proof passed for the local rebuild: downloaded bytes `390056548`, SHA256 matched, silent uninstall exit `0`, install exit `0`, app exe present; visual smoke showed Chrome CDP, Electron CDP, Host API, Gateway, and post-probe readiness true |
 | Online model path | installed app completes one chat through managed gateway/model broker or configured cloud provider; no raw upstream keys exposed to the user | GitHub Windows packaging requires `CLAWX_CLOUD_GATEWAY_CONFIG_JSON` and `CLAWX_CLOUD_GATEWAY_KEY`; VM proof confirmed packaged seed files present, `providerKeys=1`, local Qwen seeded with `default=false`, and `.openclaw` default model `custom-moecloud/moe-demo-pro`; model chat smoke still needed |
 | Runtime coherence | settings/provider store, `~/.openclaw/openclaw.json`, agent `models.json`, and latest transcript agree | VM install proof confirmed `.openclaw` default primary `custom-moecloud/moe-demo-pro`; provider/config coherence should be rechecked after a real chat transcript |
-| Outlook safety | open/read/draft smoke passes through signed-in Chrome CDP; send requires explicit same-session confirmation | RC path exists; rerun on clean install |
+| Outlook safety | open/read/draft smoke passes through signed-in Chrome CDP; send requires explicit same-session confirmation | VM visual smoke `20260609-235054` passed Outlook open/read and refused send/download without confirmation |
 | Outlook attach UX | a fresh user who asks "check my email" is routed through `outlook.*`, `browser.diagnose`, and `browser.repair_chrome_cdp`; the assistant must not tell the user to enable Chrome remote debugging, use `chrome://flags`, search the web, or run manual Chrome commands | user report on 2026-06-09 exposed old guidance; regression patch and chat-harness scenario added; local unit tests passed; clean installer proof now passed on GCP VM, but Chrome/Outlook sign-in proof still requires Chrome on the test image or a physical laptop |
-| Forms safety | Forms list/preview/dry-run passes; submit requires explicit same-session confirmation | RC path exists; rerun on clean install |
-| Office files | sample Excel and Word analysis complete from Downloads through app chat | needs fresh GA transcript proof |
-| ASR | Windows ASR helper installed and one transcript smoke passes, or ASR explicitly marked best-effort for GA | pending decision/evidence |
+| Forms safety | Forms list/preview/dry-run passes; submit requires explicit same-session confirmation | Forms list passes and submit without confirm refuses for both Daily Report and Suspensions. Preview is blocked on clean VM by Microsoft sign-in: Forms tabs land on `login.microsoftonline.com/.../authorize`; driver now reports a precise sign-in-required diagnostic instead of selector timeout. Filling still needs signed-in Microsoft profile evidence. |
+| Office files | sample Excel and Word analysis complete from Downloads through app chat | packaged runtime check confirmed parser dependencies and Office smoke reports `OFFICE_RUNTIME_READY`; still needs fresh app-chat transcript proof |
+| ASR | Windows ASR helper installed and one transcript smoke passes, or ASR explicitly marked best-effort for GA | packaged runtime check confirmed `resources/bin/WinSpeechRecognize.exe`; quality remains best-effort until microphone/file transcription proof is captured |
 | Secrets | no committed upstream keys or test passwords; desktop stores only broker/client-scoped credentials | verify with git grep and install-state audit |
 | UI trust | no raw model/vendor identity in principal-facing UI; cost hidden from frontend | existing checklist green; rerun grep |
 | Observability | local logs redacted, support artifact capture documented, optional Phoenix/model tracing decision recorded | local logs exist; Phoenix optional pending |
@@ -69,6 +79,7 @@ Owner skill: `windows-outlook-forms`.
 Tasks:
 
 - verify signed-in user Chrome CDP attach;
+- sign in to Microsoft in the ClawX-opened system Chrome profile before Forms preview proof, or move to an approved Microsoft/Entra flow;
 - verify the model uses `outlook.*` and ClawX browser repair tools, not generic Chrome MCP troubleshooting;
 - run Outlook open/read/draft smoke without sending;
 - run Forms list/preview/dry-run without submitting;

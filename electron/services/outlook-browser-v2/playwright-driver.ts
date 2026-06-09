@@ -19,8 +19,10 @@
  *
  * If the browser plugin isn't running, we fall back to launching Chrome
  * ourselves with `--remote-debugging-port` AND `--user-data-dir=<user's
- * Default>`. We never use Playwright's bundled Chromium — managed Chromium
- * is blocked by Microsoft's Conditional Access (hard rule).
+ * Default>`. If current Chrome blocks CDP on that default profile, ClawX can
+ * launch a dedicated system-Chrome profile for the demo. We never use
+ * Playwright's bundled Chromium — managed Chromium is blocked by Microsoft's
+ * Conditional Access (hard rule).
  *
  * ## Single-tab discipline
  *
@@ -115,7 +117,7 @@ export class PlaywrightDriver {
       userDataDir: this.cfg.userDataDir,
       chromeExecutable: this.cfg.chromeExecutable,
       waitMs: this.cfg.actionTimeoutMs,
-      allowManagedProfileFallback: false,
+      allowManagedProfileFallback: true,
     });
     if (status.state !== 'cdp_ready') {
       throw new Error(`[${status.state}] ${status.message}`);
