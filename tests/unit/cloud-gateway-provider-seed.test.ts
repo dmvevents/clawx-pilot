@@ -4,6 +4,7 @@ import type { ProviderAccount } from '@electron/shared/providers/types';
 const mocks = vi.hoisted(() => ({
   userDataPath: '/tmp/clawx-cloud-seed-user-data',
   appPath: '/tmp/clawx-cloud-seed-app',
+  cwdPath: '/tmp/clawx-cloud-seed-cwd',
   getProviderAccount: vi.fn(),
   getDefaultProviderAccountId: vi.fn(),
   saveProviderAccount: vi.fn(),
@@ -75,6 +76,8 @@ import {
   seedCloudGatewayProvider,
 } from '@electron/main/cloud-gateway-provider-seed';
 
+const cwdSpy = vi.spyOn(process, 'cwd');
+
 const ENV_KEYS = [
   'CLAWX_CLOUD_GATEWAY_ENABLED',
   'CLAWX_CLOUD_GATEWAY_CONFIG',
@@ -101,6 +104,7 @@ describe('cloud-gateway-provider-seed', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearEnv();
+    cwdSpy.mockReturnValue(mocks.cwdPath);
     mocks.getProviderAccount.mockResolvedValue(null);
     mocks.getDefaultProviderAccountId.mockResolvedValue(undefined);
     mocks.saveProviderAccount.mockResolvedValue(undefined);

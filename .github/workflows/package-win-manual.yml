@@ -7,6 +7,11 @@ on:
         description: 'Git ref to build (branch, tag, or SHA). Leave empty for current default ref.'
         required: false
         default: ''
+      requireCloudGatewaySeed:
+        description: 'Fail the build unless CLAWX_CLOUD_GATEWAY_CONFIG_JSON and CLAWX_CLOUD_GATEWAY_KEY secrets are available.'
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -48,6 +53,50 @@ jobs:
 
       - name: Download uv binaries for Windows
         run: pnpm run uv:download:win
+
+      - name: Prepare cloud gateway seed
+        shell: pwsh
+        env:
+          CLOUD_GATEWAY_CONFIG_JSON: ${{ secrets.CLAWX_CLOUD_GATEWAY_CONFIG_JSON }}
+          CLOUD_GATEWAY_KEY: ${{ secrets.CLAWX_CLOUD_GATEWAY_KEY }}
+          REQUIRE_CLOUD_GATEWAY_SEED: ${{ inputs.requireCloudGatewaySeed }}
+        run: |
+          $resourcesDir = Join-Path $PWD 'resources'
+          New-Item -ItemType Directory -Force -Path $resourcesDir | Out-Null
+
+          $hasConfig = -not [string]::IsNullOrWhiteSpace($env:CLOUD_GATEWAY_CONFIG_JSON)
+          $hasKey = -not [string]::IsNullOrWhiteSpace($env:CLOUD_GATEWAY_KEY)
+          if (-not ($hasConfig -and $hasKey)) {
+            $message = 'Cloud gateway seed secrets are incomplete. Set CLAWX_CLOUD_GATEWAY_CONFIG_JSON and CLAWX_CLOUD_GATEWAY_KEY before building a release installer.'
+            if ($env:REQUIRE_CLOUD_GATEWAY_SEED -eq 'true') {
+              throw $message
+            }
+            Write-Warning $message
+            exit 0
+          }
+
+          $configPath = Join-Path $resourcesDir 'cloud-gateway.json'
+          $keyPath = Join-Path $resourcesDir 'cloud-gateway.key'
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+          [System.IO.File]::WriteAllText($configPath, $env:CLOUD_GATEWAY_CONFIG_JSON.Trim(), $utf8NoBom)
+          [System.IO.File]::WriteAllText($keyPath, ($env:CLOUD_GATEWAY_KEY.Trim() + [Environment]::NewLine), $utf8NoBom)
+
+          $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$config.baseUrl)) {
+            throw 'CLAWX_CLOUD_GATEWAY_CONFIG_JSON is missing baseUrl.'
+          }
+          if ([string]::IsNullOrWhiteSpace([string]$config.apiKeyFile)) {
+            throw 'CLAWX_CLOUD_GATEWAY_CONFIG_JSON is missing apiKeyFile.'
+          }
+          if ($config.apiKeyFile -ne 'cloud-gateway.key') {
+            throw 'CLAWX_CLOUD_GATEWAY_CONFIG_JSON apiKeyFile must be cloud-gateway.key for packaged release builds.'
+          }
+          if ((Get-Item $keyPath).Length -lt 8) {
+            throw 'CLAWX_CLOUD_GATEWAY_KEY is too short to be a usable gateway client key.'
+          }
+
+          Write-Host "Cloud gateway seed prepared for packaged release (providerId=$($config.providerId), model=$($config.model), key redacted)."
 
       - name: Build Windows package (no publish)
         env:

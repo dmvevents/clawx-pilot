@@ -105,6 +105,19 @@ if (Test-Path $un) {
 
 Build is on GitHub Actions, downloadable for 7 days after each push:
 
+Release builds must include the managed online gateway seed. The manual
+packaging workflow now fails by default unless these GitHub repository secrets
+exist:
+
+- `CLAWX_CLOUD_GATEWAY_CONFIG_JSON`: JSON matching `resources/cloud-gateway.example.json`
+- `CLAWX_CLOUD_GATEWAY_KEY`: broker/client-scoped gateway key only, not an upstream provider key
+
+The workflow writes those secrets into ignored `resources/cloud-gateway.json`
+and `resources/cloud-gateway.key` files on the runner before packaging. The
+installer should then first-run with the Online channel selected and the cloud
+gateway as the default provider; a clean install falling back to `qwen2.5` is a
+release-blocking packaging failure.
+
 ```bash
 # On Mac:
 gh run list --repo dmvevents/clawx-pilot --workflow package-win-manual.yml --limit 1 --json databaseId

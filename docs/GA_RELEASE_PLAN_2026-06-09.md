@@ -23,7 +23,7 @@ This baseline is acceptable for controlled demo installs. GA requires the gates 
 |---|---|---|
 | Installer reproducibility | `pnpm run build:win`, installer path, SHA256, `playwright-core` still in runtime dependencies | RC evidence exists; rerun for GA |
 | Clean install | fresh Windows user or laptop install, desktop shortcut launch, Gateway/Host API reachable | needs fresh GA rerun |
-| Online model path | installed app completes one chat through managed gateway/model broker or configured cloud provider; no raw upstream keys exposed to the user | broker code exists; deployed endpoint and installed-app proof pending |
+| Online model path | installed app completes one chat through managed gateway/model broker or configured cloud provider; no raw upstream keys exposed to the user | GitHub Windows packaging now requires `CLAWX_CLOUD_GATEWAY_CONFIG_JSON` and `CLAWX_CLOUD_GATEWAY_KEY` secrets so release installers include the managed gateway seed; clean Windows VM proof pending after rebuild |
 | Runtime coherence | settings/provider store, `~/.openclaw/openclaw.json`, agent `models.json`, and latest transcript agree | must verify before tag |
 | Outlook safety | open/read/draft smoke passes through signed-in Chrome CDP; send requires explicit same-session confirmation | RC path exists; rerun on clean install |
 | Outlook attach UX | a fresh user who asks "check my email" is routed through `outlook.*`, `browser.diagnose`, and `browser.repair_chrome_cdp`; the assistant must not tell the user to enable Chrome remote debugging, use `chrome://flags`, search the web, or run manual Chrome commands | user report on 2026-06-09 exposed old guidance; regression patch and chat-harness scenario added; local unit tests passed; rebuilt installer and clean Windows proof still required |
@@ -57,6 +57,7 @@ Tasks:
 
 - decide the GA default: managed model broker endpoint preferred;
 - ensure desktop stores only a broker-issued/client-scoped key, not upstream provider keys;
+- keep `package-win-manual.yml` failing by default when the cloud gateway seed secrets are absent;
 - verify one installed-app chat through the broker;
 - document failure handling when Wi-Fi or gateway is unavailable;
 - keep local model fallback only as an explicit fallback, not the demo default.
