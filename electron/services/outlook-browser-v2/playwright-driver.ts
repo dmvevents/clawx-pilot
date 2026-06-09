@@ -115,6 +115,7 @@ export class PlaywrightDriver {
       userDataDir: this.cfg.userDataDir,
       chromeExecutable: this.cfg.chromeExecutable,
       waitMs: this.cfg.actionTimeoutMs,
+      allowManagedProfileFallback: false,
     });
     if (status.state !== 'cdp_ready') {
       throw new Error(`[${status.state}] ${status.message}`);

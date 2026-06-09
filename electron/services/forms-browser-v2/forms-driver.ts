@@ -166,7 +166,10 @@ export class FormsDriver {
       logger.warn(
         `[forms-v2] CDP attach failed (${err instanceof Error ? err.message : String(err)}) — attempting Chrome CDP repair`,
       );
-      const status = await ensureChromeCdpReady({ cdpEndpoint: this.cdp });
+      const status = await ensureChromeCdpReady({
+        cdpEndpoint: this.cdp,
+        allowManagedProfileFallback: false,
+      });
       if (status.state !== 'cdp_ready') {
         throw new Error(`[${status.state}] ${status.message}`, { cause: err });
       }

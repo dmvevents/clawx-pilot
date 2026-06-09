@@ -59,6 +59,7 @@ describe('PlaywrightDriver CDP repair', () => {
     expect(ensureChromeCdpReady).toHaveBeenCalledWith(expect.objectContaining({
       cdpEndpoint: 'http://127.0.0.1:18792',
       debugPort: 18792,
+      allowManagedProfileFallback: false,
     }));
     expect(chromium.connectOverCDP).toHaveBeenCalledTimes(2);
   });

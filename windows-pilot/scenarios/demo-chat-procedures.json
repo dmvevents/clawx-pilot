@@ -12,6 +12,51 @@
       "waitMs": 12000
     },
     {
+      "id": "fresh-user-check-email-routes-outlook-tools",
+      "title": "Fresh user asks to check email and does not get Chrome setup instructions",
+      "type": "safe-chat-custom",
+      "required": true,
+      "waitMs": 22000,
+      "expectedToolAny": ["outlook.read_inbox"],
+      "bannedToolAny": [
+        "outlook.draft_email",
+        "outlook.send_email",
+        "outlook.download_attachment",
+        "outlook.reply",
+        "outlook.forward",
+        "forms.preview_daily_report",
+        "forms.preview_suspension",
+        "forms.submit_daily_report",
+        "forms.submit_suspension",
+        "exec",
+        "process",
+        "sessions_spawn",
+        "sessions_yield"
+      ],
+      "bannedToolInputPatterns": [
+        "chrome://flags",
+        "chrome\\.exe",
+        "--remote-debugging",
+        "remote debugging",
+        "\\b(Get-Command|Start-Process|cmd\\.exe|powershell\\.exe)\\b"
+      ],
+      "bannedAnswerPatterns": [
+        "chrome://flags",
+        "chrome\\.exe",
+        "--remote-debugging",
+        "remote debugging",
+        "enable .*debugging",
+        "debugging mode",
+        "quick web search|web search",
+        "system PATH|not in .*PATH",
+        "Command Prompt|PowerShell"
+      ],
+      "requiredAnswerPatterns": [
+        "email|inbox|Outlook|message"
+      ],
+      "prompt": "Can you check my email? Use the installed ClawX Outlook path only. Return a concise safe inbox summary and echo the requested verification token. If browser automation needs repair, use the ClawX browser.diagnose and browser.repair_chrome_cdp tools before asking me to do anything. If the repair says Chrome is already open with the target profile, ask me only to close all Chrome windows and retry from ClawX. Do not give Chrome setup, flags-page, web-search, command-line, debugging, PATH, or chrome.exe instructions. Do not send, draft, reply, forward, download attachments, submit forms, or print full email addresses, email bodies, secrets, tokens, or private URLs."
+    },
+    {
       "id": "safechat-forms-list",
       "title": "Chat can list configured Microsoft Forms through the normal tool path",
       "type": "safe-chat-mode",

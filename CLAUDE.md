@@ -8,6 +8,18 @@
 
 This section supersedes older "as of 2026-05-25/26" status below. Keep this block short so Claude Code starts with current direction, then load details from skills/docs on demand.
 
+## Current GA release packet - 2026-06-09
+
+For GA, release-candidate, Windows installer, Outlook/Forms, model Gateway, or cross-agent handoff work, start with:
+
+1. `docs/AGENT_SKILL_INTEROPERABILITY.md`
+2. `docs/GA_RELEASE_PLAN_2026-06-09.md`
+3. `.claude/skills/ga-release-readiness/SKILL.md`
+4. `.claude/agents/ga-release-conductor.md`
+5. `docs/PRODUCTION_CHECKLIST.md`
+
+The repo now mirrors critical workflows across official Codex surfaces (`.agents/skills`, `.codex/agents`) and Claude Code surfaces (`.claude/skills`, `.claude/agents`). Keep those surfaces behaviorally aligned when a release-critical process changes.
+
 Start a new Claude Code session with:
 
 ```text

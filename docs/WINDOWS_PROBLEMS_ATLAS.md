@@ -103,7 +103,7 @@ Every Windows-specific bug we hit during the moe.1→moe.10 build sequence, with
 
 **Root cause:** `@moe.gov.tt` and `@fac.edu.tt` tenants both have Conditional Access policies that require the device to be Intune-enrolled OR run a "real" browser (not Playwright's bundled Chromium).
 
-**Fix (HARD RULE):** **Never** launch managed Chromium for Outlook/Forms. Always attach via CDP to the user's existing Chrome (`profile=user`, `--remote-debugging-port=18792`).
+**Fix (HARD RULE):** **Never** launch managed Chromium for Outlook/Forms. Always use the user's system Chrome profile through the ClawX browser automation repair path. If Chrome is closed, ClawX can launch system Chrome in automation mode. If Chrome is already open without the required automation endpoint, ClawX must return `profile_locked_close_chrome` and ask for one action only: close all Chrome windows and retry from ClawX. Do not tell principals to configure Chrome flags or run Chrome commands.
 
 **Commit / memory:** documented at `~/.claude/projects/-Users-antonalexander-Github-moe-tt-ClawX/memory/feedback_browser_existing_session.md`.
 

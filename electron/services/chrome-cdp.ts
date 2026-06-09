@@ -311,7 +311,7 @@ export async function diagnoseChromeCdp(
   const cfg = resolveConfig(opts, runtime);
   const ready = await probeVersion(cfg, runtime);
   if (ready.ok) {
-    return buildStatus(cfg, 'cdp_ready', [], 'Chrome remote debugging is reachable.', 'none', {
+    return buildStatus(cfg, 'cdp_ready', [], 'Chrome browser automation is reachable.', 'none', {
       browser: ready.version.Browser,
       userAgent: ready.version['User-Agent'],
     });
@@ -336,7 +336,7 @@ export async function diagnoseChromeCdp(
       cfg,
       'profile_locked_close_chrome',
       processes,
-      `Chrome is already open with the target profile, but ${cfg.cdpEndpoint} is not reachable. Close all Chrome windows, then retry so ClawX can reopen Chrome with remote debugging enabled.`,
+      'Chrome is already open with the target profile, but ClawX cannot attach to it yet. Close all Chrome windows, then retry from ClawX so it can reopen Chrome in automation mode.',
       'close_chrome_then_retry',
       { error: ready.error },
     );
@@ -346,7 +346,7 @@ export async function diagnoseChromeCdp(
     cfg,
     'cdp_down_chrome_closed',
     processes,
-    'Chrome remote debugging is down and the target Chrome profile is not currently locked. ClawX can safely launch system Chrome with remote debugging enabled.',
+    'Chrome browser automation is not ready and the target Chrome profile is not currently locked. ClawX can safely launch system Chrome in automation mode.',
     'launch_chrome',
     { error: ready.error },
   );
@@ -393,7 +393,7 @@ async function launchChromeForCdp(
   while (Date.now() < deadline) {
     const ready = await probeVersion(cfg, runtime);
     if (ready.ok) {
-      return buildStatus(cfg, 'cdp_ready', [], 'Chrome remote debugging is reachable after launch.', 'none', {
+      return buildStatus(cfg, 'cdp_ready', [], 'Chrome browser automation is reachable after launch.', 'none', {
         browser: ready.version.Browser,
         userAgent: ready.version['User-Agent'],
       });
@@ -435,7 +435,7 @@ export async function ensureChromeCdpReady(
       return {
         ...fallback,
         message:
-          'Chrome remote debugging is reachable on the ClawX-managed browser profile because the default Chrome profile is already open.',
+          'Chrome browser automation is reachable on the ClawX-managed browser profile because the default Chrome profile is already open.',
       };
     }
 
@@ -448,7 +448,7 @@ export async function ensureChromeCdpReady(
         return {
           ...launched,
           message:
-            'Chrome remote debugging is reachable on a ClawX-managed browser profile. Sign in to Microsoft there once if Outlook or Forms asks.',
+            'Chrome browser automation is reachable on a ClawX-managed browser profile. Sign in to Microsoft there once if Outlook or Forms asks.',
         };
       }
       return launched;

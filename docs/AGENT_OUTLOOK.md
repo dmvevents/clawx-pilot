@@ -173,7 +173,7 @@ pnpm exec tsx scripts/v2-eval.ts
 | `Could not find target (semantic locator missed and VLM grounding failed)` | Outlook DOM changed OR a dialog blocking | Run v2-page-state.ts; if dialog, dismissBlockingDialog may need a new affordance |
 | `Send refused: open subject "X" does not match args.subject "Y"` | Working as designed | Agent passed wrong subject; refuse + retry |
 | `outlook capability disabled: ... 404` | `outlook` removed from PRINCIPAL_SKILL_ALLOWLIST | Add it back |
-| `[profile_locked_close_chrome]` | Chrome is already open without the CDP port on the target profile | Close Chrome, then retry so ClawX can reopen it with remote debugging |
+| `[profile_locked_close_chrome]` | Chrome is already open without the ClawX automation endpoint on the target profile | Close all Chrome windows, then retry from ClawX |
 | `Outlook is on the sign-in page` | MS session expired | Sign in manually in Chrome window |
 
 ## Pending work

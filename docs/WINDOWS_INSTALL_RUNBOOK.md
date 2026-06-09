@@ -208,9 +208,9 @@ Look for `Gateway auto-start succeeded` and `Gateway ready fallback RPC router p
 
 ---
 
-## Step 11 — agent smoke (without launching Chrome)
+## Step 11 — agent smoke (without manual Chrome setup)
 
-The Outlook tools need Chrome on `--remote-debugging-port=18792`. For the demo we won't drive Outlook from SSH; we drive it from the app's chat composer once a principal opens the GUI on the laptop directly. SSH-side smoke is just gateway sanity:
+The app owns the Chrome automation repair path for Outlook and Forms. Do not ask a principal to configure Chrome flags or run Chrome commands. For the demo we won't drive Outlook from SSH; we drive it from the app's chat composer once a principal opens the GUI on the laptop directly. SSH-side smoke is just gateway sanity:
 
 ```bash
 ssh pilot 'powershell -NoProfile -c "
@@ -230,10 +230,11 @@ Expected: `HTTP/1.1 101 Switching Protocols` from gateway, `401` from host-API (
 ## Demo path (principal sits at the laptop, NOT SSH)
 
 For the actual demo, the principal:
-1. Opens Chrome (the openclaw browser plugin auto-attaches via `--remote-debugging-port=18792` when first navigated)
-2. Signs into Outlook in that Chrome
-3. Opens the Ministry of Education app
-4. Types into the chat composer
+1. Opens the Ministry of Education app.
+2. Asks the assistant to check email or open Outlook.
+3. Signs into Outlook in the Chrome window if Microsoft asks for sign-in.
+4. If the assistant says Chrome is already open with the target profile, closes all Chrome windows and retries from ClawX.
+5. Types the demo request into the chat composer.
 
 The SSH-driven steps above are just for IT-side install/verify.
 

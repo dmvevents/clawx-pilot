@@ -80,7 +80,10 @@ describe('FormsDriver CDP connection lifecycle', () => {
 
     await driver.ensureBrowser();
 
-    expect(ensureChromeCdpReady).toHaveBeenCalledWith({ cdpEndpoint: 'http://127.0.0.1:18792' });
+    expect(ensureChromeCdpReady).toHaveBeenCalledWith({
+      cdpEndpoint: 'http://127.0.0.1:18792',
+      allowManagedProfileFallback: false,
+    });
     expect(chromium.connectOverCDP).toHaveBeenCalledTimes(2);
     expect((driver as unknown as { browser: unknown }).browser).toBe(browser);
   });

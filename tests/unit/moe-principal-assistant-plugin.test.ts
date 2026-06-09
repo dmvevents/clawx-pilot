@@ -19,6 +19,10 @@ async function loadPlugin() {
   return import('../../extensions/moe-principal-assistant/index.mjs');
 }
 
+async function loadPersona() {
+  return import('../../extensions/moe-principal-assistant/persona.mjs');
+}
+
 function jsonResponse(data: unknown) {
   return {
     status: 200,
@@ -97,6 +101,46 @@ describe('moe-principal-assistant plugin registration', () => {
         expect(typeof byName[name].execute).toBe('function');
         expect(byName[name].parameters).toMatchObject({ type: 'object' });
       }
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
+      else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
+      else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+    }
+  });
+
+  it('keeps Outlook/Forms model-facing guidance on the ClawX repair path', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+
+    try {
+      const { register } = await loadPlugin();
+      const { SYSTEM_PROMPT } = await loadPersona();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const modelFacingText = [
+        SYSTEM_PROMPT,
+        ...tools.map((tool) => `${tool.name}\n${String((tool as { description?: unknown }).description ?? '')}`),
+      ].join('\n');
+
+      expect(modelFacingText).toMatch(/outlook\.\*/);
+      expect(modelFacingText).toMatch(/browser\.diagnose/);
+      expect(modelFacingText).toMatch(/browser\.repair_chrome_cdp/);
+      expect(modelFacingText).toMatch(/close all Chrome windows and retry from ClawX/i);
+      expect(modelFacingText).not.toMatch(/enable Chrome remote debugging/i);
+      expect(modelFacingText).not.toMatch(/configure remote debugging/i);
+      expect(modelFacingText).not.toMatch(/remote debugging enabled/i);
+      expect(modelFacingText).not.toMatch(/chrome:\/\/flags/i);
+      expect(modelFacingText).not.toMatch(/chrome\.exe/i);
+      expect(modelFacingText).not.toMatch(/web-?search/i);
     } finally {
       if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
       else process.env.CLAWX_HOST_API_PORT = previousPort;

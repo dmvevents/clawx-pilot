@@ -1054,7 +1054,7 @@ export function register(api) {
     registerTool({
       name: 'browser.diagnose',
       description:
-        'Diagnose browser automation readiness for Outlook and Microsoft Forms. Returns Chrome/CDP state such as cdp_ready, chrome_not_found, profile_locked_close_chrome, or cdp_down_chrome_closed, plus the next safe action. Call this before asking a principal to change Chrome settings.',
+        'Diagnose browser automation readiness for Outlook and Microsoft Forms. Returns Chrome/CDP state such as cdp_ready, chrome_not_found, profile_locked_close_chrome, or cdp_down_chrome_closed, plus the next safe action. Call this after any Outlook/Forms Chrome attach failure. Never give a principal manual Chrome setup, flags-page, online troubleshooting, or command-line instructions.',
       parameters: emptyParameters,
       execute: async (_toolCallId, _params = {}) => browser.diagnose(),
     });
@@ -1062,7 +1062,7 @@ export function register(api) {
     registerTool({
       name: 'browser.repair_chrome_cdp',
       description:
-        'Repair Chrome browser automation by launching the system Chrome profile with remote debugging on port 18792 when safe. Never force-closes Chrome. If Chrome is already open without CDP, returns profile_locked_close_chrome so the principal can close Chrome and retry.',
+        'Repair Chrome browser automation by launching the system Chrome profile with the ClawX-required automation port when safe. Never force-closes Chrome. If Chrome is already open without CDP, returns profile_locked_close_chrome; ask the principal to close all Chrome windows and retry from ClawX. Do not ask the principal to run manual Chrome commands or configure Chrome automation manually.',
       parameters: emptyParameters,
       execute: async (_toolCallId, _params = {}) => browser.repairChromeCdp(),
     });
@@ -1085,7 +1085,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.open',
       description:
-        'Open Outlook Web (https://outlook.office.com/mail/) in the principal\'s existing Chrome session. Returns { status: "opened" | "needs_signin", url, message? }. If a Chrome/CDP attach error occurs, call browser.diagnose then browser.repair_chrome_cdp before asking the principal to do anything manually. If sign-in is required, ask the principal to sign in to Outlook in the Chrome window that just opened, then call outlook.open again.',
+        'Open Outlook Web (https://outlook.office.com/mail/) in the principal\'s existing Chrome session. Use this for email instead of generic browser/Chrome MCP tools. Returns { status: "opened" | "needs_signin", url, message? }. If a Chrome/CDP attach error occurs, call browser.diagnose then browser.repair_chrome_cdp before asking the principal to do anything manually. Never give the principal manual Chrome setup, flags-page, online troubleshooting, or command-line instructions. If sign-in is required, ask the principal to sign in to Outlook in the Chrome window that just opened, then call outlook.open again.',
       parameters: emptyParameters,
       execute: async (_toolCallId, _params = {}) => {
         const result = await outlook.open();
@@ -1096,7 +1096,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.read_inbox',
       description:
-        'Return the top N unread/recent messages from the principal\'s Outlook inbox by scraping Outlook Web. Args: { top?: number (default 10) }. Returns { status: "ok" | "needs_signin", messages: [{ id, subject, sender, snippet, receivedAt, unread }] }.',
+        'Return the top N unread/recent messages from the principal\'s Outlook inbox through the ClawX Outlook tool path. Args: { top?: number (default 10) }. If Chrome attach fails, use browser.diagnose and browser.repair_chrome_cdp; do not give manual Chrome setup instructions. Returns { status: "ok" | "needs_signin", messages: [{ id, subject, sender, snippet, receivedAt, unread }] }.',
       parameters: toolParameters({
         top: nonNegativeNumberSchema,
       }),
