@@ -6,6 +6,8 @@ Ship the Ministry of Education Windows app as a GA-quality installer for non-tec
 
 Current status: **YELLOW - RC/demo-ready after Microsoft sign-in, not GA**.
 
+Operating OKR board: `docs/GA_OKRS_2026-06-10.md`.
+
 ## Current RC Baseline
 
 - Windows RC tag: `moe10-windows-rc-20260608-eb7146c`.
@@ -44,6 +46,10 @@ This baseline is acceptable for controlled demo installs. GA requires the gates 
 - installer SHA256: `4663ad8a1d46729633132ddac47fc8bc40c1d5d14fd29da231b53941b22d1931`
 - instructions asset: `MOE_WINDOWS_RC_2026-06-10_USER_INSTRUCTIONS.md`
 - direct URL checks returned HTTP 200 for the installer and instructions assets
+- local ignored staging copies in `release/github/` were refreshed on
+  2026-06-10 to match the June 10 installer and blockmap hashes:
+  `4663ad8a1d46729633132ddac47fc8bc40c1d5d14fd29da231b53941b22d1931` and
+  `e07e35d200f884066ba531c7e135c7b4a00211938c82b79df0e527412bace5c7`
 
 2026-06-09 external tester feedback from Karunesh Ramdass on the June 10 prerelease:
 
@@ -61,6 +67,20 @@ repeated, Gateway startup timing needs an accepted SLO or UX treatment, Forms
 preview/dry-run still needs fresh tester evidence, and the send path should
 stay covered by explicit same-session confirmation tests.
 
+2026-06-10 local validation pass:
+
+- Outlook/Graph/launch tests: 5 files, 31 tests passed.
+- Windows package critical tests: 6 files, 53 tests passed.
+- `pnpm run typecheck` passed.
+- `pnpm run build:vite` passed with existing chunk-size/dynamic-import
+  warnings only.
+- `pnpm run harness:ci` passed; report at `artifacts/harness/latest.md`.
+- Release secret grep found only placeholder/example key patterns, not full
+  committed provider keys.
+- Targeted branding grep of patched app-facing surfaces now returns only
+  internal runtime/developer identifiers or comments allowed by the branding
+  audit.
+
 ## GA Gates
 
 | Gate | Required evidence | Current state |
@@ -76,7 +96,7 @@ stay covered by explicit same-session confirmation tests.
 | Office files | sample Excel and Word analysis complete from Downloads through app chat | packaged runtime check confirmed parser dependencies and Office smoke reports `OFFICE_RUNTIME_READY`; 2026-06-09 external tester confirmed local file scanning worked. Still needs Excel/Word/PDF matrix evidence. |
 | ASR | Windows ASR helper installed and one transcript smoke passes, or ASR explicitly marked best-effort for GA | packaged runtime check confirmed `resources/bin/WinSpeechRecognize.exe`; quality remains best-effort until microphone/file transcription proof is captured |
 | Secrets | no committed upstream keys or test passwords; desktop stores only broker/client-scoped credentials | verify with git grep and install-state audit |
-| UI trust | no raw model/vendor identity or ClawX/OpenClaw branding in principal-facing UI; cost hidden from frontend | existing checklist mostly green; branding audit found remaining user-visible ClawX/OpenClaw strings and metadata that should move to developer-only or Ministry wording before GA |
+| UI trust | no raw model/vendor identity or ClawX/OpenClaw branding in principal-facing UI; cost hidden from frontend | 2026-06-10 remediation updated app metadata, title, menus, OAuth pages, notifications, setup copy, Settings links, attribution headers, and bundled agent context; targeted grep now leaves only internal runtime/developer identifiers in patched surfaces; broader branding issue remains open for icons, docs, and deeper support/dev surfaces |
 | Observability | local logs redacted, support artifact capture documented, optional Phoenix/model tracing decision recorded | local logs exist; Phoenix optional pending |
 | Documentation | first-run, install, support, and operator runbooks match the GA installer | RC docs exist; GA docs need final pass |
 
@@ -256,4 +276,5 @@ Red:
 
 ## Next Action
 
-Run a GA readiness pass against this plan, then rebuild the installer only after the gate table is updated with fresh evidence.
+Run the OKR validation pass, then rebuild the installer only after the gate
+table is updated with fresh evidence.

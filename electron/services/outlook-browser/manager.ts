@@ -75,7 +75,7 @@ export class OutlookBrowserManager {
         status: 'needs_signin',
         url: OUTLOOK_INBOX_URL,
         message:
-          'ClawX could not attach to Chrome for Outlook. The assistant should run browser.diagnose and browser.repair_chrome_cdp, then retry outlook.open. If repair reports profile_locked_close_chrome, close all Chrome windows and retry from ClawX. Do not ask the principal to configure Chrome manually.',
+          'Ministry of Education could not attach to Chrome for Outlook. The assistant should run browser.diagnose and browser.repair_chrome_cdp, then retry outlook.open. If repair reports profile_locked_close_chrome, close all Chrome windows and retry from Ministry of Education. Do not ask the principal to configure Chrome manually.',
       };
     }
 

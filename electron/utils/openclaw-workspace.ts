@@ -30,15 +30,15 @@ function isCurrentOpenClawPath(p: string): boolean {
 
 export function buildDefaultClawXIdentityContent(): string {
   return [
-    '# IDENTITY.md - ClawX',
+    '# IDENTITY.md - Ministry of Education',
     '',
-    '- **Name:** ClawX',
+    '- **Name:** Ministry of Education',
     '- **Creature:** desktop AI assistant',
     '- **Vibe:** concise, capable, and practical',
-    '- **Emoji:** 🐾',
+    '- **Emoji:**',
     '- **Avatar:**',
     '',
-    'ClawX uses a default desktop identity instead of chat-first bootstrap.',
+    'Ministry of Education uses a default desktop identity instead of chat-first bootstrap.',
     '',
   ].join('\n');
 }
@@ -64,7 +64,7 @@ async function writeFileIfMissing(path: string, content: string): Promise<boolea
 }
 
 /**
- * Ensure ClawX-managed workspaces have a non-template IDENTITY.md before the
+ * Ensure Ministry-managed workspaces have a non-template IDENTITY.md before the
  * Gateway initializes them. Existing custom identities are preserved.
  */
 export async function ensureClawXIdentityFile(
@@ -100,12 +100,12 @@ export async function ensureClawXIdentityFile(
   if (await fileExists(bootstrapPath)) {
     try {
       await unlink(bootstrapPath);
-      logger.info(`Removed chat-first bootstrap file from ClawX workspace (${resolvedWorkspaceDir})`);
+      logger.info(`Removed chat-first bootstrap file from Ministry workspace (${resolvedWorkspaceDir})`);
     } catch {
       logger.warn(`Failed to remove chat-first bootstrap file: ${bootstrapPath}`);
     }
   } else if (wroteIdentity) {
-    logger.info(`Seeded default ClawX identity for workspace (${resolvedWorkspaceDir})`);
+    logger.info(`Seeded default Ministry identity for workspace (${resolvedWorkspaceDir})`);
   }
 }
 
@@ -119,7 +119,7 @@ export async function ensureClawXDefaultIdentity(): Promise<void> {
 // ── Pure helpers (no I/O) ────────────────────────────────────────
 
 /**
- * Merge a ClawX context section into an existing file's content.
+ * Merge a Ministry context section into an existing file's content.
  * If markers already exist, replaces the section in-place.
  * Otherwise appends it at the end.
  */
@@ -136,7 +136,7 @@ export function mergeClawXSection(existing: string, section: string): string {
 /**
  * Strip the "## First Run" section from workspace AGENTS.md content.
  * This section is seeded by the OpenClaw Gateway but is unnecessary
- * for ClawX-managed workspaces.  Removes everything from the heading
+ * for Ministry-managed workspaces. Removes everything from the heading
  * line until the next markdown heading (any level) or end of content.
  */
 export function stripFirstRunSection(content: string): string {
@@ -263,7 +263,7 @@ async function resolveAllWorkspaceDirs(): Promise<WorkspaceDir[]> {
 // ── Bootstrap file repair ────────────────────────────────────────
 
 /**
- * Detect and remove bootstrap .md files that contain only ClawX markers
+ * Detect and remove bootstrap .md files that contain only app-owned markers
  * with no meaningful OpenClaw content outside them.
  */
 export async function repairClawXOnlyBootstrapFiles(): Promise<void> {
@@ -295,9 +295,9 @@ export async function repairClawXOnlyBootstrapFiles(): Promise<void> {
       if (before === '' && after === '') {
         try {
           await unlink(filePath);
-          logger.info(`Removed ClawX-only bootstrap file for re-seeding: ${file} (${workspaceDir})`);
+          logger.info(`Removed app-only bootstrap file for re-seeding: ${file} (${workspaceDir})`);
         } catch {
-          logger.warn(`Failed to remove ClawX-only bootstrap file: ${filePath}`);
+          logger.warn(`Failed to remove app-only bootstrap file: ${filePath}`);
         }
       }
     }
@@ -307,7 +307,7 @@ export async function repairClawXOnlyBootstrapFiles(): Promise<void> {
 // ── Context merging ──────────────────────────────────────────────
 
 /**
- * Merge ClawX context snippets into workspace bootstrap files that already
+ * Merge Ministry context snippets into workspace bootstrap files that already
  * exist on disk. Missing files are only retryable for startup-owned workspaces.
  */
 type MergeResult = {
@@ -327,7 +327,7 @@ type EnsureClawXContextOptions = {
 async function mergeClawXContextOnce(options: EnsureClawXContextOptions = {}): Promise<MergeResult> {
   const contextDir = join(getResourcesDir(), 'context');
   if (!(await fileExists(contextDir))) {
-    logger.debug('ClawX context directory not found, skipping context merge');
+    logger.debug('Ministry context directory not found, skipping context merge');
     return { missing: 0, retryableMissing: 0 };
   }
 
@@ -383,10 +383,10 @@ async function mergeClawXContextOnce(options: EnsureClawXContextOptions = {}): P
 
       const merged = mergeClawXSection(existing, section);
       // Compare against on-disk content so we persist changes even when only
-      // First Run stripping happened and the ClawX section stayed identical.
+      // First Run stripping happened and the app-owned section stayed identical.
       if (merged !== originalExisting) {
         await writeFile(targetPath, merged, 'utf-8');
-        logger.info(`Merged ClawX context into ${targetName} (${workspaceDir})`);
+        logger.info(`Merged Ministry context into ${targetName} (${workspaceDir})`);
       }
     }
   }
@@ -423,7 +423,7 @@ async function runEnsureClawXContext(options: EnsureClawXContextOptions): Promis
   let result = await mergeClawXContextOnce(options);
   if (result.retryableMissing === 0) {
     if (result.missing > 0) {
-      logger.debug(`ClawX context merge skipped ${result.missing} non-ready file(s)`);
+      logger.debug(`Ministry context merge skipped ${result.missing} non-ready file(s)`);
     }
     return;
   }
@@ -432,11 +432,11 @@ async function runEnsureClawXContext(options: EnsureClawXContextOptions): Promis
     await new Promise((r) => setTimeout(r, RETRY_INTERVAL_MS));
     result = await mergeClawXContextOnce(options);
     if (result.retryableMissing === 0) {
-      logger.info(`ClawX context merge completed after ${attempt} retry(ies)`);
+      logger.info(`Ministry context merge completed after ${attempt} retry(ies)`);
       return;
     }
-    logger.debug(`ClawX context merge: ${result.retryableMissing} startup file(s) still missing (retry ${attempt}/${MAX_RETRIES})`);
+    logger.debug(`Ministry context merge: ${result.retryableMissing} startup file(s) still missing (retry ${attempt}/${MAX_RETRIES})`);
   }
 
-  logger.warn(`ClawX context merge: ${result.retryableMissing} startup file(s) still missing after ${MAX_RETRIES} retries`);
+  logger.warn(`Ministry context merge: ${result.retryableMissing} startup file(s) still missing after ${MAX_RETRIES} retries`);
 }

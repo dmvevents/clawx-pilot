@@ -9,6 +9,22 @@ are needed to debug the runtime.
 
 GitHub issue: `dmvevents/clawx-pilot#7`.
 
+2026-06-10 remediation pass:
+
+- Patched high-impact user-facing release/app identity surfaces:
+  `package.json`, `electron-builder.yml`, `index.html`,
+  `electron/main/index.ts`, and Linux autostart naming.
+- Patched menu/support links, OAuth completion pages, daily-report
+  notification copy, Forms/Outlook diagnostics, OpenRouter attribution,
+  Azure Speech client name, first-run setup copy, Settings About links, and
+  bundled agent context snippets.
+- Left internal runtime names, package identifiers, source filenames, and
+  developer diagnostics in place where changing them would risk migration,
+  plugin discovery, or support tooling before the demo.
+- Verification: targeted grep against patched app-facing surfaces now leaves
+  only internal runtime/developer identifiers and comments, not principal-facing
+  labels or instructions.
+
 ## High-Priority User-Facing Leaks
 
 ### Release And App Identity

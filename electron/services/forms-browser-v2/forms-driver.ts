@@ -105,7 +105,7 @@ async function diagnoseFormsLoadPage(page: Page): Promise<string | null> {
   const visibleText = `${title}\n${body}`;
 
   if (/login\.microsoftonline\.com/i.test(url) || /sign in to your account|can't access your account|sign-in options/i.test(visibleText)) {
-    return `Microsoft Forms sign-in required before questions can render. Chrome landed on ${location} with title "${title || 'unknown'}". Sign in to Microsoft in the Chrome profile that ClawX opened, then retry the form preview.`;
+    return `Microsoft Forms sign-in required before questions can render. Chrome landed on ${location} with title "${title || 'unknown'}". Sign in to Microsoft in the Chrome profile that Ministry of Education opened, then retry the form preview.`;
   }
 
   if (/you don't have permission|access denied|request access|account doesn't have access|not authorized/i.test(visibleText)) {

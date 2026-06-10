@@ -26,7 +26,7 @@
             ]
         }
     },
-    "description": "Ministry of Education — AI-supported administrative assistant for primary-school principals (built on ClawX/OpenClaw)",
+    "description": "Ministry of Education — AI-supported administrative assistant for Trinidad & Tobago primary-school principals",
     "main": "dist-electron/main/index.js",
     "author": "Ministry of Education, Trinidad & Tobago",
     "license": "MIT",

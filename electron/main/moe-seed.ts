@@ -92,7 +92,7 @@ export function registerMoeSeedHandlers(gatewayManager: GatewayManager): void {
     try {
       new Notification({
         title: 'Daily Report due at 3:45pm',
-        body: 'Open ClawX to dictate today\'s numbers; the agent will fill and review before submitting.',
+        body: 'Open Ministry of Education to dictate today\'s numbers; the agent will fill and review before submitting.',
         urgency: 'normal',
       }).show();
     } catch (err) {
