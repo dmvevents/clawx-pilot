@@ -19,6 +19,9 @@
  * (b) macOS keychain access from Electron requires bundle signing in package
  * mode. Future hardening: move `secret` to keytar when packaging is signed.
  */
+import { constants } from 'node:fs';
+import { access, readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import type Store from 'electron-store';
 
 export interface MicrosoftGraphConfig {
@@ -58,28 +61,133 @@ interface MicrosoftGraphStoreShape {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let storeInstance: any = null;
 
+type RawMicrosoftGraphConfig = Partial<MicrosoftGraphConfig & {
+  enabled: boolean | string;
+  scopes: string[] | string;
+}>;
+
+const CONFIG_FILE_NAME = 'microsoft-graph.json';
+
+function boolFromUnknown(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value !== 'string') return fallback;
+  const raw = value.trim().toLowerCase();
+  if (!raw) return fallback;
+  if (['1', 'true', 'yes', 'on'].includes(raw)) return true;
+  if (['0', 'false', 'no', 'off'].includes(raw)) return false;
+  return fallback;
+}
+
+function cleanList(values: string[] | string | undefined): string[] | undefined {
+  const raw = Array.isArray(values) ? values : (values ? values.split(/[,\s]+/) : []);
+  const seen = new Set<string>();
+  const cleaned = raw
+    .map((scope) => scope.trim())
+    .filter((scope) => {
+      if (!scope || seen.has(scope)) return false;
+      seen.add(scope);
+      return true;
+    });
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+function normalizeMicrosoftGraphConfig(
+  raw: RawMicrosoftGraphConfig | null | undefined,
+): MicrosoftGraphConfig | null {
+  if (!raw || !boolFromUnknown(raw.enabled, true)) return null;
+  const tenantId = raw.tenantId?.trim() ?? '';
+  const clientId = raw.clientId?.trim() ?? '';
+  if (!tenantId || !clientId) return null;
+  const scopes = cleanList(raw.scopes);
+  const redirectUri = raw.redirectUri?.trim() || undefined;
+  return { tenantId, clientId, scopes, redirectUri };
+}
+
 export function readMicrosoftGraphConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): MicrosoftGraphConfig | null {
-  const tenantId = env.CLAWX_MICROSOFT_GRAPH_TENANT_ID?.trim()
-    || env.CLAWX_MS_GRAPH_TENANT_ID?.trim()
-    || '';
-  const clientId = env.CLAWX_MICROSOFT_GRAPH_CLIENT_ID?.trim()
-    || env.CLAWX_MS_GRAPH_CLIENT_ID?.trim()
-    || '';
-  if (!tenantId || !clientId) return null;
+  return normalizeMicrosoftGraphConfig({
+    enabled: env.CLAWX_MICROSOFT_GRAPH_ENABLED ?? env.CLAWX_MS_GRAPH_ENABLED,
+    tenantId: env.CLAWX_MICROSOFT_GRAPH_TENANT_ID
+      ?? env.CLAWX_MS_GRAPH_TENANT_ID,
+    clientId: env.CLAWX_MICROSOFT_GRAPH_CLIENT_ID
+      ?? env.CLAWX_MS_GRAPH_CLIENT_ID,
+    scopes: env.CLAWX_MICROSOFT_GRAPH_SCOPES
+      ?? env.CLAWX_MS_GRAPH_SCOPES,
+    redirectUri: env.CLAWX_MICROSOFT_GRAPH_REDIRECT_URI
+      ?? env.CLAWX_MS_GRAPH_REDIRECT_URI,
+  });
+}
 
-  const scopesRaw = env.CLAWX_MICROSOFT_GRAPH_SCOPES?.trim()
-    || env.CLAWX_MS_GRAPH_SCOPES?.trim()
-    || '';
-  const scopes = scopesRaw
-    ? scopesRaw.split(/[,\s]+/).map((scope) => scope.trim()).filter(Boolean)
-    : undefined;
-  const redirectUri = env.CLAWX_MICROSOFT_GRAPH_REDIRECT_URI?.trim()
-    || env.CLAWX_MS_GRAPH_REDIRECT_URI?.trim()
-    || undefined;
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-  return { tenantId, clientId, scopes, redirectUri };
+function processResourcesPath(): string | undefined {
+  return (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+}
+
+async function electronPaths(): Promise<{ userData?: string; appPath?: string }> {
+  try {
+    const electron = await import('electron');
+    return {
+      userData: electron.app?.getPath?.('userData'),
+      appPath: electron.app?.getAppPath?.(),
+    };
+  } catch {
+    return {};
+  }
+}
+
+async function candidateConfigPaths(env: NodeJS.ProcessEnv = process.env): Promise<string[]> {
+  const explicit = env.CLAWX_MICROSOFT_GRAPH_CONFIG?.trim()
+    || env.CLAWX_MS_GRAPH_CONFIG?.trim()
+    || '';
+  const paths = await electronPaths();
+  const candidates = [
+    explicit || undefined,
+    paths.userData ? join(paths.userData, CONFIG_FILE_NAME) : undefined,
+    processResourcesPath() ? join(processResourcesPath() as string, 'resources', CONFIG_FILE_NAME) : undefined,
+    paths.appPath ? join(paths.appPath, 'resources', CONFIG_FILE_NAME) : undefined,
+    join(process.cwd(), 'resources', CONFIG_FILE_NAME),
+  ].filter((path): path is string => Boolean(path));
+
+  const seen = new Set<string>();
+  return candidates
+    .map((candidate) => resolve(candidate))
+    .filter((candidate) => {
+      if (seen.has(candidate)) return false;
+      seen.add(candidate);
+      return true;
+    });
+}
+
+export async function readMicrosoftGraphConfigFromFile(
+  path: string,
+): Promise<MicrosoftGraphConfig | null> {
+  const parsed = JSON.parse(await readFile(path, 'utf-8')) as RawMicrosoftGraphConfig;
+  return normalizeMicrosoftGraphConfig(parsed);
+}
+
+export async function readMicrosoftGraphConfigFromDisk(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<MicrosoftGraphConfig | null> {
+  for (const path of await candidateConfigPaths(env)) {
+    if (!(await fileExists(path))) continue;
+    try {
+      const config = await readMicrosoftGraphConfigFromFile(path);
+      if (config) return config;
+    } catch {
+      // Invalid bootstrap files are ignored so a bad optional seed does not
+      // prevent the app from launching; Settings still allows manual config.
+    }
+  }
+  return null;
 }
 
 async function getStore(): Promise<Store<MicrosoftGraphStoreShape>> {
@@ -101,7 +209,9 @@ async function getStore(): Promise<Store<MicrosoftGraphStoreShape>> {
 
 export async function getMicrosoftGraphConfig(): Promise<MicrosoftGraphConfig | null> {
   const store = await getStore();
-  return store.get('config') ?? readMicrosoftGraphConfigFromEnv();
+  return store.get('config')
+    ?? readMicrosoftGraphConfigFromEnv()
+    ?? await readMicrosoftGraphConfigFromDisk();
 }
 
 export async function setMicrosoftGraphConfig(

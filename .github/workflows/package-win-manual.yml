@@ -12,6 +12,11 @@ on:
         required: true
         type: boolean
         default: true
+      requireMicrosoftGraphSeed:
+        description: 'Fail the build unless CLAWX_MICROSOFT_GRAPH_CONFIG_JSON secret or variable is available.'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -97,6 +102,44 @@ jobs:
           }
 
           Write-Host "Cloud gateway seed prepared for packaged release (providerId=$($config.providerId), model=$($config.model), key redacted)."
+
+      - name: Prepare Microsoft Graph seed
+        shell: pwsh
+        env:
+          MICROSOFT_GRAPH_CONFIG_JSON: ${{ secrets.CLAWX_MICROSOFT_GRAPH_CONFIG_JSON || vars.CLAWX_MICROSOFT_GRAPH_CONFIG_JSON }}
+          REQUIRE_MICROSOFT_GRAPH_SEED: ${{ inputs.requireMicrosoftGraphSeed }}
+        run: |
+          $resourcesDir = Join-Path $PWD 'resources'
+          New-Item -ItemType Directory -Force -Path $resourcesDir | Out-Null
+
+          $hasConfig = -not [string]::IsNullOrWhiteSpace($env:MICROSOFT_GRAPH_CONFIG_JSON)
+          if (-not $hasConfig) {
+            $message = 'Microsoft Graph seed config is missing. Set CLAWX_MICROSOFT_GRAPH_CONFIG_JSON to package Outlook Graph defaults.'
+            if ($env:REQUIRE_MICROSOFT_GRAPH_SEED -eq 'true') {
+              throw $message
+            }
+            Write-Warning $message
+            exit 0
+          }
+
+          $configPath = Join-Path $resourcesDir 'microsoft-graph.json'
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+          [System.IO.File]::WriteAllText($configPath, $env:MICROSOFT_GRAPH_CONFIG_JSON.Trim(), $utf8NoBom)
+
+          $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$config.tenantId)) {
+            throw 'CLAWX_MICROSOFT_GRAPH_CONFIG_JSON is missing tenantId.'
+          }
+          if ([string]::IsNullOrWhiteSpace([string]$config.clientId)) {
+            throw 'CLAWX_MICROSOFT_GRAPH_CONFIG_JSON is missing clientId.'
+          }
+          foreach ($blocked in @('clientSecret', 'client_secret', 'apiKey', 'password', 'refreshToken')) {
+            if ($null -ne $config.PSObject.Properties[$blocked]) {
+              throw "CLAWX_MICROSOFT_GRAPH_CONFIG_JSON must not contain secret field: $blocked."
+            }
+          }
+
+          Write-Host "Microsoft Graph seed prepared for packaged release (tenant=$($config.tenantId), clientId=$($config.clientId), no secrets)."
 
       - name: Build Windows package (no publish)
         env:

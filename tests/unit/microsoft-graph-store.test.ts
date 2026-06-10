@@ -1,6 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { readMicrosoftGraphConfigFromEnv } from '../../electron/services/microsoft-graph/store';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import {
+  readMicrosoftGraphConfigFromEnv,
+  readMicrosoftGraphConfigFromFile,
+} from '../../electron/services/microsoft-graph/store';
 
 describe('Microsoft Graph config bootstrap', () => {
   it('returns null until tenant and client id are both present', () => {
@@ -34,5 +40,50 @@ describe('Microsoft Graph config bootstrap', () => {
       scopes: undefined,
       redirectUri: undefined,
     });
+  });
+
+  it('reads non-secret tenant defaults from a packaged config file', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'clawx-msgraph-seed-'));
+    try {
+      const path = join(dir, 'microsoft-graph.json');
+      await writeFile(path, JSON.stringify({
+        enabled: true,
+        tenantId: 'moe.gov.tt',
+        clientId: 'client-id',
+        scopes: ['openid', 'profile', 'Mail.Read', 'Mail.Read'],
+        redirectUri: 'http://localhost:53682/callback',
+      }), 'utf-8');
+
+      await expect(readMicrosoftGraphConfigFromFile(path)).resolves.toEqual({
+        tenantId: 'moe.gov.tt',
+        clientId: 'client-id',
+        scopes: ['openid', 'profile', 'Mail.Read'],
+        redirectUri: 'http://localhost:53682/callback',
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('treats disabled or incomplete packaged configs as absent', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'clawx-msgraph-seed-'));
+    try {
+      const disabled = join(dir, 'disabled.json');
+      const incomplete = join(dir, 'incomplete.json');
+      await writeFile(disabled, JSON.stringify({
+        enabled: false,
+        tenantId: 'moe.gov.tt',
+        clientId: 'client-id',
+      }), 'utf-8');
+      await writeFile(incomplete, JSON.stringify({
+        enabled: true,
+        tenantId: 'moe.gov.tt',
+      }), 'utf-8');
+
+      await expect(readMicrosoftGraphConfigFromFile(disabled)).resolves.toBeNull();
+      await expect(readMicrosoftGraphConfigFromFile(incomplete)).resolves.toBeNull();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

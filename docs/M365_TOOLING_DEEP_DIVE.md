@@ -25,6 +25,9 @@ The repo already contains most of the product foundation:
   tokens and exposes Graph mail calls.
 - `electron/services/forms-graph/forms-graph-client.ts` can create SharePoint
   list items once IT provides site/list IDs and scopes.
+- `resources/microsoft-graph.example.json` documents the non-secret packaged
+  seed used to make fresh installs show Microsoft Graph as configured before
+  the user signs in.
 
 The missing product work is routing agent tools to Graph/SharePoint first when
 signed in, then falling back to Chrome/CDP only when Graph is unavailable or a
@@ -68,6 +71,8 @@ What it cannot safely do from only username/password:
    - public-client `clientId`.
    - default scopes.
    - optional SharePoint form destination config.
+   - preferred seed file: ignored `resources/microsoft-graph.json`, copied into
+     packaged resources by `scripts/after-pack.cjs`.
 2. On first launch, show one action: **Sign in with Microsoft 365**.
 3. Use the signed-in token for Outlook Host API calls.
 4. Use the same token for SharePoint list submission when form destinations are
@@ -79,6 +84,27 @@ What it cannot safely do from only username/password:
    - for attachment flows until Graph attachment download is implemented
 
 Tenant defaults can be preseeded without storing any secret:
+
+```json
+{
+  "enabled": true,
+  "tenantId": "moe.gov.tt",
+  "clientId": "<public-client-id>",
+  "redirectUri": "http://localhost:53682/callback",
+  "scopes": [
+    "openid",
+    "profile",
+    "email",
+    "offline_access",
+    "User.Read",
+    "Mail.Read",
+    "Mail.ReadWrite",
+    "Mail.Send"
+  ]
+}
+```
+
+The environment route remains available for IT policy or manual diagnostics:
 
 ```powershell
 setx CLAWX_MICROSOFT_GRAPH_TENANT_ID "moe.gov.tt"

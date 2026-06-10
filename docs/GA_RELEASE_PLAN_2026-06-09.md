@@ -27,13 +27,22 @@ This baseline is acceptable for controlled demo installs. GA requires the gates 
 - VM visual smoke evidence: `C:\Users\clawxtest\Downloads\clawx-managed-cdp-visual-smoke-20260609-235054`
 - local pulled screenshot/probe evidence: `/tmp/clawx-vm-visual-20260609-235054`
 
+2026-06-10 local rebuild after Microsoft 365 programmatic package bootstrap:
+
+- installer: `release/Ministry of Education-0.4.3-moe.10-win-x64.exe`
+- installer SHA256: `4663ad8a1d46729633132ddac47fc8bc40c1d5d14fd29da231b53941b22d1931`
+- blockmap SHA256: `e07e35d200f884066ba531c7e135c7b4a00211938c82b79df0e527412bace5c7`
+- packaged runtime check confirmed `playwright-core`, `xlsx`, `docx`, `mammoth`, `pdf-parse`, `WinSpeechRecognize.exe`, `node.exe`, `uv.exe`, cloud gateway seed files, and Microsoft Graph example config
+- packaged runtime check intentionally found `resources/microsoft-graph.json=false`; do not publish this as Graph-configured until MoE IT provides the real Entra public client ID
+
 ## GA Gates
 
 | Gate | Required evidence | Current state |
 |---|---|---|
-| Installer reproducibility | `pnpm run build:win`, installer path, SHA256, `playwright-core` still in runtime dependencies | 2026-06-09 local build passed; installer SHA256 `5566ea55aeadfaba60ecae0aa23fbb9644dceebc1c5f8137c0be3f6d5d11f692`; packaged runtime check confirmed `playwright-core`, `xlsx`, `docx`, `mammoth`, `pdf-parse`, ASR helper, `ffmpeg`, `node`, `uv`, and cloud gateway seed files |
+| Installer reproducibility | `pnpm run build:win`, installer path, SHA256, `playwright-core` still in runtime dependencies | 2026-06-10 local build passed; installer SHA256 `4663ad8a1d46729633132ddac47fc8bc40c1d5d14fd29da231b53941b22d1931`; packaged runtime check confirmed `playwright-core`, `xlsx`, `docx`, `mammoth`, `pdf-parse`, ASR helper, `node`, `uv`, cloud gateway seed files, and Microsoft Graph example config |
 | Clean install | fresh Windows user or laptop install, desktop shortcut launch, Gateway/Host API reachable | 2026-06-09 GCP Windows VM `clawx-win-rc-20260609` proof passed for the local rebuild: downloaded bytes `390056548`, SHA256 matched, silent uninstall exit `0`, install exit `0`, app exe present; visual smoke showed Chrome CDP, Electron CDP, Host API, Gateway, and post-probe readiness true |
 | Online model path | installed app completes one chat through managed gateway/model broker or configured cloud provider; no raw upstream keys exposed to the user | GitHub Windows packaging requires `CLAWX_CLOUD_GATEWAY_CONFIG_JSON` and `CLAWX_CLOUD_GATEWAY_KEY`; VM proof confirmed packaged seed files present, `providerKeys=1`, local Qwen seeded with `default=false`, and `.openclaw` default model `custom-moecloud/moe-demo-pro`; model chat smoke still needed |
+| Microsoft 365 programmatic config | installer can carry non-secret tenant/client defaults so Outlook can use Microsoft Graph after sign-in instead of Chrome troubleshooting | 2026-06-10 implementation added `resources/microsoft-graph.example.json`, ignored `resources/microsoft-graph.json` packaged-copy support, store fallback from packaged/user/env config, and optional GitHub Actions `CLAWX_MICROSOFT_GRAPH_CONFIG_JSON` injection; needs real Entra client ID from IT |
 | Runtime coherence | settings/provider store, `~/.openclaw/openclaw.json`, agent `models.json`, and latest transcript agree | VM install proof confirmed `.openclaw` default primary `custom-moecloud/moe-demo-pro`; provider/config coherence should be rechecked after a real chat transcript |
 | Outlook safety | open/read/draft smoke passes through signed-in Chrome CDP; send requires explicit same-session confirmation | VM visual smoke `20260609-235054` passed Outlook open/read and refused send/download without confirmation |
 | Outlook attach UX | a fresh user who asks "check my email" is routed through `outlook.*`, `browser.diagnose`, and `browser.repair_chrome_cdp`; the assistant must not tell the user to enable Chrome remote debugging, use `chrome://flags`, search the web, or run manual Chrome commands | user report on 2026-06-09 exposed old guidance; regression patch and chat-harness scenario added; local unit tests passed; clean installer proof now passed on GCP VM, but Chrome/Outlook sign-in proof still requires Chrome on the test image or a physical laptop |
@@ -68,6 +77,7 @@ Tasks:
 - decide the GA default: managed model broker endpoint preferred;
 - ensure desktop stores only a broker-issued/client-scoped key, not upstream provider keys;
 - keep `package-win-manual.yml` failing by default when the cloud gateway seed secrets are absent;
+- package `resources/microsoft-graph.json` from `CLAWX_MICROSOFT_GRAPH_CONFIG_JSON` once IT returns the Entra app registration;
 - verify one installed-app chat through the broker;
 - document failure handling when Wi-Fi or gateway is unavailable;
 - keep local model fallback only as an explicit fallback, not the demo default.
@@ -78,10 +88,12 @@ Owner skill: `windows-outlook-forms`.
 
 Tasks:
 
-- verify signed-in user Chrome CDP attach;
+- verify Microsoft Graph sign-in and Graph-backed Outlook read/draft first;
+- verify signed-in user Chrome CDP attach only for browser fallback and Forms UI fallback;
 - sign in to Microsoft in the ClawX-opened system Chrome profile before Forms preview proof, or move to an approved Microsoft/Entra flow;
 - verify the model uses `outlook.*` and ClawX browser repair tools, not generic Chrome MCP troubleshooting;
 - run Outlook open/read/draft smoke without sending;
+- confirm Host API logs report `transport=graph` for read/search/draft/send once Graph is signed in;
 - run Forms list/preview/dry-run without submitting;
 - confirm no managed Chromium fallback is accepted as final proof;
 - keep send/submit hard gates.

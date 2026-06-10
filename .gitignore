@@ -69,6 +69,7 @@ electron/native/**/obj/
 *.key
 cloud-gateway.json
 resources/cloud-gateway.json
+resources/microsoft-graph.json
 
 build/
 artifacts/

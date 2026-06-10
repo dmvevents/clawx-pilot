@@ -112,11 +112,23 @@ exist:
 - `CLAWX_CLOUD_GATEWAY_CONFIG_JSON`: JSON matching `resources/cloud-gateway.example.json`
 - `CLAWX_CLOUD_GATEWAY_KEY`: broker/client-scoped gateway key only, not an upstream provider key
 
+For a release candidate that should use programmatic Outlook instead of Chrome
+remote-debugging guidance, also set:
+
+- `CLAWX_MICROSOFT_GRAPH_CONFIG_JSON`: JSON matching `resources/microsoft-graph.example.json`
+
+This Graph config is not a secret; it contains only tenant/client/scopes. Use
+the workflow input `requireMicrosoftGraphSeed=true` only after MoE IT returns
+the Entra app registration. Until then, leave it optional and the installer
+keeps the browser/CDP demo fallback.
+
 The workflow writes those secrets into ignored `resources/cloud-gateway.json`
 and `resources/cloud-gateway.key` files on the runner before packaging. The
 installer should then first-run with the Online channel selected and the cloud
 gateway as the default provider; a clean install falling back to `qwen2.5` is a
-release-blocking packaging failure.
+release-blocking packaging failure. When the Microsoft Graph seed is present,
+the workflow also writes ignored `resources/microsoft-graph.json`, and the
+packaged app should show Microsoft 365 as configured before sign-in.
 
 ```bash
 # On Mac:

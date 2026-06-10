@@ -82,6 +82,19 @@ function copyReleaseGatewaySeed(resourcesDir) {
   console.log(`[after-pack] ✅ Copied release cloud gateway seed files: ${seedFiles.join(', ')}`);
 }
 
+function copyReleaseMicrosoftGraphSeed(resourcesDir) {
+  const projectResourcesDir = join(__dirname, '..', 'resources');
+  const packagedResourcesDir = join(resourcesDir, 'resources');
+  const seedFile = 'microsoft-graph.json';
+  const source = join(projectResourcesDir, seedFile);
+
+  if (!existsSync(source)) return;
+
+  mkdirSync(normWin(packagedResourcesDir), { recursive: true });
+  cpSync(normWin(source), normWin(join(packagedResourcesDir, seedFile)));
+  console.log(`[after-pack] ✅ Copied release Microsoft Graph seed file: ${seedFile}`);
+}
+
 // ── General cleanup ──────────────────────────────────────────────────────────
 
 function cleanupUnnecessaryFiles(dir) {
@@ -602,6 +615,7 @@ exports.default = async function afterPack(context) {
   const pluginsDestRoot = join(resourcesDir, 'openclaw-plugins');
 
   copyReleaseGatewaySeed(resourcesDir);
+  copyReleaseMicrosoftGraphSeed(resourcesDir);
 
   if (!existsSync(src)) {
     console.warn('[after-pack] ⚠️  build/openclaw/node_modules not found. Run bundle-openclaw first.');
