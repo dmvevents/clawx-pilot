@@ -17,12 +17,110 @@ on:
         required: true
         type: boolean
         default: false
+      publishFromRunId:
+        description: 'Optional completed workflow run ID whose Windows artifacts should be published to a release instead of building.'
+        required: false
+        default: ''
+      publishReleaseTag:
+        description: 'Release tag to receive the Windows artifacts when publishFromRunId is set.'
+        required: false
+        default: ''
+      publishReleaseTitle:
+        description: 'Optional release title to apply when publishing existing artifacts.'
+        required: false
+        default: ''
 
 permissions:
-  contents: read
+  actions: read
+  contents: write
 
 jobs:
+  publish-existing-windows-run:
+    if: ${{ inputs.publishFromRunId != '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout docs for release notes
+        uses: actions/checkout@v4
+
+      - name: Download Windows artifacts from completed run
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.publishFromRunId }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: release-artifacts
+          pattern: windows-*
+
+      - name: Publish Windows artifacts to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.publishReleaseTag }}
+          RELEASE_TITLE: ${{ inputs.publishReleaseTitle }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$RELEASE_TAG" ]]; then
+            echo "::error::publishReleaseTag is required when publishFromRunId is set."
+            exit 1
+          fi
+
+          echo "Downloaded Windows artifacts:"
+          find release-artifacts -maxdepth 3 -type f -print -exec ls -lh {} \;
+
+          mapfile -t release_assets < <(
+            find release-artifacts -type f \
+              \( -name '*.exe' -o -name '*.blockmap' -o -name '*.yml' \) \
+              | sort
+          )
+
+          if [[ "${#release_assets[@]}" -eq 0 ]]; then
+            echo "::error::No Windows release assets found in run ${{ inputs.publishFromRunId }}."
+            exit 1
+          fi
+
+          docs=(
+            windows-pilot/plans/MOE_WINDOWS_RC_2026-06-10_USER_INSTRUCTIONS.md
+            windows-pilot/plans/MOE_WINDOWS_CUSTOMER_FEEDBACK_2026-06-10.md
+            windows-pilot/plans/MOE_WINDOWS_GA_STATUS_2026-06-10.md
+          )
+          for doc in "${docs[@]}"; do
+            if [[ ! -f "$doc" ]]; then
+              echo "::error::Required release document is missing: $doc"
+              exit 1
+            fi
+          done
+
+          echo "SHA256 checksums to publish:"
+          sha256sum "${release_assets[@]}" "${docs[@]}"
+
+          gh release upload "$RELEASE_TAG" \
+            "${release_assets[@]}" \
+            "${docs[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+          if [[ -f windows-pilot/plans/MOE_WINDOWS_RC_2026-06-10_RELEASE_NOTES.md ]]; then
+            if [[ -n "$RELEASE_TITLE" ]]; then
+              gh release edit "$RELEASE_TAG" \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "$RELEASE_TITLE" \
+                --notes-file windows-pilot/plans/MOE_WINDOWS_RC_2026-06-10_RELEASE_NOTES.md
+            else
+              gh release edit "$RELEASE_TAG" \
+                --repo "$GITHUB_REPOSITORY" \
+                --notes-file windows-pilot/plans/MOE_WINDOWS_RC_2026-06-10_RELEASE_NOTES.md
+            fi
+          fi
+
+          echo "Published assets:"
+          gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json assets \
+            --jq '.assets[] | [.name,.size,.digest,.updatedAt] | @tsv'
+
   package-windows:
+    if: ${{ inputs.publishFromRunId == '' }}
     runs-on: windows-latest
 
     steps:

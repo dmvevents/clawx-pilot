@@ -35,13 +35,13 @@ Do not download the source code zip or tar.gz files for testing.
 Expected installer size:
 
 ```text
-About 372 MB
+About 287 MB
 ```
 
 Expected SHA-256, if your test coordinator asks you to verify it:
 
 ```text
-4663ad8a1d46729633132ddac47fc8bc40c1d5d14fd29da231b53941b22d1931
+fe8d7af9fe2db1054ec7ee2bfdd22d05f932ba486644b7d15b6153bb5f8f9219
 ```
 
 ## Install

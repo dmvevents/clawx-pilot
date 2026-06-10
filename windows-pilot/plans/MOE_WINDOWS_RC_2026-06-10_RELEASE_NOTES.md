@@ -5,7 +5,7 @@ Windows release candidate refresh for the Ministry of Education pilot.
 Installer source commit:
 
 ```text
-bbc4eb10c97cc21315eada3ce2d084f56d44dca0
+832aaf3d70baa9bc377bfaaffeb984cd9986334b
 ```
 
 ## Download
@@ -20,29 +20,23 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 
 ## Assets
 
-Published GitHub prerelease asset:
-
 - `Ministry.of.Education-0.4.3-moe.10-win-x64.exe`
-  - SHA-256: `4663ad8a1d46729633132ddac47fc8bc40c1d5d14fd29da231b53941b22d1931`
+  - SHA-256: `fe8d7af9fe2db1054ec7ee2bfdd22d05f932ba486644b7d15b6153bb5f8f9219`
 - `Ministry.of.Education-0.4.3-moe.10-win-x64.exe.blockmap`
-  - SHA-256: `e07e35d200f884066ba531c7e135c7b4a00211938c82b79df0e527412bace5c7`
+  - SHA-256: `a563185c8e68aa328fe7d09c0654430b98d1624dc1d0611d1e2b02a87a141220`
 - `MOE_WINDOWS_RC_2026-06-10_USER_INSTRUCTIONS.md`
   - Detailed tester instructions for install, first launch, Outlook, Forms,
     files, voice input, expected behavior, and support evidence.
+- `MOE_WINDOWS_CUSTOMER_FEEDBACK_2026-06-10.md`
+  - Structured smoke prompts, feedback questions, and bug report template.
+- `MOE_WINDOWS_GA_STATUS_2026-06-10.md`
+  - Current GA/pre-release gate status and remaining blockers.
 
-Fresh manual workflow rebuild after principal onboarding:
+Manual workflow rebuild:
 
 - Workflow run: `https://github.com/dmvevents/clawx-pilot/actions/runs/27299469846`
-- Commit: `832aaf3d70baa9bc377bfaaffeb984cd9986334b`
-- Installer artifact SHA-256:
-  `fe8d7af9fe2db1054ec7ee2bfdd22d05f932ba486644b7d15b6153bb5f8f9219`
-- Blockmap artifact SHA-256:
-  `a563185c8e68aa328fe7d09c0654430b98d1624dc1d0611d1e2b02a87a141220`
 - Local cross-build SHA-256:
   `4342b4e8bd849f27db769393e57129c5352631e7bd7aa40b7bdc7940960262c3`
-
-Use the manual workflow artifact from run `27299469846` for the next clean
-install candidate unless the GitHub prerelease asset is explicitly replaced.
 
 ## What Changed Since 2026-06-08
 
@@ -110,9 +104,9 @@ same-session confirmation.
 
 ## Known Gaps Before GA Green
 
-- Need real MoE Entra public-client app registration and delegated Outlook
-  consent.
-- Need SharePoint/Power Automate destination mapping for production Forms.
 - Need fresh Windows installed-app smoke proving model chat, Outlook, Forms
   preview, Office file analysis, and ASR on the target laptop/profile.
+- Need real MoE Entra public-client app registration and delegated Outlook
+  consent for Graph-first Outlook at scale.
+- Need SharePoint/Power Automate destination mapping for production Forms.
 - Need final no-secrets audit before GA.
