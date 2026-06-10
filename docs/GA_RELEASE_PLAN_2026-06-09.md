@@ -91,11 +91,29 @@ stay covered by explicit same-session confirmation tests.
   administrator provisioning, and pre-qualifying form questions.
 - `tests/unit/moe-principal-setup-section.test.ts` covers Forms URL validation.
 
+2026-06-10 manual rebuild after principal onboarding:
+
+- GitHub Actions manual workflow `package-win-manual.yml` run `27299469846`
+  succeeded on commit `832aaf3d70baa9bc377bfaaffeb984cd9986334b`.
+- Manual workflow used `requireCloudGatewaySeed=true` and
+  `requireMicrosoftGraphSeed=false`.
+- Manual artifact hashes:
+  - installer `fe8d7af9fe2db1054ec7ee2bfdd22d05f932ba486644b7d15b6153bb5f8f9219`
+  - blockmap `a563185c8e68aa328fe7d09c0654430b98d1624dc1d0611d1e2b02a87a141220`
+- Local `PATH="$HOME/.dotnet:$PATH" pnpm run build:win` also succeeded.
+- Local rebuild hashes:
+  - installer `4342b4e8bd849f27db769393e57129c5352631e7bd7aa40b7bdc7940960262c3`
+  - blockmap `bb3706cae31960b1dbafee16fa404a86f0dbe9f8a5a8d396595e8af42e302e45`
+- Package inspection confirmed runtime `playwright-core`, Office parsers,
+  Windows ASR helper, Windows Node/uv/ffmpeg, cloud gateway seed files,
+  Microsoft Graph example config, and MoE principal extensions.
+- Full status: `windows-pilot/plans/MOE_WINDOWS_GA_STATUS_2026-06-10.md`.
+
 ## GA Gates
 
 | Gate | Required evidence | Current state |
 |---|---|---|
-| Installer reproducibility | `pnpm run build:win`, installer path, SHA256, `playwright-core` still in runtime dependencies | 2026-06-10 local build passed; installer SHA256 `4663ad8a1d46729633132ddac47fc8bc40c1d5d14fd29da231b53941b22d1931`; packaged runtime check confirmed `playwright-core`, `xlsx`, `docx`, `mammoth`, `pdf-parse`, ASR helper, `node`, `uv`, cloud gateway seed files, and Microsoft Graph example config |
+| Installer reproducibility | `pnpm run build:win`, installer path, SHA256, `playwright-core` still in runtime dependencies | 2026-06-10 manual workflow run `27299469846` passed on commit `832aaf3d70baa9bc377bfaaffeb984cd9986334b` with installer SHA256 `fe8d7af9fe2db1054ec7ee2bfdd22d05f932ba486644b7d15b6153bb5f8f9219`; local `PATH="$HOME/.dotnet:$PATH" pnpm run build:win` also passed with installer SHA256 `4342b4e8bd849f27db769393e57129c5352631e7bd7aa40b7bdc7940960262c3`; packaged runtime check confirmed `playwright-core`, `xlsx`, `docx`, `mammoth`, `pdf-parse`, ASR helper, `node`, `uv`, cloud gateway seed files, Microsoft Graph example config, and MoE principal extensions |
 | Clean install | fresh Windows user or laptop install, desktop shortcut launch, Gateway/Host API reachable | 2026-06-09 GCP Windows VM `clawx-win-rc-20260609` proof passed for the local rebuild: downloaded bytes `390056548`, SHA256 matched, silent uninstall exit `0`, install exit `0`, app exe present; visual smoke showed Chrome CDP, Electron CDP, Host API, Gateway, and post-probe readiness true. 2026-06-09 external tester installed the GitHub prerelease successfully. |
 | Online model path | installed app completes one chat through managed gateway/model broker or configured cloud provider; no raw upstream keys exposed to the user | GitHub Windows packaging requires `CLAWX_CLOUD_GATEWAY_CONFIG_JSON` and `CLAWX_CLOUD_GATEWAY_KEY`; VM proof confirmed packaged seed files present, `providerKeys=1`, local Qwen seeded with `default=false`, and `.openclaw` default model `custom-moecloud/moe-demo-pro`; 2026-06-09 external tester confirmed online agent defaulted with no user setup. Gateway startup was around two minutes and needs SLO/UX treatment. |
 | Microsoft 365 programmatic config | installer can carry non-secret tenant/client defaults so Outlook can use Microsoft Graph after sign-in instead of Chrome troubleshooting | 2026-06-10 implementation added `resources/microsoft-graph.example.json`, ignored `resources/microsoft-graph.json` packaged-copy support, store fallback from packaged/user/env config, and optional GitHub Actions `CLAWX_MICROSOFT_GRAPH_CONFIG_JSON` injection; needs real Entra client ID from IT |

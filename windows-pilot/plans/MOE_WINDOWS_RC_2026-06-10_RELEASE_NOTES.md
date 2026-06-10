@@ -20,6 +20,8 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 
 ## Assets
 
+Published GitHub prerelease asset:
+
 - `Ministry.of.Education-0.4.3-moe.10-win-x64.exe`
   - SHA-256: `4663ad8a1d46729633132ddac47fc8bc40c1d5d14fd29da231b53941b22d1931`
 - `Ministry.of.Education-0.4.3-moe.10-win-x64.exe.blockmap`
@@ -27,6 +29,20 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 - `MOE_WINDOWS_RC_2026-06-10_USER_INSTRUCTIONS.md`
   - Detailed tester instructions for install, first launch, Outlook, Forms,
     files, voice input, expected behavior, and support evidence.
+
+Fresh manual workflow rebuild after principal onboarding:
+
+- Workflow run: `https://github.com/dmvevents/clawx-pilot/actions/runs/27299469846`
+- Commit: `832aaf3d70baa9bc377bfaaffeb984cd9986334b`
+- Installer artifact SHA-256:
+  `fe8d7af9fe2db1054ec7ee2bfdd22d05f932ba486644b7d15b6153bb5f8f9219`
+- Blockmap artifact SHA-256:
+  `a563185c8e68aa328fe7d09c0654430b98d1624dc1d0611d1e2b02a87a141220`
+- Local cross-build SHA-256:
+  `4342b4e8bd849f27db769393e57129c5352631e7bd7aa40b7bdc7940960262c3`
+
+Use the manual workflow artifact from run `27299469846` for the next clean
+install candidate unless the GitHub prerelease asset is explicitly replaced.
 
 ## What Changed Since 2026-06-08
 
@@ -38,6 +54,10 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
   non-secret tenant/client defaults in `resources/microsoft-graph.json`.
 - GitHub Actions can inject `CLAWX_MICROSOFT_GRAPH_CONFIG_JSON` and optionally
   require it for release builds.
+- Settings includes Principal setup for the Daily Report and Student
+  Suspensions Microsoft Forms response links.
+- Microsoft 365 sign-in copy now states that passwords are entered only on
+  Microsoft's page, never in the Ministry app.
 
 ## Validation
 
@@ -47,7 +67,12 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
   - Passed.
 - `pnpm run build:win`
   - Passed.
+- Manual GitHub Actions rebuild `27299469846`
+  - Passed.
 - Local package hash verified.
+- Packaged runtime inspection confirmed `playwright-core`, Office parsers,
+  Windows ASR helper, bundled Node, bundled uv, `ffmpeg.exe`, cloud gateway
+  seed files, Microsoft Graph example config, and MoE principal extensions.
 - Internal GCS mirror uploaded under
   `rc-local-20260610-m365-programmatic-bootstrap`.
 

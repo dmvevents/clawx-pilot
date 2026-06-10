@@ -90,6 +90,23 @@ Do not open `chrome://flags`.
 Do not install Chrome MCP.
 Do not run PowerShell or command-line Chrome commands.
 
+## Principal Setup
+
+Before testing Forms, open Settings and check:
+
+1. `Microsoft 365 sign-in`
+   - Use the Microsoft sign-in button if it is available.
+   - Enter your email and password only on Microsoft's page.
+   - Do not type your Microsoft password into the Ministry app.
+2. `Principal setup`
+   - Paste the Daily Report Microsoft Forms response link if your coordinator
+     supplied one.
+   - Paste the Student Suspensions Microsoft Forms response link if your
+     coordinator supplied one.
+   - Save the links.
+
+Do not share private Microsoft Forms links in screenshots or support chats.
+
 ## Test 1 - Downloads Folder
 
 In the app chat, type:
@@ -257,6 +274,10 @@ Microsoft Graph bootstrap support is included in the app, but this exact
 package does not yet include the real MoE Entra public client ID. Once IT
 provides that tenant configuration, the next package can make Outlook use Graph
 after sign-in instead of the browser fallback.
+
+Settings includes a Principal setup panel for the Daily Report and Student
+Suspensions Forms links. The app stores those workflow links locally; it does
+not store Microsoft passwords.
 
 Production Forms submission should eventually go through an IT-owned
 SharePoint or Power Automate destination. For this test, Forms are treated as
