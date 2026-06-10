@@ -32,6 +32,8 @@ This baseline is acceptable for controlled demo installs. GA requires the gates 
 - installer: `release/Ministry of Education-0.4.3-moe.10-win-x64.exe`
 - installer SHA256: `4663ad8a1d46729633132ddac47fc8bc40c1d5d14fd29da231b53941b22d1931`
 - blockmap SHA256: `e07e35d200f884066ba531c7e135c7b4a00211938c82b79df0e527412bace5c7`
+- GCS prefix: `gs://clawx-rc-artifacts-622687731621/rc-local-20260610-m365-programmatic-bootstrap/`
+- GCS upload evidence: installer `390056265` bytes and blockmap `308222` bytes listed at `2026-06-10T02:10:51Z` / `2026-06-10T01:26:29Z`
 - packaged runtime check confirmed `playwright-core`, `xlsx`, `docx`, `mammoth`, `pdf-parse`, `WinSpeechRecognize.exe`, `node.exe`, `uv.exe`, cloud gateway seed files, and Microsoft Graph example config
 - packaged runtime check intentionally found `resources/microsoft-graph.json=false`; do not publish this as Graph-configured until MoE IT provides the real Entra public client ID
 
