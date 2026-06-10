@@ -81,6 +81,16 @@ stay covered by explicit same-session confirmation tests.
   internal runtime/developer identifiers or comments allowed by the branding
   audit.
 
+2026-06-10 principal onboarding pass:
+
+- Settings > Microsoft 365 sign-in copy now states that passwords are entered
+  only on Microsoft's sign-in page, never in the app.
+- Settings > Principal setup stores Daily Report and Student Suspensions
+  response links through `moeforms:get-urls` / `moeforms:set-urls`.
+- `docs/MOE_PRINCIPAL_ONBOARDING_FLOW.md` documents principal setup,
+  administrator provisioning, and pre-qualifying form questions.
+- `tests/unit/moe-principal-setup-section.test.ts` covers Forms URL validation.
+
 ## GA Gates
 
 | Gate | Required evidence | Current state |
@@ -92,7 +102,7 @@ stay covered by explicit same-session confirmation tests.
 | Runtime coherence | settings/provider store, `~/.openclaw/openclaw.json`, agent `models.json`, and latest transcript agree | VM install proof confirmed `.openclaw` default primary `custom-moecloud/moe-demo-pro`; provider/config coherence should be rechecked after a real chat transcript |
 | Outlook safety | open/read/draft smoke passes through signed-in Chrome CDP or Microsoft Graph; send requires explicit same-session confirmation | VM visual smoke `20260609-235054` passed Outlook open/read and refused send/download without confirmation. 2026-06-09 external tester confirmed checking email plus compose/send worked. Unit coverage in `tests/unit/outlook-actions-safety.test.ts` verifies send refuses without confirmation, refuses mismatched recipient/subject/body drafts, and clicks Send only inside one exact matching compose pane. |
 | Outlook attach UX | a fresh user who asks "check my email" is routed through `outlook.*`, `browser.diagnose`, and `browser.repair_chrome_cdp`; the assistant must not tell the user to enable Chrome remote debugging, use `chrome://flags`, search the web, or run manual Chrome commands | user report on 2026-06-09 exposed old guidance; regression patch and chat-harness scenario added; local unit tests passed; clean installer proof now passed on GCP VM, but Chrome/Outlook sign-in proof still requires Chrome on the test image or a physical laptop |
-| Forms safety | Forms list/preview/dry-run passes; submit requires explicit same-session confirmation | Forms list passes and submit without confirm refuses for both Daily Report and Suspensions. Preview is blocked on clean VM by Microsoft sign-in: Forms tabs land on `login.microsoftonline.com/.../authorize`; driver now reports a precise sign-in-required diagnostic instead of selector timeout. Filling still needs signed-in Microsoft profile evidence. |
+| Forms safety | Forms list/preview/dry-run passes; submit requires explicit same-session confirmation | Forms list passes and submit without confirm refuses for both Daily Report and Suspensions. Settings now exposes the saved Daily Report and Student Suspensions response links through the existing MoE form URL store. Preview is blocked on clean VM by Microsoft sign-in: Forms tabs land on `login.microsoftonline.com/.../authorize`; driver now reports a precise sign-in-required diagnostic instead of selector timeout. Filling still needs signed-in Microsoft profile evidence. |
 | Office files | sample Excel and Word analysis complete from Downloads through app chat | packaged runtime check confirmed parser dependencies and Office smoke reports `OFFICE_RUNTIME_READY`; 2026-06-09 external tester confirmed local file scanning worked. Still needs Excel/Word/PDF matrix evidence. |
 | ASR | Windows ASR helper installed and one transcript smoke passes, or ASR explicitly marked best-effort for GA | packaged runtime check confirmed `resources/bin/WinSpeechRecognize.exe`; quality remains best-effort until microphone/file transcription proof is captured |
 | Secrets | no committed upstream keys or test passwords; desktop stores only broker/client-scoped credentials | verify with git grep and install-state audit |
@@ -138,6 +148,8 @@ Tasks:
   OAuth for each signed-in Microsoft 365 user; require tenant/admin consent so
   teachers see a normal sign-in rather than a confusing permissions prompt;
 - verify Microsoft Graph sign-in and Graph-backed Outlook read/draft first;
+- verify Settings > Principal setup saves the Daily Report and Student
+  Suspensions response links before Forms proof;
 - verify signed-in user Chrome CDP attach only for browser fallback and Forms UI fallback;
 - sign in to Microsoft in the ClawX-opened system Chrome profile before Forms preview proof, or move to an approved Microsoft/Entra flow;
 - verify the model uses `outlook.*` and ClawX browser repair tools, not generic Chrome MCP troubleshooting;

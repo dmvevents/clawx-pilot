@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { MicrosoftGraphSection } from './MicrosoftGraphSection';
+import { MoePrincipalSetupSection } from './MoePrincipalSetupSection';
 import { OutlookBrowserSection } from './OutlookBrowserSection';
 import { AzureSpeechSection } from './AzureSpeechSection';
 import { Badge } from '@/components/ui/badge';
@@ -652,6 +653,10 @@ export function Settings() {
           <Separator className="bg-black/5 dark:bg-white/5" />
 
           <MicrosoftGraphSection />
+
+          <Separator className="bg-black/5 dark:bg-white/5" />
+
+          <MoePrincipalSetupSection />
 
           <Separator className="bg-black/5 dark:bg-white/5" />
 
