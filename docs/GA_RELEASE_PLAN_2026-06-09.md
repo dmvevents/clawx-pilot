@@ -2,7 +2,7 @@
 
 ## Target Result
 
-Ship ClawX / Ministry of Education as a GA-quality Windows installer for non-technical principals, with a supported online model path, safe Outlook and Forms automation, Office document handling, ASR expectations, and a documented fallback/support process.
+Ship the Ministry of Education Windows app as a GA-quality installer for non-technical principals, with a supported online model path, safe Outlook and Forms automation, Office document handling, ASR expectations, and a documented fallback/support process.
 
 Current status: **YELLOW - RC/demo-ready after Microsoft sign-in, not GA**.
 
@@ -37,22 +37,46 @@ This baseline is acceptable for controlled demo installs. GA requires the gates 
 - packaged runtime check confirmed `playwright-core`, `xlsx`, `docx`, `mammoth`, `pdf-parse`, `WinSpeechRecognize.exe`, `node.exe`, `uv.exe`, cloud gateway seed files, and Microsoft Graph example config
 - packaged runtime check intentionally found `resources/microsoft-graph.json=false`; do not publish this as Graph-configured until MoE IT provides the real Entra public client ID
 
+2026-06-10 GitHub prerelease publication:
+
+- release: `https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260610-bbc4eb1`
+- installer asset: `Ministry.of.Education-0.4.3-moe.10-win-x64.exe`
+- installer SHA256: `4663ad8a1d46729633132ddac47fc8bc40c1d5d14fd29da231b53941b22d1931`
+- instructions asset: `MOE_WINDOWS_RC_2026-06-10_USER_INSTRUCTIONS.md`
+- direct URL checks returned HTTP 200 for the installer and instructions assets
+
+2026-06-09 external tester feedback from Karunesh Ramdass on the June 10 prerelease:
+
+- downloaded, installed, and tested the GitHub release installer successfully
+- confirmed the online agent was set by default with no user setup necessary
+- observed Gateway connection time around two minutes
+- scanned local files successfully
+- checked email successfully
+- composed and sent email successfully
+- tester plans broader follow-up tests on 2026-06-10
+
+Treat this as strong RC evidence for install, online default, file scan, email,
+and confirmed send. It is not yet full GA evidence because the pass must be
+repeated, Gateway startup timing needs an accepted SLO or UX treatment, Forms
+preview/dry-run still needs fresh tester evidence, and the send path should
+stay covered by explicit same-session confirmation tests.
+
 ## GA Gates
 
 | Gate | Required evidence | Current state |
 |---|---|---|
 | Installer reproducibility | `pnpm run build:win`, installer path, SHA256, `playwright-core` still in runtime dependencies | 2026-06-10 local build passed; installer SHA256 `4663ad8a1d46729633132ddac47fc8bc40c1d5d14fd29da231b53941b22d1931`; packaged runtime check confirmed `playwright-core`, `xlsx`, `docx`, `mammoth`, `pdf-parse`, ASR helper, `node`, `uv`, cloud gateway seed files, and Microsoft Graph example config |
-| Clean install | fresh Windows user or laptop install, desktop shortcut launch, Gateway/Host API reachable | 2026-06-09 GCP Windows VM `clawx-win-rc-20260609` proof passed for the local rebuild: downloaded bytes `390056548`, SHA256 matched, silent uninstall exit `0`, install exit `0`, app exe present; visual smoke showed Chrome CDP, Electron CDP, Host API, Gateway, and post-probe readiness true |
-| Online model path | installed app completes one chat through managed gateway/model broker or configured cloud provider; no raw upstream keys exposed to the user | GitHub Windows packaging requires `CLAWX_CLOUD_GATEWAY_CONFIG_JSON` and `CLAWX_CLOUD_GATEWAY_KEY`; VM proof confirmed packaged seed files present, `providerKeys=1`, local Qwen seeded with `default=false`, and `.openclaw` default model `custom-moecloud/moe-demo-pro`; model chat smoke still needed |
+| Clean install | fresh Windows user or laptop install, desktop shortcut launch, Gateway/Host API reachable | 2026-06-09 GCP Windows VM `clawx-win-rc-20260609` proof passed for the local rebuild: downloaded bytes `390056548`, SHA256 matched, silent uninstall exit `0`, install exit `0`, app exe present; visual smoke showed Chrome CDP, Electron CDP, Host API, Gateway, and post-probe readiness true. 2026-06-09 external tester installed the GitHub prerelease successfully. |
+| Online model path | installed app completes one chat through managed gateway/model broker or configured cloud provider; no raw upstream keys exposed to the user | GitHub Windows packaging requires `CLAWX_CLOUD_GATEWAY_CONFIG_JSON` and `CLAWX_CLOUD_GATEWAY_KEY`; VM proof confirmed packaged seed files present, `providerKeys=1`, local Qwen seeded with `default=false`, and `.openclaw` default model `custom-moecloud/moe-demo-pro`; 2026-06-09 external tester confirmed online agent defaulted with no user setup. Gateway startup was around two minutes and needs SLO/UX treatment. |
 | Microsoft 365 programmatic config | installer can carry non-secret tenant/client defaults so Outlook can use Microsoft Graph after sign-in instead of Chrome troubleshooting | 2026-06-10 implementation added `resources/microsoft-graph.example.json`, ignored `resources/microsoft-graph.json` packaged-copy support, store fallback from packaged/user/env config, and optional GitHub Actions `CLAWX_MICROSOFT_GRAPH_CONFIG_JSON` injection; needs real Entra client ID from IT |
 | Runtime coherence | settings/provider store, `~/.openclaw/openclaw.json`, agent `models.json`, and latest transcript agree | VM install proof confirmed `.openclaw` default primary `custom-moecloud/moe-demo-pro`; provider/config coherence should be rechecked after a real chat transcript |
-| Outlook safety | open/read/draft smoke passes through signed-in Chrome CDP; send requires explicit same-session confirmation | VM visual smoke `20260609-235054` passed Outlook open/read and refused send/download without confirmation |
+| Outlook safety | open/read/draft smoke passes through signed-in Chrome CDP or Microsoft Graph; send requires explicit same-session confirmation | VM visual smoke `20260609-235054` passed Outlook open/read and refused send/download without confirmation. 2026-06-09 external tester confirmed checking email plus compose/send worked. Unit coverage in `tests/unit/outlook-actions-safety.test.ts` verifies send refuses without confirmation, refuses mismatched recipient/subject/body drafts, and clicks Send only inside one exact matching compose pane. |
 | Outlook attach UX | a fresh user who asks "check my email" is routed through `outlook.*`, `browser.diagnose`, and `browser.repair_chrome_cdp`; the assistant must not tell the user to enable Chrome remote debugging, use `chrome://flags`, search the web, or run manual Chrome commands | user report on 2026-06-09 exposed old guidance; regression patch and chat-harness scenario added; local unit tests passed; clean installer proof now passed on GCP VM, but Chrome/Outlook sign-in proof still requires Chrome on the test image or a physical laptop |
 | Forms safety | Forms list/preview/dry-run passes; submit requires explicit same-session confirmation | Forms list passes and submit without confirm refuses for both Daily Report and Suspensions. Preview is blocked on clean VM by Microsoft sign-in: Forms tabs land on `login.microsoftonline.com/.../authorize`; driver now reports a precise sign-in-required diagnostic instead of selector timeout. Filling still needs signed-in Microsoft profile evidence. |
-| Office files | sample Excel and Word analysis complete from Downloads through app chat | packaged runtime check confirmed parser dependencies and Office smoke reports `OFFICE_RUNTIME_READY`; still needs fresh app-chat transcript proof |
+| Office files | sample Excel and Word analysis complete from Downloads through app chat | packaged runtime check confirmed parser dependencies and Office smoke reports `OFFICE_RUNTIME_READY`; 2026-06-09 external tester confirmed local file scanning worked. Still needs Excel/Word/PDF matrix evidence. |
 | ASR | Windows ASR helper installed and one transcript smoke passes, or ASR explicitly marked best-effort for GA | packaged runtime check confirmed `resources/bin/WinSpeechRecognize.exe`; quality remains best-effort until microphone/file transcription proof is captured |
 | Secrets | no committed upstream keys or test passwords; desktop stores only broker/client-scoped credentials | verify with git grep and install-state audit |
-| UI trust | no raw model/vendor identity in principal-facing UI; cost hidden from frontend | existing checklist green; rerun grep |
+| UI trust | no raw model/vendor identity or ClawX/OpenClaw branding in principal-facing UI; cost hidden from frontend | existing checklist mostly green; branding audit found remaining user-visible ClawX/OpenClaw strings and metadata that should move to developer-only or Ministry wording before GA |
 | Observability | local logs redacted, support artifact capture documented, optional Phoenix/model tracing decision recorded | local logs exist; Phoenix optional pending |
 | Documentation | first-run, install, support, and operator runbooks match the GA installer | RC docs exist; GA docs need final pass |
 
@@ -90,6 +114,9 @@ Owner skill: `windows-outlook-forms`.
 
 Tasks:
 
+- implement the production Outlook login flow as Microsoft Graph delegated
+  OAuth for each signed-in Microsoft 365 user; require tenant/admin consent so
+  teachers see a normal sign-in rather than a confusing permissions prompt;
 - verify Microsoft Graph sign-in and Graph-backed Outlook read/draft first;
 - verify signed-in user Chrome CDP attach only for browser fallback and Forms UI fallback;
 - sign in to Microsoft in the ClawX-opened system Chrome profile before Forms preview proof, or move to an approved Microsoft/Entra flow;
@@ -141,6 +168,20 @@ Tasks:
 - confirm Outlook/Forms access path does not require users to configure Chrome manually;
 - keep Microsoft Graph disabled until Entra registration is approved;
 - keep key rotation and broker ownership documented.
+
+### 8. Branding And UX
+
+Owner skill: `ga-release-readiness`.
+
+Tasks:
+
+- remove principal-facing `ClawX`, `OpenClaw`, upstream model, and developer
+  brand names from the shipped UI and docs;
+- keep technical `OpenClaw` names only in developer diagnostics, logs, file
+  paths, and internal runbooks where they are needed for support;
+- update package metadata, permission prompts, release notes, and chat harness
+  prompts to use Ministry wording;
+- add a branding grep check before GA.
 
 ## Validation Commands
 
