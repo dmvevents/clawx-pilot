@@ -17,11 +17,11 @@ Last updated: 2026-06-23.
 | Release page | `https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260623-outlook-reply-fix` |
 | Evidence manifest | `docs/GA_RELEASE_EVIDENCE_MANIFEST.md` |
 | GA plan | `docs/GA_RELEASE_PLAN_2026-06-09.md` |
-| Current verdict | `YELLOW - local prerelease candidate built; Outlook reply/body regressions fixed and local release gates passed, GitHub asset upload plus VM installed-app Outlook/Forms smoke must still pass for this exact hash before GA` |
+| Current verdict | `YELLOW - prerelease candidate uploaded; Outlook reply/body regressions fixed and local release gates passed, VM installed-app Outlook/Forms smoke must still pass for this exact hash before GA` |
 
 ## Staleness Warning
 
-The installer snapshot above was rebuilt on 2026-06-23 after the Outlook reply regressions reported by testers: reply-body text could land in `To:`, reviewed reply sends could fail when Outlook hid the inline reply subject, and reply discovery could click a neighboring destructive command such as Archive. Local package inspection, the focused 92-test Outlook/plugin/probe release slice, full `pnpm test`, typecheck, lint, and harness CI passed after the rebuild. The packaged `app.asar` contains the new reply body verification guard that refuses to claim success when requested reply text is found in recipient fields. VM runner scripts were refreshed with the Outlook state-matrix probe, but the VM installed-app smoke must still be rerun against this exact GitHub asset before GA. This is still a prerelease until signed-in tenant Outlook/Forms flows are proven through the installed app.
+The installer snapshot above was rebuilt and uploaded to the GitHub prerelease on 2026-06-23 after the Outlook reply regressions reported by testers: reply-body text could land in `To:`, reviewed reply sends could fail when Outlook hid the inline reply subject, and reply discovery could click a neighboring destructive command such as Archive. Local package inspection, the focused 92-test Outlook/plugin/probe release slice, full `pnpm test`, typecheck, lint, and harness CI passed after the rebuild. The packaged `app.asar` contains the new reply body verification guard that refuses to claim success when requested reply text is found in recipient fields. VM runner scripts were refreshed with the Outlook state-matrix probe, but the VM installed-app smoke must still be rerun against this exact GitHub asset before GA. This is still a prerelease until signed-in tenant Outlook/Forms flows are proven through the installed app.
 
 ## Do Not Call GA Until
 

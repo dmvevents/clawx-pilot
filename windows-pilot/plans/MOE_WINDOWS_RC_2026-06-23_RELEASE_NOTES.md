@@ -114,8 +114,8 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 
 Verdict: `YELLOW - prerelease`.
 
-This build is suitable for tester prerelease download after the new GitHub
-asset upload completes. It is not GA yet.
+This build is suitable for tester prerelease download from the GitHub release
+asset. It is not GA yet.
 
 Remaining GA gaps:
 
