@@ -158,6 +158,10 @@ effective_discover_cidrs() {
 }
 
 configured_link_local_cidrs() {
+  if ! ifconfig 2>/dev/null | awk '/inet 169\.254\./ { found=1 } END { exit found ? 0 : 1 }'; then
+    return 0
+  fi
+
   local host ip
   for host in $SSH_HOSTS $SSH_HOST; do
     ip="${host#*@}"
@@ -221,7 +225,7 @@ candidate_hosts_from_cidrs() {
   fi
   # Port 22 only; hostname validation happens before any discovered target is accepted.
   log "Scanning SSH CIDRs: $cidrs" >&2
-  nmap -n -Pn -p 22 --open --max-retries 0 --host-timeout 3s --min-rate 2000 $cidrs 2>/dev/null |
+  nmap -n -Pn -p 22 --open --max-retries 0 --host-timeout 1s --max-rtt-timeout 500ms --initial-rtt-timeout 200ms --min-parallelism 64 --min-rate 5000 $cidrs 2>/dev/null |
     awk '/Nmap scan report for / { print $NF }'
 }
 
