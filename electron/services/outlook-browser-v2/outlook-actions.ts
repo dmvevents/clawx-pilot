@@ -212,7 +212,13 @@ export class OutlookActions {
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    await this.ensureInboxFolder(page);
+    if (!(await this.ensureInboxFolderOrSignin(page))) {
+      return {
+        status: 'needs_signin',
+        messages: [],
+        message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
+      };
+    }
 
     // Wait for the inbox grid to render. We don't trust a single hard-coded
     // selector; ARIA "rowgroup" or any row-with-subject heuristic works
@@ -491,7 +497,13 @@ export class OutlookActions {
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    await this.ensureInboxFolder(page);
+    if (!(await this.ensureInboxFolderOrSignin(page))) {
+      return {
+        status: 'needs_signin',
+        id: args.id,
+        message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
+      };
+    }
 
     const opened = await this.openMessageById(page, args.id);
     if (!opened) {
@@ -586,7 +598,13 @@ export class OutlookActions {
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    await this.ensureInboxFolder(page);
+    if (!(await this.ensureInboxFolderOrSignin(page))) {
+      return {
+        status: 'needs_signin',
+        draftLeftOpen: false,
+        message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
+      };
+    }
 
     const opened = await this.openMessageById(page, args.id);
     if (!opened) {
@@ -649,7 +667,13 @@ export class OutlookActions {
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    await this.ensureInboxFolder(page);
+    if (!(await this.ensureInboxFolderOrSignin(page))) {
+      return {
+        status: 'needs_signin',
+        draftLeftOpen: false,
+        message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
+      };
+    }
     const opened = await this.openMessageById(page, args.id);
     if (!opened) {
       return { status: 'not_found', draftLeftOpen: false, message: `Could not locate message with id "${args.id}".` };
@@ -695,7 +719,9 @@ export class OutlookActions {
     if (await this.looksLikeSignin(page)) {
       return { status: 'needs_signin', message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.' };
     }
-    await this.ensureInboxFolder(page);
+    if (!(await this.ensureInboxFolderOrSignin(page))) {
+      return { status: 'needs_signin', message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.' };
+    }
     const opened = await this.openMessageById(page, args.id);
     if (!opened) return { status: 'not_found', message: `Could not locate message with id "${args.id}".` };
 
@@ -761,7 +787,13 @@ export class OutlookActions {
       };
     }
 
-    await this.ensureInboxFolder(page);
+    if (!(await this.ensureInboxFolderOrSignin(page))) {
+      return {
+        status: 'needs_signin',
+        filename: args.filename,
+        message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
+      };
+    }
     const opened = await this.openMessageById(page, args.id);
     if (!opened) {
       return {
@@ -915,6 +947,16 @@ export class OutlookActions {
         'Outlook Inbox folder could not be confirmed after navigation. Refusing to read the visible message list because it may be Sent Items or another folder.',
       );
     }
+  }
+
+  private async ensureInboxFolderOrSignin(page: Page): Promise<boolean> {
+    try {
+      await this.ensureInboxFolder(page);
+    } catch (err) {
+      if (await this.looksLikeSignin(page)) return false;
+      throw err;
+    }
+    return !(await this.looksLikeSignin(page));
   }
 
   private async resetInboxListScroll(page: Page): Promise<void> {
@@ -1224,12 +1266,70 @@ export class OutlookActions {
     if (/login\.microsoftonline\.com/.test(url) || /login\.live\.com/.test(url)) {
       return true;
     }
-    // Fallback: check for the sign-in heading via accessibility.
+    const domSignals = await page.evaluate(() => {
+      const textFor = (element: Element | null) => [
+        element?.getAttribute('aria-label') || '',
+        element?.getAttribute('title') || '',
+        element?.textContent || '',
+      ].join(' ');
+      const isVisible = (element: Element | null) => {
+        if (!(element instanceof HTMLElement)) return false;
+        return element.offsetParent !== null || element.getClientRects().length > 0;
+      };
+      const inputs = Array.from(document.querySelectorAll([
+        'input[type="email"]',
+        'input[type="password"]',
+        'input[name="loginfmt"]',
+        'input[name="passwd"]',
+        '#i0116',
+        '#i0118',
+      ].join(',')));
+      if (inputs.some(isVisible)) return true;
+
+      const authRoots = Array.from(document.querySelectorAll([
+        'form',
+        '[role="dialog"]',
+        '[data-testid*="credential" i]',
+        '[data-testid*="signin" i]',
+        '#lightbox',
+      ].join(',')));
+      return authRoots.some((root) => {
+        if (!isVisible(root)) return false;
+        const text = [
+          document.title || '',
+          textFor(root),
+          ...Array.from(root.querySelectorAll('button, input[type="submit"], [role="button"], [role="heading"]'))
+            .slice(0, 40)
+            .map(textFor),
+        ].join(' ').replace(/\s+/g, ' ').trim();
+        const hasAuthCopy = /(?:sign in|sign-in|pick an account|enter password|email, phone, or skype|stay signed in|use another account)/i
+          .test(text);
+        const hasMicrosoftAuthControl = Boolean(root.querySelector([
+          '#idSIButton9',
+          'input[name="loginfmt"]',
+          'input[name="passwd"]',
+          'input[type="email"]',
+          'input[type="password"]',
+        ].join(',')));
+        return hasAuthCopy && hasMicrosoftAuthControl;
+      });
+    }).catch(() => false);
+    if (domSignals) return true;
+
+    // Fallback: check accessibility headings only when a Microsoft auth
+    // control is also visible; a normal email body may contain "sign in".
     const headings = await page
       .getByRole('heading')
       .allTextContents()
       .catch(() => [] as string[]);
-    return headings.some((h) => /sign in|pick an account|enter password/i.test(h));
+    if (!headings.some((h) => /sign in|pick an account|enter password/i.test(h))) return false;
+    return page.locator([
+      '#idSIButton9',
+      'input[name="loginfmt"]',
+      'input[name="passwd"]',
+      'input[type="email"]',
+      'input[type="password"]',
+    ].join(',')).first().isVisible({ timeout: 500 }).catch(() => false);
   }
 
   /**

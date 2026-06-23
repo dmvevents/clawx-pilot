@@ -6,8 +6,9 @@ type TestActions = OutlookActions & {
   looksLikeSignin: () => Promise<boolean>;
   ensureInboxFolder: (page: unknown) => Promise<void>;
   readInbox: (top?: number) => Promise<{
-    status: 'ok';
+    status: 'ok' | 'needs_signin';
     messages: Array<{ id: string; subject: string; sender: string; snippet: string; receivedAt: string; unread: boolean }>;
+    message?: string;
     scan?: unknown;
   }>;
 };
@@ -195,6 +196,25 @@ describe('Outlook inbox windowing', () => {
     expect(order[0]).toBe('inbox');
     expect(order).toContain('rows');
     expect(order.indexOf('inbox')).toBeLessThan(order.indexOf('rows'));
+  });
+
+  it('readInbox reports sign-in when Inbox navigation lands on an auth shell', async () => {
+    const { actions, page } = createActions();
+    let signInChecks = 0;
+    actions.looksLikeSignin = vi.fn(async () => {
+      signInChecks += 1;
+      return signInChecks > 1;
+    });
+    actions.ensureInboxFolder = vi.fn(async () => {
+      throw new Error('Outlook Inbox folder could not be confirmed after navigation.');
+    });
+
+    const result = await actions.readInbox(5);
+
+    expect(result.status).toBe('needs_signin');
+    expect(result.messages).toEqual([]);
+    expect(result.message).toMatch(/sign in/i);
+    expect(page.evaluate).not.toHaveBeenCalledWith(expect.stringContaining('const limit = 5;'));
   });
 
   it('accepts Outlook cloud Inbox URLs without navigating away from the signed-in host', async () => {

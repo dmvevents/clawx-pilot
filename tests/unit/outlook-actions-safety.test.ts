@@ -111,6 +111,41 @@ function createActions() {
   return { actions, driver, grounder };
 }
 
+function createBareActions() {
+  const driver = {
+    ensureOutlookTab: vi.fn(async () => ({ url: () => 'https://outlook.office.com/mail/inbox' })),
+    screenshotViewport: vi.fn(async () => ({ png: Buffer.alloc(0), width: 1, height: 1 })),
+    clickAt: vi.fn(),
+    pressKey: vi.fn(),
+    sleep: vi.fn(),
+    typeText: vi.fn(),
+  };
+  const grounder = {
+    ground: vi.fn(),
+  };
+  const actions = new OutlookActions(driver as never, grounder as never) as unknown as TestActions;
+  return { actions, driver, grounder };
+}
+
+function fakeSigninPage(options: {
+  url?: string;
+  headings?: string[];
+  authControlVisible?: boolean;
+  evaluateResult?: boolean;
+} = {}) {
+  return {
+    url: () => options.url ?? 'https://outlook.cloud.microsoft/mail/inbox',
+    evaluate: vi.fn(async (fn: () => boolean) => options.evaluateResult ?? fn()),
+    getByRole: vi.fn(() => ({
+      allTextContents: vi.fn(async () => options.headings ?? []),
+    })),
+    locator: vi.fn(() => ({
+      first() { return this; },
+      isVisible: vi.fn(async () => options.authControlVisible ?? false),
+    })),
+  };
+}
+
 function createDomPage(html: string): { page: FakePage; clicks: string[] } {
   document.body.innerHTML = html;
   const clicks: string[] = [];
@@ -699,6 +734,31 @@ describe('OutlookActions safety gates', () => {
 
     expect(result).toMatchObject({ status: 'not_found', filename: 'report.pdf' });
     expect(order).toEqual(['inbox', 'open']);
+  });
+
+  it('does not classify signed-in Outlook content that merely mentions sign in as auth', async () => {
+    const { actions } = createBareActions();
+    document.body.innerHTML = `
+      <main>
+        <h1>Inbox message</h1>
+        <p>Please sign in to the school portal with your Microsoft account before Friday.</p>
+      </main>
+    `;
+
+    const result = await actions.looksLikeSignin(fakeSigninPage() as never);
+
+    expect(result).toBe(false);
+  });
+
+  it('classifies scoped Microsoft auth controls as sign-in', async () => {
+    const { actions } = createBareActions();
+
+    const result = await actions.looksLikeSignin(fakeSigninPage({
+      headings: ['Sign in'],
+      authControlVisible: true,
+    }) as never);
+
+    expect(result).toBe(true);
   });
 
   it('fills the labelled message body instead of the recipient textbox', async () => {

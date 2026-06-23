@@ -23,6 +23,12 @@ Last updated: 2026-06-23.
 
 The installer snapshot above was rebuilt and uploaded to the GitHub prerelease on 2026-06-23 after the Outlook reply regressions reported by testers: reply-body text could land in `To:`, reviewed reply sends could fail when Outlook hid the inline reply subject, and reply discovery could click a neighboring destructive command such as Archive. Local package inspection, the focused 92-test Outlook/plugin/probe release slice, full `pnpm test`, typecheck, lint, and harness CI passed after the rebuild. The packaged `app.asar` contains the new reply body verification guard that refuses to claim success when requested reply text is found in recipient fields. VM runner scripts were refreshed with the Outlook state-matrix probe, but the VM installed-app smoke must still be rerun against this exact GitHub asset before GA. This is still a prerelease until signed-in tenant Outlook/Forms flows are proven through the installed app.
 
+## Post-Asset Source Evidence
+
+After the GitHub asset above, a local signed-in Outlook CDP probe was run against the user's Chrome tab at `https://outlook.cloud.microsoft/mail/`. The source browser-manager path returned `open=opened`, `readInbox(5)=ok`, and a widened 12-row Inbox window where the June filter returned 10 rows, the May filter returned 2 rows, and the Raj sender filter returned 2 rows, all with `scan.exhaustive=false`. The same source tree passed the 127-test focused Outlook/plugin/probe slice, full `pnpm test` with 147 files / 1091 passed / 5 skipped, `pnpm run typecheck`, `pnpm run lint`, and `git diff --check`.
+
+This is source/no-install evidence only. The release page still points to the installer snapshot in the table above until a new Windows package is built, uploaded, and installed-app smoked.
+
 ## Do Not Call GA Until
 
 - `docs/GA_RELEASE_EVIDENCE_MANIFEST.md` has fresh `GREEN` or accepted `YELLOW` rows for every release-critical gate.
