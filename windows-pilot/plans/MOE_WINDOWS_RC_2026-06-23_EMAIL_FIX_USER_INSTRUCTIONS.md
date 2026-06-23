@@ -1,8 +1,8 @@
-# Ministry of Education Windows RC - Email Fix
+# Ministry of Education Windows RC - Outlook Green
 
 Download the installer from the GitHub prerelease:
 
-`https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260623-email-draft-fix`
+`https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260623-outlook-green-b38b620`
 
 Use:
 
@@ -10,7 +10,7 @@ Use:
 
 Expected SHA256:
 
-`e35ee6cda63a942a585b0638831487562d66a0901b006cf2ccadfe81b0e6f182`
+`a19a9c62eaacd958df772b432277dd220a38e61e5f0e69b449ee6b66ef00c6ee`
 
 ## Install
 
@@ -29,9 +29,10 @@ Suggested checks:
 - "Check my inbox and show me the latest emails."
 - "Show me all emails from June. Tell me how many recent Inbox rows you scanned."
 - "Show me all emails from Raj."
-- "Reply to the latest email with: Testing the reply feature. Do not send it."
-- "Reply all to the latest email with: Testing reply all. Do not send it."
-- "Forward the latest email to a test address with: Forwarding smoke test. Do not send it."
+- "Compose an email to my test address with subject: ClawX compose smoke. Body: Testing compose. Let me review it, then send it."
+- "Reply to the latest test email with: Testing the reply feature. Let me review it, then send it."
+- "Reply all to the latest test email with: Testing reply all. Let me review it, then send it."
+- "Forward the latest test email to my test address with: Forwarding smoke test. Let me review it, then send it."
 
 Expected behavior:
 
@@ -40,7 +41,7 @@ Expected behavior:
 - The assistant should not claim it found every email in the mailbox unless the tool reports the scan is exhaustive.
 - Reply should open a draft for review and should not ask for the recipient after Outlook pre-fills it.
 - Reply, reply-all, and forward should put the requested message in the email body, not in the To field.
-- If the app creates no-send validation drafts during testing, it should close only its own ClawX-marked test drafts and should not discard unrelated user drafts.
+- If the app creates validation drafts during testing, it should close only its own ClawX-marked test drafts and should not discard unrelated user drafts.
 - Sending still requires explicit confirmation after review.
 
 Do not test real sends unless the sender and recipient are test accounts and the send is intentionally confirmed in the same session.
