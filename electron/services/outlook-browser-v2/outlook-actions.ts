@@ -621,6 +621,14 @@ export class OutlookActions {
     await this.fillBody(page, args.body);
 
     const draftProbe = await this.readOpenDraftProbe(page);
+    const draftBodyProblem = this.describeReplyDraftBodyProblem(draftProbe.snapshot, args.body);
+    if (draftBodyProblem) {
+      return {
+        status: 'not_found',
+        draftLeftOpen: true,
+        message: draftBodyProblem,
+      };
+    }
     const previewSubject = draftProbe.snapshot?.subject || (await this.readOpenSubject(page)) || '';
     const previewTo = draftProbe.snapshot?.to ?? [];
     return {
@@ -2091,6 +2099,27 @@ export class OutlookActions {
     return null;
   }
 
+  private describeReplyDraftBodyProblem(snapshot: OpenDraftSnapshot | null, expectedBody: string): string | null {
+    const expected = normalizeSearchText(expectedBody);
+    if (!expected) return null;
+    if (!snapshot) {
+      return 'Reply draft opened, but ClawX could not verify the draft body. Review the open draft in Outlook before sending.';
+    }
+    const actualBody = normalizeSearchText(snapshot.body);
+    const recipientText = normalizeSearchText([
+      ...snapshot.to,
+      ...snapshot.cc,
+      ...snapshot.bcc,
+    ].join(' '));
+    if (expected.length >= 8 && recipientText.includes(expected)) {
+      return 'Reply draft text appears in a recipient field instead of the message body. Review the open draft in Outlook before sending.';
+    }
+    if (!actualBody.includes(expected)) {
+      return 'Reply draft opened, but ClawX could not verify the message text in the compose body. Review the open draft in Outlook before sending.';
+    }
+    return null;
+  }
+
   private async readOpenDraftSnapshot(page: Page): Promise<OpenDraftSnapshot | null> {
     const probe = await this.evaluateOpenDraftDom(page, null);
     return probe.snapshot;
@@ -2322,7 +2351,7 @@ export class OutlookActions {
         firstSnapshot ??= snapshot;
         const button = sendButton(root);
         if (button && snapshot.to.some((value) => normalizeSearch(value).length > 0)
-          && subject && body && root === rootForBody(button)) {
+          && body && root === rootForBody(button)) {
           sendableRoots.push({ root, snapshot, button });
         }
         if (!expectedDraft) continue;

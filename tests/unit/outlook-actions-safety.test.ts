@@ -461,6 +461,96 @@ describe('OutlookActions safety gates', () => {
     expect(result.message).toMatch(/\{ confirm: true \} only/i);
   });
 
+  it('does not claim a reply draft when body text is composed in the To field', async () => {
+    const { actions, driver } = createActions();
+    const { page } = createVerifyingBodyFillPage(`
+      <div role="dialog">
+        <div aria-label="To" role="textbox" contenteditable="true">Testing the reply feature</div>
+        <input aria-label="Subject" value="Re: Meeting" />
+        <div aria-label="Message body" contenteditable="true"></div>
+      </div>
+    `);
+    const replyPage = {
+      ...page,
+      waitForSelector: vi.fn(async () => undefined),
+    } as unknown as FakeReplyPage & FakeFillPage;
+    driver.ensureOutlookTab.mockResolvedValue(replyPage);
+    actions.clickOpenMessageToolbarButton = vi.fn(async () => true);
+
+    await expect(actions.reply({ id: 'message-1', body: 'Testing the reply feature' }))
+      .rejects.toThrow(/recipient field/i);
+
+    expect(actions.readOpenDraftProbe).not.toHaveBeenCalled();
+  });
+
+  it('does not claim a reply draft when body verification cannot confirm the text', async () => {
+    const { actions, driver } = createActions();
+    const { page } = createVerifyingBodyFillPage(`
+      <div role="dialog">
+        <div aria-label="To" role="textbox" contenteditable="true">Karunesh Ramdass</div>
+        <input aria-label="Subject" value="Re: Meeting" />
+        <div aria-label="Message body" contenteditable="true"></div>
+      </div>
+    `);
+    const replyPage = {
+      ...page,
+      waitForSelector: vi.fn(async () => undefined),
+    } as unknown as FakeReplyPage & FakeFillPage;
+    driver.ensureOutlookTab.mockResolvedValue(replyPage);
+    actions.clickOpenMessageToolbarButton = vi.fn(async () => true);
+
+    await expect(actions.reply({ id: 'message-1', body: 'Testing the reply feature' }))
+      .rejects.toThrow(/message text was not found in the compose body/i);
+
+    expect(actions.readOpenDraftProbe).not.toHaveBeenCalled();
+  });
+
+  it('does not report drafted when the reply draft probe finds body text in recipients', async () => {
+    const { actions } = createActions();
+    actions.clickOpenMessageToolbarButton = vi.fn(async () => true);
+    actions.fillBody = vi.fn(async () => undefined);
+    actions.readOpenDraftProbe = vi.fn(async () => ({
+      snapshot: {
+        ...matchingDraft,
+        to: ['Testing the reply feature'],
+        subject: 'Re: Meeting',
+        body: '',
+        searchableText: 'Testing the reply feature Re: Meeting',
+      },
+      clickedSend: false,
+      draftCount: 1,
+      sendableDraftCount: 0,
+    }));
+
+    const result = await actions.reply({ id: 'message-1', body: 'Testing the reply feature' });
+
+    expect(result).toMatchObject({ status: 'not_found', draftLeftOpen: true });
+    expect(result.message).toMatch(/recipient field/i);
+  });
+
+  it('does not report drafted when the reply draft probe cannot verify body text', async () => {
+    const { actions } = createActions();
+    actions.clickOpenMessageToolbarButton = vi.fn(async () => true);
+    actions.fillBody = vi.fn(async () => undefined);
+    actions.readOpenDraftProbe = vi.fn(async () => ({
+      snapshot: {
+        ...matchingDraft,
+        to: ['Karunesh Ramdass'],
+        subject: 'Re: Meeting',
+        body: '',
+        searchableText: 'Karunesh Ramdass Re: Meeting',
+      },
+      clickedSend: false,
+      draftCount: 1,
+      sendableDraftCount: 0,
+    }));
+
+    const result = await actions.reply({ id: 'message-1', body: 'Testing the reply feature' });
+
+    expect(result).toMatchObject({ status: 'not_found', draftLeftOpen: true });
+    expect(result.message).toMatch(/could not verify the message text/i);
+  });
+
   it('falls back to Outlook reply keyboard shortcut when the Reply button is hidden', async () => {
     const { actions, driver } = createActions();
     const { page } = createDomPage(`
@@ -480,6 +570,8 @@ describe('OutlookActions safety gates', () => {
         ...matchingDraft,
         to: ['Karunesh Ramdass'],
         subject: 'Re: Meeting',
+        body: 'Testing the reply feature',
+        searchableText: 'Karunesh Ramdass Re: Meeting Testing the reply feature',
       },
       clickedSend: false,
       draftCount: 1,
@@ -516,6 +608,8 @@ describe('OutlookActions safety gates', () => {
         ...matchingDraft,
         to: ['Karunesh Ramdass'],
         subject: 'Re: Meeting',
+        body: 'Testing the reply feature',
+        searchableText: 'Karunesh Ramdass Re: Meeting Testing the reply feature',
       },
       clickedSend: false,
       draftCount: 1,
@@ -560,6 +654,18 @@ describe('OutlookActions safety gates', () => {
     actions.openMessageById = vi.fn(async () => { order.push('open'); return true; });
     actions.clickOpenMessageToolbarButton = vi.fn(async () => true);
     actions.fillBody = vi.fn(async () => undefined);
+    actions.readOpenDraftProbe = vi.fn(async () => ({
+      snapshot: {
+        ...matchingDraft,
+        to: ['Karunesh Ramdass'],
+        subject: 'Re: Meeting',
+        body: 'Testing the reply feature',
+        searchableText: 'Karunesh Ramdass Re: Meeting Testing the reply feature',
+      },
+      clickedSend: false,
+      draftCount: 1,
+      sendableDraftCount: 1,
+    }));
 
     const result = await actions.reply({ id: 'message-1', body: 'Testing the reply feature' });
 
@@ -845,6 +951,24 @@ describe('OutlookActions verified draft DOM probe', () => {
     const result = await actions.evaluateOpenDraftDom(page, { mode: 'current-reviewed' });
 
     expect(result.clickedSend).toBe(true);
+    expect(clicks).toEqual(['send-1']);
+  });
+
+  it('sends a reviewed reply draft when Outlook hides the subject field', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <div role="dialog">
+        <button aria-label="Send" data-click-id="send-1">Send</button>
+        <div aria-label="To" role="textbox" contenteditable="true">Karunesh Ramdass</div>
+        <div aria-label="Message body" contenteditable="true">Testing the reply feature</div>
+      </div>
+    `);
+
+    const result = await actions.evaluateOpenDraftDom(page, { mode: 'current-reviewed' });
+
+    expect(result.clickedSend).toBe(true);
+    expect(result.draftCount).toBe(1);
+    expect(result.sendableDraftCount).toBe(1);
     expect(clicks).toEqual(['send-1']);
   });
 
