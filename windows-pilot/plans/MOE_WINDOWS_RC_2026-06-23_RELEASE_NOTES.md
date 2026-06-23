@@ -19,9 +19,9 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 ## Assets
 
 - `Ministry.of.Education-0.4.3-moe.10-win-x64.exe`
-  - SHA-256: `3a43cdff49c758b07ccfd57117a06304152813a7b80d857ba99c03486fe8f4fa`
+  - SHA-256: `0ad45db3d1a405c47f8105720099beca220e99fb2e81c69cebb3c45b6622100e`
 - `Ministry.of.Education-0.4.3-moe.10-win-x64.exe.blockmap`
-  - SHA-256: `dfeacd98465081df7c0da0494dede0b881f673af916f6da5661439880a68e817`
+  - SHA-256: `0e2bc93dd063262bc1c371699601a4e8e6447a9a6445b0fca355ee74c0d274ab`
 - `MOE_WINDOWS_RC_2026-06-23_USER_INSTRUCTIONS.md`
   - Tester instructions for install, first launch, Microsoft sign-in, Outlook,
     Forms, files, voice input, and support evidence.
@@ -65,8 +65,14 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
   - Exit 0 with known existing warnings.
 - Windows package rebuild
   - Passed.
+- Refreshed Windows installer rebuild on 2026-06-23
+  - Source commit: `42787c6243eba88f436b43f84df8d66aa60d5683`.
+  - Installer SHA-256: `0ad45db3d1a405c47f8105720099beca220e99fb2e81c69cebb3c45b6622100e`.
+  - Package inspection after rebuild passed: 11 tests.
+  - Focused release regression after rebuild passed: 6 files, 107 tests.
+  - Clean VM/RM smoke for this exact refreshed hash is the next gate.
 - Clean Windows VM install/package smoke
-  - Installer SHA matched.
+  - Previous installer SHA matched.
   - Previous app uninstall exit `0`.
   - Installer exit `0`.
   - Desktop and Start Menu shortcuts present.
@@ -77,7 +83,7 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
   - Installed gateway readiness passed on rerun with realistic timeout.
   - Installed Electron app exposed Electron CDP, Host API, and Gateway port.
 - Hidden WinRM silent-install automation
-  - A separate fresh temp-user VM run against the same installer reproduced a
+  - A separate fresh temp-user VM run against the earlier installer reproduced a
     hidden `/S /currentuser` automation failure: the installer created a large
     partial tree but did not create the app exe or critical runtime helper
     files.

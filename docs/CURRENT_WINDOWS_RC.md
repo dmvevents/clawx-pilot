@@ -7,21 +7,21 @@ Last updated: 2026-06-23.
 | Field | Value |
 |---|---|
 | Branch | `release/moe10-windows-laptop-ready-20260529` |
-| Latest release evidence/process commit | `4212071ea7938624d895a2486a1167ebd6a235df` |
-| GitHub release tag target | `84fe4c3166bd73d15b144bb95af5db6bc43409de` (installer binary unchanged; later commits update tests, watcher automation, and evidence docs) |
+| Installer source commit | `42787c6243eba88f436b43f84df8d66aa60d5683` |
+| GitHub prerelease tag | `moe10-windows-rc-20260623-stable-regression` |
 | Installer | `release/Ministry of Education-0.4.3-moe.10-win-x64.exe` |
-| Installer SHA256 | `3a43cdff49c758b07ccfd57117a06304152813a7b80d857ba99c03486fe8f4fa` |
-| Blockmap SHA256 | `dfeacd98465081df7c0da0494dede0b881f673af916f6da5661439880a68e817` |
-| App ASAR SHA256 | `ee749bc6b05e56cc4ffbc6faba6436bf51cd23c02a3d86ed5a87a14d3bac1421` |
+| Installer SHA256 | `0ad45db3d1a405c47f8105720099beca220e99fb2e81c69cebb3c45b6622100e` |
+| Blockmap SHA256 | `0e2bc93dd063262bc1c371699601a4e8e6447a9a6445b0fca355ee74c0d274ab` |
+| App ASAR SHA256 | `d8b439f157527d2bac5d144fcd261e13294cb11a50b3b800b1ab8429a8c9a0cb` |
 | GCS staging prefix | `gs://clawx-rc-artifacts-622687731621/rc-local-20260622-stable-regression-candidate/` |
-| Planned GitHub prerelease tag | `moe10-windows-rc-20260623-stable-regression` |
+| Release page | `https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260623-stable-regression` |
 | Evidence manifest | `docs/GA_RELEASE_EVIDENCE_MANIFEST.md` |
 | GA plan | `docs/GA_RELEASE_PLAN_2026-06-09.md` |
-| Current verdict | `YELLOW - prerelease candidate; assisted clean Windows install/package smoke passed, hidden WinRM silent install is red, signed-in tenant Outlook/Forms proof still required before GA` |
+| Current verdict | `YELLOW - prerelease candidate; refreshed installer package/regression checks passed locally, clean VM smoke must be rerun for this exact hash, hidden WinRM silent install is red, signed-in tenant Outlook/Forms proof still required before GA` |
 
 ## Staleness Warning
 
-The local installer snapshot above includes the latest process/test, ASR package, and Outlook reply-safety edits. The clean Windows VM package smoke passed on 2026-06-23, and the Mac laptop watcher now refuses hidden silent install by default when the installed app is stale or missing. This is still a prerelease until signed-in tenant Outlook/Forms flows are proven through the installed app.
+The installer snapshot above was rebuilt on 2026-06-23 from `42787c6243eba88f436b43f84df8d66aa60d5683` and supersedes the earlier `3a43cdff49c758b07ccfd57117a06304152813a7b80d857ba99c03486fe8f4fa` GitHub asset. Local package inspection and the focused 107-test release regression slice passed after the rebuild. The clean Windows VM package smoke must be rerun for this exact hash, and the Mac laptop watcher now refuses hidden silent install by default when the installed app is stale or missing. This is still a prerelease until signed-in tenant Outlook/Forms flows are proven through the installed app.
 
 ## Do Not Call GA Until
 
