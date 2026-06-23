@@ -132,9 +132,23 @@ describe('moe-principal-assistant plugin registration', () => {
       ].join('\n');
 
       expect(modelFacingText).toMatch(/outlook\.\*/);
+      expect(modelFacingText).toMatch(/outlook\.open first/i);
+      expect(modelFacingText).toMatch(/outlook\.read_inbox/i);
+      expect(modelFacingText).toMatch(/outlook\.search_inbox/i);
+      expect(modelFacingText).toMatch(/outlook\.read_email/i);
+      expect(modelFacingText).toMatch(/outlook\.reply/i);
+      expect(modelFacingText).toMatch(/outlook\.forward/i);
+      expect(modelFacingText).toMatch(/outlook\.send_email/i);
+      expect(modelFacingText).toMatch(/Canonical action: read-email/i);
+      expect(modelFacingText).toMatch(/transport\/source\/implementation\/version/i);
+      expect(modelFacingText).toMatch(/Outlook Browser v2\/browser, Microsoft Graph, or legacy/i);
       expect(modelFacingText).toMatch(/browser\.diagnose/);
       expect(modelFacingText).toMatch(/browser\.repair_chrome_cdp/);
       expect(modelFacingText).toMatch(/call outlook\.send_email with \{ confirm: true \} only/i);
+      expect(modelFacingText).toMatch(/do not regenerate, redraft, or resend/i);
+      expect(modelFacingText).toMatch(/do not call outlook\.draft_email again/i);
+      expect(modelFacingText).toMatch(/one concrete diagnostic question/i);
+      expect(modelFacingText).toMatch(/exactly one reviewed Outlook compose pane/i);
       expect(modelFacingText).toMatch(/bounded recent Inbox window/i);
       expect(modelFacingText).toMatch(/not an exhaustive mailbox export/i);
       expect(modelFacingText).toMatch(/do not claim all mail unless scan\.exhaustive is true/i);
@@ -147,6 +161,8 @@ describe('moe-principal-assistant plugin registration', () => {
       expect(modelFacingText).not.toMatch(/enable Chrome remote debugging/i);
       expect(modelFacingText).not.toMatch(/configure remote debugging/i);
       expect(modelFacingText).not.toMatch(/remote debugging enabled/i);
+      expect(modelFacingText).toMatch(/Never give .*manual Chrome debugging/i);
+      expect(modelFacingText).not.toMatch(/advise .*manual Chrome debugging/i);
       expect(modelFacingText).not.toMatch(/chrome:\/\/flags/i);
       expect(modelFacingText).not.toMatch(/chrome\.exe/i);
       expect(modelFacingText).not.toMatch(/web-?search/i);

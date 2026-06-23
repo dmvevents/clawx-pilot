@@ -6,6 +6,7 @@
 # Explicit -SendEmail and -SubmitForms flags perform real side effects.
 # -DraftEmail drafts only and leaves the compose pane open for inspection.
 # -OutlookReplyMatrix drafts reply/reply-all/forward only and never sends.
+# -OutlookSendMatrix sends compose/reply/reply-all/forward only with confirm:true.
 
 param(
     [string]$Endpoint = "http://127.0.0.1:9223",
@@ -16,6 +17,7 @@ param(
     [switch]$OutlookSmoke,
     [switch]$OutlookStateMatrix,
     [switch]$OutlookReplyMatrix,
+    [switch]$OutlookSendMatrix,
     [string]$ChromeEndpoint = "http://127.0.0.1:18792",
     [switch]$FormsSmoke,
     [switch]$DraftEmail,
@@ -90,6 +92,7 @@ if (-not (Test-Endpoint -Url $Endpoint)) {
 "OutlookSmoke:$($OutlookSmoke.IsPresent)"
 "OutlookStateMatrix:$($OutlookStateMatrix.IsPresent)"
 "OutlookReplyMatrix:$($OutlookReplyMatrix.IsPresent)"
+"OutlookSendMatrix:$($OutlookSendMatrix.IsPresent)"
 "ChromeEndpoint:$ChromeEndpoint"
 "FormsSmoke:  $($FormsSmoke.IsPresent)"
 "DraftEmail:  $($DraftEmail.IsPresent)"
@@ -121,6 +124,15 @@ if ($OutlookStateMatrix) {
 }
 if ($OutlookReplyMatrix) {
     $argsList += "--outlook-reply-matrix"
+}
+if ($OutlookSendMatrix) {
+    if (-not $EmailTo) {
+        "STATE: EMAIL_TO_REQUIRED"
+        exit 5
+    }
+    $argsList += "--outlook-send-matrix"
+    $argsList += "--email-to"
+    $argsList += $EmailTo
 }
 if ($FormsSmoke) {
     $argsList += "--forms-smoke"

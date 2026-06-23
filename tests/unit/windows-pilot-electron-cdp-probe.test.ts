@@ -31,6 +31,12 @@ const probeModule = require('../../windows-pilot/scripts/pilot-electron-cdp-prob
     bannedToolResults: Array<{ name: string; id?: string; isError: boolean }>;
   };
   isOutlookPageUrl: (url: string) => boolean;
+  isFolderWideDeleteText: (text: string) => boolean;
+  isSafeDraftRowDeleteText: (text: string) => boolean;
+  isLikelyMatrixTestMessage: (message: Record<string, unknown>) => boolean;
+  selectOutlookMatrixSourceMessage: (
+    messages: Array<Record<string, unknown>>,
+  ) => Record<string, unknown> | null;
   validateProbeSummary: (summary: unknown, args?: Record<string, unknown>) => {
     ok: boolean;
     reasons: string[];
@@ -39,7 +45,11 @@ const probeModule = require('../../windows-pilot/scripts/pilot-electron-cdp-prob
 
 const {
   buildVisualAcceptance,
+  isFolderWideDeleteText,
+  isLikelyMatrixTestMessage,
   isOutlookPageUrl,
+  isSafeDraftRowDeleteText,
+  selectOutlookMatrixSourceMessage,
   summarizeChatHistory,
   validateProbeSummary,
 } = probeModule;
@@ -171,6 +181,63 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     expect(isOutlookPageUrl('https://outlook.cloud.microsoft/mail/inbox')).toBe(true);
     expect(isOutlookPageUrl('https://outlook.live.com/mail/inbox')).toBe(true);
     expect(isOutlookPageUrl('https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=form')).toBe(false);
+  });
+
+  it('does not classify folder-wide draft delete actions as safe marker cleanup', () => {
+    expect(isFolderWideDeleteText('Delete all')).toBe(true);
+    expect(isFolderWideDeleteText('Are you sure you want to move all the items from Drafts to Deleted Items?')).toBe(true);
+    expect(isSafeDraftRowDeleteText('Delete all')).toBe(false);
+    expect(isSafeDraftRowDeleteText('Discard draft')).toBe(true);
+    expect(isSafeDraftRowDeleteText('Delete draft')).toBe(true);
+  });
+
+  it('selects a stable non-test inbox source for the actual Outlook send matrix', () => {
+    const messages = [
+      {
+        id: 'Corporate Communications|[Draft] Greetings: United Nations Public Service Day|9:19 AM',
+        sender: 'Corporate Communications',
+        subject: '[Draft] Greetings: United Nations Public Service Day',
+        snippet: 'ClawX send matrix compose body',
+      },
+      {
+        id: 'Karunesh Ramdass|Meeting|Mon 10:08 PM',
+        sender: 'Karunesh Ramdass',
+        subject: 'Meeting',
+        snippet: 'Do you wanna have a meeting tomorrow?',
+      },
+    ];
+
+    expect(isLikelyMatrixTestMessage(messages[0])).toBe(true);
+    expect(isLikelyMatrixTestMessage(messages[1])).toBe(false);
+    expect(selectOutlookMatrixSourceMessage(messages)).toEqual(messages[1]);
+  });
+
+  it('does not exclude real inbox messages just because they come from the controlled test recipient', () => {
+    const messages = [
+      {
+        id: 'Test User|Meeting|Mon 10:08 PM',
+        sender: 'Test User',
+        subject: 'Meeting',
+        snippet: 'Do you wanna have a meeting tomorrow?',
+      },
+    ];
+
+    expect(isLikelyMatrixTestMessage(messages[0])).toBe(false);
+    expect(selectOutlookMatrixSourceMessage(messages)).toEqual(messages[0]);
+  });
+
+  it('runs actual Outlook reply sends before composing a self-sent test message', () => {
+    const source = readFileSync(probeScriptPath, 'utf8');
+    const replyIndex = source.indexOf("action: 'reply'");
+    const replyAllIndex = source.indexOf("action: 'replyAll'");
+    const forwardIndex = source.indexOf("action: 'forward'");
+    const composeIndex = source.indexOf("action: 'compose'");
+
+    expect(source).toContain("invokeSendMatrixHostApi('/api/outlook/read-inbox', { top: 25 })");
+    expect(replyIndex).toBeGreaterThan(-1);
+    expect(replyAllIndex).toBeGreaterThan(replyIndex);
+    expect(forwardIndex).toBeGreaterThan(replyAllIndex);
+    expect(composeIndex).toBeGreaterThan(forwardIndex);
   });
 
   it('keeps the daily report smoke payload aligned with visible required schema fields', () => {
@@ -743,6 +810,90 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     }, { sendEmail: true });
 
     expect(validation).toEqual({ ok: true, reasons: [] });
+  });
+
+  it('passes actual Outlook send matrix validation when sent messages leave no draft residue', () => {
+    const steps = ['compose', 'reply', 'replyAll', 'forward'].map((action) => ({
+      action,
+      status: 'sent',
+      draftLeftOpen: true,
+      bodyInComposeBody: true,
+      bodyInRecipientField: false,
+      send: { ok: true, result: { status: 'sent' } },
+      postSend: { matchingOpenComposeCount: 0 },
+      sentItems: { containsNeedle: true },
+      drafts: { containsNeedle: false },
+    }));
+
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      outlookSendMatrix: {
+        ok: true,
+        observedHostApiPaths: [
+          '/api/outlook/read-inbox',
+          '/api/outlook/draft',
+          '/api/outlook/send',
+          '/api/outlook/reply',
+          '/api/outlook/send',
+          '/api/outlook/reply',
+          '/api/outlook/send',
+          '/api/outlook/forward',
+          '/api/outlook/send',
+        ],
+        steps,
+      },
+    }, { outlookSendMatrix: true });
+
+    expect(validation).toEqual({ ok: true, reasons: [] });
+  });
+
+  it('fails actual Outlook send matrix validation when a sent draft remains open or in Drafts', () => {
+    const steps = ['compose', 'reply', 'replyAll', 'forward'].map((action) => ({
+      action,
+      status: 'sent',
+      draftLeftOpen: true,
+      bodyInComposeBody: true,
+      bodyInRecipientField: false,
+      send: { ok: true, result: { status: 'sent' } },
+      postSend: { matchingOpenComposeCount: action === 'reply' ? 1 : 0 },
+      sentItems: { containsNeedle: true },
+      drafts: { containsNeedle: action === 'reply' },
+    }));
+
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      outlookSendMatrix: {
+        ok: false,
+        observedHostApiPaths: [
+          '/api/outlook/draft',
+          '/api/outlook/reply',
+          '/api/outlook/reply',
+          '/api/outlook/forward',
+          '/api/outlook/send',
+          '/api/outlook/send',
+          '/api/outlook/send',
+          '/api/outlook/send',
+        ],
+        steps,
+      },
+    }, { outlookSendMatrix: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('outlook send matrix was not ok');
+    expect(validation.reasons).toContain('outlook send matrix reply still had a matching open compose after send');
+    expect(validation.reasons).toContain('outlook send matrix reply still appeared in Drafts');
+  });
+
+  it('adds visual acceptance criteria for the actual Outlook send matrix', () => {
+    const visual = buildVisualAcceptance({
+      outlookSendMatrix: true,
+    }, 'C:\\Users\\clawxtest\\Downloads\\clawx-electron.png');
+
+    expect(visual.criteria.map((item) => item.id)).toEqual(expect.arrayContaining([
+      'outlook-compose-reply-forward-actual-sends',
+    ]));
   });
 
   it('passes reply matrix validation when reply, reply-all, and forward draft correctly', () => {

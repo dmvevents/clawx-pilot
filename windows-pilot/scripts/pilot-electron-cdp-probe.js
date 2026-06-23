@@ -14,6 +14,7 @@
  * - --send-email drafts and sends only with confirm:true
  * - --submit-forms previews and submits only with confirm:true
  * - --outlook-reply-matrix drafts reply/reply-all/forward only and never sends
+ * - --outlook-send-matrix drafts and sends compose/reply/reply-all/forward only with confirm:true
  *
  * - redacts tokens/passwords/URLs/email addresses from console output
  */
@@ -30,6 +31,7 @@ const TEST_DRAFT_MARKERS = [
   'ClawX reply matrix',
   'ClawX reply-all matrix',
   'ClawX forward matrix',
+  'ClawX send matrix',
   'Rd matrix 2026',
 ];
 
@@ -44,6 +46,48 @@ function isOutlookPageUrl(url) {
   return OUTLOOK_HOST_PATTERNS.some((pattern) => pattern.test(String(url ?? '')));
 }
 
+function isFolderWideDeleteText(text) {
+  return /\bdelete\s+all\b/i.test(String(text ?? ''))
+    || /\bempty\s+(?:messages|folder)\b/i.test(String(text ?? ''))
+    || /\bmove\s+all\s+the\s+items\s+from\s+drafts\s+to\s+deleted\s+items\b/i.test(String(text ?? ''));
+}
+
+function isSafeDraftRowDeleteText(text) {
+  const value = String(text ?? '');
+  return /\b(delete|discard)\b/i.test(value) && !isFolderWideDeleteText(value);
+}
+
+function normalizeMatrixText(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9@.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isLikelyMatrixTestMessage(message) {
+  const fields = [
+    message?.id,
+    message?.sender,
+    message?.subject,
+    message?.snippet,
+    message?.receivedAt,
+  ];
+  const text = normalizeMatrixText(fields.join(' '));
+  if (!text) return true;
+  if (/\bdraft\b/.test(text)) return true;
+  if (/\bclawx\s+(?:controlled|compose|reply|reply all|reply-all|forward|send)\s+matrix\b/.test(text)) return true;
+  if (/\brd\s+matrix\s+2026\b/.test(text)) return true;
+  return false;
+}
+
+function selectOutlookMatrixSourceMessage(messages) {
+  const candidates = Array.isArray(messages) ? messages.filter((message) => message?.id) : [];
+  return candidates.find((message) => !isLikelyMatrixTestMessage(message))
+    ?? candidates[0]
+    ?? null;
+}
+
 function parseArgs(argv) {
   const out = {
     endpoint: 'http://127.0.0.1:9223',
@@ -54,6 +98,7 @@ function parseArgs(argv) {
     outlookSmoke: false,
     outlookStateMatrix: false,
     outlookReplyMatrix: false,
+    outlookSendMatrix: false,
     chromeEndpoint: 'http://127.0.0.1:18792',
     formsSmoke: false,
     draftEmail: false,
@@ -79,6 +124,7 @@ function parseArgs(argv) {
     else if (arg === '--outlook-smoke') out.outlookSmoke = true;
     else if (arg === '--outlook-state-matrix') out.outlookStateMatrix = true;
     else if (arg === '--outlook-reply-matrix') out.outlookReplyMatrix = true;
+    else if (arg === '--outlook-send-matrix') out.outlookSendMatrix = true;
     else if (arg === '--chrome-endpoint') out.chromeEndpoint = argv[++i] || out.chromeEndpoint;
     else if (arg === '--forms-smoke') out.formsSmoke = true;
     else if (arg === '--draft-email') out.draftEmail = true;
@@ -90,7 +136,7 @@ function parseArgs(argv) {
     else if (arg === '--visual-acceptance') out.visualAcceptance = true;
     else if (arg === '--wait-ms') out.waitMs = Number(argv[++i] || out.waitMs);
     else if (arg === '--help' || arg === '-h') {
-      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--chrome-endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--safe-chat-prompt TEXT] [--outlook-smoke] [--outlook-state-matrix] [--outlook-reply-matrix] [--forms-smoke] [--draft-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--send-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--submit-forms] [--visual-acceptance] [--wait-ms N]');
+      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--chrome-endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--safe-chat-prompt TEXT] [--outlook-smoke] [--outlook-state-matrix] [--outlook-reply-matrix] [--outlook-send-matrix --email-to ADDR] [--forms-smoke] [--draft-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--send-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--submit-forms] [--visual-acceptance] [--wait-ms N]');
       process.exit(0);
     }
   }
@@ -706,6 +752,37 @@ function validateOutlookSend(summary, reasons) {
   addValidationReason(reasons, statusOf(emailSend?.send) === 'sent', `outlook confirmed send status was ${statusOf(emailSend?.send) ?? 'missing'}`);
 }
 
+function validateOutlookSendMatrix(summary, reasons) {
+  const matrix = summary?.outlookSendMatrix;
+  addValidationReason(reasons, matrix && matrix.skipped !== true, 'outlook send matrix skipped or missing');
+  if (!matrix || matrix.skipped === true) return;
+  addValidationReason(reasons, matrix.ok === true, 'outlook send matrix was not ok');
+
+  const requiredActions = ['compose', 'reply', 'replyAll', 'forward'];
+  const steps = Array.isArray(matrix.steps) ? matrix.steps : [];
+  const byAction = new Map(steps.map((step) => [step?.action, step]));
+  for (const action of requiredActions) {
+    const step = byAction.get(action);
+    addValidationReason(reasons, Boolean(step), `outlook send matrix missing ${action}`);
+    if (!step) continue;
+    addValidationReason(reasons, step.status === 'sent', `outlook send matrix ${action} status was ${step.status ?? 'missing'}`);
+    addValidationReason(reasons, step.draftLeftOpen === true, `outlook send matrix ${action} draft was not visible before send`);
+    addValidationReason(reasons, step.bodyInRecipientField !== true, `outlook send matrix ${action} body text was detected in a recipient field before send`);
+    addValidationReason(reasons, step.bodyInComposeBody === true, `outlook send matrix ${action} body text was not verified in the compose body before send`);
+    addValidationReason(reasons, step.send?.ok === true, `outlook send matrix ${action} send call was not ok`);
+    addValidationReason(reasons, statusOf(step.send) === 'sent', `outlook send matrix ${action} confirmed send status was ${statusOf(step.send) ?? 'missing'}`);
+    addValidationReason(reasons, step.postSend?.matchingOpenComposeCount === 0, `outlook send matrix ${action} still had a matching open compose after send`);
+    addValidationReason(reasons, step.sentItems?.containsNeedle === true, `outlook send matrix ${action} was not found in Sent Items`);
+    addValidationReason(reasons, step.drafts?.containsNeedle === false, `outlook send matrix ${action} still appeared in Drafts`);
+  }
+  const observedPaths = Array.isArray(matrix.observedHostApiPaths) ? matrix.observedHostApiPaths : [];
+  const observedCount = (pathName) => observedPaths.filter((value) => value === pathName).length;
+  addValidationReason(reasons, observedCount('/api/outlook/draft') >= 1, 'outlook send matrix did not observe compose draft Host API call');
+  addValidationReason(reasons, observedCount('/api/outlook/reply') >= 2, 'outlook send matrix did not observe reply and reply-all Host API calls');
+  addValidationReason(reasons, observedCount('/api/outlook/forward') >= 1, 'outlook send matrix did not observe forward Host API call');
+  addValidationReason(reasons, observedCount('/api/outlook/send') >= 4, 'outlook send matrix did not observe four confirmed send Host API calls');
+}
+
 function validateFormsSubmit(summary, reasons) {
   const formsSubmit = summary?.formsSubmit;
   addValidationReason(reasons, formsSubmit && formsSubmit.skipped !== true, 'forms submit skipped or missing');
@@ -739,7 +816,7 @@ function buildVisualAcceptance(args, screenshotPath) {
     },
   ];
 
-  if (args.outlookSmoke || args.outlookStateMatrix || args.safeChat) {
+  if (args.outlookSmoke || args.outlookStateMatrix || args.outlookSendMatrix || args.safeChat) {
     criteria.push(
       {
         id: 'outlook-uses-app-tool-path',
@@ -779,6 +856,16 @@ function buildVisualAcceptance(args, screenshotPath) {
       reviewTarget: 'outlookReplyMatrix probe JSON plus reply/reply-all/forward screenshots',
       accept: 'Reply, Reply all, and Forward each reach status=drafted, leave a reviewable draft open, place the requested text in the compose body, and do not place that text in To/Cc/Bcc. No email is sent.',
       reject: 'Any workflow fails to draft, asks for a recipient after reply prefill, cannot find the Reply/Reply all/Forward control, places body text in To/Cc/Bcc, moves/archives the source message, or sends an email.',
+    });
+  }
+
+  if (args.outlookSendMatrix) {
+    criteria.push({
+      id: 'outlook-compose-reply-forward-actual-sends',
+      required: true,
+      reviewTarget: 'outlookSendMatrix probe JSON plus Sent Items/Drafts screenshots',
+      accept: 'Compose, Reply, Reply all, and Forward each use the installed app Host API path, draft exactly one reviewable message, send only via { confirm: true }, disappear from open compose/Drafts, and appear in Sent Items.',
+      reject: 'Any workflow reports sent while the matching compose remains open, the marker remains in Drafts, Sent Items lacks evidence, body text lands in To/Cc/Bcc, or the harness uses a non-Host-API path.',
     });
   }
 
@@ -858,7 +945,7 @@ function validateVisualAcceptance(summary, args, reasons) {
   addValidationReason(reasons, criteriaIds.has('electron-app-shell'), 'visual acceptance missing electron app shell check');
   addValidationReason(reasons, criteriaIds.has('chat-not-stuck-thinking'), 'visual acceptance missing stuck-thinking check');
   addValidationReason(reasons, criteriaIds.has('no-sensitive-visual-leak'), 'visual acceptance missing sensitive-data leak check');
-  if (args.outlookSmoke || args.outlookStateMatrix || args.safeChat) {
+  if (args.outlookSmoke || args.outlookStateMatrix || args.outlookSendMatrix || args.safeChat) {
     addValidationReason(reasons, criteriaIds.has('outlook-uses-app-tool-path'), 'visual acceptance missing Outlook app-tool-path check');
     addValidationReason(reasons, criteriaIds.has('outlook-start-state-matrix'), 'visual acceptance missing Outlook start-state matrix check');
     addValidationReason(reasons, criteriaIds.has('outlook-reply-draft-state'), 'visual acceptance missing Outlook reply-draft state check');
@@ -869,6 +956,9 @@ function validateVisualAcceptance(summary, args, reasons) {
   }
   if (args.outlookReplyMatrix) {
     addValidationReason(reasons, criteriaIds.has('outlook-reply-replyall-forward-drafts'), 'visual acceptance missing Outlook reply matrix check');
+  }
+  if (args.outlookSendMatrix) {
+    addValidationReason(reasons, criteriaIds.has('outlook-compose-reply-forward-actual-sends'), 'visual acceptance missing Outlook actual-send matrix check');
   }
   if (args.formsSmoke || args.submitForms) {
     addValidationReason(reasons, criteriaIds.has('forms-preview-field-coverage'), 'visual acceptance missing Forms field-coverage check');
@@ -887,6 +977,7 @@ function validateProbeSummary(summary, args = {}) {
     || args.outlookSmoke
     || args.outlookStateMatrix
     || args.outlookReplyMatrix
+    || args.outlookSendMatrix
     || args.formsSmoke
     || args.draftEmail
     || args.sendEmail
@@ -900,6 +991,7 @@ function validateProbeSummary(summary, args = {}) {
   if (args.outlookSmoke) validateOutlookSmoke(summary, reasons);
   if (args.outlookStateMatrix) validateOutlookStateMatrix(summary, reasons);
   if (args.outlookReplyMatrix) validateOutlookReplyMatrix(summary, reasons);
+  if (args.outlookSendMatrix) validateOutlookSendMatrix(summary, reasons);
   if (args.formsSmoke) validateFormsSmoke(summary, reasons);
   if (args.draftEmail) validateOutlookDraft(summary, reasons);
   if (args.sendEmail) validateOutlookSend(summary, reasons);
@@ -1156,6 +1248,18 @@ async function inspectOpenComposePlacement(outlookPage, bodyNeedle) {
       ].map(normalize).filter(Boolean);
       return labels.some((label) => /^send$/i.test(label) || /\bcompose.*send\b|\bsend.*button\b/i.test(label));
     });
+    const hasDiscardButton = (root) => Array.from(root.querySelectorAll(
+      'button, [role="button"], [aria-label], [title], [data-testid]',
+    )).some((el) => {
+      if (!isVisible(el)) return false;
+      const labels = [
+        el.getAttribute('aria-label') || '',
+        el.getAttribute('title') || '',
+        el.getAttribute('data-testid') || '',
+        el.textContent || '',
+      ].map(normalize).filter(Boolean);
+      return labels.some((label) => /\bdiscard\b/i.test(label));
+    });
     const hasRecipientField = (root) => Boolean(root.querySelector([
       '[aria-label="To"]',
       '[aria-label="Cc"]',
@@ -1181,20 +1285,18 @@ async function inspectOpenComposePlacement(outlookPage, bodyNeedle) {
       let current = body;
       const composeRootScore = (root) => {
         const hasSend = hasSendButton(root);
+        const hasDiscard = hasDiscardButton(root);
         const hasRecipient = hasRecipientField(root);
         const hasSubject = hasSubjectField(root);
         let score = 0;
         if (hasSend) score += 120;
+        if (hasDiscard) score += 20;
         if (hasRecipient) score += 35;
         if (hasSubject) score += 25;
         if (root.getAttribute('role') === 'dialog') score += 25;
         if (/\b(compose|new message|draft|reply|forward)\b/i.test(fieldText(root))) score += 20;
         return { score, hasSend };
       };
-      if (readingRoot && isVisible(readingRoot)) {
-        const { score } = composeRootScore(readingRoot);
-        if (score >= 80) best = { root: readingRoot, score };
-      }
       for (let depth = 0; current && depth < 30; depth += 1) {
         if (readingRoot && !readingRoot.contains(current)) break;
         if (!isVisible(current)) {
@@ -1203,8 +1305,12 @@ async function inspectOpenComposePlacement(outlookPage, bodyNeedle) {
         }
         const { score, hasSend } = composeRootScore(current);
         const adjustedScore = score - (readingRoot && !hasSend ? 80 : 0);
-        if (adjustedScore >= 80 && (!best || adjustedScore > best.score)) {
-          best = { root: current, score: adjustedScore };
+        const rect = current.getBoundingClientRect();
+        const area = Math.max(1, rect.width * rect.height);
+        if (adjustedScore >= 80 && (!best
+          || adjustedScore > best.score
+          || (adjustedScore === best.score && area < best.area))) {
+          best = { root: current, score: adjustedScore, area };
         }
         current = current.parentElement;
       }
@@ -1220,6 +1326,10 @@ async function inspectOpenComposePlacement(outlookPage, bodyNeedle) {
         || role === 'textbox'
         || tag === 'textarea';
     };
+    const isComposeRoot = (root) => {
+      if (!root || root === document.body || root === document.documentElement) return false;
+      return hasSendButton(root);
+    };
     const bodyEditors = Array.from(document.querySelectorAll([
       '[aria-label="Message body"]',
       '[aria-label*="Message body" i]',
@@ -1228,8 +1338,12 @@ async function inspectOpenComposePlacement(outlookPage, bodyNeedle) {
       '[contenteditable="true"][role="textbox"]',
       '[contenteditable="true"][aria-multiline="true"]',
       '[role="textbox"][aria-multiline="true"]',
-    ].join(','))).filter((el) => isVisible(el) && isEditableBodyElement(el) && !isRecipientOrSubject(el) && nearestComposeRootForBody(el));
-    const composeRoots = Array.from(new Set(bodyEditors.map(nearestComposeRootForBody).filter(Boolean)));
+    ].join(','))).filter((el) => {
+      if (!isVisible(el) || !isEditableBodyElement(el) || isRecipientOrSubject(el)) return false;
+      const root = nearestComposeRootForBody(el);
+      return isComposeRoot(root);
+    });
+    const composeRoots = Array.from(new Set(bodyEditors.map(nearestComposeRootForBody).filter(isComposeRoot)));
     const recipientFields = Array.from(document.querySelectorAll([
       '[aria-label="To"]',
       '[aria-label="Cc"]',
@@ -1252,7 +1366,7 @@ async function inspectOpenComposePlacement(outlookPage, bodyNeedle) {
       recipientFieldCount: recipientFields.length,
       bodyInComposeBody: bodyEditors.some((el) => valueText(el).includes(needleText)),
       bodyInRecipientField: Boolean(needleText) && recipientFields.some((el) => valueText(el).includes(needleText)),
-      visibleSendButton: Array.from(document.querySelectorAll('body *')).some((el) => isVisible(el) && hasSendButton(el)),
+      visibleSendButton: composeRoots.some((root) => isVisible(root) && hasSendButton(root)),
     };
   }, bodyNeedle).catch((error) => ({
     error: error instanceof Error ? error.message : String(error),
@@ -1292,6 +1406,45 @@ async function closeOpenComposeDraft(outlookPage, needles = []) {
   if (normalizedNeedles.length === 0) {
     return { attempted: false, closed: false, reason: 'no_marker' };
   }
+  const dismissFolderWideDeleteModal = async () => {
+    const result = await outlookPage.evaluate(() => {
+      const normalize = (value) => String(value ?? '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const isVisible = (el) => {
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        return rect.width > 0
+          && rect.height > 0
+          && style.visibility !== 'hidden'
+          && style.display !== 'none';
+      };
+      const labelText = (el) => normalize([
+        el?.getAttribute?.('aria-label') || '',
+        el?.getAttribute?.('title') || '',
+        el?.textContent || '',
+      ].filter(Boolean).join(' '));
+      const text = normalize(document.body?.innerText || document.body?.textContent || '');
+      const isFolderWide = /\bdelete\s+\d+\s+items\b/i.test(text)
+        || /\bmove\s+all\s+the\s+items\s+from\s+drafts\s+to\s+deleted\s+items\b/i.test(text);
+      if (!isFolderWide) return { detected: false, cancelled: false };
+      const cancel = Array.from(document.querySelectorAll('button, [role="button"]'))
+        .filter((el) => isVisible(el))
+        .find((el) => /^cancel$/i.test(labelText(el)));
+      cancel?.click?.();
+      return { detected: true, cancelled: Boolean(cancel) };
+    }).catch((error) => ({
+      detected: false,
+      cancelled: false,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    if (result.detected) {
+      await outlookPage.waitForTimeout(600).catch(() => undefined);
+    }
+    return result;
+  };
   const clickDiscardConfirmation = async () => {
     const confirmVisible = await outlookPage
       .locator('text=/Discard message|Are you sure you want to discard/i')
@@ -1326,10 +1479,24 @@ async function closeOpenComposeDraft(outlookPage, needles = []) {
   const dialogHandler = (dialog) => {
     dialog.accept().catch(() => undefined);
   };
-  const result = { attempted: true, closed: false, clickCount: 0, confirmCount: 0 };
+  const result = {
+    attempted: true,
+    closed: false,
+    clickCount: 0,
+    confirmCount: 0,
+    folderWideDeleteCancelled: false,
+  };
   outlookPage.on('dialog', dialogHandler);
   try {
     for (let attempt = 0; attempt < 5; attempt += 1) {
+      const folderWideDelete = await dismissFolderWideDeleteModal();
+      if (folderWideDelete.detected) {
+        result.folderWideDeleteCancelled = true;
+        result.lastReason = folderWideDelete.cancelled
+          ? 'folder_wide_delete_cancelled'
+          : 'folder_wide_delete_cancel_missing';
+        break;
+      }
       if (await clickDiscardConfirmation()) {
         result.confirmCount += 1;
         if (!(await hasMatchingCompose())) {
@@ -1390,6 +1557,13 @@ async function closeOpenComposeDraft(outlookPage, needles = []) {
           const text = labelText(el);
           return /\bsend\b/i.test(text) && !/\bmore send\b/i.test(text);
         });
+        const hasDiscardButton = (root) => Array.from(root.querySelectorAll(
+          'button, [role="button"], [aria-label], [title], [data-testid]',
+        )).some((el) => {
+          if (!isVisible(el)) return false;
+          const text = labelText(el);
+          return /\bdiscard\b/i.test(text);
+        });
         const hasRecipientField = (root) => Boolean(root.querySelector([
           '[aria-label="To"]',
           '[aria-label="Cc"]',
@@ -1406,6 +1580,7 @@ async function closeOpenComposeDraft(outlookPage, needles = []) {
         const composeRootScore = (root) => {
           let score = 0;
           if (hasSendButton(root)) score += 120;
+          if (hasDiscardButton(root)) score += 20;
           if (hasRecipientField(root)) score += 35;
           if (hasSubjectField(root)) score += 25;
           if (root.getAttribute('role') === 'dialog') score += 25;
@@ -1421,10 +1596,6 @@ async function closeOpenComposeDraft(outlookPage, needles = []) {
             '[data-automationid*="ReadingPane" i]',
           ].join(','));
           let best = null;
-          if (readingRoot && isVisible(readingRoot)) {
-            const score = composeRootScore(readingRoot);
-            if (score >= 80) best = { root: readingRoot, score };
-          }
           let current = body;
           for (let depth = 0; current && depth < 30; depth += 1) {
             if (readingRoot && !readingRoot.contains(current)) break;
@@ -1433,7 +1604,13 @@ async function closeOpenComposeDraft(outlookPage, needles = []) {
               continue;
             }
             const score = composeRootScore(current);
-            if (score >= 80 && (!best || score > best.score)) best = { root: current, score };
+            const rect = current.getBoundingClientRect();
+            const area = Math.max(1, rect.width * rect.height);
+            if (score >= 80 && (!best
+              || score > best.score
+              || (score === best.score && area < best.area))) {
+              best = { root: current, score, area };
+            }
             current = current.parentElement;
           }
           return best?.root ?? null;
@@ -1450,6 +1627,21 @@ async function closeOpenComposeDraft(outlookPage, needles = []) {
         };
         const pageText = normalize(document.body?.innerText || document.body?.textContent || '');
         const isDiscardConfirm = /\bdiscard message\b|\bdiscard this draft\b|\bare you sure you want to discard/i.test(pageText);
+        const isFolderWideDelete = /\bdelete\s+\d+\s+items\b/i.test(pageText)
+          || /\bmove\s+all\s+the\s+items\s+from\s+drafts\s+to\s+deleted\s+items\b/i.test(pageText);
+
+        if (isFolderWideDelete) {
+          const cancel = Array.from(document.querySelectorAll('button, [role="button"]'))
+            .filter((el) => isVisible(el))
+            .find((el) => /^cancel$/i.test(labelText(el)));
+          cancel?.click?.();
+          return {
+            clicked: false,
+            confirm: false,
+            folderWideDeleteCancelled: Boolean(cancel),
+            reason: 'folder_wide_delete_dialog',
+          };
+        }
 
         if (isDiscardConfirm) {
           const confirmButtons = Array.from(document.querySelectorAll('button, [role="button"]'))
@@ -1475,7 +1667,11 @@ async function closeOpenComposeDraft(outlookPage, needles = []) {
         ].join(','))).filter((el) => isVisible(el) && isEditableBodyElement(el) && !isRecipientOrSubject(el));
         const targetRoots = Array.from(new Set(bodyEditors
           .map(nearestComposeRootForBody)
-          .filter((root) => root && containsMarker(root))));
+          .filter((root) => root
+            && root !== document.body
+            && root !== document.documentElement
+            && hasSendButton(root)
+            && containsMarker(root))));
         const root = targetRoots[0];
         if (!root) return { clicked: false, reason: 'no_marker_compose_root' };
 
@@ -1485,6 +1681,7 @@ async function closeOpenComposeDraft(outlookPage, needles = []) {
           .filter((item) => {
             const text = item.text;
             if (/\bsend\b/i.test(text) || /\bmore send\b/i.test(text)) return false;
+            if (/\bdelete\s+all\b|\bempty\s+(?:messages|folder)\b/i.test(text)) return false;
             return /\bdiscard(?: draft)?\b/i.test(text)
               || /\bclose\b/i.test(text)
               || /\bdelete draft\b/i.test(text);
@@ -1496,6 +1693,9 @@ async function closeOpenComposeDraft(outlookPage, needles = []) {
         return { clicked: Boolean(preferred), confirm: false, reason: preferred ? 'clicked_compose_discard' : 'no_discard_button' };
       }, normalizedNeedles).catch((error) => ({ clicked: false, reason: error instanceof Error ? error.message : String(error) }));
       await outlookPage.waitForTimeout(600).catch(() => undefined);
+      if (action?.folderWideDeleteCancelled) {
+        result.folderWideDeleteCancelled = true;
+      }
       if (action?.confirm) result.confirmCount += 1;
       if (action?.clicked) {
         result.clickCount += 1;
@@ -1536,6 +1736,80 @@ async function closeMatchingComposeDrafts(browser, needles) {
     if (result.closed) cleanup.closed += 1;
   }
   return cleanup;
+}
+
+async function inspectMatchingOpenComposes(browser, needles) {
+  const pages = listOutlookPages(browser);
+  let matchingOpenComposeCount = 0;
+  let visibleSendButtonCount = 0;
+  for (const page of pages) {
+    for (const needle of needles) {
+      const placement = await inspectOpenComposePlacement(page, needle).catch(() => null);
+      if (!placement) continue;
+      if (placement.composeContainsNeedle || placement.bodyInComposeBody) matchingOpenComposeCount += 1;
+      if (placement.visibleSendButton) visibleSendButtonCount += 1;
+    }
+  }
+  return {
+    outlookPageCount: pages.length,
+    matchingOpenComposeCount,
+    visibleSendButtonCount,
+  };
+}
+
+async function inspectOutlookFolderForNeedles(outlookPage, artifactDir, folderId, needles) {
+  const folderUrls = {
+    sent: 'https://outlook.office.com/mail/sentitems',
+    drafts: 'https://outlook.office.com/mail/drafts',
+  };
+  const url = folderUrls[folderId];
+  const result = {
+    folder: folderId,
+    containsNeedle: false,
+    matchedNeedleCount: 0,
+    screenshotPath: '',
+  };
+  if (!url) {
+    return { ...result, error: `unknown folder ${folderId}` };
+  }
+
+  await outlookPage.goto(url, { timeout: 30_000, waitUntil: 'domcontentloaded' }).catch(() => undefined);
+  await outlookPage.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+  result.urlKind = outlookPage.url().includes('/mail/') ? 'mail-folder' : 'other';
+
+  const started = Date.now();
+  const maxWaitMs = folderId === 'drafts' ? 12_000 : 25_000;
+  let latest = { containsNeedle: false, matchedNeedleCount: 0 };
+  while (Date.now() - started < maxWaitMs) {
+    latest = await outlookPage.evaluate((innerNeedles) => {
+      const normalize = (value) => String(value ?? '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+      const pageText = normalize(document.body?.innerText || document.body?.textContent || '');
+      const normalizedNeedles = innerNeedles.map(normalize).filter(Boolean);
+      const matchedNeedleCount = normalizedNeedles.filter((needle) => pageText.includes(needle)).length;
+      return {
+        containsNeedle: matchedNeedleCount > 0,
+        matchedNeedleCount,
+      };
+    }, needles).catch((error) => ({
+      containsNeedle: false,
+      matchedNeedleCount: 0,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    if (latest.containsNeedle) break;
+    await outlookPage.waitForTimeout(2_000).catch(() => undefined);
+  }
+
+  Object.assign(result, latest);
+  result.screenshotPath = await captureOutlookScreenshot(outlookPage, artifactDir, `${folderId}-send-matrix`)
+    .catch((error) => {
+      result.screenshotError = error instanceof Error ? error.message : String(error);
+      return '';
+    });
+  return result;
 }
 
 async function runOutlookReplyMatrix(page, playwright, args) {
@@ -1657,6 +1931,196 @@ async function runOutlookReplyMatrix(page, playwright, args) {
       observedHostApiPaths,
       cleanup,
       note: 'Reply, reply-all, and forward were drafted only. No email was sent.',
+    };
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+async function runOutlookSendMatrix(page, playwright, args) {
+  if (!args.emailTo) {
+    return {
+      skipped: false,
+      ok: false,
+      error: '--email-to is required with --outlook-send-matrix so compose and forward sends use a controlled test recipient.',
+      steps: [],
+    };
+  }
+
+  const browser = await withTimeout(
+    'connectOverCDP outlook send matrix',
+    () => playwright.chromium.connectOverCDP(args.chromeEndpoint),
+    20_000,
+  ).catch((error) => ({ __connectError: error instanceof Error ? error.message : String(error) }));
+  if (browser?.__connectError) {
+    return {
+      skipped: false,
+      ok: false,
+      error: browser.__connectError,
+      steps: [],
+    };
+  }
+
+  const marker = runMarker();
+  const steps = [];
+  const cleanup = [];
+  const observedHostApiPaths = [];
+  const invokeSendMatrixHostApi = (pathName, body = {}) => {
+    observedHostApiPaths.push(pathName);
+    return invokeHostApi(page, pathName, body);
+  };
+
+  try {
+    const outlookPage = await findOrCreateOutlookPage(browser);
+    await outlookPage.goto('https://outlook.office.com/mail/inbox', { timeout: 30_000, waitUntil: 'domcontentloaded' }).catch(() => undefined);
+    await outlookPage.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+    cleanup.push({ stage: 'initial', ...(await closeMatchingComposeDrafts(browser, TEST_DRAFT_MARKERS)) });
+
+    const readInbox = await withTimeout(
+      'hostapi outlook.read-inbox for send matrix',
+      () => invokeSendMatrixHostApi('/api/outlook/read-inbox', { top: 25 }),
+      120_000,
+    ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+    const sourceMessage = selectOutlookMatrixSourceMessage(readInbox?.data?.json?.data?.messages);
+    const messageId = sourceMessage?.id;
+
+    const actions = [];
+    if (messageId) {
+      actions.push(
+        {
+          action: 'reply',
+          path: '/api/outlook/reply',
+          subject: '',
+          body: `ClawX send matrix reply body ${marker}`,
+          args: { id: messageId },
+        },
+        {
+          action: 'replyAll',
+          path: '/api/outlook/reply',
+          subject: '',
+          body: `ClawX send matrix reply-all body ${marker}`,
+          args: { id: messageId, replyAll: true },
+        },
+        {
+          action: 'forward',
+          path: '/api/outlook/forward',
+          subject: '',
+          body: `ClawX send matrix forward body ${marker}`,
+          args: { id: messageId, to: args.emailTo },
+        },
+      );
+    }
+    actions.push({
+      action: 'compose',
+      path: '/api/outlook/draft',
+      subject: `ClawX send matrix compose ${marker}`,
+      body: `ClawX send matrix compose body ${marker}`,
+      args: { to: args.emailTo },
+    });
+
+    for (const action of actions) {
+      const row = {
+        action: action.action,
+        status: 'pending',
+        draftLeftOpen: false,
+      };
+      const needles = [action.subject, action.body].filter(Boolean);
+      try {
+        cleanup.push({ stage: `before-send-${action.action}`, ...(await closeMatchingComposeDrafts(browser, TEST_DRAFT_MARKERS)) });
+        const draftArgs = {
+          ...action.args,
+          subject: action.subject || undefined,
+          body: action.body,
+        };
+        const draft = await withTimeout(
+          `hostapi outlook.${action.action} draft for send matrix`,
+          () => invokeSendMatrixHostApi(action.path, draftArgs),
+          180_000,
+        ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+        row.draft = summarizeHostApiCall(draft, (data) => ({
+          status: data?.status,
+          draftLeftOpen: data?.draftLeftOpen,
+          message: data?.message,
+          preview: data?.preview
+            ? {
+              toCount: Array.isArray(data.preview.to) ? data.preview.to.length : undefined,
+              subjectPresent: Boolean(data.preview.subject),
+              bodyLength: typeof data.preview.body === 'string' ? data.preview.body.length : undefined,
+            }
+            : undefined,
+        }));
+        row.draftLeftOpen = row.draft?.result?.draftLeftOpen === true;
+        await outlookPage.waitForTimeout(1000).catch(() => undefined);
+
+        const composePage = await findOutlookPageWithCompose(browser, action.body);
+        const inspectionPage = composePage?.page ?? outlookPage;
+        Object.assign(row, composePage?.placement ?? await inspectOpenComposePlacement(inspectionPage, action.body));
+        row.beforeSendScreenshotPath = await captureOutlookScreenshot(inspectionPage, args.artifactDir, `send-matrix-before-${action.action}`)
+          .catch((error) => {
+            row.beforeSendScreenshotError = error instanceof Error ? error.message : String(error);
+            return '';
+          });
+
+        if (statusOf(row.draft) !== 'drafted') {
+          row.status = statusOf(row.draft) ?? 'failed';
+          row.send = { skipped: true, reason: 'draft did not reach status=drafted' };
+        } else {
+          const send = await withTimeout(
+            `hostapi outlook.send confirm true for ${action.action}`,
+            () => invokeSendMatrixHostApi('/api/outlook/send', { confirm: true }),
+            180_000,
+          ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+          row.send = summarizeHostApiCall(send, (data) => ({
+            status: data?.status,
+            message: data?.message,
+            reason: data?.reason,
+          }));
+          row.status = statusOf(row.send);
+        }
+
+        await outlookPage.waitForTimeout(5000).catch(() => undefined);
+        row.postSend = await inspectMatchingOpenComposes(browser, needles);
+        row.sentItems = await inspectOutlookFolderForNeedles(outlookPage, args.artifactDir, 'sent', needles);
+        row.drafts = await inspectOutlookFolderForNeedles(outlookPage, args.artifactDir, 'drafts', needles);
+      } catch (error) {
+        row.status = 'failed';
+        row.error = error instanceof Error ? error.message : String(error);
+      } finally {
+        if (row.status !== 'sent' || row.postSend?.matchingOpenComposeCount > 0 || row.drafts?.containsNeedle === true) {
+          row.cleanup = await closeMatchingComposeDrafts(browser, needles).catch((error) => ({
+            error: error instanceof Error ? error.message : String(error),
+          }));
+        }
+      }
+      steps.push(row);
+    }
+
+    const requiredActions = new Set(['compose', 'reply', 'replyAll', 'forward']);
+    const hasAllActions = steps.every((step) => requiredActions.has(step.action)) && requiredActions.size === steps.length;
+    return {
+      skipped: false,
+      ok: hasAllActions && steps.every((step) => step.status === 'sent'
+        && step.draftLeftOpen === true
+        && step.bodyInComposeBody === true
+        && step.bodyInRecipientField !== true
+        && step.postSend?.matchingOpenComposeCount === 0
+        && step.sentItems?.containsNeedle === true
+        && step.drafts?.containsNeedle === false),
+      marker,
+      readInbox: summarizeInboxMatrixCall(readInbox),
+      source: sourceMessage
+        ? {
+          selected: true,
+          rejectedTopRow: readInbox?.data?.json?.data?.messages?.[0]?.id !== sourceMessage.id,
+          senderPresent: Boolean(sourceMessage.sender),
+          subjectPresent: Boolean(sourceMessage.subject),
+        }
+        : { selected: false },
+      chromeEndpoint: args.chromeEndpoint,
+      steps,
+      observedHostApiPaths,
+      cleanup,
+      note: 'This matrix performs real sends only when --outlook-send-matrix is explicitly requested. Probe output records counts/statuses only; email bodies, recipients, and secrets are redacted.',
     };
   } finally {
     await browser.close().catch(() => {});
@@ -2021,6 +2485,9 @@ async function main() {
     const outlookReplyMatrix = args.outlookReplyMatrix
       ? await runOutlookReplyMatrix(page, playwright, args)
       : { skipped: true };
+    const outlookSendMatrix = args.outlookSendMatrix
+      ? await runOutlookSendMatrix(page, playwright, args)
+      : { skipped: true };
     const formsSmoke = args.formsSmoke
       ? await runFormsSmoke(page)
       : { skipped: true };
@@ -2054,6 +2521,7 @@ async function main() {
       outlookSmoke,
       outlookStateMatrix,
       outlookReplyMatrix,
+      outlookSendMatrix,
       formsSmoke,
       emailDraft,
       emailSend,
@@ -2115,6 +2583,10 @@ module.exports = {
   safeChatBannedTools,
   safeChatExpectedTool,
   isOutlookPageUrl,
+  isFolderWideDeleteText,
+  isSafeDraftRowDeleteText,
+  isLikelyMatrixTestMessage,
+  selectOutlookMatrixSourceMessage,
   summarizeChatHistory,
   validateProbeSummary,
 };

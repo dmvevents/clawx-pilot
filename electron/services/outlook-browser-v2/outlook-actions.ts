@@ -86,6 +86,12 @@ type OpenDraftDomProbe = {
   clickedSend: boolean;
   draftCount: number;
   sendableDraftCount: number;
+  error?: string;
+};
+
+type SendFinalStateProbe = {
+  ok: boolean;
+  reason?: string;
 };
 
 type VisibleInboxRow = {
@@ -147,6 +153,51 @@ function recipientEmails(values: string[]): string[] {
     .filter(Boolean);
 }
 
+function canonicalRecipientEmails(values: string[]): string[] {
+  return Array.from(new Set(recipientEmails(values)));
+}
+
+function recipientInputError(field: 'To' | 'Cc' | 'Bcc', values: string[]): string | null {
+  const nonEmptyValues = values.map(normalizeComparableText).filter(Boolean);
+  if (nonEmptyValues.length === 0) {
+    return `${field} recipient is empty.`;
+  }
+  const invalid = nonEmptyValues.filter((value) => canonicalRecipientEmails([value]).length === 0);
+  if (invalid.length > 0) {
+    return `${field} recipient must include an email address. Ask for or use a known email address before drafting.`;
+  }
+  const prose = nonEmptyValues.filter((value) => {
+    const emails = canonicalRecipientEmails([value]);
+    if (emails.length !== 1) return true;
+    const withoutEmail = normalizeComparableText(value.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, ''));
+    return withoutEmail.length > 0;
+  });
+  if (prose.length > 0) {
+    return `${field} recipient must be only an email address, not message text.`;
+  }
+  return null;
+}
+
+function recipientInputBucketError(args: {
+  to?: string[];
+  cc?: string[];
+  bcc?: string[];
+}, options: { requireTo?: boolean } = {}): string | null {
+  if (options.requireTo || args.to !== undefined) {
+    const error = recipientInputError('To', args.to ?? []);
+    if (error) return error;
+  }
+  if (args.cc !== undefined && args.cc.length > 0) {
+    const error = recipientInputError('Cc', args.cc);
+    if (error) return error;
+  }
+  if (args.bcc !== undefined && args.bcc.length > 0) {
+    const error = recipientInputError('Bcc', args.bcc);
+    if (error) return error;
+  }
+  return null;
+}
+
 function missingRecipientNeedles(values: string[], actualBucket: string[]): string[] {
   const searchable = normalizeSearchText(actualBucket.join(' '));
   return expectedRecipientNeedles(values).filter((needle) => !searchable.includes(needle));
@@ -178,6 +229,14 @@ function validateConfirmedSendArgs(args: SendEmailArgs): string | null {
   if (hasProvidedValue(args.to)
     && asArray(args.to).map(normalizeComparableText).filter(Boolean).length === 0) {
     return 'Send blocked: supplied To recipient assertion is empty.';
+  }
+  const recipientError = recipientInputBucketError({
+    to: hasProvidedValue(args.to) ? asArray(args.to) : undefined,
+    cc: hasProvidedValue(args.cc) ? asArray(args.cc) : undefined,
+    bcc: hasProvidedValue(args.bcc) ? asArray(args.bcc) : undefined,
+  });
+  if (recipientError) {
+    return `Send blocked: supplied ${recipientError.charAt(0).toLowerCase()}${recipientError.slice(1)}`;
   }
   if (hasProvidedValue(args.subject) && !normalizeComparableText(args.subject)) {
     return 'Send blocked: supplied subject assertion is empty.';
@@ -344,11 +403,23 @@ export class OutlookActions {
    * Leaves the draft open in Outlook for user review.
    */
   async draftEmail(args: DraftEmailArgs): Promise<DraftEmailResult> {
-    const to = asArray(args.to);
-    const cc = asArray(args.cc);
-    const bcc = asArray(args.bcc);
+    const rawTo = asArray(args.to);
+    const rawCc = asArray(args.cc);
+    const rawBcc = asArray(args.bcc);
     const subject = args.subject ?? '';
     const body = args.body ?? '';
+    const recipientError = recipientInputBucketError({ to: rawTo, cc: rawCc, bcc: rawBcc }, { requireTo: true });
+    const to = canonicalRecipientEmails(rawTo);
+    const cc = canonicalRecipientEmails(rawCc);
+    const bcc = canonicalRecipientEmails(rawBcc);
+    if (recipientError) {
+      return {
+        status: 'failed',
+        draftLeftOpen: false,
+        preview: { to: rawTo, cc: rawCc, bcc: rawBcc, subject, body },
+        message: `Draft was not created because ${recipientError}`,
+      };
+    }
 
     const page = await this.driver.ensureOutlookTab();
     if (await this.looksLikeSignin(page)) {
@@ -386,14 +457,17 @@ export class OutlookActions {
     // 3. Fill recipient/subject/body. Outlook's compose pane uses standard
     // contenteditable + inputs; semantic locators are stable here.
     await this.fillField(page, 'To', to.join('; '));
+    await this.commitRecipientField(page, 'To', to);
     if (cc.length > 0) {
       // Reveal Cc if it's hidden.
       await this.revealCcBcc(page, 'Cc');
       await this.fillField(page, 'Cc', cc.join('; '));
+      await this.commitRecipientField(page, 'Cc', cc);
     }
     if (bcc.length > 0) {
       await this.revealCcBcc(page, 'Bcc');
       await this.fillField(page, 'Bcc', bcc.join('; '));
+      await this.commitRecipientField(page, 'Bcc', bcc);
     }
     await this.fillField(page, 'Subject', subject);
     await this.fillBody(page, body);
@@ -498,6 +572,21 @@ export class OutlookActions {
         status: 'refused',
         reason,
       };
+    }
+
+    const sendCompleted = await this.waitForSendCompletion(page);
+    if (!sendCompleted) {
+      const reason =
+        'Send blocked: Outlook did not close the reviewed draft after clicking Send. The draft is still open or still in Drafts, so it was not reported as sent.';
+      logger.warn(`[outlook-v2] Send completion verification failed: ${reason}`);
+      return { status: 'refused', reason };
+    }
+    const finalState = await this.verifyPostSendState(page, snapshot);
+    if (!finalState.ok) {
+      const reason = finalState.reason
+        ?? 'Send blocked: ClawX could not verify the reviewed draft left Drafts after clicking Send.';
+      logger.warn(`[outlook-v2] Send final-state verification failed: ${reason}`);
+      return { status: 'refused', reason };
     }
 
     return { status: 'sent', message: 'Email sent via Outlook Web.' };
@@ -674,7 +763,8 @@ export class OutlookActions {
       return {
         status: 'not_found',
         draftLeftOpen: false,
-        message: `Could not locate message with id "${args.id}".`,
+        message:
+          `Could not locate message with id "${args.id}" in the current Inbox window. No reply was drafted; the message may have moved to Archive, Sent, Drafts, or another folder. Open or search the intended message and retry.`,
       };
     }
     if (await this.hasAnyVisibleOpenDraft(page)) {
@@ -706,7 +796,7 @@ export class OutlookActions {
           : 'Could not safely identify the Reply button on the open message.',
       };
     }
-    if (clickedReply) await this.waitForComposePane(page);
+    if (clickedReply) await this.waitForComposeBodyReady(page);
     await this.fillBody(page, args.body);
 
     const draftProbe = await this.readOpenDraftProbe(page);
@@ -730,6 +820,17 @@ export class OutlookActions {
   }
 
   async forward(args: ForwardArgs): Promise<ForwardResult> {
+    const rawToList = asArray(args.to);
+    const recipientError = recipientInputBucketError({ to: rawToList }, { requireTo: true });
+    const toList = canonicalRecipientEmails(rawToList);
+    if (recipientError) {
+      return {
+        status: 'not_found',
+        draftLeftOpen: false,
+        message: `Forward was not created because ${recipientError}`,
+      };
+    }
+
     const page = await this.driver.ensureOutlookTab();
     if (await this.looksLikeSignin(page)) {
       return {
@@ -748,7 +849,12 @@ export class OutlookActions {
     await this.dismissBlockingDialog(page);
     const opened = await this.openMessageById(page, args.id);
     if (!opened) {
-      return { status: 'not_found', draftLeftOpen: false, message: `Could not locate message with id "${args.id}".` };
+      return {
+        status: 'not_found',
+        draftLeftOpen: false,
+        message:
+          `Could not locate message with id "${args.id}" in the current Inbox window. No forward was drafted; the message may have moved to Archive, Sent, Drafts, or another folder. Open or search the intended message and retry.`,
+      };
     }
     if (await this.hasAnyVisibleOpenDraft(page)) {
       return {
@@ -771,18 +877,10 @@ export class OutlookActions {
         message: 'Could not safely identify the Forward button on the open message.',
       };
     }
-    if (clickedForward) await this.waitForComposePane(page);
+    if (clickedForward) await this.waitForComposeBodyReady(page);
 
-    const toList = asArray(args.to);
-    if (toList.length === 0) {
-      return {
-        status: 'drafted',
-        draftLeftOpen: true,
-        preview: { to: [], subject: (await this.readOpenSubject(page)) || '', body: args.body ?? '' },
-        message: 'Forward pane opened but no recipient supplied; fill it manually before sending.',
-      };
-    }
     await this.fillField(page, 'To', toList.join('; '));
+    await this.commitRecipientField(page, 'To', toList);
     if (args.body) await this.fillBody(page, args.body);
 
     return {
@@ -1027,6 +1125,73 @@ export class OutlookActions {
         'Outlook Inbox folder could not be confirmed after navigation. Refusing to read the visible message list because it may be Sent Items or another folder.',
       );
     }
+  }
+
+  private async ensureMailFolder(page: Page, folder: 'drafts' | 'sentitems'): Promise<boolean> {
+    const currentUrl = page.url();
+    try {
+      const url = new URL(currentUrl);
+      const segments = url.pathname.toLowerCase().split('/').filter(Boolean);
+      if (isOutlookMailHost(url.hostname) && segments[0] === 'mail' && segments.includes(folder)) {
+        return true;
+      }
+    } catch {
+      // Navigate below.
+    }
+
+    const targetUrl = `https://outlook.office.com/mail/${folder}`;
+    await page.goto(targetUrl, {
+      timeout: 30_000,
+      waitUntil: 'domcontentloaded',
+    }).catch((err) => {
+      logger.debug?.(
+        `[outlook-v2] ${folder} navigation failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
+    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+    await page.waitForSelector(
+      [
+        'div[role="listbox"]',
+        'div[role="rowgroup"]',
+        '[role="region"][aria-label*="Message list" i]',
+        '[role="option"][aria-label]',
+        '[role="row"][aria-label]',
+      ].join(','),
+      { timeout: 10_000 },
+    ).catch(() => undefined);
+
+    try {
+      const url = new URL(page.url());
+      const segments = url.pathname.toLowerCase().split('/').filter(Boolean);
+      if (isOutlookMailHost(url.hostname) && segments[0] === 'mail' && segments.includes(folder)) {
+        return true;
+      }
+    } catch {
+      // Fall through to selected-folder probe.
+    }
+
+    const folderLabel = folder === 'drafts' ? 'Drafts' : 'Sent Items';
+    return page.evaluate((expectedLabel) => {
+      const normalize = (value: string | undefined | null) => (value ?? '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const candidates = Array.from(document.querySelectorAll([
+        '[aria-current="page"]',
+        '[aria-selected="true"]',
+        '[role="treeitem"][aria-selected="true"]',
+        '[role="link"][aria-current="page"]',
+        '[role="button"][aria-current="page"]',
+      ].join(',')));
+      return candidates.some((el) => {
+        const text = normalize([
+          el.getAttribute('aria-label') || '',
+          el.getAttribute('title') || '',
+          el.textContent || '',
+        ].join(' '));
+        return text.toLowerCase().includes(expectedLabel.toLowerCase());
+      });
+    }, folderLabel).catch(() => false);
   }
 
   private async ensureInboxFolderOrSignin(page: Page): Promise<boolean> {
@@ -1660,7 +1825,7 @@ export class OutlookActions {
       for (const shortcut of shortcuts) {
         await this.driver.pressKey(shortcut);
         try {
-          await this.waitForComposePane(page, 5_000);
+          await this.waitForComposeBodyReady(page, 5_000);
           logger.info(`[outlook-v2] Opened ${action} compose pane with Outlook keyboard shortcut fallback (${shortcut})`);
           return true;
         } catch {
@@ -2047,6 +2212,26 @@ export class OutlookActions {
     );
   }
 
+  private async waitForComposeBodyReady(page: Page, timeoutMs = 15_000): Promise<void> {
+    const started = Date.now();
+    let lastError: unknown;
+    while (Date.now() - started < timeoutMs) {
+      try {
+        if (await this.focusBestComposeBodyEditor(page)) return;
+        await this.waitForComposePane(page, Math.min(1_500, Math.max(250, timeoutMs - (Date.now() - started))));
+        if (await this.focusBestComposeBodyEditor(page)) return;
+      } catch (error) {
+        lastError = error;
+      }
+      await this.driver.sleep(300);
+    }
+    throw new Error(
+      `Could not locate a ready Outlook compose body editor${
+        lastError instanceof Error ? `: ${lastError.message}` : ''
+      }`,
+    );
+  }
+
   private async fillField(page: Page, label: 'To' | 'Cc' | 'Bcc' | 'Subject', value: string): Promise<void> {
     // Compose pane fields are usually inputs or contenteditables labelled by
     // aria-label. This is stable in Outlook.
@@ -2079,6 +2264,9 @@ export class OutlookActions {
       }
       await this.driver.sleep(250);
     }
+    if (label === 'Subject' && await this.fillSubjectFieldDom(page, value)) {
+      return;
+    }
     // VLM fallback for the field itself.
     const shot = await this.driver.screenshotViewport();
     const r = await this.grounder.ground({
@@ -2095,14 +2283,183 @@ export class OutlookActions {
     await this.driver.typeText(value);
   }
 
-  private async fillBody(page: Page, body: string): Promise<void> {
-    if (await this.focusBestComposeBodyEditor(page)) {
-      await this.assertFocusedComposeTargetIsBody(page);
-      await this.driver.typeText(body);
-      await this.verifyBodyFill(page, body);
-      return;
-    }
+  private async fillSubjectFieldDom(page: Page, value: string): Promise<boolean> {
+    const evaluate = (page as unknown as {
+      evaluate?: <TArg, TResult>(fn: (arg: TArg) => TResult, arg: TArg) => Promise<TResult>;
+    }).evaluate;
+    if (typeof evaluate !== 'function') return false;
+    await this.prepareFunctionEvaluate(page);
+    return evaluate.call(page, (subject) => {
+      const normalize = (input: string | undefined | null) => (input ?? '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const isVisible = (el: Element | null) => {
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        let current: Element | null = el;
+        while (current) {
+          const style = window.getComputedStyle(current);
+          if (style.visibility === 'hidden' || style.display === 'none') return false;
+          current = current.parentElement;
+        }
+        return true;
+      };
+      const metaText = (el: Element | null) => normalize([
+        el?.getAttribute('aria-label') || '',
+        el?.getAttribute('placeholder') || '',
+        el?.getAttribute('title') || '',
+        el?.getAttribute('name') || '',
+        el?.getAttribute('data-automation-id') || '',
+        el?.getAttribute('data-automationid') || '',
+        el?.textContent || '',
+      ].filter(Boolean).join(' '));
+      const hasSendButton = (root: Element) => Array.from(
+        root.querySelectorAll('button, [role="button"], [aria-label], [title], [data-testid]'),
+      ).some((el) => {
+        if (!isVisible(el)) return false;
+        const labels = [
+          el.getAttribute('aria-label') || '',
+          el.getAttribute('title') || '',
+          el.getAttribute('data-testid') || '',
+          el.textContent || '',
+        ].map(normalize).filter(Boolean);
+        return labels.some((label) => /^send$/i.test(label));
+      });
+      const composeRoot = (el: Element) => {
+        let current: Element | null = el;
+        for (let depth = 0; current && depth < 20; depth += 1) {
+          if (current !== document.body && current !== document.documentElement && hasSendButton(current)) {
+            return current;
+          }
+          current = current.parentElement;
+        }
+        return null;
+      };
+      const subjectCandidates = Array.from(document.querySelectorAll([
+        'input',
+        'textarea',
+        '[role="textbox"]',
+        '[contenteditable="true"]',
+        '[aria-label*="subject" i]',
+        '[placeholder*="subject" i]',
+      ].join(',')))
+        .filter((el) => isVisible(el))
+        .filter((el) => {
+          const text = metaText(el);
+          if (/\b(to|cc|bcc|recipient|recipients|message body)\b/i.test(text)) return false;
+          return /\bsubject\b/i.test(text) || /^add a subject$/i.test(normalize(el.textContent || ''));
+        })
+        .map((el) => ({ el, root: composeRoot(el), text: metaText(el) }))
+        .filter((item): item is { el: Element; root: Element; text: string } => Boolean(item.root))
+        .sort((a, b) => {
+          const aExact = /^(subject|add a subject)$/i.test(a.text) ? 1 : 0;
+          const bExact = /^(subject|add a subject)$/i.test(b.text) ? 1 : 0;
+          return bExact - aExact;
+        });
+      const target = subjectCandidates[0]?.el as HTMLElement | undefined;
+      if (!target) return false;
+      target.focus();
+      target.click();
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+        const proto = target instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        setter?.call(target, subject);
+      } else {
+        target.textContent = subject;
+      }
+      const inputEvent = typeof InputEvent === 'function'
+        ? new InputEvent('input', { bubbles: true, inputType: 'insertText', data: subject })
+        : new Event('input', { bubbles: true });
+      target.dispatchEvent(inputEvent);
+      target.dispatchEvent(new Event('change', { bubbles: true }));
+      target.blur();
+      return true;
+    }, value).catch((err) => {
+      logger.debug?.(
+        `[outlook-v2] subject DOM fill failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return false;
+    });
+  }
 
+  private async commitRecipientField(page: Page, label: 'To' | 'Cc' | 'Bcc', values: string[]): Promise<void> {
+    const expected = recipientEmails(values);
+    if (expected.length === 0) return;
+    const evaluate = (page as unknown as {
+      evaluate?: <TArg, TResult>(fn: (arg: TArg) => TResult, arg: TArg) => Promise<TResult>;
+    }).evaluate;
+
+    const readState = async () => {
+      if (typeof evaluate !== 'function') {
+        return { hasExpected: false, hasOpenPicker: true };
+      }
+      await this.prepareFunctionEvaluate(page);
+      return evaluate.call(page, ({ fieldLabel, expectedEmails: emails }) => {
+        const normalize = (value: string | undefined | null) => (value ?? '')
+          .replace(/\u00a0/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase();
+        const isVisible = (el: Element | null) => {
+          if (!el) return false;
+          const rect = el.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 0) return false;
+          let current: Element | null = el;
+          while (current) {
+            const style = window.getComputedStyle(current);
+            if (style.visibility === 'hidden' || style.display === 'none') return false;
+            current = current.parentElement;
+          }
+          return true;
+        };
+        const valueText = (el: Element | null) => {
+          if (!el) return '';
+          const value = 'value' in el && typeof el.value === 'string' ? el.value : '';
+          return normalize([value, el.textContent || ''].filter(Boolean).join(' '));
+        };
+        const fieldText = (el: Element | null) => normalize([
+          el?.getAttribute('aria-label') || '',
+          el?.getAttribute('placeholder') || '',
+          el?.getAttribute('title') || '',
+          el?.getAttribute('name') || '',
+          el?.getAttribute('data-automation-id') || '',
+          el?.getAttribute('data-automationid') || '',
+        ].filter(Boolean).join(' '));
+        const fieldSelectors = [
+          `[aria-label="${fieldLabel}"]`,
+          `[aria-label*="${fieldLabel}" i]`,
+          `[role="textbox"][aria-label*="${fieldLabel}" i]`,
+          `[contenteditable="true"][aria-label*="${fieldLabel}" i]`,
+        ];
+        const fieldValues = Array.from(document.querySelectorAll(fieldSelectors.join(',')))
+          .filter((el) => isVisible(el) && new RegExp(`\\b${fieldLabel}\\b`, 'i').test(fieldText(el)))
+          .map(valueText)
+          .join(' ');
+        const pageText = normalize(document.body?.innerText || document.body?.textContent || '');
+        const hasExpected = emails.every((email) => fieldValues.includes(normalize(email)) || pageText.includes(normalize(email)));
+        const hasOpenPicker = Array.from(document.querySelectorAll([
+          '[role="listbox"]',
+          '[role="option"]',
+          '[role="menu"]',
+          '[data-testid*="picker" i]',
+          '[aria-label*="suggest" i]',
+          '[aria-label*="search result" i]',
+        ].join(','))).some((el) => isVisible(el) && emails.some((email) => valueText(el).includes(normalize(email))));
+        return { hasExpected, hasOpenPicker };
+      }, { fieldLabel: label, expectedEmails: expected }).catch(() => ({ hasExpected: false, hasOpenPicker: true }));
+    };
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const state = await readState();
+      if (state.hasExpected && !state.hasOpenPicker) return;
+      await this.driver.pressKey(attempt < 3 ? 'Enter' : 'Tab');
+      await this.driver.sleep(300);
+    }
+  }
+
+  private async fillBody(page: Page, body: string): Promise<void> {
     const candidates = [
       page.getByLabel('Message body', { exact: true }),
       page.locator('[aria-label="Message body"]'),
@@ -2110,26 +2467,41 @@ export class OutlookActions {
       page.locator('[role="textbox"][aria-label*="body" i]'),
       page.locator('[contenteditable="true"][aria-label*="body" i]'),
     ];
-    for (const c of candidates) {
-      let hasCandidate: boolean;
-      try {
-        hasCandidate = (await c.count()) > 0;
-      } catch {
-        continue;
-      }
-      if (!hasCandidate) continue;
-      try {
-        await c.first().click({ timeout: 5_000 });
+
+    // Outlook's tabbed compose layout can render To/Subject before the body
+    // editor is attached. Retry the deterministic body probes before falling
+    // back to VLM so a transient DOM miss does not strand a saved draft.
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      if (await this.focusBestComposeBodyEditor(page)) {
         await this.assertFocusedComposeTargetIsBody(page);
-        // contenteditable bodies don't always accept .fill — type instead.
         await this.driver.typeText(body);
-      } catch {
-        // try next
-        continue;
+        await this.verifyBodyFill(page, body);
+        return;
       }
-      await this.verifyBodyFill(page, body);
-      return;
+
+      for (const c of candidates) {
+        let hasCandidate: boolean;
+        try {
+          hasCandidate = (await c.count()) > 0;
+        } catch {
+          continue;
+        }
+        if (!hasCandidate) continue;
+        try {
+          await c.first().click({ timeout: 2_000 });
+          await this.assertFocusedComposeTargetIsBody(page);
+          // contenteditable bodies don't always accept .fill — type instead.
+          await this.driver.typeText(body);
+          await this.verifyBodyFill(page, body);
+          return;
+        } catch {
+          // try next
+        }
+      }
+
+      await this.driver.sleep(250);
     }
+
     // VLM fallback.
     const shot = await this.driver.screenshotViewport();
     const r = await this.grounder.ground({
@@ -2805,6 +3177,107 @@ export class OutlookActions {
     return probe.clickedSend;
   }
 
+  private async waitForSendCompletion(page: Page): Promise<boolean> {
+    let clearPasses = 0;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await this.driver.sleep(500);
+      const probe = await this.readOpenDraftProbe(page);
+      if (!probe.error && probe.draftCount === 0) {
+        clearPasses += 1;
+        if (clearPasses >= 2) return true;
+      } else {
+        clearPasses = 0;
+      }
+    }
+    return false;
+  }
+
+  private async visibleFolderRowsContainDraftSnapshot(
+    page: Page,
+    folder: 'drafts' | 'sentitems',
+    snapshot: OpenDraftSnapshot,
+  ): Promise<boolean | null> {
+    const opened = await this.ensureMailFolder(page, folder);
+    if (!opened) return null;
+    const rows = await page.evaluate(() => {
+      const normalize = (value: string | undefined | null) => (value ?? '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const elements = Array.from(document.querySelectorAll([
+        '[role="option"][aria-label]',
+        '[role="row"][aria-label]',
+      ].join(',')));
+      return elements.slice(0, 30).map((el) => normalize([
+        el.getAttribute('aria-label') || '',
+        el.textContent || '',
+      ].join(' '))).filter(Boolean);
+    }).catch((err) => {
+      logger.debug?.(
+        `[outlook-v2] ${folder} row probe failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
+    }) as string[] | null;
+    if (!rows) return null;
+
+    const subjectNeedle = normalizeSearchText(snapshot.subject);
+    const bodyNeedle = normalizeSearchText(snapshot.body);
+    const recipientNeedles = canonicalRecipientEmails([
+      ...snapshot.to,
+      ...snapshot.cc,
+      ...snapshot.bcc,
+    ]).map(normalizeSearchText);
+    const bodyIsSpecific = bodyNeedle.length >= 8;
+    return rows.some((row) => {
+      const text = normalizeSearchText(row);
+      const subjectMatches = Boolean(subjectNeedle && text.includes(subjectNeedle));
+      const bodyMatches = Boolean(bodyIsSpecific && text.includes(bodyNeedle));
+      const recipientMatches = recipientNeedles.length === 0
+        || recipientNeedles.some((needle) => text.includes(needle));
+      if (bodyIsSpecific) {
+        return bodyMatches && (subjectMatches || recipientMatches);
+      }
+      if (subjectNeedle) {
+        return subjectMatches && recipientMatches;
+      }
+      return recipientNeedles.length > 0 && recipientMatches;
+    });
+  }
+
+  private async verifyPostSendState(page: Page, snapshot: OpenDraftSnapshot): Promise<SendFinalStateProbe> {
+    const subjectNeedle = normalizeSearchText(snapshot.subject);
+    const bodyNeedle = normalizeSearchText(snapshot.body);
+    const recipientNeedles = canonicalRecipientEmails([
+      ...snapshot.to,
+      ...snapshot.cc,
+      ...snapshot.bcc,
+    ]).map(normalizeSearchText);
+    const hasUsefulNeedle = Boolean(subjectNeedle || bodyNeedle || recipientNeedles.length > 0);
+    if (!hasUsefulNeedle) return { ok: true };
+
+    const draftResidue = await this.visibleFolderRowsContainDraftSnapshot(page, 'drafts', snapshot);
+    if (draftResidue === true) {
+      return {
+        ok: false,
+        reason:
+          'Send blocked: Outlook still shows a matching reviewed draft in Drafts after clicking Send, so it was not reported as sent.',
+      };
+    }
+    if (draftResidue === null) {
+      return {
+        ok: false,
+        reason:
+          'Send blocked: ClawX could not inspect Drafts after clicking Send, so it could not verify the reviewed draft left Drafts.',
+      };
+    }
+
+    const sentEvidence = await this.visibleFolderRowsContainDraftSnapshot(page, 'sentitems', snapshot);
+    if (sentEvidence === false && (subjectNeedle || bodyNeedle)) {
+      logger.debug?.('[outlook-v2] Sent Items did not expose the reviewed draft marker in the visible window after send');
+    }
+    return { ok: true };
+  }
+
   private async evaluateOpenDraftDom(
     page: Page,
     expected: DraftSendProbeInput,
@@ -2958,6 +3431,17 @@ export class OutlookActions {
         return labels.some((label) => /^send$/i.test(label));
       }) as HTMLElement | undefined;
       const hasSendButton = (root: Element) => Boolean(sendButton(root));
+      const hasDiscardButton = (root: Element) => Array.from(
+        root.querySelectorAll('button, [role="button"], [aria-label], [title]'),
+      ).some((el) => {
+        if (!isVisible(el)) return false;
+        const labels = [
+          el.getAttribute('aria-label') || '',
+          el.getAttribute('title') || '',
+          el.textContent || '',
+        ].map(normalize).filter(Boolean);
+        return labels.some((label) => /\bdiscard\b/i.test(label));
+      });
       const splitRecipients = (value: string) => normalize(value)
         .split(/[;,\n]+/)
         .map((part) => normalize(part))
@@ -2981,7 +3465,7 @@ export class OutlookActions {
         return '';
       };
       const nearestComposeRootForBody = (body: Element) => {
-        let best: { root: Element; score: number } | null = null;
+        let best: { root: Element; score: number; area: number } | null = null;
         let current: Element | null = body;
         const readingRoot = body.closest([
           '[role="region"][aria-label*="reading" i]',
@@ -2991,20 +3475,18 @@ export class OutlookActions {
         ].join(','));
         const composeRootScore = (root: Element) => {
           const hasSend = hasSendButton(root);
+          const hasDiscard = hasDiscardButton(root);
           const hasRecipient = hasRecipientField(root);
           const hasSubject = hasSubjectField(root);
           let score = 0;
           if (hasSend) score += 120;
+          if (hasDiscard) score += 20;
           if (hasRecipient) score += 35;
           if (hasSubject) score += 25;
           if (root.getAttribute('role') === 'dialog') score += 25;
           if (/\b(compose|new message|draft|reply|forward)\b/i.test(fieldNameText(root))) score += 20;
           return { score, hasSend };
         };
-        if (readingRoot && isVisible(readingRoot)) {
-          const { score } = composeRootScore(readingRoot);
-          if (score >= 80) best = { root: readingRoot, score };
-        }
         for (let depth = 0; current && depth < 30; depth += 1) {
           if (readingRoot && !readingRoot.contains(current)) break;
           if (!isVisible(current)) {
@@ -3013,8 +3495,12 @@ export class OutlookActions {
           }
           const { score, hasSend } = composeRootScore(current);
           const adjustedScore = score - (readingRoot && !hasSend ? 80 : 0);
-          if (adjustedScore >= 80 && (!best || adjustedScore > best.score)) {
-            best = { root: current, score: adjustedScore };
+          const rect = current.getBoundingClientRect();
+          const area = Math.max(1, rect.width * rect.height);
+          if (adjustedScore >= 80 && (!best
+            || adjustedScore > best.score
+            || (adjustedScore === best.score && area < best.area))) {
+            best = { root: current, score: adjustedScore, area };
           }
           current = current.parentElement;
         }
@@ -3031,7 +3517,12 @@ export class OutlookActions {
           '[role="textbox"][aria-multiline="true"]',
         ].join(','),
       )).filter((el) => isVisible(el) && isEditableBodyElement(el) && !isRecipientOrSubjectField(el) && nearestComposeRootForBody(el));
-      const roots = Array.from(new Set(bodyNodes.map(nearestComposeRootForBody).filter((root): root is Element => Boolean(root))));
+      const roots = Array.from(new Set(bodyNodes
+        .map(nearestComposeRootForBody)
+        .filter((root): root is Element => Boolean(root)
+          && root !== document.body
+          && root !== document.documentElement
+          && hasSendButton(root))));
       let firstSnapshot: OpenDraftSnapshot | null = null;
       const sendableRoots: Array<{ root: Element; snapshot: OpenDraftSnapshot; button: HTMLElement }> = [];
       const matchingRoots: Array<{ root: Element; snapshot: OpenDraftSnapshot; button: HTMLElement }> = [];
@@ -3118,7 +3609,13 @@ export class OutlookActions {
       logger.debug?.(
         `[outlook-v2] evaluateOpenDraftDom failed: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return { snapshot: null, clickedSend: false, draftCount: 0, sendableDraftCount: 0 };
+      return {
+        snapshot: null,
+        clickedSend: false,
+        draftCount: -1,
+        sendableDraftCount: -1,
+        error: err instanceof Error ? err.message : String(err),
+      };
     });
   }
 

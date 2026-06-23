@@ -13,6 +13,30 @@ description: Verify, debug, or repair the ClawX/Ministry Windows pilot demo for 
 - Do not send email, reply, forward, download attachments, or submit Forms unless the user explicitly confirms that exact action in the same session.
 - Prefer Outlook Browser v2 (`CLAWX_OUTLOOK_V2=1`) for Windows. Keep Microsoft Graph out of the real-send path until it has the same visible draft and confirmation gates.
 
+## Outlook State Vector
+
+Before compose, reply, forward, cleanup, or send, classify Outlook with this state vector:
+
+- `tab`: one canonical signed-in Outlook tab; if multiple Outlook tabs exist, use the active signed-in mail tab and do not act in background tabs.
+- `folder`: Inbox, message detail, Drafts, Sent, Archive, Deleted Items, or other. If the wrong folder is open, navigate back to Inbox or the specific message/draft instead of guessing from the current list.
+- `surface`: inbox list, message detail, compose draft, saved Drafts row, confirmation dialog, recipient autocomplete, or blocking dialog.
+- `source`: selected message id/subject/action target. A replied or forwarded source may now be in Archive/Sent/Drafts, not Inbox; recover by search/read-email, not by assuming the row is still visible.
+- `draft`: draft kind, visible draft count, reviewed flag, marker/subject, recipients, subject, body location, and whether the draft is stale.
+- `guards`: send confirm, human-reviewed state, marker-scoped cleanup target, and whether Outlook still shows the draft after a reported send.
+
+Recovery transitions:
+
+- Inbox list -> message detail -> compose is the normal read/reply/forward path.
+- Compose or saved Drafts row -> reviewed draft -> `outlook.send_email({confirm:true})` is the only send path.
+- Wrong folder, Sent, Drafts, Archive, or stale detail view -> search/read the intended message or navigate to Inbox before action.
+- Recipient autocomplete -> select only valid email recipients, then verify body text is in the message body editor.
+- Folder delete confirmation or discard-draft dialog -> cancel unless cleaning a known marker-scoped test draft.
+- False-positive send -> if the draft remains open or in Drafts, report failure, keep it for review, and do not retry without a fresh review and confirm.
+
+Hard guardrails: never click folder-level `Empty`, `Delete all`, or bulk cleanup controls; cleanup only marker-scoped test drafts/messages; never send unless the visible draft has been reviewed and the send call includes `confirm:true`; recipient fields must contain email addresses only; the requested body must be in the Message body, never in To/Cc/Bcc.
+
+Acceptance for compose/reply/reply-all/forward/send: exactly one intended draft exists, the right Outlook tab and folder/message context are active, recipients are valid emails, subject is correct, body is in the body editor, no autocomplete or delete/discard dialog is blocking, and send closes/removes the draft or is reported as not sent.
+
 ## Quick Checks
 
 From the repo root:

@@ -1085,7 +1085,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.open',
       description:
-        'Open Outlook Web (https://outlook.office.com/mail/) in the principal\'s existing Chrome session. Use this for email instead of generic browser/Chrome MCP tools. Returns { status: "opened" | "needs_signin", url, message? }. If a Chrome/CDP attach error occurs, call browser.diagnose then browser.repair_chrome_cdp before asking the principal to do anything manually. Never give the principal manual Chrome setup, flags-page, online troubleshooting, or command-line instructions. If sign-in is required, ask the principal to sign in to Outlook in the Chrome window that just opened, then call outlook.open again.',
+        'Open Outlook Web (https://outlook.office.com/mail/) in the principal\'s existing Chrome session. Use outlook.open first for Outlook email tasks, then use the explicit Outlook tools for read/search/read-email/reply/forward/send instead of generic browser/Chrome MCP tools. Returns { status: "opened" | "needs_signin", url, message?, transport?, source?, implementation?, version? }. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy; do not infer it when absent. If a Chrome/CDP attach error occurs, call browser.diagnose then browser.repair_chrome_cdp before asking the principal to do anything manually. Never give the principal manual Chrome debugging, manual Chrome setup, flags-page, online troubleshooting, or command-line instructions. If sign-in is required, ask the principal to sign in to Outlook in the Chrome window that just opened, then call outlook.open again.',
       parameters: emptyParameters,
       execute: async (_toolCallId, _params = {}) => {
         const result = await outlook.open();
@@ -1096,7 +1096,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.read_inbox',
       description:
-        'Return the top N recent messages from the principal\'s Outlook Inbox through the ClawX Outlook tool path. Args: { top?: number (default 10) }. This is a bounded recent Inbox window, not an exhaustive mailbox export. For "all emails", "this month", or audit-style summaries, use outlook.search_inbox with top 100-200, report scan.scannedCount/scan.scope, and do not claim all mail unless scan.exhaustive is true. If Chrome attach fails, use browser.diagnose and browser.repair_chrome_cdp; do not give manual Chrome setup instructions. Returns { status: "ok" | "needs_signin", messages: [{ id, subject, sender, snippet, receivedAt, unread }], scan }.',
+        'Read the top N recent messages from the principal\'s Outlook Inbox through the ClawX Outlook tool path. Canonical action: read. Args: { top?: number (default 10) }. This is a bounded recent Inbox window, not an exhaustive mailbox export. For "all emails", "this month", or audit-style summaries, use outlook.search_inbox with top 100-200, report scan.scannedCount/scan.scope, and do not claim all mail unless scan.exhaustive is true. If transport/source/implementation/version is present in the result, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy; do not infer it when absent. If Chrome attach fails, use browser.diagnose and browser.repair_chrome_cdp; do not give manual Chrome setup instructions. Returns { status: "ok" | "needs_signin", messages: [{ id, subject, sender, snippet, receivedAt, unread }], scan, transport?, source?, implementation?, version? }.',
       parameters: toolParameters({
         top: nonNegativeNumberSchema,
       }),
@@ -1110,7 +1110,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.draft_email',
       description:
-        'Compose a new email in Outlook Web and leave the draft open for the principal to review. Does NOT send. Args: { to: string | string[], subject, body, cc?, bcc? }. The body is email content and belongs only in the Outlook message body editor, never in To/Cc/Bcc. Returns { status, draftLeftOpen, preview }.',
+        'Compose a new email in Outlook Web and leave the draft open for the principal to review. Does NOT send. Use this only for a new draft, not to recover from a draft-related send refusal. Args: { to: string | string[], subject, body, cc?, bcc? }. The body is email content and belongs only in the Outlook message body editor, never in To/Cc/Bcc. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy. Returns { status, draftLeftOpen, preview, transport?, source?, implementation?, version? }.',
       parameters: toolParameters(
         {
           to: stringOrStringArraySchema,
@@ -1137,7 +1137,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.send_email',
       description:
-        'Send the single visible reviewed draft in Outlook Web. HARD GATE: refuses unless { confirm: true } is set. The agent MUST show or leave the draft open for the principal and obtain explicit confirmation ("yes, send") before passing confirm=true. After the principal reviews an open draft, call outlook.send_email with { confirm: true } only; do not regenerate or resend to/subject/body from memory. Optional to/cc/bcc/subject/body are safety assertions for advanced flows, not required for the normal reviewed-draft send.',
+        'Send the single visible reviewed draft in Outlook Web. Canonical action: send. HARD GATE: refuses unless { confirm: true } is set. The agent MUST show or leave the draft open for the principal and obtain explicit confirmation ("yes, send") before passing confirm=true. After the principal reviews an open draft, call outlook.send_email with { confirm: true } only; do not regenerate, redraft, or resend to/subject/body from memory. If the result refuses or fails because of drafts (no open draft, multiple drafts, stale saved draft, mismatched draft, or unverified Send button), do not call outlook.draft_email again. Run browser.diagnose when the result indicates browser/CDP state; otherwise ask one concrete diagnostic question about whether exactly one reviewed Outlook compose pane is visible, then retry outlook.send_email with { confirm: true } only after that visible draft state is clear. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy. Optional to/cc/bcc/subject/body are safety assertions for advanced flows, not required for the normal reviewed-draft send.',
       parameters: toolParameters(
         {
           to: stringOrStringArraySchema,
@@ -1169,7 +1169,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.search_inbox',
       description:
-        'Filter the principal\'s Inbox by sender, subject, date, unread, or attachment presence. Args: { from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top? (default 25) }. Returns { status, messages, capped, scan }. dateGte/dateLt are ISO 8601 strings. Prefer this over read_inbox when the user mentions a sender, date, month, or topic. For broad month/all-inbox searches use top 100-200, report the bounded scan, and say capped/incomplete/not exhaustive when capped is true or scan.exhaustive is false. Do not say "these are all emails" unless scan.exhaustive is true.',
+        'Search the principal\'s Inbox by sender, subject, date, unread, or attachment presence. Canonical action: search. Args: { from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top? (default 25) }. Returns { status, messages, capped, scan, transport?, source?, implementation?, version? }. dateGte/dateLt are ISO 8601 strings. Prefer this over read_inbox when the user mentions a sender, date, month, or topic. For broad month/all-inbox searches use top 100-200, report the bounded scan, and say capped/incomplete/not exhaustive when capped is true or scan.exhaustive is false. Do not say "these are all emails" unless scan.exhaustive is true. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy; do not infer it when absent.',
       parameters: toolParameters({
         from: stringSchema,
         subjectContains: stringSchema,
@@ -1187,7 +1187,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.read_email',
       description:
-        'Open a specific message and return its full body, sender, recipients, and attachment list. Args: { id }. id is the InboxMessage.id from read_inbox or search_inbox (sender|subject|received fingerprint). Returns { status, id, subject, sender, receivedAt, body, recipients, attachments: [{ filename, sizeBytes?, mimeType? }] }. Use this when the user asks "what does it say" or "summarise that email".',
+        'Open a specific message and return its full body, sender, recipients, and attachment list. Canonical action: read-email. Args: { id }. id is the InboxMessage.id from read_inbox or search_inbox (sender|subject|received fingerprint). Returns { status, id, subject, sender, receivedAt, body, recipients, attachments: [{ filename, sizeBytes?, mimeType? }], transport?, source?, implementation?, version? }. Use this before summarising a specific message or drafting a reply/forward. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy; do not infer it when absent.',
       parameters: toolParameters(
         {
           id: stringSchema,
@@ -1204,7 +1204,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.reply',
       description:
-        'Reply (or reply-all) to a specific message. Use this explicit Outlook tool for replies; do not use generic browser clicks or toolbar guessing to find Reply. Opens the reply pane in Outlook with To/Subject pre-filled by Outlook; we fill only the message body editor. Do not ask for a recipient after Outlook pre-fills the reply draft, and never place body text in To/Cc/Bcc. Leaves the draft open for the principal to review — does NOT send. Args: { id, body, replyAll? (default false) }.',
+        'Reply (or reply-all) to a specific message. Canonical action: reply. Use this explicit Outlook tool for replies; do not use generic browser clicks or toolbar guessing to find Reply. Opens the reply pane in Outlook with To/Subject pre-filled by Outlook; we fill only the message body editor. Do not ask for a recipient after Outlook pre-fills the reply draft, and never place body text in To/Cc/Bcc. Leaves the draft open for the principal to review — does NOT send. Args: { id, body, replyAll? (default false) }. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy.',
       parameters: toolParameters(
         {
           id: stringSchema,
@@ -1224,7 +1224,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.forward',
       description:
-        'Forward a specific message to a new recipient. Use this explicit Outlook tool for forwards; do not use generic browser clicks or toolbar guessing to find Forward. Opens the forward pane in Outlook with the original message quoted; To/Cc/Bcc are recipients only, and optional body is commentary that belongs only in the message body editor. Leaves the draft open. Args: { id, to: string | string[], body? }.',
+        'Forward a specific message to a new recipient. Canonical action: forward. Use this explicit Outlook tool for forwards; do not use generic browser clicks or toolbar guessing to find Forward. Opens the forward pane in Outlook with the original message quoted; To/Cc/Bcc are recipients only, and optional body is commentary that belongs only in the message body editor. Leaves the draft open. Args: { id, to: string | string[], body? }. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy.',
       parameters: toolParameters(
         {
           id: stringSchema,

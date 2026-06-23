@@ -43,6 +43,34 @@ Source of truth: `electron/services/outlook-browser-v2/manager.ts` + `outlook-ac
 - Body text belongs only in the compose message body editor. Do not place body text in To, Cc, or Bcc fields, and do not ask for a recipient after Outlook has pre-filled a reply draft.
 - Sending is separate from drafting. After `outlook.reply`, `outlook.forward`, or `outlook.draft_email`, leave the draft open for review. Send only with `outlook.send_email({confirm:true})` after the principal has reviewed the visible draft and explicitly approved sending.
 
+## Outlook state vector and recovery
+
+Classify Outlook before every compose, reply, reply-all, forward, cleanup, or send:
+
+| Field | Check |
+|---|---|
+| `tab` | Exactly one active signed-in Outlook mail tab is the action target. If multiple Outlook tabs exist, use the active mail tab and do not act in background tabs. |
+| `folder` | Current context is Inbox, message detail, Drafts, Sent, Archive, Deleted Items, or other. Wrong-folder, Sent, Drafts, or Archive views must navigate back to Inbox or the intended message/draft before acting. |
+| `surface` | Current surface is inbox list, message detail, compose draft, saved Drafts row, folder delete confirmation, discard draft dialog, recipient autocomplete, or another blocker. |
+| `source` | Target message id/subject/action is known. A replied or forwarded source may have moved to Archive/Sent/Drafts; recover with search/read-email instead of assuming the Inbox row still exists. |
+| `draft` | Draft kind, visible draft count, reviewed flag, marker/subject, recipients, subject, body location, and stale/open status are known. |
+| `guards` | Send has same-session confirmation, cleanup is marker-scoped, recipient fields contain emails only, body is in Message body, and post-send verifies the draft disappeared. |
+
+Recovery transitions:
+
+- Inbox list -> message detail -> compose draft for read, reply, reply-all, and forward.
+- Compose draft or saved Drafts row -> reviewed draft -> `outlook.send_email({confirm:true})`.
+- Recipient autocomplete -> select only the intended email recipient, then verify body text is still in the message body.
+- Body text in To/Cc/Bcc -> stop, discard only that draft if marker-scoped, then recreate with body in Message body.
+- Reply button not found -> call `outlook.reply`/`outlook.forward` by message id; do not hunt toolbar buttons.
+- Folder delete confirmation or discard draft dialog -> cancel unless cleaning a known marker-scoped test draft.
+- Stale open drafts or multiple compose panes -> close only marker-scoped stale drafts; otherwise stop and ask for review.
+- False-positive send -> if the draft remains open or in Drafts after success, treat it as not sent and do not retry without fresh review plus `confirm:true`.
+
+Hard guardrails: never click folder-level `Empty`, `Delete all`, or bulk delete/cleanup controls. Cleanup is only for marker-scoped test drafts/messages. Never send unless one visible intended draft has been reviewed in Outlook and `confirm:true` is present. Recipient fields must contain valid email addresses only; body text must be in the Message body.
+
+Acceptance for compose/reply/reply-all/forward/send: correct tab, folder/message context, and source id; exactly one intended draft; valid email recipients; correct subject; requested body in the body editor; no autocomplete, delete, or discard dialog blocking; send closes/removes the draft or is reported as refused/not sent.
+
 ## Send gate (mandatory)
 
 `outlook.send_email` will refuse unless `confirm: true` is in the args and Outlook shows exactly one complete reviewed draft with its own Send button.

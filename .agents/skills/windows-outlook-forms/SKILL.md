@@ -12,6 +12,21 @@ description: Verify, debug, or drive the Windows Outlook and Microsoft Forms dem
 - Do not send email, reply, forward, download attachments, or submit Forms unless the user explicitly confirms that exact action in the current session.
 - Do not print passwords, provider keys, Host API tokens, email bodies, full recipient lists, or private Forms URLs.
 
+## Outlook State Vector
+
+For every Outlook action, classify the current page before acting:
+
+- `tab`: one active signed-in Outlook mail tab. Ignore background duplicates.
+- `folder`: Inbox, message detail, Drafts, Sent, Archive, Deleted Items, or other.
+- `surface`: inbox list, message detail, compose draft, saved Drafts row, folder delete confirmation, discard draft dialog, or recipient autocomplete.
+- `source`: target message id/subject/action. Replied or forwarded source messages may now be archived or in another folder.
+- `draft`: kind, visible draft count, reviewed flag, marker/subject, recipients, body location, and stale/open status.
+- `guards`: explicit send confirmation, marker-scoped cleanup target, and post-send draft-absence check.
+
+Recover by moving to the intended state, not by guessing from the current view: return wrong-folder/Sent/Drafts/Archive views to Inbox or the target message; search/read the source if its row moved; resolve recipient autocomplete with email recipients only; cancel folder delete or discard dialogs unless cleaning a known marker-scoped test draft. Never click folder-level `Empty`, `Delete all`, or bulk cleanup controls. Never send unless exactly one visible reviewed draft is open and `confirm:true` is present. Body text must be in the Message body, never in To/Cc/Bcc. If send reports success but the draft remains open or in Drafts, treat it as not sent.
+
+Acceptance for compose, reply, reply-all, forward, and send: the right Outlook tab and message/folder context are active, exactly one intended draft exists, recipients are valid email addresses, the subject is correct, body text is in the body editor, no autocomplete/delete/discard dialog blocks the draft, and send closes/removes the draft or reports a refusal.
+
 ## First Reads
 
 - `docs/AGENT_OUTLOOK.md`
