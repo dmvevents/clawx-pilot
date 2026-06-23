@@ -72,7 +72,47 @@ describe('Outlook inbox windowing', () => {
       returnedCount: 37,
       exhaustive: false,
     });
-    expect(page.evaluate).toHaveBeenCalledWith(expect.stringContaining('const limit = 37;'));
+    expect(page.evaluate).toHaveBeenCalledWith(expect.stringContaining('const limit = 49;'));
+  });
+
+  it('readInbox skips open-draft pseudo rows before selecting reply targets', async () => {
+    const { actions, page } = createActions();
+    page.evaluate = vi.fn(async (script: string) => {
+      if (!script.includes('const limit =')) return false;
+      return [
+        {
+          id: '[Draft]|Karunesh Ramdass Meeting|Mon 10:08 PM',
+          sender: '[Draft]',
+          subject: 'Karunesh Ramdass Meeting',
+          snippet: '',
+          received: 'Mon 10:08 PM',
+          unread: false,
+        },
+        {
+          id: 'Karunesh Ramdass|Meeting|Mon 10:08 PM',
+          sender: 'Karunesh Ramdass',
+          subject: 'Meeting',
+          snippet: 'Do you wanna have a meeting tomorrow?',
+          received: 'Mon 10:08 PM',
+          unread: true,
+        },
+      ];
+    });
+
+    const result = await actions.readInbox(1);
+
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]).toMatchObject({
+      id: 'Karunesh Ramdass|Meeting|Mon 10:08 PM',
+      sender: 'Karunesh Ramdass',
+      subject: 'Meeting',
+    });
+    expect(result.scan).toMatchObject({
+      requestedTop: 1,
+      scannedCount: 1,
+      returnedCount: 1,
+      artifactSkippedCount: 1,
+    });
   });
 
   it('searchInbox reads a wider inbox window before applying a small result cap', async () => {
@@ -214,7 +254,7 @@ describe('Outlook inbox windowing', () => {
     expect(result.status).toBe('needs_signin');
     expect(result.messages).toEqual([]);
     expect(result.message).toMatch(/sign in/i);
-    expect(page.evaluate).not.toHaveBeenCalledWith(expect.stringContaining('const limit = 5;'));
+    expect(page.evaluate).not.toHaveBeenCalledWith(expect.stringContaining('const limit ='));
   });
 
   it('accepts Outlook cloud Inbox URLs without navigating away from the signed-in host', async () => {

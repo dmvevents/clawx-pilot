@@ -26,7 +26,7 @@ The agent calls these via the Anthropic tool-use protocol; you do **not** call t
 | `outlook.search_inbox({subjectContains, fromContains, dateRange})` | Filtered search | none |
 | `outlook.read_email({id})` | Full body, recipients, attachments-meta | none |
 | `outlook.draft_email({to, subject, body})` | Open compose pane with values | none |
-| `outlook.reply({id, body})` | Open Reply compose with `Re:` subject pre-filled | none |
+| `outlook.reply({id, body, replyAll?})` | Open Reply or Reply All compose with recipients/subject pre-filled by Outlook | none |
 | `outlook.forward({id, to, body?})` | Open Forward compose | none |
 | `outlook.send_email({confirm:true})` | **Send the single visible reviewed draft** | **hard-confirm gate** (see below) |
 | `outlook.list_attachments({id})` | List names + sizes | none |
@@ -34,6 +34,14 @@ The agent calls these via the Anthropic tool-use protocol; you do **not** call t
 | `outlook.mark_read({id, read})` | Toggle read state | none |
 
 Source of truth: `electron/services/outlook-browser-v2/manager.ts` + `outlook-actions.ts`.
+
+## Explicit Outlook action rules
+
+- Reply must use `outlook.reply({id, body})`. Reply All must use `outlook.reply({id, body, replyAll:true})`.
+- Forward must use `outlook.forward({id, to, body?})`.
+- Never use generic browser clicks, toolbar guessing, keyboard shortcuts, or broad DOM automation for reply, reply-all, or forward. Locate the target message with `outlook.read_inbox`, `outlook.search_inbox`, or `outlook.read_email`, then call the explicit Outlook tool.
+- Body text belongs only in the compose message body editor. Do not place body text in To, Cc, or Bcc fields, and do not ask for a recipient after Outlook has pre-filled a reply draft.
+- Sending is separate from drafting. After `outlook.reply`, `outlook.forward`, or `outlook.draft_email`, leave the draft open for review. Send only with `outlook.send_email({confirm:true})` after the principal has reviewed the visible draft and explicitly approved sending.
 
 ## Send gate (mandatory)
 
@@ -71,6 +79,8 @@ Expected:
 1. `outlook.search_inbox({subjectContains: "parent meeting"})` to locate
 2. `outlook.read_email({id})` to fetch context
 3. `outlook.reply({id, body: "<draft>"})` opens compose pane in Chrome
+
+The draft body must be inserted into the message body editor only. Outlook pre-fills the reply recipient and subject; do not fill To/Cc/Bcc with message body text and do not use browser clicks to hunt for a Reply button.
 
 **Do NOT click Send.** Show the principal the assistant stops at draft.
 

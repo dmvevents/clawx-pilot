@@ -69,7 +69,7 @@ export interface DraftEmailArgs {
 }
 
 export interface DraftEmailResult {
-  status: 'drafted' | 'needs_signin';
+  status: 'drafted' | 'failed' | 'needs_signin';
   /** True when the New-mail compose pane was filled and left open. */
   draftLeftOpen: boolean;
   /** Echo of what we filled, for the agent's "show before you send" hand-off. */

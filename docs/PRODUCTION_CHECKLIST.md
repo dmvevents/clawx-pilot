@@ -4,7 +4,7 @@
 >
 > **Used by**: the `production-readiness` sub-agent and any human on-call before a release tag.
 >
-> Last reviewed: **2026-06-05**.
+> Last reviewed: **2026-06-23**.
 
 ## Legend
 
@@ -65,11 +65,11 @@
 
 | # | Check | How to verify | State |
 |---|---|---|---|
-| 6.1 | Vitest green | `pnpm test` → 781 pass, 5 skipped — channel-routes flake fixed in `electron/utils/gateway-health.ts` (failure>=ok comparison) | ✅ |
-| 6.2 | Typecheck clean | `pnpm run typecheck` passed 2026-06-05 | ✅ |
-| 6.3 | Harness CI green | `pnpm run harness:ci` passed 2026-06-05 | ✅ |
+| 6.1 | Vitest green | 2026-06-23 `pnpm test` → 148 files, 1115 passed, 5 skipped | ✅ |
+| 6.2 | Typecheck clean | 2026-06-23 `pnpm run typecheck` passed | ✅ |
+| 6.3 | Harness CI green | 2026-06-23 `pnpm run harness:ci` passed | ✅ |
 | 6.4 | E2E (Playwright) green | `pnpm run test:e2e` | ⚠️ run before release |
-| 6.5 | Windows installed-app chat procedures | Latest evidence reached `READY_SAFE_CHAT_PROCEDURES` with Outlook open, Forms list, Downloads inventory, Excel summary, suspension-source extraction, and Host API Outlook/Forms safety smoke | ✅ |
+| 6.5 | Windows installed-app chat procedures | 2026-06-23 local Electron/Chrome Host API no-send matrix passed compose, reply, reply-all, and forward with scoped ClawX test-draft cleanup; installed Windows desktop shortcut proof for the current `e35ee6...` asset is still required before GA | ⚠️ |
 | 6.6 | Teacher Daily Report guardrail | `teacher-daily-report-missing-counts` safe-chat scenario asks for missing required counts instead of inventing them | ⚠️ added; rerun on Windows |
 
 ## 7 · Self-test cron
@@ -139,3 +139,4 @@ After every audit, append a one-line verdict:
 - 2026-05-20 — VERDICT: **YELLOW** — gateway self-heal shipped + skill manifest expanded; logo asset and telemetry pipeline still pending; Entra packet still with MoE IT. Pilot-deployable, fleet-deployable when 8.8, 9.2, 10.1 close.
 - 2026-05-20 (PM) — VERDICT: **YELLOW** — channel-routes flake closed (full vitest 781/781), seeder hardened for first-run-from-zero (writes skeleton instead of skipping ENOENT), bluebubbles removed from manifest+bundles (not present upstream — was the Windows build blocker). Skill count down to 17. Logo, telemetry, Entra still pending. Pilot-deployable.
 - 2026-06-05 — VERDICT: **YELLOW** — Windows installed-app RC evidence is green for safe Outlook/Forms/Downloads procedures, and model-broker code/tests are present. Pilot production is still blocked on deployed broker configuration, rerun of the new teacher Daily Report guardrail scenario, clean installer smoke, logo, telemetry, and Entra/fleet items.
+- 2026-06-23 — VERDICT: **YELLOW** — email draft/reply regressions are locally green for compose, reply, reply-all, forward, and scoped test-draft cleanup; rebuilt installer `e35ee6...` is ready for prerelease upload, but current-asset installed Windows proof, Forms preview, Office installed-app chat matrix, ASR smoke, logo, telemetry, and Entra/fleet items remain open.

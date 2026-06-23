@@ -88,6 +88,15 @@ type OpenDraftDomProbe = {
   sendableDraftCount: number;
 };
 
+type VisibleInboxRow = {
+  id: string;
+  sender: string;
+  subject: string;
+  snippet: string;
+  received: string;
+  unread: boolean;
+};
+
 // Predicate moved to ./search-helpers.ts for unit testing without Playwright.
 const matchesSearchArgs = matchesSearchArgsForTests;
 
@@ -179,11 +188,39 @@ function validateConfirmedSendArgs(args: SendEmailArgs): string | null {
   return null;
 }
 
+function isInboxMessageCandidateRow(row: VisibleInboxRow): boolean {
+  const sender = normalizeComparableText(row.sender);
+  const subject = normalizeComparableText(row.subject);
+  const id = normalizeComparableText(row.id);
+  if (!sender || !subject) return false;
+  return !(
+    /^\[?draft\]?$/i.test(sender)
+    || /^\[?draft\]?(?:\||$)/i.test(id)
+    || /^\[draft\]/i.test(subject)
+  );
+}
+
 export class OutlookActions {
   constructor(
     private readonly driver: PlaywrightDriver,
     private readonly grounder: VlmGrounder,
   ) {}
+
+  private async prepareFunctionEvaluate(page: Page): Promise<void> {
+    const evaluate = (page as unknown as { evaluate?: (script: string) => Promise<unknown> }).evaluate;
+    if (typeof evaluate !== 'function') return;
+    await evaluate.call(page, `
+      (() => {
+        if (typeof window.__name !== 'function') {
+          Object.defineProperty(window, '__name', {
+            configurable: true,
+            writable: true,
+            value: function(fn) { return fn; }
+          });
+        }
+      })()
+    `).catch(() => undefined);
+  }
 
   /** Ensure the Outlook tab exists and is signed in. */
   async open(): Promise<OutlookOpenResult> {
@@ -242,23 +279,22 @@ export class OutlookActions {
     //    "Fri 3:46 PM" (received), "preview/snippet text"]
     // We classify each text node by content (date-like, single-letter
     // avatar, etc.) and assign positions.
-    const rowById = new Map<string, {
-      id: string;
-      sender: string;
-      subject: string;
-      snippet: string;
-      received: string;
-      unread: boolean;
-    }>();
+    const rowById = new Map<string, VisibleInboxRow>();
     let scrollPasses = 0;
     let lastCount = -1;
     let stalePasses = 0;
+    let artifactSkippedCount = 0;
     const maxPasses = Math.min(Math.max(Math.ceil(top / 8) + 4, 1), 40);
+    const extractionLimit = Math.max(top, Math.min(top + 12, 240));
 
     await this.resetInboxListScroll(page);
     for (let pass = 0; pass < maxPasses && rowById.size < top; pass += 1) {
-      const rows = await this.extractVisibleInboxRows(page, top);
+      const rows = await this.extractVisibleInboxRows(page, extractionLimit);
       for (const row of rows) {
+        if (!isInboxMessageCandidateRow(row)) {
+          artifactSkippedCount += 1;
+          continue;
+        }
         if (!row.id || rowById.has(row.id)) continue;
         rowById.set(row.id, row);
         if (rowById.size >= top) break;
@@ -295,6 +331,7 @@ export class OutlookActions {
         scannedCount: messages.length,
         returnedCount: messages.length,
         scrollPasses,
+        artifactSkippedCount,
         exhaustive: false,
         note:
           'Browser Outlook scan covers a bounded, scrolled recent Inbox window only; do not describe it as all mailbox mail.',
@@ -330,6 +367,16 @@ export class OutlookActions {
     // affordances; ignore failures (no dialog to close is the happy path).
     await this.dismissBlockingDialog(page);
 
+    if (await this.hasAnyVisibleOpenDraft(page)) {
+      return {
+        status: 'failed',
+        draftLeftOpen: true,
+        preview: { to, cc, bcc, subject, body },
+        message:
+          'Outlook already has an open draft. Review, send, or close that draft before starting another email so ClawX does not create duplicate saved drafts.',
+      };
+    }
+
     // 1. Click New mail.
     await this.clickNewMail(page);
 
@@ -350,6 +397,21 @@ export class OutlookActions {
     }
     await this.fillField(page, 'Subject', subject);
     await this.fillBody(page, body);
+
+    const draftProbe = await this.readOpenDraftProbe(page);
+    const mismatch = draftProbe.snapshot
+      ? this.describeDraftMismatch(draftProbe.snapshot, { to, cc, bcc, subject, body, confirm: true })
+      : 'the new draft is not visible for review';
+    if (draftProbe.draftCount !== 1 || draftProbe.sendableDraftCount !== 1 || mismatch) {
+      return {
+        status: 'failed',
+        draftLeftOpen: draftProbe.draftCount > 0,
+        preview: { to, cc, bcc, subject, body },
+        message: mismatch
+          ? `Draft was not marked ready because ${mismatch}. Review or close any saved Outlook draft before retrying.`
+          : 'Draft was not marked ready because ClawX could not identify exactly one visible reviewed draft. Review or close any saved Outlook draft before retrying.',
+      };
+    }
 
     return {
       status: 'drafted',
@@ -606,12 +668,21 @@ export class OutlookActions {
       };
     }
 
+    await this.dismissBlockingDialog(page);
     const opened = await this.openMessageById(page, args.id);
     if (!opened) {
       return {
         status: 'not_found',
         draftLeftOpen: false,
         message: `Could not locate message with id "${args.id}".`,
+      };
+    }
+    if (await this.hasAnyVisibleOpenDraft(page)) {
+      return {
+        status: 'not_found',
+        draftLeftOpen: true,
+        message:
+          'Outlook already has an open draft. Review, send, or close it before replying so ClawX does not type the reply into the wrong draft.',
       };
     }
 
@@ -674,9 +745,18 @@ export class OutlookActions {
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
+    await this.dismissBlockingDialog(page);
     const opened = await this.openMessageById(page, args.id);
     if (!opened) {
       return { status: 'not_found', draftLeftOpen: false, message: `Could not locate message with id "${args.id}".` };
+    }
+    if (await this.hasAnyVisibleOpenDraft(page)) {
+      return {
+        status: 'not_found',
+        draftLeftOpen: true,
+        message:
+          'Outlook already has an open draft. Review, send, or close it before forwarding so ClawX does not type into the wrong draft.',
+      };
     }
 
     await this.dismissBlockingDialog(page);
@@ -1006,7 +1086,7 @@ export class OutlookActions {
   private async extractVisibleInboxRows(
     page: Page,
     limit: number,
-  ): Promise<Array<{ id: string; sender: string; subject: string; snippet: string; received: string; unread: boolean }>> {
+  ): Promise<VisibleInboxRow[]> {
     return page.evaluate(`
       (() => {
         const out = [];
@@ -1081,7 +1161,7 @@ export class OutlookActions {
         `[outlook-v2] extractVisibleInboxRows failed: ${err instanceof Error ? err.message : String(err)}`,
       );
       return [];
-    }) as Promise<Array<{ id: string; sender: string; subject: string; snippet: string; received: string; unread: boolean }>>;
+    }) as Promise<VisibleInboxRow[]>;
   }
 
   private async scrollInboxList(page: Page): Promise<boolean> {
@@ -1232,6 +1312,8 @@ export class OutlookActions {
     // Order matters: prefer affordances that close-or-continue the dialog
     // (Continue, Got it, OK) before generic Close, because some Outlook
     // privacy/welcome dialogs don't have a Close X — only a primary action.
+    // Do not click Discard/Discard draft here. Those buttons are destructive
+    // and belong only in the ClawX-owned test cleanup harness.
     const candidates = [
       page.getByRole('button', { name: /^continue$/i }),
       page.getByRole('button', { name: /^got it$/i }),
@@ -1266,6 +1348,7 @@ export class OutlookActions {
     if (/login\.microsoftonline\.com/.test(url) || /login\.live\.com/.test(url)) {
       return true;
     }
+    await this.prepareFunctionEvaluate(page);
     const domSignals = await page.evaluate(() => {
       const textFor = (element: Element | null) => [
         element?.getAttribute('aria-label') || '',
@@ -1395,6 +1478,7 @@ export class OutlookActions {
   }
 
   private async resetComposeSurfaceToInbox(page: Page): Promise<boolean> {
+    await this.prepareFunctionEvaluate(page);
     const state = await page.evaluate(readOutlookDomState).catch(() => ({
       hasNewMailControl: false,
       hasOpenComposeSurface: false,
@@ -1484,6 +1568,7 @@ export class OutlookActions {
       : opts.role === 'link'
         ? 'a,[role="link"]'
         : '[role="menuitem"],button,[role="button"]';
+    await this.prepareFunctionEvaluate(page);
     const index = await page.evaluate(
       ({ selector: selectorText, source, ignoreCase }) => {
         const re = new RegExp(source, ignoreCase ? 'i' : '');
@@ -1534,13 +1619,14 @@ export class OutlookActions {
     page: Page,
     action: 'reply' | 'replyAll' | 'forward',
   ): Promise<boolean> {
-    const shortcut = action === 'replyAll'
-      ? 'Control+Shift+R'
+    const shortcuts = action === 'replyAll'
+      ? (process.platform === 'darwin' ? ['Meta+Shift+R', 'Control+Shift+R', 'Shift+R'] : ['Control+Shift+R', 'Shift+R'])
       : action === 'forward'
-        ? 'Control+Shift+F'
-        : 'Control+R';
+        ? (process.platform === 'darwin' ? ['Meta+Shift+F', 'Control+Shift+F', 'Shift+F'] : ['Control+Shift+F', 'Shift+F'])
+        : (process.platform === 'darwin' ? ['Meta+R', 'Control+R', 'R'] : ['Control+R', 'R']);
 
     try {
+      await this.prepareFunctionEvaluate(page);
       const focusedMessageSurface = await page.evaluate(() => {
         const roots = Array.from(document.querySelectorAll([
           '[role="region"][aria-label*="reading" i]',
@@ -1571,10 +1657,18 @@ export class OutlookActions {
         return true;
       });
       if (!focusedMessageSurface) return false;
-      await this.driver.pressKey(shortcut);
-      await this.waitForComposePane(page);
-      logger.info(`[outlook-v2] Opened ${action} compose pane with Outlook keyboard shortcut fallback`);
-      return true;
+      for (const shortcut of shortcuts) {
+        await this.driver.pressKey(shortcut);
+        try {
+          await this.waitForComposePane(page, 5_000);
+          logger.info(`[outlook-v2] Opened ${action} compose pane with Outlook keyboard shortcut fallback (${shortcut})`);
+          return true;
+        } catch {
+          // Try the next shortcut. Outlook Web differs across Windows/macOS
+          // and tenant keyboard-shortcut modes.
+        }
+      }
+      return false;
     } catch (err) {
       logger.debug?.(
         `[outlook-v2] ${action} keyboard shortcut fallback missed: ${
@@ -1586,6 +1680,7 @@ export class OutlookActions {
   }
 
   private async clickOpenMessageToolbarButton(page: Page, nameRegex: RegExp): Promise<boolean> {
+    await this.prepareFunctionEvaluate(page);
     const clickResult = await page.evaluate(({ source, ignoreCase }) => {
       const re = new RegExp(source, ignoreCase ? 'i' : '');
       const target = /\breply\s+all\b/i.test(source)
@@ -1708,6 +1803,7 @@ export class OutlookActions {
     });
     if (clickResult) return true;
 
+    await this.prepareFunctionEvaluate(page);
     const openedMoreMenu = await page.evaluate(() => {
       const normalize = (value: string | undefined | null) => (value ?? '')
         .replace(/\u00a0/g, ' ')
@@ -1775,6 +1871,7 @@ export class OutlookActions {
       await waitForTimeout.call(page, 300).catch(() => undefined);
     }
 
+    await this.prepareFunctionEvaluate(page);
     return page.evaluate(({ source, ignoreCase }) => {
       const re = new RegExp(source, ignoreCase ? 'i' : '');
       const target = /\breply\s+all\b/i.test(source)
@@ -1840,37 +1937,147 @@ export class OutlookActions {
     });
   }
 
-  private async waitForComposePane(page: Page): Promise<void> {
-    // The compose pane uses role="dialog" or aria-label="Message body".
+  private async hasAnyVisibleOpenDraft(page: Page): Promise<boolean> {
+    const listPages = (this.driver as unknown as { outlookPages?: () => Promise<Page[]> }).outlookPages;
+    const pages = typeof listPages === 'function'
+      ? await listPages.call(this.driver).catch(() => [page])
+      : [page];
+    for (const candidate of pages.length > 0 ? pages : [page]) {
+      if (await this.hasVisibleOpenDraft(candidate)) return true;
+    }
+    return false;
+  }
+
+  private async hasVisibleOpenDraft(page: Page): Promise<boolean> {
+    const evaluate = (page as unknown as {
+      evaluate?: <TResult>(fn: () => TResult) => Promise<TResult>;
+    }).evaluate;
+    if (typeof evaluate !== 'function') return false;
+    await this.prepareFunctionEvaluate(page);
+    return evaluate.call(page, () => {
+      const normalize = (value: string | undefined | null) => (value ?? '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const isVisible = (el: Element | null) => {
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        let current: Element | null = el;
+        while (current) {
+          const style = window.getComputedStyle(current);
+          if (style.visibility === 'hidden' || style.display === 'none') return false;
+          current = current.parentElement;
+        }
+        return true;
+      };
+      const labelFor = (el: Element | null) => normalize([
+        el?.getAttribute('aria-label') || '',
+        el?.getAttribute('title') || '',
+        el?.getAttribute('data-testid') || '',
+        el?.getAttribute('data-automation-id') || '',
+        el?.getAttribute('data-automationid') || '',
+        el?.textContent || '',
+      ].filter(Boolean).join(' '));
+      const hasSendButton = (root: Element) => Array.from(
+        root.querySelectorAll('button, [role="button"], [aria-label], [title], [data-testid]'),
+      ).some((el) => isVisible(el) && /^send$/i.test(labelFor(el)));
+      const hasRecipientOrSubjectField = (root: Element) => Array.from(root.querySelectorAll([
+        '[aria-label="To"]',
+        '[aria-label="Cc"]',
+        '[aria-label="Bcc"]',
+        '[aria-label="Subject"]',
+        '[aria-label*="recipient" i]',
+        '[placeholder="Add a subject"]',
+        '[placeholder*="subject" i]',
+        '[role="textbox"][aria-label*="To" i]',
+        '[role="textbox"][aria-label*="Cc" i]',
+        '[role="textbox"][aria-label*="Bcc" i]',
+        '[contenteditable="true"][aria-label*="recipient" i]',
+      ].join(','))).some(isVisible);
+      const hasEditableBody = (root: Element) => Array.from(root.querySelectorAll([
+        '[aria-label="Message body"]',
+        '[aria-label*="Message body" i]',
+        '[role="textbox"][aria-label*="body" i]',
+        '[contenteditable="true"][aria-label*="body" i]',
+        '[contenteditable="true"][role="textbox"]',
+        '[contenteditable="true"][aria-multiline="true"]',
+        '[role="textbox"][aria-multiline="true"]',
+      ].join(','))).some((el) => {
+        if (!isVisible(el)) return false;
+        const label = labelFor(el);
+        if (/\b(to|cc|bcc|subject|recipient|recipients)\b/i.test(label)) return false;
+        if (el.getAttribute('contenteditable') === 'false') return false;
+        const role = normalize(el.getAttribute('role')).toLowerCase();
+        const tag = el.tagName.toLowerCase();
+        return el.getAttribute('contenteditable') === 'true' || role === 'textbox' || tag === 'textarea';
+      });
+      const roots = Array.from(document.querySelectorAll([
+        'div[role="dialog"]',
+        '[aria-label*="Compose" i]',
+        '[aria-label*="New message" i]',
+        '[aria-label*="Draft" i]',
+        '[role="region"][aria-label*="reading" i]',
+        '[role="main"][aria-label*="Reading Pane" i]',
+        '[aria-label*="reading pane" i]',
+      ].join(','))).filter(isVisible);
+      return roots.some((root) => hasEditableBody(root)
+        && (hasSendButton(root) || hasRecipientOrSubjectField(root) || /\b(compose|new message|draft|reply|forward)\b/i.test(labelFor(root))));
+    }).catch((err) => {
+      logger.debug?.(
+        `[outlook-v2] visible draft preflight failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return false;
+    });
+  }
+
+  private async waitForComposePane(page: Page, timeoutMs = 15_000): Promise<void> {
+    // Do not unblock on the open-message reading pane. It also exposes
+    // "Message body"; a compose surface must have send/compose evidence.
     await page.waitForSelector(
-      'div[role="dialog"], [aria-label="Message body"], [aria-label*="Compose" i]',
-      { timeout: 15_000 },
+      [
+        'button[aria-label="Send"]',
+        '[role="button"][aria-label="Send"]',
+        '[title="Send"]',
+        '[data-testid*="Send" i]',
+        '[aria-label*="Compose" i]',
+        'div[role="dialog"] [aria-label="Message body"]',
+      ].join(', '),
+      { timeout: timeoutMs },
     );
   }
 
   private async fillField(page: Page, label: 'To' | 'Cc' | 'Bcc' | 'Subject', value: string): Promise<void> {
     // Compose pane fields are usually inputs or contenteditables labelled by
     // aria-label. This is stable in Outlook.
-    const candidates = [
-      page.getByLabel(label, { exact: true }),
-      page.locator(`[aria-label="${label}"]`),
-      page.locator(`[aria-label*="${label}" i]`),
-      page.locator(`[placeholder="${label}"]`),
-      page.locator(`[placeholder*="${label}" i]`),
-      page.locator(`[placeholder="Add a ${label.toLowerCase()}"]`),
-      page.locator(`[role="textbox"][aria-label*="${label}" i]`),
-      page.locator(`[contenteditable="true"][aria-label*="${label}" i]`),
-    ];
-    for (const c of candidates) {
-      try {
-        if ((await c.count()) > 0) {
-          await c.first().click({ timeout: 5_000 });
-          await c.first().fill(value);
-          return;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const candidates = [
+        page.getByLabel(label, { exact: true }),
+        page.locator(`[aria-label="${label}"]`),
+        page.locator(`[aria-label*="${label}" i]`),
+        page.locator(`[placeholder="${label}"]`),
+        page.locator(`[placeholder*="${label}" i]`),
+        page.locator(`[placeholder="Add a ${label.toLowerCase()}"]`),
+        page.locator(`[role="textbox"][aria-label*="${label}" i]`),
+        page.locator(`[contenteditable="true"][aria-label*="${label}" i]`),
+      ];
+      for (const c of candidates) {
+        try {
+          const count = await c.count();
+          for (let index = 0; index < Math.min(count, 8); index += 1) {
+            const target = typeof c.nth === 'function' ? c.nth(index) : c.first();
+            if (typeof target.isVisible === 'function' && !(await target.isVisible({ timeout: 500 }).catch(() => false))) {
+              continue;
+            }
+            await target.click({ timeout: 2_000 });
+            await target.fill(value, { timeout: 2_000 });
+            return;
+          }
+        } catch {
+          // try next
         }
-      } catch {
-        // try next
       }
+      await this.driver.sleep(250);
     }
     // VLM fallback for the field itself.
     const shot = await this.driver.screenshotViewport();
@@ -1889,6 +2096,13 @@ export class OutlookActions {
   }
 
   private async fillBody(page: Page, body: string): Promise<void> {
+    if (await this.focusBestComposeBodyEditor(page)) {
+      await this.assertFocusedComposeTargetIsBody(page);
+      await this.driver.typeText(body);
+      await this.verifyBodyFill(page, body);
+      return;
+    }
+
     const candidates = [
       page.getByLabel('Message body', { exact: true }),
       page.locator('[aria-label="Message body"]'),
@@ -1906,6 +2120,7 @@ export class OutlookActions {
       if (!hasCandidate) continue;
       try {
         await c.first().click({ timeout: 5_000 });
+        await this.assertFocusedComposeTargetIsBody(page);
         // contenteditable bodies don't always accept .fill — type instead.
         await this.driver.typeText(body);
       } catch {
@@ -1933,15 +2148,215 @@ export class OutlookActions {
     await this.verifyBodyFill(page, body);
   }
 
+  private async focusBestComposeBodyEditor(page: Page): Promise<boolean> {
+    const evaluate = (page as unknown as {
+      evaluate?: <TArg, TResult>(fn: (arg: TArg) => TResult, arg: TArg) => Promise<TResult>;
+    }).evaluate;
+    if (typeof evaluate !== 'function') return false;
+    await this.prepareFunctionEvaluate(page);
+
+    type ComposeBodyProbe = {
+      clicked: boolean;
+      reason: string;
+      candidateCount: number;
+      composeCandidateCount: number;
+    };
+
+    const probe = await evaluate.call(page, () => {
+      const normalize = (value: string | undefined | null) => (value ?? '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const isVisible = (el: Element | null) => {
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        let current: Element | null = el;
+        while (current) {
+          const style = window.getComputedStyle(current);
+          if (style.visibility === 'hidden' || style.display === 'none') return false;
+          current = current.parentElement;
+        }
+        return true;
+      };
+      const fieldNameText = (el: Element | null) => {
+        if (!el) return '';
+        return normalize([
+          el.getAttribute('aria-label') || '',
+          el.getAttribute('placeholder') || '',
+          el.getAttribute('name') || '',
+          el.getAttribute('title') || '',
+          el.getAttribute('data-automation-id') || '',
+          el.getAttribute('data-automationid') || '',
+          el.getAttribute('data-testid') || '',
+        ].filter(Boolean).join(' '));
+      };
+      const isRecipientOrSubjectField = (el: Element | null) => {
+        const text = fieldNameText(el);
+        if (!text) return false;
+        return /^(to|cc|bcc|subject)$/i.test(text)
+          || /\b(to|cc|bcc|subject|recipient|recipients)\b/i.test(text);
+      };
+      const isEditableBodyCandidate = (el: Element) => {
+        if (isRecipientOrSubjectField(el)) return false;
+        if (el.getAttribute('contenteditable') === 'false') return false;
+        if (el.getAttribute('aria-readonly') === 'true') return false;
+        const label = fieldNameText(el);
+        const role = normalize(el.getAttribute('role')).toLowerCase();
+        const tag = el.tagName.toLowerCase();
+        return el.getAttribute('contenteditable') === 'true'
+          || role === 'textbox'
+          || tag === 'textarea'
+          || (/\bmessage body\b/i.test(label) && el.hasAttribute('contenteditable'));
+      };
+      const hasSubjectField = (root: Element) => Boolean(root.querySelector(
+        '[aria-label="Subject"], [aria-label*="Subject" i], [placeholder="Add a subject"], [placeholder*="subject" i]',
+      ));
+      const hasRecipientField = (root: Element) => Boolean(root.querySelector([
+        '[aria-label="To"]',
+        '[aria-label="Cc"]',
+        '[aria-label="Bcc"]',
+        '[aria-label*="recipient" i]',
+        '[role="textbox"][aria-label*="To" i]',
+        '[role="textbox"][aria-label*="Cc" i]',
+        '[role="textbox"][aria-label*="Bcc" i]',
+        '[contenteditable="true"][aria-label*="recipient" i]',
+      ].join(',')));
+      const hasSendButton = (root: Element) => Array.from(root.querySelectorAll(
+        'button, [role="button"], [aria-label], [title], [data-testid]',
+      )).some((el) => {
+        if (!isVisible(el)) return false;
+        const labels = [
+          el.getAttribute('aria-label') || '',
+          el.getAttribute('title') || '',
+          el.getAttribute('data-testid') || '',
+          el.textContent || '',
+        ].map(normalize).filter(Boolean);
+        return labels.some((label) => /^send$/i.test(label) || /\bcompose.*send\b|\bsend.*button\b/i.test(label));
+      });
+      const labelHasCompose = (el: Element | null) => /\b(compose|new message|draft|reply|forward)\b/i.test(
+        fieldNameText(el),
+      );
+      const readingPaneRoot = (el: Element) => el.closest([
+        '[role="region"][aria-label*="reading" i]',
+        '[aria-label*="reading pane" i]',
+        '[data-automation-id*="ReadingPane" i]',
+        '[data-automationid*="ReadingPane" i]',
+      ].join(','));
+      const composeRootScore = (root: Element) => {
+        const hasSend = hasSendButton(root);
+        const hasRecipient = hasRecipientField(root);
+        const hasSubject = hasSubjectField(root);
+        let score = 0;
+        if (hasSend) score += 120;
+        if (hasRecipient) score += 35;
+        if (hasSubject) score += 25;
+        if (root.getAttribute('role') === 'dialog') score += 25;
+        if (labelHasCompose(root)) score += 20;
+        return { score, hasSend };
+      };
+      const nearestComposeRoot = (body: Element) => {
+        let best: { root: Element; score: number } | null = null;
+        let current: Element | null = body;
+        const readingRoot = readingPaneRoot(body);
+        if (readingRoot && isVisible(readingRoot)) {
+          const { score } = composeRootScore(readingRoot);
+          if (score >= 80) best = { root: readingRoot, score };
+        }
+        for (let depth = 0; current && depth < 30; depth += 1) {
+          if (readingRoot && !readingRoot.contains(current)) break;
+          if (!isVisible(current)) {
+            current = current.parentElement;
+            continue;
+          }
+          const { score, hasSend } = composeRootScore(current);
+          const adjustedScore = score - (readingRoot && !hasSend ? 80 : 0);
+          if (adjustedScore >= 80 && (!best || adjustedScore > best.score)) {
+            best = { root: current, score: adjustedScore };
+          }
+          current = current.parentElement;
+        }
+        return best;
+      };
+      const candidates = Array.from(document.querySelectorAll([
+        '[aria-label="Message body"]',
+        '[aria-label*="Message body" i]',
+        '[role="textbox"][aria-label*="body" i]',
+        '[contenteditable="true"][aria-label*="body" i]',
+        '[contenteditable="true"][role="textbox"]',
+        '[contenteditable="true"][aria-multiline="true"]',
+        '[role="textbox"][aria-multiline="true"]',
+      ].join(','))).filter((el) => isVisible(el) && isEditableBodyCandidate(el));
+      const scored = candidates
+        .map((el) => {
+          const composeRoot = nearestComposeRoot(el);
+          if (!composeRoot) return null;
+          const label = fieldNameText(el);
+          let score = composeRoot.score;
+          if (el.getAttribute('contenteditable') === 'true') score += 20;
+          if (normalize(el.getAttribute('role')).toLowerCase() === 'textbox') score += 10;
+          if (/\bmessage body\b/i.test(label)) score += 20;
+          const rect = el.getBoundingClientRect();
+          score += Math.min(20, Math.round((rect.width * rect.height) / 50_000));
+          return { el: el as HTMLElement, score, root: composeRoot.root };
+        })
+        .filter(Boolean) as Array<{ el: HTMLElement; score: number; root: Element }>;
+      const sorted = scored.sort((a, b) => b.score - a.score);
+      if (sorted.length === 0) {
+        return {
+          clicked: false,
+          reason: 'no-compose-body',
+          candidateCount: candidates.length,
+          composeCandidateCount: 0,
+        };
+      }
+      const best = sorted[0];
+      const ties = sorted.filter((candidate) => candidate.score === best.score);
+      if (ties.length > 1) {
+        return {
+          clicked: false,
+          reason: 'ambiguous-compose-body',
+          candidateCount: candidates.length,
+          composeCandidateCount: sorted.length,
+        };
+      }
+      best.el.scrollIntoView?.({ block: 'center', inline: 'nearest' });
+      best.el.focus?.();
+      best.el.click();
+      return {
+        clicked: document.activeElement === best.el || best.root.contains(document.activeElement),
+        reason: 'clicked',
+        candidateCount: candidates.length,
+        composeCandidateCount: sorted.length,
+      };
+    }, undefined).catch((err) => {
+      logger.debug?.(
+        `[outlook-v2] compose body selector probe failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
+    }) as ComposeBodyProbe | null;
+
+    if (!probe?.clicked) {
+      logger.debug?.(
+        `[outlook-v2] compose body selector missed: ${probe ? `${probe.reason}; candidates=${
+          probe.candidateCount
+        }; composeCandidates=${probe.composeCandidateCount}` : 'no probe'}`,
+      );
+      return false;
+    }
+    return true;
+  }
+
   private async assertFocusedComposeTargetIsBody(page: Page): Promise<void> {
     const evaluate = (page as unknown as {
       evaluate?: <TArg, TResult>(fn: (arg: TArg) => TResult, arg: TArg) => Promise<TResult>;
     }).evaluate;
     if (typeof evaluate !== 'function') return;
+    await this.prepareFunctionEvaluate(page);
 
     type FocusProbe = {
       ok: boolean;
-      reason: 'body' | 'recipient' | 'subject' | 'unknown';
+      reason: 'body' | 'recipient' | 'subject' | 'readingPane' | 'unknown';
       label: string;
     };
 
@@ -1982,6 +2397,72 @@ export class OutlookActions {
           const match = el?.closest(selectors) ?? null;
           return isVisible(match) ? match : null;
         };
+        const fieldNameText = (el: Element | null) => {
+          if (!el) return '';
+          return normalize([
+            el.getAttribute('aria-label') || '',
+            el.getAttribute('placeholder') || '',
+            el.getAttribute('name') || '',
+            el.getAttribute('title') || '',
+            el.getAttribute('data-automation-id') || '',
+            el.getAttribute('data-automationid') || '',
+            el.getAttribute('data-testid') || '',
+          ].filter(Boolean).join(' '));
+        };
+        const hasSubjectField = (root: Element) => Boolean(root.querySelector(
+          '[aria-label="Subject"], [aria-label*="Subject" i], [placeholder="Add a subject"], [placeholder*="subject" i]',
+        ));
+        const hasRecipientField = (root: Element) => Boolean(root.querySelector([
+          '[aria-label="To"]',
+          '[aria-label="Cc"]',
+          '[aria-label="Bcc"]',
+          '[aria-label*="recipient" i]',
+          '[role="textbox"][aria-label*="To" i]',
+          '[role="textbox"][aria-label*="Cc" i]',
+          '[role="textbox"][aria-label*="Bcc" i]',
+          '[contenteditable="true"][aria-label*="recipient" i]',
+        ].join(',')));
+        const hasSendButton = (root: Element) => Array.from(root.querySelectorAll(
+          'button, [role="button"], [aria-label], [title], [data-testid]',
+        )).some((el) => {
+          if (!isVisible(el)) return false;
+          const labels = [
+            el.getAttribute('aria-label') || '',
+            el.getAttribute('title') || '',
+            el.getAttribute('data-testid') || '',
+            el.textContent || '',
+          ].map(normalize).filter(Boolean);
+          return labels.some((label) => /^send$/i.test(label) || /\bcompose.*send\b|\bsend.*button\b/i.test(label));
+        });
+        const isComposeBody = (el: Element | null) => {
+          if (!el) return false;
+          const readingRoot = el.closest([
+            '[role="region"][aria-label*="reading" i]',
+            '[aria-label*="reading pane" i]',
+            '[data-automation-id*="ReadingPane" i]',
+            '[data-automationid*="ReadingPane" i]',
+          ].join(','));
+          const isComposeRoot = (root: Element) => {
+            const structuredComposeRoot = root.getAttribute('role') === 'dialog'
+              && hasRecipientField(root)
+              && (hasSubjectField(root) || /\b(compose|draft|reply|forward)\b/i.test(fieldNameText(root)));
+            return (hasSendButton(root)
+              && (hasRecipientField(root) || hasSubjectField(root) || /\b(compose|draft|reply|forward)\b/i.test(fieldNameText(root))))
+              || structuredComposeRoot;
+          };
+          if (readingRoot && isVisible(readingRoot) && isComposeRoot(readingRoot)) {
+            return true;
+          }
+          let current: Element | null = el;
+          for (let depth = 0; current && depth < 30; depth += 1) {
+            if (readingRoot && !readingRoot.contains(current)) break;
+            if (isComposeRoot(current)) {
+              return true;
+            }
+            current = current.parentElement;
+          }
+          return false;
+        };
         const active = document.activeElement;
         const label = labelText(active);
         const recipient = closestVisible(active, [
@@ -2015,7 +2496,11 @@ export class OutlookActions {
           '[contenteditable="true"][aria-multiline="true"]',
           '[role="textbox"][aria-multiline="true"]',
         ].join(','));
-        if (body) return { ok: true, reason: 'body' as const, label };
+        if (body) {
+          return isComposeBody(body)
+            ? { ok: true, reason: 'body' as const, label }
+            : { ok: false, reason: 'readingPane' as const, label };
+        }
         return { ok: false, reason: 'unknown' as const, label };
       }, undefined).catch((err) => {
         logger.debug?.(
@@ -2035,6 +2520,9 @@ export class OutlookActions {
     if (lastProbe?.reason === 'subject') {
       throw new Error('Outlook compose body targeting failed: focused element is the subject field.');
     }
+    if (lastProbe?.reason === 'readingPane') {
+      throw new Error('Outlook compose body targeting failed: focused element is the message reading pane, not the compose body.');
+    }
     throw new Error('Outlook compose body targeting failed: focused element is not the compose body.');
   }
 
@@ -2045,6 +2533,7 @@ export class OutlookActions {
       evaluate?: <TArg, TResult>(fn: (arg: TArg) => TResult, arg: TArg) => Promise<TResult>;
     }).evaluate;
     if (typeof evaluate !== 'function') return;
+    await this.prepareFunctionEvaluate(page);
 
     type BodyFillProbe = {
       bodyHasExpected: boolean;
@@ -2096,6 +2585,68 @@ export class OutlookActions {
           const label = fieldNameText(el);
           return /\b(to|cc|bcc|subject|recipient|recipients)\b/i.test(label);
         };
+        const isEditableBodyElement = (el: Element | null) => {
+          if (!el) return false;
+          if (el.getAttribute('contenteditable') === 'false') return false;
+          const role = normalize(el.getAttribute('role')).toLowerCase();
+          const tag = el.tagName.toLowerCase();
+          return el.getAttribute('contenteditable') === 'true'
+            || role === 'textbox'
+            || tag === 'textarea';
+        };
+        const hasSubjectField = (root: Element) => Boolean(root.querySelector(
+          '[aria-label="Subject"], [aria-label*="Subject" i], [placeholder="Add a subject"], [placeholder*="subject" i]',
+        ));
+        const hasRecipientField = (root: Element) => Boolean(root.querySelector([
+          '[aria-label="To"]',
+          '[aria-label="Cc"]',
+          '[aria-label="Bcc"]',
+          '[aria-label*="recipient" i]',
+          '[role="textbox"][aria-label*="To" i]',
+          '[role="textbox"][aria-label*="Cc" i]',
+          '[role="textbox"][aria-label*="Bcc" i]',
+          '[contenteditable="true"][aria-label*="recipient" i]',
+        ].join(',')));
+        const hasSendButton = (root: Element) => Array.from(root.querySelectorAll(
+          'button, [role="button"], [aria-label], [title], [data-testid]',
+        )).some((el) => {
+          if (!isVisible(el)) return false;
+          const labels = [
+            el.getAttribute('aria-label') || '',
+            el.getAttribute('title') || '',
+            el.getAttribute('data-testid') || '',
+            el.textContent || '',
+          ].map(normalize).filter(Boolean);
+          return labels.some((label) => /^send$/i.test(label) || /\bcompose.*send\b|\bsend.*button\b/i.test(label));
+        });
+        const isComposeBody = (body: Element) => {
+          const readingRoot = body.closest([
+            '[role="region"][aria-label*="reading" i]',
+            '[aria-label*="reading pane" i]',
+            '[data-automation-id*="ReadingPane" i]',
+            '[data-automationid*="ReadingPane" i]',
+          ].join(','));
+          const isComposeRoot = (root: Element) => {
+            const structuredComposeRoot = root.getAttribute('role') === 'dialog'
+              && hasRecipientField(root)
+              && (hasSubjectField(root) || /\b(compose|draft|reply|forward)\b/i.test(fieldNameText(root)));
+            return (hasSendButton(root)
+              && (hasRecipientField(root) || hasSubjectField(root) || /\b(compose|draft|reply|forward)\b/i.test(fieldNameText(root))))
+              || structuredComposeRoot;
+          };
+          if (readingRoot && isVisible(readingRoot) && isComposeRoot(readingRoot)) {
+            return true;
+          }
+          let current: Element | null = body;
+          for (let depth = 0; current && depth < 30; depth += 1) {
+            if (readingRoot && !readingRoot.contains(current)) break;
+            if (isComposeRoot(current)) {
+              return true;
+            }
+            current = current.parentElement;
+          }
+          return false;
+        };
         const bodyEditors = Array.from(document.querySelectorAll([
           '[aria-label="Message body"]',
           '[aria-label*="Message body" i]',
@@ -2104,7 +2655,7 @@ export class OutlookActions {
           '[contenteditable="true"][role="textbox"]',
           '[contenteditable="true"][aria-multiline="true"]',
           '[role="textbox"][aria-multiline="true"]',
-        ].join(','))).filter((el) => isVisible(el) && !isRecipientOrSubjectField(el));
+        ].join(','))).filter((el) => isVisible(el) && isEditableBodyElement(el) && !isRecipientOrSubjectField(el) && isComposeBody(el));
         const recipientFields = Array.from(document.querySelectorAll([
           '[aria-label="To"]',
           '[aria-label="Cc"]',
@@ -2117,8 +2668,7 @@ export class OutlookActions {
         ].join(','))).filter((el) => isVisible(el) && isRecipientField(el));
         return {
           bodyHasExpected: bodyEditors.some((el) => valueText(el).includes(needle)),
-          recipientHasExpected: needle.length >= 8
-            && recipientFields.some((el) => valueText(el).includes(needle)),
+          recipientHasExpected: recipientFields.some((el) => valueText(el).includes(needle)),
           bodyEditorCount: bodyEditors.length,
           recipientFieldCount: recipientFields.length,
         };
@@ -2211,7 +2761,7 @@ export class OutlookActions {
       ...snapshot.cc,
       ...snapshot.bcc,
     ].join(' '));
-    if (expected.length >= 8 && recipientText.includes(expected)) {
+    if (recipientText.includes(expected)) {
       return 'Reply draft text appears in a recipient field instead of the message body. Review the open draft in Outlook before sending.';
     }
     if (!actualBody.includes(expected)) {
@@ -2259,6 +2809,7 @@ export class OutlookActions {
     page: Page,
     expected: DraftSendProbeInput,
   ): Promise<OpenDraftDomProbe> {
+    await this.prepareFunctionEvaluate(page);
     return page.evaluate((expectedDraft) => {
       const normalize = (value: string | undefined | null) => (value ?? '')
         .replace(/\u00a0/g, ' ')
@@ -2296,6 +2847,15 @@ export class OutlookActions {
         if (!text) return false;
         return /^(to|cc|bcc|subject)$/i.test(text)
           || /\b(to|cc|bcc|subject|recipient|recipients)\b/i.test(text);
+      };
+      const isEditableBodyElement = (el: Element | null) => {
+        if (!el) return false;
+        if (el.getAttribute('contenteditable') === 'false') return false;
+        const role = normalizeSearch(el.getAttribute('role'));
+        const tag = el.tagName.toLowerCase();
+        return el.getAttribute('contenteditable') === 'true'
+          || role === 'textbox'
+          || tag === 'textarea';
       };
       const searchableText = (root: Element) => {
         const parts = [
@@ -2344,6 +2904,7 @@ export class OutlookActions {
         for (const selector of selectors) {
           for (const el of Array.from(root.querySelectorAll(selector))) {
             if (!isVisible(el)) continue;
+            if (!isEditableBodyElement(el)) continue;
             if (isRecipientOrSubjectField(el)) continue;
             const text = valueText(el);
             if (text) return text;
@@ -2375,6 +2936,16 @@ export class OutlookActions {
       const hasSubjectField = (root: Element) => Boolean(root.querySelector(
         '[aria-label="Subject"], [aria-label*="Subject" i], [placeholder="Add a subject"], [placeholder*="subject" i]',
       ));
+      const hasRecipientField = (root: Element) => Boolean(root.querySelector([
+        '[aria-label="To"]',
+        '[aria-label="Cc"]',
+        '[aria-label="Bcc"]',
+        '[aria-label*="recipient" i]',
+        '[role="textbox"][aria-label*="To" i]',
+        '[role="textbox"][aria-label*="Cc" i]',
+        '[role="textbox"][aria-label*="Bcc" i]',
+        '[contenteditable="true"][aria-label*="recipient" i]',
+      ].join(',')));
       const sendButton = (root: Element) => Array.from(
         root.querySelectorAll('button, [role="button"], [aria-label], [title]'),
       ).find((el) => {
@@ -2409,16 +2980,45 @@ export class OutlookActions {
         }
         return '';
       };
-      const rootForBody = (body: Element) => {
+      const nearestComposeRootForBody = (body: Element) => {
+        let best: { root: Element; score: number } | null = null;
         let current: Element | null = body;
-        for (let depth = 0; current && depth < 10; depth += 1) {
-          if (hasSubjectField(current) && hasSendButton(current)) return current;
+        const readingRoot = body.closest([
+          '[role="region"][aria-label*="reading" i]',
+          '[aria-label*="reading pane" i]',
+          '[data-automation-id*="ReadingPane" i]',
+          '[data-automationid*="ReadingPane" i]',
+        ].join(','));
+        const composeRootScore = (root: Element) => {
+          const hasSend = hasSendButton(root);
+          const hasRecipient = hasRecipientField(root);
+          const hasSubject = hasSubjectField(root);
+          let score = 0;
+          if (hasSend) score += 120;
+          if (hasRecipient) score += 35;
+          if (hasSubject) score += 25;
+          if (root.getAttribute('role') === 'dialog') score += 25;
+          if (/\b(compose|new message|draft|reply|forward)\b/i.test(fieldNameText(root))) score += 20;
+          return { score, hasSend };
+        };
+        if (readingRoot && isVisible(readingRoot)) {
+          const { score } = composeRootScore(readingRoot);
+          if (score >= 80) best = { root: readingRoot, score };
+        }
+        for (let depth = 0; current && depth < 30; depth += 1) {
+          if (readingRoot && !readingRoot.contains(current)) break;
+          if (!isVisible(current)) {
+            current = current.parentElement;
+            continue;
+          }
+          const { score, hasSend } = composeRootScore(current);
+          const adjustedScore = score - (readingRoot && !hasSend ? 80 : 0);
+          if (adjustedScore >= 80 && (!best || adjustedScore > best.score)) {
+            best = { root: current, score: adjustedScore };
+          }
           current = current.parentElement;
         }
-        return body.closest('div[role="dialog"]')
-          || body.closest('[aria-label*="Compose" i]')
-          || body.parentElement
-          || body;
+        return best?.root ?? null;
       };
       const bodyNodes = Array.from(document.querySelectorAll(
         [
@@ -2430,8 +3030,8 @@ export class OutlookActions {
           '[contenteditable="true"][aria-multiline="true"]',
           '[role="textbox"][aria-multiline="true"]',
         ].join(','),
-      )).filter((el) => isVisible(el) && !isRecipientOrSubjectField(el));
-      const roots = Array.from(new Set(bodyNodes.map(rootForBody).filter(isVisible)));
+      )).filter((el) => isVisible(el) && isEditableBodyElement(el) && !isRecipientOrSubjectField(el) && nearestComposeRootForBody(el));
+      const roots = Array.from(new Set(bodyNodes.map(nearestComposeRootForBody).filter((root): root is Element => Boolean(root))));
       let firstSnapshot: OpenDraftSnapshot | null = null;
       const sendableRoots: Array<{ root: Element; snapshot: OpenDraftSnapshot; button: HTMLElement }> = [];
       const matchingRoots: Array<{ root: Element; snapshot: OpenDraftSnapshot; button: HTMLElement }> = [];
@@ -2451,7 +3051,7 @@ export class OutlookActions {
         firstSnapshot ??= snapshot;
         const button = sendButton(root);
         if (button && snapshot.to.some((value) => normalizeSearch(value).length > 0)
-          && body && root === rootForBody(button)) {
+          && body && root.contains(button)) {
           sendableRoots.push({ root, snapshot, button });
         }
         if (!expectedDraft) continue;
@@ -2465,7 +3065,7 @@ export class OutlookActions {
         const expectedBody = normalizeSearch(expectedDraft.body);
         if (normalizeSearch(body) !== expectedBody) continue;
         if (!button) continue;
-        if (root !== rootForBody(button)) continue;
+        if (!root.contains(button)) continue;
         matchingRoots.push({ root, snapshot, button });
       }
       if (expectedDraft && 'mode' in expectedDraft && expectedDraft.mode === 'current-reviewed') {

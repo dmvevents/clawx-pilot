@@ -16,8 +16,8 @@ All defined in `extensions/moe-principal-assistant/index.mjs`.
 | `outlook.send_email` | 390-409 | **Send the single visible reviewed draft** | **hard-confirm gate** (see below) |
 | `outlook.search_inbox` | 415-422 | Filter by sender, subject, date, unread, attachment | none |
 | `outlook.read_email` | 424-433 | Open message; full body, recipients, attachments | none |
-| `outlook.reply` | 435-445 | Reply / reply-all; leaves draft open | none |
-| `outlook.forward` | 447-459 | Forward with optional commentary | none |
+| `outlook.reply` | 435-445 | Reply / reply-all; leaves draft open; body goes in message body only | none |
+| `outlook.forward` | 447-459 | Forward with optional commentary; body goes in message body only | none |
 | `outlook.mark_read` | 461-473 | Toggle read state | none |
 | `outlook.list_attachments` | 475-484 | List metadata (no download) | none |
 | `outlook.download_attachment` | 486-500 | Save to disk | hard-confirm |
@@ -33,6 +33,24 @@ All defined in `extensions/moe-principal-assistant/index.mjs`.
 - Normal reviewed sends call `outlook.send_email({confirm:true})` only. Optional recipient/subject/body values are advanced safety assertions; stale assertions can make a valid reviewed draft refuse.
 
 Both gates must pass. Demo this by trying to send with no draft open or multiple compose panes open; the tool must refuse.
+
+### Explicit Outlook action rules
+
+- Reply must use `outlook.reply({id, body})`; reply-all must use `outlook.reply({id, body, replyAll:true})`.
+- Forward must use `outlook.forward({id, to, body?})`.
+- Do not use generic browser clicks, toolbar guessing, keyboard shortcuts, or broad DOM automation for reply, reply-all, or forward. Find the message with `outlook.read_inbox`, `outlook.search_inbox`, or `outlook.read_email`, then call the explicit Outlook tool.
+- The draft body belongs in the compose message body editor only. Never put body text in To, Cc, or Bcc.
+- Sending remains separate: after any reply, reply-all, forward, or new draft tool call, leave the draft open for review. Send only with `outlook.send_email({confirm:true})` after explicit review approval.
+
+### Windows no-send reply matrix probe
+
+Use the Windows wrapper to exercise the installed Electron app path for compose/reply/reply-all/forward draft validation without sending:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\pilot-run-electron-cdp-probe.ps1" -OutlookReplyMatrix
+```
+
+The switch passes `--outlook-reply-matrix` to `pilot-electron-cdp-probe.js`. Expected evidence is probe JSON plus reply, reply-all, and forward screenshots; every path must leave a draft open and prove no email was sent.
 
 ### Host-API mirror
 

@@ -4,7 +4,7 @@
 
 Ship the Ministry of Education Windows app as a GA-quality installer for non-technical principals, with a supported online model path, safe Outlook and Forms automation, Office document handling, ASR expectations, and a documented fallback/support process.
 
-Current status: **YELLOW - RC/demo-ready after Microsoft sign-in, not GA**.
+Current status: **YELLOW - email-draft-fix RC candidate ready for prerelease upload, not GA**.
 
 Operating OKR board: `docs/GA_OKRS_2026-06-10.md`.
 
@@ -14,12 +14,12 @@ VM/browser visual acceptance criteria: `docs/GA_VM_BROWSER_VISUAL_ACCEPTANCE_CRI
 
 ## Current RC Baseline
 
-- Windows RC tag: `moe10-windows-rc-20260608-eb7146c`.
+- Windows RC tag: `moe10-windows-rc-20260623-email-draft-fix`.
 - Release asset: `Ministry.of.Education-0.4.3-moe.10-win-x64.exe`.
-- Installer SHA256: `2e189dd004995d6ce18e9e240f8228ba5039c2e384fd479a597137458a9046cf` for the 2026-06-23 Outlook reply fix prerelease asset.
-- RC commit: `eb7146ccf8b0e1282cfc7efcaab9e195c0576feb`.
+- Installer SHA256: `e35ee6cda63a942a585b0638831487562d66a0901b006cf2ccadfe81b0e6f182` for the 2026-06-23 Outlook email draft/reply fix prerelease candidate.
+- RC commit: see the GitHub release tag target commit.
 - Operator instructions: `windows-pilot/plans/MOE_WINDOWS_END_TO_END_INSTRUCTIONS_2026-06-08.md`.
-- Release notes: `windows-pilot/plans/MOE_WINDOWS_RC_2026-06-08_RELEASE_NOTES.md`.
+- Release notes: `windows-pilot/plans/MOE_WINDOWS_RC_2026-06-23_EMAIL_FIX_RELEASE_NOTES.md`.
 
 This baseline is acceptable for controlled demo installs. GA requires the gates below.
 
@@ -113,16 +113,38 @@ stay covered by explicit same-session confirmation tests.
   Microsoft Graph example config, and MoE principal extensions.
 - Full status: `windows-pilot/plans/MOE_WINDOWS_GA_STATUS_2026-06-10.md`.
 
+2026-06-23 local rebuild after Outlook email draft/reply hardening:
+
+- installer: `release/Ministry of Education-0.4.3-moe.10-win-x64.exe`
+- installer SHA256: `e35ee6cda63a942a585b0638831487562d66a0901b006cf2ccadfe81b0e6f182`
+- blockmap SHA256: `9ac78ae72aa6fd671ac044351f8b796dbc3d263d78f7bde5a39d4946c858f2b2`
+- app.asar SHA256: `9f8c9b0c90d4ff8a3a3a0a59e244504531247d8425a19f30d109d4250a8e3f96`
+- `PATH="$HOME/.dotnet:$PATH" pnpm run build:win` passed.
+- Package inspection confirmed runtime `playwright-core`, Office parsers,
+  Windows ASR helper, Windows Node/uv/ffmpeg, cloud gateway seed files,
+  Microsoft Graph extension, MoE principal assistant extension, and no
+  `app-update.yml`.
+- Local signed-in Electron/Chrome CDP no-send matrix passed compose, reply,
+  reply-all, and forward with body text in compose bodies, not recipient
+  fields. The run observed `/api/outlook/read-inbox`, two
+  `/api/outlook/reply` calls, and `/api/outlook/forward`, with no
+  `/api/outlook/send`.
+- ClawX-marker-scoped test draft cleanup succeeded and the post-run hygiene
+  check found `openCompose=0`; the visible Drafts count stayed `[8]`.
+- Full `pnpm test` passed: 148 files, 1115 passed, 5 skipped.
+- `pnpm run typecheck`, `pnpm run lint:check`, `pnpm run harness:ci`, and
+  `git diff --check` passed.
+
 ## GA Gates
 
 | Gate | Required evidence | Current state |
 |---|---|---|
-| Installer reproducibility | `pnpm run build:win`, installer path, SHA256, `playwright-core` still in runtime dependencies | 2026-06-10 manual workflow run `27299469846` passed on commit `832aaf3d70baa9bc377bfaaffeb984cd9986334b` with installer SHA256 `fe8d7af9fe2db1054ec7ee2bfdd22d05f932ba486644b7d15b6153bb5f8f9219`; local `PATH="$HOME/.dotnet:$PATH" pnpm run build:win` also passed with installer SHA256 `4342b4e8bd849f27db769393e57129c5352631e7bd7aa40b7bdc7940960262c3`; packaged runtime check confirmed `playwright-core`, `xlsx`, `docx`, `mammoth`, `pdf-parse`, ASR helper, `node`, `uv`, cloud gateway seed files, Microsoft Graph example config, and MoE principal extensions |
-| Clean install | fresh Windows user or laptop install, desktop shortcut launch, Gateway/Host API reachable | 2026-06-09 GCP Windows VM `clawx-win-rc-20260609` proof passed for the local rebuild: downloaded bytes `390056548`, SHA256 matched, silent uninstall exit `0`, install exit `0`, app exe present; visual smoke showed Chrome CDP, Electron CDP, Host API, Gateway, and post-probe readiness true. 2026-06-09 external tester installed the GitHub prerelease successfully. 2026-06-23 temp-user VM testing against the earlier `3a43cdff...` prerelease reproduced a hidden WinRM `/S /currentuser` partial-install failure; do not use that unattended path as GA proof until fixed. The refreshed `0ad45db...` installer has local package/regression proof and needs a fresh VM/RM smoke before this row is green for the current asset. |
+| Installer reproducibility | `pnpm run build:win`, installer path, SHA256, `playwright-core` still in runtime dependencies | 2026-06-23 local `PATH="$HOME/.dotnet:$PATH" pnpm run build:win` passed with installer SHA256 `e35ee6cda63a942a585b0638831487562d66a0901b006cf2ccadfe81b0e6f182`; packaged runtime check confirmed `playwright-core`, `xlsx`, `docx`, `mammoth`, `pdf-parse`, ASR helper, `node`, `uv`, `ffmpeg.exe`, cloud gateway seed files, Microsoft Graph extension, MoE principal extension, and no `app-update.yml` |
+| Clean install | fresh Windows user or laptop install, desktop shortcut launch, Gateway/Host API reachable | 2026-06-09 GCP Windows VM `clawx-win-rc-20260609` proof passed for an older local rebuild: downloaded bytes `390056548`, SHA256 matched, silent uninstall exit `0`, install exit `0`, app exe present; visual smoke showed Chrome CDP, Electron CDP, Host API, Gateway, and post-probe readiness true. 2026-06-09 external tester installed a GitHub prerelease successfully. 2026-06-23 hidden WinRM `/S /currentuser` testing against superseded assets reproduced a partial-install failure; do not use that unattended path as GA proof. The refreshed `e35ee6...` installer has local package/regression proof and needs a normal assisted VM/RDP or physical laptop installed-app smoke before this row is green for the current asset. |
 | Online model path | installed app completes one chat through managed gateway/model broker or configured cloud provider; no raw upstream keys exposed to the user | GitHub Windows packaging requires `CLAWX_CLOUD_GATEWAY_CONFIG_JSON` and `CLAWX_CLOUD_GATEWAY_KEY`; VM proof confirmed packaged seed files present, `providerKeys=1`, local Qwen seeded with `default=false`, and `.openclaw` default model `custom-moecloud/moe-demo-pro`; 2026-06-09 external tester confirmed online agent defaulted with no user setup. Gateway startup was around two minutes and needs SLO/UX treatment. |
 | Microsoft 365 programmatic config | installer can carry non-secret tenant/client defaults so Outlook can use Microsoft Graph after sign-in instead of Chrome troubleshooting | 2026-06-10 implementation added `resources/microsoft-graph.example.json`, ignored `resources/microsoft-graph.json` packaged-copy support, store fallback from packaged/user/env config, and optional GitHub Actions `CLAWX_MICROSOFT_GRAPH_CONFIG_JSON` injection; needs real Entra client ID from IT |
 | Runtime coherence | settings/provider store, `~/.openclaw/openclaw.json`, agent `models.json`, and latest transcript agree | VM install proof confirmed `.openclaw` default primary `custom-moecloud/moe-demo-pro`; provider/config coherence should be rechecked after a real chat transcript |
-| Outlook safety | open/read/draft smoke passes through signed-in Chrome CDP or Microsoft Graph; send requires explicit same-session confirmation | VM visual smoke `20260609-235054` passed Outlook open/read and refused send/download without confirmation. 2026-06-09 external tester confirmed checking email plus compose/send worked. Unit coverage in `tests/unit/outlook-actions-safety.test.ts` verifies send refuses without confirmation, refuses mismatched recipient/subject/body drafts, and clicks Send only inside one exact matching compose pane. |
+| Outlook safety | open/read/draft smoke passes through signed-in Chrome CDP or Microsoft Graph; send requires explicit same-session confirmation | VM visual smoke `20260609-235054` passed Outlook open/read and refused send/download without confirmation. 2026-06-09 external tester confirmed checking email plus compose/send worked. 2026-06-23 local signed-in Electron/Chrome Host API no-send matrix passed compose, reply, reply-all, and forward; body text landed in compose bodies and not recipient fields; no send route was observed; ClawX-marker-scoped cleanup left `openCompose=0`. Unit coverage verifies send refuses without confirmation, refuses mismatched recipient/subject/body drafts including short body strings in recipient fields, and clicks Send only inside one exact matching compose pane. |
 | Outlook attach UX | a fresh user who asks "check my email" is routed through `outlook.*`, `browser.diagnose`, and `browser.repair_chrome_cdp`; the assistant must not tell the user to enable Chrome remote debugging, use `chrome://flags`, search the web, or run manual Chrome commands | user report on 2026-06-09 exposed old guidance; regression patch and chat-harness scenario added; local unit tests passed; clean installer proof now passed on GCP VM, but Chrome/Outlook sign-in proof still requires Chrome on the test image or a physical laptop |
 | Forms safety | Forms list/preview/dry-run passes; submit requires explicit same-session confirmation | Forms list passes and submit without confirm refuses for both Daily Report and Suspensions. Settings now exposes the saved Daily Report and Student Suspensions response links through the existing MoE form URL store. Preview is blocked on clean VM by Microsoft sign-in: Forms tabs land on `login.microsoftonline.com/.../authorize`; driver now reports a precise sign-in-required diagnostic instead of selector timeout. Filling still needs signed-in Microsoft profile evidence. |
 | Office files | sample Excel, Word, CSV, and PowerPoint analysis complete from Downloads through app chat | packaged runtime checks now validate seeded CSV rows, generated Excel data rows, Word OpenXML, PowerPoint OpenXML slides, and Office analysis summaries; 2026-06-09 external tester confirmed local file scanning worked. Still needs full installed-app chat evidence for the Office matrix. |

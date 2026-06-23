@@ -178,6 +178,84 @@ describe('Outlook Host API Graph routing', () => {
     expect(graphAvailableMock).not.toHaveBeenCalled();
   });
 
+  it('routes replies through browser Outlook so DOM message ids remain valid', async () => {
+    const body = { id: 'sender|subject|today', body: 'OK' };
+    parseBodyMock.mockResolvedValueOnce(body);
+    browserManagerMock.reply.mockResolvedValueOnce({
+      status: 'drafted',
+      draftLeftOpen: true,
+      message: 'Reply draft prepared',
+      preview: { to: ['sender'], subject: 'Re: subject', body: 'OK' },
+    });
+
+    const { handleOutlookRoutes } = await import('../../electron/api/routes/outlook');
+    const handled = await handleOutlookRoutes(
+      { method: 'POST' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/outlook/reply'),
+    );
+
+    expect(handled).toBe(true);
+    expect(browserManagerMock.reply).toHaveBeenCalledWith(body);
+    expect(graphAvailableMock).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, {
+      success: true,
+      data: expect.objectContaining({ status: 'drafted' }),
+    });
+  });
+
+  it('preserves replyAll on browser Outlook reply routing', async () => {
+    const body = { id: 'sender|subject|today', body: 'Reply all body', replyAll: true };
+    parseBodyMock.mockResolvedValueOnce(body);
+    browserManagerMock.reply.mockResolvedValueOnce({
+      status: 'drafted',
+      draftLeftOpen: true,
+      message: 'Reply all draft prepared',
+      preview: { to: ['sender'], subject: 'Re: subject', body: 'Reply all body' },
+    });
+
+    const { handleOutlookRoutes } = await import('../../electron/api/routes/outlook');
+    const handled = await handleOutlookRoutes(
+      { method: 'POST' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/outlook/reply'),
+    );
+
+    expect(handled).toBe(true);
+    expect(browserManagerMock.reply).toHaveBeenCalledWith(expect.objectContaining({ replyAll: true }));
+    expect(graphAvailableMock).not.toHaveBeenCalled();
+  });
+
+  it('routes forwards through browser Outlook instead of Graph compose routing', async () => {
+    const body = {
+      id: 'sender|subject|today',
+      to: 'recipient@example.invalid',
+      body: 'Forward body',
+    };
+    parseBodyMock.mockResolvedValueOnce(body);
+    browserManagerMock.forward.mockResolvedValueOnce({
+      status: 'drafted',
+      draftLeftOpen: true,
+      message: 'Forward draft prepared',
+      preview: { to: ['recipient@example.invalid'], subject: 'Fw: subject', body: 'Forward body' },
+    });
+
+    const { handleOutlookRoutes } = await import('../../electron/api/routes/outlook');
+    const handled = await handleOutlookRoutes(
+      { method: 'POST' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/outlook/forward'),
+    );
+
+    expect(handled).toBe(true);
+    expect(browserManagerMock.forward).toHaveBeenCalledWith(body);
+    expect(graphAvailableMock).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, {
+      success: true,
+      data: expect.objectContaining({ status: 'drafted' }),
+    });
+  });
+
   it('routes Graph sends through the same confirm-gated adapter only when compose Graph is explicitly enabled', async () => {
     process.env.CLAWX_GRAPH_OUTLOOK_COMPOSE = '1';
     graphAvailableMock.mockResolvedValueOnce(true);

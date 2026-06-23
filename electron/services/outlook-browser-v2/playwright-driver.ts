@@ -76,6 +76,7 @@ export class PlaywrightDriver {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private page: Page | null = null;
+  private readonly dialogHandledPages = new WeakSet<Page>();
   private readonly cfg: Required<DriverConfig>;
 
   constructor(cfg: DriverConfig = {}) {
@@ -166,7 +167,22 @@ export class PlaywrightDriver {
     }
 
     this.page = outlookPage;
+    this.installDialogHandler(outlookPage);
     return outlookPage;
+  }
+
+  private installDialogHandler(page: Page): void {
+    if (this.dialogHandledPages.has(page)) return;
+    this.dialogHandledPages.add(page);
+    page.on('dialog', (dialog) => {
+      const message = dialog.message();
+      logger.warn(`[outlook-v2] Dismissing browser dialog from Outlook page: ${message.slice(0, 120)}`);
+      dialog.dismiss().catch((err) => {
+        logger.debug?.(
+          `[outlook-v2] Outlook dialog dismiss race ignored: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+    });
   }
 
   /** Returns the current Outlook page or throws — doesn't navigate. */
@@ -175,6 +191,19 @@ export class PlaywrightDriver {
       throw new Error('PlaywrightDriver: no Outlook tab — call ensureOutlookTab first');
     }
     return this.page;
+  }
+
+  /** Return all live Outlook tabs in the attached Chrome context. */
+  async outlookPages(): Promise<Page[]> {
+    await this.ensureBrowser();
+    if (!this.context) return [];
+    const pages = this.context
+      .pages()
+      .filter((page) => !page.isClosed() && OUTLOOK_HOST_PATTERNS.some((re) => re.test(page.url())));
+    for (const page of pages) {
+      this.installDialogHandler(page);
+    }
+    return pages;
   }
 
   /** Take a PNG screenshot of the visible viewport. Used by the VLM grounder. */

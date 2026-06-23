@@ -30,6 +30,7 @@ const probeModule = require('../../windows-pilot/scripts/pilot-electron-cdp-prob
     bannedToolCalls: Array<{ name: string; id?: string }>;
     bannedToolResults: Array<{ name: string; id?: string; isError: boolean }>;
   };
+  isOutlookPageUrl: (url: string) => boolean;
   validateProbeSummary: (summary: unknown, args?: Record<string, unknown>) => {
     ok: boolean;
     reasons: string[];
@@ -38,6 +39,7 @@ const probeModule = require('../../windows-pilot/scripts/pilot-electron-cdp-prob
 
 const {
   buildVisualAcceptance,
+  isOutlookPageUrl,
   summarizeChatHistory,
   validateProbeSummary,
 } = probeModule;
@@ -161,6 +163,14 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
 
     expect(source).toContain("invokeHostApi(page, '/api/outlook/send', { confirm: true })");
     expect(source).not.toContain("invokeHostApi(page, '/api/outlook/send', { to, subject, body, confirm: true })");
+  });
+
+  it('recognizes all supported Outlook web hosts, including cloud.microsoft without .com', () => {
+    expect(isOutlookPageUrl('https://outlook.office.com/mail/inbox')).toBe(true);
+    expect(isOutlookPageUrl('https://outlook.office365.com/mail/inbox')).toBe(true);
+    expect(isOutlookPageUrl('https://outlook.cloud.microsoft/mail/inbox')).toBe(true);
+    expect(isOutlookPageUrl('https://outlook.live.com/mail/inbox')).toBe(true);
+    expect(isOutlookPageUrl('https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=form')).toBe(false);
   });
 
   it('keeps the daily report smoke payload aligned with visible required schema fields', () => {
@@ -658,6 +668,9 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
         subject: 'Demo draft',
         toCount: 1,
         draft: { ok: true, result: { status: 'drafted', draftLeftOpen: false } },
+        bodyInComposeBody: true,
+        bodyInRecipientField: false,
+        screenshotPath: 'compose.png',
       },
     }, { draftEmail: true });
 
@@ -665,7 +678,7 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     expect(validation.reasons).toContain('outlook draft was not left open');
   });
 
-  it('passes draft validation when Outlook leaves the draft open', () => {
+  it('passes draft validation when Outlook leaves the draft open with body in the compose editor', () => {
     const validation = validateProbeSummary({
       state: 'ELECTRON_CDP_PROBE_DONE',
       renderer: { hasElectronInvoke: true },
@@ -673,10 +686,32 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
         subject: 'Demo draft',
         toCount: 1,
         draft: { ok: true, result: { status: 'drafted', draftLeftOpen: true } },
+        bodyInComposeBody: true,
+        bodyInRecipientField: false,
+        screenshotPath: 'compose.png',
       },
     }, { draftEmail: true });
 
     expect(validation).toEqual({ ok: true, reasons: [] });
+  });
+
+  it('fails draft validation when the compose body text lands in a recipient field', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      emailDraft: {
+        subject: 'Demo draft',
+        toCount: 1,
+        draft: { ok: true, result: { status: 'drafted', draftLeftOpen: true } },
+        bodyInComposeBody: false,
+        bodyInRecipientField: true,
+        screenshotPath: 'compose.png',
+      },
+    }, { draftEmail: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('outlook draft body text was detected in a recipient field');
+    expect(validation.reasons).toContain('outlook draft body text was not verified in the compose body');
   });
 
   it('fails confirmed send validation when draft or send results are incomplete', () => {
@@ -708,6 +743,181 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     }, { sendEmail: true });
 
     expect(validation).toEqual({ ok: true, reasons: [] });
+  });
+
+  it('passes reply matrix validation when reply, reply-all, and forward draft correctly', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      outlookReplyMatrix: {
+        ok: true,
+        noSend: true,
+        observedHostApiPaths: [
+          '/api/outlook/read-inbox',
+          '/api/outlook/reply',
+          '/api/outlook/reply',
+          '/api/outlook/forward',
+        ],
+        steps: [
+          {
+            action: 'reply',
+            status: 'drafted',
+            draftLeftOpen: true,
+            bodyInComposeBody: true,
+            bodyInRecipientField: false,
+            screenshotPath: 'reply.png',
+          },
+          {
+            action: 'replyAll',
+            status: 'drafted',
+            draftLeftOpen: true,
+            bodyInComposeBody: true,
+            bodyInRecipientField: false,
+            screenshotPath: 'reply-all.png',
+          },
+          {
+            action: 'forward',
+            status: 'drafted',
+            draftLeftOpen: true,
+            bodyInComposeBody: true,
+            bodyInRecipientField: false,
+            screenshotPath: 'forward.png',
+          },
+        ],
+      },
+    }, { outlookReplyMatrix: true });
+
+    expect(validation).toEqual({ ok: true, reasons: [] });
+  });
+
+  it('fails reply matrix validation when the no-send matrix observes a send call', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      outlookReplyMatrix: {
+        ok: false,
+        noSend: false,
+        observedHostApiPaths: [
+          '/api/outlook/read-inbox',
+          '/api/outlook/reply',
+          '/api/outlook/send',
+          '/api/outlook/forward',
+        ],
+        steps: [
+          {
+            action: 'reply',
+            status: 'drafted',
+            draftLeftOpen: true,
+            bodyInComposeBody: true,
+            bodyInRecipientField: false,
+            screenshotPath: 'reply.png',
+          },
+          {
+            action: 'replyAll',
+            status: 'drafted',
+            draftLeftOpen: true,
+            bodyInComposeBody: true,
+            bodyInRecipientField: false,
+            screenshotPath: 'reply-all.png',
+          },
+          {
+            action: 'forward',
+            status: 'drafted',
+            draftLeftOpen: true,
+            bodyInComposeBody: true,
+            bodyInRecipientField: false,
+            screenshotPath: 'forward.png',
+          },
+        ],
+      },
+    }, { outlookReplyMatrix: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('outlook reply matrix sent an email or did not prove no-send mode');
+    expect(validation.reasons).toContain('outlook reply matrix observed /api/outlook/send during no-send validation');
+  });
+
+  it('fails reply matrix validation when observed Host API paths are missing', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      outlookReplyMatrix: {
+        ok: true,
+        noSend: true,
+        steps: [
+          {
+            action: 'reply',
+            status: 'drafted',
+            draftLeftOpen: true,
+            bodyInComposeBody: true,
+            bodyInRecipientField: false,
+            screenshotPath: 'reply.png',
+          },
+          {
+            action: 'replyAll',
+            status: 'drafted',
+            draftLeftOpen: true,
+            bodyInComposeBody: true,
+            bodyInRecipientField: false,
+            screenshotPath: 'reply-all.png',
+          },
+          {
+            action: 'forward',
+            status: 'drafted',
+            draftLeftOpen: true,
+            bodyInComposeBody: true,
+            bodyInRecipientField: false,
+            screenshotPath: 'forward.png',
+          },
+        ],
+      },
+    }, { outlookReplyMatrix: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('outlook reply matrix did not record observed Host API paths');
+    expect(validation.reasons).toContain('outlook reply matrix did not observe the expected read/reply/reply-all/forward Host API calls');
+  });
+
+  it('fails reply matrix validation when body text lands in a recipient field', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      outlookReplyMatrix: {
+        ok: false,
+        noSend: true,
+        steps: [
+          {
+            action: 'reply',
+            status: 'drafted',
+            draftLeftOpen: true,
+            bodyInComposeBody: false,
+            bodyInRecipientField: true,
+            screenshotPath: 'reply.png',
+          },
+          {
+            action: 'replyAll',
+            status: 'drafted',
+            draftLeftOpen: true,
+            bodyInComposeBody: true,
+            bodyInRecipientField: false,
+            screenshotPath: 'reply-all.png',
+          },
+          {
+            action: 'forward',
+            status: 'drafted',
+            draftLeftOpen: true,
+            bodyInComposeBody: true,
+            bodyInRecipientField: false,
+            screenshotPath: 'forward.png',
+          },
+        ],
+      },
+    }, { outlookReplyMatrix: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('outlook reply matrix was not ok');
+    expect(validation.reasons).toContain('outlook reply matrix reply body text was detected in a recipient field');
+    expect(validation.reasons).toContain('outlook reply matrix reply body text was not verified in the compose body');
   });
 
   it('fails confirmed form submit validation when preview is incomplete', () => {

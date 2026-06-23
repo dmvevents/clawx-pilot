@@ -1110,7 +1110,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.draft_email',
       description:
-        'Compose a new email in Outlook Web and leave the draft open for the principal to review. Does NOT send. Args: { to: string | string[], subject, body, cc?, bcc? }. Returns { status, draftLeftOpen, preview }.',
+        'Compose a new email in Outlook Web and leave the draft open for the principal to review. Does NOT send. Args: { to: string | string[], subject, body, cc?, bcc? }. The body is email content and belongs only in the Outlook message body editor, never in To/Cc/Bcc. Returns { status, draftLeftOpen, preview }.',
       parameters: toolParameters(
         {
           to: stringOrStringArraySchema,
@@ -1204,7 +1204,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.reply',
       description:
-        'Reply (or reply-all) to a specific message. Opens the reply pane in Outlook with To/Subject pre-filled by Outlook; we fill the body. Leaves the draft open for the principal to review — does NOT send. Args: { id, body, replyAll? (default false) }.',
+        'Reply (or reply-all) to a specific message. Use this explicit Outlook tool for replies; do not use generic browser clicks or toolbar guessing to find Reply. Opens the reply pane in Outlook with To/Subject pre-filled by Outlook; we fill only the message body editor. Do not ask for a recipient after Outlook pre-fills the reply draft, and never place body text in To/Cc/Bcc. Leaves the draft open for the principal to review — does NOT send. Args: { id, body, replyAll? (default false) }.',
       parameters: toolParameters(
         {
           id: stringSchema,
@@ -1224,7 +1224,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.forward',
       description:
-        'Forward a specific message to a new recipient. Opens the forward pane in Outlook with the original message quoted; we fill To and an optional commentary body. Leaves the draft open. Args: { id, to: string | string[], body? }.',
+        'Forward a specific message to a new recipient. Use this explicit Outlook tool for forwards; do not use generic browser clicks or toolbar guessing to find Forward. Opens the forward pane in Outlook with the original message quoted; To/Cc/Bcc are recipients only, and optional body is commentary that belongs only in the message body editor. Leaves the draft open. Args: { id, to: string | string[], body? }.',
       parameters: toolParameters(
         {
           id: stringSchema,

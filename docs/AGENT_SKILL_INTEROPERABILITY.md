@@ -1,13 +1,13 @@
 # Agent And Skill Interoperability
 
-Last reviewed: 2026-06-09.
+Last reviewed: 2026-06-23.
 
 ## Purpose
 
 This repo now has first-class operating surfaces for Codex, Claude Code, and the existing Windows pilot runbooks. The goal is not to create three competing sources of truth. The goal is to let either agent start cleanly, discover the same safety rules, and route to the same release-critical workflows.
 
 Release evidence source of truth: `docs/GA_RELEASE_EVIDENCE_MANIFEST.md`.
-Current candidate pointer: `docs/CURRENT_WINDOWS_RC.md`.
+Current candidate pointer: `docs/CURRENT_WINDOWS_RC.md`. As of the 2026-06-23 email draft fix, Outlook release proof must include compose, reply, reply-all, and forward no-send validation plus evidence that ClawX-marked test drafts are cleaned without broadly discarding user drafts.
 
 ## Official References Reviewed
 

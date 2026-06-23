@@ -139,6 +139,10 @@ describe('moe-principal-assistant plugin registration', () => {
       expect(modelFacingText).toMatch(/not an exhaustive mailbox export/i);
       expect(modelFacingText).toMatch(/do not claim all mail unless scan\.exhaustive is true/i);
       expect(modelFacingText).toMatch(/say capped\/incomplete\/not exhaustive/i);
+      expect(modelFacingText).toMatch(/message body editor/i);
+      expect(modelFacingText).toMatch(/never (?:place|in) .*body text in To\/Cc\/Bcc/i);
+      expect(modelFacingText).toMatch(/do not ask for a recipient after Outlook pre-fills/i);
+      expect(modelFacingText).toMatch(/do not use generic browser clicks or toolbar guessing/i);
       expect(modelFacingText).toMatch(/close all Chrome windows and retry from ClawX/i);
       expect(modelFacingText).not.toMatch(/enable Chrome remote debugging/i);
       expect(modelFacingText).not.toMatch(/configure remote debugging/i);

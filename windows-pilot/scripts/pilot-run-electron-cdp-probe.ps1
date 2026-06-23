@@ -5,6 +5,7 @@
 # instructs the model not to send, draft, reply, forward, read inbox, or submit.
 # Explicit -SendEmail and -SubmitForms flags perform real side effects.
 # -DraftEmail drafts only and leaves the compose pane open for inspection.
+# -OutlookReplyMatrix drafts reply/reply-all/forward only and never sends.
 
 param(
     [string]$Endpoint = "http://127.0.0.1:9223",
@@ -14,6 +15,7 @@ param(
     [string]$SafeChatPrompt,
     [switch]$OutlookSmoke,
     [switch]$OutlookStateMatrix,
+    [switch]$OutlookReplyMatrix,
     [string]$ChromeEndpoint = "http://127.0.0.1:18792",
     [switch]$FormsSmoke,
     [switch]$DraftEmail,
@@ -87,6 +89,7 @@ if (-not (Test-Endpoint -Url $Endpoint)) {
 "SafeChatCustom:$([bool]$SafeChatPrompt)"
 "OutlookSmoke:$($OutlookSmoke.IsPresent)"
 "OutlookStateMatrix:$($OutlookStateMatrix.IsPresent)"
+"OutlookReplyMatrix:$($OutlookReplyMatrix.IsPresent)"
 "ChromeEndpoint:$ChromeEndpoint"
 "FormsSmoke:  $($FormsSmoke.IsPresent)"
 "DraftEmail:  $($DraftEmail.IsPresent)"
@@ -115,6 +118,9 @@ if ($OutlookSmoke) {
 }
 if ($OutlookStateMatrix) {
     $argsList += "--outlook-state-matrix"
+}
+if ($OutlookReplyMatrix) {
+    $argsList += "--outlook-reply-matrix"
 }
 if ($FormsSmoke) {
     $argsList += "--forms-smoke"

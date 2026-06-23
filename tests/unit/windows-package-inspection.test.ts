@@ -10,6 +10,7 @@ const installArtifactProbePath = join(process.cwd(), 'windows-pilot', 'scripts',
 const seedDemoDocumentsScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-seed-demo-documents.ps1');
 const officeRuntimeCheckScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-office-runtime-check.ps1');
 const demoOfficeAnalysisScriptPath = join(process.cwd(), 'scripts', 'demo-office-analysis-e2e.mjs');
+const afterPackScriptPath = join(process.cwd(), 'scripts', 'after-pack.cjs');
 const managedCdpVisualSmokeScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-managed-cdp-visual-smoke.ps1');
 const electronCdpProbeRunnerPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-run-electron-cdp-probe.ps1');
 const silentInstallScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-run-silent-install.ps1');
@@ -163,6 +164,15 @@ describe('Windows package inspection contracts', () => {
     expect(script).toContain('resources\\bin\\WinSpeechRecognize.exe');
     expect(script).toContain('Capture-InstallTreeSummary "timeout"');
     expect(script).toContain('Capture-InstallTreeSummary "after"');
+  });
+
+  it('patches NSIS direct extraction to write the app archive into the install directory', () => {
+    const script = readFileSync(afterPackScriptPath, 'utf8');
+
+    expect(script).toContain('ClawX-patched-v2: extract directly to $INSTDIR');
+    expect(script).toContain('SetOutPath "$INSTDIR"');
+    expect(script).toContain('Nsis7z::Extract "${FILE}"');
+    expect(script).toContain('already patched with explicit $INSTDIR outdir');
   });
 
   it('keeps suspension Forms field-count guidance aligned with the live schema', () => {
