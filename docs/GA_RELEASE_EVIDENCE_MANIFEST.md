@@ -13,7 +13,8 @@ Use `docs/GA_VM_BROWSER_VISUAL_ACCEPTANCE_CRITERIA.md` for human or VLM review o
 | Field | Value |
 |---|---|
 | Branch | `release/moe10-windows-laptop-ready-20260529` |
-| Source commit at last local snapshot | Pending GitHub prerelease publication; tag target is authoritative |
+| Latest release evidence/process commit | `4212071ea7938624d895a2486a1167ebd6a235df` |
+| GitHub release tag target | `84fe4c3166bd73d15b144bb95af5db6bc43409de` (installer binary unchanged; later commits update tests, watcher automation, and evidence docs) |
 | Installer path | `release/Ministry of Education-0.4.3-moe.10-win-x64.exe` |
 | Installer SHA256 | `3a43cdff49c758b07ccfd57117a06304152813a7b80d857ba99c03486fe8f4fa` |
 | Blockmap SHA256 | `dfeacd98465081df7c0da0494dede0b881f673af916f6da5661439880a68e817` |
