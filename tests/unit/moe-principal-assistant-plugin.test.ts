@@ -264,6 +264,76 @@ describe('moe-principal-assistant plugin registration', () => {
     }
   });
 
+  it('returns a structured Outlook error when a read-only Host API call times out', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new Error('The operation was aborted due to timeout');
+    }));
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      const result = await byName['outlook.reply'].execute('call-reply', {
+        id: 'message-1',
+        body: 'Body is not logged by this test.',
+      });
+
+      expect(result).toMatchObject({ status: 'error' });
+      expect((result as { message?: string }).message).toMatch(/outlook host-API \/reply unreachable/i);
+      expect((result as { message?: string }).message).toMatch(/timeout/i);
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
+      else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
+      else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+    }
+  });
+
+  it('does not encourage automatic send retries when the Outlook send result is unknown', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new Error('The operation was aborted due to timeout');
+    }));
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      const result = await byName['outlook.send_email'].execute('call-send', { confirm: true });
+
+      expect(result).toMatchObject({ status: 'unknown' });
+      expect((result as { message?: string }).message).toMatch(/could not be confirmed/i);
+      expect((result as { message?: string }).message).toMatch(/Do not retry automatically/i);
+      expect((result as { message?: string }).message).toMatch(/open draft or Sent Items/i);
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
+      else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
+      else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+    }
+  });
+
   it('builds a daily-report form payload without inventing incident fields', async () => {
     const { register } = await loadPlugin();
     const tools: RegisteredTool[] = [];

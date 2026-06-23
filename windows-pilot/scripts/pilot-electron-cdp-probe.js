@@ -206,22 +206,39 @@ async function findRendererPage(browser) {
 }
 
 async function invokeHostApi(page, pathName, body = {}) {
-  return page.evaluate(async ({ pathName: innerPath, body: innerBody }) => {
-    const invoke = window.electron?.ipcRenderer?.invoke;
-    if (typeof invoke !== 'function') {
-      return {
-        ok: false,
-        error: 'window.electron.ipcRenderer.invoke unavailable',
-        electronKeys: window.electron ? Object.keys(window.electron) : [],
-      };
+  const startedAt = Date.now();
+  try {
+    const result = await page.evaluate(async ({ pathName: innerPath, body: innerBody }) => {
+      const invoke = window.electron?.ipcRenderer?.invoke;
+      if (typeof invoke !== 'function') {
+        return {
+          ok: false,
+          error: 'window.electron.ipcRenderer.invoke unavailable',
+          electronKeys: window.electron ? Object.keys(window.electron) : [],
+        };
+      }
+      return invoke('hostapi:fetch', {
+        path: innerPath,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(innerBody || {}),
+      });
+    }, { pathName, body });
+    if (result && typeof result === 'object' && !Array.isArray(result)) {
+      return { ...result, durationMs: Date.now() - startedAt };
     }
-    return invoke('hostapi:fetch', {
-      path: innerPath,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(innerBody || {}),
-    });
-  }, { pathName, body });
+    return {
+      ok: false,
+      error: 'hostapi:fetch returned a non-object response',
+      durationMs: Date.now() - startedAt,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      durationMs: Date.now() - startedAt,
+    };
+  }
 }
 
 function safeChatPrompt(mode, verificationToken, customPrompt = '') {
@@ -469,6 +486,7 @@ function summarizeHostApiCall(result, summarizeData) {
     return {
       ok: false,
       error: result?.error ?? 'unknown error',
+      durationMs: typeof result?.durationMs === 'number' ? result.durationMs : undefined,
     };
   }
   const json = result.data?.json;
@@ -476,6 +494,7 @@ function summarizeHostApiCall(result, summarizeData) {
   return {
     ok: true,
     status: result.data?.status,
+    durationMs: typeof result.durationMs === 'number' ? result.durationMs : undefined,
     result: summarizeData(data),
   };
 }

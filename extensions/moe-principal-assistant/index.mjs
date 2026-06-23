@@ -1519,12 +1519,31 @@ function createHostApiFormsFacade(port, token) {
  * Errors:
  *   - 404 from the host-API → 'outlook' was removed from the allowlist;
  *     surface a clear error so the agent can tell the user.
- *   - Network / timeout       → wrap as { status: 'error', message }
- *     so the agent can retry or fall back gracefully.
+ *   - Network / timeout       → wrap as a structured tool result instead
+ *     of throwing. Send/download use { status: 'unknown' } and tell the
+ *     agent not to retry automatically because side effects may have happened.
  */
 function createHostApiOutlookFacade(port, token) {
   const base = `http://127.0.0.1:${port}/api/outlook`;
   const REQUEST_TIMEOUT_MS = 60_000; // generous: drafts can include slow DOM waits.
+
+  function structuredError(path, message) {
+    if (path === '/send') {
+      return {
+        status: 'unknown',
+        message:
+          `${message}. Outlook send result could not be confirmed. Do not retry automatically; ask the principal to check the open draft or Sent Items in Outlook before trying again.`,
+      };
+    }
+    if (path === '/download-attachment') {
+      return {
+        status: 'unknown',
+        message:
+          `${message}. Outlook attachment download result could not be confirmed. Do not retry automatically; ask the principal to check the Downloads folder before trying again.`,
+      };
+    }
+    return { status: 'error', message };
+  }
 
   async function call(path, body) {
     const url = `${base}${path}`;
@@ -1542,7 +1561,7 @@ function createHostApiOutlookFacade(port, token) {
       resp = await fetch(url, init);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`outlook host-API ${path} unreachable: ${msg}`);
+      return structuredError(path, `outlook host-API ${path} unreachable: ${msg}`);
     }
     if (resp.status === 404) {
       throw new Error(
@@ -1554,7 +1573,7 @@ function createHostApiOutlookFacade(port, token) {
     try { data = text ? JSON.parse(text) : null; } catch { /* fall through */ }
     if (!resp.ok) {
       const errMsg = (data && (data.error || data.message)) || text.slice(0, 200) || `HTTP ${resp.status}`;
-      throw new Error(`outlook host-API ${path}: ${errMsg}`);
+      return structuredError(path, `outlook host-API ${path}: ${errMsg}`);
     }
     // The host-API wraps results as { success: true, data } (current shape)
     // or { success: true, result } (older). Tolerate both, plus a bare

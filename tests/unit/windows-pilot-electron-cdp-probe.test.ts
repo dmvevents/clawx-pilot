@@ -47,6 +47,13 @@ type ProbeSamples = {
   sampleSuspensionPayload: (marker?: string) => Record<string, unknown>;
 };
 
+type ProbeInternals = {
+  summarizeHostApiCall: (
+    result: unknown,
+    summarizeData: (data: Record<string, unknown> | null) => Record<string, unknown>,
+  ) => Record<string, unknown>;
+};
+
 type DailySchemaField = {
   id: string;
   required?: boolean;
@@ -81,6 +88,26 @@ function loadProbeSamples(): ProbeSamples {
     throw new Error('failed to load probe sample payload helpers');
   }
   return samples;
+}
+
+function loadProbeInternals(): ProbeInternals {
+  const source = readFileSync(probeScriptPath, 'utf8');
+  const moduleShim = { exports: {} as Record<string, unknown> };
+  runInNewContext(`${source}\nmodule.exports.__internals = { summarizeHostApiCall };`, {
+    Buffer,
+    __dirname: dirname(probeScriptPath),
+    __filename: probeScriptPath,
+    console,
+    exports: moduleShim.exports,
+    module: moduleShim,
+    process,
+    require,
+  });
+  const internals = (moduleShim.exports as { __internals?: ProbeInternals }).__internals;
+  if (!internals) {
+    throw new Error('Failed to load probe internals');
+  }
+  return internals;
 }
 
 function visibleForPayload(rule: Record<string, string> | undefined, payload: Record<string, unknown>) {
@@ -418,6 +445,40 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     }, { outlookStateMatrix: true });
 
     expect(validation).toEqual({ ok: true, reasons: [] });
+  });
+
+  it('preserves Host API call durations in probe summaries', () => {
+    const { summarizeHostApiCall } = loadProbeInternals();
+
+    expect(summarizeHostApiCall({
+      ok: true,
+      durationMs: 1234,
+      data: {
+        status: 200,
+        json: {
+          success: true,
+          data: { status: 'ok', messages: [1, 2, 3] },
+        },
+      },
+    }, (data) => ({
+      status: data?.status,
+      messageCount: Array.isArray(data?.messages) ? data.messages.length : 0,
+    }))).toMatchObject({
+      ok: true,
+      status: 200,
+      durationMs: 1234,
+      result: { status: 'ok', messageCount: 3 },
+    });
+
+    expect(summarizeHostApiCall({
+      ok: false,
+      error: 'hostapi failed',
+      durationMs: 4321,
+    }, () => ({}))).toMatchObject({
+      ok: false,
+      error: 'hostapi failed',
+      durationMs: 4321,
+    });
   });
 
   it('fails the Outlook state matrix when a risky folder is missing or not normalized', () => {

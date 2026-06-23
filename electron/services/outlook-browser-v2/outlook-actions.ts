@@ -1433,7 +1433,7 @@ export class OutlookActions {
         : 'Control+R';
 
     try {
-      await page.evaluate(() => {
+      const focusedMessageSurface = await page.evaluate(() => {
         const roots = Array.from(document.querySelectorAll([
           '[role="region"][aria-label*="reading" i]',
           '[aria-label*="reading pane" i]',
@@ -1453,11 +1453,16 @@ export class OutlookActions {
           }
           return true;
         };
-        const target = roots.find(isVisible)
-          ?? document.querySelector<HTMLElement>('[role="option"][aria-selected="true"], [role="row"][aria-selected="true"]')
-          ?? document.body;
+        const selectedRows = Array.from(
+          document.querySelectorAll<HTMLElement>('[role="option"][aria-selected="true"], [role="row"][aria-selected="true"]'),
+        );
+        const target = [...roots, ...selectedRows].find(isVisible);
+        if (!target) return false;
+        if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
         target.focus?.();
+        return true;
       });
+      if (!focusedMessageSurface) return false;
       await this.driver.pressKey(shortcut);
       await this.waitForComposePane(page);
       logger.info(`[outlook-v2] Opened ${action} compose pane with Outlook keyboard shortcut fallback`);

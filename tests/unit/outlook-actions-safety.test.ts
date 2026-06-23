@@ -463,11 +463,16 @@ describe('OutlookActions safety gates', () => {
 
   it('falls back to Outlook reply keyboard shortcut when the Reply button is hidden', async () => {
     const { actions, driver } = createActions();
-    const page = {
-      evaluate: vi.fn(async () => undefined),
+    const { page } = createDomPage(`
+      <section role="region" aria-label="Reading pane">
+        <article>Meeting</article>
+      </section>
+    `);
+    const replyPage = {
+      ...page,
       waitForSelector: vi.fn(async () => undefined),
     } as unknown as FakeReplyPage;
-    driver.ensureOutlookTab.mockResolvedValue(page);
+    driver.ensureOutlookTab.mockResolvedValue(replyPage);
     actions.clickOpenMessageToolbarButton = vi.fn(async () => false);
     actions.fillBody = vi.fn(async () => undefined);
     actions.readOpenDraftProbe = vi.fn(async () => ({
@@ -485,7 +490,44 @@ describe('OutlookActions safety gates', () => {
 
     expect(result).toMatchObject({ status: 'drafted', draftLeftOpen: true });
     expect(driver.pressKey).toHaveBeenCalledWith('Control+R');
-    expect(actions.fillBody).toHaveBeenCalledWith(page, 'Testing the reply feature');
+    expect(actions.fillBody).toHaveBeenCalledWith(replyPage, 'Testing the reply feature');
+  });
+
+  it('does not run toolbar fallback or click Archive when the reply shortcut opens compose', async () => {
+    const { actions, driver } = createActions();
+    const { clicks, page } = createDomPage(`
+      <section role="region" aria-label="Reading pane">
+        <button aria-label="Archive" data-click-id="archive">Archive</button>
+        <button aria-label="Delete" data-click-id="delete">Delete</button>
+      </section>
+    `);
+    const replyPage = {
+      ...page,
+      waitForSelector: vi.fn(async () => undefined),
+    } as unknown as FakeReplyPage;
+    driver.ensureOutlookTab.mockResolvedValue(replyPage);
+    actions.clickOpenMessageToolbarButton = vi.fn(async () => {
+      clicks.push('toolbar-fallback');
+      return false;
+    });
+    actions.fillBody = vi.fn(async () => undefined);
+    actions.readOpenDraftProbe = vi.fn(async () => ({
+      snapshot: {
+        ...matchingDraft,
+        to: ['Karunesh Ramdass'],
+        subject: 'Re: Meeting',
+      },
+      clickedSend: false,
+      draftCount: 1,
+      sendableDraftCount: 1,
+    }));
+
+    const result = await actions.reply({ id: 'message-1', body: 'Testing the reply feature' });
+
+    expect(result).toMatchObject({ status: 'drafted', draftLeftOpen: true });
+    expect(driver.pressKey).toHaveBeenCalledWith('Control+R');
+    expect(actions.clickOpenMessageToolbarButton).not.toHaveBeenCalled();
+    expect(clicks).toEqual([]);
   });
 
   it('reports not_found when both Reply button detection and shortcut fallback miss', async () => {
@@ -506,7 +548,8 @@ describe('OutlookActions safety gates', () => {
     const result = await actions.reply({ id: 'message-1', body: 'Testing the reply feature' });
 
     expect(result).toMatchObject({ status: 'not_found', draftLeftOpen: false });
-    expect(driver.pressKey).toHaveBeenCalledWith('Control+R');
+    expect(driver.pressKey).not.toHaveBeenCalled();
+    expect(actions.clickOpenMessageToolbarButton).toHaveBeenCalled();
     expect(actions.fillBody).not.toHaveBeenCalled();
   });
 
