@@ -1,6 +1,6 @@
 ---
 name: outlook-email-windows
-description: Drive Outlook on the pilot Windows laptop via the moe-principal-assistant plugin's outlook.* tools. Read inbox, draft, reply, send — with the double-gate safety on send.
+description: Drive Outlook on the pilot Windows laptop via the moe-principal-assistant plugin's outlook.* tools. Read inbox, draft, reply, send — with confirm-gated safety on send.
 metadata:
   os: windows
   prereq-skill: chrome-cdp-windows
@@ -28,20 +28,18 @@ The agent calls these via the Anthropic tool-use protocol; you do **not** call t
 | `outlook.draft_email({to, subject, body})` | Open compose pane with values | none |
 | `outlook.reply({id, body})` | Open Reply compose with `Re:` subject pre-filled | none |
 | `outlook.forward({id, to, body?})` | Open Forward compose | none |
-| `outlook.send_email({to, subject, confirm:true})` | **Send** | **double-gate** (see below) |
+| `outlook.send_email({confirm:true})` | **Send the single visible reviewed draft** | **hard-confirm gate** (see below) |
 | `outlook.list_attachments({id})` | List names + sizes | none |
 | `outlook.download_attachment({id, attachmentId, confirm:true})` | Save to disk | hard-confirm |
 | `outlook.mark_read({id, read})` | Toggle read state | none |
 
 Source of truth: `electron/services/outlook-browser-v2/manager.ts` + `outlook-actions.ts`.
 
-## Double-gate on send (mandatory)
+## Send gate (mandatory)
 
-`outlook.send_email` will refuse unless **BOTH** are true:
-1. `confirm: true` is in the args.
-2. The currently-open compose pane's subject matches `args.subject` (substring match acceptable per implementation).
+`outlook.send_email` will refuse unless `confirm: true` is in the args and Outlook shows exactly one complete reviewed draft with its own Send button.
 
-If the principal types "send it" and the agent has the right draft open with the matching subject, the gate fires. If the principal accidentally edited the subject in the compose pane, the gate refuses with a clear reason. **This is intended behavior — demo it on purpose at least once.**
+Normal reviewed sends use `outlook.send_email({confirm:true})` only. Do not ask the principal to restate the recipient, subject, or body after they already reviewed the open Outlook draft. Optional `to`, `cc`, `bcc`, `subject`, and `body` fields are advanced safety assertions only; passing stale assertions after review can cause a correct draft to be refused.
 
 ## Prerequisites checklist (run before any outlook.* call)
 
@@ -76,13 +74,13 @@ Expected:
 
 **Do NOT click Send.** Show the principal the assistant stops at draft.
 
-### Turn 3 — send (double-gate demo)
+### Turn 3 — send
 
 > Send it.
 
-Expected: `outlook.send_email({to, subject, confirm:true})` with the same subject as the open compose pane. Send fires. Compose pane closes. Reply visible in Sent.
+Expected: `outlook.send_email({confirm:true})` against the single visible reviewed compose pane. Send fires. Compose pane closes. Reply visible in Sent.
 
-**Demo of the gate (optional 30s):** before saying "send it", click into the compose pane and edit the subject. Then say "send it." Gate refuses with subject-mismatch message. Re-issue draft → send → succeeds.
+**Demo of the gate (optional 30s):** say "send it" before any draft is open, or leave two compose panes open. The tool refuses with a clear message. Close extra drafts, review the intended draft, then say "send it" again.
 
 ## Acceptance smoke (before the principal arrives)
 
@@ -98,7 +96,7 @@ Order:
 4. `outlook.read_email({id: <first id from #2>})`
 5. `outlook.draft_email({to: "test.fac@fac.edu.tt", subject: "Smoke A", body: "smoke"})`
 6. `outlook.reply({id: <id>, body: "ack"})`
-7. `outlook.send_email({to:"test.fac@fac.edu.tt", subject:"Smoke A", confirm:true})`
+7. `outlook.send_email({confirm:false})` must refuse before touching Outlook; a real `confirm:true` send requires exact same-session human approval and should use `{confirm:true}` only after the draft is reviewed
 8. `outlook.list_attachments({id: <id of email with attachments>})`
 9. `outlook.download_attachment({id, attachmentId, confirm:true})`
 10. `outlook.mark_read({id, read: true})` then `false`
@@ -112,7 +110,7 @@ Pass if all 10 return without `error`. Document in the smoke result row.
 | `connectOverCDP failed: ECONNREFUSED 127.0.0.1:18792` | Chrome not on CDP | Run `chrome-cdp-windows` skill |
 | `No Outlook tab found, navigated to outlook.office.com but got login redirect` | Profile is signed out | Sign in as test.fac in the SAME Chrome profile, retry |
 | `AADSTS53003 BlockedByConditionalAccess` | Wrong Chrome profile (managed) | Switch to test.fac personal profile; never managed Chromium |
-| `send_email: subject mismatch (compose has "X", arg has "Y")` | Working as designed | Re-draft so subjects match, retry |
+| `send_email` refuses after review | Usually no open draft, multiple open drafts, or a stale optional assertion was passed | Keep exactly one reviewed draft open and retry with `{confirm:true}` only |
 | Gateway reports "model call failed" | `~/.openclaw/openclaw.json` drift OR network | Run `clawx-config-doctor` sub-agent; verify cloud reachability with `Test-NetConnection generativelanguage.googleapis.com -Port 443` |
 | Compose pane opens but body is empty | Content-Security-Policy blocking the inject | Check `outlook-actions.ts:fillCompose`; this is a v2 regression — escalate |
 | `read_inbox` returns 0 rows | Inbox empty OR Outlook UI in non-default folder | Send 3 test emails; ensure Outlook is on Inbox folder, not Focused/Other split |

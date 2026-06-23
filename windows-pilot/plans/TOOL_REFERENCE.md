@@ -13,7 +13,7 @@ All defined in `extensions/moe-principal-assistant/index.mjs`.
 | `outlook.open` | 352-360 | Open Outlook Web; returns `opened` / `needs_signin` | none |
 | `outlook.read_inbox` | 362-371 | Top N recent messages | none |
 | `outlook.draft_email` | 373-388 | Compose draft (does NOT send) | none |
-| `outlook.send_email` | 390-409 | **Send** | **double-gate** (see below) |
+| `outlook.send_email` | 390-409 | **Send the single visible reviewed draft** | **hard-confirm gate** (see below) |
 | `outlook.search_inbox` | 415-422 | Filter by sender, subject, date, unread, attachment | none |
 | `outlook.read_email` | 424-433 | Open message; full body, recipients, attachments | none |
 | `outlook.reply` | 435-445 | Reply / reply-all; leaves draft open | none |
@@ -22,17 +22,17 @@ All defined in `extensions/moe-principal-assistant/index.mjs`.
 | `outlook.list_attachments` | 475-484 | List metadata (no download) | none |
 | `outlook.download_attachment` | 486-500 | Save to disk | hard-confirm |
 
-### `outlook.send_email` double-gate (the trust moment)
+### `outlook.send_email` hard-confirm gate (the trust moment)
 
 **Gate 1 — confirm flag** (plugin-side, `index.mjs:406`):
 - Code: `confirm: confirm === true`
 - Refusal message: `"Send blocked: confirm flag not set. Show the draft to the principal and re-call with confirm=true after they say yes."`
 
-**Gate 2 — subject match** (driver-side, `electron/services/outlook-browser-v2/outlook-actions.ts`):
-- Verifies the open compose pane's subject matches `args.subject`.
-- Refusal message: `"Send blocked: the open draft's subject does not match the requested subject. The user may have edited a different draft. Re-draft and try again."`
+**Gate 2 — single visible reviewed draft** (driver-side, `electron/services/outlook-browser-v2/outlook-actions.ts`):
+- Verifies Outlook shows exactly one complete reviewed draft with its own Send button.
+- Normal reviewed sends call `outlook.send_email({confirm:true})` only. Optional recipient/subject/body values are advanced safety assertions; stale assertions can make a valid reviewed draft refuse.
 
-Both gates must pass. Demo this on purpose at least once during the smoke.
+Both gates must pass. Demo this by trying to send with no draft open or multiple compose panes open; the tool must refuse.
 
 ### Host-API mirror
 
@@ -93,7 +93,7 @@ The driver reads `extensions/moe-principal-assistant/forms/suspensions-schema.js
 When watching the log for a tool call, expect lines like:
 - `moe-principal-assistant: outlook.send_email called {...}` — invocation
 - `moe-principal-assistant: outlook.send_email gated: confirm flag not set` — Gate 1 refusal
-- `moe-principal-assistant: outlook.send_email refused: subject mismatch` — Gate 2 refusal
+- `Send blocked: multiple open drafts were detected` or `No open draft found` — Gate 2 refusal
 - `moe-principal-assistant: forms.submit_suspension status=refused reason=Submit blocked: confirm:true required` — forms hard-confirm refusal
 
 Pass-through to host-API also generates `[INFO] POST /api/outlook/* 200` style lines — useful as secondary evidence.

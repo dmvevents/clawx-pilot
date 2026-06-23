@@ -102,6 +102,26 @@ function normalizeSearchText(value: string | undefined): string {
   return normalizeComparableText(value).toLowerCase();
 }
 
+function isOutlookMailHost(hostname: string): boolean {
+  return /^(?:outlook\.office\.com|outlook\.cloud\.microsoft|outlook\.office365\.com|outlook\.live\.com)$/i.test(
+    hostname,
+  );
+}
+
+function isOutlookInboxUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (!isOutlookMailHost(url.hostname)) return false;
+    const segments = url.pathname
+      .toLowerCase()
+      .split('/')
+      .filter(Boolean);
+    return segments[0] === 'mail' && segments.includes('inbox');
+  } catch {
+    return false;
+  }
+}
+
 function expectedRecipientNeedles(values: string[]): string[] {
   return values
     .map((value) => {
@@ -312,7 +332,19 @@ export class OutlookActions {
       unread: r.unread,
     }));
 
-    return { status: 'ok', messages };
+    return {
+      status: 'ok',
+      messages,
+      scan: {
+        scope: 'recent_inbox_window',
+        requestedTop: top,
+        scannedCount: messages.length,
+        returnedCount: messages.length,
+        exhaustive: false,
+        note:
+          'Browser Outlook scan covers the recent visible Inbox window only; do not describe it as all mailbox mail.',
+      },
+    };
   }
 
   /**
@@ -477,11 +509,22 @@ export class OutlookActions {
       return { status: 'needs_signin', messages: [], message: inbox.message };
     }
     const filtered = inbox.messages.filter((m) => matchesSearchArgs(m, args));
-    const capped = filtered.length > top;
+    const capped = filtered.length > top || inbox.messages.length >= fetchN;
     return {
       status: 'ok',
       messages: filtered.slice(0, top),
       capped,
+      scan: {
+        scope: 'recent_inbox_window',
+        requestedTop: top,
+        fetchedTop: fetchN,
+        scannedCount: inbox.messages.length,
+        matchedCount: filtered.length,
+        returnedCount: Math.min(filtered.length, top),
+        exhaustive: false,
+        note:
+          'Browser Outlook search filters a recent Inbox window; for all mail/month-wide audits, report the scan window and do not claim the mailbox is complete.',
+      },
     };
   }
 
@@ -609,7 +652,10 @@ export class OutlookActions {
     const targetName = args.replyAll ? /^reply all$/i : /^reply$/i;
     await this.dismissBlockingDialog(page);
     const clickedReply = await this.clickOpenMessageToolbarButton(page, targetName);
-    if (!clickedReply) {
+    const openedByShortcut = clickedReply
+      ? false
+      : await this.openMessageComposeViaShortcut(page, args.replyAll ? 'replyAll' : 'reply');
+    if (!clickedReply && !openedByShortcut) {
       return {
         status: 'not_found',
         draftLeftOpen: false,
@@ -618,7 +664,7 @@ export class OutlookActions {
           : 'Could not safely identify the Reply button on the open message.',
       };
     }
-    await this.waitForComposePane(page);
+    if (!openedByShortcut) await this.waitForComposePane(page);
     await this.fillBody(page, args.body);
 
     const draftProbe = await this.readOpenDraftProbe(page);
@@ -650,14 +696,17 @@ export class OutlookActions {
 
     await this.dismissBlockingDialog(page);
     const clickedForward = await this.clickOpenMessageToolbarButton(page, /^forward$/i);
-    if (!clickedForward) {
+    const openedByShortcut = clickedForward
+      ? false
+      : await this.openMessageComposeViaShortcut(page, 'forward');
+    if (!clickedForward && !openedByShortcut) {
       return {
         status: 'not_found',
         draftLeftOpen: false,
         message: 'Could not safely identify the Forward button on the open message.',
       };
     }
-    await this.waitForComposePane(page);
+    if (!openedByShortcut) await this.waitForComposePane(page);
 
     const toList = asArray(args.to);
     if (toList.length === 0) {
@@ -853,7 +902,7 @@ export class OutlookActions {
    */
   private async ensureInboxFolder(page: Page): Promise<void> {
     const url = page.url();
-    if (!/outlook\.office\.com\/mail\/inbox(?:[/?#]|$)/i.test(url)) {
+    if (!isOutlookInboxUrl(url)) {
       logger.info('[outlook-v2] Navigating Outlook tab to Inbox before inbox-scoped action');
       await page.goto('https://outlook.office.com/mail/inbox', {
         timeout: 30_000,
@@ -874,6 +923,37 @@ export class OutlookActions {
       ].join(','),
       { timeout: 15_000 },
     ).catch(() => undefined);
+
+    if (isOutlookInboxUrl(page.url())) return;
+
+    const inboxSelected = await page.evaluate(`
+      (() => {
+        const candidates = Array.from(document.querySelectorAll([
+          '[aria-current="page"]',
+          '[aria-selected="true"]',
+          '[role="treeitem"][aria-selected="true"]',
+          '[role="link"][aria-current="page"]',
+          '[role="button"][aria-current="page"]'
+        ].join(',')));
+        const textFor = function(el) {
+          return [
+            el.getAttribute('aria-label') || '',
+            el.getAttribute('title') || '',
+            el.textContent || ''
+          ].join(' ').replace(/\\s+/g, ' ').trim();
+        };
+        return candidates.some(function(el) {
+          const text = textFor(el);
+          return /\\bInbox\\b/i.test(text) && !/\\bSent\\b|\\bArchive\\b|\\bDrafts\\b|\\bDeleted\\b/i.test(text);
+        });
+      })()
+    `).catch(() => false) as boolean;
+
+    if (!inboxSelected) {
+      throw new Error(
+        'Outlook Inbox folder could not be confirmed after navigation. Refusing to read the visible message list because it may be Sent Items or another folder.',
+      );
+    }
   }
 
   private async openMessageById(page: Page, id: string): Promise<boolean> {
@@ -1190,9 +1270,64 @@ export class OutlookActions {
     }
   }
 
+  private async openMessageComposeViaShortcut(
+    page: Page,
+    action: 'reply' | 'replyAll' | 'forward',
+  ): Promise<boolean> {
+    const shortcut = action === 'replyAll'
+      ? 'Control+Shift+R'
+      : action === 'forward'
+        ? 'Control+Shift+F'
+        : 'Control+R';
+
+    try {
+      await page.evaluate(() => {
+        const roots = Array.from(document.querySelectorAll([
+          '[role="region"][aria-label*="reading" i]',
+          '[aria-label*="reading pane" i]',
+          '[aria-label*="message body" i]',
+          '[aria-label*="message preview" i]',
+          '[data-automation-id*="ReadingPane" i]',
+          '[data-automationid*="ReadingPane" i]',
+        ].join(','))) as HTMLElement[];
+        const isVisible = (el: HTMLElement) => {
+          const rect = el.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 0) return false;
+          let current: HTMLElement | null = el;
+          while (current) {
+            const style = window.getComputedStyle(current);
+            if (style.visibility === 'hidden' || style.display === 'none') return false;
+            current = current.parentElement;
+          }
+          return true;
+        };
+        const target = roots.find(isVisible)
+          ?? document.querySelector<HTMLElement>('[role="option"][aria-selected="true"], [role="row"][aria-selected="true"]')
+          ?? document.body;
+        target.focus?.();
+      });
+      await this.driver.pressKey(shortcut);
+      await this.waitForComposePane(page);
+      logger.info(`[outlook-v2] Opened ${action} compose pane with Outlook keyboard shortcut fallback`);
+      return true;
+    } catch (err) {
+      logger.debug?.(
+        `[outlook-v2] ${action} keyboard shortcut fallback missed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return false;
+    }
+  }
+
   private async clickOpenMessageToolbarButton(page: Page, nameRegex: RegExp): Promise<boolean> {
-    return page.evaluate(({ source, ignoreCase }) => {
+    const clickResult = await page.evaluate(({ source, ignoreCase }) => {
       const re = new RegExp(source, ignoreCase ? 'i' : '');
+      const target = /\breply\s+all\b/i.test(source)
+        ? 'replyAll'
+        : /\bforward\b/i.test(source)
+          ? 'forward'
+          : 'reply';
       const normalize = (value: string | undefined | null) => (value ?? '')
         .replace(/\u00a0/g, ' ')
         .replace(/\s+/g, ' ')
@@ -1200,11 +1335,203 @@ export class OutlookActions {
       const isVisible = (el: Element | null) => {
         if (!el) return false;
         const rect = el.getBoundingClientRect();
-        const style = window.getComputedStyle(el);
-        return rect.width > 0
-          && rect.height > 0
-          && style.visibility !== 'hidden'
-          && style.display !== 'none';
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        let current: Element | null = el;
+        while (current) {
+          const style = window.getComputedStyle(current);
+          if (style.visibility === 'hidden' || style.display === 'none') return false;
+          current = current.parentElement;
+        }
+        return true;
+      };
+      const clickableFor = (el: Element) => el.closest(
+        'button, [role="button"], [role="menuitem"], a[role="button"]',
+      ) || el;
+      const labelFor = (el: Element) => [
+        el.getAttribute('aria-label') || '',
+        el.getAttribute('title') || '',
+        el.getAttribute('data-automation-id') || '',
+        el.getAttribute('data-automationid') || '',
+        el.textContent || '',
+      ].map(normalize).filter(Boolean);
+      const scoreLabel = (label: string) => {
+        if (!label) return 0;
+        if (/^\s*(archive|delete|move|sweep|junk|report|flag|pin|mark|categorize)\b/i.test(label)) return 0;
+        if (target === 'replyAll') {
+          if (/^reply\s+all$/i.test(label)) return 100;
+          if (/^reply\s+all\b/i.test(label)) return 90;
+          return re.test(label) ? 70 : 0;
+        }
+        if (target === 'forward') {
+          if (/^forward$/i.test(label)) return 100;
+          if (/^forward\b/i.test(label)) return 90;
+          return re.test(label) ? 70 : 0;
+        }
+        if (/\breply\s+all\b/i.test(label)) return 0;
+        if (/^reply$/i.test(label)) return 100;
+        if (/^reply\b/i.test(label)) return 90;
+        if (/\breply\b/i.test(label)) return 70;
+        return re.test(label) ? 60 : 0;
+      };
+      const scoreElement = (el: Element) => {
+        const labels = labelFor(el);
+        if (labels.some((label) => /^\s*(archive|delete|move|sweep|junk|report|flag|pin|mark|categorize)\b/i.test(label))) {
+          return 0;
+        }
+        return Math.max(0, ...labels.map(scoreLabel));
+      };
+      const collectCandidates = (roots: ParentNode[]) => {
+        const seen = new Set<Element>();
+        const out: Array<{ el: HTMLElement; score: number }> = [];
+        for (const root of roots) {
+          const elements = Array.from(root.querySelectorAll(
+            'button, [role="button"], [role="menuitem"], a[role="button"], [aria-label], [title], [data-automation-id], [data-automationid]',
+          ));
+          for (const raw of elements) {
+            const clickable = clickableFor(raw);
+            if (seen.has(clickable) || !isVisible(clickable)) continue;
+            seen.add(clickable);
+            const score = Math.max(scoreElement(raw), scoreElement(clickable));
+            if (score >= 70) out.push({ el: clickable as HTMLElement, score });
+          }
+        }
+        return out;
+      };
+      const clickUniqueBest = (candidates: Array<{ el: HTMLElement; score: number }>) => {
+        const sorted = candidates
+          .filter((candidate) => candidate.score >= 70)
+          .sort((a, b) => b.score - a.score);
+        if (sorted.length === 0) return false;
+        const best = sorted[0];
+        const ties = sorted.filter((candidate) => candidate.score === best.score);
+        if (ties.length !== 1) return false;
+        best.el.click();
+        return true;
+      };
+
+      const readingPaneRoots = Array.from(document.querySelectorAll([
+        '[role="region"][aria-label*="reading" i]',
+        '[aria-label*="reading pane" i]',
+        '[aria-label*="message body" i]',
+        '[aria-label*="message preview" i]',
+        '[data-automation-id*="ReadingPane" i]',
+        '[data-automationid*="ReadingPane" i]',
+      ].join(','))).filter(isVisible);
+
+      for (const root of readingPaneRoots) {
+        if (clickUniqueBest(collectCandidates([root]))) return true;
+      }
+      if (readingPaneRoots.length > 0) {
+        const rootRects = readingPaneRoots.map((root) => root.getBoundingClientRect());
+        const nearReadingPane = collectCandidates([document]).filter(({ el }) => {
+          const rect = el.getBoundingClientRect();
+          return rootRects.some((rootRect) => rect.left >= rootRect.left - 80
+            && rect.right <= rootRect.right + 80
+            && rect.top >= rootRect.top - 180
+            && rect.top <= rootRect.bottom + 40);
+        });
+        if (clickUniqueBest(nearReadingPane)) return true;
+        return false;
+      }
+
+      return clickUniqueBest(collectCandidates([document]));
+    }, { source: nameRegex.source, ignoreCase: nameRegex.ignoreCase }).catch((err) => {
+      logger.debug?.(
+        `[outlook-v2] safe open-message toolbar click missed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return false;
+    });
+    if (clickResult) return true;
+
+    const openedMoreMenu = await page.evaluate(() => {
+      const normalize = (value: string | undefined | null) => (value ?? '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const isVisible = (el: Element | null) => {
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        let current: Element | null = el;
+        while (current) {
+          const style = window.getComputedStyle(current);
+          if (style.visibility === 'hidden' || style.display === 'none') return false;
+          current = current.parentElement;
+        }
+        return true;
+      };
+      const labelFor = (el: Element) => [
+        el.getAttribute('aria-label') || '',
+        el.getAttribute('title') || '',
+        el.getAttribute('data-automation-id') || '',
+        el.getAttribute('data-automationid') || '',
+        el.textContent || '',
+      ].map(normalize).filter(Boolean).join(' ');
+      const readingPaneRoots = Array.from(document.querySelectorAll([
+        '[role="region"][aria-label*="reading" i]',
+        '[aria-label*="reading pane" i]',
+        '[aria-label*="message body" i]',
+        '[aria-label*="message preview" i]',
+        '[data-automation-id*="ReadingPane" i]',
+        '[data-automationid*="ReadingPane" i]',
+      ].join(','))).filter(isVisible);
+      if (readingPaneRoots.length === 0) return false;
+      const rootRects = readingPaneRoots.map((root) => root.getBoundingClientRect());
+      const candidates = Array.from(document.querySelectorAll('button, [role="button"], a[role="button"]'))
+        .map((el) => {
+          if (!isVisible(el)) return false;
+          const label = labelFor(el);
+          if (!/\bmore\s+(actions|options|commands)\b|\bresponse?\s+actions\b|\brespond\b|^more$/i.test(label)) return false;
+          const rect = el.getBoundingClientRect();
+          const nearRoot = rootRects.some((rootRect) => rect.left >= rootRect.left - 80
+            && rect.right <= rootRect.right + 80
+            && rect.top >= rootRect.top - 180
+            && rect.top <= rootRect.bottom + 40);
+          if (!nearRoot) return false;
+          const insideRoot = readingPaneRoots.some((root) => root.contains(el));
+          let score = insideRoot ? 120 : 100;
+          if (/\bmore\s+actions\b/i.test(label)) score += 20;
+          else if (/\brespond\b|\bresponse?\s+actions\b/i.test(label)) score += 15;
+          else if (/^more$/i.test(label)) score += 5;
+          return { el: el as HTMLElement, score };
+        })
+        .filter(Boolean) as Array<{ el: HTMLElement; score: number }>;
+      const sorted = candidates.sort((a, b) => b.score - a.score);
+      if (sorted.length === 0) return false;
+      const best = sorted[0];
+      if (sorted.filter((candidate) => candidate.score === best.score).length !== 1) return false;
+      best.el.click();
+      return true;
+    }).catch(() => false);
+
+    if (!openedMoreMenu) return false;
+    const waitForTimeout = (page as unknown as { waitForTimeout?: (timeout: number) => Promise<void> }).waitForTimeout;
+    if (waitForTimeout) {
+      await waitForTimeout.call(page, 300).catch(() => undefined);
+    }
+
+    return page.evaluate(({ source, ignoreCase }) => {
+      const re = new RegExp(source, ignoreCase ? 'i' : '');
+      const target = /\breply\s+all\b/i.test(source)
+        ? 'replyAll'
+        : /\bforward\b/i.test(source)
+          ? 'forward'
+          : 'reply';
+      const normalize = (value: string | undefined | null) => (value ?? '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const isVisible = (el: Element | null) => {
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        let current: Element | null = el;
+        while (current) {
+          const style = window.getComputedStyle(current);
+          if (style.visibility === 'hidden' || style.display === 'none') return false;
+          current = current.parentElement;
+        }
+        return true;
       };
       const labelFor = (el: Element) => [
         el.getAttribute('aria-label') || '',
@@ -1213,40 +1540,36 @@ export class OutlookActions {
         el.getAttribute('data-automationid') || '',
         el.textContent || '',
       ].map(normalize).filter(Boolean);
-      const collectMatches = (root: ParentNode) => Array.from(
-        root.querySelectorAll('button, [role="button"], [role="menuitem"], [aria-label], [title]'),
-      ).filter((el) => {
-        if (!isVisible(el)) return false;
-        return labelFor(el).some((label) => re.test(label));
-      }) as HTMLElement[];
-
-      const readingPaneRoots = Array.from(document.querySelectorAll([
-        '[role="region"][aria-label*="reading" i]',
-        '[aria-label*="reading pane" i]',
-        '[data-automation-id*="ReadingPane" i]',
-        '[data-automationid*="ReadingPane" i]',
-      ].join(','))).filter(isVisible);
-
-      for (const root of readingPaneRoots) {
-        const matches = collectMatches(root);
-        if (matches.length === 1) {
-          matches[0].click();
-          return true;
+      const scoreLabel = (label: string) => {
+        if (/^\s*(archive|delete|move|sweep|junk|report|flag|pin|mark|categorize)\b/i.test(label)) return 0;
+        if (target === 'replyAll') {
+          if (/^reply\s+all$/i.test(label)) return 100;
+          if (/^reply\s+all\b/i.test(label)) return 90;
+          return re.test(label) ? 70 : 0;
         }
-      }
-      if (readingPaneRoots.length > 0) {
-        return false;
-      }
-
-      const globalMatches = collectMatches(document);
-      if (globalMatches.length === 1) {
-        globalMatches[0].click();
-        return true;
-      }
-      return false;
+        if (target === 'forward') {
+          if (/^forward$/i.test(label)) return 100;
+          if (/^forward\b/i.test(label)) return 90;
+          return re.test(label) ? 70 : 0;
+        }
+        if (/\breply\s+all\b/i.test(label)) return 0;
+        if (/^reply$/i.test(label)) return 100;
+        if (/^reply\b/i.test(label)) return 90;
+        return re.test(label) ? 70 : 0;
+      };
+      const candidates = Array.from(document.querySelectorAll('[role="menuitem"], button[role="menuitem"], [role="menu"] button'))
+        .filter(isVisible)
+        .map((el) => ({ el: el as HTMLElement, score: Math.max(0, ...labelFor(el).map(scoreLabel)) }))
+        .filter((candidate) => candidate.score >= 70)
+        .sort((a, b) => b.score - a.score);
+      if (candidates.length === 0) return false;
+      const best = candidates[0];
+      if (candidates.filter((candidate) => candidate.score === best.score).length !== 1) return false;
+      best.el.click();
+      return true;
     }, { source: nameRegex.source, ignoreCase: nameRegex.ignoreCase }).catch((err) => {
       logger.debug?.(
-        `[outlook-v2] safe open-message toolbar click missed: ${err instanceof Error ? err.message : String(err)}`,
+        `[outlook-v2] safe open-message menu click missed: ${err instanceof Error ? err.message : String(err)}`,
       );
       return false;
     });

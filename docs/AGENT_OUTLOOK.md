@@ -174,7 +174,7 @@ pnpm exec tsx scripts/v2-eval.ts
 | Gateway 000 on /healthz | Config validation failed on boot | Check log for `Config validation failed: models.providers.X.api`. Migration in seedGatewayPluginConfig should self-repair |
 | `outlook host handle not provided` (in doctor logs) | Doctor preflight runs without env | Ignored — preflight isn't the runtime |
 | `Could not find target (semantic locator missed and VLM grounding failed)` | Outlook DOM changed OR a dialog blocking | Run v2-page-state.ts; if dialog, dismissBlockingDialog may need a new affordance |
-| `Send refused: open subject "X" does not match args.subject "Y"` | Working as designed | Agent passed an explicit subject assertion that does not match the visible draft; refuse + re-review |
+| `Send refused` after review | No open draft, multiple open drafts, or a stale optional assertion | Keep exactly one reviewed draft open and use `outlook.send_email({ confirm: true })` only for the normal send-after-review path |
 | `outlook capability disabled: ... 404` | `outlook` removed from PRINCIPAL_SKILL_ALLOWLIST | Add it back |
 | `[profile_locked_close_chrome]` | Chrome is already open without the ClawX automation endpoint on the target profile | Close all Chrome windows, then retry from ClawX |
 | `Outlook is on the sign-in page` | MS session expired | Sign in manually in Chrome window |

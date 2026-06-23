@@ -8,7 +8,7 @@ param(
   [Parameter(Mandatory = $true)]
   [string] $InstallerPath,
 
-  [int] $TimeoutSeconds = 300,
+  [int] $TimeoutSeconds = 1800,
 
   [string] $EvidenceRoot = "$env:PUBLIC\Downloads",
 
@@ -85,6 +85,60 @@ function Stop-ProcessTree([int] $rootPid) {
       Write-State "INSTALL_TREE_STOP_ERROR" ("{0}|{1}" -f $processId, $_.Exception.Message)
     }
   }
+}
+
+function Capture-InstallTreeSummary([string] $label) {
+  if (-not $script:EvidenceDir) { return }
+  $safeLabel = $label -replace '[^a-zA-Z0-9._-]+', '-'
+  $path = Join-Path $script:EvidenceDir ("install-tree-" + $safeLabel + ".json")
+  $installDir = Join-Path $env:LOCALAPPDATA "Programs\Ministry of Education"
+  $importantRelative = @(
+    "Ministry of Education.exe",
+    "resources\app.asar",
+    "resources\openclaw\node_modules\playwright-core\package.json",
+    "resources\bin\ffmpeg.exe",
+    "resources\bin\WinSpeechRecognize.exe"
+  )
+
+  $summary = [ordered]@{
+    Label = $label
+    InstallDir = $installDir
+    InstallDirExists = (Test-Path -LiteralPath $installDir)
+    ImportantFiles = @()
+    InstallFileCount = 0
+    InstallTotalBytes = 0
+    TempNsuDirs = @()
+  }
+
+  foreach ($relative in $importantRelative) {
+    $candidate = Join-Path $installDir $relative
+    $summary.ImportantFiles += [ordered]@{
+      RelativePath = $relative
+      Exists = (Test-Path -LiteralPath $candidate)
+    }
+  }
+
+  if (Test-Path -LiteralPath $installDir) {
+    $files = @(Get-ChildItem -LiteralPath $installDir -Recurse -File -Force -ErrorAction SilentlyContinue)
+    $summary.InstallFileCount = $files.Count
+    $summary.InstallTotalBytes = ($files | Measure-Object -Property Length -Sum).Sum
+    $summary.TopFiles = @($files | Sort-Object Length -Descending | Select-Object -First 20 FullName, Length)
+  }
+
+  $tempDirs = @(Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter "nsu*.tmp" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 5)
+  foreach ($tempDir in $tempDirs) {
+    $tempFiles = @(Get-ChildItem -LiteralPath $tempDir.FullName -Recurse -File -Force -ErrorAction SilentlyContinue)
+    $summary.TempNsuDirs += [ordered]@{
+      FullName = $tempDir.FullName
+      LastWriteTime = $tempDir.LastWriteTime
+      FileCount = $tempFiles.Count
+      TotalBytes = ($tempFiles | Measure-Object -Property Length -Sum).Sum
+      TopFiles = @($tempFiles | Sort-Object Length -Descending | Select-Object -First 10 FullName, Length)
+    }
+  }
+
+  $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $path -Encoding UTF8
+  Write-State ("INSTALL_TREE_SUMMARY_" + $safeLabel) $path
 }
 
 Write-State "MODE" "RunSilentInstall"
@@ -166,6 +220,7 @@ try {
 if (-not $exited) {
   Write-State "INSTALL_TIMEOUT" "True"
   Capture-ProcessSnapshot "timeout"
+  Capture-InstallTreeSummary "timeout"
   Stop-ProcessTree $proc.Id
   Write-State "RESULT" "FAILED_TIMEOUT"
   exit 4
@@ -175,6 +230,7 @@ $proc.Refresh()
 Write-State "INSTALL_EXIT_CODE" $proc.ExitCode
 Write-State "INSTALL_DURATION_SECONDS" ([math]::Round(((Get-Date) - $startedAt).TotalSeconds, 1))
 Capture-ProcessSnapshot "after"
+Capture-InstallTreeSummary "after"
 
 $appExe = Join-Path $env:LOCALAPPDATA "Programs\Ministry of Education\Ministry of Education.exe"
 $appAsar = Join-Path $env:LOCALAPPDATA "Programs\Ministry of Education\resources\app.asar"

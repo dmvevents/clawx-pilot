@@ -196,6 +196,7 @@ $probeArgs = @(
   "-File", $runner,
   "-Endpoint", $electronEndpoint,
   "-OutlookSmoke",
+  "-VisualAcceptance",
   "-WaitMs", "1000",
   "-ArtifactDir", $artifact
 )

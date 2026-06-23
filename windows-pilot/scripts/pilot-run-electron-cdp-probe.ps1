@@ -20,6 +20,7 @@ param(
     [string]$EmailSubject,
     [string]$EmailBody,
     [switch]$SubmitForms,
+    [switch]$VisualAcceptance,
     [int]$WaitMs = 5000,
     [string]$ArtifactDir = "$env:USERPROFILE\Downloads"
 )
@@ -87,6 +88,7 @@ if (-not (Test-Endpoint -Url $Endpoint)) {
 "DraftEmail:  $($DraftEmail.IsPresent)"
 "SendEmail:   $($SendEmail.IsPresent)"
 "SubmitForms: $($SubmitForms.IsPresent)"
+"VisualAcceptance:$($VisualAcceptance.IsPresent)"
 
 $argsList = @(
     $scriptPath,
@@ -145,6 +147,9 @@ if ($SendEmail) {
 }
 if ($SubmitForms) {
     $argsList += "--submit-forms"
+}
+if ($VisualAcceptance) {
+    $argsList += "--visual-acceptance"
 }
 
 & $node @argsList

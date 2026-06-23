@@ -183,6 +183,11 @@ Invoke-Step "hostapi-outlook-forms-smoke" {
     -ArtifactDir $script:Evidence
 }
 
+Invoke-Step "seed-demo-documents" {
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\windows-pilot\scripts\pilot-seed-demo-documents.ps1" `
+    -DownloadsPath (Join-Path $env:USERPROFILE "Downloads")
+}
+
 Invoke-Step "office-runtime-check" {
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\windows-pilot\scripts\pilot-office-runtime-check.ps1"
 }

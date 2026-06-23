@@ -20,7 +20,7 @@
 These are inviolable per project hard rules. Every script + skill + agent in this directory honors them:
 
 1. **Never managed Chromium.** Always `profile=user` Chrome — the principal's already-signed-in session. Playwright's bundled Chromium is blocked by Microsoft Conditional Access (`AADSTS53003`).
-2. **Outlook `send_email` requires double gate:** `confirm:true` + open compose pane subject must match `args.subject`. Demonstrate the gate; never skip it.
+2. **Outlook `send_email` requires hard confirmation:** normal reviewed sends use `outlook.send_email({confirm:true})` only against the single visible reviewed draft. Optional recipient/subject/body args are safety assertions for advanced flows, not the normal demo path.
 3. **`download_attachment` same hard-confirm gate.**
 4. **No body / recipient / password content in logs.** Subject truncated to 120 chars, recipient counts only.
 5. **Cloud only for the demo.** Agent must call `google/gemini-2.5-pro`; on-device path stays cosmetic.

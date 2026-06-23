@@ -5,10 +5,14 @@ import { OutlookActions } from '@electron/services/outlook-browser-v2/outlook-ac
 type TestActions = OutlookActions & {
   looksLikeSignin: () => Promise<boolean>;
   ensureInboxFolder: (page: unknown) => Promise<void>;
-  readInbox: (top?: number) => Promise<{ status: 'ok'; messages: Array<{ id: string; subject: string; sender: string; snippet: string; receivedAt: string; unread: boolean }> }>;
+  readInbox: (top?: number) => Promise<{
+    status: 'ok';
+    messages: Array<{ id: string; subject: string; sender: string; snippet: string; receivedAt: string; unread: boolean }>;
+    scan?: unknown;
+  }>;
 };
 
-function createActions() {
+function createActions(options: { mockEnsureInbox?: boolean } = {}) {
   const page = {
     url: () => 'https://outlook.office.com/mail/inbox',
     waitForSelector: vi.fn(async () => undefined),
@@ -29,8 +33,28 @@ function createActions() {
   };
   const actions = new OutlookActions(driver as never, { ground: vi.fn() } as never) as unknown as TestActions;
   actions.looksLikeSignin = vi.fn(async () => false);
-  actions.ensureInboxFolder = vi.fn(async () => undefined);
+  if (options.mockEnsureInbox !== false) {
+    actions.ensureInboxFolder = vi.fn(async () => undefined);
+  }
   return { actions, page };
+}
+
+function createInboxGuardPage(
+  initialUrl: string,
+  options: { redirectUrl?: string; domConfirmed?: boolean; failGoto?: boolean } = {},
+) {
+  let currentUrl = initialUrl;
+  const page = {
+    url: () => currentUrl,
+    goto: vi.fn(async (targetUrl: string) => {
+      if (options.failGoto) throw new Error('navigation failed');
+      currentUrl = options.redirectUrl ?? targetUrl;
+    }),
+    waitForLoadState: vi.fn(async () => undefined),
+    waitForSelector: vi.fn(async () => undefined),
+    evaluate: vi.fn(async () => options.domConfirmed ?? false),
+  };
+  return page;
 }
 
 describe('Outlook inbox windowing', () => {
@@ -40,6 +64,13 @@ describe('Outlook inbox windowing', () => {
     const result = await actions.readInbox(37);
 
     expect(result.messages).toHaveLength(37);
+    expect(result.scan).toMatchObject({
+      scope: 'recent_inbox_window',
+      requestedTop: 37,
+      scannedCount: 37,
+      returnedCount: 37,
+      exhaustive: false,
+    });
     expect(page.evaluate).toHaveBeenCalledWith(expect.stringContaining('const limit = 37;'));
   });
 
@@ -61,6 +92,15 @@ describe('Outlook inbox windowing', () => {
 
     expect(actions.readInbox).toHaveBeenCalledWith(50);
     expect(result.messages.map((message) => message.id)).toEqual(['message-42']);
+    expect(result.scan).toMatchObject({
+      scope: 'recent_inbox_window',
+      requestedTop: 5,
+      fetchedTop: 50,
+      scannedCount: 50,
+      matchedCount: 1,
+      returnedCount: 1,
+      exhaustive: false,
+    });
   });
 
   it('searchInbox caps the widened inbox read at 200 rows', async () => {
@@ -70,5 +110,80 @@ describe('Outlook inbox windowing', () => {
     await actions.searchInbox({ subjectContains: 'district', top: 90 });
 
     expect(actions.readInbox).toHaveBeenCalledWith(200);
+  });
+
+  it('searchInbox reports incomplete scope when the widened read reaches the fetch limit', async () => {
+    const { actions } = createActions();
+    actions.readInbox = vi.fn(async (top = 10) => ({
+      status: 'ok',
+      messages: Array.from({ length: top }, (_, i) => ({
+        id: `message-${i}`,
+        sender: i % 50 === 0 ? 'Raj Ramdass' : 'Corporate Communications',
+        subject: i % 50 === 0 ? 'June workshop' : 'Routine circular',
+        snippet: '',
+        receivedAt: i % 50 === 0 ? '2026-06-09T12:00:00Z' : '2026-05-30T12:00:00Z',
+        unread: false,
+      })),
+    }));
+
+    const result = await actions.searchInbox({
+      dateGte: '2026-06-01T00:00:00.000Z',
+      dateLt: '2026-07-01T00:00:00.000Z',
+      top: 200,
+    });
+
+    expect(actions.readInbox).toHaveBeenCalledWith(200);
+    expect(result.messages).toHaveLength(4);
+    expect(result.capped).toBe(true);
+    expect(result.scan).toMatchObject({
+      scope: 'recent_inbox_window',
+      requestedTop: 200,
+      fetchedTop: 200,
+      scannedCount: 200,
+      matchedCount: 4,
+      returnedCount: 4,
+      exhaustive: false,
+    });
+    expect(result.scan?.note).toMatch(/do not claim/i);
+  });
+
+  it('accepts Outlook cloud Inbox URLs without navigating away from the signed-in host', async () => {
+    const { actions } = createActions({ mockEnsureInbox: false });
+    const page = createInboxGuardPage('https://outlook.cloud.microsoft/mail/0/inbox');
+
+    await actions.ensureInboxFolder(page as never);
+
+    expect(page.goto).not.toHaveBeenCalled();
+  });
+
+  it('navigates away from Sent Items before reading folder-scoped rows', async () => {
+    const { actions } = createActions({ mockEnsureInbox: false });
+    const page = createInboxGuardPage('https://outlook.cloud.microsoft/mail/sentitems', {
+      redirectUrl: 'https://outlook.cloud.microsoft/mail/inbox',
+    });
+
+    await actions.ensureInboxFolder(page as never);
+
+    expect(page.goto).toHaveBeenCalledWith('https://outlook.office.com/mail/inbox', expect.any(Object));
+  });
+
+  it('refuses to parse visible rows when Inbox cannot be confirmed after navigation', async () => {
+    const { actions } = createActions({ mockEnsureInbox: false });
+    const page = createInboxGuardPage('https://outlook.cloud.microsoft/mail/sentitems', {
+      redirectUrl: 'https://outlook.cloud.microsoft/mail/sentitems',
+      domConfirmed: false,
+    });
+
+    await expect(actions.ensureInboxFolder(page as never)).rejects.toThrow(/Inbox folder could not be confirmed/i);
+  });
+
+  it('accepts a selected Inbox nav item when Outlook redirects to a neutral mail URL', async () => {
+    const { actions } = createActions({ mockEnsureInbox: false });
+    const page = createInboxGuardPage('https://outlook.cloud.microsoft/mail/sentitems', {
+      redirectUrl: 'https://outlook.cloud.microsoft/mail/',
+      domConfirmed: true,
+    });
+
+    await expect(actions.ensureInboxFolder(page as never)).resolves.toBeUndefined();
   });
 });

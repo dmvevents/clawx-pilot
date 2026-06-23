@@ -55,6 +55,10 @@ type FakePage = {
   evaluate: <TArg, TResult>(fn: (arg: TArg) => TResult, arg: TArg) => Promise<TResult>;
 };
 
+type FakeReplyPage = FakePage & {
+  waitForSelector?: (selector: string, options?: unknown) => Promise<unknown>;
+};
+
 type FakeLocator = {
   count: () => Promise<number>;
   first: () => FakeLocator;
@@ -390,6 +394,55 @@ describe('OutlookActions safety gates', () => {
     expect(result.message).toMatch(/\{ confirm: true \} only/i);
   });
 
+  it('falls back to Outlook reply keyboard shortcut when the Reply button is hidden', async () => {
+    const { actions, driver } = createActions();
+    const page = {
+      evaluate: vi.fn(async () => undefined),
+      waitForSelector: vi.fn(async () => undefined),
+    } as unknown as FakeReplyPage;
+    driver.ensureOutlookTab.mockResolvedValue(page);
+    actions.clickOpenMessageToolbarButton = vi.fn(async () => false);
+    actions.fillBody = vi.fn(async () => undefined);
+    actions.readOpenDraftProbe = vi.fn(async () => ({
+      snapshot: {
+        ...matchingDraft,
+        to: ['Karunesh Ramdass'],
+        subject: 'Re: Meeting',
+      },
+      clickedSend: false,
+      draftCount: 1,
+      sendableDraftCount: 1,
+    }));
+
+    const result = await actions.reply({ id: 'message-1', body: 'Testing the reply feature' });
+
+    expect(result).toMatchObject({ status: 'drafted', draftLeftOpen: true });
+    expect(driver.pressKey).toHaveBeenCalledWith('Control+R');
+    expect(actions.fillBody).toHaveBeenCalledWith(page, 'Testing the reply feature');
+  });
+
+  it('reports not_found when both Reply button detection and shortcut fallback miss', async () => {
+    const { actions, driver } = createActions();
+    const page = {
+      evaluate: vi.fn(async () => undefined),
+      waitForSelector: vi.fn(async () => {
+        throw new Error('compose pane did not open');
+      }),
+    } as unknown as FakeReplyPage;
+    driver.ensureOutlookTab.mockResolvedValue(page);
+    actions.clickOpenMessageToolbarButton = vi.fn(async () => false);
+    actions.waitForComposePane = vi.fn(async () => {
+      throw new Error('compose pane did not open');
+    });
+    actions.fillBody = vi.fn(async () => undefined);
+
+    const result = await actions.reply({ id: 'message-1', body: 'Testing the reply feature' });
+
+    expect(result).toMatchObject({ status: 'not_found', draftLeftOpen: false });
+    expect(driver.pressKey).toHaveBeenCalledWith('Control+R');
+    expect(actions.fillBody).not.toHaveBeenCalled();
+  });
+
   it('mark read resets to Inbox before opening a message id', async () => {
     const { actions } = createActions();
     const order: string[] = [];
@@ -643,6 +696,144 @@ describe('OutlookActions verified draft DOM probe', () => {
 
     expect(clicked).toBe(true);
     expect(clicks).toEqual(['reply']);
+  });
+
+  it('clicks Reply to sender without clicking Reply all', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <section role="region" aria-label="Reading pane">
+        <button aria-label="Reply all" data-click-id="reply-all">Reply all</button>
+        <button aria-label="Reply to sender" data-click-id="reply">Reply</button>
+      </section>
+    `);
+
+    const clicked = await actions.clickOpenMessageToolbarButton(page, /^reply$/i);
+
+    expect(clicked).toBe(true);
+    expect(clicks).toEqual(['reply']);
+  });
+
+  it('clicks a reading-pane command bar Reply near the opened message', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <section role="region" aria-label="Reading pane">
+        <article aria-label="Message body">Opened message body</article>
+      </section>
+      <div role="toolbar" aria-label="Message actions">
+        <button aria-label="Archive" data-click-id="archive">Archive</button>
+        <button aria-label="Reply" data-click-id="reply">Reply</button>
+      </div>
+    `);
+
+    const clicked = await actions.clickOpenMessageToolbarButton(page, /^reply$/i);
+
+    expect(clicked).toBe(true);
+    expect(clicks).toEqual(['reply']);
+  });
+
+  it('opens the message More actions menu when Reply is only available there', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <section role="region" aria-label="Reading pane">
+        <article aria-label="Message body">Opened message body</article>
+        <button aria-label="More actions" data-click-id="more">More actions</button>
+      </section>
+      <div role="menu" id="message-menu" style="display: none">
+        <button role="menuitem" aria-label="Archive" data-click-id="archive">Archive</button>
+        <button role="menuitem" aria-label="Reply" data-click-id="reply">Reply</button>
+      </div>
+    `);
+    document.querySelector('[data-click-id="more"]')?.addEventListener('click', () => {
+      const menu = document.querySelector<HTMLElement>('#message-menu');
+      if (menu) menu.style.display = 'block';
+    });
+
+    const clicked = await actions.clickOpenMessageToolbarButton(page, /^reply$/i);
+
+    expect(clicked).toBe(true);
+    expect(clicks).toEqual(['more', 'reply']);
+  });
+
+  it('opens the Respond overflow menu when Reply is nested there', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <section role="region" aria-label="Reading pane">
+        <article aria-label="Message body">Opened message body</article>
+        <button aria-label="Respond" data-click-id="respond">Respond</button>
+      </section>
+      <div role="menu" id="respond-menu" style="display: none">
+        <button role="menuitem" aria-label="Reply" data-click-id="reply">Reply</button>
+      </div>
+    `);
+    document.querySelector('[data-click-id="respond"]')?.addEventListener('click', () => {
+      const menu = document.querySelector<HTMLElement>('#respond-menu');
+      if (menu) menu.style.display = 'block';
+    });
+
+    const clicked = await actions.clickOpenMessageToolbarButton(page, /^reply$/i);
+
+    expect(clicked).toBe(true);
+    expect(clicks).toEqual(['respond', 'reply']);
+  });
+
+  it('chooses the message More actions button when another nearby More button exists', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <section role="region" aria-label="Reading pane">
+        <article aria-label="Message body">Opened message body</article>
+        <button aria-label="More actions" data-click-id="message-more">More actions</button>
+      </section>
+      <button aria-label="More actions" data-click-id="global-more">More actions</button>
+      <div role="menu" id="message-menu" style="display: none">
+        <button role="menuitem" aria-label="Reply" data-click-id="reply">Reply</button>
+      </div>
+    `);
+    document.querySelector('[data-click-id="message-more"]')?.addEventListener('click', () => {
+      const menu = document.querySelector<HTMLElement>('#message-menu');
+      if (menu) menu.style.display = 'block';
+    });
+
+    const clicked = await actions.clickOpenMessageToolbarButton(page, /^reply$/i);
+
+    expect(clicked).toBe(true);
+    expect(clicks).toEqual(['message-more', 'reply']);
+  });
+
+  it('clicks Reply from a menu item identified by data automation id', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <section role="region" aria-label="Reading pane">
+        <article aria-label="Message body">Opened message body</article>
+        <button aria-label="More actions" data-click-id="more">More actions</button>
+      </section>
+      <div role="menu" id="message-menu" style="display: none">
+        <button role="menuitem" data-automation-id="Reply" data-click-id="reply">Answer</button>
+      </div>
+    `);
+    document.querySelector('[data-click-id="more"]')?.addEventListener('click', () => {
+      const menu = document.querySelector<HTMLElement>('#message-menu');
+      if (menu) menu.style.display = 'block';
+    });
+
+    const clicked = await actions.clickOpenMessageToolbarButton(page, /^reply$/i);
+
+    expect(clicked).toBe(true);
+    expect(clicks).toEqual(['more', 'reply']);
+  });
+
+  it('refuses ambiguous Reply candidates inside the open message surface', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <section role="region" aria-label="Reading pane">
+        <button aria-label="Reply" data-click-id="reply-1">Reply</button>
+        <button aria-label="Reply" data-click-id="reply-2">Reply</button>
+      </section>
+    `);
+
+    const clicked = await actions.clickOpenMessageToolbarButton(page, /^reply$/i);
+
+    expect(clicked).toBe(false);
+    expect(clicks).toEqual([]);
   });
 
   it('refuses a global Reply fallback when the reading pane lacks one safe match', async () => {

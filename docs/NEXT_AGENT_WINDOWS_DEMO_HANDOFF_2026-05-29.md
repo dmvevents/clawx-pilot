@@ -221,7 +221,7 @@ Before asking the model to send an email or fill a form:
 - Forms preview must fill but not submit.
 - Forms submit must require `confirm:true` and the expected form title.
 - Outlook draft must leave a visible draft open.
-- Outlook send must require `confirm:true` and a subject match with the open compose pane.
+- Outlook send must require `confirm:true` and exactly one visible reviewed draft. Normal reviewed sends use `{confirm:true}` only after the principal reviews the open draft.
 
 Useful log grep patterns:
 

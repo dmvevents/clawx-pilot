@@ -136,21 +136,47 @@ export async function readInboxWithGraph(top = 10): Promise<ReadInboxResult> {
   const messages = ((data as { value?: GraphMessage[] }).value ?? [])
     .map(toInboxMessage)
     .filter((message) => message.id);
-  return { status: 'ok', messages };
+  return {
+    status: 'ok',
+    messages,
+    scan: {
+      scope: 'graph_inbox',
+      requestedTop: top,
+      scannedCount: messages.length,
+      returnedCount: messages.length,
+      exhaustive: messages.length < top,
+      note: messages.length < top
+        ? 'Graph returned fewer messages than requested for this Inbox page.'
+        : 'Graph returned the requested page size; more Inbox messages may exist beyond this page.',
+    },
+  };
 }
 
 export async function searchInboxWithGraph(args: SearchInboxArgs): Promise<SearchInboxResult> {
   const fetchTop = Math.max(args.top ?? 25, 25);
   const data = await graphCalls.listMessages({ top: fetchTop } satisfies ListMessagesArgs);
-  const messages = ((data as { value?: GraphMessage[] }).value ?? [])
+  const scanned = ((data as { value?: GraphMessage[] }).value ?? [])
     .map(toInboxMessage)
-    .filter((message) => message.id)
-    .filter((message) => matchesSearch(message, args))
-    .slice(0, args.top ?? 25);
+    .filter((message) => message.id);
+  const filtered = scanned.filter((message) => matchesSearch(message, args));
+  const top = args.top ?? 25;
+  const messages = filtered.slice(0, top);
   return {
     status: 'ok',
     messages,
-    capped: messages.length >= (args.top ?? 25),
+    capped: filtered.length > top || scanned.length >= fetchTop,
+    scan: {
+      scope: 'graph_inbox',
+      requestedTop: top,
+      fetchedTop: fetchTop,
+      scannedCount: scanned.length,
+      matchedCount: filtered.length,
+      returnedCount: messages.length,
+      exhaustive: scanned.length < fetchTop,
+      note: scanned.length < fetchTop
+        ? 'Graph returned fewer messages than requested for this Inbox page.'
+        : 'Graph returned the requested page size; more Inbox messages may exist beyond this page.',
+    },
   };
 }
 

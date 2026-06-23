@@ -56,11 +56,11 @@ Type into the chat composer (verbatim):
 
 > Send it.
 
-**Expected result (~3s):** the agent sends. Compose pane closes. Reply visible in Sent.
+**Expected result (~3s):** the agent calls `outlook.send_email({confirm:true})` only, sends the single visible reviewed draft, and the compose pane closes. Reply visible in Sent.
 
-**Optional 30s gate demo:** before you say "send it", click into the compose pane in Chrome and add ` UPDATED` to the subject. THEN say "send it". The gate refuses with a clear "subject mismatch" message. Re-issue: "redraft the reply" → agent re-drafts → "send it" → succeeds. **This is the trust moment.**
+**Optional 30s gate demo:** say "send it" before any draft is open, or leave two compose panes open. The gate refuses with a clear message. Close extra drafts, review the intended draft, then say "send it" again. **This is the trust moment.**
 
-> "The assistant won't send if the email it sees doesn't match what it was about to send. That's intentional. You can always edit the draft yourself before approving."
+> "The assistant sends only the draft you can see and approve. You can edit that draft yourself before approving."
 
 ---
 
@@ -117,7 +117,7 @@ Otherwise: play `docs/ui-snapshots/cron-reminder-demo.mov`.
 | Symptom | Action |
 |---|---|
 | Agent turn errors with "400 status code (no body)" | Same prompt with brain icon ON (Think mode → Pro). |
-| `outlook.send_email` refuses on subject mismatch | Demo the gate; then say "redraft the reply" → "send it". |
+| `outlook.send_email` refuses after review | Make sure exactly one reviewed draft is open, then say "send it" again. The agent should call `outlook.send_email({confirm:true})` only. |
 | `forms.submit_suspension` fails to find Submit | Click "Next" in the form tab, then re-issue "submit the form". |
 | Gateway disconnects (red footer) | Pause demo; tell the principal "let me restart"; relaunch app from Desktop shortcut; resume from Path 1 Turn 1. |
 | Chrome lost CDP | Same — relaunch via the FIXED shortcut OR run `pilot-attach-chrome-cdp.ps1`. |

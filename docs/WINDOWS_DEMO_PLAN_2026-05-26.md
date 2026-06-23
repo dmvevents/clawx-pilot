@@ -145,13 +145,13 @@ This is the only step where SSH stops — the principal sits at the Windows lapt
 4. In the Ministry of Education chat composer:
    - "Show me my 5 most recent emails" → `outlook.read_inbox`
    - "Draft a reply to the parent meeting email saying I'll be there at 4pm" → `outlook.reply` → compose pane opens
-   - "Send it." → `outlook.send_email` with `confirm:true` + subject-match gate. **Both gates must fire.**
+   - "Send it." → `outlook.send_email({confirm:true})` against the single visible reviewed draft. The hard-confirm gate must fire.
 
-**Stop condition:** all 3 turns succeed; send completes; subject-match gate visible in logs.
+**Stop condition:** all 3 turns succeed; send completes; `confirm:true` send gate visible in logs.
 **Fallbacks:**
 - AADSTS53003 → wrong Chrome profile. Restart with the user-data-dir flag.
 - Tool 404 → gateway plugin didn't load `moe-principal-assistant`. Tail logs, look for the plugin-init line. If absent, restart app.
-- Send gate refuses with subject mismatch → re-issue draft (compose-pane subject got edited). Working as designed; demo it once on purpose.
+- Send gate refuses after review → make sure exactly one reviewed draft is open and retry with `outlook.send_email({confirm:true})` only.
 
 ### Phase 7 — Forms path on Windows (10 min, principal at the laptop)
 

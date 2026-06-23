@@ -1096,7 +1096,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.read_inbox',
       description:
-        'Return the top N unread/recent messages from the principal\'s Outlook Inbox through the ClawX Outlook tool path. Args: { top?: number (default 10) }. For "all emails", "this month", or audit-style summaries, request a larger top value (50-200) or use outlook.search_inbox and state when results are capped. If Chrome attach fails, use browser.diagnose and browser.repair_chrome_cdp; do not give manual Chrome setup instructions. Returns { status: "ok" | "needs_signin", messages: [{ id, subject, sender, snippet, receivedAt, unread }] }.',
+        'Return the top N recent messages from the principal\'s Outlook Inbox through the ClawX Outlook tool path. Args: { top?: number (default 10) }. This is a bounded recent Inbox window, not an exhaustive mailbox export. For "all emails", "this month", or audit-style summaries, use outlook.search_inbox with top 100-200, report scan.scannedCount/scan.scope, and do not claim all mail unless scan.exhaustive is true. If Chrome attach fails, use browser.diagnose and browser.repair_chrome_cdp; do not give manual Chrome setup instructions. Returns { status: "ok" | "needs_signin", messages: [{ id, subject, sender, snippet, receivedAt, unread }], scan }.',
       parameters: toolParameters({
         top: nonNegativeNumberSchema,
       }),
@@ -1169,7 +1169,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.search_inbox',
       description:
-        'Filter the principal\'s Inbox by sender, subject, date, unread, or attachment presence. Args: { from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top? (default 25) }. Returns { status, messages, capped }. dateGte/dateLt are ISO 8601 strings. Prefer this over read_inbox when the user mentions a sender, date, month, or topic; for broad month searches use top 100-200 and tell the user if capped is true.',
+        'Filter the principal\'s Inbox by sender, subject, date, unread, or attachment presence. Args: { from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top? (default 25) }. Returns { status, messages, capped, scan }. dateGte/dateLt are ISO 8601 strings. Prefer this over read_inbox when the user mentions a sender, date, month, or topic. For broad month/all-inbox searches use top 100-200, report the bounded scan, and say capped/incomplete/not exhaustive when capped is true or scan.exhaustive is false. Do not say "these are all emails" unless scan.exhaustive is true.',
       parameters: toolParameters({
         from: stringSchema,
         subjectContains: stringSchema,

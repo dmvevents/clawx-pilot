@@ -20,7 +20,6 @@ async function cleanupRepo(dir: string): Promise<void> {
   try {
     await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn(`harness-git test: temp dir cleanup failed (non-fatal): ${dir}`, err);
   }
 }

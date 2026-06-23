@@ -54,7 +54,7 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 ## Validation
 
 - `pnpm test`
-  - Result: 147 files, 1019 passed, 5 skipped.
+  - Result: 147 files, 1054 passed, 5 skipped.
 - `pnpm run typecheck`
   - Passed.
 - `pnpm run lint`
@@ -72,6 +72,13 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
   - Office runtime dependency check passed for Excel/Word/PDF libraries.
   - Installed gateway readiness passed on rerun with realistic timeout.
   - Installed Electron app exposed Electron CDP, Host API, and Gateway port.
+- Hidden WinRM silent-install automation
+  - A separate fresh temp-user VM run against the same installer reproduced a
+    hidden `/S /currentuser` automation failure: the installer created a large
+    partial tree but did not create the app exe or critical runtime helper
+    files.
+  - Treat hidden silent install as a diagnostic automation path only. Tester
+    installs should use the normal assisted Windows installer screens.
 - Safety smoke
   - Email send without confirmation refused.
   - Attachment download without confirmation refused.
@@ -89,7 +96,10 @@ Remaining GA gaps:
   and Forms preview/fill behavior.
 - The clean VM Forms probe reached Microsoft sign-in, which is expected without
   a signed-in tenant profile.
+- Unattended hidden WinRM `/S /currentuser` install is not release-supported
+  until the NSIS silent path is fixed or replaced by an assisted desktop/RDP
+  install proof.
 - Real email sends and real Forms submits were not executed during this smoke.
 - High-quality Azure Speech ASR requires the release workflow secret seed.
-- PowerPoint generated-file evidence remains a follow-up gate after the stable
-  release package is published.
+- PowerPoint generated-file checks exist in the package/runtime smoke; full
+  PowerPoint creation through installed app chat remains a follow-up gate.

@@ -181,14 +181,14 @@ For each tool, expect a log line within 10s of the prompt. Subjects truncated �
 | Agent picks Bearer-API path on stage | low | demo-critical | Brain icon ON; Turn-A wording forces preview, not API |
 | Network drops mid-demo | low | high | Pre-recorded clip as backup; Mac fallback |
 | Gateway crashes mid-demo | low | high | Just relaunch — chat history persists in `~/.openclaw/` |
-| Agent calls outlook.send_email on the wrong email (mismatch) | very low | high | The double-gate refuses; demo this on purpose once |
+| Agent calls outlook.send_email on the wrong draft | very low | high | The hard-confirm/single-visible-draft gate refuses when no draft or multiple drafts are open |
 | 401 Required user login in form fill | high (if API path triggered) | demo-killer | DOM-only path; explicit prompt wording |
 | User accidentally sees `claude-sonnet-4-5` model name in UI | very low | trust | UI shows "Online"/"On this device" only — anonymisation rule honored |
 
 ## Hard rules summary (do NOT break)
 
 - `profile=user` Chrome always; never managed Chromium.
-- Send-email double-gate (`confirm:true` + subject match) MUST fire.
+- Send-email hard-confirm gate (`confirm:true` against exactly one visible reviewed draft) MUST fire.
 - No body / recipients in logs; subject ≤120 chars.
 - Test.fac password only from local operator context (`PILOT_TEST_PASSWORD` or direct human sign-in), never printed or committed.
 - No Ollama on the demo critical path.

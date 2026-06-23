@@ -8,7 +8,7 @@ Ministry of Education Windows app on a fresh laptop.
 - A Windows 10 or Windows 11 laptop.
 - Wi-Fi turned on.
 - Your Microsoft 365 work or school account for Outlook and Forms.
-- About 10-15 minutes for download, install, first launch, and testing.
+- About 10-20 minutes for download, install, first launch, and testing.
 
 You do not need to install Chrome MCP, a Chrome extension, Python, Node,
 Playwright, Whisper, or any command-line tool.
@@ -46,6 +46,9 @@ Expected SHA-256, if your test coordinator asks you to verify it:
 4. Use the normal installer screens and keep the default install location.
 5. Keep the desktop shortcut enabled.
 6. Finish the installer.
+
+Do not install this release by running hidden command-line `/S` or unattended
+installer commands. Use the normal Windows installer screens.
 
 After install, you should see:
 

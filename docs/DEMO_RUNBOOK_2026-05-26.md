@@ -135,7 +135,7 @@ Then:
 
 > Send it.
 
-Expect: agent calls `outlook.send_email` with `confirm:true`. If the open compose pane's subject still matches, send fires. If not, gate refuses with a clear reason.
+Expect: agent calls `outlook.send_email({confirm:true})` only. If exactly one reviewed draft is open, send fires. If there is no open draft or multiple drafts are open, the gate refuses with a clear reason.
 
 ### Path 2 — Suspension form fill (4 min)
 
@@ -172,7 +172,7 @@ If timing aligns and we've configured a cron near demo time, watch the chat comp
 
 If an agent turn errors with **"400 status code (no body)"**: type the same prompt again with the **brain icon enabled** (Think mode → routes to gemini-2.5-pro). Pre-flight step 6 should have made this unnecessary, but the brain toggle is the fastest live recovery.
 
-If `outlook.send_email` **refuses on subject mismatch**: re-draft. The compose pane subject got edited (by the principal or a stray click). Ask the agent to "redraft the reply" so subjects match again.
+If `outlook.send_email` **refuses after review**: make sure exactly one reviewed draft is open and ask the agent to send it again. The agent should call `outlook.send_email({confirm:true})` only; stale recipient/subject/body assertions are not needed for the normal reviewed-draft path.
 
 If `forms.submit_suspension` **fails to find the Submit button**: the form page may be on a sub-page (Forms paginates long forms). Click "Next" in the form once, then re-issue "submit the form" in chat.
 

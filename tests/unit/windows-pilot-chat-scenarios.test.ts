@@ -20,6 +20,17 @@ const macWaitRunDemoScriptPath = join(process.cwd(), 'windows-pilot', 'scripts',
 const claudeChatLoopScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-start-claude-chat-loop.ps1');
 const pilotWatcherInstallerPath = join(process.cwd(), 'windows-pilot', 'scripts', 'install-pilot-watcher-launchd.sh');
 const seedDemoDocumentsScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-seed-demo-documents.ps1');
+const outlookSendGuidancePaths = [
+  join(process.cwd(), 'windows-pilot', 'skills', 'outlook-email-windows.md'),
+  join(process.cwd(), 'windows-pilot', 'README.md'),
+  join(process.cwd(), 'windows-pilot', 'plans', 'PRINCIPAL_DEMO_SCRIPT.md'),
+  join(process.cwd(), 'windows-pilot', 'plans', 'TOOL_REFERENCE.md'),
+  join(process.cwd(), 'windows-pilot', 'plans', 'EXECUTION_PLAN_OUTLOOK_FORMS.md'),
+  join(process.cwd(), '.codex', 'skills', 'windows-outlook-demo', 'references', 'outlook-forms-critical-path.md'),
+  join(process.cwd(), 'docs', 'AGENT_OUTLOOK.md'),
+  join(process.cwd(), 'docs', 'DEMO_RUNBOOK_2026-05-26.md'),
+  join(process.cwd(), 'docs', 'WINDOWS_DEMO_PLAN_2026-05-26.md'),
+];
 
 function loadScenarios(): DemoScenario[] {
   const parsed = JSON.parse(readFileSync(scenarioPath, 'utf8')) as { scenarios?: DemoScenario[] };
@@ -42,7 +53,7 @@ describe('Windows pilot chat procedure scenarios', () => {
     const inventory = loadScenarios().find((scenario) => scenario.id === 'downloads-document-inventory');
 
     expect(inventory?.prompt).toBeTruthy();
-    for (const extension of ['.xlsx', '.xls', '.docx', '.doc', '.pdf', '.csv', '.txt', '.md']) {
+    for (const extension of ['.xlsx', '.xls', '.docx', '.doc', '.pptx', '.ppt', '.pdf', '.csv', '.txt', '.md']) {
       expect(inventory?.prompt).toContain(extension);
     }
   });
@@ -74,9 +85,109 @@ describe('Windows pilot chat procedure scenarios', () => {
     ]);
   });
 
-  it('keeps Excel and Word document prompts specific enough for the demo files', () => {
+  it('keeps the Outlook reply scenario on the dedicated reply tool path', () => {
+    const scenario = loadScenarios().find((item) => item.id === 'fresh-user-reply-routes-outlook-reply');
+
+    expect(scenario).toMatchObject({
+      type: 'safe-chat-custom',
+      required: true,
+      expectedToolAny: ['outlook.reply'],
+    });
+    expect(scenario?.prompt).toContain('Do not use generic browser clicking to find a Reply button');
+    expect(scenario?.prompt).toContain('Outlook pre-fills the recipient');
+    expect(scenario?.bannedToolAny).toEqual(expect.arrayContaining([
+      'outlook.send_email',
+      'outlook.download_attachment',
+      'forms.submit_daily_report',
+      'forms.submit_suspension',
+      'exec',
+      'process',
+      'sessions_spawn',
+      'sessions_yield',
+    ]));
+    expect(scenario?.bannedAnswerPatterns).toEqual(expect.arrayContaining([
+      'find .*Reply button',
+      'click .*Reply button',
+      'manually .*reply',
+    ]));
+    expect(scenario?.requiredAnswerPatterns).toEqual([
+      'draft|reply',
+      'review|left open|Outlook',
+      'not sent|send it|confirm',
+    ]);
+  });
+
+  it('requires Outlook reply visual acceptance criteria in the final answer', () => {
+    const scenario = loadScenarios().find((item) => item.id === 'fresh-user-reply-routes-outlook-reply');
+
+    expect(scenario?.requiredAnswerPatterns).toEqual(expect.arrayContaining([
+      'draft|reply',
+      'review|left open|Outlook',
+      'not sent|send it|confirm',
+    ]));
+    expect(scenario?.prompt).toContain('Outlook opens a reply draft');
+    expect(scenario?.prompt).toContain('ready for review');
+    expect(scenario?.prompt).toContain('Do not send the draft');
+    expect(scenario?.bannedToolAny).toEqual(expect.arrayContaining(['outlook.send_email']));
+  });
+
+  it('keeps all-June inbox requests scoped to bounded search evidence', () => {
+    const scenario = loadScenarios().find((item) => item.id === 'fresh-user-june-inbox-reports-bounded-scan');
+
+    expect(scenario).toMatchObject({
+      type: 'safe-chat-custom',
+      required: true,
+      expectedToolAny: ['outlook.search_inbox'],
+    });
+    expect(scenario?.prompt).toContain('broad June date range');
+    expect(scenario?.prompt).toContain('do not claim the result is the complete mailbox unless the tool says the scan is exhaustive');
+    expect(scenario?.bannedToolAny).toEqual(expect.arrayContaining([
+      'outlook.draft_email',
+      'outlook.send_email',
+      'outlook.reply',
+      'outlook.forward',
+      'forms.submit_daily_report',
+      'forms.submit_suspension',
+      'exec',
+      'process',
+      'sessions_spawn',
+      'sessions_yield',
+    ]));
+    expect(scenario?.bannedAnswerPatterns).toEqual(expect.arrayContaining([
+      'complete list',
+      'these are all',
+      'full list for June',
+    ]));
+    expect(scenario?.requiredAnswerPatterns).toEqual([
+      'June',
+      'inbox|email|message',
+      'searched|scanned|recent|window|limited|bounded|capped|not exhaustive|may be more|incomplete',
+    ]);
+  });
+
+  it('requires bounded inbox scan visual acceptance criteria in the final answer', () => {
+    const scenario = loadScenarios().find((item) => item.id === 'fresh-user-june-inbox-reports-bounded-scan');
+
+    expect(scenario?.requiredAnswerPatterns).toEqual(expect.arrayContaining([
+      'June',
+      'inbox|email|message',
+      'searched|scanned|recent|window|limited|bounded|capped|not exhaustive|may be more|incomplete',
+    ]));
+    expect(scenario?.prompt).toContain('Because browser Outlook searches are bounded');
+    expect(scenario?.prompt).toContain('do not claim the result is the complete mailbox unless the tool says the scan is exhaustive');
+    expect(scenario?.prompt).toContain('Include a short scope note');
+    expect(scenario?.bannedToolAny).toEqual(expect.arrayContaining([
+      'outlook.reply',
+      'outlook.send_email',
+      'forms.submit_daily_report',
+      'forms.submit_suspension',
+    ]));
+  });
+
+  it('keeps Excel, PowerPoint, and Word document prompts specific enough for the demo files', () => {
     const scenarios = loadScenarios();
     const excel = scenarios.find((scenario) => scenario.id === 'downloads-excel-summary');
+    const powerpoint = scenarios.find((scenario) => scenario.id === 'downloads-powerpoint-summary');
     const word = scenarios.find((scenario) => scenario.id === 'downloads-word-suspension-fields');
 
     expect(excel?.prompt).toContain('moe-demo-attendance-results.csv');
@@ -86,6 +197,15 @@ describe('Windows pilot chat procedure scenarios', () => {
       'xlsx|xls|csv|spreadsheet|workbook',
       'sheet|column|row',
       'school|attendance|enrolled|present|absent|total',
+    ]);
+
+    expect(powerpoint?.prompt).toContain('moe-demo-attendance-summary.pptx');
+    expect(powerpoint?.prompt).toContain('zipped OpenXML slide text');
+    expect(powerpoint?.prompt).toContain('Standard 4 transport-delay note');
+    expect(powerpoint?.requiredAnswerPatterns).toEqual([
+      'pptx|PowerPoint|deck|presentation|slides',
+      'attendance|Demo Primary School',
+      'Standard 4|Transport delay|absent|present',
     ]);
 
     const wordPrompt = word?.prompt?.toLowerCase() ?? '';
@@ -107,6 +227,7 @@ describe('Windows pilot chat procedure scenarios', () => {
     expect(documentScenarios.map((scenario) => scenario.id)).toEqual([
       'downloads-document-inventory',
       'downloads-excel-summary',
+      'downloads-powerpoint-summary',
       'downloads-word-suspension-fields',
     ]);
 
@@ -135,6 +256,19 @@ describe('Windows pilot chat procedure scenarios', () => {
     }
   });
 
+  it('keeps Windows Outlook send-after-review guidance confirm-only', () => {
+    for (const docPath of outlookSendGuidancePaths) {
+      const content = readFileSync(docPath, 'utf8');
+
+      expect(content, docPath).toMatch(/confirm:true|\{ confirm: true \}/i);
+      expect(content, docPath).toMatch(/single visible reviewed draft|visible reviewed draft|reviewed draft/i);
+      expect(content, docPath).not.toMatch(/subject[- ]match gate/i);
+      expect(content, docPath).not.toMatch(/subject mismatch/i);
+      expect(content, docPath).not.toMatch(/double-gate/i);
+      expect(content, docPath).not.toMatch(/send_email\(\{to/i);
+    }
+  });
+
   it('keeps probe execution failures hard-failing even for optional scenarios', () => {
     const script = readFileSync(chatProcedureScriptPath, 'utf8');
 
@@ -153,9 +287,21 @@ describe('Windows pilot chat procedure scenarios', () => {
     expect(script).toContain('$Reason -eq "safe chat send missing or skipped"');
     expect(script).toContain('$Reason -eq "safe chat did not scope to current prompt"');
     expect(script).toContain('$Reason -eq "banned send/download/submit/background-session tool was observed"');
+    expect(script).toContain('$Reason -like "visual acceptance*"');
     expect(script).toContain('$Reason -like "banned tool observed:*"');
     expect(script).toContain('$Reason -like "banned tool input pattern observed:*"');
     expect(script).toContain('if (Test-HardFailureReason ([string] $reason))');
+  });
+
+  it('requires visual acceptance criteria for every installed-app chat procedure probe', () => {
+    const script = readFileSync(chatProcedureScriptPath, 'utf8');
+
+    expect(script).toContain('function Test-VisualAcceptance');
+    expect(script).toContain('visual acceptance criteria missing or skipped');
+    expect(script).toContain('visual acceptance electron screenshot path missing');
+    expect(script).toContain('visual acceptance missing {0} check');
+    expect(script).toContain('"electron-app-shell", "chat-not-stuck-thinking", "no-sensitive-visual-leak"');
+    expect(script.match(/-VisualAcceptance/g)?.length).toBeGreaterThanOrEqual(3);
   });
 
   it('rejects write-like tool inputs inside allowed document tools', () => {
@@ -190,6 +336,7 @@ describe('Windows pilot chat procedure scenarios', () => {
 
     expect(seedScript).toContain('moe-demo-attendance-results.csv');
     expect(seedScript).toContain('moe-demo-attendance-results.xlsx');
+    expect(seedScript).toContain('moe-demo-attendance-summary.pptx');
     expect(seedScript).toContain('moe-demo-daily-report-source.txt');
     expect(seedScript).toContain('moe-demo-suspension-source.txt');
     expect(seedScript).toContain('moe-demo-suspension-source.docx');
@@ -199,6 +346,7 @@ describe('Windows pilot chat procedure scenarios', () => {
     expect(seedScript).toContain('Assert-OpenXmlPackage');
     expect(seedScript).toContain('[System.IO.File]::Replace($tempPackage, $PackagePath, $null, $true)');
     expect(seedScript).toContain('Write-DemoWorkbook');
+    expect(seedScript).toContain('Write-DemoPowerPointPresentation');
     expect(seedScript).toContain('Write-DemoWordDocument');
     expect(seedScript).toContain('Write-State "DEMO_DOCUMENTS_SEEDED" "false"');
     expect(seedScript).toContain('exit 6');
@@ -208,7 +356,10 @@ describe('Windows pilot chat procedure scenarios', () => {
 
     expect(chatRunner).toContain('[switch] $SeedDemoDocuments');
     expect(chatRunner).toContain('pilot-seed-demo-documents.ps1');
+    expect(chatRunner).toContain("'^\\.(xlsx|xls|docx|doc|pptx|ppt|pdf|csv|txt|md)$'");
     expect(chatRunner).toContain('BLOCKED seed-demo-documents failed');
+    expect(demoAcceptance.indexOf('Invoke-Step "seed-demo-documents"')).toBeGreaterThanOrEqual(0);
+    expect(demoAcceptance.indexOf('Invoke-Step "seed-demo-documents"')).toBeLessThan(demoAcceptance.indexOf('Invoke-Step "office-runtime-check"'));
     expect(demoAcceptance).toContain('-SeedDemoDocuments');
     expect(macWatcher).toContain('-SeedDemoDocuments');
   });

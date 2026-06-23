@@ -133,8 +133,21 @@ export class OutlookBrowserManager {
       };
     }
 
-    const messages = extractInboxMessages(snap?.tree).slice(0, Math.max(1, top));
-    return { status: 'ok', messages };
+    const requestedTop = Math.max(1, top);
+    const messages = extractInboxMessages(snap?.tree).slice(0, requestedTop);
+    return {
+      status: 'ok',
+      messages,
+      scan: {
+        scope: 'recent_inbox_window',
+        requestedTop,
+        scannedCount: messages.length,
+        returnedCount: messages.length,
+        exhaustive: false,
+        note:
+          'Browser Outlook scan covers the recent visible Inbox window only; do not describe it as all mailbox mail.',
+      },
+    };
   }
 
   /**

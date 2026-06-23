@@ -263,6 +263,40 @@ function Get-BlockingRendererEvents {
   return $blocking
 }
 
+function Test-VisualAcceptance {
+  param(
+    $Probe,
+    [System.Collections.ArrayList] $Reasons
+  )
+
+  if ($null -eq $Probe) {
+    Add-Reason $Reasons "visual acceptance probe missing"
+    return
+  }
+
+  $visual = $Probe.visualAcceptance
+  if ($null -eq $visual -or $visual.skipped -eq $true) {
+    Add-Reason $Reasons "visual acceptance criteria missing or skipped"
+    return
+  }
+
+  if (-not $visual.electronScreenshotPath) {
+    Add-Reason $Reasons "visual acceptance electron screenshot path missing"
+  }
+
+  $criteria = @($visual.criteria)
+  if ($criteria.Count -lt 3) {
+    Add-Reason $Reasons "visual acceptance criteria missing required checks"
+  }
+
+  $criteriaIds = @($criteria | ForEach-Object { [string] $_.id })
+  foreach ($requiredId in @("electron-app-shell", "chat-not-stuck-thinking", "no-sensitive-visual-leak")) {
+    if ($criteriaIds -notcontains $requiredId) {
+      Add-Reason $Reasons ("visual acceptance missing {0} check" -f $requiredId)
+    }
+  }
+}
+
 function Test-SafeChatResult {
   param(
     $Probe,
@@ -285,6 +319,7 @@ function Test-SafeChatResult {
   if ($blockingEvents.Count -ne 0) {
     Add-Reason $Reasons ("blocking renderer events observed: {0}" -f $blockingEvents.Count)
   }
+  Test-VisualAcceptance $Probe $Reasons
 
   $send = $Probe.safeChat.send
   if ($null -eq $send -or $send.skipped -eq $true) {
@@ -361,6 +396,7 @@ function Test-HostApiSmokeResult {
   if ($blockingEvents.Count -ne 0) {
     Add-Reason $Reasons ("blocking renderer events observed: {0}" -f $blockingEvents.Count)
   }
+  Test-VisualAcceptance $Probe $Reasons
 
   $outlook = $Probe.outlookSmoke
   if ($null -eq $outlook -or $outlook.skipped -eq $true) {
@@ -399,6 +435,7 @@ function Test-HardFailureReason {
     $Reason -eq "safe chat history was not ok" -or
     $Reason -eq "safe chat did not scope to current prompt" -or
     $Reason -eq "banned send/download/submit/background-session tool was observed" -or
+    $Reason -like "visual acceptance*" -or
     $Reason -like "banned tool observed:*" -or
     $Reason -like "banned tool input pattern observed:*" -or
     $Reason -like "banned answer pattern observed:*"
@@ -433,6 +470,7 @@ function Invoke-Scenario {
         -Endpoint $ElectronEndpoint `
         -SafeChat `
         -SafeChatMode $mode `
+        -VisualAcceptance `
         -WaitMs $waitMs `
         -ArtifactDir $scenarioDir
     }
@@ -443,6 +481,7 @@ function Invoke-Scenario {
         -Endpoint $ElectronEndpoint `
         -SafeChat `
         -SafeChatPrompt $prompt `
+        -VisualAcceptance `
         -WaitMs $waitMs `
         -ArtifactDir $scenarioDir
     }
@@ -452,6 +491,7 @@ function Invoke-Scenario {
         -Endpoint $ElectronEndpoint `
         -OutlookSmoke `
         -FormsSmoke `
+        -VisualAcceptance `
         -WaitMs $waitMs `
         -ArtifactDir $scenarioDir
     }
@@ -594,7 +634,7 @@ if ($SeedDemoDocuments) {
 
 $downloadInventory = Join-Path $script:Evidence "downloads-inventory.json"
 Get-ChildItem $script:DownloadsPath -File -ErrorAction SilentlyContinue |
-  Where-Object { $_.Extension -match '^\.(xlsx|xls|docx|doc|pdf|csv|txt|md)$' } |
+  Where-Object { $_.Extension -match '^\.(xlsx|xls|docx|doc|pptx|ppt|pdf|csv|txt|md)$' } |
   Sort-Object LastWriteTime -Descending |
   Select-Object Name,Extension,Length,LastWriteTime |
   ConvertTo-Json -Depth 4 |

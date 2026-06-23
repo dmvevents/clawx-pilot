@@ -42,6 +42,19 @@ export interface InboxMessage {
 export interface ReadInboxResult {
   status: 'ok' | 'needs_signin';
   messages: InboxMessage[];
+  /**
+   * Browser/CDP reads are a recent visible Inbox window, not a server-side
+   * exhaustive mailbox export. Agents must surface this when users ask for
+   * "all" mail or month-wide audits.
+   */
+  scan?: {
+    scope: 'recent_inbox_window' | 'graph_inbox';
+    requestedTop: number;
+    scannedCount: number;
+    returnedCount: number;
+    exhaustive: boolean;
+    note?: string;
+  };
   message?: string;
 }
 
@@ -119,6 +132,16 @@ export interface SearchInboxResult {
   messages: InboxMessage[];
   /** True when the result is the cap, not necessarily exhaustive. */
   capped?: boolean;
+  scan?: {
+    scope: 'recent_inbox_window' | 'graph_inbox';
+    requestedTop: number;
+    fetchedTop: number;
+    scannedCount: number;
+    matchedCount: number;
+    returnedCount: number;
+    exhaustive: boolean;
+    note?: string;
+  };
   message?: string;
 }
 

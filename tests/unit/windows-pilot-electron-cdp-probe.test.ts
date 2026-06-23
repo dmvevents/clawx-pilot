@@ -8,6 +8,16 @@ import { isDailyReportFieldVisible } from '@electron/services/forms-browser-v2/d
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- the probe is a CommonJS Windows CLI script.
 const probeModule = require('../../windows-pilot/scripts/pilot-electron-cdp-probe.js') as {
+  buildVisualAcceptance: (
+    args: Record<string, unknown>,
+    screenshotPath: string,
+  ) => {
+    allowedStatuses: string[];
+    criteria: Array<{ id: string; accept: string; reject: string }>;
+    electronScreenshotPath: string;
+    modelPrompt: string;
+    state: string;
+  };
   summarizeChatHistory: (result: unknown, mode: string, verificationToken: string) => {
     scopedToCurrentPrompt: boolean;
     completed: boolean;
@@ -25,6 +35,7 @@ const probeModule = require('../../windows-pilot/scripts/pilot-electron-cdp-prob
 };
 
 const {
+  buildVisualAcceptance,
   summarizeChatHistory,
   validateProbeSummary,
 } = probeModule;
@@ -116,6 +127,13 @@ function history(messages: unknown[]) {
 }
 
 describe('Windows Electron CDP probe transcript evaluator', () => {
+  it('keeps the explicit confirmed-send probe on the reviewed-draft confirm-only path', () => {
+    const source = readFileSync(probeScriptPath, 'utf8');
+
+    expect(source).toContain("invokeHostApi(page, '/api/outlook/send', { confirm: true })");
+    expect(source).not.toContain("invokeHostApi(page, '/api/outlook/send', { to, subject, body, confirm: true })");
+  });
+
   it('keeps the daily report smoke payload aligned with visible required schema fields', () => {
     const payload = loadProbeSamples().sampleDailyReportPayload();
     const schema = JSON.parse(readFileSync(dailyReportSchemaPath, 'utf8')) as { fields: DailySchemaField[] };
@@ -193,6 +211,78 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     expect(summary.noBannedSideEffects).toBe(false);
   });
 
+  it('captures reply-draft visual acceptance text without requiring a send', () => {
+    const token = 'pilot-safe-chat-token';
+    const summary = summarizeChatHistory(history([
+      textMessage('user', `Verification token: ${token}`),
+      toolCallMessage('outlook.search_inbox', 'search-1', { fromContains: 'Karunesh', top: 10 }),
+      toolResultMessage('outlook.search_inbox', false, 'search-1'),
+      toolCallMessage('outlook.reply', 'reply-1', { id: 'message-1', body: 'Testing the reply feature' }),
+      toolResultMessage('outlook.reply', false, 'reply-1'),
+      {
+        role: 'assistant',
+        stopReason: 'stop',
+        content: [{
+          type: 'text',
+          text: [
+            'The reply draft is open in Outlook and ready for review.',
+            'It has not been sent; sending requires your explicit confirmation.',
+            `Verification token: ${token}`,
+          ].join(' '),
+        }],
+      },
+    ]), 'custom', token);
+
+    expect(summary.observedToolCalls.map((tool) => tool.name)).toEqual([
+      'outlook.search_inbox',
+      'outlook.reply',
+    ]);
+    expect(summary.finalAnswerTextSample).toMatch(/draft .*open|open .*draft/i);
+    expect(summary.finalAnswerTextSample).toMatch(/review/i);
+    expect(summary.finalAnswerTextSample).toMatch(/not been sent|not sent/i);
+    expect(summary.finalAnswerTextSample).toMatch(/confirmation/i);
+    expect(summary.noBannedSideEffects).toBe(true);
+    expect(summary.observedToolCalls.map((tool) => tool.name)).not.toContain('outlook.send_email');
+  });
+
+  it('captures bounded inbox-scan acceptance text from the final answer', () => {
+    const token = 'pilot-safe-chat-token';
+    const summary = summarizeChatHistory(history([
+      textMessage('user', `Verification token: ${token}`),
+      toolCallMessage('outlook.search_inbox', 'search-1', {
+        dateGte: '2026-06-01T00:00:00.000Z',
+        dateLt: '2026-07-01T00:00:00.000Z',
+        top: 200,
+      }),
+      toolResultMessage('outlook.search_inbox', false, 'search-1'),
+      {
+        role: 'assistant',
+        stopReason: 'stop',
+        content: [{
+          type: 'text',
+          text: [
+            'I found June inbox messages from a recent bounded window.',
+            'The scan checked 200 recent inbox rows, so this is not exhaustive and there may be more older June messages.',
+            `Verification token: ${token}`,
+          ].join(' '),
+        }],
+      },
+    ]), 'custom', token);
+
+    expect(summary.observedToolCalls).toEqual([
+      expect.objectContaining({ name: 'outlook.search_inbox' }),
+    ]);
+    expect(summary.noBannedSideEffects).toBe(true);
+    expect(summary.finalAnswerTextSample).toMatch(/June/i);
+    expect(summary.finalAnswerTextSample).toMatch(/inbox|message/i);
+    expect(summary.finalAnswerTextSample).toMatch(/bounded|recent|window|scanned/i);
+    expect(summary.finalAnswerTextSample).toMatch(/not exhaustive|may be more/i);
+    expect(summary.observedToolCalls.map((tool) => tool.name)).not.toEqual(expect.arrayContaining([
+      'outlook.reply',
+      'outlook.send_email',
+    ]));
+  });
+
   it('records redacted tool input samples for document write audits', () => {
     const token = 'pilot-safe-chat-token';
     const summary = summarizeChatHistory(history([
@@ -242,6 +332,81 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
 
     expect(validation.ok).toBe(false);
     expect(validation.reasons).toContain('hostapi outlook.open was not ok');
+  });
+
+  it('builds visual acceptance criteria for Outlook, Forms, and safe-chat evidence', () => {
+    const visual = buildVisualAcceptance({
+      safeChat: true,
+      outlookSmoke: true,
+      formsSmoke: true,
+    }, 'C:\\Users\\clawxtest\\Downloads\\clawx-electron.png');
+    const ids = visual.criteria.map((item) => item.id);
+
+    expect(visual.state).toBe('PENDING_VISUAL_OR_VLM_REVIEW');
+    expect(visual.allowedStatuses).toEqual(['PASS', 'YELLOW', 'RED']);
+    expect(visual.electronScreenshotPath).toContain('clawx-electron.png');
+    expect(visual.modelPrompt).toContain('redacted VM/browser evidence');
+    expect(ids).toEqual(expect.arrayContaining([
+      'electron-app-shell',
+      'chat-not-stuck-thinking',
+      'no-sensitive-visual-leak',
+      'outlook-uses-app-tool-path',
+      'outlook-inbox-scope-visible',
+      'outlook-side-effect-refusal',
+      'forms-preview-field-coverage',
+      'safe-chat-current-turn',
+    ]));
+  });
+
+  it('requires visual acceptance evidence when the probe asks for it', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      outlookSmoke: {
+        readInbox: { ok: true },
+        sendWithoutConfirm: { ok: true, result: { status: 'refused', refused: true } },
+        downloadWithoutConfirm: { ok: true, result: { status: 'refused', refused: true } },
+      },
+      visualAcceptance: { skipped: true },
+      events: [],
+    }, { outlookSmoke: true, visualAcceptance: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('visual acceptance criteria missing or skipped');
+  });
+
+  it('passes visual acceptance validation when required criteria and screenshot path are present', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      outlookSmoke: {
+        readInbox: { ok: true },
+        sendWithoutConfirm: { ok: true, result: { status: 'refused', refused: true } },
+        downloadWithoutConfirm: { ok: true, result: { status: 'refused', refused: true } },
+      },
+      visualAcceptance: buildVisualAcceptance(
+        { outlookSmoke: true },
+        'C:\\Users\\clawxtest\\Downloads\\clawx-electron.png',
+      ),
+      events: [],
+    }, { outlookSmoke: true, visualAcceptance: true });
+
+    expect(validation).toEqual({ ok: true, reasons: [] });
+  });
+
+  it('fails visual acceptance validation when screenshot capture failed', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      visualAcceptance: buildVisualAcceptance(
+        {},
+        'C:\\Users\\clawxtest\\Downloads\\clawx-electron.png',
+      ),
+      events: [{ type: 'screenshot-error', text: 'capture failed' }],
+    }, { visualAcceptance: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('visual acceptance screenshot capture failed');
   });
 
   it('fails safe chat validation when the model never completes the requested tool call', () => {

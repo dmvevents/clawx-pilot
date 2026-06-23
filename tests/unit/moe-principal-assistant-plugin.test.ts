@@ -135,6 +135,10 @@ describe('moe-principal-assistant plugin registration', () => {
       expect(modelFacingText).toMatch(/browser\.diagnose/);
       expect(modelFacingText).toMatch(/browser\.repair_chrome_cdp/);
       expect(modelFacingText).toMatch(/call outlook\.send_email with \{ confirm: true \} only/i);
+      expect(modelFacingText).toMatch(/bounded recent Inbox window/i);
+      expect(modelFacingText).toMatch(/not an exhaustive mailbox export/i);
+      expect(modelFacingText).toMatch(/do not claim all mail unless scan\.exhaustive is true/i);
+      expect(modelFacingText).toMatch(/say capped\/incomplete\/not exhaustive/i);
       expect(modelFacingText).toMatch(/close all Chrome windows and retry from ClawX/i);
       expect(modelFacingText).not.toMatch(/enable Chrome remote debugging/i);
       expect(modelFacingText).not.toMatch(/configure remote debugging/i);

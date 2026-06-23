@@ -159,7 +159,17 @@ Or use the in-repo `release/Ministry of Education-0.4.3-moe.10-win-x64.exe` if i
 
 ---
 
-## Step 6 — silent install on pilot
+## Step 6 — install on pilot
+
+For a real tester or principal, use the normal assisted Windows installer
+screens by double-clicking the downloaded `.exe`. Keep the default install
+location and desktop shortcut enabled.
+
+For automation-only smoke tests, the hidden NSIS `/S /CURRENTUSER` path is a
+diagnostic helper, not user-facing release proof. On busy VM/WinRM sessions it
+can stall after copying a partial tree. If that happens, mark the automation
+path red and rerun proof from an interactive desktop/RDP install before
+claiming visual acceptance.
 
 ```bash
 ssh pilot 'powershell -NoProfile -c "
@@ -171,7 +181,13 @@ $p = Start-Process -FilePath $exe.FullName -ArgumentList \"/S\",\"/CURRENTUSER\"
 "'
 ```
 
-Expected: `exit: 0`. If you see `exit: 1`, NSIS hit a precondition (e.g., `vc_redist.x64.exe` missing — see PROBLEMS_ATLAS).
+Expected for the automation helper: `exit: 0` plus
+`%LOCALAPPDATA%\Programs\Ministry of Education\Ministry of Education.exe`
+present. If you see a timeout, a partial install tree, or the app exe is
+missing, do not treat the VM as green. Use
+`windows-pilot/scripts/pilot-run-silent-install.ps1` to capture process and
+install-tree evidence, then switch to an assisted desktop/RDP install or fix
+the NSIS silent path.
 
 ---
 

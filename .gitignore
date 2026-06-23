@@ -23,6 +23,7 @@ release/
 .env
 .env.local
 .env.*.local
+.tmp/
 
 # Logs
 logs

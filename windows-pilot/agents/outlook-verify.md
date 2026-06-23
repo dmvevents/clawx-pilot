@@ -95,7 +95,7 @@ For each of the 10 acceptance smoke calls listed in `outlook-email-windows.md` Â
 - Did the agent invoke the tool? (log line `[plugin:moe-principal-assistant] outlook.<name>`)
 - Did the tool return without `error`?
 - Did it complete in <10s? (>10s = WARN, >30s = FAIL)
-- For `outlook.send_email`: did the double-gate fire? (look for `subject mismatch` or `confirm:true` in log)
+- For `outlook.send_email`: did the hard-confirm gate fire? (look for `confirm:true` in the log, and verify the model did not pass stale recipient/subject/body assertions for a normal reviewed draft)
 
 ### Phase 5 â€” Compile the report
 

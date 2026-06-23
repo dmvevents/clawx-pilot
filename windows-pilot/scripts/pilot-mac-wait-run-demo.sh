@@ -24,6 +24,10 @@ DEADLINE_SECONDS="${DEADLINE_SECONDS:-28800}"
 SLEEP_SECONDS="${SLEEP_SECONDS:-60}"
 REPO_WIN="${REPO_WIN:-C:\\Users\\VYONIX\\Github\\ClawX-release-moe10}"
 EVIDENCE_ROOT_WIN="${EVIDENCE_ROOT_WIN:-C:\\Users\\VYONIX\\Downloads}"
+RELEASE_TAG="${RELEASE_TAG:-moe10-windows-rc-20260623-stable-regression}"
+RELEASE_INSTALLER_NAME="${RELEASE_INSTALLER_NAME:-Ministry.of.Education-0.4.3-moe.10-win-x64.exe}"
+RELEASE_INSTALLER_SHA256="${RELEASE_INSTALLER_SHA256:-3a43cdff49c758b07ccfd57117a06304152813a7b80d857ba99c03486fe8f4fa}"
+RELEASE_APP_ASAR_SHA256="${RELEASE_APP_ASAR_SHA256:-ee749bc6b05e56cc4ffbc6faba6436bf51cd23c02a3d86ed5a87a14d3bac1421}"
 LOG_ROOT="${LOG_ROOT:-$HOME/Library/Logs/clawx}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="${LOG_FILE:-$LOG_ROOT/pilot-mac-wait-run-demo-$STAMP.log}"
@@ -272,6 +276,65 @@ if (Test-Path -LiteralPath \$GeneratedHelper) {
 git status --short --branch
 git pull --ff-only
 git rev-parse --short HEAD
+
+\$ReleaseTag = '${RELEASE_TAG}'
+\$InstallerName = '${RELEASE_INSTALLER_NAME}'
+\$ExpectedInstallerSha = '${RELEASE_INSTALLER_SHA256}'.ToUpperInvariant()
+\$ExpectedAppAsarSha = '${RELEASE_APP_ASAR_SHA256}'.ToUpperInvariant()
+\$InstallRoot = Join-Path \$env:LOCALAPPDATA 'Programs\Ministry of Education'
+\$AppAsar = Join-Path \$InstallRoot 'resources\app.asar'
+\$InstallerPath = Join-Path \$EvidenceRoot \$InstallerName
+\$ReleaseUrl = 'https://github.com/dmvevents/clawx-pilot/releases/download/' + \$ReleaseTag + '/' + \$InstallerName
+
+Write-Output ('ReleaseTag=' + \$ReleaseTag)
+Write-Output ('ExpectedAppAsarSha=' + \$ExpectedAppAsarSha)
+\$InstalledAppAsarSha = \$null
+if (Test-Path -LiteralPath \$AppAsar) {
+  \$InstalledAppAsarSha = (Get-FileHash -LiteralPath \$AppAsar -Algorithm SHA256).Hash.ToUpperInvariant()
+}
+\$InstalledAppAsarShaLabel = if (\$InstalledAppAsarSha) { \$InstalledAppAsarSha } else { 'missing' }
+Write-Output ('InstalledAppAsarSha=' + \$InstalledAppAsarShaLabel)
+
+if (\$InstalledAppAsarSha -ne \$ExpectedAppAsarSha) {
+  Write-Output 'Installed app is stale or missing; preparing release installer.'
+  if (-not (Test-Path -LiteralPath \$InstallerPath) -or ((Get-FileHash -LiteralPath \$InstallerPath -Algorithm SHA256).Hash.ToUpperInvariant() -ne \$ExpectedInstallerSha)) {
+    Write-Output ('Downloading installer: ' + \$ReleaseUrl)
+    Invoke-WebRequest -Uri \$ReleaseUrl -OutFile \$InstallerPath -UseBasicParsing
+  }
+  \$InstallerSha = (Get-FileHash -LiteralPath \$InstallerPath -Algorithm SHA256).Hash.ToUpperInvariant()
+  Write-Output ('InstallerSha=' + \$InstallerSha)
+  if (\$InstallerSha -ne \$ExpectedInstallerSha) {
+    throw ('installer SHA mismatch: ' + \$InstallerSha)
+  }
+
+  \$BackupStamp = Get-Date -Format yyyyMMdd-HHmmss
+  \$OpenClawSrc = Join-Path \$env:USERPROFILE '.openclaw'
+  \$OpenClawBackup = Join-Path \$EvidenceRoot ('.openclaw.backup-before-rc-' + \$BackupStamp)
+  if (Test-Path -LiteralPath \$OpenClawSrc) {
+    Copy-Item -LiteralPath \$OpenClawSrc -Destination \$OpenClawBackup -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Output ('OPENCLAW_BACKUP=' + \$OpenClawBackup)
+  }
+  \$AppDataSrc = Join-Path \$env:APPDATA 'Ministry of Education'
+  \$AppDataBackup = Join-Path \$EvidenceRoot ('MinistryAppData.backup-before-rc-' + \$BackupStamp)
+  if (Test-Path -LiteralPath \$AppDataSrc) {
+    Copy-Item -LiteralPath \$AppDataSrc -Destination \$AppDataBackup -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Output ('APPDATA_BACKUP=' + \$AppDataBackup)
+  }
+
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows-pilot\scripts\pilot-run-silent-install.ps1 -InstallerPath \$InstallerPath -TimeoutSeconds 900 -EvidenceRoot \$EvidenceRoot -StopRunningApp
+  if (\$LASTEXITCODE -ne 0) {
+    throw "silent install failed with exit code \$LASTEXITCODE"
+  }
+  \$InstalledAppAsarSha = (Get-FileHash -LiteralPath \$AppAsar -Algorithm SHA256).Hash.ToUpperInvariant()
+  Write-Output ('InstalledAppAsarShaAfterInstall=' + \$InstalledAppAsarSha)
+  if (\$InstalledAppAsarSha -ne \$ExpectedAppAsarSha) {
+    throw ('installed app.asar SHA mismatch after install: ' + \$InstalledAppAsarSha)
+  }
+} else {
+  Write-Output 'Installed app already matches expected release app.asar.'
+}
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows-pilot\scripts\pilot-check-install-artifacts.ps1
 
 node --check .\\windows-pilot\\scripts\\pilot-electron-cdp-probe.js
 node -e "JSON.parse(require('fs').readFileSync('windows-pilot/scenarios/demo-chat-procedures.json','utf8')); console.log('SCENARIO_JSON_OK')"
