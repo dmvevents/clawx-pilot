@@ -20,7 +20,7 @@ Last updated: 2026-06-23.
 
 ## Staleness Warning
 
-The local installer snapshot above includes the latest process/test, ASR package, and Outlook reply-safety edits. The clean Windows VM package smoke passed on 2026-06-23, but this is still a prerelease until signed-in tenant Outlook/Forms flows are proven through the installed app.
+The local installer snapshot above includes the latest process/test, ASR package, and Outlook reply-safety edits. The clean Windows VM package smoke passed on 2026-06-23, and the Mac laptop watcher now refuses hidden silent install by default when the installed app is stale or missing. This is still a prerelease until signed-in tenant Outlook/Forms flows are proven through the installed app.
 
 ## Do Not Call GA Until
 

@@ -28,11 +28,21 @@ RELEASE_TAG="${RELEASE_TAG:-moe10-windows-rc-20260623-stable-regression}"
 RELEASE_INSTALLER_NAME="${RELEASE_INSTALLER_NAME:-Ministry.of.Education-0.4.3-moe.10-win-x64.exe}"
 RELEASE_INSTALLER_SHA256="${RELEASE_INSTALLER_SHA256:-3a43cdff49c758b07ccfd57117a06304152813a7b80d857ba99c03486fe8f4fa}"
 RELEASE_APP_ASAR_SHA256="${RELEASE_APP_ASAR_SHA256:-ee749bc6b05e56cc4ffbc6faba6436bf51cd23c02a3d86ed5a87a14d3bac1421}"
+ALLOW_SILENT_INSTALL="${ALLOW_SILENT_INSTALL:-0}"
 LOG_ROOT="${LOG_ROOT:-$HOME/Library/Logs/clawx}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="${LOG_FILE:-$LOG_ROOT/pilot-mac-wait-run-demo-$STAMP.log}"
 TRUNCATE_LOG_ON_START="${TRUNCATE_LOG_ON_START:-0}"
 RUN_ID="${RUN_ID:-$STAMP-$$}"
+
+case "$ALLOW_SILENT_INSTALL" in
+  1|true|TRUE|yes|YES)
+    ALLOW_SILENT_INSTALL=1
+    ;;
+  *)
+    ALLOW_SILENT_INSTALL=0
+    ;;
+esac
 
 mkdir -p "$LOG_ROOT"
 if [[ "$TRUNCATE_LOG_ON_START" == "1" ]]; then
@@ -285,9 +295,11 @@ git rev-parse --short HEAD
 \$AppAsar = Join-Path \$InstallRoot 'resources\app.asar'
 \$InstallerPath = Join-Path \$EvidenceRoot \$InstallerName
 \$ReleaseUrl = 'https://github.com/dmvevents/clawx-pilot/releases/download/' + \$ReleaseTag + '/' + \$InstallerName
+\$AllowSilentInstall = '${ALLOW_SILENT_INSTALL}' -eq '1'
 
 Write-Output ('ReleaseTag=' + \$ReleaseTag)
 Write-Output ('ExpectedAppAsarSha=' + \$ExpectedAppAsarSha)
+Write-Output ('AllowSilentInstall=' + \$AllowSilentInstall)
 \$InstalledAppAsarSha = \$null
 if (Test-Path -LiteralPath \$AppAsar) {
   \$InstalledAppAsarSha = (Get-FileHash -LiteralPath \$AppAsar -Algorithm SHA256).Hash.ToUpperInvariant()
@@ -296,7 +308,15 @@ if (Test-Path -LiteralPath \$AppAsar) {
 Write-Output ('InstalledAppAsarSha=' + \$InstalledAppAsarShaLabel)
 
 if (\$InstalledAppAsarSha -ne \$ExpectedAppAsarSha) {
-  Write-Output 'Installed app is stale or missing; preparing release installer.'
+  if (-not \$AllowSilentInstall) {
+    Write-Output 'Installed app is stale or missing; hidden silent install is disabled by default.'
+    Write-Output 'Set ALLOW_SILENT_INSTALL=1 only for an explicit automation install diagnostic. Use assisted desktop/RDP install for release proof.'
+    Write-Output 'STATE:STALE_APP_REQUIRES_ASSISTED_INSTALL'
+    throw 'installed app.asar does not match expected release; assisted install required'
+  }
+
+  Write-Output 'Installed app is stale or missing; ALLOW_SILENT_INSTALL=1 so preparing release installer.'
+  Write-Output 'STATE:DIAGNOSTIC_SILENT_INSTALL_ONLY'
   if (-not (Test-Path -LiteralPath \$InstallerPath) -or ((Get-FileHash -LiteralPath \$InstallerPath -Algorithm SHA256).Hash.ToUpperInvariant() -ne \$ExpectedInstallerSha)) {
     Write-Output ('Downloading installer: ' + \$ReleaseUrl)
     Invoke-WebRequest -Uri \$ReleaseUrl -OutFile \$InstallerPath -UseBasicParsing
@@ -321,7 +341,7 @@ if (\$InstalledAppAsarSha -ne \$ExpectedAppAsarSha) {
     Write-Output ('APPDATA_BACKUP=' + \$AppDataBackup)
   }
 
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows-pilot\scripts\pilot-run-silent-install.ps1 -InstallerPath \$InstallerPath -TimeoutSeconds 900 -EvidenceRoot \$EvidenceRoot -StopRunningApp
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows-pilot\scripts\pilot-run-silent-install.ps1 -InstallerPath \$InstallerPath -TimeoutSeconds 1800 -EvidenceRoot \$EvidenceRoot -StopRunningApp
   if (\$LASTEXITCODE -ne 0) {
     throw "silent install failed with exit code \$LASTEXITCODE"
   }
@@ -384,6 +404,7 @@ LAST_DISCOVERY_SECONDS=-999999
 log "Waiting for SSH host(s) '$SSH_HOSTS' for up to ${DEADLINE_SECONDS}s"
 log "Log file: $LOG_FILE"
 log "Run id: $RUN_ID"
+log "Allow silent install: $ALLOW_SILENT_INSTALL"
 log "Repo commit: $(git -C "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
 
 while (( SECONDS < deadline )); do

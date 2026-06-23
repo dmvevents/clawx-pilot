@@ -377,6 +377,22 @@ describe('Windows pilot chat procedure scenarios', () => {
     expect(script).toContain('-ReuseIfRunning');
   });
 
+  it('requires explicit opt-in before the Mac watcher uses hidden silent install automation', () => {
+    const script = readFileSync(macWaitRunDemoScriptPath, 'utf8');
+
+    expect(script).toContain('ALLOW_SILENT_INSTALL="${ALLOW_SILENT_INSTALL:-0}"');
+    expect(script).toContain('$AllowSilentInstall = \'${ALLOW_SILENT_INSTALL}\' -eq \'1\'');
+    expect(script).toContain('if (-not \\$AllowSilentInstall) {');
+    expect(script).toContain('hidden silent install is disabled by default');
+    expect(script).toContain('Set ALLOW_SILENT_INSTALL=1 only for an explicit automation install diagnostic');
+    expect(script).toContain('Use assisted desktop/RDP install for release proof');
+    expect(script).toContain('STATE:STALE_APP_REQUIRES_ASSISTED_INSTALL');
+    expect(script).toContain('ALLOW_SILENT_INSTALL=1 so preparing release installer');
+    expect(script).toContain('STATE:DIAGNOSTIC_SILENT_INSTALL_ONLY');
+    expect(script).toContain('-TimeoutSeconds 1800');
+    expect(script).not.toContain('-TimeoutSeconds 900');
+  });
+
   it('reuses a running Claude loop instead of stopping it from the watcher path', () => {
     const script = readFileSync(claudeChatLoopScriptPath, 'utf8');
 
@@ -397,6 +413,8 @@ describe('Windows pilot chat procedure scenarios', () => {
     expect(script).toContain('<key>AUTO_DISCOVER_MIN_PREFIX</key>');
     expect(script).toContain('<key>ARP_SCAN_LIMIT</key>');
     expect(script).toContain('<key>TRUNCATE_LOG_ON_START</key>');
+    expect(script).toContain('<key>ALLOW_SILENT_INSTALL</key>');
+    expect(script).toContain('ALLOW_SILENT_INSTALL_VALUE="${ALLOW_SILENT_INSTALL:-0}"');
     expect(script).toContain('plutil -lint "$PLIST"');
   });
 });

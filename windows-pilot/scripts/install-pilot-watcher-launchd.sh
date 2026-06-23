@@ -30,6 +30,7 @@ SLEEP_SECONDS_VALUE="${SLEEP_SECONDS:-45}"
 REPO_WIN_VALUE="${REPO_WIN:-C:\\Users\\VYONIX\\Github\\ClawX-release-moe10}"
 EVIDENCE_ROOT_WIN_VALUE="${EVIDENCE_ROOT_WIN:-C:\\Users\\VYONIX\\Downloads}"
 TRUNCATE_LOG_ON_START_VALUE="${TRUNCATE_LOG_ON_START:-1}"
+ALLOW_SILENT_INSTALL_VALUE="${ALLOW_SILENT_INSTALL:-0}"
 
 xml_escape() {
   printf '%s' "$1" |
@@ -95,6 +96,7 @@ cat >"$PLIST" <<PLIST
     <key>LOG_ROOT</key><string>$(xml_escape "$LOG_ROOT")</string>
     <key>LOG_FILE</key><string>$(xml_escape "$ACTIVE_LOG")</string>
     <key>TRUNCATE_LOG_ON_START</key><string>$(xml_escape "$TRUNCATE_LOG_ON_START_VALUE")</string>
+    <key>ALLOW_SILENT_INSTALL</key><string>$(xml_escape "$ALLOW_SILENT_INSTALL_VALUE")</string>
   </dict>
 </dict>
 </plist>

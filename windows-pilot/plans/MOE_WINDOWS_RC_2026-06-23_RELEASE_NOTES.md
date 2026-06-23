@@ -50,6 +50,10 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
   secrets are supplied through the package workflow.
 - GA process skills and verifier agents were added across Codex, Claude Code,
   and `.agents` surfaces so regression testing is repeatable.
+- The Mac laptop watcher no longer treats stale or missing installed app files
+  as permission to run hidden silent install automation. It stops with a clear
+  assisted-install-required state unless `ALLOW_SILENT_INSTALL=1` is set for an
+  explicit diagnostic run.
 
 ## Validation
 
@@ -79,6 +83,12 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
     files.
   - Treat hidden silent install as a diagnostic automation path only. Tester
     installs should use the normal assisted Windows installer screens.
+  - The Mac watcher regression guard passed: hidden silent install is opt-in
+    only, uses the 1800-second diagnostic timeout, and emits diagnostic-only
+    state when forced.
+- Focused release regression slice after the watcher guard
+  - `pnpm exec vitest run tests/unit/windows-pilot-chat-scenarios.test.ts tests/unit/windows-pilot-electron-cdp-probe.test.ts tests/unit/outlook-inbox-windowing.test.ts tests/unit/outlook-actions-safety.test.ts tests/unit/forms-browser-submit-gate.test.ts tests/unit/windows-package-inspection.test.ts`
+  - Result: 6 files, 107 tests passed.
 - Safety smoke
   - Email send without confirmation refused.
   - Attachment download without confirmation refused.
