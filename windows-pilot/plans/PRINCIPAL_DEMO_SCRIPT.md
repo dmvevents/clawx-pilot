@@ -73,7 +73,7 @@ Type into the chat composer (verbatim):
 **Expected result (~15s):**
 1. Chat shows: "Reading inbox..." → "Found suspension report from <sender>" → "Extracting 32 fields..." → "Filling form..."
 2. Chrome's form tab visibly fills in real time (or shows fully filled when you switch to it).
-3. Chat-side summary: "Filled 31 of 31 required fields. Form is open for your review."
+3. Chat-side summary: "Filled 31 browser-fillable required fields; respondent name is auto-recorded by Forms. Form is open for your review."
 
 **Switch to Chrome.** Walk the principal through:
 - General Information section: district + school + name auto-filled

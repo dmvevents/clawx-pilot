@@ -147,6 +147,56 @@ describe('Outlook inbox windowing', () => {
     expect(result.scan?.note).toMatch(/do not claim/i);
   });
 
+  it('searchInbox can match an older June message near the widened 200-row boundary', async () => {
+    const { actions } = createActions();
+    actions.readInbox = vi.fn(async (top = 10) => ({
+      status: 'ok',
+      messages: Array.from({ length: top }, (_, i) => ({
+        id: `message-${i}`,
+        sender: 'District Office',
+        subject: i === 199 ? 'June safety notice' : 'Routine circular',
+        snippet: '',
+        receivedAt: i === 199 ? '2026-06-03T12:00:00Z' : '2026-05-30T12:00:00Z',
+        unread: false,
+      })),
+    }));
+
+    const result = await actions.searchInbox({
+      dateGte: '2026-06-01T00:00:00.000Z',
+      dateLt: '2026-07-01T00:00:00.000Z',
+      top: 50,
+    });
+
+    expect(actions.readInbox).toHaveBeenCalledWith(200);
+    expect(result.messages.map((message) => message.id)).toEqual(['message-199']);
+    expect(result.scan).toMatchObject({
+      fetchedTop: 200,
+      scannedCount: 200,
+      matchedCount: 1,
+      exhaustive: false,
+    });
+  });
+
+  it('readInbox confirms Inbox scope before evaluating visible rows', async () => {
+    const { actions, page } = createActions();
+    const order: string[] = [];
+    actions.ensureInboxFolder = vi.fn(async () => { order.push('inbox'); });
+    page.evaluate = vi.fn(async (script: string) => {
+      if (script.includes('const limit =')) {
+        order.push('rows');
+        return [];
+      }
+      order.push('list-probe');
+      return false;
+    });
+
+    await actions.readInbox(5);
+
+    expect(order[0]).toBe('inbox');
+    expect(order).toContain('rows');
+    expect(order.indexOf('inbox')).toBeLessThan(order.indexOf('rows'));
+  });
+
   it('accepts Outlook cloud Inbox URLs without navigating away from the signed-in host', async () => {
     const { actions } = createActions({ mockEnsureInbox: false });
     const page = createInboxGuardPage('https://outlook.cloud.microsoft/mail/0/inbox');
@@ -159,6 +209,21 @@ describe('Outlook inbox windowing', () => {
   it('navigates away from Sent Items before reading folder-scoped rows', async () => {
     const { actions } = createActions({ mockEnsureInbox: false });
     const page = createInboxGuardPage('https://outlook.cloud.microsoft/mail/sentitems', {
+      redirectUrl: 'https://outlook.cloud.microsoft/mail/inbox',
+    });
+
+    await actions.ensureInboxFolder(page as never);
+
+    expect(page.goto).toHaveBeenCalledWith('https://outlook.office.com/mail/inbox', expect.any(Object));
+  });
+
+  it.each([
+    ['Drafts', 'https://outlook.cloud.microsoft/mail/drafts'],
+    ['Archive', 'https://outlook.cloud.microsoft/mail/archive'],
+    ['Search', 'https://outlook.cloud.microsoft/mail/search/id/AAMkAGVj/search'],
+  ])('navigates away from %s before reading folder-scoped rows', async (_folder, url) => {
+    const { actions } = createActions({ mockEnsureInbox: false });
+    const page = createInboxGuardPage(url, {
       redirectUrl: 'https://outlook.cloud.microsoft/mail/inbox',
     });
 

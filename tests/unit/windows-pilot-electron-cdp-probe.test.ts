@@ -27,6 +27,8 @@ const probeModule = require('../../windows-pilot/scripts/pilot-electron-cdp-prob
     noBannedSideEffects: boolean;
     observedToolCalls: Array<{ name: string; inputTextSample?: string }>;
     observedToolResults: Array<{ name: string; isError: boolean }>;
+    bannedToolCalls: Array<{ name: string; id?: string }>;
+    bannedToolResults: Array<{ name: string; id?: string; isError: boolean }>;
   };
   validateProbeSummary: (summary: unknown, args?: Record<string, unknown>) => {
     ok: boolean;
@@ -211,6 +213,26 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     expect(summary.noBannedSideEffects).toBe(false);
   });
 
+  it.each([
+    'outlook.download_attachment',
+    'forms.submit_daily_report',
+    'forms.submit_suspension',
+  ])('flags %s as a banned safe-chat side effect', (toolName) => {
+    const token = 'pilot-safe-chat-token';
+    const summary = summarizeChatHistory(history([
+      textMessage('user', `Verification token: ${token}`),
+      toolCallMessage(toolName),
+      toolResultMessage(toolName),
+      finalMessage(token),
+    ]), 'custom', token);
+
+    expect(summary.completed).toBe(true);
+    expect(summary.finalAnswerEchoedMarker).toBe(true);
+    expect(summary.noBannedSideEffects).toBe(false);
+    expect(summary.bannedToolCalls).toEqual([expect.objectContaining({ name: toolName })]);
+    expect(summary.bannedToolResults).toEqual([expect.objectContaining({ name: toolName })]);
+  });
+
   it('captures reply-draft visual acceptance text without requiring a send', () => {
     const token = 'pilot-safe-chat-token';
     const summary = summarizeChatHistory(history([
@@ -351,11 +373,77 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
       'chat-not-stuck-thinking',
       'no-sensitive-visual-leak',
       'outlook-uses-app-tool-path',
+      'outlook-start-state-matrix',
+      'outlook-reply-draft-state',
       'outlook-inbox-scope-visible',
       'outlook-side-effect-refusal',
       'forms-preview-field-coverage',
       'safe-chat-current-turn',
     ]));
+  });
+
+  it('builds Outlook state-matrix visual acceptance criteria when requested', () => {
+    const visual = buildVisualAcceptance({
+      outlookStateMatrix: true,
+    }, 'C:\\Users\\clawxtest\\Downloads\\clawx-electron.png');
+    const ids = visual.criteria.map((item) => item.id);
+
+    expect(ids).toEqual(expect.arrayContaining([
+      'outlook-uses-app-tool-path',
+      'outlook-start-state-matrix',
+      'outlook-reply-draft-state',
+      'outlook-inbox-scope-visible',
+      'outlook-state-matrix-screenshots',
+    ]));
+    expect(visual.modelPrompt).toMatch(/redacted VM\/browser evidence/i);
+  });
+
+  it('validates the Outlook state matrix across risky starting folders', () => {
+    const states = ['inbox', 'sent', 'drafts', 'archive', 'search', 'opened-message'].map((id) => ({
+      id,
+      status: 'ok',
+      screenshotPath: `C:\\evidence\\${id}.png`,
+      readInbox: { ok: true, result: { status: 'ok' } },
+      readEmail: id === 'opened-message' ? { ok: true, result: { status: 'ok' } } : undefined,
+    }));
+
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      outlookStateMatrix: {
+        skipped: false,
+        ok: true,
+        states,
+      },
+    }, { outlookStateMatrix: true });
+
+    expect(validation).toEqual({ ok: true, reasons: [] });
+  });
+
+  it('fails the Outlook state matrix when a risky folder is missing or not normalized', () => {
+    const validation = validateProbeSummary({
+      state: 'ELECTRON_CDP_PROBE_DONE',
+      renderer: { hasElectronInvoke: true },
+      outlookStateMatrix: {
+        skipped: false,
+        ok: false,
+        states: [
+          {
+            id: 'sent',
+            status: 'failed',
+            screenshotPath: '',
+            readInbox: { ok: true, result: { status: 'needs_signin' } },
+          },
+        ],
+      },
+    }, { outlookStateMatrix: true });
+
+    expect(validation.ok).toBe(false);
+    expect(validation.reasons).toContain('outlook state matrix was not ok');
+    expect(validation.reasons).toContain('outlook state matrix missing inbox');
+    expect(validation.reasons).toContain('outlook state matrix sent status was failed');
+    expect(validation.reasons).toContain('outlook state matrix sent screenshot path missing');
+    expect(validation.reasons).toContain('outlook state matrix sent readInbox status was needs_signin');
   });
 
   it('requires visual acceptance evidence when the probe asks for it', () => {

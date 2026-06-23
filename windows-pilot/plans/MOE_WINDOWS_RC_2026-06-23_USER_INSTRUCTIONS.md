@@ -21,7 +21,7 @@ API keys into the app. This release uses the managed online model gateway.
 Open the release page:
 
 ```text
-https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260623-stable-regression
+https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260623-outlook-reply-fix
 ```
 
 Download this file from the Assets section:
@@ -35,7 +35,7 @@ Do not download the source code zip or tar.gz files for testing.
 Expected SHA-256, if your test coordinator asks you to verify it:
 
 ```text
-0ad45db3d1a405c47f8105720099beca220e99fb2e81c69cebb3c45b6622100e
+2e189dd004995d6ce18e9e240f8228ba5039c2e384fd479a597137458a9046cf
 ```
 
 ## Install
@@ -222,6 +222,8 @@ The assistant:
 - says it is using a local Hermes model;
 - sends email without same-session confirmation;
 - submits a form without same-session confirmation;
+- puts reply body text in the `To`, `Cc`, or `Bcc` field;
+- moves the email being replied to into Archive;
 - cannot list files from Downloads;
 - cannot open after reinstalling and restarting the laptop.
 

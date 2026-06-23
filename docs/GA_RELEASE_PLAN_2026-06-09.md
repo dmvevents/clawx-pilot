@@ -16,7 +16,7 @@ VM/browser visual acceptance criteria: `docs/GA_VM_BROWSER_VISUAL_ACCEPTANCE_CRI
 
 - Windows RC tag: `moe10-windows-rc-20260608-eb7146c`.
 - Release asset: `Ministry.of.Education-0.4.3-moe.10-win-x64.exe`.
-- Installer SHA256: `0ad45db3d1a405c47f8105720099beca220e99fb2e81c69cebb3c45b6622100e` for the 2026-06-23 refreshed prerelease asset.
+- Installer SHA256: `2e189dd004995d6ce18e9e240f8228ba5039c2e384fd479a597137458a9046cf` for the 2026-06-23 Outlook reply fix prerelease asset.
 - RC commit: `eb7146ccf8b0e1282cfc7efcaab9e195c0576feb`.
 - Operator instructions: `windows-pilot/plans/MOE_WINDOWS_END_TO_END_INSTRUCTIONS_2026-06-08.md`.
 - Release notes: `windows-pilot/plans/MOE_WINDOWS_RC_2026-06-08_RELEASE_NOTES.md`.

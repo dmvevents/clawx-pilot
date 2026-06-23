@@ -52,6 +52,8 @@ export interface ReadInboxResult {
     requestedTop: number;
     scannedCount: number;
     returnedCount: number;
+    /** Number of list-scroll passes used to gather the bounded browser window. */
+    scrollPasses?: number;
     exhaustive: boolean;
     note?: string;
   };

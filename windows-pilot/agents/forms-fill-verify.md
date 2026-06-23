@@ -1,6 +1,6 @@
 ---
 name: forms-fill-verify
-description: Forms suspension-fill acceptance specialist for the Windows pilot. Use PROACTIVELY before the demo to verify the test.fac form is reachable, the schema is current, and a fill+submit dry-run completes 31/31 fields with the DOM path. Reports PASS/FAIL/BLOCKER.
+description: Forms suspension-fill acceptance specialist for the Windows pilot. Use PROACTIVELY before the demo to verify the test.fac form is reachable, the schema is current, and a fill+submit dry-run completes the 31 browser-fillable required fields with the DOM path while treating respondent_name as auto-recorded. Reports PASS/FAIL/BLOCKER.
 tools: Read, Bash, Grep
 ---
 
@@ -23,7 +23,7 @@ If those don't pass, exit and report "Blocked on Outlook prerequisites".
 ## Inputs
 
 - The form URL (default: read from `extensions/moe-principal-assistant/forms/suspensions-test-fac-url.txt`)
-- The schema path (default: `extensions/moe-principal-assistant/forms/suspensions-schema.vlm.json`)
+- The schema path (default: `extensions/moe-principal-assistant/forms/suspensions-schema.json`)
 
 ## Workflow
 
@@ -44,8 +44,10 @@ If page didn't render: BLOCKER, "Form may have been deleted; recreate via forms-
 
 ### Phase 3 — Schema integrity check
 
-Read `suspensions-schema.vlm.json`. Verify:
+Read `suspensions-schema.json`. Verify:
 - 32 questions
+- 32 required fields total
+- 31 browser-fillable required fields because `respondent_name` is auto-recorded by Microsoft Forms
 - Question types: at least one of each (`text`, `single_choice`, `multi_choice`, `date`, `phone`)
 - Question 4 has the 454-school list (or the truncated 8-school list — confirm with the human which is current)
 
@@ -69,9 +71,9 @@ Then `pilot-tail-gateway-log.ps1` and capture the tool sequence:
 - `outlook.search_inbox` ✓
 - `outlook.read_email` ✓
 - `forms.preview_suspension` ✓
-- Field count from the response (`filled: X/31`)
+- Field count from the response (`filledCount`, `skippedCount`, and `errors`; expect 31 browser-fillable fields and no errors)
 
-If field count <30: WARN. If <25: FAIL. The proven baseline is 31/31.
+If browser-fillable field count <31: WARN. If <25: FAIL. The current baseline is 31 browser-fillable required fields plus `respondent_name` auto-recorded by Forms.
 
 If `forms.<api-endpoint>` appears instead of `forms.preview_suspension`: FAIL with "Agent took the API path; demo path is DOM only. Re-issue with explicit DOM hint OR enable brain icon."
 

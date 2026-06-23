@@ -1,11 +1,11 @@
 ---
 name: forms-suspension-fill
-description: Extract suspension-report fields from an email body, fill the test.fac Suspensions form via DOM, and submit it with the principal's confirmation. Uses the proven 31/31 React-native-setter approach.
+description: Extract suspension-report fields from an email body, fill the test.fac Suspensions form via DOM, and submit it with the principal's confirmation. Uses the proven React-native-setter approach for the 31 browser-fillable required fields plus the Forms auto-recorded respondent field.
 metadata:
   os: windows
   prereq-skills: chrome-cdp-windows, outlook-email-windows
   form-url-config: extensions/moe-principal-assistant/forms/suspensions-test-fac-url.txt
-  proven-state: 31/31 fields filled + POST 201 (2026-05-26 00:27Z, Mac side)
+  proven-state: 32 required fields total; 31 browser-fillable fields + respondent_name auto-recorded by Forms; POST 201 historical proof (2026-05-26 00:27Z, Mac side)
   demo-path: DOM fill + DOM submit (Bearer-API path is post-demo polish)
 ---
 
@@ -30,7 +30,7 @@ The fill driver is `electron/services/forms-browser-v2/forms-driver.ts` + `suspe
 
 **DO NOT trigger the Bearer-API path on stage.** It returns `401 Required user login` because the in-page fetch can't grab the MSAL Bearer token (open investigation in `docs/MSFORMS_API_FILL_PLAN.md`).
 
-The DOM path is **proven 31/31** as of 2026-05-26 00:27Z (commit `a7e7623`). Schema-driven Playwright with the React-native-setter pattern fills every field type cleanly:
+The DOM path is proven for the **31 browser-fillable required fields** as of 2026-05-26 00:27Z (commit `a7e7623`). The current load-bearing schema has 32 required fields total; `respondent_name` is auto-recorded by Microsoft Forms and should appear as skipped/auto-recorded rather than manually filled. Schema-driven Playwright with the React-native-setter pattern fills every browser-controlled field type cleanly:
 - Text inputs (single + multi-line)
 - Radio choice (single answer)
 - Checkbox choice (multi answer)
@@ -54,9 +54,9 @@ Source: `forms-driver.ts` — search for `nativeSetter` or `reactSetValue`.
 
 ## Schema source
 
-The 32-field suspension schema lives at:
+The load-bearing 32-question suspension schema lives at:
 ```
-extensions/moe-principal-assistant/forms/suspensions-schema.vlm.json
+extensions/moe-principal-assistant/forms/suspensions-schema.json
 ```
 
 VLM-extracted from the official MoE PDF using Sonnet 4.5 (commit `a18d470`). Includes:
@@ -92,8 +92,8 @@ Expected sequence:
 1. `outlook.search_inbox({subjectContains: "suspension"})`
 2. `outlook.read_email({id: <top result>})`
 3. Agent extracts the 32 fields from the body (Pro-mode, ~5-10s)
-4. `forms.preview_suspension({payload: <extracted>})` opens the form on test.fac and fills 31/31 fields
-5. Chat-side summary: "Filled X/31 required fields. Form is open in Chrome for your review."
+4. `forms.preview_suspension({payload: <extracted>})` opens the form on test.fac and fills the 31 browser-fillable required fields
+5. Chat-side summary: "Filled X browser-fillable fields; respondent name is auto-recorded. Form is open in Chrome for your review."
 
 **Switch to the Chrome tab.** Show the principal each section. Realistic data should be in every required field.
 
@@ -119,7 +119,7 @@ Reset for demo: open the form URL fresh, Ctrl+R, leave the tab on the empty Resp
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Field count <30 after preview | Schema mismatch OR Flash selected | Brain icon ON; retry |
+| Field count <31 browser-fillable fields after preview | Schema mismatch OR Flash selected | Brain icon ON; retry |
 | `Cannot find Submit button` | Form paginated; on a sub-page | Click "Next" once in Chrome, retry "submit the form" |
 | Date field rejected with "invalid date" | ISO format used | The driver should locale-format. If not, manually edit the date in Chrome to `MM/DD/YYYY`, retry submit |
 | Multi-choice checkbox didn't click | Curly-quote in label OR DOM rotation | Click the missing checkbox manually; document selector drift to `dom-selector-regression-tester` sub-agent |
@@ -136,7 +136,8 @@ Reset for demo: open the form URL fresh, Ctrl+R, leave the tab on the empty Resp
 
 ## Cross-references
 
-- Schema: `extensions/moe-principal-assistant/forms/suspensions-schema.vlm.json`
+- Schema: `extensions/moe-principal-assistant/forms/suspensions-schema.json`
+- VLM reference schema: `extensions/moe-principal-assistant/forms/suspensions-schema.vlm.json`
 - Form spec: `extensions/moe-principal-assistant/forms/suspensions-form-spec.md`
 - Driver: `electron/services/forms-browser-v2/forms-driver.ts`
 - Mac smoke: `scripts/forms-fill-suspensions.ts`

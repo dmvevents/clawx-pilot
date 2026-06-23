@@ -11,7 +11,12 @@ const seedDemoDocumentsScriptPath = join(process.cwd(), 'windows-pilot', 'script
 const officeRuntimeCheckScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-office-runtime-check.ps1');
 const demoOfficeAnalysisScriptPath = join(process.cwd(), 'scripts', 'demo-office-analysis-e2e.mjs');
 const managedCdpVisualSmokeScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-managed-cdp-visual-smoke.ps1');
+const electronCdpProbeRunnerPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-run-electron-cdp-probe.ps1');
 const silentInstallScriptPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pilot-run-silent-install.ps1');
+const suspensionFormsSkillPath = join(process.cwd(), 'windows-pilot', 'skills', 'forms-suspension-fill.md');
+const suspensionFormsVerifierPath = join(process.cwd(), 'windows-pilot', 'agents', 'forms-fill-verify.md');
+const principalDemoScriptPath = join(process.cwd(), 'windows-pilot', 'plans', 'PRINCIPAL_DEMO_SCRIPT.md');
+const suspensionsSchemaPath = join(process.cwd(), 'extensions', 'moe-principal-assistant', 'forms', 'suspensions-schema.json');
 
 describe('Windows package inspection contracts', () => {
   it('package:win prepares native Windows ASR and runtime binaries before packaging', () => {
@@ -115,6 +120,7 @@ describe('Windows package inspection contracts', () => {
     expect(script).toContain('extractPresentationParagraphs');
     expect(script).toContain("args.pptx || args.powerpoint");
     expect(script).toContain("result.powerpoint = summarizePptx(powerpointPath)");
+    expect(script).toContain(".replace(/\\\\/g, '/')");
   });
 
   it('runs the managed CDP visual smoke through no-send/no-submit probe evidence', () => {
@@ -124,6 +130,8 @@ describe('Windows package inspection contracts', () => {
     expect(script).toContain('clawx-managed-cdp-visual-smoke-');
     expect(script).toContain('electron-cdp-probe.out.txt');
     expect(script).toContain('-OutlookSmoke');
+    expect(script).toContain('-OutlookStateMatrix');
+    expect(script).toContain('-ChromeEndpoint');
     expect(script).toContain('-FormsSmoke');
     expect(script).toContain('-VisualAcceptance');
     expect(script).toContain('PROBE_EXIT_CODE');
@@ -133,6 +141,15 @@ describe('Windows package inspection contracts', () => {
     expect(script).toContain('POST_PROBE_GATEWAY_PORT_READY');
     expect(script).not.toContain('-SendEmail');
     expect(script).not.toContain('-SubmitForms');
+  });
+
+  it('exposes the Outlook state matrix through the Electron CDP probe runner', () => {
+    const script = readFileSync(electronCdpProbeRunnerPath, 'utf8');
+
+    expect(script).toContain('[switch]$OutlookStateMatrix');
+    expect(script).toContain('[string]$ChromeEndpoint = "http://127.0.0.1:18792"');
+    expect(script).toContain('"--chrome-endpoint", $ChromeEndpoint');
+    expect(script).toContain('"--outlook-state-matrix"');
   });
 
   it('captures diagnostic install-tree evidence when silent NSIS install times out', () => {
@@ -146,5 +163,29 @@ describe('Windows package inspection contracts', () => {
     expect(script).toContain('resources\\bin\\WinSpeechRecognize.exe');
     expect(script).toContain('Capture-InstallTreeSummary "timeout"');
     expect(script).toContain('Capture-InstallTreeSummary "after"');
+  });
+
+  it('keeps suspension Forms field-count guidance aligned with the live schema', () => {
+    const schema = JSON.parse(readFileSync(suspensionsSchemaPath, 'utf8')) as {
+      questionCount: number;
+      sections: Array<{ fields: Array<{ id: string; required?: boolean }> }>;
+    };
+    const fields = schema.sections.flatMap((section) => section.fields);
+    const requiredFields = fields.filter((field) => field.required);
+    const browserFillableRequiredFields = requiredFields.filter((field) => field.id !== 'respondent_name');
+    const docs = [
+      readFileSync(suspensionFormsSkillPath, 'utf8'),
+      readFileSync(suspensionFormsVerifierPath, 'utf8'),
+      readFileSync(principalDemoScriptPath, 'utf8'),
+    ].join('\n');
+
+    expect(schema.questionCount).toBe(32);
+    expect(fields).toHaveLength(33);
+    expect(requiredFields).toHaveLength(32);
+    expect(browserFillableRequiredFields).toHaveLength(31);
+    expect(docs).toContain('31 browser-fillable');
+    expect(docs).toContain('respondent_name');
+    expect(docs).not.toContain('31/31 required');
+    expect(docs).not.toContain('31 of 31 required');
   });
 });

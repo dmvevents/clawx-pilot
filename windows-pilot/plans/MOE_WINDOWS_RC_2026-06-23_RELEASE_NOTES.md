@@ -5,7 +5,7 @@ Windows prerelease refresh for the Ministry of Education principal assistant.
 ## Release Page
 
 ```text
-https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260623-stable-regression
+https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260623-outlook-reply-fix
 ```
 
 Use the attached installer asset:
@@ -19,9 +19,9 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 ## Assets
 
 - `Ministry.of.Education-0.4.3-moe.10-win-x64.exe`
-  - SHA-256: `0ad45db3d1a405c47f8105720099beca220e99fb2e81c69cebb3c45b6622100e`
+  - SHA-256: `2e189dd004995d6ce18e9e240f8228ba5039c2e384fd479a597137458a9046cf`
 - `Ministry.of.Education-0.4.3-moe.10-win-x64.exe.blockmap`
-  - SHA-256: `0e2bc93dd063262bc1c371699601a4e8e6447a9a6445b0fca355ee74c0d274ab`
+  - SHA-256: `8863ef90aff9a8ab804a9e39c58b20c9a480f67f888b01829d56b3be2e0ea132`
 - `MOE_WINDOWS_RC_2026-06-23_USER_INSTRUCTIONS.md`
   - Tester instructions for install, first launch, Microsoft sign-in, Outlook,
     Forms, files, voice input, and support evidence.
@@ -39,6 +39,12 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 - Reply and forward actions avoid unsafe global-toolbar fallback when a message
   is open but the expected reading-pane button is not uniquely available. This
   is intended to reduce archive/reply misclick regressions.
+- Reply body filling now verifies that text landed in the compose body, rejects
+  any draft where reply text appears in recipient fields, and refuses the VLM
+  body fallback before typing if Outlook focus is on `To`, `Cc`, `Bcc`, or
+  `Subject`.
+- The Windows VM smoke harness now includes an Outlook state matrix for Inbox,
+  Sent, Drafts, Archive, Search, and opened-message starting states.
 - Inbox reads are pinned to the Inbox folder for Microsoft Graph and browser
   paths instead of drifting to Sent Items or other folders.
 - The model-facing Outlook guidance no longer tells users to install Chrome
@@ -58,7 +64,7 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 ## Validation
 
 - `pnpm test`
-  - Result: 147 files, 1054 passed, 5 skipped.
+  - Result: 147 files, 1076 passed, 5 skipped.
 - `pnpm run typecheck`
   - Passed.
 - `pnpm run lint`
@@ -66,12 +72,15 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 - Windows package rebuild
   - Passed.
 - Refreshed Windows installer rebuild on 2026-06-23
-  - Source commit: `42787c6243eba88f436b43f84df8d66aa60d5683`.
-  - Installer SHA-256: `0ad45db3d1a405c47f8105720099beca220e99fb2e81c69cebb3c45b6622100e`.
-  - Package inspection after rebuild passed: 11 tests.
-  - Focused release regression after rebuild passed: 6 files, 107 tests.
-  - RM/VM download verification passed for this exact GitHub asset hash.
-  - Clean installed-app smoke for this refreshed hash is still blocked until the VM/RM runs the normal assisted desktop installer screens.
+  - Source commit: release tag target.
+  - Installer SHA-256: `2e189dd004995d6ce18e9e240f8228ba5039c2e384fd479a597137458a9046cf`.
+  - Blockmap SHA-256: `8863ef90aff9a8ab804a9e39c58b20c9a480f67f888b01829d56b3be2e0ea132`.
+  - App ASAR SHA-256: `a67a1f3f518c2bbeccac1adf306e780762a12a421f07205c8c001b65df2bc7f7`.
+  - Package inspection after rebuild passed: 13 tests.
+  - Focused Outlook release regression after rebuild passed: 5 files, 101 tests.
+  - Full unit suite passed: 147 files, 1076 tests, 5 skipped.
+  - Harness CI passed.
+  - VM installed-app smoke for this refreshed hash is pending.
 - Clean Windows VM install/package smoke
   - Previous installer SHA matched.
   - Previous app uninstall exit `0`.
@@ -105,7 +114,8 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 
 Verdict: `YELLOW - prerelease`.
 
-This build is suitable for tester prerelease download. It is not GA yet.
+This build is suitable for tester prerelease download after the new GitHub
+asset upload completes. It is not GA yet.
 
 Remaining GA gaps:
 

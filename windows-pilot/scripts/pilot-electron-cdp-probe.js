@@ -30,6 +30,8 @@ function parseArgs(argv) {
     safeChatMode: 'outlook-open',
     safeChatPrompt: '',
     outlookSmoke: false,
+    outlookStateMatrix: false,
+    chromeEndpoint: 'http://127.0.0.1:18792',
     formsSmoke: false,
     draftEmail: false,
     sendEmail: false,
@@ -52,6 +54,8 @@ function parseArgs(argv) {
       out.safeChatPrompt = argv[++i] || out.safeChatPrompt;
     }
     else if (arg === '--outlook-smoke') out.outlookSmoke = true;
+    else if (arg === '--outlook-state-matrix') out.outlookStateMatrix = true;
+    else if (arg === '--chrome-endpoint') out.chromeEndpoint = argv[++i] || out.chromeEndpoint;
     else if (arg === '--forms-smoke') out.formsSmoke = true;
     else if (arg === '--draft-email') out.draftEmail = true;
     else if (arg === '--send-email') out.sendEmail = true;
@@ -62,7 +66,7 @@ function parseArgs(argv) {
     else if (arg === '--visual-acceptance') out.visualAcceptance = true;
     else if (arg === '--wait-ms') out.waitMs = Number(argv[++i] || out.waitMs);
     else if (arg === '--help' || arg === '-h') {
-      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--safe-chat-prompt TEXT] [--outlook-smoke] [--forms-smoke] [--draft-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--send-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--submit-forms] [--visual-acceptance] [--wait-ms N]');
+      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--chrome-endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--safe-chat-prompt TEXT] [--outlook-smoke] [--outlook-state-matrix] [--forms-smoke] [--draft-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--send-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--submit-forms] [--visual-acceptance] [--wait-ms N]');
       process.exit(0);
     }
   }
@@ -524,6 +528,44 @@ function validateOutlookSmoke(summary, reasons) {
   addValidationReason(reasons, outlook?.downloadWithoutConfirm?.result?.refused === true, 'outlook download without confirm was not refused');
 }
 
+function validateOutlookStateMatrix(summary, reasons) {
+  const matrix = summary?.outlookStateMatrix;
+  addValidationReason(reasons, matrix && matrix.skipped !== true, 'outlook state matrix skipped or missing');
+  if (!matrix || matrix.skipped === true) return;
+  addValidationReason(reasons, matrix.ok === true, 'outlook state matrix was not ok');
+
+  const requiredStates = ['inbox', 'sent', 'drafts', 'archive', 'search', 'opened-message'];
+  const states = Array.isArray(matrix.states) ? matrix.states : [];
+  const byId = new Map(states.map((state) => [state?.id, state]));
+  for (const id of requiredStates) {
+    const state = byId.get(id);
+    addValidationReason(reasons, Boolean(state), `outlook state matrix missing ${id}`);
+    if (!state) continue;
+    addValidationReason(
+      reasons,
+      state.status === 'ok',
+      `outlook state matrix ${id} status was ${state.status ?? 'missing'}`,
+    );
+    addValidationReason(
+      reasons,
+      typeof state.screenshotPath === 'string' && state.screenshotPath.length > 0,
+      `outlook state matrix ${id} screenshot path missing`,
+    );
+    if (id !== 'opened-message') {
+      addValidationReason(
+        reasons,
+        state.readInbox?.ok === true,
+        `outlook state matrix ${id} readInbox was not ok`,
+      );
+      addValidationReason(
+        reasons,
+        statusOf(state.readInbox) === 'ok',
+        `outlook state matrix ${id} readInbox status was ${statusOf(state.readInbox) ?? 'missing'}`,
+      );
+    }
+  }
+}
+
 function validateFormsSmoke(summary, reasons) {
   const forms = summary?.formsSmoke;
   addValidationReason(reasons, forms && forms.skipped !== true, 'forms smoke skipped or missing');
@@ -586,7 +628,7 @@ function buildVisualAcceptance(args, screenshotPath) {
     },
   ];
 
-  if (args.outlookSmoke || args.safeChat) {
+  if (args.outlookSmoke || args.outlookStateMatrix || args.safeChat) {
     criteria.push(
       {
         id: 'outlook-uses-app-tool-path',
@@ -594,6 +636,20 @@ function buildVisualAcceptance(args, screenshotPath) {
         reviewTarget: 'probe JSON, transcript, and any Outlook browser screenshot collected by the VM operator',
         accept: 'Outlook actions use the installed app Host API/plugin path; the assistant does not tell the user to enable Chrome debugging, run chrome.exe, use chrome://flags, or search the web.',
         reject: 'Manual Chrome debugging instructions, generic browser-MCP troubleshooting, or PATH/chrome.exe guidance appears in the final answer.',
+      },
+      {
+        id: 'outlook-start-state-matrix',
+        required: true,
+        reviewTarget: 'outlookStateMatrix probe JSON plus Outlook screenshots',
+        accept: 'The evidence covers Inbox, Sent Items, Drafts, Archive, Search, and opened-message starting states; inbox-scoped reads/searches normalize back to Inbox or return an explicit sign-in/blocked diagnostic without summarizing the wrong folder.',
+        reject: 'Evidence is missing a risky start state, reads visible Sent/Drafts/Archive/Search rows as Inbox, or reports a generic failure instead of a clear diagnostic.',
+      },
+      {
+        id: 'outlook-reply-draft-state',
+        required: true,
+        reviewTarget: 'safe-chat reply scenario transcript and Outlook screenshot when collected',
+        accept: 'Reply workflows use outlook.reply or a safe Host API reply path, leave a reviewable draft open, and do not ask the user for the recipient after Outlook pre-fills it.',
+        reject: 'The model tells the user it cannot find the Reply button, asks for the recipient after a reply draft was opened, archives/moves the source message, or sends without explicit confirmation.',
       },
       {
         id: 'outlook-inbox-scope-visible',
@@ -612,6 +668,16 @@ function buildVisualAcceptance(args, screenshotPath) {
       reviewTarget: 'probe JSON and transcript',
       accept: 'Send and attachment download attempts without confirm:true are refused; no visible sent state or download completion is shown.',
       reject: 'An email was sent, an attachment was downloaded, or the app reports success for send/download without same-session confirmation.',
+    });
+  }
+
+  if (args.outlookStateMatrix) {
+    criteria.push({
+      id: 'outlook-state-matrix-screenshots',
+      required: true,
+      reviewTarget: 'outlookStateMatrix.screenshotPath values',
+      accept: 'Every Outlook state-matrix row has a redacted screenshot path or an explicit sign-in/connectivity blocker; screenshots show the expected Outlook surface for that row.',
+      reject: 'A state row lacks both screenshot evidence and a diagnostic, or the screenshot clearly shows the wrong profile/browser/app.',
     });
   }
 
@@ -671,9 +737,14 @@ function validateVisualAcceptance(summary, args, reasons) {
   addValidationReason(reasons, criteriaIds.has('electron-app-shell'), 'visual acceptance missing electron app shell check');
   addValidationReason(reasons, criteriaIds.has('chat-not-stuck-thinking'), 'visual acceptance missing stuck-thinking check');
   addValidationReason(reasons, criteriaIds.has('no-sensitive-visual-leak'), 'visual acceptance missing sensitive-data leak check');
-  if (args.outlookSmoke || args.safeChat) {
+  if (args.outlookSmoke || args.outlookStateMatrix || args.safeChat) {
     addValidationReason(reasons, criteriaIds.has('outlook-uses-app-tool-path'), 'visual acceptance missing Outlook app-tool-path check');
+    addValidationReason(reasons, criteriaIds.has('outlook-start-state-matrix'), 'visual acceptance missing Outlook start-state matrix check');
+    addValidationReason(reasons, criteriaIds.has('outlook-reply-draft-state'), 'visual acceptance missing Outlook reply-draft state check');
     addValidationReason(reasons, criteriaIds.has('outlook-inbox-scope-visible'), 'visual acceptance missing Outlook inbox-scope check');
+  }
+  if (args.outlookStateMatrix) {
+    addValidationReason(reasons, criteriaIds.has('outlook-state-matrix-screenshots'), 'visual acceptance missing Outlook state-matrix screenshot check');
   }
   if (args.formsSmoke || args.submitForms) {
     addValidationReason(reasons, criteriaIds.has('forms-preview-field-coverage'), 'visual acceptance missing Forms field-coverage check');
@@ -690,6 +761,7 @@ function validateProbeSummary(summary, args = {}) {
   const requested = Boolean(
     args.safeChat
     || args.outlookSmoke
+    || args.outlookStateMatrix
     || args.formsSmoke
     || args.draftEmail
     || args.sendEmail
@@ -701,6 +773,7 @@ function validateProbeSummary(summary, args = {}) {
   }
   if (args.safeChat) validateSafeChat(summary, reasons);
   if (args.outlookSmoke) validateOutlookSmoke(summary, reasons);
+  if (args.outlookStateMatrix) validateOutlookStateMatrix(summary, reasons);
   if (args.formsSmoke) validateFormsSmoke(summary, reasons);
   if (args.draftEmail) validateOutlookDraft(summary, reasons);
   if (args.sendEmail) validateOutlookSend(summary, reasons);
@@ -758,6 +831,150 @@ async function runOutlookSmoke(page) {
       reason: data?.reason,
     })),
   };
+}
+
+function summarizeInboxMatrixCall(result) {
+  return summarizeHostApiCall(result, (data) => ({
+    status: data?.status,
+    messageCount: Array.isArray(data?.messages) ? data.messages.length : 0,
+    scan: data?.scan
+      ? {
+        scope: data.scan.scope,
+        scannedCount: data.scan.scannedCount,
+        returnedCount: data.scan.returnedCount,
+        exhaustive: data.scan.exhaustive,
+      }
+      : undefined,
+    message: data?.message,
+  }));
+}
+
+async function findOrCreateOutlookPage(browser) {
+  const contexts = browser.contexts();
+  const pages = contexts.flatMap((context) => context.pages());
+  const existing = pages.find((page) => /https:\/\/outlook\.(office|office365|cloud\.microsoft|live)\.com\//i.test(page.url()));
+  if (existing) return existing;
+  const context = contexts[0] ?? await browser.newContext();
+  const page = context.pages()[0] ?? await context.newPage();
+  await page.goto('https://outlook.office.com/mail/inbox', {
+    timeout: 30_000,
+    waitUntil: 'domcontentloaded',
+  }).catch(() => undefined);
+  return page;
+}
+
+async function captureOutlookScreenshot(outlookPage, artifactDir, id) {
+  const screenshotPath = path.join(
+    artifactDir,
+    `outlook-state-${id}-${new Date().toISOString().replace(/[:.]/g, '-')}.png`,
+  );
+  await outlookPage.screenshot({ path: screenshotPath, fullPage: false });
+  return screenshotPath;
+}
+
+async function runOutlookStateMatrix(page, playwright, args) {
+  const browser = await withTimeout(
+    'connectOverCDP outlook state matrix',
+    () => playwright.chromium.connectOverCDP(args.chromeEndpoint),
+    20_000,
+  ).catch((error) => ({ __connectError: error instanceof Error ? error.message : String(error) }));
+  if (browser?.__connectError) {
+    return {
+      skipped: false,
+      ok: false,
+      error: browser.__connectError,
+      states: [],
+    };
+  }
+
+  const states = [];
+  try {
+    const outlookPage = await findOrCreateOutlookPage(browser);
+    const folderStates = [
+      { id: 'inbox', url: 'https://outlook.office.com/mail/inbox' },
+      { id: 'sent', url: 'https://outlook.office.com/mail/sentitems' },
+      { id: 'drafts', url: 'https://outlook.office.com/mail/drafts' },
+      { id: 'archive', url: 'https://outlook.office.com/mail/archive' },
+      { id: 'search', url: 'https://outlook.office.com/mail/search' },
+    ];
+
+    for (const state of folderStates) {
+      const row = { id: state.id, targetUrl: state.url, status: 'pending' };
+      try {
+        await outlookPage.goto(state.url, { timeout: 30_000, waitUntil: 'domcontentloaded' }).catch(() => undefined);
+        await outlookPage.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+        row.beforeUrl = outlookPage.url();
+        row.screenshotPath = await captureOutlookScreenshot(outlookPage, args.artifactDir, state.id)
+          .catch((error) => {
+            row.screenshotError = error instanceof Error ? error.message : String(error);
+            return '';
+          });
+        const readInbox = await withTimeout(
+          `hostapi outlook.read-inbox from ${state.id}`,
+          () => invokeHostApi(page, '/api/outlook/read-inbox', { top: 3 }),
+          120_000,
+        ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+        row.readInbox = summarizeInboxMatrixCall(readInbox);
+        await outlookPage.waitForTimeout(500).catch(() => undefined);
+        row.afterUrl = outlookPage.url();
+        row.status = row.readInbox?.ok && statusOf(row.readInbox) === 'ok' ? 'ok' : 'failed';
+      } catch (error) {
+        row.status = 'failed';
+        row.error = error instanceof Error ? error.message : String(error);
+      }
+      states.push(row);
+    }
+
+    const opened = { id: 'opened-message', status: 'pending' };
+    try {
+      const readInbox = await withTimeout(
+        'hostapi outlook.read-inbox for opened-message',
+        () => invokeHostApi(page, '/api/outlook/read-inbox', { top: 1 }),
+        120_000,
+      ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+      opened.readInbox = summarizeInboxMatrixCall(readInbox);
+      const firstId = readInbox?.data?.json?.data?.messages?.[0]?.id;
+      if (!firstId) {
+        opened.status = statusOf(opened.readInbox) === 'needs_signin' ? 'needs_signin' : 'failed';
+        opened.error = 'No message id available from top inbox row.';
+      } else {
+        const readEmail = await withTimeout(
+          'hostapi outlook.read-email for opened-message',
+          () => invokeHostApi(page, '/api/outlook/read-email', { id: firstId }),
+          120_000,
+        ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+        opened.readEmail = summarizeHostApiCall(readEmail, (data) => ({
+          status: data?.status,
+          hasSubject: Boolean(data?.subject),
+          hasSender: Boolean(data?.sender),
+          hasBody: Boolean(data?.body),
+          attachmentCount: Array.isArray(data?.attachments) ? data.attachments.length : 0,
+          message: data?.message,
+        }));
+        opened.screenshotPath = await captureOutlookScreenshot(outlookPage, args.artifactDir, 'opened-message')
+          .catch((error) => {
+            opened.screenshotError = error instanceof Error ? error.message : String(error);
+            return '';
+          });
+        opened.afterUrl = outlookPage.url();
+        opened.status = opened.readEmail?.ok && statusOf(opened.readEmail) === 'ok' ? 'ok' : 'failed';
+      }
+    } catch (error) {
+      opened.status = 'failed';
+      opened.error = error instanceof Error ? error.message : String(error);
+    }
+    states.push(opened);
+
+    return {
+      skipped: false,
+      ok: states.every((state) => state.status === 'ok'),
+      chromeEndpoint: args.chromeEndpoint,
+      states,
+      note: 'No email was sent, no attachment was downloaded, and no form was submitted. This matrix navigates Outlook folders and performs read-only Host API calls.',
+    };
+  } finally {
+    await browser.close().catch(() => {});
+  }
 }
 
 function runMarker() {
@@ -1069,6 +1286,9 @@ async function main() {
     const outlookSmoke = args.outlookSmoke
       ? await runOutlookSmoke(page)
       : { skipped: true };
+    const outlookStateMatrix = args.outlookStateMatrix
+      ? await runOutlookStateMatrix(page, playwright, args)
+      : { skipped: true };
     const formsSmoke = args.formsSmoke
       ? await runFormsSmoke(page)
       : { skipped: true };
@@ -1100,6 +1320,7 @@ async function main() {
         formsList,
       },
       outlookSmoke,
+      outlookStateMatrix,
       formsSmoke,
       emailDraft,
       emailSend,

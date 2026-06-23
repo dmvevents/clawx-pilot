@@ -13,6 +13,8 @@ param(
     [string]$SafeChatMode = "outlook-open",
     [string]$SafeChatPrompt,
     [switch]$OutlookSmoke,
+    [switch]$OutlookStateMatrix,
+    [string]$ChromeEndpoint = "http://127.0.0.1:18792",
     [switch]$FormsSmoke,
     [switch]$DraftEmail,
     [switch]$SendEmail,
@@ -84,6 +86,8 @@ if (-not (Test-Endpoint -Url $Endpoint)) {
 "SafeChatMode:$SafeChatMode"
 "SafeChatCustom:$([bool]$SafeChatPrompt)"
 "OutlookSmoke:$($OutlookSmoke.IsPresent)"
+"OutlookStateMatrix:$($OutlookStateMatrix.IsPresent)"
+"ChromeEndpoint:$ChromeEndpoint"
 "FormsSmoke:  $($FormsSmoke.IsPresent)"
 "DraftEmail:  $($DraftEmail.IsPresent)"
 "SendEmail:   $($SendEmail.IsPresent)"
@@ -93,6 +97,7 @@ if (-not (Test-Endpoint -Url $Endpoint)) {
 $argsList = @(
     $scriptPath,
     "--endpoint", $Endpoint,
+    "--chrome-endpoint", $ChromeEndpoint,
     "--artifact-dir", $ArtifactDir,
     "--wait-ms", "$WaitMs"
 )
@@ -107,6 +112,9 @@ if ($SafeChatPrompt) {
 }
 if ($OutlookSmoke) {
     $argsList += "--outlook-smoke"
+}
+if ($OutlookStateMatrix) {
+    $argsList += "--outlook-state-matrix"
 }
 if ($FormsSmoke) {
     $argsList += "--forms-smoke"

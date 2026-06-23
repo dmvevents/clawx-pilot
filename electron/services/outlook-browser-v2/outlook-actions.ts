@@ -236,92 +236,40 @@ export class OutlookActions {
     //    "Fri 3:46 PM" (received), "preview/snippet text"]
     // We classify each text node by content (date-like, single-letter
     // avatar, etc.) and assign positions.
-    const rawAriaLabel = (s: string) => s.replace(/^Unread\s+/i, '').trim();
-    const rows = await page.evaluate(`
-      (() => {
-        const out = [];
-        const seen = new Set();
-        const nodes = document.querySelectorAll('[role="option"][aria-label], [role="row"][aria-label]');
-        const limit = ${JSON.stringify(top)};
-        // Date-line heuristic: short string starting with weekday/month/AM-PM
-        // marker or HH:MM. Stable across en-* locales; for non-English we
-        // accept any string under 25 chars with a digit and a colon or slash.
-        const isDateLike = function(s) {
-          if (!s) return false;
-          if (s.length > 30) return false;
-          if (/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Yesterday|Today|Tomorrow)\\b/i.test(s)) return true;
-          if (/^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\b/i.test(s)) return true;
-          if (/^\\d{1,2}[:\\/]\\d/.test(s)) return true;
-          return false;
-        };
-        for (const el of Array.from(nodes)) {
-          const label = el.getAttribute('aria-label') || '';
-          if (!label) continue;
-          // De-dup by label so collapsed thread groups don't multiply rows.
-          const key = label.slice(0, 200);
-          if (seen.has(key)) continue;
-          seen.add(key);
-          if (out.length >= limit) break;
+    const rowById = new Map<string, {
+      id: string;
+      sender: string;
+      subject: string;
+      snippet: string;
+      received: string;
+      unread: boolean;
+    }>();
+    let scrollPasses = 0;
+    let lastCount = -1;
+    let stalePasses = 0;
+    const maxPasses = Math.min(Math.max(Math.ceil(top / 8) + 4, 1), 40);
 
-          // Collect non-empty text-node values in DOM order.
-          const texts = [];
-          const walk = function(node) {
-            if (node.nodeType === 3) {
-              const t = (node.textContent || '').trim();
-              if (t) texts.push(t);
-            } else if (node.nodeType === 1) {
-              for (const c of Array.from(node.childNodes)) walk(c);
-            }
-          };
-          walk(el);
+    await this.resetInboxListScroll(page);
+    for (let pass = 0; pass < maxPasses && rowById.size < top; pass += 1) {
+      const rows = await this.extractVisibleInboxRows(page, top);
+      for (const row of rows) {
+        if (!row.id || rowById.has(row.id)) continue;
+        rowById.set(row.id, row);
+        if (rowById.size >= top) break;
+      }
+      if (rowById.size >= top) break;
 
-          // Classify the text nodes:
-          // 1. Skip 1-2 char fragments — these are avatar initials.
-          // 2. First "long" string is sender.
-          // 3. Next "long" string before any date-like is subject.
-          // 4. First date-like string is receivedAt.
-          // 5. Everything after the date is snippet.
-          let sender = '';
-          let subject = '';
-          let receivedAt = '';
-          const snippetParts = [];
-          let phase = 'sender';
-          for (const t of texts) {
-            if (t.length < 3 && phase !== 'snippet') continue;
-            if (phase === 'sender') {
-              sender = t;
-              phase = 'subject';
-              continue;
-            }
-            if (phase === 'subject') {
-              if (isDateLike(t)) { receivedAt = t; phase = 'snippet'; continue; }
-              subject = subject ? subject + ' ' + t : t;
-              continue;
-            }
-            if (phase === 'snippet') {
-              snippetParts.push(t);
-            }
-          }
-          // If we never hit a date, fall back: assume the LAST short token
-          // before snippet text is the date.
-          if (!receivedAt && snippetParts.length) {
-            for (let i = snippetParts.length - 1; i >= 0; i--) {
-              if (isDateLike(snippetParts[i])) {
-                receivedAt = snippetParts.splice(i, 1)[0];
-                break;
-              }
-            }
-          }
-          const snippet = snippetParts.join(' ').slice(0, 200);
-          const unread = /\\bunread\\b/i.test(label);
-          // id: stable-ish hash from sender+subject+receivedAt so re-reads match.
-          const id = (sender + '|' + subject + '|' + receivedAt).slice(0, 96) || label.slice(0, 96);
-          out.push({ id: id, sender: sender, subject: subject, snippet: snippet, received: receivedAt, unread: unread });
-        }
-        return out;
-      })()
-    `) as Array<{ id: string; sender: string; subject: string; snippet: string; received: string; unread: boolean }>;
-    void rawAriaLabel; // reserved for future fallback path
+      stalePasses = rowById.size === lastCount ? stalePasses + 1 : 0;
+      lastCount = rowById.size;
+      if (stalePasses >= 2) break;
+
+      const moved = await this.scrollInboxList(page);
+      if (!moved) break;
+      scrollPasses += 1;
+      await this.driver.sleep(250);
+    }
+
+    const rows = Array.from(rowById.values()).slice(0, top);
 
     const messages: InboxMessage[] = rows.map((r) => ({
       id: r.id,
@@ -340,9 +288,10 @@ export class OutlookActions {
         requestedTop: top,
         scannedCount: messages.length,
         returnedCount: messages.length,
+        scrollPasses,
         exhaustive: false,
         note:
-          'Browser Outlook scan covers the recent visible Inbox window only; do not describe it as all mailbox mail.',
+          'Browser Outlook scan covers a bounded, scrolled recent Inbox window only; do not describe it as all mailbox mail.',
       },
     };
   }
@@ -648,14 +597,18 @@ export class OutlookActions {
       };
     }
 
-    // Click Reply / Reply All on the open message.
+    // Open Reply / Reply All on the open message. Prefer Outlook's
+    // keyboard shortcuts first because they are scoped to the selected
+    // message and cannot accidentally click adjacent destructive toolbar
+    // commands such as Archive/Delete. The safe toolbar/menu detector remains
+    // as fallback for tenants where shortcuts are disabled or focus misses.
     const targetName = args.replyAll ? /^reply all$/i : /^reply$/i;
     await this.dismissBlockingDialog(page);
-    const clickedReply = await this.clickOpenMessageToolbarButton(page, targetName);
-    const openedByShortcut = clickedReply
+    const openedByShortcut = await this.openMessageComposeViaShortcut(page, args.replyAll ? 'replyAll' : 'reply');
+    const clickedReply = openedByShortcut
       ? false
-      : await this.openMessageComposeViaShortcut(page, args.replyAll ? 'replyAll' : 'reply');
-    if (!clickedReply && !openedByShortcut) {
+      : await this.clickOpenMessageToolbarButton(page, targetName);
+    if (!openedByShortcut && !clickedReply) {
       return {
         status: 'not_found',
         draftLeftOpen: false,
@@ -664,7 +617,7 @@ export class OutlookActions {
           : 'Could not safely identify the Reply button on the open message.',
       };
     }
-    if (!openedByShortcut) await this.waitForComposePane(page);
+    if (clickedReply) await this.waitForComposePane(page);
     await this.fillBody(page, args.body);
 
     const draftProbe = await this.readOpenDraftProbe(page);
@@ -695,18 +648,18 @@ export class OutlookActions {
     }
 
     await this.dismissBlockingDialog(page);
-    const clickedForward = await this.clickOpenMessageToolbarButton(page, /^forward$/i);
-    const openedByShortcut = clickedForward
+    const openedByShortcut = await this.openMessageComposeViaShortcut(page, 'forward');
+    const clickedForward = openedByShortcut
       ? false
-      : await this.openMessageComposeViaShortcut(page, 'forward');
-    if (!clickedForward && !openedByShortcut) {
+      : await this.clickOpenMessageToolbarButton(page, /^forward$/i);
+    if (!openedByShortcut && !clickedForward) {
       return {
         status: 'not_found',
         draftLeftOpen: false,
         message: 'Could not safely identify the Forward button on the open message.',
       };
     }
-    if (!openedByShortcut) await this.waitForComposePane(page);
+    if (clickedForward) await this.waitForComposePane(page);
 
     const toList = asArray(args.to);
     if (toList.length === 0) {
@@ -956,8 +909,193 @@ export class OutlookActions {
     }
   }
 
+  private async resetInboxListScroll(page: Page): Promise<void> {
+    await page.evaluate(`
+      (() => {
+        const isScrollable = function(el) {
+          if (!el) return false;
+          const style = window.getComputedStyle(el);
+          if (!/(auto|scroll)/i.test(style.overflowY || '')) return false;
+          return el.scrollHeight > el.clientHeight + 8;
+        };
+        const findScrollableAncestor = function(el) {
+          let current = el;
+          while (current && current !== document.body) {
+            if (isScrollable(current)) return current;
+            current = current.parentElement;
+          }
+          return null;
+        };
+        const firstRow = document.querySelector('[role="option"][aria-label], [role="row"][aria-label]');
+        const candidates = [
+          firstRow ? findScrollableAncestor(firstRow) : null,
+          ...Array.from(document.querySelectorAll([
+            'div[role="listbox"]',
+            'div[role="rowgroup"]',
+            '[role="region"][aria-label*="Message list" i]',
+            '[aria-label*="Inbox" i]'
+          ].join(','))).map(findScrollableAncestor),
+          document.scrollingElement
+        ].filter(Boolean);
+        const seen = new Set();
+        for (const raw of candidates) {
+          const el = raw;
+          if (seen.has(el)) continue;
+          seen.add(el);
+          if ('scrollTop' in el) el.scrollTop = 0;
+        }
+        return true;
+      })()
+    `).catch((err) => {
+      logger.debug?.(
+        `[outlook-v2] resetInboxListScroll failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
+  }
+
+  private async extractVisibleInboxRows(
+    page: Page,
+    limit: number,
+  ): Promise<Array<{ id: string; sender: string; subject: string; snippet: string; received: string; unread: boolean }>> {
+    return page.evaluate(`
+      (() => {
+        const out = [];
+        const seen = new Set();
+        const nodes = document.querySelectorAll('[role="option"][aria-label], [role="row"][aria-label]');
+        const limit = ${JSON.stringify(limit)};
+        const isDateLike = function(s) {
+          if (!s) return false;
+          if (s.length > 30) return false;
+          if (/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Yesterday|Today|Tomorrow)\\b/i.test(s)) return true;
+          if (/^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\b/i.test(s)) return true;
+          if (/^\\d{1,2}[:\\/]\\d/.test(s)) return true;
+          return false;
+        };
+        for (const el of Array.from(nodes)) {
+          const label = el.getAttribute('aria-label') || '';
+          if (!label) continue;
+          const key = label.slice(0, 200);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          if (out.length >= limit) break;
+
+          const texts = [];
+          const walk = function(node) {
+            if (node.nodeType === 3) {
+              const t = (node.textContent || '').trim();
+              if (t) texts.push(t);
+            } else if (node.nodeType === 1) {
+              for (const c of Array.from(node.childNodes)) walk(c);
+            }
+          };
+          walk(el);
+
+          let sender = '';
+          let subject = '';
+          let receivedAt = '';
+          const snippetParts = [];
+          let phase = 'sender';
+          for (const t of texts) {
+            if (t.length < 3 && phase !== 'snippet') continue;
+            if (phase === 'sender') {
+              sender = t;
+              phase = 'subject';
+              continue;
+            }
+            if (phase === 'subject') {
+              if (isDateLike(t)) { receivedAt = t; phase = 'snippet'; continue; }
+              subject = subject ? subject + ' ' + t : t;
+              continue;
+            }
+            if (phase === 'snippet') {
+              snippetParts.push(t);
+            }
+          }
+          if (!receivedAt && snippetParts.length) {
+            for (let i = snippetParts.length - 1; i >= 0; i--) {
+              if (isDateLike(snippetParts[i])) {
+                receivedAt = snippetParts.splice(i, 1)[0];
+                break;
+              }
+            }
+          }
+          const snippet = snippetParts.join(' ').slice(0, 200);
+          const unread = /\\bunread\\b/i.test(label);
+          const id = (sender + '|' + subject + '|' + receivedAt).slice(0, 96) || label.slice(0, 96);
+          out.push({ id: id, sender: sender, subject: subject, snippet: snippet, received: receivedAt, unread: unread });
+        }
+        return out;
+      })()
+    `).catch((err) => {
+      logger.debug?.(
+        `[outlook-v2] extractVisibleInboxRows failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return [];
+    }) as Promise<Array<{ id: string; sender: string; subject: string; snippet: string; received: string; unread: boolean }>>;
+  }
+
+  private async scrollInboxList(page: Page): Promise<boolean> {
+    const moved = await page.evaluate(`
+      (() => {
+        const isScrollable = function(el) {
+          if (!el) return false;
+          const style = window.getComputedStyle(el);
+          if (!/(auto|scroll)/i.test(style.overflowY || '')) return false;
+          return el.scrollHeight > el.clientHeight + 8;
+        };
+        const findScrollableAncestor = function(el) {
+          let current = el;
+          while (current && current !== document.body) {
+            if (isScrollable(current)) return current;
+            current = current.parentElement;
+          }
+          return null;
+        };
+        const firstRow = document.querySelector('[role="option"][aria-label], [role="row"][aria-label]');
+        const explicit = Array.from(document.querySelectorAll([
+          'div[role="listbox"]',
+          'div[role="rowgroup"]',
+          '[role="region"][aria-label*="Message list" i]',
+          '[aria-label*="Inbox" i]'
+        ].join(','))).map(findScrollableAncestor).find(Boolean);
+        const target = (firstRow ? findScrollableAncestor(firstRow) : null)
+          || explicit
+          || document.scrollingElement;
+        if (!target || !('scrollTop' in target)) return false;
+        const before = target.scrollTop;
+        const step = Math.max(Math.floor((target.clientHeight || window.innerHeight || 600) * 0.85), 480);
+        target.scrollTop = Math.min(target.scrollTop + step, target.scrollHeight || target.scrollTop + step);
+        target.dispatchEvent(new Event('scroll', { bubbles: true }));
+        return target.scrollTop > before + 2;
+      })()
+    `).catch((err) => {
+      logger.debug?.(
+        `[outlook-v2] scrollInboxList failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return false;
+    });
+    return moved === true;
+  }
+
+  private async visibleInboxFingerprint(page: Page): Promise<string> {
+    return page.evaluate(`
+      (() => Array.from(document.querySelectorAll('[role="option"][aria-label], [role="row"][aria-label]'))
+        .slice(0, 20)
+        .map((el) => [
+          el.getAttribute('aria-label') || '',
+          el.textContent || ''
+        ].join(' ').replace(/\\s+/g, ' ').trim().slice(0, 200))
+        .join('\\n'))()
+    `).catch(() => '') as Promise<string>;
+  }
+
   private async openMessageById(page: Page, id: string): Promise<boolean> {
-    const targetIdx = await page.evaluate(`
+    await this.resetInboxListScroll(page);
+    const maxPasses = 40;
+    let stalePasses = 0;
+    let previousVisibleFingerprint = '';
+    for (let pass = 0; pass < maxPasses; pass += 1) {
+      const targetIdx = await page.evaluate(`
       (() => {
         const wantedId = ${JSON.stringify(id)};
         const isDateLike = function(s) {
@@ -1000,17 +1138,31 @@ export class OutlookActions {
         return -1;
       })()
     `) as number;
-    if (targetIdx < 0) return false;
-    const rowLocator = page.locator('[role="option"][aria-label], [role="row"][aria-label]').nth(targetIdx);
-    try {
-      await rowLocator.click({ timeout: 8_000 });
-    } catch (err) {
-      logger.warn?.(
-        `[outlook-v2] openMessageById click failed for id "${id}": ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return false;
+      if (targetIdx >= 0) {
+        const rowLocator = page.locator('[role="option"][aria-label], [role="row"][aria-label]').nth(targetIdx);
+        try {
+          await rowLocator.click({ timeout: 8_000 });
+        } catch (err) {
+          logger.warn?.(
+            `[outlook-v2] openMessageById click failed for id "${id}": ${err instanceof Error ? err.message : String(err)}`,
+          );
+          return false;
+        }
+        return true;
+      }
+
+      const visibleFingerprint = await this.visibleInboxFingerprint(page);
+      stalePasses = visibleFingerprint && visibleFingerprint === previousVisibleFingerprint
+        ? stalePasses + 1
+        : 0;
+      previousVisibleFingerprint = visibleFingerprint;
+      if (stalePasses >= 2) return false;
+
+      const moved = await this.scrollInboxList(page);
+      if (!moved) return false;
+      await this.driver.sleep(250);
     }
-    return true;
+    return false;
   }
 
   /**
@@ -1632,16 +1784,23 @@ export class OutlookActions {
       page.locator('[contenteditable="true"][aria-label*="body" i]'),
     ];
     for (const c of candidates) {
+      let hasCandidate: boolean;
       try {
-        if ((await c.count()) > 0) {
-          await c.first().click({ timeout: 5_000 });
-          // contenteditable bodies don't always accept .fill — type instead.
-          await this.driver.typeText(body);
-          return;
-        }
+        hasCandidate = (await c.count()) > 0;
+      } catch {
+        continue;
+      }
+      if (!hasCandidate) continue;
+      try {
+        await c.first().click({ timeout: 5_000 });
+        // contenteditable bodies don't always accept .fill — type instead.
+        await this.driver.typeText(body);
       } catch {
         // try next
+        continue;
       }
+      await this.verifyBodyFill(page, body);
+      return;
     }
     // VLM fallback.
     const shot = await this.driver.screenshotViewport();
@@ -1656,7 +1815,217 @@ export class OutlookActions {
     }
     const c = bboxCentre(r.bbox);
     await this.driver.clickAt(c.x, c.y);
+    await this.assertFocusedComposeTargetIsBody(page);
     await this.driver.typeText(body);
+    await this.verifyBodyFill(page, body);
+  }
+
+  private async assertFocusedComposeTargetIsBody(page: Page): Promise<void> {
+    const evaluate = (page as unknown as {
+      evaluate?: <TArg, TResult>(fn: (arg: TArg) => TResult, arg: TArg) => Promise<TResult>;
+    }).evaluate;
+    if (typeof evaluate !== 'function') return;
+
+    type FocusProbe = {
+      ok: boolean;
+      reason: 'body' | 'recipient' | 'subject' | 'unknown';
+      label: string;
+    };
+
+    let lastProbe: FocusProbe | null = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const probe = await evaluate.call(page, () => {
+        const normalize = (value: string | undefined | null) => (value ?? '')
+          .replace(/\u00a0/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase();
+        const isVisible = (el: Element | null) => {
+          if (!el) return false;
+          const rect = el.getBoundingClientRect();
+          const style = window.getComputedStyle(el);
+          return rect.width > 0
+            && rect.height > 0
+            && style.visibility !== 'hidden'
+            && style.display !== 'none';
+        };
+        const labelText = (el: Element | null) => {
+          const parts: string[] = [];
+          let current: Element | null = el;
+          while (current && parts.length < 20) {
+            parts.push(
+              current.getAttribute('aria-label') || '',
+              current.getAttribute('placeholder') || '',
+              current.getAttribute('name') || '',
+              current.getAttribute('title') || '',
+              current.getAttribute('data-automation-id') || '',
+              current.getAttribute('data-automationid') || '',
+            );
+            current = current.parentElement;
+          }
+          return normalize(parts.filter(Boolean).join(' '));
+        };
+        const closestVisible = (el: Element | null, selectors: string) => {
+          const match = el?.closest(selectors) ?? null;
+          return isVisible(match) ? match : null;
+        };
+        const active = document.activeElement;
+        const label = labelText(active);
+        const recipient = closestVisible(active, [
+          '[aria-label="To"]',
+          '[aria-label="Cc"]',
+          '[aria-label="Bcc"]',
+          '[aria-label*="recipient" i]',
+          '[role="textbox"][aria-label*="To" i]',
+          '[role="textbox"][aria-label*="Cc" i]',
+          '[role="textbox"][aria-label*="Bcc" i]',
+          '[contenteditable="true"][aria-label*="recipient" i]',
+        ].join(','));
+        if (recipient || /\b(to|cc|bcc|recipient|recipients)\b/i.test(label)) {
+          return { ok: false, reason: 'recipient' as const, label };
+        }
+        const subject = closestVisible(active, [
+          '[aria-label="Subject"]',
+          '[aria-label*="Subject" i]',
+          '[placeholder*="Subject" i]',
+          '[name*="subject" i]',
+        ].join(','));
+        if (subject || /\bsubject\b/i.test(label)) {
+          return { ok: false, reason: 'subject' as const, label };
+        }
+        const body = closestVisible(active, [
+          '[aria-label="Message body"]',
+          '[aria-label*="Message body" i]',
+          '[role="textbox"][aria-label*="body" i]',
+          '[contenteditable="true"][aria-label*="body" i]',
+          '[contenteditable="true"][role="textbox"]',
+          '[contenteditable="true"][aria-multiline="true"]',
+          '[role="textbox"][aria-multiline="true"]',
+        ].join(','));
+        if (body) return { ok: true, reason: 'body' as const, label };
+        return { ok: false, reason: 'unknown' as const, label };
+      }, undefined).catch((err) => {
+        logger.debug?.(
+          `[outlook-v2] focused body target probe failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return null;
+      }) as FocusProbe | null;
+      if (!probe) return;
+      lastProbe = probe;
+      if (probe.ok) return;
+      await this.driver.sleep(150);
+    }
+
+    if (lastProbe?.reason === 'recipient') {
+      throw new Error('Outlook compose body targeting failed: focused element is a recipient field.');
+    }
+    if (lastProbe?.reason === 'subject') {
+      throw new Error('Outlook compose body targeting failed: focused element is the subject field.');
+    }
+    throw new Error('Outlook compose body targeting failed: focused element is not the compose body.');
+  }
+
+  private async verifyBodyFill(page: Page, expectedBody: string): Promise<void> {
+    const expected = normalizeSearchText(expectedBody);
+    if (!expected) return;
+    const evaluate = (page as unknown as {
+      evaluate?: <TArg, TResult>(fn: (arg: TArg) => TResult, arg: TArg) => Promise<TResult>;
+    }).evaluate;
+    if (typeof evaluate !== 'function') return;
+
+    type BodyFillProbe = {
+      bodyHasExpected: boolean;
+      recipientHasExpected: boolean;
+      bodyEditorCount: number;
+      recipientFieldCount: number;
+    };
+
+    let lastProbe: BodyFillProbe | null = null;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const probe = await evaluate.call(page, (needle: string) => {
+        const normalize = (value: string | undefined | null) => (value ?? '')
+          .replace(/\u00a0/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase();
+        const isVisible = (el: Element | null) => {
+          if (!el) return false;
+          const rect = el.getBoundingClientRect();
+          const style = window.getComputedStyle(el);
+          return rect.width > 0
+            && rect.height > 0
+            && style.visibility !== 'hidden'
+            && style.display !== 'none';
+        };
+        const valueText = (el: Element | null) => {
+          if (!el) return '';
+          const value = 'value' in el && typeof el.value === 'string' ? el.value : '';
+          const text = el.textContent || '';
+          return normalize([value, text].filter(Boolean).join(' '));
+        };
+        const fieldNameText = (el: Element | null) => {
+          if (!el) return '';
+          return normalize([
+            el.getAttribute('aria-label') || '',
+            el.getAttribute('placeholder') || '',
+            el.getAttribute('name') || '',
+            el.getAttribute('title') || '',
+            el.getAttribute('data-automation-id') || '',
+            el.getAttribute('data-automationid') || '',
+          ].filter(Boolean).join(' '));
+        };
+        const isRecipientField = (el: Element | null) => {
+          const label = fieldNameText(el);
+          return /\b(to|cc|bcc|recipient|recipients)\b/i.test(label)
+            && !/\bsubject\b/i.test(label);
+        };
+        const isRecipientOrSubjectField = (el: Element | null) => {
+          const label = fieldNameText(el);
+          return /\b(to|cc|bcc|subject|recipient|recipients)\b/i.test(label);
+        };
+        const bodyEditors = Array.from(document.querySelectorAll([
+          '[aria-label="Message body"]',
+          '[aria-label*="Message body" i]',
+          '[role="textbox"][aria-label*="body" i]',
+          '[contenteditable="true"][aria-label*="body" i]',
+          '[contenteditable="true"][role="textbox"]',
+          '[contenteditable="true"][aria-multiline="true"]',
+          '[role="textbox"][aria-multiline="true"]',
+        ].join(','))).filter((el) => isVisible(el) && !isRecipientOrSubjectField(el));
+        const recipientFields = Array.from(document.querySelectorAll([
+          '[aria-label="To"]',
+          '[aria-label="Cc"]',
+          '[aria-label="Bcc"]',
+          '[aria-label*="To" i]',
+          '[aria-label*="Cc" i]',
+          '[aria-label*="Bcc" i]',
+          '[role="textbox"][aria-label*="recipient" i]',
+          '[contenteditable="true"][aria-label*="recipient" i]',
+        ].join(','))).filter((el) => isVisible(el) && isRecipientField(el));
+        return {
+          bodyHasExpected: bodyEditors.some((el) => valueText(el).includes(needle)),
+          recipientHasExpected: needle.length >= 8
+            && recipientFields.some((el) => valueText(el).includes(needle)),
+          bodyEditorCount: bodyEditors.length,
+          recipientFieldCount: recipientFields.length,
+        };
+      }, expected).catch((err) => {
+        logger.debug?.(
+          `[outlook-v2] verifyBodyFill probe failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return null;
+      }) as BodyFillProbe | null;
+
+      if (!probe) return;
+      lastProbe = probe;
+      if (probe.bodyHasExpected && !probe.recipientHasExpected) return;
+      await this.driver.sleep(250);
+    }
+
+    if (lastProbe?.recipientHasExpected) {
+      throw new Error('Outlook compose body verification failed: message text appears in a recipient field.');
+    }
+    throw new Error('Outlook compose body verification failed: message text was not found in the compose body.');
   }
 
   private async revealCcBcc(page: Page, which: 'Cc' | 'Bcc'): Promise<void> {

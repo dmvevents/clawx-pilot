@@ -15,7 +15,8 @@ param(
   [string] $AppExe = "$env:LOCALAPPDATA\Programs\Ministry of Education\Ministry of Education.exe",
   [switch] $StopExistingApp,
   [switch] $StopChrome,
-  [switch] $OutlookOnly
+  [switch] $OutlookOnly,
+  [switch] $OutlookStateMatrix
 )
 
 $ErrorActionPreference = "Continue"
@@ -195,6 +196,7 @@ $probeArgs = @(
   "-ExecutionPolicy", "Bypass",
   "-File", $runner,
   "-Endpoint", $electronEndpoint,
+  "-ChromeEndpoint", $chromeEndpoint,
   "-OutlookSmoke",
   "-VisualAcceptance",
   "-WaitMs", "1000",
@@ -202,6 +204,9 @@ $probeArgs = @(
 )
 if (-not $OutlookOnly) {
   $probeArgs += "-FormsSmoke"
+}
+if ($OutlookStateMatrix) {
+  $probeArgs += "-OutlookStateMatrix"
 }
 
 & powershell.exe @probeArgs *> $probeLog
