@@ -70,7 +70,8 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
   - Installer SHA-256: `0ad45db3d1a405c47f8105720099beca220e99fb2e81c69cebb3c45b6622100e`.
   - Package inspection after rebuild passed: 11 tests.
   - Focused release regression after rebuild passed: 6 files, 107 tests.
-  - Clean VM/RM smoke for this exact refreshed hash is the next gate.
+  - RM/VM download verification passed for this exact GitHub asset hash.
+  - Clean installed-app smoke for this refreshed hash is still blocked until the VM/RM runs the normal assisted desktop installer screens.
 - Clean Windows VM install/package smoke
   - Previous installer SHA matched.
   - Previous app uninstall exit `0`.

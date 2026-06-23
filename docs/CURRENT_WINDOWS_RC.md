@@ -13,7 +13,7 @@ Last updated: 2026-06-23.
 | Installer SHA256 | `0ad45db3d1a405c47f8105720099beca220e99fb2e81c69cebb3c45b6622100e` |
 | Blockmap SHA256 | `0e2bc93dd063262bc1c371699601a4e8e6447a9a6445b0fca355ee74c0d274ab` |
 | App ASAR SHA256 | `d8b439f157527d2bac5d144fcd261e13294cb11a50b3b800b1ab8429a8c9a0cb` |
-| GCS staging prefix | `gs://clawx-rc-artifacts-622687731621/rc-local-20260622-stable-regression-candidate/` |
+| GCS staging prefix | superseded by GitHub release asset for this refresh |
 | Release page | `https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260623-stable-regression` |
 | Evidence manifest | `docs/GA_RELEASE_EVIDENCE_MANIFEST.md` |
 | GA plan | `docs/GA_RELEASE_PLAN_2026-06-09.md` |
@@ -21,7 +21,7 @@ Last updated: 2026-06-23.
 
 ## Staleness Warning
 
-The installer snapshot above was rebuilt on 2026-06-23 from `42787c6243eba88f436b43f84df8d66aa60d5683` and supersedes the earlier `3a43cdff49c758b07ccfd57117a06304152813a7b80d857ba99c03486fe8f4fa` GitHub asset. Local package inspection and the focused 107-test release regression slice passed after the rebuild. The clean Windows VM package smoke must be rerun for this exact hash, and the Mac laptop watcher now refuses hidden silent install by default when the installed app is stale or missing. This is still a prerelease until signed-in tenant Outlook/Forms flows are proven through the installed app.
+The installer snapshot above was rebuilt on 2026-06-23 from `42787c6243eba88f436b43f84df8d66aa60d5683` and supersedes the earlier `3a43cdff49c758b07ccfd57117a06304152813a7b80d857ba99c03486fe8f4fa` GitHub asset. Local package inspection and the focused 107-test release regression slice passed after the rebuild. RM/VM download verification passed for this exact GitHub asset, but the VM installed tree is still stale or partial; clean installed-app smoke must be rerun after a normal assisted desktop install. The Mac laptop watcher now refuses hidden silent install by default when the installed app is stale or missing. This is still a prerelease until signed-in tenant Outlook/Forms flows are proven through the installed app.
 
 ## Do Not Call GA Until
 
