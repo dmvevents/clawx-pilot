@@ -169,4 +169,80 @@ describe('ASR provider selection', () => {
       timeoutMs: 30_000,
     });
   });
+
+  it('falls back to Windows native ASR when Azure throws', async () => {
+    mocks.transcribeAzureShort.mockRejectedValue(new Error('Azure request failed'));
+    mocks.transcribeWindowsNative.mockResolvedValue({
+      text: 'Open Outlook and read my inbox.',
+      language: 'en-US',
+    });
+
+    const { registerAsrIpcHandlers } = await import('@electron/main/asr-ipc');
+    registerAsrIpcHandlers();
+    const transcribe = getRegisteredHandler('asr:transcribe');
+
+    const result = await transcribe(null, { audioPath, language: 'en-TT' });
+
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        text: 'Open Outlook and read my inbox.',
+        language: 'en-US',
+        backend: 'windows-native',
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('test-key');
+  });
+
+  it('preserves Windows microphone permission errors instead of masking them with Whisper fallback', async () => {
+    const { WindowsAsrError } = await import('@electron/main/asr-native-windows');
+    mocks.transcribeAzureShort.mockResolvedValue({
+      text: '',
+      language: 'en-TT',
+    });
+    mocks.transcribeWindowsNative.mockRejectedValue(
+      new WindowsAsrError('MIC_PERMISSION', 'Microphone access is blocked in Windows privacy settings'),
+    );
+
+    const { registerAsrIpcHandlers } = await import('@electron/main/asr-ipc');
+    registerAsrIpcHandlers();
+    const transcribe = getRegisteredHandler('asr:transcribe');
+
+    const result = await transcribe(null, { audioPath, language: 'en-TT' });
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: 'MIC_PERMISSION',
+        message: 'Microphone access is blocked in Windows privacy settings',
+      },
+    });
+  });
+
+  it('returns an actionable Windows ASR packaging error when native and Whisper are unavailable', async () => {
+    const { WindowsAsrError } = await import('@electron/main/asr-native-windows');
+    mocks.transcribeAzureShort.mockResolvedValue({
+      text: '',
+      language: 'en-TT',
+    });
+    mocks.transcribeWindowsNative.mockRejectedValue(
+      new WindowsAsrError('MIC_BINARY_MISSING', 'WinSpeechRecognize.exe missing'),
+    );
+
+    const { registerAsrIpcHandlers } = await import('@electron/main/asr-ipc');
+    registerAsrIpcHandlers();
+    const transcribe = getRegisteredHandler('asr:transcribe');
+
+    const result = await transcribe(null, { audioPath, language: 'en-TT' });
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: 'NO_WHISPER',
+        message: expect.stringContaining('Rebuild with pnpm run prep:win-binaries'),
+      },
+    });
+    expect(JSON.stringify(result)).toContain('WinSpeechRecognize.exe');
+    expect(JSON.stringify(result)).not.toContain('test-key');
+  });
 });

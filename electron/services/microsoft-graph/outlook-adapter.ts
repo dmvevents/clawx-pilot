@@ -201,6 +201,19 @@ export async function sendEmailWithGraph(args: SendEmailArgs): Promise<SendEmail
       reason: 'confirm flag required before sending through Microsoft Graph',
     };
   }
-  await graphCalls.sendMail(normalizeGraphSendArgs(args));
+  if (!args.to || !args.subject || typeof args.body !== 'string' || args.body.trim().length === 0) {
+    return {
+      status: 'refused',
+      reason:
+        'Graph send requires explicit to, subject, and body because it cannot verify a visible reviewed Outlook draft.',
+    };
+  }
+  await graphCalls.sendMail(normalizeGraphSendArgs({
+    to: args.to,
+    subject: args.subject,
+    body: args.body,
+    cc: args.cc,
+    bcc: args.bcc,
+  }));
   return { status: 'sent', message: 'Sent through Microsoft Graph' };
 }

@@ -70,6 +70,8 @@ electron/native/**/obj/
 cloud-gateway.json
 resources/cloud-gateway.json
 resources/microsoft-graph.json
+azure-speech.json
+resources/azure-speech.json
 
 build/
 artifacts/

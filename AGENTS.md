@@ -12,7 +12,10 @@ For GA, release-candidate, Windows installer, Outlook/Forms, model Gateway, or c
 
 - `docs/AGENT_SKILL_INTEROPERABILITY.md`
 - `docs/GA_RELEASE_PLAN_2026-06-09.md`
+- `.agents/skills/ga-e2e-regression/SKILL.md`
+- `.agents/skills/windows-vm-smoke/SKILL.md`
 - `.agents/skills/ga-release-readiness/SKILL.md`
+- `.codex/agents/ga-e2e-regression-verifier.toml`
 - `.codex/agents/ga-release-conductor.toml`
 
 The repo supports both official Codex surfaces (`.agents/skills`, `.codex/agents`) and Claude Code surfaces (`CLAUDE.md`, `.claude/skills`, `.claude/agents`). Keep those surfaces behaviorally aligned when adding release-critical workflows.

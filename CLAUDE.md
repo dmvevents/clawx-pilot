@@ -15,8 +15,11 @@ For GA, release-candidate, Windows installer, Outlook/Forms, model Gateway, or c
 1. `docs/AGENT_SKILL_INTEROPERABILITY.md`
 2. `docs/GA_RELEASE_PLAN_2026-06-09.md`
 3. `.claude/skills/ga-release-readiness/SKILL.md`
-4. `.claude/agents/ga-release-conductor.md`
-5. `docs/PRODUCTION_CHECKLIST.md`
+4. `.claude/skills/ga-e2e-regression/SKILL.md`
+5. `.claude/skills/windows-vm-smoke/SKILL.md`
+6. `.claude/agents/ga-e2e-regression-verifier.md`
+7. `.claude/agents/ga-release-conductor.md`
+8. `docs/PRODUCTION_CHECKLIST.md`
 
 The repo now mirrors critical workflows across official Codex surfaces (`.agents/skills`, `.codex/agents`) and Claude Code surfaces (`.claude/skills`, `.claude/agents`). Keep those surfaces behaviorally aligned when a release-critical process changes.
 
@@ -50,6 +53,8 @@ Claude-native resume surfaces now exist:
 - `.claude/skills/pilot-ssh-ops/SKILL.md`
 - `.claude/skills/windows-build-package/SKILL.md`
 - `.claude/skills/windows-outlook-forms/SKILL.md`
+- `.claude/skills/ga-e2e-regression/SKILL.md`
+- `.claude/skills/windows-vm-smoke/SKILL.md`
 - `.claude/skills/claude-bedrock-windows/SKILL.md`
 - `.claude/skills/windows-github-dev/SKILL.md`
 
@@ -231,6 +236,7 @@ If you've just been started on this project:
 - `state-idempotency-auditor` — catch chflags-band-aid-class bugs
 - `gateway-recovery` — boot crash-loop repair
 - `production-readiness` — pre-release audit
+- `ga-e2e-regression-verifier` — known-failure regression matrix and evidence
 - `skill-audit` — skill-bundle drift detector
 - `windows-smoke` — Windows post-install smoke runner
 

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { app, ipcMain } from 'electron';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { access, mkdtemp, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 
 // Mock node:child_process before importing the module under test so that
 // the real ffmpeg binary is never invoked. This keeps the test runnable on
@@ -89,8 +89,26 @@ function getRegisteredHandler(channel: string): IpcHandler {
 
 describe('ASR saveBlob IPC', () => {
   const originalFfmpegPath = process.env.FFMPEG_PATH;
+  const originalClawxFfmpegPath = process.env.CLAWX_FFMPEG_PATH;
+  const originalPlatform = process.platform;
+  const originalResourcesPath = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
+  const originalIsPackaged = app.isPackaged;
   let tempRoot: string;
   let fakeFfmpegPath: string;
+
+  function setPlatform(platform: NodeJS.Platform): void {
+    Object.defineProperty(process, 'platform', {
+      value: platform,
+      configurable: true,
+    });
+  }
+
+  function setResourcesPath(resourcesPath: string): void {
+    Object.defineProperty(process, 'resourcesPath', {
+      value: resourcesPath,
+      configurable: true,
+    });
+  }
 
   beforeEach(async () => {
     tempRoot = await mkdtemp(path.join(tmpdir(), 'clawx-asr-saveblob-test-'));
@@ -109,6 +127,18 @@ describe('ASR saveBlob IPC', () => {
     } else {
       process.env.FFMPEG_PATH = originalFfmpegPath;
     }
+    if (originalClawxFfmpegPath == null) {
+      delete process.env.CLAWX_FFMPEG_PATH;
+    } else {
+      process.env.CLAWX_FFMPEG_PATH = originalClawxFfmpegPath;
+    }
+    setPlatform(originalPlatform);
+    if (originalResourcesPath) {
+      Object.defineProperty(process, 'resourcesPath', originalResourcesPath);
+    } else {
+      delete (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+    }
+    (app as unknown as { isPackaged: boolean }).isPackaged = originalIsPackaged;
     _resetAsrIpcCaches();
   });
 
@@ -138,5 +168,46 @@ describe('ASR saveBlob IPC', () => {
     });
     expect(result.data?.path).toBe(path.join(path.dirname(result.data?.path ?? ''), 'clip.wav'));
     await expect(pathExists(path.join(path.dirname(result.data?.path ?? ''), 'clip-input.wav'))).resolves.toBe(false);
+  });
+
+  it('uses bundled ffmpeg from packaged Windows resources without PATH setup', async () => {
+    delete process.env.FFMPEG_PATH;
+    delete process.env.CLAWX_FFMPEG_PATH;
+    setPlatform('win32');
+    (app as unknown as { isPackaged: boolean }).isPackaged = true;
+    const resourcesPath = path.join(tempRoot, 'resources');
+    setResourcesPath(resourcesPath);
+    const packagedFfmpeg = path.join(resourcesPath, 'bin', 'ffmpeg.exe');
+    await mkdir(path.dirname(packagedFfmpeg), { recursive: true });
+    await writeFile(packagedFfmpeg, '');
+    _resetAsrIpcCaches();
+    registerAsrIpcHandlers();
+
+    const saveBlob = getRegisteredHandler('asr:saveBlob');
+    const wavBytes = Buffer.from('RIFF----WAVEfmt data', 'ascii');
+    const result = await saveBlob(null, {
+      mime: 'audio/wav',
+      suggestedExt: 'wav',
+      base64: wavBytes.toString('base64'),
+    }) as {
+      ok: boolean;
+      data?: {
+        path: string;
+        bytes: number;
+        transcoded: boolean;
+        transcodeSkippedReason?: string;
+      };
+      error?: { message: string };
+    };
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        bytes: wavBytes.length,
+        transcoded: true,
+      },
+    });
+    expect(result.data?.transcodeSkippedReason).toBeUndefined();
+    expect(result.data?.path.endsWith(`${path.sep}clip.wav`)).toBe(true);
   });
 });

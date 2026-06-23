@@ -8,6 +8,9 @@ Current status: **YELLOW - RC/demo-ready after Microsoft sign-in, not GA**.
 
 Operating OKR board: `docs/GA_OKRS_2026-06-10.md`.
 
+Repeatable E2E regression process: `.agents/skills/ga-e2e-regression/SKILL.md`.
+Clean Windows installed-app smoke process: `.agents/skills/windows-vm-smoke/SKILL.md`.
+
 ## Current RC Baseline
 
 - Windows RC tag: `moe10-windows-rc-20260608-eb7146c`.
@@ -122,11 +125,12 @@ stay covered by explicit same-session confirmation tests.
 | Outlook attach UX | a fresh user who asks "check my email" is routed through `outlook.*`, `browser.diagnose`, and `browser.repair_chrome_cdp`; the assistant must not tell the user to enable Chrome remote debugging, use `chrome://flags`, search the web, or run manual Chrome commands | user report on 2026-06-09 exposed old guidance; regression patch and chat-harness scenario added; local unit tests passed; clean installer proof now passed on GCP VM, but Chrome/Outlook sign-in proof still requires Chrome on the test image or a physical laptop |
 | Forms safety | Forms list/preview/dry-run passes; submit requires explicit same-session confirmation | Forms list passes and submit without confirm refuses for both Daily Report and Suspensions. Settings now exposes the saved Daily Report and Student Suspensions response links through the existing MoE form URL store. Preview is blocked on clean VM by Microsoft sign-in: Forms tabs land on `login.microsoftonline.com/.../authorize`; driver now reports a precise sign-in-required diagnostic instead of selector timeout. Filling still needs signed-in Microsoft profile evidence. |
 | Office files | sample Excel and Word analysis complete from Downloads through app chat | packaged runtime check confirmed parser dependencies and Office smoke reports `OFFICE_RUNTIME_READY`; 2026-06-09 external tester confirmed local file scanning worked. Still needs Excel/Word/PDF matrix evidence. |
-| ASR | Windows ASR helper installed and one transcript smoke passes, or ASR explicitly marked best-effort for GA | packaged runtime check confirmed `resources/bin/WinSpeechRecognize.exe`; quality remains best-effort until microphone/file transcription proof is captured |
+| ASR | Windows `ffmpeg.exe` and `WinSpeechRecognize.exe` are packaged, `asr:saveBlob` resolves bundled ffmpeg without PATH setup, and one transcript smoke passes through the configured high-quality backend or is explicitly deferred | 2026-06-22 packaging inspection confirmed `resources/bin/ffmpeg.exe` and `resources/bin/WinSpeechRecognize.exe`; 2026-06-23 fix adds packaged ffmpeg resolver coverage and release seed support for `resources/azure-speech.json` + `azure-speech.key`. GA packages should run the manual workflow with `requireAzureSpeechSeed=true` when microphone accuracy is release-critical; otherwise ASR is YELLOW and falls back to Windows native/Whisper. |
 | Secrets | no committed upstream keys or test passwords; desktop stores only broker/client-scoped credentials | verify with git grep and install-state audit |
 | UI trust | no raw model/vendor identity or ClawX/OpenClaw branding in principal-facing UI; cost hidden from frontend | 2026-06-10 remediation updated app metadata, title, menus, OAuth pages, notifications, setup copy, Settings links, attribution headers, and bundled agent context; targeted grep now leaves only internal runtime/developer identifiers in patched surfaces; broader branding issue remains open for icons, docs, and deeper support/dev surfaces |
 | Observability | local logs redacted, support artifact capture documented, optional Phoenix/model tracing decision recorded | local logs exist; Phoenix optional pending |
 | Documentation | first-run, install, support, and operator runbooks match the GA installer | RC docs exist; GA docs need final pass |
+| E2E regression matrix | known demo/customer failures and adjacent risks have targeted tests plus package/VM evidence where applicable | 2026-06-23 added `ga-e2e-regression` process surfaces and expanded Outlook, ASR, package, Office-path, and plugin guidance tests; clean Windows VM smoke still required before GA |
 
 ## Workstreams
 
@@ -152,6 +156,7 @@ Tasks:
 - ensure desktop stores only a broker-issued/client-scoped key, not upstream provider keys;
 - keep `package-win-manual.yml` failing by default when the cloud gateway seed secrets are absent;
 - package `resources/microsoft-graph.json` from `CLAWX_MICROSOFT_GRAPH_CONFIG_JSON` once IT returns the Entra app registration;
+- package `resources/azure-speech.json` and `azure-speech.key` from `CLAWX_AZURE_SPEECH_CONFIG_JSON` / `CLAWX_AZURE_SPEECH_KEY`, and run the workflow with `requireAzureSpeechSeed=true` for high-quality ASR GA builds;
 - verify one installed-app chat through the broker;
 - document failure handling when Wi-Fi or gateway is unavailable;
 - keep local model fallback only as an explicit fallback, not the demo default.
@@ -271,6 +276,7 @@ The chat procedure harness includes `fresh-user-check-email-routes-outlook-tools
 Codex:
 
 - `ga_release_conductor` owns the gate table.
+- `ga_e2e_regression_verifier` owns the known-failure regression matrix and test evidence.
 - `windows_runtime_debugger` owns Gateway/model/Office/ASR diagnosis.
 - `office_automation_verifier` owns Outlook/Forms/Office safety proof.
 - `windows_release_packager` owns packaging and installer evidence.
@@ -279,6 +285,7 @@ Codex:
 Claude Code:
 
 - `/ga-release-readiness` starts the GA pass.
+- `ga-e2e-regression-verifier` owns the known-failure regression matrix and test evidence.
 - `ga-release-conductor` coordinates release evidence.
 - Existing auditors cover production readiness, dependency classification, state idempotency, DOM selector stability, config coherence, and Windows smoke.
 

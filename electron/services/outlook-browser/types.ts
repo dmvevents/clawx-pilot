@@ -68,7 +68,17 @@ export interface DraftEmailResult {
   message?: string;
 }
 
-export interface SendEmailArgs extends DraftEmailArgs {
+export interface SendEmailArgs {
+  /**
+   * Optional verification fields. After a principal has reviewed an already
+   * open Outlook draft, the model should normally send only { confirm: true }.
+   * When supplied, recipient fields are treated as safety assertions.
+   */
+  to?: string | string[];
+  subject?: string;
+  body?: string;
+  cc?: string | string[];
+  bcc?: string | string[];
   /**
    * Hard gate. send() refuses unless the caller explicitly sets confirm=true.
    * The agent must show the user the draft and get a "yes, send" before

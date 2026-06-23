@@ -72,9 +72,20 @@ type ExpectedDraftForSend = {
   body: string;
 };
 
+type CurrentReviewedDraftForSend = {
+  mode: 'current-reviewed';
+  to?: string[];
+  cc?: string[];
+  bcc?: string[];
+};
+
+type DraftSendProbeInput = ExpectedDraftForSend | CurrentReviewedDraftForSend | null;
+
 type OpenDraftDomProbe = {
   snapshot: OpenDraftSnapshot | null;
   clickedSend: boolean;
+  draftCount: number;
+  sendableDraftCount: number;
 };
 
 // Predicate moved to ./search-helpers.ts for unit testing without Playwright.
@@ -120,15 +131,30 @@ function hasUnexpectedRecipient(values: string[], actualBucket: string[]): boole
   return recipientEmails(actualBucket).some((email) => !expectedEmails.has(email));
 }
 
+function hasProvidedValue(value: string | string[] | undefined): boolean {
+  return value !== undefined;
+}
+
+function hasExplicitRecipientAssertions(args: SendEmailArgs): boolean {
+  return hasProvidedValue(args.to) || hasProvidedValue(args.cc) || hasProvidedValue(args.bcc);
+}
+
+function hasCompleteExactDraftAssertions(args: SendEmailArgs): args is SendEmailArgs & Required<Pick<SendEmailArgs, 'to' | 'subject' | 'body'>> {
+  return asArray(args.to).map(normalizeComparableText).filter(Boolean).length > 0
+    && Boolean(normalizeComparableText(args.subject))
+    && Boolean(normalizeComparableText(args.body));
+}
+
 function validateConfirmedSendArgs(args: SendEmailArgs): string | null {
-  if (asArray(args.to).map(normalizeComparableText).filter(Boolean).length === 0) {
-    return 'Send blocked: at least one To recipient is required.';
+  if (hasProvidedValue(args.to)
+    && asArray(args.to).map(normalizeComparableText).filter(Boolean).length === 0) {
+    return 'Send blocked: supplied To recipient assertion is empty.';
   }
-  if (!normalizeComparableText(args.subject)) {
-    return 'Send blocked: subject is required.';
+  if (hasProvidedValue(args.subject) && !normalizeComparableText(args.subject)) {
+    return 'Send blocked: supplied subject assertion is empty.';
   }
-  if (!normalizeComparableText(args.body)) {
-    return 'Send blocked: body is required.';
+  if (hasProvidedValue(args.body) && !normalizeComparableText(args.body)) {
+    return 'Send blocked: supplied body assertion is empty.';
   }
   return null;
 }
@@ -166,6 +192,7 @@ export class OutlookActions {
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
+    await this.ensureInboxFolder(page);
 
     // Wait for the inbox grid to render. We don't trust a single hard-coded
     // selector; ARIA "rowgroup" or any row-with-subject heuristic works
@@ -347,8 +374,10 @@ export class OutlookActions {
 
   /**
    * Send the email. Hard refuses unless confirm=true. Crucially, does NOT
-   * re-draft. It verifies the user-reviewed compose pane still matches the
-   * confirmed recipients, subject, and body, then clicks Send inside that pane.
+   * re-draft. It sends the single user-reviewed compose pane. If the caller
+   * supplies recipients, subject, or body, those fields are treated as safety
+   * assertions; recipient mismatches always refuse, while subject/body edits
+   * are allowed after the user has reviewed the visible draft.
    */
   async sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     if (args.confirm !== true) {
@@ -371,8 +400,9 @@ export class OutlookActions {
       };
     }
 
-    const snapshot = await this.readOpenDraftSnapshot(page);
-    if (snapshot == null) {
+    const probe = await this.readOpenDraftProbe(page);
+    const snapshot = probe.snapshot;
+    if (snapshot == null || probe.draftCount === 0) {
       return {
         status: 'refused',
         reason:
@@ -380,21 +410,44 @@ export class OutlookActions {
       };
     }
 
-    const mismatch = this.describeDraftMismatch(snapshot, args);
-    if (mismatch) {
-      logger.warn(`[outlook-v2] Send refused: verified draft mismatch (${mismatch})`);
+    const recipientMismatch = this.describeRecipientAssertionMismatch(snapshot, args);
+    if (recipientMismatch) {
+      logger.warn(`[outlook-v2] Send refused: recipient assertion mismatch (${recipientMismatch})`);
       return {
         status: 'refused',
-        reason: `Send blocked: ${mismatch}. The user may have edited a different draft. Re-draft and try again.`,
+        reason: `Send blocked: ${recipientMismatch}. Re-draft and confirm the visible draft before retrying.`,
       };
     }
 
-    const clicked = await this.clickSendInVerifiedDraft(page, args);
+    let clicked: boolean;
+    if (hasCompleteExactDraftAssertions(args)) {
+      const mismatch = this.describeDraftMismatch(snapshot, args);
+      if (!mismatch) {
+        clicked = await this.clickSendInVerifiedDraft(page, args);
+      } else if (/subject|body/i.test(mismatch)) {
+        logger.info(
+          `[outlook-v2] Exact draft assertion changed after review (${mismatch}); attempting single visible draft send`,
+        );
+        clicked = await this.clickSendInCurrentReviewedDraft(page, args);
+      } else {
+        logger.warn(`[outlook-v2] Send refused: verified draft mismatch (${mismatch})`);
+        return {
+          status: 'refused',
+          reason: `Send blocked: ${mismatch}. Re-draft and confirm the visible draft before retrying.`,
+        };
+      }
+    } else {
+      clicked = await this.clickSendInCurrentReviewedDraft(page, args);
+    }
+
     if (!clicked) {
+      const reason = probe.draftCount > 1 || probe.sendableDraftCount > 1
+        ? 'Send blocked: multiple open drafts were detected. Close extra drafts, review the intended draft, and retry.'
+        : 'Send blocked: could not identify exactly one complete reviewed draft with its own Send button. Re-draft and try again.';
+      logger.warn(`[outlook-v2] Send refused: ${reason}`);
       return {
         status: 'refused',
-        reason:
-          'Send blocked: could not identify the Send button inside the verified open draft. Re-draft and try again.',
+        reason,
       };
     }
 
@@ -446,6 +499,7 @@ export class OutlookActions {
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
+    await this.ensureInboxFolder(page);
 
     const opened = await this.openMessageById(page, args.id);
     if (!opened) {
@@ -540,6 +594,7 @@ export class OutlookActions {
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
+    await this.ensureInboxFolder(page);
 
     const opened = await this.openMessageById(page, args.id);
     if (!opened) {
@@ -553,22 +608,28 @@ export class OutlookActions {
     // Click Reply / Reply All on the open message.
     const targetName = args.replyAll ? /^reply all$/i : /^reply$/i;
     await this.dismissBlockingDialog(page);
-    await this.clickByRoleOrVlm(page, {
-      role: 'button',
-      nameRegex: targetName,
-      vlmQuestion: args.replyAll
-        ? 'The "Reply all" button on the open Outlook message reading pane toolbar.'
-        : 'The "Reply" button on the open Outlook message reading pane toolbar.',
-    });
+    const clickedReply = await this.clickOpenMessageToolbarButton(page, targetName);
+    if (!clickedReply) {
+      return {
+        status: 'not_found',
+        draftLeftOpen: false,
+        message: args.replyAll
+          ? 'Could not safely identify the Reply all button on the open message.'
+          : 'Could not safely identify the Reply button on the open message.',
+      };
+    }
     await this.waitForComposePane(page);
     await this.fillBody(page, args.body);
 
-    const previewSubject = (await this.readOpenSubject(page)) || '';
+    const draftProbe = await this.readOpenDraftProbe(page);
+    const previewSubject = draftProbe.snapshot?.subject || (await this.readOpenSubject(page)) || '';
+    const previewTo = draftProbe.snapshot?.to ?? [];
     return {
       status: 'drafted',
       draftLeftOpen: true,
-      preview: { to: [], subject: previewSubject, body: args.body },
-      message: 'Reply draft prepared and left open in Outlook for your review.',
+      preview: { to: previewTo, subject: previewSubject, body: args.body },
+      message:
+        'Reply draft prepared and left open in Outlook for your review. Outlook pre-filled the reply recipient; after review, send this open draft with outlook.send_email using { confirm: true } only.',
     };
   }
 
@@ -581,17 +642,21 @@ export class OutlookActions {
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
+    await this.ensureInboxFolder(page);
     const opened = await this.openMessageById(page, args.id);
     if (!opened) {
       return { status: 'not_found', draftLeftOpen: false, message: `Could not locate message with id "${args.id}".` };
     }
 
     await this.dismissBlockingDialog(page);
-    await this.clickByRoleOrVlm(page, {
-      role: 'button',
-      nameRegex: /^forward$/i,
-      vlmQuestion: 'The "Forward" button on the open Outlook message reading pane toolbar.',
-    });
+    const clickedForward = await this.clickOpenMessageToolbarButton(page, /^forward$/i);
+    if (!clickedForward) {
+      return {
+        status: 'not_found',
+        draftLeftOpen: false,
+        message: 'Could not safely identify the Forward button on the open message.',
+      };
+    }
     await this.waitForComposePane(page);
 
     const toList = asArray(args.to);
@@ -620,6 +685,7 @@ export class OutlookActions {
     if (await this.looksLikeSignin(page)) {
       return { status: 'needs_signin', message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.' };
     }
+    await this.ensureInboxFolder(page);
     const opened = await this.openMessageById(page, args.id);
     if (!opened) return { status: 'not_found', message: `Could not locate message with id "${args.id}".` };
 
@@ -685,6 +751,7 @@ export class OutlookActions {
       };
     }
 
+    await this.ensureInboxFolder(page);
     const opened = await this.openMessageById(page, args.id);
     if (!opened) {
       return {
@@ -784,6 +851,31 @@ export class OutlookActions {
    * loads the message into the reading pane synchronously enough that
    * subsequent waitForSelector for the body works ~immediately.
    */
+  private async ensureInboxFolder(page: Page): Promise<void> {
+    const url = page.url();
+    if (!/outlook\.office\.com\/mail\/inbox(?:[/?#]|$)/i.test(url)) {
+      logger.info('[outlook-v2] Navigating Outlook tab to Inbox before inbox-scoped action');
+      await page.goto('https://outlook.office.com/mail/inbox', {
+        timeout: 30_000,
+        waitUntil: 'domcontentloaded',
+      }).catch((err) => {
+        logger.debug?.(
+          `[outlook-v2] Inbox navigation failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+    }
+    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+    await page.waitForSelector(
+      [
+        'div[role="listbox"]',
+        'div[role="rowgroup"]',
+        '[role="region"][aria-label*="Message list" i]',
+        '[aria-label*="Inbox" i]',
+      ].join(','),
+      { timeout: 15_000 },
+    ).catch(() => undefined);
+  }
+
   private async openMessageById(page: Page, id: string): Promise<boolean> {
     const targetIdx = await page.evaluate(`
       (() => {
@@ -1098,6 +1190,68 @@ export class OutlookActions {
     }
   }
 
+  private async clickOpenMessageToolbarButton(page: Page, nameRegex: RegExp): Promise<boolean> {
+    return page.evaluate(({ source, ignoreCase }) => {
+      const re = new RegExp(source, ignoreCase ? 'i' : '');
+      const normalize = (value: string | undefined | null) => (value ?? '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const isVisible = (el: Element | null) => {
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        return rect.width > 0
+          && rect.height > 0
+          && style.visibility !== 'hidden'
+          && style.display !== 'none';
+      };
+      const labelFor = (el: Element) => [
+        el.getAttribute('aria-label') || '',
+        el.getAttribute('title') || '',
+        el.getAttribute('data-automation-id') || '',
+        el.getAttribute('data-automationid') || '',
+        el.textContent || '',
+      ].map(normalize).filter(Boolean);
+      const collectMatches = (root: ParentNode) => Array.from(
+        root.querySelectorAll('button, [role="button"], [role="menuitem"], [aria-label], [title]'),
+      ).filter((el) => {
+        if (!isVisible(el)) return false;
+        return labelFor(el).some((label) => re.test(label));
+      }) as HTMLElement[];
+
+      const readingPaneRoots = Array.from(document.querySelectorAll([
+        '[role="region"][aria-label*="reading" i]',
+        '[aria-label*="reading pane" i]',
+        '[data-automation-id*="ReadingPane" i]',
+        '[data-automationid*="ReadingPane" i]',
+      ].join(','))).filter(isVisible);
+
+      for (const root of readingPaneRoots) {
+        const matches = collectMatches(root);
+        if (matches.length === 1) {
+          matches[0].click();
+          return true;
+        }
+      }
+      if (readingPaneRoots.length > 0) {
+        return false;
+      }
+
+      const globalMatches = collectMatches(document);
+      if (globalMatches.length === 1) {
+        globalMatches[0].click();
+        return true;
+      }
+      return false;
+    }, { source: nameRegex.source, ignoreCase: nameRegex.ignoreCase }).catch((err) => {
+      logger.debug?.(
+        `[outlook-v2] safe open-message toolbar click missed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return false;
+    });
+  }
+
   private async waitForComposePane(page: Page): Promise<void> {
     // The compose pane uses role="dialog" or aria-label="Message body".
     await page.waitForSelector(
@@ -1153,7 +1307,6 @@ export class OutlookActions {
       page.locator('[aria-label*="Message body" i]'),
       page.locator('[role="textbox"][aria-label*="body" i]'),
       page.locator('[contenteditable="true"][aria-label*="body" i]'),
-      page.locator('[contenteditable="true"][role="textbox"]'),
     ];
     for (const c of candidates) {
       try {
@@ -1207,10 +1360,8 @@ export class OutlookActions {
     // subsequent fillField will surface the real problem if not.
   }
 
-  private describeDraftMismatch(snapshot: OpenDraftSnapshot, args: SendEmailArgs): string | null {
-    if (normalizeComparableText(snapshot.subject) !== normalizeComparableText(args.subject)) {
-      return 'the open draft subject does not match the requested subject';
-    }
+  private describeRecipientAssertionMismatch(snapshot: OpenDraftSnapshot, args: SendEmailArgs): string | null {
+    if (!hasExplicitRecipientAssertions(args)) return null;
     if (missingRecipientNeedles(asArray(args.to), snapshot.to).length > 0
       || hasUnexpectedRecipient(asArray(args.to), snapshot.to)) {
       return 'the open draft does not contain all requested To recipients';
@@ -1223,7 +1374,18 @@ export class OutlookActions {
       || hasUnexpectedRecipient(asArray(args.bcc), snapshot.bcc)) {
       return 'the open draft does not contain all requested Bcc recipients';
     }
+    return null;
+  }
 
+  private describeDraftMismatch(
+    snapshot: OpenDraftSnapshot,
+    args: SendEmailArgs & Required<Pick<SendEmailArgs, 'to' | 'subject' | 'body'>>,
+  ): string | null {
+    if (normalizeComparableText(snapshot.subject) !== normalizeComparableText(args.subject)) {
+      return 'the open draft subject does not match the requested subject';
+    }
+    const recipientMismatch = this.describeRecipientAssertionMismatch(snapshot, args);
+    if (recipientMismatch) return recipientMismatch;
     const expectedBody = normalizeSearchText(args.body);
     const actualBody = normalizeSearchText(snapshot.body);
     if (actualBody !== expectedBody) {
@@ -1237,7 +1399,14 @@ export class OutlookActions {
     return probe.snapshot;
   }
 
-  private async clickSendInVerifiedDraft(page: Page, args: SendEmailArgs): Promise<boolean> {
+  private async readOpenDraftProbe(page: Page): Promise<OpenDraftDomProbe> {
+    return this.evaluateOpenDraftDom(page, null);
+  }
+
+  private async clickSendInVerifiedDraft(
+    page: Page,
+    args: SendEmailArgs & Required<Pick<SendEmailArgs, 'to' | 'subject' | 'body'>>,
+  ): Promise<boolean> {
     const expected: ExpectedDraftForSend = {
       to: asArray(args.to),
       cc: asArray(args.cc),
@@ -1249,9 +1418,20 @@ export class OutlookActions {
     return probe.clickedSend;
   }
 
+  private async clickSendInCurrentReviewedDraft(page: Page, args: SendEmailArgs): Promise<boolean> {
+    const expected: CurrentReviewedDraftForSend = {
+      mode: 'current-reviewed',
+    };
+    if (hasProvidedValue(args.to)) expected.to = asArray(args.to);
+    if (hasProvidedValue(args.cc)) expected.cc = asArray(args.cc);
+    if (hasProvidedValue(args.bcc)) expected.bcc = asArray(args.bcc);
+    const probe = await this.evaluateOpenDraftDom(page, expected);
+    return probe.clickedSend;
+  }
+
   private async evaluateOpenDraftDom(
     page: Page,
-    expected: ExpectedDraftForSend | null,
+    expected: DraftSendProbeInput,
   ): Promise<OpenDraftDomProbe> {
     return page.evaluate((expectedDraft) => {
       const normalize = (value: string | undefined | null) => (value ?? '')
@@ -1273,6 +1453,23 @@ export class OutlookActions {
         const value = 'value' in el && typeof el.value === 'string' ? el.value : '';
         const text = (el.textContent || '').trim();
         return normalize([value, text].filter(Boolean).join(' '));
+      };
+      const fieldNameText = (el: Element | null) => {
+        if (!el) return '';
+        return normalize([
+          el.getAttribute('aria-label') || '',
+          el.getAttribute('placeholder') || '',
+          el.getAttribute('name') || '',
+          el.getAttribute('title') || '',
+          el.getAttribute('data-automation-id') || '',
+          el.getAttribute('data-automationid') || '',
+        ].filter(Boolean).join(' '));
+      };
+      const isRecipientOrSubjectField = (el: Element | null) => {
+        const text = fieldNameText(el);
+        if (!text) return false;
+        return /^(to|cc|bcc|subject)$/i.test(text)
+          || /\b(to|cc|bcc|subject|recipient|recipients)\b/i.test(text);
       };
       const searchableText = (root: Element) => {
         const parts = [
@@ -1315,10 +1512,13 @@ export class OutlookActions {
           '[role="textbox"][aria-label*="body" i]',
           '[contenteditable="true"][aria-label*="body" i]',
           '[contenteditable="true"][role="textbox"]',
+          '[contenteditable="true"][aria-multiline="true"]',
+          '[role="textbox"][aria-multiline="true"]',
         ];
         for (const selector of selectors) {
           for (const el of Array.from(root.querySelectorAll(selector))) {
             if (!isVisible(el)) continue;
+            if (isRecipientOrSubjectField(el)) continue;
             const text = valueText(el);
             if (text) return text;
           }
@@ -1401,10 +1601,13 @@ export class OutlookActions {
           '[role="textbox"][aria-label*="body" i]',
           '[contenteditable="true"][aria-label*="body" i]',
           '[contenteditable="true"][role="textbox"]',
+          '[contenteditable="true"][aria-multiline="true"]',
+          '[role="textbox"][aria-multiline="true"]',
         ].join(','),
-      )).filter(isVisible);
-      const roots = bodyNodes.map(rootForBody).filter(isVisible);
+      )).filter((el) => isVisible(el) && !isRecipientOrSubjectField(el));
+      const roots = Array.from(new Set(bodyNodes.map(rootForBody).filter(isVisible)));
       let firstSnapshot: OpenDraftSnapshot | null = null;
+      const sendableRoots: Array<{ root: Element; snapshot: OpenDraftSnapshot; button: HTMLElement }> = [];
       const matchingRoots: Array<{ root: Element; snapshot: OpenDraftSnapshot; button: HTMLElement }> = [];
       for (const root of roots) {
         const subject = fieldText(root, 'Subject');
@@ -1420,31 +1623,76 @@ export class OutlookActions {
           searchableText: text,
         };
         firstSnapshot ??= snapshot;
+        const button = sendButton(root);
+        if (button && snapshot.to.some((value) => normalizeSearch(value).length > 0)
+          && subject && body && root === rootForBody(button)) {
+          sendableRoots.push({ root, snapshot, button });
+        }
         if (!expectedDraft) continue;
+        if ('mode' in expectedDraft && expectedDraft.mode === 'current-reviewed') {
+          continue;
+        }
         if (normalize(subject) !== normalize(expectedDraft.subject)) continue;
         if (!recipientBucketMatches(expectedDraft.to, snapshot.to)) continue;
         if (!recipientBucketMatches(expectedDraft.cc, snapshot.cc)) continue;
         if (!recipientBucketMatches(expectedDraft.bcc, snapshot.bcc)) continue;
         const expectedBody = normalizeSearch(expectedDraft.body);
         if (normalizeSearch(body) !== expectedBody) continue;
-        const button = sendButton(root);
         if (!button) continue;
         if (root !== rootForBody(button)) continue;
         matchingRoots.push({ root, snapshot, button });
       }
+      if (expectedDraft && 'mode' in expectedDraft && expectedDraft.mode === 'current-reviewed') {
+        const candidateRoots = sendableRoots.filter(({ snapshot }) => {
+          if (expectedDraft.to && !recipientBucketMatches(expectedDraft.to, snapshot.to)) return false;
+          if (expectedDraft.cc && !recipientBucketMatches(expectedDraft.cc, snapshot.cc)) return false;
+          if (expectedDraft.bcc && !recipientBucketMatches(expectedDraft.bcc, snapshot.bcc)) return false;
+          return true;
+        });
+        if (candidateRoots.length === 1 && sendableRoots.length === 1) {
+          candidateRoots[0].button.click();
+          return {
+            snapshot: candidateRoots[0].snapshot,
+            clickedSend: true,
+            draftCount: roots.length,
+            sendableDraftCount: sendableRoots.length,
+          };
+        }
+        return {
+          snapshot: candidateRoots[0]?.snapshot ?? firstSnapshot,
+          clickedSend: false,
+          draftCount: roots.length,
+          sendableDraftCount: sendableRoots.length,
+        };
+      }
       if (matchingRoots.length === 1) {
         matchingRoots[0].button.click();
-        return { snapshot: matchingRoots[0].snapshot, clickedSend: true };
+        return {
+          snapshot: matchingRoots[0].snapshot,
+          clickedSend: true,
+          draftCount: roots.length,
+          sendableDraftCount: sendableRoots.length,
+        };
       }
       if (matchingRoots.length > 1) {
-        return { snapshot: matchingRoots[0].snapshot, clickedSend: false };
+        return {
+          snapshot: matchingRoots[0].snapshot,
+          clickedSend: false,
+          draftCount: roots.length,
+          sendableDraftCount: sendableRoots.length,
+        };
       }
-      return { snapshot: firstSnapshot, clickedSend: false };
+      return {
+        snapshot: firstSnapshot,
+        clickedSend: false,
+        draftCount: roots.length,
+        sendableDraftCount: sendableRoots.length,
+      };
     }, expected).catch((err) => {
       logger.debug?.(
         `[outlook-v2] evaluateOpenDraftDom failed: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return { snapshot: null, clickedSend: false };
+      return { snapshot: null, clickedSend: false, draftCount: 0, sendableDraftCount: 0 };
     });
   }
 

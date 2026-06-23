@@ -134,6 +134,7 @@ describe('moe-principal-assistant plugin registration', () => {
       expect(modelFacingText).toMatch(/outlook\.\*/);
       expect(modelFacingText).toMatch(/browser\.diagnose/);
       expect(modelFacingText).toMatch(/browser\.repair_chrome_cdp/);
+      expect(modelFacingText).toMatch(/call outlook\.send_email with \{ confirm: true \} only/i);
       expect(modelFacingText).toMatch(/close all Chrome windows and retry from ClawX/i);
       expect(modelFacingText).not.toMatch(/enable Chrome remote debugging/i);
       expect(modelFacingText).not.toMatch(/configure remote debugging/i);
@@ -177,6 +178,9 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      expect(byName['outlook.send_email'].parameters).toMatchObject({
+        required: ['confirm'],
+      });
 
       await byName['outlook.open'].execute('call-open', {});
       await byName['outlook.draft_email'].execute('call-draft', {
@@ -212,6 +216,42 @@ describe('moe-principal-assistant plugin registration', () => {
       expect(calls[3].body).toMatchObject({ confirm: false });
       expect(calls[4].body).toMatchObject({ confirm: false });
       expect(calls[5].body).toMatchObject({ confirm: false });
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
+      else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
+      else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+    }
+  });
+
+  it('lets the reviewed Outlook draft send tool pass confirm only', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      const body = typeof init.body === 'string' ? JSON.parse(init.body) : {};
+      calls.push({ url: String(url), body });
+      return jsonResponse({ success: true, data: { status: 'sent' } });
+    }));
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      await byName['outlook.send_email'].execute('call-send', { confirm: true });
+
+      expect(calls).toHaveLength(1);
+      expect(new URL(calls[0].url).pathname).toBe('/api/outlook/send');
+      expect(calls[0].body).toEqual({ confirm: true });
     } finally {
       if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
       else process.env.CLAWX_HOST_API_PORT = previousPort;

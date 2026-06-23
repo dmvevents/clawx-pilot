@@ -6,7 +6,7 @@
 [CmdletBinding()]
 param(
   [int] $Port = 18789,
-  [int] $WaitSeconds = 25,
+  [int] $WaitSeconds = 150,
   [string] $Token = "pilot-smoke-token",
   [string] $ArtifactRoot = "$env:PUBLIC\Downloads"
 )

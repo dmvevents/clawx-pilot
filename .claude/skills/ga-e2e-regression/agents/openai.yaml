@@ -1,0 +1,4 @@
+interface:
+  display_name: "GA E2E Regression"
+  short_description: "Run the MoE release regression evidence loop."
+  default_prompt: "Use $ga-e2e-regression to execute the MoE GA end-to-end regression and evidence process."

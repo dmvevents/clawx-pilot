@@ -1096,7 +1096,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.read_inbox',
       description:
-        'Return the top N unread/recent messages from the principal\'s Outlook inbox through the ClawX Outlook tool path. Args: { top?: number (default 10) }. If Chrome attach fails, use browser.diagnose and browser.repair_chrome_cdp; do not give manual Chrome setup instructions. Returns { status: "ok" | "needs_signin", messages: [{ id, subject, sender, snippet, receivedAt, unread }] }.',
+        'Return the top N unread/recent messages from the principal\'s Outlook Inbox through the ClawX Outlook tool path. Args: { top?: number (default 10) }. For "all emails", "this month", or audit-style summaries, request a larger top value (50-200) or use outlook.search_inbox and state when results are capped. If Chrome attach fails, use browser.diagnose and browser.repair_chrome_cdp; do not give manual Chrome setup instructions. Returns { status: "ok" | "needs_signin", messages: [{ id, subject, sender, snippet, receivedAt, unread }] }.',
       parameters: toolParameters({
         top: nonNegativeNumberSchema,
       }),
@@ -1137,7 +1137,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.send_email',
       description:
-        'Send an email via Outlook Web. HARD GATE: refuses unless { confirm: true } is set. The agent MUST show the draft to the principal and obtain explicit confirmation ("yes, send") before passing confirm=true. Default behaviour is to draft and stop. Args: { to, subject, body, cc?, bcc?, confirm: boolean }.',
+        'Send the single visible reviewed draft in Outlook Web. HARD GATE: refuses unless { confirm: true } is set. The agent MUST show or leave the draft open for the principal and obtain explicit confirmation ("yes, send") before passing confirm=true. After the principal reviews an open draft, call outlook.send_email with { confirm: true } only; do not regenerate or resend to/subject/body from memory. Optional to/cc/bcc/subject/body are safety assertions for advanced flows, not required for the normal reviewed-draft send.',
       parameters: toolParameters(
         {
           to: stringOrStringArraySchema,
@@ -1147,14 +1147,10 @@ export function register(api) {
           bcc: stringOrStringArraySchema,
           confirm: booleanSchema,
         },
-        ['to', 'subject', 'body', 'confirm'],
+        ['confirm'],
       ),
       execute: async (_toolCallId, args = {}) => {
         const { to, subject, body, cc, bcc, confirm } = args;
-        requireString('subject', subject);
-        if (typeof body !== 'string') {
-          throw new Error('body is required (string).');
-        }
         return outlook.sendEmail({
           to,
           subject,
@@ -1173,7 +1169,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.search_inbox',
       description:
-        'Filter the principal\'s inbox by sender, subject, date, unread, or attachment presence. Args: { from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top? (default 25) }. Returns { status, messages, capped }. dateGte/dateLt are ISO 8601 strings. Prefer this over read_inbox when the user mentions a sender or date or topic.',
+        'Filter the principal\'s Inbox by sender, subject, date, unread, or attachment presence. Args: { from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top? (default 25) }. Returns { status, messages, capped }. dateGte/dateLt are ISO 8601 strings. Prefer this over read_inbox when the user mentions a sender, date, month, or topic; for broad month searches use top 100-200 and tell the user if capped is true.',
       parameters: toolParameters({
         from: stringSchema,
         subjectContains: stringSchema,

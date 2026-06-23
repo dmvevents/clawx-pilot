@@ -207,6 +207,14 @@ export class OutlookBrowserManager {
       };
     }
 
+    if (!args.to || !String(args.subject ?? '').trim() || typeof args.body !== 'string') {
+      return {
+        status: 'refused',
+        reason:
+          'Send blocked: the legacy Outlook driver requires explicit to, subject, and body fields. Open the reviewed draft in the v2 Outlook path or re-draft before sending.',
+      };
+    }
+
     // Ensure the draft exists (idempotent — fills again if needed).
     const drafted = await this.draftEmail({
       to: args.to,

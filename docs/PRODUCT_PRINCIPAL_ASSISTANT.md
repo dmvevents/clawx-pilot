@@ -40,7 +40,7 @@ Eleven Outlook tools are registered with the agent:
 | `outlook.search_inbox` | Filter by `from`, `subjectContains`, `dateGte`, `dateLt`, `unread`, `hasAttachment` | — |
 | `outlook.read_email` | Reads a specific email's full body and attachments list | — |
 | `outlook.draft_email` | Opens a new compose pane with To/Subject/Body filled, **left open for review** | Always leaves draft open — principal must click Send themselves OR explicitly authorise via send_email |
-| `outlook.send_email` | Clicks Send | **Refuses** unless `confirm:true` AND the open compose pane's subject matches `args.subject`. Two locks. |
+| `outlook.send_email` | Sends the single visible reviewed draft | **Refuses** unless `confirm:true` and exactly one sendable reviewed draft is open. Optional recipient/subject/body arguments are safety assertions for advanced flows; the normal reviewed-draft path sends with `{ confirm: true }` only. |
 | `outlook.reply` | Opens reply pane on a specific message with body filled | Same draft-left-open pattern |
 | `outlook.forward` | Opens forward pane | Same |
 | `outlook.mark_read` | Marks a message read/unread | — |
@@ -206,7 +206,7 @@ LLM routing: on-device Hermes 3 8B via Ollama for routine work; managed cloud (G
 - ✓ Live LLM → tool-pick → `outlook.open` (1.6s round-trip)
 - ✓ Live LLM → `outlook.read_inbox` 5 rows (1.9s)
 - ✓ Live LLM → `outlook.draft_email` to test.fac@fac.edu.tt (1.9s, draft left open for review)
-- ✓ Hard-confirm gate refuses send when subject doesn't match args
+- ✓ Hard-confirm gate refuses send when optional assertions do not match the visible draft
 - ✓ Hard-confirm gate refuses send without `confirm:true`
 - ✓ Live `outlook.send_email` actually delivered to `test.fac@fac.edu.tt`
 - ✓ Windows .exe builds clean on GitHub Actions runner (run 26413522998)

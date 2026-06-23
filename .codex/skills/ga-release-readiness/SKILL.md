@@ -12,15 +12,21 @@ Move the project from Windows RC to GA with evidence-backed gates. Do not call s
 ## First Reads
 
 - `docs/GA_RELEASE_PLAN_2026-06-09.md`
+- `docs/GA_RELEASE_EVIDENCE_MANIFEST.md`
+- `docs/CURRENT_WINDOWS_RC.md`
 - `docs/AGENT_SKILL_INTEROPERABILITY.md`
 - `docs/PRODUCTION_CHECKLIST.md`
+- `windows-pilot/plans/MOE_WINDOWS_GA_STATUS_2026-06-10.md`
 - `windows-pilot/plans/MOE_WINDOWS_RC_2026-06-08_RELEASE_NOTES.md`
+- `windows-pilot/plans/MOE_WINDOWS_RC_2026-06-10_RELEASE_NOTES.md`
 - `windows-pilot/plans/MOE_WINDOWS_END_TO_END_INSTRUCTIONS_2026-06-08.md`
 - `package.json`
 
 ## Workstream Routing
 
 - Installer/package: `windows-build-package`.
+- Clean Windows install/VM smoke: `windows-vm-smoke`.
+- Known-failure E2E regression and evidence matrix: `ga-e2e-regression`.
 - Runtime/model/Gateway: `windows-runtime-recovery`.
 - Outlook/Forms: `windows-outlook-forms`.
 - Form defaults: `moe-form-prefill`.
@@ -40,6 +46,7 @@ Collect or update:
 - Office file analysis proof for sample Excel and Word inputs;
 - ASR smoke or explicit GA deferral;
 - no committed secrets and no user-visible raw model/vendor identity.
+- updated `docs/GA_RELEASE_EVIDENCE_MANIFEST.md` before the verdict.
 
 ## Output
 

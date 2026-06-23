@@ -117,10 +117,21 @@ remote-debugging guidance, also set:
 
 - `CLAWX_MICROSOFT_GRAPH_CONFIG_JSON`: JSON matching `resources/microsoft-graph.example.json`
 
+For a release candidate or GA installer that should use high-quality cloud ASR
+instead of relying on the weaker Windows local recognizer, also set:
+
+- `CLAWX_AZURE_SPEECH_CONFIG_JSON`: JSON matching `resources/azure-speech.example.json`
+- `CLAWX_AZURE_SPEECH_KEY`: Speech resource key only; keep it out of the JSON
+
 This Graph config is not a secret; it contains only tenant/client/scopes. Use
 the workflow input `requireMicrosoftGraphSeed=true` only after MoE IT returns
 the Entra app registration. Until then, leave it optional and the installer
 keeps the browser/CDP demo fallback.
+
+Use the workflow input `requireAzureSpeechSeed=true` for GA packages where the
+microphone must be cloud-first. If the Azure Speech seed is absent, pilot mode
+still tries Azure first, sees no configured key, then falls back to Windows
+native ASR and finally Whisper CLI when available.
 
 The workflow writes those secrets into ignored `resources/cloud-gateway.json`
 and `resources/cloud-gateway.key` files on the runner before packaging. The
@@ -128,7 +139,10 @@ installer should then first-run with the Online channel selected and the cloud
 gateway as the default provider; a clean install falling back to `qwen2.5` is a
 release-blocking packaging failure. When the Microsoft Graph seed is present,
 the workflow also writes ignored `resources/microsoft-graph.json`, and the
-packaged app should show Microsoft 365 as configured before sign-in.
+packaged app should show Microsoft 365 as configured before sign-in. When the
+Azure Speech seed is present, the workflow writes ignored
+`resources/azure-speech.json` and `resources/azure-speech.key`; the app should
+transcribe through Azure Speech before trying local ASR.
 
 ```bash
 # On Mac:

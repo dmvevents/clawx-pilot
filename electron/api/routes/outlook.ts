@@ -75,7 +75,7 @@ function isOutlookEnabled(): boolean {
   return PRINCIPAL_SKILL_ALLOWLIST.has('outlook');
 }
 
-async function shouldUseGraphOutlook(): Promise<boolean> {
+async function isGraphAvailableForOutlook(): Promise<boolean> {
   try {
     return await isGraphOutlookAvailable();
   } catch (error) {
@@ -84,6 +84,20 @@ async function shouldUseGraphOutlook(): Promise<boolean> {
     );
     return false;
   }
+}
+
+async function shouldUseGraphOutlookRead(): Promise<boolean> {
+  if (process.env.CLAWX_GRAPH_OUTLOOK_READ !== '1') {
+    return false;
+  }
+  return isGraphAvailableForOutlook();
+}
+
+async function shouldUseGraphOutlookCompose(): Promise<boolean> {
+  if (process.env.CLAWX_GRAPH_OUTLOOK_COMPOSE !== '1') {
+    return false;
+  }
+  return isGraphAvailableForOutlook();
 }
 
 export async function handleOutlookRoutes(
@@ -119,7 +133,7 @@ export async function handleOutlookRoutes(
         typeof body.top === 'number' && Number.isFinite(body.top) && body.top > 0
           ? Math.floor(body.top)
           : 10;
-      const graphAvailable = await shouldUseGraphOutlook();
+      const graphAvailable = await shouldUseGraphOutlookRead();
       const result = graphAvailable
         ? await readInboxWithGraph(top)
         : await outlookBrowserManager.readInbox(top);
@@ -133,7 +147,7 @@ export async function handleOutlookRoutes(
     if (url.pathname === '/api/outlook/draft') {
       const body = await parseJsonBody<DraftEmailArgs>(req);
       logger.info(`[host-api outlook/draft] ${JSON.stringify(logSafeArgs(body))}`);
-      const graphAvailable = await shouldUseGraphOutlook();
+      const graphAvailable = await shouldUseGraphOutlookCompose();
       const result = graphAvailable
         ? await draftEmailWithGraph(body)
         : await outlookBrowserManager.draftEmail(body);
@@ -146,7 +160,7 @@ export async function handleOutlookRoutes(
       const body = await parseJsonBody<SendEmailArgs>(req);
       // Manager has the hard gate; we don't pre-check confirm here.
       logger.info(`[host-api outlook/send] attempt ${JSON.stringify(logSafeArgs(body))}`);
-      const graphAvailable = await shouldUseGraphOutlook();
+      const graphAvailable = await shouldUseGraphOutlookCompose();
       const result = graphAvailable
         ? await sendEmailWithGraph(body)
         : await outlookBrowserManager.sendEmail(body);
@@ -157,7 +171,7 @@ export async function handleOutlookRoutes(
 
     if (url.pathname === '/api/outlook/search-inbox') {
       const body = await parseJsonBody<SearchInboxArgs>(req);
-      const graphAvailable = await shouldUseGraphOutlook();
+      const graphAvailable = await shouldUseGraphOutlookRead();
       const result = graphAvailable
         ? await searchInboxWithGraph(body)
         : await outlookBrowserManager.searchInbox(body);
@@ -170,7 +184,7 @@ export async function handleOutlookRoutes(
 
     if (url.pathname === '/api/outlook/read-email') {
       const body = await parseJsonBody<ReadEmailArgs>(req);
-      const graphAvailable = await shouldUseGraphOutlook();
+      const graphAvailable = await shouldUseGraphOutlookRead();
       const result = graphAvailable
         ? await readEmailWithGraph(body)
         : await outlookBrowserManager.readEmail(body);

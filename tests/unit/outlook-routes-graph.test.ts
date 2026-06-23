@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { parseJsonBody, sendJson } from '../../electron/api/route-utils';
 import {
+  draftEmailWithGraph,
   isGraphOutlookAvailable,
   readInboxWithGraph,
   sendEmailWithGraph,
@@ -48,6 +49,7 @@ vi.mock('../../electron/services/outlook-browser-v2/manager', () => ({
 
 const parseBodyMock = vi.mocked(parseJsonBody);
 const sendJsonMock = vi.mocked(sendJson);
+const graphDraftEmailMock = vi.mocked(draftEmailWithGraph);
 const graphAvailableMock = vi.mocked(isGraphOutlookAvailable);
 const graphReadInboxMock = vi.mocked(readInboxWithGraph);
 const graphSendEmailMock = vi.mocked(sendEmailWithGraph);
@@ -56,9 +58,36 @@ const browserManagerMock = vi.mocked(outlookBrowserManagerV2);
 describe('Outlook Host API Graph routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.CLAWX_GRAPH_OUTLOOK_READ;
+    delete process.env.CLAWX_GRAPH_OUTLOOK_COMPOSE;
   });
 
-  it('uses Microsoft Graph for read-inbox when Graph is available', async () => {
+  it('uses browser Outlook for read-inbox by default to keep DOM ids compatible with reply', async () => {
+    parseBodyMock.mockResolvedValueOnce({ top: 3 });
+    browserManagerMock.readInbox.mockResolvedValueOnce({
+      status: 'ok',
+      messages: [{ id: 'b1', subject: 'Browser', sender: 'IT', snippet: '', receivedAt: '', unread: false }],
+    });
+
+    const { handleOutlookRoutes } = await import('../../electron/api/routes/outlook');
+    const handled = await handleOutlookRoutes(
+      { method: 'POST' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/outlook/read-inbox'),
+    );
+
+    expect(handled).toBe(true);
+    expect(browserManagerMock.readInbox).toHaveBeenCalledWith(3);
+    expect(graphReadInboxMock).not.toHaveBeenCalled();
+    expect(graphAvailableMock).not.toHaveBeenCalled();
+    expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, {
+      success: true,
+      data: expect.objectContaining({ status: 'ok' }),
+    });
+  });
+
+  it('uses Microsoft Graph for read-inbox only when Graph read is explicitly enabled', async () => {
+    process.env.CLAWX_GRAPH_OUTLOOK_READ = '1';
     graphAvailableMock.mockResolvedValueOnce(true);
     parseBodyMock.mockResolvedValueOnce({ top: 3 });
     graphReadInboxMock.mockResolvedValueOnce({
@@ -76,13 +105,10 @@ describe('Outlook Host API Graph routing', () => {
     expect(handled).toBe(true);
     expect(graphReadInboxMock).toHaveBeenCalledWith(3);
     expect(browserManagerMock.readInbox).not.toHaveBeenCalled();
-    expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, {
-      success: true,
-      data: expect.objectContaining({ status: 'ok' }),
-    });
   });
 
-  it('falls back to browser Outlook when Graph is unavailable', async () => {
+  it('falls back to browser Outlook when explicit Graph read is unavailable', async () => {
+    process.env.CLAWX_GRAPH_OUTLOOK_READ = '1';
     graphAvailableMock.mockResolvedValueOnce(false);
     parseBodyMock.mockResolvedValueOnce({ top: 2 });
     browserManagerMock.readInbox.mockResolvedValueOnce({
@@ -102,7 +128,58 @@ describe('Outlook Host API Graph routing', () => {
     expect(graphReadInboxMock).not.toHaveBeenCalled();
   });
 
-  it('routes Graph sends through the same confirm-gated adapter', async () => {
+  it('uses browser Outlook for draft when Graph is available by default', async () => {
+    parseBodyMock.mockResolvedValueOnce({
+      to: 'teacher@example.edu',
+      subject: 'Visible draft',
+      body: 'Body',
+    });
+    browserManagerMock.draftEmail.mockResolvedValueOnce({
+      status: 'drafted',
+      draftLeftOpen: true,
+      preview: { to: ['teacher@example.edu'], cc: [], bcc: [], subject: 'Visible draft', body: 'Body' },
+    });
+
+    const { handleOutlookRoutes } = await import('../../electron/api/routes/outlook');
+    const handled = await handleOutlookRoutes(
+      { method: 'POST' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/outlook/draft'),
+    );
+
+    expect(handled).toBe(true);
+    expect(browserManagerMock.draftEmail).toHaveBeenCalledWith(expect.objectContaining({ subject: 'Visible draft' }));
+    expect(graphDraftEmailMock).not.toHaveBeenCalled();
+    expect(graphAvailableMock).not.toHaveBeenCalled();
+  });
+
+  it('uses browser Outlook for send when Graph is available by default', async () => {
+    parseBodyMock.mockResolvedValueOnce({
+      to: 'teacher@example.edu',
+      subject: 'Confirm',
+      body: 'Body',
+      confirm: false,
+    });
+    browserManagerMock.sendEmail.mockResolvedValueOnce({
+      status: 'refused',
+      reason: 'confirm flag not set',
+    });
+
+    const { handleOutlookRoutes } = await import('../../electron/api/routes/outlook');
+    const handled = await handleOutlookRoutes(
+      { method: 'POST' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/outlook/send'),
+    );
+
+    expect(handled).toBe(true);
+    expect(browserManagerMock.sendEmail).toHaveBeenCalledWith(expect.objectContaining({ confirm: false }));
+    expect(graphSendEmailMock).not.toHaveBeenCalled();
+    expect(graphAvailableMock).not.toHaveBeenCalled();
+  });
+
+  it('routes Graph sends through the same confirm-gated adapter only when compose Graph is explicitly enabled', async () => {
+    process.env.CLAWX_GRAPH_OUTLOOK_COMPOSE = '1';
     graphAvailableMock.mockResolvedValueOnce(true);
     parseBodyMock.mockResolvedValueOnce({
       to: 'teacher@example.edu',
