@@ -19,9 +19,9 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 ## Assets
 
 - `Ministry.of.Education-0.4.3-moe.10-win-x64.exe`
-  - SHA-256: `2e189dd004995d6ce18e9e240f8228ba5039c2e384fd479a597137458a9046cf`
+  - SHA-256: `dbd252612b23c81f0061b8ec16063cee6fda3b94d834e881d4a6c83b503a0ea3`
 - `Ministry.of.Education-0.4.3-moe.10-win-x64.exe.blockmap`
-  - SHA-256: `8863ef90aff9a8ab804a9e39c58b20c9a480f67f888b01829d56b3be2e0ea132`
+  - SHA-256: `9865b8acf84654590d866203346be48d295990e69b0eb437e723434e9db90fd1`
 - `MOE_WINDOWS_RC_2026-06-23_USER_INSTRUCTIONS.md`
   - Tester instructions for install, first launch, Microsoft sign-in, Outlook,
     Forms, files, voice input, and support evidence.
@@ -64,7 +64,7 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 ## Validation
 
 - `pnpm test`
-  - Result: 147 files, 1076 passed, 5 skipped.
+  - Result: 147 files, 1085 passed, 5 skipped.
 - `pnpm run typecheck`
   - Passed.
 - `pnpm run lint`
@@ -72,17 +72,17 @@ Do not use the GitHub source code zip or tar.gz files for app testing.
 - Windows package rebuild
   - Passed.
 - Refreshed Windows installer rebuild on 2026-06-23
-  - Source commit: release tag target.
-  - Installer SHA-256: `2e189dd004995d6ce18e9e240f8228ba5039c2e384fd479a597137458a9046cf`.
-  - Blockmap SHA-256: `8863ef90aff9a8ab804a9e39c58b20c9a480f67f888b01829d56b3be2e0ea132`.
-  - App ASAR SHA-256: `a67a1f3f518c2bbeccac1adf306e780762a12a421f07205c8c001b65df2bc7f7`.
+  - Source commit: `ea72db2`.
+  - Installer SHA-256: `dbd252612b23c81f0061b8ec16063cee6fda3b94d834e881d4a6c83b503a0ea3`.
+  - Blockmap SHA-256: `9865b8acf84654590d866203346be48d295990e69b0eb437e723434e9db90fd1`.
+  - App ASAR SHA-256: `86604ddfd338f6baf7a9dd3d2524e84e68fbaa5fb697bb7a5af820965e0eb3a9`.
   - Package inspection after rebuild passed: 13 tests.
-  - Focused Outlook release regression after rebuild passed: 5 files, 101 tests.
-  - Full unit suite passed: 147 files, 1076 tests, 5 skipped.
+  - Focused Outlook/plugin/probe release regression after rebuild passed: 3 files, 92 tests.
+  - Full unit suite passed: 147 files, 1085 tests, 5 skipped.
   - Harness CI passed.
   - VM installed-app smoke for this refreshed hash is pending.
 - Clean Windows VM install/package smoke
-  - Previous installer SHA matched.
+  - Previous installer SHA matched the superseded `2e189dd...` asset.
   - Previous app uninstall exit `0`.
   - Installer exit `0`.
   - Desktop and Start Menu shortcuts present.

@@ -35,7 +35,7 @@ Do not download the source code zip or tar.gz files for testing.
 Expected SHA-256, if your test coordinator asks you to verify it:
 
 ```text
-2e189dd004995d6ce18e9e240f8228ba5039c2e384fd479a597137458a9046cf
+dbd252612b23c81f0061b8ec16063cee6fda3b94d834e881d4a6c83b503a0ea3
 ```
 
 ## Install
