@@ -35,6 +35,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // @ts-expect-error — sibling .mjs, no bundled .d.ts
 import { renderJUnitXml, truncateStdout, validateReport } from './src/junit-schema.mjs';
+import { classifyFailure } from './failure_classifier.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -395,7 +396,7 @@ export function buildReport(results: RunResult[]): {
  */
 function junitXml(results: RunResult[]): string {
   const report = validateReport(buildReport(results));
-  return renderJUnitXml(report);
+  return renderJUnitXml(report, { classify: classifyFailure });
 }
 
 async function main(): Promise<void> {
@@ -463,7 +464,7 @@ async function main(): Promise<void> {
     let xml: string;
     try {
       const report = validateReport(buildReport(results));
-      xml = renderJUnitXml(report);
+      xml = renderJUnitXml(report, { classify: classifyFailure });
     } catch (err) {
       const e = err as Error;
       process.stderr.write(`clawx-harness: JUnit schema violation — ${e.message}\n`);

@@ -147,7 +147,20 @@ function escapeXml(s) {
  * this function does not re-validate to keep the schema gate a single
  * choke-point in harness/run.ts.
  */
-export function renderJUnitXml(report) {
+/**
+ * Render a validated report to JUnit XML.
+ *
+ * @param {object} report        canonical, schema-valid report
+ * @param {object} [opts]
+ * @param {(tc: object) => {category: string} | null | undefined} [opts.classify]
+ *   optional per-testcase classifier. When supplied, each failed
+ *   testcase gets a `<properties><property name="failure_category"
+ *   value="…"/></properties>` block emitted before its `<failure>`
+ *   element, so downstream dashboards can group failures by category
+ *   without re-parsing stdout.
+ */
+export function renderJUnitXml(report, opts = {}) {
+  const classify = typeof opts.classify === 'function' ? opts.classify : null;
   const suite = report.testsuites[0];
   const cases = suite.testcases
     .map((tc) => {
@@ -164,6 +177,17 @@ export function renderJUnitXml(report) {
       const systemOut = attachLines.length
         ? `<system-out><![CDATA[${attachLines.join('\n')}]]></system-out>`
         : '';
+      let propsBlock = '';
+      if (tc.status === 'fail' && classify) {
+        try {
+          const c = classify(tc);
+          if (c && typeof c.category === 'string') {
+            propsBlock = `<properties><property name="failure_category" value="${escapeXml(c.category)}"/></properties>`;
+          }
+        } catch {
+          // Never let classifier bugs break XML emission.
+        }
+      }
       if (tc.status === 'pass') {
         return systemOut
           ? `    <testcase ${attrs}>${systemOut}</testcase>`
@@ -172,7 +196,7 @@ export function renderJUnitXml(report) {
       if (tc.status === 'skip') {
         return `    <testcase ${attrs}><skipped message="${escapeXml(tc.reason ?? '')}"/>${systemOut}</testcase>`;
       }
-      return `    <testcase ${attrs}><failure message="${escapeXml(tc.reason ?? '')}"><![CDATA[${tc.detail ?? ''}]]></failure>${systemOut}</testcase>`;
+      return `    <testcase ${attrs}>${propsBlock}<failure message="${escapeXml(tc.reason ?? '')}"><![CDATA[${tc.detail ?? ''}]]></failure>${systemOut}</testcase>`;
     })
     .join('\n');
   return [
