@@ -169,3 +169,68 @@ jobs:
           path: ${{ env.HARNESS_SCREENSHOT_DIR }}
           if-no-files-found: ignore
           retention-days: 14
+
+  consolidated-summary:
+    name: Consolidated summary across all installer versions
+    needs: [installer-e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download nightly JUnit
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: harness-junit-nightly
+          path: junit-nightly
+        continue-on-error: true
+
+      - name: Download stable JUnit
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: harness-junit-stable
+          path: junit-stable
+        continue-on-error: true
+
+      - name: Download previous JUnit
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: harness-junit-previous
+          path: junit-previous
+        continue-on-error: true
+
+      - name: Emit consolidated summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Windows Installer E2E — consolidated summary"
+            echo ""
+            echo "| installer_version | tests_run | passed | failed | failure_categories |"
+            echo "| --- | ---: | ---: | ---: | --- |"
+            for v in nightly stable previous; do
+              dir="junit-$v"
+              # download-artifact writes the file inside the dir; fall back
+              # to any *.xml so a rename in the harness doesn't hide it.
+              junit=$(find "$dir" -type f -name '*.xml' 2>/dev/null | head -1 || true)
+              if [ -z "$junit" ] || [ ! -f "$junit" ]; then
+                echo "| $v | — | — | — | (no JUnit) |"
+                continue
+              fi
+              # tests + failures come from the aggregate <testsuite ...>
+              # attributes; passed = tests - failures - skipped.
+              tests=$(grep -oE 'testsuite [^>]*tests="[0-9]+"' "$junit" | head -1 | grep -oE 'tests="[0-9]+"' | grep -oE '[0-9]+' || echo 0)
+              failures=$(grep -oE 'testsuite [^>]*failures="[0-9]+"' "$junit" | head -1 | grep -oE 'failures="[0-9]+"' | grep -oE '[0-9]+' || echo 0)
+              skipped=$(grep -oE 'testsuite [^>]*skipped="[0-9]+"' "$junit" | head -1 | grep -oE 'skipped="[0-9]+"' | grep -oE '[0-9]+' || echo 0)
+              tests=${tests:-0}; failures=${failures:-0}; skipped=${skipped:-0}
+              passed=$(( tests - failures - skipped ))
+              cats=$(awk 'match($0, /name="failure_category" value="([^"]+)"/, a) { c[a[1]]++ } END { first=1; for (k in c) { if (!first) printf ", "; printf "%s=%d", k, c[k]; first=0 } }' "$junit")
+              [ -z "$cats" ] && cats="(none)"
+              echo "| $v | $tests | $passed | $failures | $cats |"
+            done
+            echo ""
+            echo "_Rows showing \"(no JUnit)\" indicate that matrix leg produced no artifact — check the per-version job logs._"
+          } >> "$GITHUB_STEP_SUMMARY"

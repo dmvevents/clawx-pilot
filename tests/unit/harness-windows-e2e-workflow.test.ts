@@ -30,7 +30,13 @@ type Strategy = {
   'fail-fast'?: boolean;
   matrix?: Record<string, unknown>;
 };
-type Job = { 'runs-on'?: string; steps?: Step[]; strategy?: Strategy };
+type Job = {
+  'runs-on'?: string;
+  steps?: Step[];
+  strategy?: Strategy;
+  needs?: string | string[];
+  if?: string;
+};
 type Workflow = {
   on?: { workflow_dispatch?: { inputs?: Record<string, { required?: boolean; default?: string }> } };
   jobs?: Record<string, Job>;
@@ -59,14 +65,16 @@ describe('.github/workflows/windows-installer-e2e.yml — dispatch contract', ()
     expect(inputs?.harness_prompts_ref?.default).toBe('main');
   });
 
-  it('every job runs on windows-latest', () => {
+  it('the installer-e2e matrix job runs on windows-latest', () => {
     const wf = loadWorkflow();
     const jobs = wf.jobs ?? {};
-    const jobNames = Object.keys(jobs);
-    expect(jobNames.length).toBeGreaterThan(0);
-    for (const name of jobNames) {
-      expect(jobs[name]['runs-on']).toBe('windows-latest');
-    }
+    // The matrix job is the one that installs + runs the harness against
+    // the .exe; it MUST be windows-latest. Aggregation jobs (consolidated
+    // summary etc.) can run on any linux runner — they only download
+    // artifacts and emit markdown.
+    const matrixJob = Object.values(jobs).find((j) => j.strategy?.matrix);
+    expect(matrixJob).toBeDefined();
+    expect(matrixJob?.['runs-on']).toBe('windows-latest');
   });
 
   it('has at least 8 named steps across all jobs', () => {
@@ -145,9 +153,9 @@ describe('.github/workflows/windows-installer-e2e.yml — post-run steps (always
 describe('.github/workflows/windows-installer-e2e.yml — matrix runner', () => {
   it('strategy.matrix.installer_version has >=3 entries', () => {
     const wf = loadWorkflow();
-    const jobs = Object.values(wf.jobs ?? {});
-    expect(jobs.length).toBeGreaterThan(0);
-    for (const job of jobs) {
+    const matrixJobs = Object.values(wf.jobs ?? {}).filter((j) => j.strategy?.matrix);
+    expect(matrixJobs.length).toBeGreaterThanOrEqual(1);
+    for (const job of matrixJobs) {
       const versions = job.strategy?.matrix?.installer_version;
       expect(Array.isArray(versions)).toBe(true);
       expect((versions as unknown[]).length).toBeGreaterThanOrEqual(3);
@@ -156,9 +164,9 @@ describe('.github/workflows/windows-installer-e2e.yml — matrix runner', () => 
 
   it('fail-fast: false is set on every matrix job (so one version breaking does not cancel the others)', () => {
     const wf = loadWorkflow();
-    const jobs = Object.values(wf.jobs ?? {});
-    for (const job of jobs) {
-      expect(job.strategy).toBeDefined();
+    const matrixJobs = Object.values(wf.jobs ?? {}).filter((j) => j.strategy?.matrix);
+    expect(matrixJobs.length).toBeGreaterThanOrEqual(1);
+    for (const job of matrixJobs) {
       expect(job.strategy?.['fail-fast']).toBe(false);
     }
   });
@@ -174,6 +182,68 @@ describe('.github/workflows/windows-installer-e2e.yml — matrix runner', () => 
       const name = (s.with as Record<string, unknown> | undefined)?.name;
       expect(typeof name).toBe('string');
       expect(name as string).toMatch(/\$\{\{\s*matrix\.installer_version\s*\}\}/);
+    }
+  });
+});
+
+describe('.github/workflows/windows-installer-e2e.yml — consolidated summary', () => {
+  function findConsolidatedJob() {
+    const wf = loadWorkflow();
+    const jobs = wf.jobs ?? {};
+    // Pick the job that has needs: on the matrix job and does not have a
+    // matrix strategy of its own — that's the aggregation job.
+    const matrixJobIds = Object.entries(jobs)
+      .filter(([, j]) => j.strategy?.matrix)
+      .map(([id]) => id);
+    return Object.entries(jobs).find(([, j]) => {
+      if (j.strategy?.matrix) return false;
+      const needs = Array.isArray(j.needs) ? j.needs : j.needs ? [j.needs] : [];
+      return matrixJobIds.some((id) => needs.includes(id));
+    });
+  }
+
+  it('consolidated-summary job exists (a non-matrix job that needs the matrix job)', () => {
+    const entry = findConsolidatedJob();
+    expect(entry).toBeDefined();
+    const [id] = entry!;
+    expect(typeof id).toBe('string');
+  });
+
+  it('needs: array includes the matrix installer-e2e job', () => {
+    const wf = loadWorkflow();
+    const jobs = wf.jobs ?? {};
+    const matrixJobIds = Object.entries(jobs)
+      .filter(([, j]) => j.strategy?.matrix)
+      .map(([id]) => id);
+    expect(matrixJobIds.length).toBeGreaterThanOrEqual(1);
+    const entry = findConsolidatedJob();
+    expect(entry).toBeDefined();
+    const [, job] = entry!;
+    const needs = Array.isArray(job.needs) ? job.needs : job.needs ? [job.needs] : [];
+    for (const matrixId of matrixJobIds) {
+      expect(needs).toContain(matrixId);
+    }
+  });
+
+  it('job-level if: always() is set on the consolidated-summary job', () => {
+    const entry = findConsolidatedJob();
+    expect(entry).toBeDefined();
+    const [, job] = entry!;
+    expect(job.if).toBe('always()');
+  });
+
+  it('downloads all 3 matrix artifact names (harness-junit-{nightly,stable,previous})', () => {
+    const entry = findConsolidatedJob();
+    expect(entry).toBeDefined();
+    const [, job] = entry!;
+    const downloadSteps = (job.steps ?? []).filter(
+      (s) => typeof s.uses === 'string' && s.uses.startsWith('actions/download-artifact@'),
+    );
+    const downloadedNames = downloadSteps
+      .map((s) => (s.with as Record<string, unknown> | undefined)?.name)
+      .filter((n): n is string => typeof n === 'string');
+    for (const v of ['nightly', 'stable', 'previous']) {
+      expect(downloadedNames).toContain(`harness-junit-${v}`);
     }
   });
 });
