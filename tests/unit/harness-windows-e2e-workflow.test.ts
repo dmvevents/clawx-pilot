@@ -19,7 +19,13 @@ const WORKFLOW_PATH = path.join(
   'windows-installer-e2e.yml',
 );
 
-type Step = { name?: string; uses?: string; run?: string; with?: Record<string, unknown> };
+type Step = {
+  name?: string;
+  uses?: string;
+  run?: string;
+  if?: string;
+  with?: Record<string, unknown>;
+};
 type Job = { 'runs-on'?: string; steps?: Step[] };
 type Workflow = {
   on?: { workflow_dispatch?: { inputs?: Record<string, { required?: boolean; default?: string }> } };
@@ -77,6 +83,57 @@ describe('.github/workflows/windows-installer-e2e.yml — dispatch contract', ()
     for (const s of uploaders) {
       expect(s.with).toBeDefined();
       expect(typeof (s.with as Record<string, unknown>).name).toBe('string');
+    }
+  });
+});
+
+describe('.github/workflows/windows-installer-e2e.yml — post-run steps (always-guarded)', () => {
+  it('has the 3 post-run steps: failure-category summary, JUnit upload, screenshot upload', () => {
+    const wf = loadWorkflow();
+    const steps = Object.values(wf.jobs ?? {}).flatMap((j) => j.steps ?? []);
+    const names = steps.map((s) => s.name ?? '');
+    // Case-insensitive substring match so a future rename that keeps the
+    // intent (e.g. "Summarize" vs "Summarise") still passes.
+    const has = (needle: string) =>
+      names.some((n) => n.toLowerCase().includes(needle.toLowerCase()));
+    expect(has('failure_category')).toBe(true);
+    expect(has('Upload harness-junit')).toBe(true);
+    expect(has('screenshot')).toBe(true);
+  });
+
+  it('all 3 post-run steps are guarded by if: always()', () => {
+    const wf = loadWorkflow();
+    const steps = Object.values(wf.jobs ?? {}).flatMap((j) => j.steps ?? []);
+    const postRun = steps.filter((s) => {
+      const n = (s.name ?? '').toLowerCase();
+      return (
+        n.includes('failure_category') ||
+        n.includes('upload harness-junit') ||
+        n.includes('screenshot')
+      );
+    });
+    // Sanity: caught all three (summary + JUnit upload + collect + upload
+    // screenshots = 4 in the current shape). Assert >=3 so a future
+    // reshuffle that keeps the same intent survives.
+    expect(postRun.length).toBeGreaterThanOrEqual(3);
+    for (const s of postRun) {
+      expect(s.if).toBe('always()');
+    }
+  });
+
+  it('every actions/upload-artifact step sets retention-days', () => {
+    const wf = loadWorkflow();
+    const steps = Object.values(wf.jobs ?? {}).flatMap((j) => j.steps ?? []);
+    const uploaders = steps.filter(
+      (s) => typeof s.uses === 'string' && s.uses.startsWith('actions/upload-artifact@'),
+    );
+    expect(uploaders.length).toBeGreaterThanOrEqual(2);
+    for (const s of uploaders) {
+      const w = s.with as Record<string, unknown> | undefined;
+      expect(w).toBeDefined();
+      const retention = w?.['retention-days'];
+      expect(typeof retention).toBe('number');
+      expect(retention).toBe(14);
     }
   });
 });

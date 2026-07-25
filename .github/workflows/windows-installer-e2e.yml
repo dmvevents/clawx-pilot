@@ -128,3 +128,34 @@ jobs:
             ${{ env.INSTALL_LOG }}
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Collect harness screenshot attachments
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Screenshots are emitted by the harness under a well-known dir
+          # when the runtime (binary mode) captures them. Direct-mode
+          # emits nothing, so this step is a no-op on offline runs.
+          shot_dir="$GITHUB_WORKSPACE/harness/.artifacts/screenshots"
+          runner_shot_dir="$RUNNER_TEMP/harness-screenshots"
+          mkdir -p "$runner_shot_dir"
+          if [ -d "$shot_dir" ]; then
+            # Copy anything the harness produced into a stable location.
+            find "$shot_dir" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) \
+              -exec cp {} "$runner_shot_dir/" \; || true
+          fi
+          count=$(find "$runner_shot_dir" -type f | wc -l | tr -d ' ')
+          echo "screenshot_count=$count" >> "$GITHUB_OUTPUT"
+          echo "HARNESS_SCREENSHOT_DIR=$runner_shot_dir" >> "$GITHUB_ENV"
+          echo "collected $count screenshot(s)"
+        id: collect_screenshots
+
+      - name: Upload harness screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-screenshots
+          path: ${{ env.HARNESS_SCREENSHOT_DIR }}
+          if-no-files-found: ignore
+          retention-days: 14
