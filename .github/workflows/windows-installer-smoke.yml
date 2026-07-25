@@ -1,0 +1,147 @@
+name: Windows Installer Smoke (headless, on-demand)
+
+# Runs a ClawX Windows installer on a fresh windows-latest runner and
+# captures the install log. Use this to confirm a candidate fix for the
+# "installer tries to install dependencies every time" bug against a
+# guaranteed-clean Windows environment.
+#
+# Inputs:
+#   installer_url   — public/pre-signed URL to the .exe (e.g. release asset URL)
+#   installer_sha256 — optional; verifies the downloaded artifact
+#
+# Outputs (as artifacts):
+#   install.log      — installer's own log (/log flag)
+#   nsis-verbose.log — verbose NSIS log from the runner
+#   post-state.zip   — %APPDATA%\Ministry of Education snapshot (config, gateway state)
+
+on:
+  workflow_dispatch:
+    inputs:
+      installer_url:
+        description: 'Direct URL to Ministry-of-Education-Setup-*.exe'
+        required: true
+      installer_sha256:
+        description: 'Expected SHA-256 (optional, verifies download)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  install-and-probe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = "$env:RUNNER_TEMP\installer.exe"
+          Invoke-WebRequest -Uri "${{ inputs.installer_url }}" -OutFile $out
+          Get-Item $out | Select Length, LastWriteTime | Format-List
+          if ("${{ inputs.installer_sha256 }}" -ne "") {
+            $actual = (Get-FileHash $out -Algorithm SHA256).Hash
+            if ($actual -ine "${{ inputs.installer_sha256 }}") {
+              throw "SHA-256 mismatch: expected ${{ inputs.installer_sha256 }}, got $actual"
+            }
+            Write-Host "SHA-256 verified: $actual"
+          }
+          "INSTALLER_PATH=$out" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Snapshot fresh-Windows baseline
+        shell: pwsh
+        run: |
+          $b = "$env:RUNNER_TEMP\baseline.txt"
+          "===== Installed Programs (baseline) ====="        | Out-File $b
+          Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue |
+            Select DisplayName, DisplayVersion | Where DisplayName | Sort DisplayName | Format-Table -AutoSize | Out-File $b -Append
+          "===== VC++ Redists =====" | Out-File $b -Append
+          Get-ItemProperty HKLM:\Software\Microsoft\VisualStudio\* -ErrorAction SilentlyContinue |
+            Format-List | Out-File $b -Append
+
+      - name: Run installer (silent, with logs)
+        shell: pwsh
+        run: |
+          $log = "$env:RUNNER_TEMP\install.log"
+          $verbose = "$env:RUNNER_TEMP\nsis-verbose.log"
+          Write-Host "Launching installer silently..."
+          $p = Start-Process -FilePath "$env:INSTALLER_PATH" `
+            -ArgumentList "/S","/log=$log","/verbose=$verbose" `
+            -Wait -PassThru -NoNewWindow
+          Write-Host "Installer exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) {
+            Write-Host "::warning::Installer exited non-zero ($($p.ExitCode)) — continuing to collect logs"
+          }
+          if (Test-Path $log) { Write-Host "--- install.log tail ---"; Get-Content $log -Tail 60 }
+
+      - name: Detect the "install dependencies every time" symptom
+        shell: pwsh
+        run: |
+          $log = "$env:RUNNER_TEMP\install.log"
+          if (-not (Test-Path $log)) { Write-Host "::warning::No install.log produced"; exit 0 }
+          $matches = Select-String -Path $log -Pattern 'redist|dependenc|prereq|vcruntime|Installing' -CaseSensitive:$false
+          Write-Host "Dependency-install hits: $($matches.Count)"
+          $matches | Select -First 40 | ForEach-Object { Write-Host "  $($_.Line)" }
+
+      - name: Checkout repo (for 5-prompt harness)
+        if: ${{ inputs.installer_url != '' }}
+        uses: actions/checkout@v4
+
+      - name: Setup Node (for 5-prompt harness)
+        if: ${{ inputs.installer_url != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm + minimal deps (for 5-prompt harness)
+        if: ${{ inputs.installer_url != '' }}
+        shell: pwsh
+        run: |
+          npm install -g pnpm@10.33.4
+          # The harness only needs docx, xlsx, mammoth, pdf-parse, sharp — the
+          # same deps electron-builder bundles into the installer. Skip the
+          # full workspace install for speed; use --ignore-scripts to avoid
+          # postinstall side-effects.
+          pnpm install --ignore-scripts --frozen-lockfile
+
+      - name: Run 5-prompt Windows E2E harness (direct mode)
+        if: ${{ inputs.installer_url != '' }}
+        shell: pwsh
+        continue-on-error: false
+        run: |
+          $env:CLAWX_APP_RESOURCES = "$env:LOCALAPPDATA\Programs\Ministry of Education\resources"
+          pnpm harness:windows-e2e --junit "$env:RUNNER_TEMP\harness-junit.xml"
+
+      - name: Upload harness JUnit report
+        if: ${{ always() && inputs.installer_url != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-junit-${{ github.run_id }}
+          path: ${{ runner.temp }}/harness-junit.xml
+          if-no-files-found: warn
+
+      - name: Snapshot post-install state
+        if: always()
+        shell: pwsh
+        run: |
+          $out = "$env:RUNNER_TEMP\post-state.zip"
+          $tmp = "$env:RUNNER_TEMP\post-state"
+          New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+          $appdata = Join-Path $env:APPDATA 'Ministry of Education'
+          $openclaw = Join-Path $env:USERPROFILE '.openclaw'
+          if (Test-Path $appdata) { Copy-Item $appdata -Destination "$tmp\appdata" -Recurse -Force }
+          if (Test-Path $openclaw) { Copy-Item $openclaw -Destination "$tmp\openclaw" -Recurse -Force }
+          Compress-Archive -Path "$tmp\*" -DestinationPath $out -Force -ErrorAction SilentlyContinue
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-smoke-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/install.log
+            ${{ runner.temp }}/nsis-verbose.log
+            ${{ runner.temp }}/baseline.txt
+            ${{ runner.temp }}/post-state.zip
+          if-no-files-found: warn
