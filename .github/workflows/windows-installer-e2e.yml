@@ -33,9 +33,16 @@ permissions:
 
 jobs:
   installer-e2e:
-    name: Install + run 5-prompt harness
+    name: Install + run 5-prompt harness (${{ matrix.installer_version }})
     runs-on: windows-latest
     timeout-minutes: 30
+    strategy:
+      # One version breaking must not cancel the others — a regression
+      # on nightly should still let stable + previous complete so we
+      # know whether the failure is version-specific.
+      fail-fast: false
+      matrix:
+        installer_version: [nightly, stable, previous]
     steps:
       - name: Check out harness sources
         uses: actions/checkout@v4
@@ -94,18 +101,21 @@ jobs:
           # (exit 3) or fatal error (exit 2).
           if ($exit -eq 2 -or $exit -eq 3) { exit $exit }
 
-      - name: Summarise failure_category counts
+      - name: Summarise failure_category counts (${{ matrix.installer_version }})
         if: always()
         shell: bash
+        env:
+          INSTALLER_VERSION: ${{ matrix.installer_version }}
         run: |
           set -euo pipefail
           junit="${HARNESS_JUNIT:-}"
           if [ -z "$junit" ] || [ ! -f "$junit" ]; then
+            echo "## Windows Installer E2E — ${INSTALLER_VERSION}" >> "$GITHUB_STEP_SUMMARY"
             echo "no JUnit XML produced — see previous step" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           {
-            echo "## Windows Installer E2E — failure categories"
+            echo "## Windows Installer E2E — failure categories (${INSTALLER_VERSION})"
             echo ""
             echo "| category | count |"
             echo "| --- | ---: |"
@@ -118,11 +128,11 @@ jobs:
             echo "_Empty table = no failing testcases in this run._"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload harness-junit artifact
+      - name: Upload harness-junit artifact (${{ matrix.installer_version }})
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: harness-junit
+          name: harness-junit-${{ matrix.installer_version }}
           path: |
             ${{ env.HARNESS_JUNIT }}
             ${{ env.INSTALL_LOG }}
@@ -151,11 +161,11 @@ jobs:
           echo "collected $count screenshot(s)"
         id: collect_screenshots
 
-      - name: Upload harness screenshots
+      - name: Upload harness screenshots (${{ matrix.installer_version }})
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: harness-screenshots
+          name: harness-screenshots-${{ matrix.installer_version }}
           path: ${{ env.HARNESS_SCREENSHOT_DIR }}
           if-no-files-found: ignore
           retention-days: 14

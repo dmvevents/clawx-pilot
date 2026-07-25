@@ -26,7 +26,11 @@ type Step = {
   if?: string;
   with?: Record<string, unknown>;
 };
-type Job = { 'runs-on'?: string; steps?: Step[] };
+type Strategy = {
+  'fail-fast'?: boolean;
+  matrix?: Record<string, unknown>;
+};
+type Job = { 'runs-on'?: string; steps?: Step[]; strategy?: Strategy };
 type Workflow = {
   on?: { workflow_dispatch?: { inputs?: Record<string, { required?: boolean; default?: string }> } };
   jobs?: Record<string, Job>;
@@ -134,6 +138,42 @@ describe('.github/workflows/windows-installer-e2e.yml — post-run steps (always
       const retention = w?.['retention-days'];
       expect(typeof retention).toBe('number');
       expect(retention).toBe(14);
+    }
+  });
+});
+
+describe('.github/workflows/windows-installer-e2e.yml — matrix runner', () => {
+  it('strategy.matrix.installer_version has >=3 entries', () => {
+    const wf = loadWorkflow();
+    const jobs = Object.values(wf.jobs ?? {});
+    expect(jobs.length).toBeGreaterThan(0);
+    for (const job of jobs) {
+      const versions = job.strategy?.matrix?.installer_version;
+      expect(Array.isArray(versions)).toBe(true);
+      expect((versions as unknown[]).length).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('fail-fast: false is set on every matrix job (so one version breaking does not cancel the others)', () => {
+    const wf = loadWorkflow();
+    const jobs = Object.values(wf.jobs ?? {});
+    for (const job of jobs) {
+      expect(job.strategy).toBeDefined();
+      expect(job.strategy?.['fail-fast']).toBe(false);
+    }
+  });
+
+  it('every actions/upload-artifact name is keyed by matrix.installer_version', () => {
+    const wf = loadWorkflow();
+    const steps = Object.values(wf.jobs ?? {}).flatMap((j) => j.steps ?? []);
+    const uploaders = steps.filter(
+      (s) => typeof s.uses === 'string' && s.uses.startsWith('actions/upload-artifact@'),
+    );
+    expect(uploaders.length).toBeGreaterThanOrEqual(2);
+    for (const s of uploaders) {
+      const name = (s.with as Record<string, unknown> | undefined)?.name;
+      expect(typeof name).toBe('string');
+      expect(name as string).toMatch(/\$\{\{\s*matrix\.installer_version\s*\}\}/);
     }
   });
 });
