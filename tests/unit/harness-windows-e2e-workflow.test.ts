@@ -345,3 +345,507 @@ describe('harness/src/failure-dedup.mjs — REGRESSION SUSPECT logic', () => {
     expect(markdown).toMatch(/per-version-only/);
   });
 });
+
+// @ts-expect-error — .mjs sibling with no bundled .d.ts
+import { buildPerTestcaseTable } from '../../harness/src/per-testcase-table.mjs';
+
+/**
+ * Build a JUnit XML fixture with an all-pass suite of `passCount` cases
+ * (each self-closing), matching the shape renderJUnitXml emits for
+ * passing rows.
+ */
+function junitAllPass(passCount: number, suiteTs = '2026-07-25T18:00:00Z'): string {
+  const cases = Array.from({ length: passCount }, (_, i) =>
+    `    <testcase name="P${i + 1}" classname="clawx.harness" time="0.100"/>`,
+  ).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="${passCount}" failures="0" skipped="0">
+  <testsuite name="clawx.harness" tests="${passCount}" failures="0" skipped="0" timestamp="${suiteTs}">
+${cases}
+  </testsuite>
+</testsuites>`;
+}
+
+/**
+ * Build a JUnit XML fixture with mixed pass + fail rows. Each failing
+ * row carries a per-testcase timestamp attribute and a failure_category
+ * property, matching the shape harness/run.ts + PR #16 emit.
+ */
+function junitWithFailures(
+  totalTests: number,
+  failures: Array<{ name: string; category: string; timestamp: string }>,
+  suiteTs = '2026-07-25T18:00:00Z',
+): string {
+  const passCount = totalTests - failures.length;
+  const passCases = Array.from({ length: passCount }, (_, i) =>
+    `    <testcase name="OK${i + 1}" classname="clawx.harness" time="0.100"/>`,
+  ).join('\n');
+  const failCases = failures
+    .map(
+      (f) =>
+        `    <testcase name="${f.name}" classname="clawx.harness" time="0.500" timestamp="${f.timestamp}"><properties><property name="failure_category" value="${f.category}"/></properties><failure message="boom" type="AssertionError"><![CDATA[detail]]></failure></testcase>`,
+    )
+    .join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="${totalTests}" failures="${failures.length}" skipped="0">
+  <testsuite name="clawx.harness" tests="${totalTests}" failures="${failures.length}" skipped="0" timestamp="${suiteTs}">
+${passCases}
+${failCases}
+  </testsuite>
+</testsuites>`;
+}
+
+describe('harness/src/per-testcase-table.mjs — per-testcase failure table', () => {
+  it('all-pass across all 3 legs -> single-line all-passed message (0 failures)', () => {
+    // 197 total: 66 + 66 + 65 to mirror the real 197-testcase corpus
+    // the workflow is graded against.
+    const legs = [
+      { version: 'nightly', xml: junitAllPass(66) },
+      { version: 'stable', xml: junitAllPass(66) },
+      { version: 'previous', xml: junitAllPass(65) },
+    ];
+    const { rows, totalTests, allPassed, markdown } = buildPerTestcaseTable(legs);
+    expect(rows).toHaveLength(0);
+    expect(totalTests).toBe(197);
+    expect(allPassed).toBe(true);
+    // Locked message shape — reviewers scan for this exact sentence on
+    // every green run.
+    expect(markdown).toContain(
+      'All 197 testcases passed across all 3 installer_versions.',
+    );
+    // No table pipe-header should render when all-passed.
+    expect(markdown).not.toMatch(/\|\s*test_name\s*\|/);
+  });
+
+  it('3-versions × 2-failures each, dedup of same failure_category -> sorted 6-row table', () => {
+    // Each leg has the SAME two failure categories on the SAME two test
+    // names — but they're distinct testcase rows per leg. The table
+    // must render all 6 rows (one per (test_name, installer_version)
+    // combination); "dedup" applies to failure_category counts in the
+    // suspect callout, NOT to per-testcase rows.
+    const legs = [
+      {
+        version: 'nightly',
+        xml: junitWithFailures(
+          10,
+          [
+            { name: 'P1-docx-summarize', category: 'timeout', timestamp: '2026-07-25T18:01:00Z' },
+            { name: 'P2-xlsx-total', category: 'schema_violation', timestamp: '2026-07-25T18:02:00Z' },
+          ],
+          '2026-07-25T18:00:00Z',
+        ),
+      },
+      {
+        version: 'stable',
+        xml: junitWithFailures(
+          10,
+          [
+            { name: 'P1-docx-summarize', category: 'timeout', timestamp: '2026-07-25T19:01:00Z' },
+            { name: 'P2-xlsx-total', category: 'schema_violation', timestamp: '2026-07-25T19:02:00Z' },
+          ],
+          '2026-07-25T19:00:00Z',
+        ),
+      },
+      {
+        version: 'previous',
+        xml: junitWithFailures(
+          10,
+          [
+            { name: 'P1-docx-summarize', category: 'timeout', timestamp: '2026-07-25T20:01:00Z' },
+            { name: 'P2-xlsx-total', category: 'schema_violation', timestamp: '2026-07-25T20:02:00Z' },
+          ],
+          '2026-07-25T20:00:00Z',
+        ),
+      },
+    ];
+    const { rows, allPassed, markdown } = buildPerTestcaseTable(legs);
+    expect(allPassed).toBe(false);
+    expect(rows).toHaveLength(6);
+    // Sort key: (failure_category asc, test_name asc). Both P1 and P2
+    // rows keep their per-version identity — 3 x schema_violation
+    // BEFORE 3 x timeout (schema_violation < timeout lexicographically).
+    const catSeq = rows.map((r: { failure_category: string }) => r.failure_category);
+    expect(catSeq).toEqual([
+      'schema_violation',
+      'schema_violation',
+      'schema_violation',
+      'timeout',
+      'timeout',
+      'timeout',
+    ]);
+    // Every row must carry the correct testcase timestamp from JUnit
+    // — the sort must not corrupt this. schema_violation is P2 across
+    // all 3 legs; timeout is P1.
+    const schemaRows = rows.filter(
+      (r: { failure_category: string }) => r.failure_category === 'schema_violation',
+    );
+    expect(schemaRows.every((r: { test_name: string }) => r.test_name === 'P2-xlsx-total')).toBe(true);
+    const timeoutRows = rows.filter(
+      (r: { failure_category: string }) => r.failure_category === 'timeout',
+    );
+    expect(timeoutRows.every((r: { test_name: string }) => r.test_name === 'P1-docx-summarize')).toBe(true);
+    // Markdown carries the required header row + 6 body rows.
+    const bodyRows = markdown
+      .split('\n')
+      .filter((l: string) => l.startsWith('|') && !l.startsWith('| ---') && !l.includes('test_name'));
+    expect(bodyRows).toHaveLength(6);
+    expect(markdown).toContain(
+      '| test_name | installer_version | failure_category | owner | flake_rate | first_failure_ts_from_junit |',
+    );
+    // Every distinct per-testcase timestamp survives into the output.
+    for (const ts of [
+      '2026-07-25T18:01:00Z',
+      '2026-07-25T18:02:00Z',
+      '2026-07-25T19:01:00Z',
+      '2026-07-25T19:02:00Z',
+      '2026-07-25T20:01:00Z',
+      '2026-07-25T20:02:00Z',
+    ]) {
+      expect(markdown).toContain(ts);
+    }
+  });
+
+  it('mixed unique + shared failure_categories -> sort order (category asc, test_name asc) preserved', () => {
+    // 5 failures spanning 3 categories: two share `timeout` on distinct
+    // test names (D-doc + A-alpha); one row per each of
+    // `schema_violation` and `missing_output` and `zzz_last`. Correct
+    // sort must group by category asc, then test_name asc within each
+    // group.
+    const legs = [
+      {
+        version: 'nightly',
+        xml: junitWithFailures(
+          10,
+          [
+            { name: 'D-doc-summarize', category: 'timeout', timestamp: '2026-07-25T10:01:00Z' },
+            { name: 'A-alpha-extract', category: 'timeout', timestamp: '2026-07-25T10:02:00Z' },
+            { name: 'M-missing', category: 'missing_output', timestamp: '2026-07-25T10:03:00Z' },
+          ],
+          '2026-07-25T10:00:00Z',
+        ),
+      },
+      {
+        version: 'stable',
+        xml: junitWithFailures(
+          10,
+          [
+            { name: 'S-schema-bad', category: 'schema_violation', timestamp: '2026-07-25T11:01:00Z' },
+          ],
+          '2026-07-25T11:00:00Z',
+        ),
+      },
+      {
+        version: 'previous',
+        xml: junitWithFailures(
+          10,
+          [
+            { name: 'Z-last-row', category: 'zzz_last', timestamp: '2026-07-25T12:01:00Z' },
+          ],
+          '2026-07-25T12:00:00Z',
+        ),
+      },
+    ];
+    const { rows, allPassed } = buildPerTestcaseTable(legs);
+    expect(allPassed).toBe(false);
+    expect(rows).toHaveLength(5);
+    // Expected order:
+    //   1. missing_output   / M-missing        / nightly
+    //   2. schema_violation / S-schema-bad     / stable
+    //   3. timeout          / A-alpha-extract  / nightly
+    //   4. timeout          / D-doc-summarize  / nightly
+    //   5. zzz_last         / Z-last-row       / previous
+    expect(rows.map((r: { failure_category: string }) => r.failure_category)).toEqual([
+      'missing_output',
+      'schema_violation',
+      'timeout',
+      'timeout',
+      'zzz_last',
+    ]);
+    expect(rows.map((r: { test_name: string }) => r.test_name)).toEqual([
+      'M-missing',
+      'S-schema-bad',
+      'A-alpha-extract',
+      'D-doc-summarize',
+      'Z-last-row',
+    ]);
+    expect(rows.map((r: { installer_version: string }) => r.installer_version)).toEqual([
+      'nightly',
+      'stable',
+      'nightly',
+      'nightly',
+      'previous',
+    ]);
+    // Timestamps come from the per-testcase attribute, NOT the suite
+    // attribute — proves the parser reads the right field.
+    expect(rows[0].first_failure_ts_from_junit).toBe('2026-07-25T10:03:00Z');
+    expect(rows[1].first_failure_ts_from_junit).toBe('2026-07-25T11:01:00Z');
+    expect(rows[4].first_failure_ts_from_junit).toBe('2026-07-25T12:01:00Z');
+  });
+});
+
+// @ts-expect-error — .mjs sibling with no bundled .d.ts
+import {
+  DEFAULT_OWNER,
+  parseCodeowners,
+  parseOwnersJson,
+  resolveOwner,
+} from '../../harness/src/testcase-owners.mjs';
+
+describe('harness/src/testcase-owners.mjs — test-code-owner routing', () => {
+  it('CODEOWNERS match: failing testcase resolves to the mapped @team handle', () => {
+    // Realistic CODEOWNERS shape. `P1-*` maps docx tests to @clawx-docs
+    // via a directory glob — testcase names are matched against the
+    // classname-derived path the workflow feeds in.
+    const codeownersRules = parseCodeowners(
+      [
+        '# CODEOWNERS — first line is a comment, must be ignored',
+        '',
+        'P1-docx-*   @clawx-docs',
+        'P4-forms-*  @clawx-forms  @clawx-web',
+        '/harness/tests/**  @clawx-harness',
+      ].join('\n'),
+    );
+    // Testcase-name direct match on the P1-docx-* pattern.
+    expect(
+      resolveOwner('P1-docx-summarize', { codeownersRules }),
+    ).toBe('@clawx-docs');
+    // Multi-owner rule returns the first handle (GitHub semantics for
+    // "primary owner"), and matches the P4-forms-* rule.
+    expect(
+      resolveOwner('P4-forms-suspensions', { codeownersRules }),
+    ).toBe('@clawx-forms');
+    // Full-path match (leading `/`) works too — for classname-derived
+    // paths a test may hand in.
+    expect(
+      resolveOwner('harness/tests/unit-x', { codeownersRules }),
+    ).toBe('@clawx-harness');
+  });
+
+  it('fallback: no CODEOWNERS/OWNERS.json match -> @clawx-triage default', () => {
+    // Realistic case: a new testcase lands before its owner rule is
+    // added. Reviewer must still see SOMEONE in the OWNERS column.
+    const codeownersRules = parseCodeowners(
+      ['P1-docx-*   @clawx-docs'].join('\n'),
+    );
+    const ownersJsonRules = parseOwnersJson(
+      JSON.stringify({ 'P4-forms-suspensions': '@clawx-forms' }),
+    );
+    // Unmapped testcase — falls through both sources.
+    expect(
+      resolveOwner('P99-brand-new-test', { codeownersRules, ownersJsonRules }),
+    ).toBe('@clawx-triage');
+    // Confirm the exported constant is the same value the workflow
+    // renders on unowned rows.
+    expect(DEFAULT_OWNER).toBe('@clawx-triage');
+    // With NO sources loaded at all, every testcase falls to the
+    // default — a repo with neither file still renders a valid table.
+    expect(resolveOwner('anything', {})).toBe('@clawx-triage');
+  });
+
+  it('OWNERS.json wins over CODEOWNERS when both exist', () => {
+    // CODEOWNERS routes P1-docx-* to @clawx-docs (the coarse default).
+    // OWNERS.json intentionally overrides one specific testcase to
+    // @clawx-oncall — a per-test escape hatch for hot regressions.
+    const codeownersRules = parseCodeowners(
+      ['P1-docx-*   @clawx-docs'].join('\n'),
+    );
+    const ownersJsonRules = parseOwnersJson(
+      JSON.stringify({
+        'P1-docx-summarize': '@clawx-oncall',
+        'P2-*': '@clawx-xlsx',
+      }),
+    );
+    // Exact key in OWNERS.json wins over CODEOWNERS glob.
+    expect(
+      resolveOwner('P1-docx-summarize', { ownersJsonRules, codeownersRules }),
+    ).toBe('@clawx-oncall');
+    // Prefix key in OWNERS.json wins over CODEOWNERS glob.
+    expect(
+      resolveOwner('P2-xlsx-total', { ownersJsonRules, codeownersRules }),
+    ).toBe('@clawx-xlsx');
+    // Testcase NOT in OWNERS.json falls through to CODEOWNERS.
+    expect(
+      resolveOwner('P1-docx-otherpath', { ownersJsonRules, codeownersRules }),
+    ).toBe('@clawx-docs');
+    // And per-testcase-table.mjs threads the owner column through.
+    const legs = [
+      {
+        version: 'nightly',
+        xml: junitWithFailures(
+          5,
+          [
+            {
+              name: 'P1-docx-summarize',
+              category: 'timeout',
+              timestamp: '2026-07-25T18:01:00Z',
+            },
+          ],
+          '2026-07-25T18:00:00Z',
+        ),
+      },
+      { version: 'stable', xml: junitAllPass(5) },
+      { version: 'previous', xml: junitAllPass(5) },
+    ];
+    const { rows, markdown } = buildPerTestcaseTable(legs, {
+      ownersJsonRules,
+      codeownersRules,
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].owner).toBe('@clawx-oncall');
+    // OWNERS column lands between failure_category and first_failure_ts.
+    expect(markdown).toContain(
+      '| test_name | installer_version | failure_category | owner | flake_rate | first_failure_ts_from_junit |',
+    );
+    // No historyJunits passed here — flake_rate defaults to 0.00 and
+    // no [known-flaky] prefix is applied.
+    expect(markdown).toContain(
+      '| P1-docx-summarize | nightly | timeout | @clawx-oncall | 0.00 | 2026-07-25T18:01:00Z |',
+    );
+  });
+});
+
+// @ts-expect-error — .mjs sibling with no bundled .d.ts
+import {
+  DEFAULT_FLAKE_THRESHOLD,
+  DEFAULT_FLAKE_WINDOW,
+  analyzeFlakeRate,
+} from '../../harness/src/flake-analyzer.mjs';
+
+/**
+ * Build a JUnit XML fixture containing exactly one failure row for
+ * `testName` if `failing` is true, otherwise a pass row. Shape matches
+ * harness/run.ts renderJUnitXml — same as junitWithFailures above but
+ * scoped to a single testcase so we can drive analyzeFlakeRate.
+ */
+function junitHistoryEntry(testName: string, failing: boolean): string {
+  const passOrFailBody = failing
+    ? `    <testcase name="${testName}" classname="clawx.harness" time="0.500" timestamp="2026-07-24T00:00:00Z"><properties><property name="failure_category" value="timeout"/></properties><failure message="boom" type="AssertionError"><![CDATA[detail]]></failure></testcase>`
+    : `    <testcase name="${testName}" classname="clawx.harness" time="0.100"/>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="${failing ? 1 : 0}" skipped="0">
+  <testsuite name="clawx.harness" tests="1" failures="${failing ? 1 : 0}" skipped="0" timestamp="2026-07-24T00:00:00Z">
+${passOrFailBody}
+  </testsuite>
+</testsuites>`;
+}
+
+describe('harness/src/flake-analyzer.mjs — SLA-based flake-suppression', () => {
+  it('empty history -> flake_rate = 0 and no [known-flaky] prefix on any row', () => {
+    // Repo with no history dir: analyzeFlakeRate([], ...) -> 0. And the
+    // per-testcase-table pipeline degrades gracefully — flake_rate is 0
+    // on every row, threshold 0.20 is never met.
+    expect(analyzeFlakeRate([], 'P1-docx-summarize')).toBe(0);
+    expect(analyzeFlakeRate([], 'anything')).toBe(0);
+    // End-to-end: no historyJunits passed at all -> no prefix rendered.
+    const legs = [
+      {
+        version: 'nightly',
+        xml: junitWithFailures(
+          5,
+          [
+            {
+              name: 'P1-docx-summarize',
+              category: 'timeout',
+              timestamp: '2026-07-25T18:01:00Z',
+            },
+          ],
+          '2026-07-25T18:00:00Z',
+        ),
+      },
+      { version: 'stable', xml: junitAllPass(5) },
+      { version: 'previous', xml: junitAllPass(5) },
+    ];
+    const { markdown } = buildPerTestcaseTable(legs);
+    expect(markdown).not.toContain('[known-flaky]');
+    // The flake_rate column renders "0.00" for every row on empty history.
+    expect(markdown).toContain(' | 0.00 | 2026-07-25T18:01:00Z |');
+    // Exported defaults are what the CLI wrapper reads from env.
+    expect(DEFAULT_FLAKE_WINDOW).toBe(10);
+    expect(DEFAULT_FLAKE_THRESHOLD).toBeCloseTo(0.2);
+  });
+
+  it('3-of-10 failing history -> flake_rate = 0.30 and row flagged as [known-flaky]', () => {
+    // 10 historical runs, 3 of them failed the same testcase. That's
+    // above the default 0.20 threshold, so the row must carry the
+    // [known-flaky] prefix in the rendered markdown.
+    const testName = 'P1-docx-summarize';
+    const historyJunits = [
+      junitHistoryEntry(testName, true),
+      junitHistoryEntry(testName, true),
+      junitHistoryEntry(testName, true),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+    ];
+    expect(analyzeFlakeRate(historyJunits, testName)).toBeCloseTo(0.3);
+    // End-to-end through the table renderer.
+    const legs = [
+      {
+        version: 'nightly',
+        xml: junitWithFailures(
+          5,
+          [
+            { name: testName, category: 'timeout', timestamp: '2026-07-25T18:01:00Z' },
+          ],
+          '2026-07-25T18:00:00Z',
+        ),
+      },
+      { version: 'stable', xml: junitAllPass(5) },
+      { version: 'previous', xml: junitAllPass(5) },
+    ];
+    const { rows, markdown } = buildPerTestcaseTable(legs, { historyJunits });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].flake_rate).toBeCloseTo(0.3);
+    expect(markdown).toContain('[known-flaky] P1-docx-summarize');
+    expect(markdown).toContain(' | 0.30 | 2026-07-25T18:01:00Z |');
+  });
+
+  it('1-of-10 failing history -> flake_rate = 0.10 and row NOT flagged (below 0.20 threshold)', () => {
+    // 10 runs, 1 failure — below the default 0.20 threshold. No
+    // [known-flaky] prefix; the reviewer sees this as a fresh regression,
+    // not a repeat offender.
+    const testName = 'P2-xlsx-total';
+    const historyJunits = [
+      junitHistoryEntry(testName, true),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+    ];
+    expect(analyzeFlakeRate(historyJunits, testName)).toBeCloseTo(0.1);
+    const legs = [
+      {
+        version: 'nightly',
+        xml: junitWithFailures(
+          5,
+          [
+            { name: testName, category: 'schema_violation', timestamp: '2026-07-25T18:01:00Z' },
+          ],
+          '2026-07-25T18:00:00Z',
+        ),
+      },
+      { version: 'stable', xml: junitAllPass(5) },
+      { version: 'previous', xml: junitAllPass(5) },
+    ];
+    const { rows, markdown } = buildPerTestcaseTable(legs, { historyJunits });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].flake_rate).toBeCloseTo(0.1);
+    expect(markdown).not.toContain('[known-flaky]');
+    expect(markdown).toContain(' | 0.10 | 2026-07-25T18:01:00Z |');
+    // A custom threshold under the row's flake_rate flips the prefix on.
+    const { markdown: mkStrict } = buildPerTestcaseTable(legs, {
+      historyJunits,
+      flakeThreshold: 0.05,
+    });
+    expect(mkStrict).toContain('[known-flaky] P2-xlsx-total');
+  });
+});
