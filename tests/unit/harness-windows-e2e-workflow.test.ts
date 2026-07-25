@@ -490,7 +490,7 @@ describe('harness/src/per-testcase-table.mjs — per-testcase failure table', ()
       .filter((l: string) => l.startsWith('|') && !l.startsWith('| ---') && !l.includes('test_name'));
     expect(bodyRows).toHaveLength(6);
     expect(markdown).toContain(
-      '| test_name | installer_version | failure_category | owner | flake_rate | first_failure_ts_from_junit |',
+      '| test_name | installer_version | failure_category | owner | flake_rate | quarantine | first_failure_ts_from_junit |',
     );
     // Every distinct per-testcase timestamp survives into the output.
     for (const ts of [
@@ -694,12 +694,12 @@ describe('harness/src/testcase-owners.mjs — test-code-owner routing', () => {
     expect(rows[0].owner).toBe('@clawx-oncall');
     // OWNERS column lands between failure_category and first_failure_ts.
     expect(markdown).toContain(
-      '| test_name | installer_version | failure_category | owner | flake_rate | first_failure_ts_from_junit |',
+      '| test_name | installer_version | failure_category | owner | flake_rate | quarantine | first_failure_ts_from_junit |',
     );
     // No historyJunits passed here — flake_rate defaults to 0.00 and
     // no [known-flaky] prefix is applied.
     expect(markdown).toContain(
-      '| P1-docx-summarize | nightly | timeout | @clawx-oncall | 0.00 | 2026-07-25T18:01:00Z |',
+      '| P1-docx-summarize | nightly | timeout | @clawx-oncall | 0.00 | noop | 2026-07-25T18:01:00Z |',
     );
   });
 });
@@ -758,7 +758,7 @@ describe('harness/src/flake-analyzer.mjs — SLA-based flake-suppression', () =>
     const { markdown } = buildPerTestcaseTable(legs);
     expect(markdown).not.toContain('[known-flaky]');
     // The flake_rate column renders "0.00" for every row on empty history.
-    expect(markdown).toContain(' | 0.00 | 2026-07-25T18:01:00Z |');
+    expect(markdown).toContain(' | 0.00 | noop | 2026-07-25T18:01:00Z |');
     // Exported defaults are what the CLI wrapper reads from env.
     expect(DEFAULT_FLAKE_WINDOW).toBe(10);
     expect(DEFAULT_FLAKE_THRESHOLD).toBeCloseTo(0.2);
@@ -801,7 +801,7 @@ describe('harness/src/flake-analyzer.mjs — SLA-based flake-suppression', () =>
     expect(rows).toHaveLength(1);
     expect(rows[0].flake_rate).toBeCloseTo(0.3);
     expect(markdown).toContain('[known-flaky] P1-docx-summarize');
-    expect(markdown).toContain(' | 0.30 | 2026-07-25T18:01:00Z |');
+    expect(markdown).toContain(' | 0.30 | noop | 2026-07-25T18:01:00Z |');
   });
 
   it('1-of-10 failing history -> flake_rate = 0.10 and row NOT flagged (below 0.20 threshold)', () => {
@@ -840,12 +840,166 @@ describe('harness/src/flake-analyzer.mjs — SLA-based flake-suppression', () =>
     expect(rows).toHaveLength(1);
     expect(rows[0].flake_rate).toBeCloseTo(0.1);
     expect(markdown).not.toContain('[known-flaky]');
-    expect(markdown).toContain(' | 0.10 | 2026-07-25T18:01:00Z |');
+    expect(markdown).toContain(' | 0.10 | noop | 2026-07-25T18:01:00Z |');
     // A custom threshold under the row's flake_rate flips the prefix on.
     const { markdown: mkStrict } = buildPerTestcaseTable(legs, {
       historyJunits,
       flakeThreshold: 0.05,
     });
     expect(mkStrict).toContain('[known-flaky] P2-xlsx-total');
+  });
+});
+
+// @ts-expect-error — .mjs sibling with no bundled .d.ts
+import {
+  DEFAULT_QUARANTINE_SUSTAIN,
+  DEFAULT_QUARANTINE_THRESHOLD,
+  buildQuarantineManifest,
+  manifestToLookup,
+  planQuarantine,
+  readQuarantineConfig,
+} from '../../harness/src/quarantine-manager.mjs';
+
+describe('harness/src/quarantine-manager.mjs — SLA-based auto-quarantine', () => {
+  it('below threshold -> action=noop, no manifest quarantine entry', () => {
+    // 10 runs, only run #1 failed. Overall flake_rate 0.10, well below
+    // the 0.30 quarantine threshold. Tail is 9 consecutive passes ->
+    // sustained_over_n_runs = 0. Action must be noop; reason must
+    // reference the sustain window, not the flake rate alone.
+    const testName = 'P2-xlsx-total';
+    const history = [
+      junitHistoryEntry(testName, true),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+    ];
+    const plan = planQuarantine(history, testName);
+    expect(plan.action).toBe('noop');
+    expect(plan.current_flake_rate).toBeCloseTo(0.1);
+    expect(plan.sustained_over_n_runs).toBe(0);
+    expect(plan.reason).toMatch(/not sustained/);
+    // Exported defaults match the doc'd env-var defaults so a downstream
+    // reader doesn't need to duplicate the literal.
+    expect(DEFAULT_QUARANTINE_THRESHOLD).toBeCloseTo(0.3);
+    expect(DEFAULT_QUARANTINE_SUSTAIN).toBe(3);
+  });
+
+  it('above threshold single-run -> action=noop (fails on one run, not sustained)', () => {
+    // 10 runs, ONLY the last one failed. Overall flake_rate 0.10 —
+    // but even at threshold=0.05 (below the current rate) the action
+    // must stay noop because there's only ONE consecutive tail
+    // failure, less than the default sustain window of 3. This is
+    // the property the SLA is built on: a single hot run must never
+    // trigger a quarantine PR.
+    const testName = 'P3-hot-run';
+    const history = [
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, true),
+    ];
+    // With the aggressive threshold=0.05 the flake_rate 0.10 clears the
+    // bar; the sustain gate is what keeps this a noop.
+    const plan = planQuarantine(history, testName, {
+      sustainThreshold: 0.05,
+      sustainWindow: 3,
+    });
+    expect(plan.action).toBe('noop');
+    expect(plan.sustained_over_n_runs).toBe(1);
+    expect(plan.current_flake_rate).toBeCloseTo(0.1);
+    expect(plan.reason).toMatch(/not sustained/);
+  });
+
+  it('above threshold sustained -> action=quarantine and manifest lookup drives table column', () => {
+    // Last 3 runs are ALL failures — meets sustain=3. The tail flake
+    // rate over the sustain window is 3/3 = 1.00, well above the
+    // default 0.30 threshold. Action must be quarantine.
+    const testName = 'P1-docx-summarize';
+    const history = [
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, false),
+      junitHistoryEntry(testName, true),
+      junitHistoryEntry(testName, true),
+      junitHistoryEntry(testName, true),
+    ];
+    const plan = planQuarantine(history, testName);
+    expect(plan.action).toBe('quarantine');
+    expect(plan.sustained_over_n_runs).toBe(3);
+    expect(plan.current_flake_rate).toBeCloseTo(0.3);
+    expect(plan.reason).toMatch(/consecutive/);
+
+    // Manifest shape carries config + plans and is dry-run only —
+    // nothing here mutates a test file. The per-testcase table reads
+    // this manifest via manifestToLookup so the QUARANTINE column
+    // reflects the planner's decision on this exact test_name.
+    const manifest = buildQuarantineManifest(history, [testName], {
+      window: 10,
+    });
+    expect(manifest.config.threshold).toBeCloseTo(0.3);
+    expect(manifest.config.sustain).toBe(3);
+    expect(manifest.config.window).toBe(10);
+    expect(manifest.plans).toHaveLength(1);
+    expect(manifest.plans[0].test_name).toBe(testName);
+    expect(manifest.plans[0].action).toBe('quarantine');
+
+    const quarantineLookup = manifestToLookup(manifest);
+    expect(quarantineLookup.get(testName)?.action).toBe('quarantine');
+
+    const legs = [
+      {
+        version: 'nightly',
+        xml: junitWithFailures(
+          5,
+          [
+            { name: testName, category: 'timeout', timestamp: '2026-07-25T18:01:00Z' },
+          ],
+          '2026-07-25T18:00:00Z',
+        ),
+      },
+      { version: 'stable', xml: junitAllPass(5) },
+      { version: 'previous', xml: junitAllPass(5) },
+    ];
+    const { rows, markdown } = buildPerTestcaseTable(legs, {
+      quarantineLookup,
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].quarantine).toBe('quarantine');
+    expect(markdown).toContain(
+      '| test_name | installer_version | failure_category | owner | flake_rate | quarantine | first_failure_ts_from_junit |',
+    );
+    expect(markdown).toContain(' | quarantine | 2026-07-25T18:01:00Z |');
+
+    // Env override behavior: HARNESS_QUARANTINE_THRESHOLD /
+    // HARNESS_QUARANTINE_SUSTAIN are read from a caller-supplied env.
+    const cfg = readQuarantineConfig({
+      HARNESS_QUARANTINE_THRESHOLD: '0.5',
+      HARNESS_QUARANTINE_SUSTAIN: '5',
+    });
+    expect(cfg.threshold).toBeCloseTo(0.5);
+    expect(cfg.sustain).toBe(5);
+    // Malformed values fall back to the shipped defaults.
+    const cfgBad = readQuarantineConfig({
+      HARNESS_QUARANTINE_THRESHOLD: 'not-a-number',
+      HARNESS_QUARANTINE_SUSTAIN: '-2',
+    });
+    expect(cfgBad.threshold).toBeCloseTo(DEFAULT_QUARANTINE_THRESHOLD);
+    expect(cfgBad.sustain).toBe(DEFAULT_QUARANTINE_SUSTAIN);
   });
 });

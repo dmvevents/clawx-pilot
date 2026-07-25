@@ -99,6 +99,7 @@ export function extractFailingTestcases(xml, version) {
  *   codeownersRules?: Array<any> | null,
  *   historyJunits?: string[] | null,
  *   flakeThreshold?: number,
+ *   quarantineLookup?: Map<string, { action: string, reason: string }> | null,
  * }} [sources]
  * @returns {{
  *   rows: Array<{
@@ -107,6 +108,7 @@ export function extractFailingTestcases(xml, version) {
  *     failure_category: string,
  *     owner: string,
  *     flake_rate: number,
+ *     quarantine: string,
  *     first_failure_ts_from_junit: string,
  *   }>,
  *   totalTests: number,
@@ -123,17 +125,21 @@ export function buildPerTestcaseTable(legs, sources) {
     sources && typeof sources.flakeThreshold === 'number'
       ? sources.flakeThreshold
       : DEFAULT_FLAKE_THRESHOLD;
+  const quarantineLookup =
+    sources && sources.quarantineLookup instanceof Map ? sources.quarantineLookup : null;
   for (const { version, xml } of legs) {
     const { failingRows, totalTests: t } = extractFailingTestcases(xml, version);
     totalTests += t;
     for (const r of failingRows) {
       const flakeRate = historyJunits ? analyzeFlakeRate(historyJunits, r.test_name) : 0;
+      const q = quarantineLookup ? quarantineLookup.get(r.test_name) : null;
       rows.push({
         test_name: r.test_name,
         installer_version: r.installer_version,
         failure_category: r.failure_category,
         owner: resolveOwner(r.test_name, sources ?? {}),
         flake_rate: flakeRate,
+        quarantine: q ? q.action : 'noop',
         first_failure_ts_from_junit: r.first_failure_ts_from_junit,
       });
     }
@@ -160,9 +166,9 @@ export function buildPerTestcaseTable(legs, sources) {
     );
   } else {
     lines.push(
-      '| test_name | installer_version | failure_category | owner | flake_rate | first_failure_ts_from_junit |',
+      '| test_name | installer_version | failure_category | owner | flake_rate | quarantine | first_failure_ts_from_junit |',
     );
-    lines.push('| --- | --- | --- | --- | ---: | --- |');
+    lines.push('| --- | --- | --- | --- | ---: | --- | --- |');
     for (const r of rows) {
       // `[known-flaky]` prefix is a visual signal to the reviewer that
       // this row is a repeat offender across history, not a fresh
@@ -171,7 +177,7 @@ export function buildPerTestcaseTable(legs, sources) {
       const displayName = flaky ? `[known-flaky] ${r.test_name}` : r.test_name;
       const rateStr = r.flake_rate.toFixed(2);
       lines.push(
-        `| ${displayName} | ${r.installer_version} | ${r.failure_category} | ${r.owner} | ${rateStr} | ${r.first_failure_ts_from_junit} |`,
+        `| ${displayName} | ${r.installer_version} | ${r.failure_category} | ${r.owner} | ${rateStr} | ${r.quarantine} | ${r.first_failure_ts_from_junit} |`,
       );
     }
   }
