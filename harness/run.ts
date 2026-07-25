@@ -33,6 +33,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// @ts-expect-error — sibling .mjs, no bundled .d.ts
+import { renderJUnitXml, validateReport } from './src/junit-schema.mjs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -311,30 +314,75 @@ async function runBinary(_p: Prompt, _w: string): Promise<never> {
   throw new Error('binary mode not enabled in scaffold — awaits installer URL follow-up');
 }
 
-function junitXml(results: RunResult[]): string {
-  const total = results.length;
+const SUITE_NAME = 'clawx.harness.doc-tooling-e2e';
+
+/**
+ * Build the canonical JUnit report object. run.ts hands this to
+ * validateReport() BEFORE rendering XML so a malformed row (missing
+ * name, non-numeric time, unknown status) aborts the run with a schema
+ * error instead of producing a report a downstream CI parser will
+ * silently accept.
+ */
+export function buildReport(results: RunResult[]): {
+  testsuites: Array<{
+    name: string;
+    tests: number;
+    failures: number;
+    skipped: number;
+    testcases: Array<{
+      name: string;
+      classname: string;
+      time: number;
+      status: 'pass' | 'fail' | 'skip';
+      reason?: string;
+      detail?: string;
+    }>;
+  }>;
+} {
   const failures = results.filter((r) => r.status === 'FAIL').length;
   const skipped = results.filter((r) => r.status === 'SKIP').length;
-  const escape = (s: string): string =>
-    String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-  const cases = results
-    .map((r) => {
-      const attrs = `name="${escape(r.id)}" classname="clawx.harness.doc-tooling-e2e" time="${(r.durationMs / 1000).toFixed(3)}"`;
-      if (r.status === 'PASS') return `    <testcase ${attrs}/>`;
-      if (r.status === 'SKIP')
-        return `    <testcase ${attrs}><skipped message="${escape(r.reason)}"/></testcase>`;
-      return `    <testcase ${attrs}><failure message="${escape(r.reason)}"><![CDATA[${r.detail}]]></failure></testcase>`;
-    })
-    .join('\n');
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    `<testsuites tests="${total}" failures="${failures}" skipped="${skipped}">`,
-    `  <testsuite name="clawx.harness.doc-tooling-e2e" tests="${total}" failures="${failures}" skipped="${skipped}">`,
-    cases,
-    '  </testsuite>',
-    '</testsuites>',
-    '',
-  ].join('\n');
+  const testcases = results.map((r) => {
+    const status: 'pass' | 'fail' | 'skip' =
+      r.status === 'PASS' ? 'pass' : r.status === 'SKIP' ? 'skip' : 'fail';
+    const tc: {
+      name: string;
+      classname: string;
+      time: number;
+      status: 'pass' | 'fail' | 'skip';
+      reason?: string;
+      detail?: string;
+    } = {
+      name: r.id,
+      classname: SUITE_NAME,
+      time: r.durationMs / 1000,
+      status,
+    };
+    if (status !== 'pass') {
+      tc.reason = r.reason;
+      if (status === 'fail') tc.detail = r.detail;
+    }
+    return tc;
+  });
+  return {
+    testsuites: [
+      {
+        name: SUITE_NAME,
+        tests: results.length,
+        failures,
+        skipped,
+        testcases,
+      },
+    ],
+  };
+}
+
+/**
+ * Legacy JUnit renderer kept for exported callers. The runtime path in
+ * main() validates the report first, then renders through renderJUnitXml.
+ */
+function junitXml(results: RunResult[]): string {
+  const report = validateReport(buildReport(results));
+  return renderJUnitXml(report);
 }
 
 async function main(): Promise<void> {
@@ -379,7 +427,19 @@ async function main(): Promise<void> {
   if (args.junit) {
     const dest = path.resolve(args.junit);
     await mkdir(path.dirname(dest), { recursive: true });
-    await writeFile(dest, junitXml(results));
+    // Validation gate: if buildReport() emits a malformed row (missing
+    // name, non-numeric time, unknown status), validateReport() throws
+    // and the harness exits with code 3 — the report never reaches disk.
+    let xml: string;
+    try {
+      const report = validateReport(buildReport(results));
+      xml = renderJUnitXml(report);
+    } catch (err) {
+      const e = err as Error;
+      process.stderr.write(`clawx-harness: JUnit schema violation — ${e.message}\n`);
+      process.exit(3);
+    }
+    await writeFile(dest, xml);
     process.stdout.write(`clawx-harness: wrote JUnit XML → ${dest}\n`);
   }
 
