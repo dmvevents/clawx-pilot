@@ -1,0 +1,12 @@
+{
+  "id": "P10-empty-doc-edge",
+  "prompt": "Open this document (which is essentially empty) and tell me what's in it.",
+  "expect_calls_tool": "document.read_docx",
+  "fixture": {
+    "kind": "docx-empty",
+    "name": "Empty_Placeholder.docx"
+  },
+  "tool_args": { "format": "markdown" },
+  "expected_stdout_regex": ".*",
+  "timeout_ms": 30000
+}

@@ -8,6 +8,8 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const RUNNER = path.join(REPO_ROOT, 'harness', 'run.ts');
 const PROMPTS = path.join(REPO_ROOT, 'tests', 'e2e', 'prompts.json');
 const GOLDEN_DIR = path.join(REPO_ROOT, 'tests', 'e2e', 'golden');
+const CORPUS_DIR = path.join(REPO_ROOT, 'harness', 'fixtures');
+const CORPUS_GOLDEN_DIR = path.join(REPO_ROOT, 'harness', 'golden');
 const TSX = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx');
 
 describe('harness/run.ts — 5-prompt doc-tooling E2E', () => {
@@ -56,16 +58,51 @@ describe('harness/run.ts — 5-prompt doc-tooling E2E', () => {
     }
   });
 
-  it('runs direct-mode against seeded fixtures and PASSes all 5', () => {
-    const res = spawnSync(TSX, [RUNNER], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 60_000 });
+  it('runs direct-mode against seeded fixtures and PASSes all 10 (baseline + corpus expansion)', () => {
+    const res = spawnSync(TSX, [RUNNER], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 90_000 });
     expect(res.status).toBe(0);
     const combined = `${res.stdout}\n${res.stderr}`;
-    expect(combined).toMatch(/\[PASS\] P1-docx-summarize/);
-    expect(combined).toMatch(/\[PASS\] P2-docx-rewrite-save/);
-    expect(combined).toMatch(/\[PASS\] P3-pdf-summarize/);
-    expect(combined).toMatch(/\[PASS\] P4-xlsx-grade/);
-    expect(combined).toMatch(/\[PASS\] P5-image-fields/);
+    for (const id of [
+      'P1-docx-summarize',
+      'P2-docx-rewrite-save',
+      'P3-pdf-summarize',
+      'P4-xlsx-grade',
+      'P5-image-fields',
+      'P6-docx-multipage-header-footer',
+      'P7-pdf-with-tables',
+      'P8-markdown-docx-roundtrip',
+      'P9-xlsx-to-pdf-export',
+      'P10-empty-doc-edge',
+    ]) {
+      expect(combined).toMatch(new RegExp(`\\[PASS\\] ${id}`));
+    }
     expect(combined).not.toMatch(/\[FAIL\]/);
+    // Runner announces 10 prompts loaded (baseline 5 + corpus 5).
+    expect(combined).toMatch(/prompts=10/);
+  });
+
+  it('corpus expansion has 5 fixtures P6..P10 with matching goldens', async () => {
+    const fixtures = (await readdir(CORPUS_DIR)).filter((f) => f.endsWith('.json')).sort();
+    const goldens = (await readdir(CORPUS_GOLDEN_DIR)).filter((f) => f.endsWith('.json')).sort();
+    // Lexicographic sort places "P10" before "P6".."P9" — this is what
+    // readdir + .sort() returns, and what the runner iterates in.
+    expect(fixtures).toEqual([
+      'P10-empty-doc-edge.json',
+      'P6-docx-multipage-header-footer.json',
+      'P7-pdf-with-tables.json',
+      'P8-markdown-docx-roundtrip.json',
+      'P9-xlsx-to-pdf-export.json',
+    ]);
+    expect(goldens).toEqual(fixtures);
+    for (const f of fixtures) {
+      const p = JSON.parse(await readFile(path.join(CORPUS_DIR, f), 'utf8'));
+      const g = JSON.parse(await readFile(path.join(CORPUS_GOLDEN_DIR, f), 'utf8'));
+      expect(p.id).toBe(f.replace(/\.json$/, ''));
+      expect(g.id).toBe(p.id);
+      expect(g.tool_called).toBe(p.expect_calls_tool);
+      expect(typeof p.fixture.kind).toBe('string');
+      expect(typeof p.timeout_ms).toBe('number');
+    }
   });
 
   it('binary mode SKIPs cleanly with exit 0 (does not red-fail CI)', () => {

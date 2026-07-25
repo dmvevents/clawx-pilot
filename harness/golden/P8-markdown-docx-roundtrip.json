@@ -1,0 +1,15 @@
+{
+  "id": "P8-markdown-docx-roundtrip",
+  "tool_called": "document.write_docx",
+  "result_schema": {
+    "path": "string",
+    "bytes": "number",
+    "paragraphs": "number"
+  },
+  "assertions": {
+    "paragraphs_min": 3,
+    "bytes_min": 200,
+    "path_matches": "Roundtrip_Memo\\.docx$",
+    "file_exists_at_path": true
+  }
+}

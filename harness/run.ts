@@ -27,7 +27,7 @@
  *   pnpm harness:windows-e2e --mode=binary  # reserved; SKIPs (exit 0)
  */
 
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -37,7 +37,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
 const PROMPTS_PATH = path.join(REPO_ROOT, 'tests', 'e2e', 'prompts.json');
-const GOLDEN_DIR = path.join(REPO_ROOT, 'tests', 'e2e', 'golden');
+const BASELINE_GOLDEN_DIR = path.join(REPO_ROOT, 'tests', 'e2e', 'golden');
+// Corpus expansion (PR #15): a second set of prompt fixtures + goldens.
+// Baseline P1..P5 stay in tests/e2e/ for continuity with harness:ci; the
+// expanded corpus lives under harness/{fixtures,golden}/ so it can grow
+// without recluttering the baseline dir.
+const CORPUS_DIR = path.join(REPO_ROOT, 'harness', 'fixtures');
+const CORPUS_GOLDEN_DIR = path.join(REPO_ROOT, 'harness', 'golden');
 const DOC_TOOLS_PATH = path.join(
   REPO_ROOT,
   'extensions',
@@ -47,6 +53,17 @@ const DOC_TOOLS_PATH = path.join(
 
 type Mode = 'direct' | 'binary';
 
+type FixtureKind =
+  | 'docx'
+  | 'xlsx'
+  | 'pdf'
+  | 'png'
+  | 'docx-multipage'
+  | 'pdf-tables'
+  | 'markdown-source'
+  | 'xlsx-export-source'
+  | 'docx-empty';
+
 interface Prompt {
   id: string;
   prompt: string;
@@ -54,13 +71,19 @@ interface Prompt {
   expected_stdout_regex: string;
   timeout_ms: number;
   fixture: {
-    kind: 'docx' | 'xlsx' | 'pdf' | 'png';
+    kind: FixtureKind;
     name: string;
     seed_paragraphs?: string[];
     seed_rows?: unknown[][];
+    header_text?: string;
+    footer_text?: string;
+    sections?: Array<{ heading: string; body: string }>;
+    table_rows?: unknown[][];
+    markdown_body?: string;
   };
   tool_args?: Record<string, unknown>;
   output_name?: string;
+  roundtrip?: { read_with: string; markdown_matches: string };
 }
 
 interface Golden {
@@ -97,11 +120,29 @@ function parseArgs(argv: string[]): { mode: Mode; junit: string | null; filter: 
 }
 
 async function loadPrompts(): Promise<Prompt[]> {
-  return JSON.parse(await readFile(PROMPTS_PATH, 'utf8')) as Prompt[];
+  const baseline = JSON.parse(await readFile(PROMPTS_PATH, 'utf8')) as Prompt[];
+  const corpus: Prompt[] = [];
+  if (existsSync(CORPUS_DIR)) {
+    const files = (await readdir(CORPUS_DIR))
+      .filter((f) => f.endsWith('.json'))
+      .sort();
+    for (const f of files) {
+      corpus.push(
+        JSON.parse(await readFile(path.join(CORPUS_DIR, f), 'utf8')) as Prompt,
+      );
+    }
+  }
+  return [...baseline, ...corpus];
 }
 
 async function loadGolden(id: string): Promise<Golden> {
-  return JSON.parse(await readFile(path.join(GOLDEN_DIR, `${id}.json`), 'utf8')) as Golden;
+  const corpusPath = path.join(CORPUS_GOLDEN_DIR, `${id}.json`);
+  if (existsSync(corpusPath)) {
+    return JSON.parse(await readFile(corpusPath, 'utf8')) as Golden;
+  }
+  return JSON.parse(
+    await readFile(path.join(BASELINE_GOLDEN_DIR, `${id}.json`), 'utf8'),
+  ) as Golden;
 }
 
 async function seedFixture(workDir: string, fixture: Prompt['fixture']): Promise<string> {
@@ -161,6 +202,129 @@ async function seedFixture(workDir: string, fixture: Prompt['fixture']): Promise
       'hex',
     );
     await writeFile(outPath, png);
+    return outPath;
+  }
+  if (fixture.kind === 'docx-multipage') {
+    // Multi-page docx with header + footer + section headings. mammoth
+    // reads .docx headings as markdown '#' lines, which the P6 golden
+    // regex asserts on.
+    const {
+      Document,
+      Packer,
+      Paragraph,
+      Header,
+      Footer,
+      HeadingLevel,
+      PageBreak,
+      TextRun,
+    } = await import('docx');
+    const sections = fixture.sections ?? [];
+    const children: unknown[] = [];
+    sections.forEach((s, i) => {
+      children.push(
+        new Paragraph({ text: s.heading, heading: HeadingLevel.HEADING_1 }),
+      );
+      children.push(new Paragraph({ text: s.body }));
+      if (i < sections.length - 1) {
+        children.push(new Paragraph({ children: [new PageBreak()] }));
+      }
+    });
+    const doc = new Document({
+      sections: [
+        {
+          properties: {},
+          headers: {
+            default: new Header({
+              children: [
+                new Paragraph({
+                  children: [new TextRun(fixture.header_text ?? '')],
+                }),
+              ],
+            }),
+          },
+          footers: {
+            default: new Footer({
+              children: [
+                new Paragraph({
+                  children: [new TextRun(fixture.footer_text ?? '')],
+                }),
+              ],
+            }),
+          },
+          children: children as never,
+        },
+      ],
+    });
+    await writeFile(outPath, await Packer.toBuffer(doc));
+    return outPath;
+  }
+  if (fixture.kind === 'pdf-tables') {
+    // Single-page PDF whose text stream lays out one row per line so
+    // pdf-parse can extract it verbatim. Not a "true" PDF table (no
+    // ruling), which is fine — the golden asserts on the row values.
+    const rows = (fixture.table_rows ?? []) as string[][];
+    const title = 'Attendance Register';
+    const lines: string[] = [];
+    let ty = 720;
+    lines.push(`BT /F1 14 Tf 72 ${ty} Td (${title}) Tj ET`);
+    ty -= 24;
+    for (const row of rows) {
+      const line = row.map((c) => String(c)).join('    ');
+      lines.push(`BT /F1 11 Tf 72 ${ty} Td (${line}) Tj ET`);
+      ty -= 18;
+    }
+    const stream = lines.join('\n');
+    const objects = [
+      '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+      '2 0 obj<</Type/Pages/Count 1/Kids [3 0 R]>>endobj',
+      '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox [0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj',
+      `4 0 obj<</Length ${stream.length}>>stream\n${stream}\nendstream endobj`,
+      '5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj',
+    ];
+    const header = '%PDF-1.4';
+    // Offset table not strictly correct for a spec-perfect PDF, but
+    // pdf-parse tolerates it and returns the extracted text — which
+    // is what the harness asserts on.
+    const body = [header, ...objects].join('\n');
+    const trailer = [
+      'xref',
+      '0 6',
+      '0000000000 65535 f',
+      '0000000009 00000 n',
+      '0000000052 00000 n',
+      '0000000095 00000 n',
+      '0000000180 00000 n',
+      `${String(body.length - 40).padStart(10, '0')} 00000 n`,
+      'trailer<</Size 6/Root 1 0 R>>',
+      'startxref',
+      `${body.length}`,
+      '%%EOF',
+    ].join('\n');
+    await writeFile(outPath, `${body}\n${trailer}`, 'binary');
+    return outPath;
+  }
+  if (fixture.kind === 'markdown-source') {
+    await writeFile(outPath, fixture.markdown_body ?? '', 'utf8');
+    return outPath;
+  }
+  if (fixture.kind === 'xlsx-export-source') {
+    const xlsx = await import('xlsx');
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(
+      wb,
+      xlsx.utils.aoa_to_sheet([['placeholder']]),
+      'Source',
+    );
+    const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    await writeFile(outPath, buf);
+    return outPath;
+  }
+  if (fixture.kind === 'docx-empty') {
+    const { Document, Packer, Paragraph } = await import('docx');
+    const doc = new Document({
+      sections: [{ properties: {}, children: [new Paragraph({ text: '' })] }],
+    });
+    await writeFile(outPath, await Packer.toBuffer(doc));
     return outPath;
   }
   throw new Error(`unknown fixture kind: ${(fixture as { kind: string }).kind}`);
@@ -291,6 +455,18 @@ async function runDirect(prompt: Prompt, workDir: string): Promise<{ preview: st
   }
   checkSchema(result, golden.result_schema);
   checkAssertions(result, golden.assertions);
+  if (prompt.roundtrip && prompt.expect_calls_tool === 'document.write_docx') {
+    // P8 markdown→docx round-trip: read the just-written .docx back and
+    // assert the markdown body contains the original agenda items.
+    const written = String(result.path);
+    const rr = await docTools.readDocx({ path: written, format: 'markdown' });
+    const rx = new RegExp(prompt.roundtrip.markdown_matches);
+    if (!rx.test(String(rr.markdown ?? ''))) {
+      throw new Error(
+        `roundtrip /${prompt.roundtrip.markdown_matches}/ !~ ${String(rr.markdown ?? '').slice(0, 200)}`,
+      );
+    }
+  }
   const stdoutForPromptRegex = String(
     result.markdown ?? result.text ?? result.dataUrl ?? result.path ?? JSON.stringify(result),
   );
