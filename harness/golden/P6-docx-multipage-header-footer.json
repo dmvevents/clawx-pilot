@@ -1,0 +1,16 @@
+{
+  "id": "P6-docx-multipage-header-footer",
+  "tool_called": "document.read_docx",
+  "result_schema": {
+    "path": "string",
+    "bytes": "number",
+    "format": "string",
+    "markdown": "string",
+    "messages": "array"
+  },
+  "assertions": {
+    "format_equals": "markdown",
+    "bytes_min": 500,
+    "markdown_matches": "Section 1: Enrollment[\\s\\S]*Section 4: Staffing"
+  }
+}

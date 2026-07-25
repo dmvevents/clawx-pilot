@@ -1,0 +1,20 @@
+{
+  "id": "P6-docx-multipage-header-footer",
+  "prompt": "Open the Term Report multi-page document (with header and footer) and produce a bullet summary of every section heading.",
+  "expect_calls_tool": "document.read_docx",
+  "fixture": {
+    "kind": "docx-multipage",
+    "name": "Term_Report_Multipage.docx",
+    "header_text": "MINISTRY OF EDUCATION — CONFIDENTIAL",
+    "footer_text": "Page — for internal circulation only",
+    "sections": [
+      { "heading": "Section 1: Enrollment", "body": "Term-two enrollment across the seven districts increased 3.2%." },
+      { "heading": "Section 2: Attendance", "body": "Attendance held steady at 94% average across primary schools." },
+      { "heading": "Section 3: Assessments", "body": "Continuous assessment scores show improvement in numeracy for grades 3-5." },
+      { "heading": "Section 4: Staffing", "body": "Two new teachers were assigned to Caroni; one long-term substitute in Victoria." }
+    ]
+  },
+  "tool_args": { "format": "markdown" },
+  "expected_stdout_regex": "Enrollment[\\s\\S]*Attendance[\\s\\S]*Assessments[\\s\\S]*Staffing",
+  "timeout_ms": 30000
+}

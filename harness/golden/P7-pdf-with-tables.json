@@ -1,0 +1,18 @@
+{
+  "id": "P7-pdf-with-tables",
+  "tool_called": "document.read_pdf",
+  "result_schema": {
+    "path": "string",
+    "bytes": "number",
+    "pages": "number",
+    "info": "object",
+    "text": "string",
+    "truncated": "boolean",
+    "totalChars": "number"
+  },
+  "assertions": {
+    "pages_min": 1,
+    "totalChars_min": 1,
+    "text_matches": "Attendance Register|Persad|Ramoutar"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "id": "P10-empty-doc-edge",
+  "tool_called": "document.read_docx",
+  "result_schema": {
+    "path": "string",
+    "bytes": "number",
+    "format": "string",
+    "markdown": "string",
+    "messages": "array"
+  },
+  "assertions": {
+    "format_equals": "markdown",
+    "bytes_min": 100,
+    "markdown_matches": "^[\\s\\S]{0,200}$"
+  }
+}

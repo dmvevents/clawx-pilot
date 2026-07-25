@@ -10,10 +10,12 @@ lands.
 
 | Path | What it holds |
 |------|---------------|
-| `tests/e2e/prompts.json` | The 5 deterministic prompts (verbatim from `incoming-tests/ClawX Agent Tests/Prompt Tests.docx`) with fixture spec + expected regex. |
-| `tests/e2e/golden/<id>.json` | Per-prompt golden expected-output: `tool_called`, `result_schema`, and `assertions`. |
-| `harness/run.ts` | Runner. Seeds a temp fixture per prompt, invokes the doc-tools entrypoint, checks schema + assertions + `expected_stdout_regex`, writes JUnit XML. |
-| `tests/unit/harness-windows-e2e.test.ts` | Vitest coverage — spec shape + runner exit-status + binary-mode SKIP. |
+| `tests/e2e/prompts.json` | The 5 baseline prompts (P1..P5) verbatim from `incoming-tests/ClawX Agent Tests/Prompt Tests.docx`. |
+| `tests/e2e/golden/<id>.json` | Per-baseline-prompt golden: `tool_called`, `result_schema`, `assertions`. |
+| `harness/fixtures/<id>.json` | Corpus expansion prompts (P6..P10) — multi-page docx w/ header+footer, pdf-with-tables, md→docx round-trip, xlsx→pdf export, empty-doc edge. |
+| `harness/golden/<id>.json` | Per-corpus-prompt golden, same shape. |
+| `harness/run.ts` | Runner. Iterates baseline + corpus, seeds a temp fixture per prompt, invokes the doc-tools entrypoint, checks schema + assertions + `expected_stdout_regex` (+ roundtrip for P8), writes JUnit XML. |
+| `tests/unit/harness-windows-e2e.test.ts` | Vitest coverage — baseline + corpus shape, runner exit-status (10/10 PASS), binary-mode SKIP. |
 
 ## Commands
 
@@ -63,4 +65,5 @@ and focused.
 
 - **No LLM roundtrip.** Tool-picking is covered by `scripts/v2-chatbot-e2e.ts` on the Mac dev box.
 - **No installer coupling.** Direct mode runs against the repo-checked JS deps; `--mode=binary` (spawn the packaged binary and drive its gateway) is a follow-up PR.
+- **P9 xlsx→pdf is currently xlsx-only.** doc-tools.mjs has no `document.export_pdf` yet; P9 exercises the xlsx write path and asserts on the produced spreadsheet. When an export tool lands, extend the P9 fixture with a chained step + golden.
 - **Maker != checker.** PR is draft; no self-merge.

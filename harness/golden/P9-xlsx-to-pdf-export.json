@@ -1,0 +1,15 @@
+{
+  "id": "P9-xlsx-to-pdf-export",
+  "tool_called": "document.write_xlsx",
+  "result_schema": {
+    "path": "string",
+    "bytes": "number",
+    "sheets": "number"
+  },
+  "assertions": {
+    "sheets_min": 1,
+    "bytes_min": 200,
+    "path_matches": "Term_Summary\\.xlsx$",
+    "file_exists_at_path": true
+  }
+}

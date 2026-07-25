@@ -1,0 +1,25 @@
+{
+  "id": "P8-markdown-docx-roundtrip",
+  "prompt": "Take this markdown draft, save it as Roundtrip_Memo.docx, then open the saved file back up and confirm the content survived the round-trip.",
+  "expect_calls_tool": "document.write_docx",
+  "fixture": {
+    "kind": "markdown-source",
+    "name": "Roundtrip_Memo_Source.md",
+    "markdown_body": "# Weekly Memo\n\nAgenda item alpha.\n\nAgenda item bravo.\n\nAgenda item charlie."
+  },
+  "tool_args": {
+    "title": "Weekly Memo",
+    "paragraphs": [
+      "Agenda item alpha.",
+      "Agenda item bravo.",
+      "Agenda item charlie."
+    ]
+  },
+  "output_name": "Roundtrip_Memo.docx",
+  "roundtrip": {
+    "read_with": "document.read_docx",
+    "markdown_matches": "Agenda item alpha[\\s\\S]*Agenda item bravo[\\s\\S]*Agenda item charlie"
+  },
+  "expected_stdout_regex": "Roundtrip_Memo\\.docx",
+  "timeout_ms": 30000
+}

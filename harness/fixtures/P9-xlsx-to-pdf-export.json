@@ -1,0 +1,26 @@
+{
+  "id": "P9-xlsx-to-pdf-export",
+  "prompt": "Take the term-summary spreadsheet and produce a PDF export the principal can email out.",
+  "expect_calls_tool": "document.write_xlsx",
+  "fixture": {
+    "kind": "xlsx-export-source",
+    "name": "Term_Summary_Source.xlsx"
+  },
+  "tool_args": {
+    "sheets": [
+      {
+        "name": "TermSummary",
+        "rows": [
+          ["Metric", "Value"],
+          ["Enrollment", 4382],
+          ["Attendance %", 94],
+          ["Numeracy Δ (pp)", 2.4]
+        ]
+      }
+    ]
+  },
+  "output_name": "Term_Summary.xlsx",
+  "expected_stdout_regex": "Term_Summary\\.xlsx",
+  "note": "Native xlsx→pdf export is not yet implemented in doc-tools.mjs. This fixture exercises the xlsx write path (the export-source produce step) and asserts the source spreadsheet is produced. When a document.export_pdf tool lands, extend this fixture with a chained step + golden assertion for the resulting .pdf. Tracked as a follow-up in harness/E2E-README.md.",
+  "timeout_ms": 30000
+}

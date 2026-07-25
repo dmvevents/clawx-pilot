@@ -1,0 +1,17 @@
+{
+  "id": "P7-pdf-with-tables",
+  "prompt": "Extract the Attendance Register table from this PDF and list any student marked absent.",
+  "expect_calls_tool": "document.read_pdf",
+  "fixture": {
+    "kind": "pdf-tables",
+    "name": "Attendance_Register.pdf",
+    "table_rows": [
+      ["Student", "Mon", "Tue", "Wed"],
+      ["A. Charles", "P", "P", "P"],
+      ["B. Persad", "P", "A", "P"],
+      ["C. Ramoutar", "A", "A", "P"]
+    ]
+  },
+  "expected_stdout_regex": "Attendance Register|Charles|Persad|Ramoutar",
+  "timeout_ms": 30000
+}
