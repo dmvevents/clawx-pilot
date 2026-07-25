@@ -105,13 +105,13 @@ jobs:
           # postinstall side-effects.
           pnpm install --ignore-scripts --frozen-lockfile
 
-      - name: Run 5-prompt Windows E2E harness (direct mode)
+      - name: Run 5-prompt doc-tooling E2E harness (direct mode)
         if: ${{ inputs.installer_url != '' }}
         shell: pwsh
         continue-on-error: false
         run: |
           $env:CLAWX_APP_RESOURCES = "$env:LOCALAPPDATA\Programs\Ministry of Education\resources"
-          pnpm harness:windows-e2e --junit "$env:RUNNER_TEMP\harness-junit.xml"
+          pnpm harness:doc-tooling-e2e --junit "$env:RUNNER_TEMP\harness-junit.xml"
 
       - name: Upload harness JUnit report
         if: ${{ always() && inputs.installer_url != '' }}

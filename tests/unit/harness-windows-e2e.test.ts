@@ -1,17 +1,18 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
-const RUNNER = path.join(REPO_ROOT, 'scripts', 'harness', 'run.mjs');
-const SPEC = path.join(REPO_ROOT, 'scripts', 'harness', 'prompts.json');
+const RUNNER = path.join(REPO_ROOT, 'harness', 'run.ts');
+const PROMPTS = path.join(REPO_ROOT, 'tests', 'e2e', 'prompts.json');
+const GOLDEN_DIR = path.join(REPO_ROOT, 'tests', 'e2e', 'golden');
+const TSX = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx');
 
-describe('scripts/harness/run.mjs — 5-prompt Windows E2E scaffold', () => {
-  it('spec has exactly the 5 prompts from Prompt Tests.docx', async () => {
-    const raw = await readFile(SPEC, 'utf8');
-    const prompts = JSON.parse(raw);
+describe('harness/run.ts — 5-prompt doc-tooling E2E', () => {
+  it('spec has exactly the 5 prompts (P1..P5) from Prompt Tests.docx', async () => {
+    const prompts = JSON.parse(await readFile(PROMPTS, 'utf8'));
     expect(prompts).toHaveLength(5);
     expect(prompts.map((p: any) => p.id)).toEqual([
       'P1-docx-summarize',
@@ -25,7 +26,6 @@ describe('scripts/harness/run.mjs — 5-prompt Windows E2E scaffold', () => {
       expect(typeof p.expect_calls_tool).toBe('string');
       expect(typeof p.expected_stdout_regex).toBe('string');
       expect(typeof p.timeout_ms).toBe('number');
-      // Only tools we actually expose from doc-tools.mjs.
       expect([
         'document.read_pdf',
         'document.read_docx',
@@ -37,12 +37,27 @@ describe('scripts/harness/run.mjs — 5-prompt Windows E2E scaffold', () => {
     }
   });
 
-  it('runs direct-mode against the seeded fixtures and PASSes all 5', () => {
-    const res = spawnSync(
-      process.execPath,
-      [RUNNER],
-      { cwd: REPO_ROOT, encoding: 'utf8', timeout: 60_000 },
-    );
+  it('golden dir has 5 files, one per prompt id, each carrying schema + assertions', async () => {
+    const files = await readdir(GOLDEN_DIR);
+    const jsons = files.filter((f) => f.endsWith('.json')).sort();
+    expect(jsons).toEqual([
+      'P1-docx-summarize.json',
+      'P2-docx-rewrite-save.json',
+      'P3-pdf-summarize.json',
+      'P4-xlsx-grade.json',
+      'P5-image-fields.json',
+    ]);
+    for (const f of jsons) {
+      const golden = JSON.parse(await readFile(path.join(GOLDEN_DIR, f), 'utf8'));
+      expect(golden.id).toBe(f.replace(/\.json$/, ''));
+      expect(typeof golden.tool_called).toBe('string');
+      expect(typeof golden.result_schema).toBe('object');
+      expect(typeof golden.assertions).toBe('object');
+    }
+  });
+
+  it('runs direct-mode against seeded fixtures and PASSes all 5', () => {
+    const res = spawnSync(TSX, [RUNNER], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 60_000 });
     expect(res.status).toBe(0);
     const combined = `${res.stdout}\n${res.stderr}`;
     expect(combined).toMatch(/\[PASS\] P1-docx-summarize/);
@@ -54,11 +69,11 @@ describe('scripts/harness/run.mjs — 5-prompt Windows E2E scaffold', () => {
   });
 
   it('binary mode SKIPs cleanly with exit 0 (does not red-fail CI)', () => {
-    const res = spawnSync(
-      process.execPath,
-      [RUNNER, '--mode=binary'],
-      { cwd: REPO_ROOT, encoding: 'utf8', timeout: 30_000 },
-    );
+    const res = spawnSync(TSX, [RUNNER, '--mode=binary'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      timeout: 30_000,
+    });
     expect(res.status).toBe(0);
     const combined = `${res.stdout}\n${res.stderr}`;
     expect(combined).toMatch(/\[SKIP\] P1-docx-summarize/);
