@@ -1,0 +1,266 @@
+name: Windows Installer E2E (5-prompt harness)
+
+# Runs the doc-tooling harness against a freshly installed ClawX build
+# on a clean windows-latest runner. Dispatched by hand with a pinned
+# installer URL — no hardcoded release URL, no auto-trigger, so this
+# workflow can only fire against an artifact the operator explicitly
+# points it at.
+#
+# Inputs:
+#   installer_url         — direct URL to Ministry-of-Education-Setup-*.exe
+#   harness_prompts_ref   — git ref to check out (default: main)
+#
+# Artifacts:
+#   harness-junit         — harness-junit.xml + install.log
+#
+# Job summary:
+#   Tallies failure_category values (from PR #16's classifier) into
+#   markdown so a reviewer can see the shape of the failures at a glance.
+
+on:
+  workflow_dispatch:
+    inputs:
+      installer_url:
+        description: 'Direct URL to Ministry-of-Education-Setup-*.exe (required at dispatch)'
+        required: true
+      harness_prompts_ref:
+        description: 'Repository ref to check out for the harness sources'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: read
+
+jobs:
+  installer-e2e:
+    name: Install + run 5-prompt harness (${{ matrix.installer_version }})
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      # One version breaking must not cancel the others — a regression
+      # on nightly should still let stable + previous complete so we
+      # know whether the failure is version-specific.
+      fail-fast: false
+      matrix:
+        installer_version: [nightly, stable, previous]
+    steps:
+      - name: Check out harness sources
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.harness_prompts_ref }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.33.4'
+          run_install: false
+
+      - name: Install harness dependencies
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Download installer
+        shell: pwsh
+        env:
+          INSTALLER_URL: ${{ inputs.installer_url }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = "$env:RUNNER_TEMP\installer.exe"
+          Invoke-WebRequest -Uri "$env:INSTALLER_URL" -OutFile $out
+          Get-Item $out | Select Length, LastWriteTime | Format-List
+          "INSTALLER_PATH=$out" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install silently
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $log = "$env:RUNNER_TEMP\install.log"
+          # NSIS /S = silent; /log captures the installer's own log.
+          Start-Process -FilePath "$env:INSTALLER_PATH" `
+            -ArgumentList '/S', "/log=$log" `
+            -Wait -PassThru | Select ExitCode | Format-List
+          "INSTALL_LOG=$log" | Out-File -FilePath $env:GITHUB_ENV -Append
+          if (Test-Path $log) { Get-Content $log -Tail 40 }
+
+      - name: Run 5-prompt harness (--output-format=junit)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $junit = "$env:RUNNER_TEMP\harness-junit.xml"
+          pnpm exec tsx harness/run.ts --output-format=junit --junit "$junit"
+          $exit = $LASTEXITCODE
+          "HARNESS_JUNIT=$junit" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "harness exit code: $exit"
+          # Do not fail the job on harness failures — the JUnit + summary
+          # tell the reviewer what happened. Fail only on schema-gate
+          # (exit 3) or fatal error (exit 2).
+          if ($exit -eq 2 -or $exit -eq 3) { exit $exit }
+
+      - name: Summarise failure_category counts (${{ matrix.installer_version }})
+        if: always()
+        shell: bash
+        env:
+          INSTALLER_VERSION: ${{ matrix.installer_version }}
+        run: |
+          set -euo pipefail
+          junit="${HARNESS_JUNIT:-}"
+          if [ -z "$junit" ] || [ ! -f "$junit" ]; then
+            echo "## Windows Installer E2E — ${INSTALLER_VERSION}" >> "$GITHUB_STEP_SUMMARY"
+            echo "no JUnit XML produced — see previous step" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "## Windows Installer E2E — failure categories (${INSTALLER_VERSION})"
+            echo ""
+            echo "| category | count |"
+            echo "| --- | ---: |"
+            # awk extracts value="..." from every <property name="failure_category" .../>
+            # tally, sorted by count desc; empty means all-pass.
+            awk 'match($0, /name="failure_category" value="([^"]+)"/, a) { c[a[1]]++ } END { for (k in c) print k"\t"c[k] }' "$junit" \
+              | sort -k2 -nr \
+              | awk -F'\t' '{ printf "| %s | %s |\n", $1, $2 }'
+            echo ""
+            echo "_Empty table = no failing testcases in this run._"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload harness-junit artifact (${{ matrix.installer_version }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-junit-${{ matrix.installer_version }}
+          path: |
+            ${{ env.HARNESS_JUNIT }}
+            ${{ env.INSTALL_LOG }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Collect harness screenshot attachments
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Screenshots are emitted by the harness under a well-known dir
+          # when the runtime (binary mode) captures them. Direct-mode
+          # emits nothing, so this step is a no-op on offline runs.
+          shot_dir="$GITHUB_WORKSPACE/harness/.artifacts/screenshots"
+          runner_shot_dir="$RUNNER_TEMP/harness-screenshots"
+          mkdir -p "$runner_shot_dir"
+          if [ -d "$shot_dir" ]; then
+            # Copy anything the harness produced into a stable location.
+            find "$shot_dir" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) \
+              -exec cp {} "$runner_shot_dir/" \; || true
+          fi
+          count=$(find "$runner_shot_dir" -type f | wc -l | tr -d ' ')
+          echo "screenshot_count=$count" >> "$GITHUB_OUTPUT"
+          echo "HARNESS_SCREENSHOT_DIR=$runner_shot_dir" >> "$GITHUB_ENV"
+          echo "collected $count screenshot(s)"
+        id: collect_screenshots
+
+      - name: Upload harness screenshots (${{ matrix.installer_version }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-screenshots-${{ matrix.installer_version }}
+          path: ${{ env.HARNESS_SCREENSHOT_DIR }}
+          if-no-files-found: ignore
+          retention-days: 14
+
+  consolidated-summary:
+    name: Consolidated summary across all installer versions
+    needs: [installer-e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download nightly JUnit
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: harness-junit-nightly
+          path: junit-nightly
+        continue-on-error: true
+
+      - name: Download stable JUnit
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: harness-junit-stable
+          path: junit-stable
+        continue-on-error: true
+
+      - name: Download previous JUnit
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: harness-junit-previous
+          path: junit-previous
+        continue-on-error: true
+
+      - name: Dedup failure_category across installer versions
+        if: always()
+        shell: bash
+        env:
+          NIGHTLY_DIR: junit-nightly
+          STABLE_DIR: junit-stable
+          PREVIOUS_DIR: junit-previous
+        run: |
+          set -euo pipefail
+          # Locate whatever XML each download-artifact step wrote.
+          find_xml() {
+            find "$1" -type f -name '*.xml' 2>/dev/null | head -1 || true
+          }
+          n=$(find_xml "$NIGHTLY_DIR")
+          s=$(find_xml "$STABLE_DIR")
+          p=$(find_xml "$PREVIOUS_DIR")
+          # Delegate the real regression-suspect logic to the Node
+          # module so we can unit-test the tally rules exhaustively.
+          # Prepended to the summary so it renders above the table.
+          out="$RUNNER_TEMP/dedup-callout.md"
+          node harness/src/failure-dedup.mjs "$n" "$s" "$p" > "$out"
+          echo "DEDUP_CALLOUT=$out" >> "$GITHUB_ENV"
+          cat "$out"
+
+      - name: Emit consolidated summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Prepend the regression-suspect callout, if the previous step
+          # produced one. Then render the per-version table.
+          if [ -n "${DEDUP_CALLOUT:-}" ] && [ -f "$DEDUP_CALLOUT" ]; then
+            cat "$DEDUP_CALLOUT" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          {
+            echo "## Windows Installer E2E — consolidated summary"
+            echo ""
+            echo "| installer_version | tests_run | passed | failed | failure_categories |"
+            echo "| --- | ---: | ---: | ---: | --- |"
+            for v in nightly stable previous; do
+              dir="junit-$v"
+              # download-artifact writes the file inside the dir; fall back
+              # to any *.xml so a rename in the harness doesn't hide it.
+              junit=$(find "$dir" -type f -name '*.xml' 2>/dev/null | head -1 || true)
+              if [ -z "$junit" ] || [ ! -f "$junit" ]; then
+                echo "| $v | — | — | — | (no JUnit) |"
+                continue
+              fi
+              # tests + failures come from the aggregate <testsuite ...>
+              # attributes; passed = tests - failures - skipped.
+              tests=$(grep -oE 'testsuite [^>]*tests="[0-9]+"' "$junit" | head -1 | grep -oE 'tests="[0-9]+"' | grep -oE '[0-9]+' || echo 0)
+              failures=$(grep -oE 'testsuite [^>]*failures="[0-9]+"' "$junit" | head -1 | grep -oE 'failures="[0-9]+"' | grep -oE '[0-9]+' || echo 0)
+              skipped=$(grep -oE 'testsuite [^>]*skipped="[0-9]+"' "$junit" | head -1 | grep -oE 'skipped="[0-9]+"' | grep -oE '[0-9]+' || echo 0)
+              tests=${tests:-0}; failures=${failures:-0}; skipped=${skipped:-0}
+              passed=$(( tests - failures - skipped ))
+              cats=$(awk 'match($0, /name="failure_category" value="([^"]+)"/, a) { c[a[1]]++ } END { first=1; for (k in c) { if (!first) printf ", "; printf "%s=%d", k, c[k]; first=0 } }' "$junit")
+              [ -z "$cats" ] && cats="(none)"
+              echo "| $v | $tests | $passed | $failures | $cats |"
+            done
+            echo ""
+            echo "_Rows showing \"(no JUnit)\" indicate that matrix leg produced no artifact — check the per-version job logs._"
+          } >> "$GITHUB_STEP_SUMMARY"
