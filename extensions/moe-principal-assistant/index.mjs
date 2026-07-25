@@ -28,6 +28,14 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  readPdf as docReadPdf,
+  readDocx as docReadDocx,
+  writeDocx as docWriteDocx,
+  readXlsx as docReadXlsx,
+  writeXlsx as docWriteXlsx,
+  readImage as docReadImage,
+} from './doc-tools.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = __dirname;
@@ -386,6 +394,121 @@ function normalizeSuspensionPreviewPayload(rawPayload, cfg) {
  * not exposed as user-facing skills, so they don't need to be added.
  */
 
+/**
+ * Register native document-processing tools. These are Windows-safe because
+ * they never shell out to Python or any other external binary — the
+ * underlying JS deps (pdf-parse, mammoth, xlsx, docx, sharp) are bundled
+ * with the installer via EXTRA_BUNDLED_PACKAGES.
+ *
+ * Naming: everything is namespaced under `document.*` so agent tool-picking
+ * clearly distinguishes it from the browser-driven `outlook.*` / `forms.*`
+ * families and the Python-backed `pdf` / `docx` / `xlsx` skills. On systems
+ * that DO have Python, the agent may still pick the skills; on the pilot
+ * Windows laptop these are the only path that works.
+ */
+function registerDocumentTools({ registerTool, log }) {
+  const readableSchema = { type: 'string', description: 'Absolute path, ~/ path, or filename to look up in ~/.openclaw/media/outbound, ~/Downloads, ~/Documents, or ~/Desktop.' };
+  const numberSchema = { type: 'number', minimum: 1 };
+
+  registerTool({
+    name: 'document.read_pdf',
+    description:
+      "Extract text from a PDF file WITHOUT invoking Python. Uses the bundled pdf-parse dep, so this works on Windows even if the pdf/nano-pdf skills' Python runtime is unavailable. Args: { path, maxChars? (default 200000) }. Returns { path, bytes, pages, info, text, truncated, totalChars }. Prefer this over the pdf skill when handling emailed attachments or files the principal dropped into chat.",
+    parameters: toolParameters(
+      { path: readableSchema, maxChars: numberSchema },
+      ['path'],
+    ),
+    execute: async (_toolCallId, args = {}) => docReadPdf(args),
+  });
+
+  registerTool({
+    name: 'document.read_docx',
+    description:
+      'Extract text from a Word (.docx) document WITHOUT invoking Python. Uses the bundled mammoth dep. Args: { path, format? ("markdown"|"html"|"text", default "markdown") }. Returns the parsed content plus any conversion messages. Works on Windows where python-docx is not installed.',
+    parameters: toolParameters(
+      {
+        path: readableSchema,
+        format: { type: 'string', enum: ['markdown', 'html', 'text', 'plain'] },
+      },
+      ['path'],
+    ),
+    execute: async (_toolCallId, args = {}) => docReadDocx(args),
+  });
+
+  registerTool({
+    name: 'document.write_docx',
+    description:
+      'Create a new Word (.docx) document using the bundled `docx` dep. Args: { path, title?, paragraphs: string[] }. Relative paths land in ~/.openclaw/media/outbound so ClawX auto-attaches. Returns { path, bytes, paragraphs }. Use this after drafting a letter or report so the principal can attach it to Outlook.',
+    parameters: toolParameters(
+      {
+        path: readableSchema,
+        title: { type: 'string' },
+        paragraphs: { type: 'array', items: { type: 'string' } },
+      },
+      ['path', 'paragraphs'],
+    ),
+    execute: async (_toolCallId, args = {}) => docWriteDocx(args),
+  });
+
+  registerTool({
+    name: 'document.read_xlsx',
+    description:
+      'Read an Excel (.xlsx / .xls / .csv) spreadsheet WITHOUT invoking Python. Uses the bundled xlsx (SheetJS) dep. Args: { path, sheet? (name or index — first sheet by default), maxRows? (default 500) }. Returns { path, sheets, sheet, rows (2D array), totalRows, truncated }. Works on Windows where openpyxl/pandas are not installed.',
+    parameters: toolParameters(
+      {
+        path: readableSchema,
+        sheet: { anyOf: [{ type: 'string' }, { type: 'number', minimum: 0 }] },
+        maxRows: numberSchema,
+      },
+      ['path'],
+    ),
+    execute: async (_toolCallId, args = {}) => docReadXlsx(args),
+  });
+
+  registerTool({
+    name: 'document.write_xlsx',
+    description:
+      'Create a new Excel (.xlsx) workbook using the bundled xlsx (SheetJS) dep. Args: { path, sheets: [{ name, rows: string[][] }] }. Relative paths land in ~/.openclaw/media/outbound. Returns { path, bytes, sheets }.',
+    parameters: toolParameters(
+      {
+        path: readableSchema,
+        sheets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              rows: {
+                type: 'array',
+                items: { type: 'array', items: {} },
+              },
+            },
+            required: ['name', 'rows'],
+            additionalProperties: false,
+          },
+        },
+      },
+      ['path', 'sheets'],
+    ),
+    execute: async (_toolCallId, args = {}) => docWriteXlsx(args),
+  });
+
+  registerTool({
+    name: 'document.read_image',
+    description:
+      'Read an image (.png/.jpg/.gif/.webp/.bmp/.avif/.tiff) from disk and return its metadata plus a base64 data URL suitable for VLM analysis. Uses Electron\'s bundled sharp module — no Python or ImageMagick. Args: { path, maxDim? (default 768) }. Large images are downscaled server-side so the response stays within model limits. Returns { path, bytes, width, height, format, mimeType, dataUrl, resized }.',
+    parameters: toolParameters(
+      { path: readableSchema, maxDim: numberSchema },
+      ['path'],
+    ),
+    execute: async (_toolCallId, args = {}) => docReadImage(args),
+  });
+
+  log?.info?.(
+    'moe-principal-assistant: document.* tools registered (read_pdf, read_docx, write_docx, read_xlsx, write_xlsx, read_image)',
+  );
+}
+
 export function register(api) {
   // Gateway register-API contract (build/openclaw/dist/api-builder-d3jBS7ML.js):
   //   api.pluginConfig — THIS plugin's `plugins.entries[<id>].config` (validated)
@@ -404,13 +527,22 @@ export function register(api) {
     (pluginConfig && typeof pluginConfig === 'object' ? pluginConfig : null) ??
     (typeof config === 'function' ? config() : config) ??
     {};
+
+  // Document-processing tools have no dependency on principal config, so we
+  // register them BEFORE the config gate. They matter on Windows especially:
+  // the Anthropic pdf/xlsx/docx skills call Python (pypdf, pdfplumber,
+  // openpyxl, python-docx) which is not shipped in the pilot runtime. These
+  // native handlers use the deps already bundled via EXTRA_BUNDLED_PACKAGES
+  // (pdf-parse, mammoth, xlsx, docx, sharp) and never shell out.
+  registerDocumentTools({ registerTool, log });
+
   const required = ['principalName', 'schoolName', 'educationDistrict', 'schoolType'];
   const missing = required.filter((k) => !cfg[k]);
   if (missing.length) {
     log.warn?.(
-      `moe-principal-assistant: missing config (${missing.join(', ')}) — tools will not be registered.`,
+      `moe-principal-assistant: missing config (${missing.join(', ')}) — principal.* tools will not be registered.`,
     );
-    return { registered: false };
+    return { registered: false, docToolsRegistered: true };
   }
   if (!VALID_DISTRICTS.includes(cfg.educationDistrict)) {
     log.warn?.(`moe-principal-assistant: educationDistrict "${cfg.educationDistrict}" is not one of the seven MoE districts.`);
