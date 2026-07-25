@@ -246,4 +246,102 @@ describe('.github/workflows/windows-installer-e2e.yml — consolidated summary',
       expect(downloadedNames).toContain(`harness-junit-${v}`);
     }
   });
+
+  it('dedup step exists, is guarded by if: always(), and runs after the 3 downloads', () => {
+    const entry = findConsolidatedJob();
+    expect(entry).toBeDefined();
+    const [, job] = entry!;
+    const steps = job.steps ?? [];
+    const dedupIdx = steps.findIndex((s) =>
+      (s.name ?? '').toLowerCase().includes('dedup'),
+    );
+    expect(dedupIdx).toBeGreaterThanOrEqual(0);
+    const dedupStep = steps[dedupIdx];
+    expect(dedupStep.if).toBe('always()');
+    // Must come after all three download steps.
+    const lastDownloadIdx = steps.reduce(
+      (acc, s, i) =>
+        typeof s.uses === 'string' && s.uses.startsWith('actions/download-artifact@')
+          ? i
+          : acc,
+      -1,
+    );
+    expect(lastDownloadIdx).toBeGreaterThanOrEqual(0);
+    expect(dedupIdx).toBeGreaterThan(lastDownloadIdx);
+  });
+});
+
+// @ts-expect-error — .mjs sibling with no bundled .d.ts
+import { dedupFailureCategories } from '../../harness/src/failure-dedup.mjs';
+
+function junitWithCategories(cats: string[]): string {
+  const props = cats
+    .map(
+      (c) =>
+        `        <property name="failure_category" value="${c}" />`,
+    )
+    .join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="x" tests="1" failures="${cats.length}" skipped="0">
+    <testcase name="t1" classname="x" time="0.1">
+      <failure message="m" type="AssertionError">boom</failure>
+      <properties>
+${props}
+      </properties>
+    </testcase>
+  </testsuite>
+</testsuites>`;
+}
+
+describe('harness/src/failure-dedup.mjs — REGRESSION SUSPECT logic', () => {
+  it('overlap-2-versions: category in 2 of 3 legs -> flagged as suspect', () => {
+    const legs = [
+      { version: 'nightly', xml: junitWithCategories(['timeout']) },
+      { version: 'stable', xml: junitWithCategories(['timeout']) },
+      { version: 'previous', xml: junitWithCategories(['schema_violation']) },
+    ];
+    const { suspects, perVersionOnly, markdown } = dedupFailureCategories(legs);
+    expect(suspects).toHaveLength(1);
+    expect(suspects[0].category).toBe('timeout');
+    expect(suspects[0].versions.sort()).toEqual(['nightly', 'stable']);
+    expect(perVersionOnly.map((p: { category: string }) => p.category)).toEqual([
+      'schema_violation',
+    ]);
+    expect(markdown).toMatch(/REGRESSION SUSPECT/);
+    expect(markdown).toMatch(/`timeout`/);
+    expect(markdown).toMatch(/`nightly`/);
+    expect(markdown).toMatch(/`stable`/);
+  });
+
+  it('overlap-3-versions: category in all 3 legs -> flagged with all 3 versions', () => {
+    const legs = [
+      { version: 'nightly', xml: junitWithCategories(['missing_output']) },
+      { version: 'stable', xml: junitWithCategories(['missing_output']) },
+      { version: 'previous', xml: junitWithCategories(['missing_output']) },
+    ];
+    const { suspects, perVersionOnly, markdown } = dedupFailureCategories(legs);
+    expect(suspects).toHaveLength(1);
+    expect(suspects[0].category).toBe('missing_output');
+    expect(suspects[0].versions.sort()).toEqual(['nightly', 'previous', 'stable']);
+    expect(perVersionOnly).toHaveLength(0);
+    expect(markdown).toMatch(/REGRESSION SUSPECT/);
+    expect(markdown).toMatch(/`missing_output`/);
+    for (const v of ['nightly', 'stable', 'previous']) {
+      expect(markdown).toContain(`\`${v}\``);
+    }
+  });
+
+  it('no-overlap: every category confined to one version -> per-version-only note', () => {
+    const legs = [
+      { version: 'nightly', xml: junitWithCategories(['timeout']) },
+      { version: 'stable', xml: junitWithCategories(['schema_violation']) },
+      { version: 'previous', xml: junitWithCategories(['missing_output']) },
+    ];
+    const { suspects, perVersionOnly, markdown } = dedupFailureCategories(legs);
+    expect(suspects).toHaveLength(0);
+    expect(perVersionOnly).toHaveLength(3);
+    expect(markdown).not.toMatch(/REGRESSION SUSPECT/);
+    expect(markdown).toMatch(/per-version-only/);
+  });
 });

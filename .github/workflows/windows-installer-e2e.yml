@@ -201,11 +201,41 @@ jobs:
           path: junit-previous
         continue-on-error: true
 
+      - name: Dedup failure_category across installer versions
+        if: always()
+        shell: bash
+        env:
+          NIGHTLY_DIR: junit-nightly
+          STABLE_DIR: junit-stable
+          PREVIOUS_DIR: junit-previous
+        run: |
+          set -euo pipefail
+          # Locate whatever XML each download-artifact step wrote.
+          find_xml() {
+            find "$1" -type f -name '*.xml' 2>/dev/null | head -1 || true
+          }
+          n=$(find_xml "$NIGHTLY_DIR")
+          s=$(find_xml "$STABLE_DIR")
+          p=$(find_xml "$PREVIOUS_DIR")
+          # Delegate the real regression-suspect logic to the Node
+          # module so we can unit-test the tally rules exhaustively.
+          # Prepended to the summary so it renders above the table.
+          out="$RUNNER_TEMP/dedup-callout.md"
+          node harness/src/failure-dedup.mjs "$n" "$s" "$p" > "$out"
+          echo "DEDUP_CALLOUT=$out" >> "$GITHUB_ENV"
+          cat "$out"
+
       - name: Emit consolidated summary
         if: always()
         shell: bash
         run: |
           set -euo pipefail
+          # Prepend the regression-suspect callout, if the previous step
+          # produced one. Then render the per-version table.
+          if [ -n "${DEDUP_CALLOUT:-}" ] && [ -f "$DEDUP_CALLOUT" ]; then
+            cat "$DEDUP_CALLOUT" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
           {
             echo "## Windows Installer E2E — consolidated summary"
             echo ""
