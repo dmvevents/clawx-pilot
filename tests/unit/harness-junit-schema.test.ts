@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   loadSchema,
   renderJUnitXml,
+  STDOUT_TAIL_MAX_BYTES,
+  TRUNCATION_MARKER,
+  truncateStdout,
   validateReport,
 } from '../../harness/src/junit-schema.mjs';
 
@@ -25,6 +28,11 @@ function baseReport() {
             classname: 'clawx.harness.doc-tooling-e2e',
             time: 0.123,
             status: 'pass' as const,
+            attachments: {
+              screenshot: '/tmp/clawx/P1-docx-summarize.png',
+              stdout_tail: '[PASS] P1-docx-summarize\nok',
+              stdout_truncated: false,
+            },
           },
         ],
       },
@@ -81,5 +89,52 @@ describe('harness/schemas/junit-report.schema.json — schema gate', () => {
     report.testsuites[0].testcases[0].status = 'flaky';
     expect(() => validateReport(report)).toThrow(/junit-report-schema/);
     expect(() => validateReport(report)).toThrow(/enum|status/);
+  });
+
+  // ── Attachments-block negative-path #A: missing attachments ─────────
+  it('rejects a testcase with the attachments block missing', () => {
+    const report = baseReport();
+    // @ts-expect-error — intentionally deleting a required field
+    delete report.testsuites[0].testcases[0].attachments;
+    expect(() => validateReport(report)).toThrow(/junit-report-schema/);
+    expect(() => validateReport(report)).toThrow(/attachments/);
+  });
+
+  // ── Attachments-block negative-path #B: malformed screenshot path ───
+  it('rejects a testcase whose attachments.screenshot is not a .png path', () => {
+    const report = baseReport();
+    // A .jpg path violates the ^(|.*\.[Pp][Nn][Gg])$ pattern; only .png
+    // (or empty string for "no screenshot") is accepted.
+    report.testsuites[0].testcases[0].attachments.screenshot =
+      '/tmp/clawx/P1-docx-summarize.jpg';
+    expect(() => validateReport(report)).toThrow(/junit-report-schema/);
+    expect(() => validateReport(report)).toThrow(/pattern|screenshot/);
+  });
+
+  // ── Attachments-block negative-path #C: >10KB stdout without marker ─
+  it('rejects a testcase whose stdout was truncated but is missing the >10KB marker', () => {
+    const report = baseReport();
+    // Simulate a runner that shortened stdout to fit but forgot the
+    // TRUNCATION_MARKER — this is the drift the invariant catches.
+    report.testsuites[0].testcases[0].attachments.stdout_tail =
+      'a'.repeat(STDOUT_TAIL_MAX_BYTES - 10);
+    report.testsuites[0].testcases[0].attachments.stdout_truncated = true;
+    expect(() => validateReport(report)).toThrow(/junit-report-schema/);
+    expect(() => validateReport(report)).toThrow(/TRUNCATION_MARKER/);
+  });
+
+  it('truncateStdout produces a schema-valid tail carrying the marker', () => {
+    const big = 'x'.repeat(20 * 1024);
+    const { stdout_tail, stdout_truncated } = truncateStdout(big);
+    expect(stdout_truncated).toBe(true);
+    expect(stdout_tail.endsWith(TRUNCATION_MARKER)).toBe(true);
+    expect(Buffer.byteLength(stdout_tail, 'utf8')).toBeLessThanOrEqual(
+      STDOUT_TAIL_MAX_BYTES,
+    );
+
+    const report = baseReport();
+    report.testsuites[0].testcases[0].attachments.stdout_tail = stdout_tail;
+    report.testsuites[0].testcases[0].attachments.stdout_truncated = true;
+    expect(() => validateReport(report)).not.toThrow();
   });
 });

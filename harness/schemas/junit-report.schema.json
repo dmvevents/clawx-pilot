@@ -32,7 +32,7 @@
     "testcase": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "classname", "time", "status"],
+      "required": ["name", "classname", "time", "status", "attachments"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "classname": { "type": "string", "minLength": 1 },
@@ -42,7 +42,28 @@
           "enum": ["pass", "fail", "skip"]
         },
         "reason": { "type": "string" },
-        "detail": { "type": "string" }
+        "detail": { "type": "string" },
+        "attachments": { "$ref": "#/definitions/attachments" }
+      }
+    },
+    "attachments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["screenshot", "stdout_tail", "stdout_truncated"],
+      "properties": {
+        "screenshot": {
+          "type": "string",
+          "description": "Absolute or relative path to a PNG screenshot, OR empty string when no screenshot was captured (e.g. offline direct-mode fixtures).",
+          "pattern": "^(|.*\\.[Pp][Nn][Gg])$"
+        },
+        "stdout_tail": {
+          "type": "string",
+          "description": "Last ≤10240 bytes of the testcase stdout. If the pre-truncation length exceeded 10KB, this string MUST end with the marker '\\n[...TRUNCATED >10KB]\\n' (enforced at runtime, not by the schema)."
+        },
+        "stdout_truncated": {
+          "type": "boolean",
+          "description": "True iff the runner shortened stdout to fit the 10KB tail budget. When true, stdout_tail must carry the truncation marker; enforced by validateReport()."
+        }
       }
     }
   }

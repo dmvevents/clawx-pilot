@@ -34,7 +34,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // @ts-expect-error — sibling .mjs, no bundled .d.ts
-import { renderJUnitXml, validateReport } from './src/junit-schema.mjs';
+import { renderJUnitXml, truncateStdout, validateReport } from './src/junit-schema.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,6 +79,8 @@ interface RunResult {
   reason: string;
   detail: string;
   durationMs: number;
+  stdout: string;
+  screenshot: string;
 }
 
 function parseArgs(argv: string[]): { mode: Mode; junit: string | null; filter: string | null } {
@@ -323,39 +325,50 @@ const SUITE_NAME = 'clawx.harness.doc-tooling-e2e';
  * error instead of producing a report a downstream CI parser will
  * silently accept.
  */
+interface Attachments {
+  screenshot: string;
+  stdout_tail: string;
+  stdout_truncated: boolean;
+}
+
+interface Testcase {
+  name: string;
+  classname: string;
+  time: number;
+  status: 'pass' | 'fail' | 'skip';
+  reason?: string;
+  detail?: string;
+  attachments: Attachments;
+}
+
 export function buildReport(results: RunResult[]): {
   testsuites: Array<{
     name: string;
     tests: number;
     failures: number;
     skipped: number;
-    testcases: Array<{
-      name: string;
-      classname: string;
-      time: number;
-      status: 'pass' | 'fail' | 'skip';
-      reason?: string;
-      detail?: string;
-    }>;
+    testcases: Testcase[];
   }>;
 } {
   const failures = results.filter((r) => r.status === 'FAIL').length;
   const skipped = results.filter((r) => r.status === 'SKIP').length;
-  const testcases = results.map((r) => {
+  const testcases: Testcase[] = results.map((r) => {
     const status: 'pass' | 'fail' | 'skip' =
       r.status === 'PASS' ? 'pass' : r.status === 'SKIP' ? 'skip' : 'fail';
-    const tc: {
-      name: string;
-      classname: string;
-      time: number;
-      status: 'pass' | 'fail' | 'skip';
-      reason?: string;
-      detail?: string;
-    } = {
+    const { stdout_tail, stdout_truncated } = truncateStdout(r.stdout) as {
+      stdout_tail: string;
+      stdout_truncated: boolean;
+    };
+    const tc: Testcase = {
       name: r.id,
       classname: SUITE_NAME,
       time: r.durationMs / 1000,
       status,
+      attachments: {
+        screenshot: r.screenshot,
+        stdout_tail,
+        stdout_truncated,
+      },
     };
     if (status !== 'pass') {
       tc.reason = r.reason;
@@ -418,7 +431,24 @@ async function main(): Promise<void> {
       reason = e.message.split('\n')[0].slice(0, 200);
       detail = e.stack ?? '';
     }
-    results.push({ id: p.id, status, reason, detail, durationMs: Date.now() - start });
+    // Direct-mode harness is offline — no browser, so no screenshot to
+    // attach today. Attachments block still carries an empty string so
+    // the schema stays uniform across modes; binary-mode/Windows CI
+    // will populate this once the installer smoke lands.
+    const screenshot = '';
+    // stdout captured for the tail: the runner's own status line plus
+    // any preview it produced. Real per-testcase stdout piping arrives
+    // with binary mode.
+    const stdoutCapture = `[${status}] ${p.id}\n${reason}\n${detail}`;
+    results.push({
+      id: p.id,
+      status,
+      reason,
+      detail,
+      durationMs: Date.now() - start,
+      stdout: stdoutCapture,
+      screenshot,
+    });
     process.stdout.write(
       `  [${status}] ${p.id.padEnd(24)} ${(Date.now() - start)}ms  ${reason.slice(0, 100)}\n`,
     );
