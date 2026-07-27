@@ -98,7 +98,7 @@ export function AzureSpeechSection() {
         Azure Speech (optional)
       </h2>
       <p className="text-meta text-muted-foreground mb-6 max-w-prose">
-        Optional cloud fallback for speech-to-text. When configured, ClawX can
+        Optional cloud fallback for speech-to-text. When configured, the app can
         stream microphone audio to your tenant's Azure Speech resource for
         higher-quality transcription with live partial results. Native
         on-device recognition (Apple / Windows) remains the default. Default

@@ -131,6 +131,7 @@ Environment variables for bundled search skills:
 Connect to multiple AI providers (OpenAI, Anthropic, and more) with credentials stored securely in your system's native keychain. OpenAI supports both API key and browser OAuth (Codex subscription) sign-in.
 For **Custom** providers used with OpenAI-compatible gateways, you can set a custom `User-Agent` in **Settings → AI Providers → Edit Provider** for compatibility-sensitive endpoints.
 When a compatible gateway rejects `/models` for non-auth reasons, ClawX automatically falls back to a lightweight `/chat/completions` or `/responses` probe during API key validation.
+Managed deployments can also pre-seed a Custom OpenAI-compatible gateway at first launch via `cloud-gateway.json` or `CLAWX_CLOUD_GATEWAY_*` environment variables; the desktop stores only the gateway client key, while upstream provider keys remain server-side.
 
 ### 🌙 Adaptive Theming
 Light mode, dark mode, or system-synchronized themes. ClawX adapts to your preferences automatically.

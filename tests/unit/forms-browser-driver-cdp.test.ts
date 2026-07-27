@@ -2,11 +2,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { chromium } from 'playwright-core';
 import { FormsDriver } from '../../electron/services/forms-browser-v2/forms-driver';
+import { ensureChromeCdpReady } from '../../electron/services/chrome-cdp';
 
 vi.mock('playwright-core', () => ({
   chromium: {
     connectOverCDP: vi.fn(),
   },
+}));
+
+vi.mock('../../electron/services/chrome-cdp', () => ({
+  CHROME_CDP_ENDPOINT: 'http://127.0.0.1:18792',
+  ensureChromeCdpReady: vi.fn(),
 }));
 
 function fakeBrowser({ connected, contexts }: { connected: boolean; contexts: unknown[] }) {
@@ -34,6 +40,7 @@ function fakePage(initialUrl: string) {
 describe('FormsDriver CDP connection lifecycle', () => {
   beforeEach(() => {
     vi.mocked(chromium.connectOverCDP).mockReset();
+    vi.mocked(ensureChromeCdpReady).mockReset();
   });
 
   it('reconnects when the cached CDP browser has no contexts', async () => {
@@ -49,6 +56,36 @@ describe('FormsDriver CDP connection lifecycle', () => {
     expect(stale.close).toHaveBeenCalledTimes(1);
     expect(chromium.connectOverCDP).toHaveBeenCalledWith('http://127.0.0.1:18792');
     expect((driver as unknown as { browser: unknown }).browser).toBe(fresh);
+  });
+
+  it('repairs Chrome CDP once when the initial attach fails', async () => {
+    const browser = fakeBrowser({ connected: true, contexts: [{}] });
+    vi.mocked(chromium.connectOverCDP)
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+      .mockResolvedValueOnce(browser as never);
+    vi.mocked(ensureChromeCdpReady).mockResolvedValue({
+      state: 'cdp_ready',
+      cdpEndpoint: 'http://127.0.0.1:18792',
+      debugPort: 18792,
+      userDataDir: 'C:\\Users\\Teacher\\AppData\\Local\\Google\\Chrome\\User Data',
+      chromeExecutable: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      chromeProcessCount: 0,
+      targetProfileProcessCount: 0,
+      remoteDebugProcessCount: 0,
+      message: 'ready',
+      action: 'none',
+    });
+
+    const driver = new FormsDriver({ cdpEndpoint: 'http://127.0.0.1:18792' });
+
+    await driver.ensureBrowser();
+
+    expect(ensureChromeCdpReady).toHaveBeenCalledWith({
+      cdpEndpoint: 'http://127.0.0.1:18792',
+      allowManagedProfileFallback: true,
+    });
+    expect(chromium.connectOverCDP).toHaveBeenCalledTimes(2);
+    expect((driver as unknown as { browser: unknown }).browser).toBe(browser);
   });
 
   it('opens a fresh tab instead of reusing a different Forms response page', async () => {
@@ -123,6 +160,42 @@ describe('FormsDriver CDP connection lifecycle', () => {
     );
   });
 
+  it('reports Microsoft sign-in when a form response URL redirects to login', async () => {
+    let currentUrl = 'about:blank';
+    const loginPage = {
+      url: vi.fn(() => currentUrl),
+      goto: vi.fn(async () => {
+        currentUrl = 'https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize';
+      }),
+      waitForLoadState: vi.fn(async () => undefined),
+      waitForSelector: vi.fn(async () => {
+        throw new Error('timeout');
+      }),
+      waitForTimeout: vi.fn(async () => undefined),
+      bringToFront: vi.fn(async () => undefined),
+      title: vi.fn(async () => 'Sign in to your account'),
+      locator: vi.fn(() => ({
+        innerText: vi.fn(async () => 'Sign in Can’t access your account? Sign-in options'),
+      })),
+    };
+    const context = {
+      pages: vi.fn(() => []),
+      newPage: vi.fn(async () => loginPage),
+    };
+    const browser = fakeBrowser({ connected: true, contexts: [context] });
+
+    const driver = new FormsDriver({ cdpEndpoint: 'http://127.0.0.1:18792' });
+    (driver as unknown as { browser: unknown }).browser = browser;
+
+    await expect(driver.ensureFormsTab('https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=daily-report-form'))
+      .rejects
+      .toThrow(/Microsoft Forms sign-in required before questions can render/);
+    expect(loginPage.waitForSelector).toHaveBeenCalledWith(
+      '[data-automation-id="questionItem"], [role="listitem"]',
+      expect.objectContaining({ state: 'visible' }),
+    );
+  });
+
   it('does not report hidden conditional fields as visible required fields', async () => {
     const hiddenItem = {
       isVisible: vi.fn(async () => false),
@@ -140,6 +213,15 @@ describe('FormsDriver CDP connection lifecycle', () => {
       text: 'Additional infractions\nThis question is required.',
     });
     expect(hiddenItem.locator).not.toHaveBeenCalled();
+  });
+
+  it('refuses submit without confirmation even when no form page is open', async () => {
+    const driver = new FormsDriver({ cdpEndpoint: 'http://127.0.0.1:18792' });
+
+    await expect(driver.submit({ confirm: false, expectedTitle: 'Primary School Student Suspensions' })).resolves.toEqual({
+      status: 'refused',
+      reason: 'Submit blocked: confirm:true required. Re-call with confirm:true after the principal has reviewed the filled form.',
+    });
   });
 
   it('accepts the Microsoft Forms submitted response screen after clicking submit', async () => {

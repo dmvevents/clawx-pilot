@@ -40,6 +40,24 @@ describe('extractRawFilePaths', () => {
     ]);
   });
 
+  it('surfaces generated CSV and PowerPoint artifacts emitted with MEDIA tags', () => {
+    const sample = [
+      'Generated files:',
+      'MEDIA:/tmp/demo/attendance export.csv',
+      'MEDIA:/tmp/demo/school board update.pptx',
+    ].join('\n');
+
+    const refs = extractRawFilePaths(sample);
+
+    expect(refs).toEqual([
+      { filePath: '/tmp/demo/attendance export.csv', mimeType: 'text/csv' },
+      {
+        filePath: '/tmp/demo/school board update.pptx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      },
+    ]);
+  });
+
   it('captures MEDIA: paths that contain ASCII spaces (macOS screenshot default name)', () => {
     // Regression: macOS' default screenshot filename is
     //   "Screenshot YYYY-MM-DD at HH.MM.SS.png" (en locale) or

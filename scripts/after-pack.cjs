@@ -60,6 +60,41 @@ function readInstalledPackageVersion(packageDir) {
   return typeof pkg?.version === 'string' ? pkg.version.trim() : null;
 }
 
+function copyReleaseGatewaySeed(resourcesDir) {
+  const projectResourcesDir = join(__dirname, '..', 'resources');
+  const packagedResourcesDir = join(resourcesDir, 'resources');
+  const seedFiles = ['cloud-gateway.json', 'cloud-gateway.key'];
+  const present = seedFiles.filter((file) => existsSync(join(projectResourcesDir, file)));
+
+  if (present.length === 0) return;
+
+  if (present.length !== seedFiles.length) {
+    throw new Error(
+      `[after-pack] Incomplete cloud gateway seed: found ${present.join(', ') || 'none'}, expected ${seedFiles.join(' and ')}`
+    );
+  }
+
+  mkdirSync(normWin(packagedResourcesDir), { recursive: true });
+  for (const file of seedFiles) {
+    cpSync(normWin(join(projectResourcesDir, file)), normWin(join(packagedResourcesDir, file)));
+  }
+
+  console.log(`[after-pack] ✅ Copied release cloud gateway seed files: ${seedFiles.join(', ')}`);
+}
+
+function copyReleaseMicrosoftGraphSeed(resourcesDir) {
+  const projectResourcesDir = join(__dirname, '..', 'resources');
+  const packagedResourcesDir = join(resourcesDir, 'resources');
+  const seedFile = 'microsoft-graph.json';
+  const source = join(projectResourcesDir, seedFile);
+
+  if (!existsSync(source)) return;
+
+  mkdirSync(normWin(packagedResourcesDir), { recursive: true });
+  cpSync(normWin(source), normWin(join(packagedResourcesDir, seedFile)));
+  console.log(`[after-pack] ✅ Copied release Microsoft Graph seed file: ${seedFile}`);
+}
+
 // ── General cleanup ──────────────────────────────────────────────────────────
 
 function cleanupUnnecessaryFiles(dir) {
@@ -579,6 +614,9 @@ exports.default = async function afterPack(context) {
   const nodeModulesRoot = join(__dirname, '..', 'node_modules');
   const pluginsDestRoot = join(resourcesDir, 'openclaw-plugins');
 
+  copyReleaseGatewaySeed(resourcesDir);
+  copyReleaseMicrosoftGraphSeed(resourcesDir);
+
   if (!existsSync(src)) {
     console.warn('[after-pack] ⚠️  build/openclaw/node_modules not found. Run bundle-openclaw first.');
     return;
@@ -898,31 +936,30 @@ exports.default = async function afterPack(context) {
       const { readFileSync: readFS, writeFileSync: writeFS } = require('fs');
       const original = readFS(extractNsh, 'utf8');
 
-      // Only patch once (idempotent check)
-      if (original.includes('CopyFiles') && !original.includes('ClawX-patched')) {
-        // Replace the extractUsing7za macro body with a direct extraction.
-        // Keep the macro signature so the rest of the template compiles unchanged.
-        const patched = original.replace(
-          /(!macro extractUsing7za FILE[\s\S]*?!macroend)/,
-          [
-            '!macro extractUsing7za FILE',
-            '  ; ClawX-patched: extract directly to $INSTDIR (skip temp + CopyFiles).',
-            '  ; customCheckAppRunning already renamed old $INSTDIR to _stale_X,',
-            '  ; so the target directory is always empty.  Nsis7z streams LZMA2 data',
-            '  ; directly to disk — ~10s vs 3-5 min for CopyFiles with Windows Defender.',
-            '  Nsis7z::Extract "${FILE}"',
-            '!macroend',
-          ].join('\n')
-        );
+      const desiredExtractUsing7zaMacro = [
+        '!macro extractUsing7za FILE',
+        '  ; ClawX-patched-v2: extract directly to $INSTDIR (skip temp + CopyFiles).',
+        '  ; customCheckAppRunning already renamed old $INSTDIR to _stale_X,',
+        '  ; so the target directory is always empty.  installer.nsh temporarily',
+        '  ; sets the NSIS outdir to $TEMP before the rename check, so set it',
+        '  ; back explicitly before Nsis7z writes the application archive.',
+        '  SetOutPath "$INSTDIR"',
+        '  Nsis7z::Extract "${FILE}"',
+        '!macroend',
+      ].join('\n');
 
-        if (patched !== original) {
-          writeFS(extractNsh, patched, 'utf8');
-          console.log('[after-pack] ⚡ Patched extractAppPackage.nsh: CopyFiles eliminated, using direct Nsis7z::Extract.');
-        } else {
-          console.warn('[after-pack] ⚠️  extractAppPackage.nsh regex did not match — template may have changed.');
-        }
-      } else if (original.includes('ClawX-patched')) {
-        console.log('[after-pack] ⚡ extractAppPackage.nsh already patched (idempotent skip).');
+      const patched = original.replace(
+        /!macro extractUsing7za FILE[\s\S]*?!macroend/,
+        desiredExtractUsing7zaMacro
+      );
+
+      if (patched !== original) {
+        writeFS(extractNsh, patched, 'utf8');
+        console.log('[after-pack] ⚡ Patched extractAppPackage.nsh: CopyFiles eliminated, using direct Nsis7z::Extract to $INSTDIR.');
+      } else if (original.includes('ClawX-patched-v2')) {
+        console.log('[after-pack] ⚡ extractAppPackage.nsh already patched with explicit $INSTDIR outdir (idempotent skip).');
+      } else {
+        console.warn('[after-pack] ⚠️  extractAppPackage.nsh regex did not match — template may have changed.');
       }
     }
   }

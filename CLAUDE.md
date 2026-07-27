@@ -4,6 +4,64 @@
 
 ---
 
+## Current resume packet - 2026-05-29
+
+This section supersedes older "as of 2026-05-25/26" status below. Keep this block short so Claude Code starts with current direction, then load details from skills/docs on demand.
+
+## Current GA release packet - 2026-06-09
+
+For GA, release-candidate, Windows installer, Outlook/Forms, model Gateway, or cross-agent handoff work, start with:
+
+1. `docs/AGENT_SKILL_INTEROPERABILITY.md`
+2. `docs/GA_RELEASE_PLAN_2026-06-09.md`
+3. `.claude/skills/ga-release-readiness/SKILL.md`
+4. `.claude/skills/ga-e2e-regression/SKILL.md`
+5. `.claude/skills/windows-vm-smoke/SKILL.md`
+6. `.claude/agents/ga-e2e-regression-verifier.md`
+7. `.claude/agents/ga-release-conductor.md`
+8. `docs/PRODUCTION_CHECKLIST.md`
+
+The repo now mirrors critical workflows across official Codex surfaces (`.agents/skills`, `.codex/agents`) and Claude Code surfaces (`.claude/skills`, `.claude/agents`). Keep those surfaces behaviorally aligned when a release-critical process changes.
+
+Start a new Claude Code session with:
+
+```text
+/project:windows-demo-resume
+```
+
+If slash commands are unavailable, read:
+
+1. `docs/NEXT_AGENT_WINDOWS_DEMO_HANDOFF_2026-05-29.md`
+2. `docs/CLAUDE_CODE_RESUME_AND_TEAMS_GUIDE_2026-05-29.md`
+3. `.claude/skills/windows-demo-resume/SKILL.md`
+4. `.claude/skills/windows-runtime-recovery/SKILL.md`
+5. `windows-pilot/README.md`
+
+Current critical path:
+
+- Keep the Windows demo on a cloud model, preferably `google/gemini-2.5-pro`, unless the user explicitly changes provider.
+- Diagnose "thinking", Gateway down, model call failed, or Excel prompt stalls as provider/Gateway/runtime-coherence first, not UI first.
+- Outlook and Forms must use the signed-in user Chrome session over CDP. Never use managed Chromium for Microsoft tenant flows.
+- Use read-only probes first: `git status --short`, `pilot-probe-state.ps1`, `pilot-verify-outlook-tab.ps1`, and targeted Vitest files.
+- Do not send email, download attachments, submit Forms, print secrets, or mutate Windows state until the exact action is confirmed or the task explicitly authorizes it.
+
+Claude-native resume surfaces now exist:
+
+- `.claude/commands/windows-demo-resume.md`
+- `.claude/skills/windows-demo-resume/SKILL.md`
+- `.claude/skills/windows-runtime-recovery/SKILL.md`
+- `.claude/skills/pilot-ssh-ops/SKILL.md`
+- `.claude/skills/windows-build-package/SKILL.md`
+- `.claude/skills/windows-outlook-forms/SKILL.md`
+- `.claude/skills/ga-e2e-regression/SKILL.md`
+- `.claude/skills/windows-vm-smoke/SKILL.md`
+- `.claude/skills/claude-bedrock-windows/SKILL.md`
+- `.claude/skills/windows-github-dev/SKILL.md`
+
+Use Claude subagents or Agent Teams only after passing each worker an explicit context packet. They do not inherit this chat. For durable OMX/OMC teams, verify `omx doctor`, `tmux -V`, and `$TMUX` first; otherwise use Claude Code subagents/Agent Teams.
+
+---
+
 ## What this is
 
 ClawX is a desktop AI assistant. This fork is rebranded as **Ministry of Education** for primary-school principals across Trinidad & Tobago's seven education districts (Caroni, North Eastern, Port of Spain & Environs, South Eastern, St. George East, St. Patrick, Victoria). It runs as a native Electron app on the principal's Mac or Windows laptop with on-device LLM by default and managed cloud (Bedrock Sonnet 4.5 for VLM, Gemini 2.5 Pro/Flash for text) when a turn benefits.
@@ -28,7 +86,7 @@ These are operational constraints learned the hard way. Each one has a real inci
 | **Anonymise model identity in UI.** "Online" / "On this device" only. No raw model IDs in chat-facing surfaces. | Principals shouldn't think about model selection. This matters for trust ("why did the AI change?"). |
 | **Hide cost in frontend, log in backend.** | Same trust concern. Principals don't need to see `$0.0023`. |
 | **Auto-update OFF in PILOT_MODE.** `publish: null` in electron-builder.yml suppresses auto-update.yml generation. | Pilot laptops can't be auto-updated remotely. Each version goes through MoE IT. |
-| **Test account passwords ARE allowed in repo/chat:** `test.fac@fac.edu.tt / Education@2000`. | User explicitly approved storage for this account only. NEVER for `*@moe.gov.tt` accounts. |
+| **Test account credentials are local-only:** `test.fac@fac.edu.tt` may be used for demo automation, but its password must come from local operator context such as `PILOT_TEST_PASSWORD`; never print or commit the plaintext password. NEVER for `*@moe.gov.tt` accounts. |
 | **Don't push to upstream `ValueCell-ai/ClawX` without confirmation.** Push to `dmvevents/clawx-pilot` (SSH) is OK. | We're a fork. Don't pollute upstream. |
 | **Don't run destructive git ops** without explicit confirmation. | force-push, reset --hard, branch -D — ask first. |
 
@@ -158,7 +216,7 @@ If you've just been started on this project:
    - `docs/WINDOWS_PROBLEMS_ATLAS.md` (every Windows bug we already solved — DO NOT re-debug)
 2. **Check Mac dev state:** `pgrep -fl "Ministry of Education"` + `lsof -nP -iTCP -sTCP:LISTEN | grep -E "18789|13210"`. Both ports listening = gateway healthy.
 3. **Check pilot Windows state:** `ssh pilot 'powershell -NoProfile -c "Get-Process | Where-Object { $_.ProcessName -match \"Ministry|Education\" } | Select Id"'` (uses the SSH multiplexer config in `~/.ssh/config`; first call ~0.3s, subsequent calls ~50ms).
-4. **Check the live test inbox:** Chrome on `:18792` should be on `test.fac@fac.edu.tt`. If not: `pnpm exec tsx scripts/forms-relogin-helper.ts` auto-fills `Education@2000` (test account password explicitly authorised by user 2026-05-25).
+4. **Check the live test inbox:** Chrome on `:18792` should be on `test.fac@fac.edu.tt`. If not: set `PILOT_TEST_PASSWORD` from the local demo credential and run `pnpm exec tsx scripts/forms-relogin-helper.ts` (test account only; never for `*@moe.gov.tt`).
 5. **Run the live smoke:** `pnpm exec tsx scripts/v2-chatbot-e2e.ts`. Three turns, ALL PASS expected.
 6. **Memory pointers** are in `~/.claude/projects/-Users-antonalexander-Github-moe-tt-ClawX/memory/`. Read `MEMORY.md` first.
 
@@ -178,6 +236,7 @@ If you've just been started on this project:
 - `state-idempotency-auditor` — catch chflags-band-aid-class bugs
 - `gateway-recovery` — boot crash-loop repair
 - `production-readiness` — pre-release audit
+- `ga-e2e-regression-verifier` — known-failure regression matrix and evidence
 - `skill-audit` — skill-bundle drift detector
 - `windows-smoke` — Windows post-install smoke runner
 
@@ -188,6 +247,36 @@ If you've just been started on this project:
 **Don't manually delete user state.** `~/.openclaw/` and `%APPDATA%\Ministry of Education\` are sacred — they hold sessions, openclaw.json, agent state. Always backup before reinstall (`docs/WINDOWS_INSTALL_RUNBOOK.md` step 3 has the one-liner). The NSIS uninstaller is designed to keep these.
 
 **Test changes locally before pushing builds.** `pnpm typecheck` + `pnpm exec tsx scripts/v2-chatbot-e2e.ts` together catch ~80% of regressions in <30s. Run them before `package:mac:local` (~6 min build cycle).
+
+---
+
+## Commands cheat-sheet
+
+Package manager is **pnpm** (locked to `pnpm@10.33.4` via `packageManager` field). Use `pnpm exec` to invoke binaries from `node_modules/.bin`.
+
+| Task | Command |
+|---|---|
+| Install | `pnpm install` (postinstall patches browser hint) |
+| First-time bootstrap | `pnpm run init` (install + download bundled `uv`) |
+| Dev (Vite + Electron) | `pnpm dev` |
+| Typecheck | `pnpm typecheck` (`tsc --noEmit`) |
+| Lint (autofix) | `pnpm lint` |
+| Lint (CI / no fix) | `pnpm lint:check` |
+| Unit tests (all) | `pnpm test` (vitest run) |
+| Single unit test | `pnpm exec vitest run <path/to/file.test.ts>` (add `-t "<name pattern>"` to filter) |
+| Playwright e2e (all) | `pnpm test:e2e` (headed: `pnpm test:e2e:headed`) |
+| Single e2e test | `pnpm exec playwright test <path/to/spec.ts>` (add `-g "<title>"` to filter) |
+| Live Outlook smoke | `pnpm exec tsx scripts/v2-chatbot-e2e.ts` (3-turn LLM + browser smoke) |
+| Outlook 14-row eval | `pnpm exec tsx scripts/v2-eval.ts` |
+| Send-gate proof | `pnpm exec tsx scripts/v2-send-test.ts` |
+| Mac unsigned build | `pnpm package:mac:local` (~6 min; skips preinstalled-skills) |
+| Mac signed build | `pnpm package:mac` |
+| Windows build | `pnpm build:win` (NSIS x64) |
+| Harness CI suite | `pnpm harness:ci` |
+| Bundle gateway plugins | `pnpm bundle:openclaw-plugins` |
+| Pre-flight before package | `pnpm typecheck && pnpm exec tsx scripts/v2-chatbot-e2e.ts` (catches ~80% of regressions in <30s) |
+
+E2E tests require a built renderer; both `test:e2e` scripts run `build:vite` first. Do not skip that step manually.
 
 ---
 

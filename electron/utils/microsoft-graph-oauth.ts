@@ -8,7 +8,7 @@
  * response fields (id_token, account JWT claims).
  *
  * Why we don't use MSAL Node:
- *  - ClawX already has a native loopback OAuth implementation it has tested
+ *  - The desktop app already has a native loopback OAuth implementation tested
  *    against OpenAI and Google. Reusing the shape keeps audit surface small
  *    and avoids a new ~3 MB dependency.
  *  - MSAL's value-adds (cross-process token cache, B2C policies, broker auth)
@@ -49,7 +49,7 @@ const SUCCESS_HTML = `<!doctype html>
 </head>
 <body>
   <h2>Sign-in successful</h2>
-  <p>You can close this tab and return to ClawX.</p>
+  <p>You can close this tab and return to Ministry of Education.</p>
 </body>
 </html>`;
 

@@ -30,7 +30,7 @@ account, with no risk of accidental email sends or attachment leaks.
 | KR1 | Plugin tools register at gateway boot | verified |
 | KR2 | Agent picks the right tool from natural-language ≥80% on a 15-prompt eval | implementation done; live LLM scoring pending |
 | KR3 | Each tool call ≤5s warm / ≤30s cold | all sub-second on Mac eval |
-| KR4 | Send-protection: no `confirm:true` AND subject mismatch both refuse | both gates fire on live eval |
+| KR4 | Send-protection: no `confirm:true`, ambiguous drafts, and explicit assertion mismatches refuse | gates fire in live eval and unit tests |
 | KR5 | Inbox parser returns clean rows | works on 1-row inbox; multi-row needs populated inbox |
 | KR6 | Plugin discovery robust to gateway-API drift | defensive chain |
 
@@ -47,7 +47,7 @@ account, with no risk of accidental email sends or attachment leaks.
 | W3.2 | attachment metadata | `read_email` returns `attachments` | OK |
 | W4.1 | new draft | `outlook.draft_email` | OK |
 | W4.2 | refuse without confirm | `send_email({confirm:false})` | refused |
-| W4.4 | refuse on subject mismatch | live-tested | refused |
+| W4.4 | refuse on explicit assertion mismatch | live-tested | refused |
 | W5.1 | reply | `outlook.reply` | OK |
 | W5.2 | reply-all | `reply({replyAll:true})` | OK |
 | W5.3 | forward | `outlook.forward` | OK |
@@ -114,8 +114,11 @@ Response envelope: `{ success: true, data: <result> }`.
 1. **profile=user** — system Chrome only. Managed Chromium is blocked
    by Microsoft Conditional Access for `*@moe.gov.tt` / `*@fac.edu.tt`
    tenants. Enforced as the default in playwright-driver.ts.
-2. **send_email refuses without `confirm:true`** AND verifies the
-   open compose pane's subject matches `args.subject`. Both required.
+2. **send_email refuses without `confirm:true`** and sends only one visible
+   reviewed draft. Optional `to`, `cc`, `bcc`, `subject`, and `body` arguments
+   are safety assertions for advanced flows; when provided, mismatches refuse.
+   Normal reviewed sends after principal review should call `{ confirm: true }`
+   only so the agent does not regenerate recipient/subject/body from memory.
 3. **download_attachment refuses without `confirm:true`**. Same
    pattern.
 4. **No bodies / recipients / passwords in logs.** Subject is
@@ -137,8 +140,9 @@ Response envelope: `{ success: true, data: <result> }`.
 
 # Sign in to your test account in that Chrome window.
 
-# Start dev mode with v2 enabled
-CLAWX_OUTLOOK_V2=1 pnpm dev > /tmp/clawx-dev-v2.log 2>&1 &
+# Start dev mode. Pilot builds default to v2; set CLAWX_OUTLOOK_V2=0 only
+# when deliberately testing the legacy browser-plugin path.
+pnpm dev > /tmp/clawx-dev-v2.log 2>&1 &
 ```
 
 ### Smoke scripts
@@ -170,8 +174,9 @@ pnpm exec tsx scripts/v2-eval.ts
 | Gateway 000 on /healthz | Config validation failed on boot | Check log for `Config validation failed: models.providers.X.api`. Migration in seedGatewayPluginConfig should self-repair |
 | `outlook host handle not provided` (in doctor logs) | Doctor preflight runs without env | Ignored — preflight isn't the runtime |
 | `Could not find target (semantic locator missed and VLM grounding failed)` | Outlook DOM changed OR a dialog blocking | Run v2-page-state.ts; if dialog, dismissBlockingDialog may need a new affordance |
-| `Send refused: open subject "X" does not match args.subject "Y"` | Working as designed | Agent passed wrong subject; refuse + retry |
+| `Send refused` after review | No open draft, multiple open drafts, or a stale optional assertion | Keep exactly one reviewed draft open and use `outlook.send_email({ confirm: true })` only for the normal send-after-review path |
 | `outlook capability disabled: ... 404` | `outlook` removed from PRINCIPAL_SKILL_ALLOWLIST | Add it back |
+| `[profile_locked_close_chrome]` | Chrome is already open without the ClawX automation endpoint on the target profile | Close all Chrome windows, then retry from ClawX |
 | `Outlook is on the sign-in page` | MS session expired | Sign in manually in Chrome window |
 
 ## Pending work

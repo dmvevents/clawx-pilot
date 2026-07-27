@@ -517,7 +517,7 @@ export async function submitFormResponse(args: SubmitArgs): Promise<SubmitResult
   logger.info(`[forms-runtime] submitFormResponse formId=${formId.slice(0, 16)}… answers=${Object.keys(args.answers).length}`);
 
   // 3. Attach.
-  let attached: AttachedPage | null = null;
+  let attached: AttachedPage;
   try {
     attached = await attachAndFindFormsPage(args.formUrl, cdpEndpoint);
   } catch (err) {

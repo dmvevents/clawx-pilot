@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { logger } from '../../utils/logger';
 import { getOpenClawConfigDir } from '../../utils/paths';
 import { buildGatewayHealthSummary } from '../../utils/gateway-health';
+import { diagnoseChromeCdp } from '../../services/chrome-cdp';
 import type { HostApiContext } from '../context';
 import { sendJson } from '../route-utils';
 import { buildChannelAccountsView, getChannelStatusDiagnostics } from './channels';
@@ -74,11 +75,13 @@ export async function handleDiagnosticsRoutes(
           ? ctx.gatewayManager.getCapabilitySnapshot(gatewaySummary)
           : undefined,
       };
+      const browserAutomation = await diagnoseChromeCdp();
       const openClawDir = getOpenClawConfigDir();
       sendJson(res, 200, {
         capturedAt: Date.now(),
         platform: process.platform,
         gateway,
+        browserAutomation,
         channels,
         clawxLogTail: await logger.readLogFile(DEFAULT_TAIL_LINES),
         gatewayLogTail: await readTail(join(openClawDir, 'logs', 'gateway.log')),

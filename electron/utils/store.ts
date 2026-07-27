@@ -51,6 +51,7 @@ export interface AppSettings {
   // UI State
   sidebarCollapsed: boolean;
   devModeUnlocked: boolean;
+  setupComplete: boolean;
 
   // Presets
   selectedBundles: string[];
@@ -112,6 +113,7 @@ function createDefaultSettings(): AppSettings {
     // UI State
     sidebarCollapsed: false,
     devModeUnlocked: false,
+    setupComplete: false,
 
     // Presets
     selectedBundles: ['principal'],

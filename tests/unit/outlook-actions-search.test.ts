@@ -5,7 +5,7 @@
  * required. We import it indirectly by going through the module's
  * file path so the function lives close to its real call site.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Re-implement the predicate in the test file for now — it's not exported
 // from outlook-actions.ts yet because keeping it module-local matches the
@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 // than test-by-shape only.
 
 import type { InboxMessage, SearchInboxArgs } from '@electron/services/outlook-browser-v2/types';
-import { matchesSearchArgsForTests } from '@electron/services/outlook-browser-v2/search-helpers';
+import { matchesSearchArgsForTests, parseOutlookReceivedAt } from '@electron/services/outlook-browser-v2/search-helpers';
 
 const baseMsg: InboxMessage = {
   id: 'sender-a|subj|today',
@@ -38,6 +38,10 @@ function expectNoMatch(args: SearchInboxArgs, msg: InboxMessage = baseMsg) {
 }
 
 describe('matchesSearchArgs', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('passes when no filter is set', () => {
     expectMatch({});
   });
@@ -75,6 +79,46 @@ describe('matchesSearchArgs', () => {
     // returns NaN for. The function should not over-exclude in that case.
     const m = withMsg({ receivedAt: 'Fri 3:46 PM' });
     expectMatch({ dateGte: '2026-05-22' }, m);
+  });
+
+  it('treats Outlook no-year day-month display dates as the current/recent year', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-23T12:00:00-04:00'));
+
+    expectMatch(
+      { dateGte: '2026-06-01T00:00:00.000Z', dateLt: '2026-07-01T00:00:00.000Z' },
+      withMsg({ receivedAt: 'Tue 9 Jun' }),
+    );
+    expectNoMatch(
+      { dateGte: '2026-06-01T00:00:00.000Z', dateLt: '2026-07-01T00:00:00.000Z' },
+      withMsg({ receivedAt: 'Tue 26 May' }),
+    );
+  });
+
+  it('treats Outlook weekday-time display dates as recent week dates', () => {
+    const parsed = parseOutlookReceivedAt(
+      'Mon 9:32 AM',
+      new Date('2026-06-23T12:00:00-04:00'),
+    );
+
+    expect(parsed).not.toBeNull();
+    expect(new Date(parsed ?? 0).getFullYear()).toBe(2026);
+    expect(new Date(parsed ?? 0).getMonth()).toBe(5);
+    expect(new Date(parsed ?? 0).getDate()).toBe(22);
+  });
+
+  it('treats Outlook no-year numeric dates as the current/recent year', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-23T12:00:00-04:00'));
+
+    expectMatch(
+      { dateGte: '2026-06-01T00:00:00.000Z', dateLt: '2026-07-01T00:00:00.000Z' },
+      withMsg({ receivedAt: '6/10' }),
+    );
+    expectNoMatch(
+      { dateGte: '2026-06-01T00:00:00.000Z', dateLt: '2026-07-01T00:00:00.000Z' },
+      withMsg({ receivedAt: '5/22' }),
+    );
   });
 
   it('honours dateGte when receivedAt is ISO', () => {

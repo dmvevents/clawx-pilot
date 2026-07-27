@@ -13,17 +13,38 @@
  * then resumes.
  */
 import { chromium } from 'playwright-core';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const TEST_USER = 'test.fac@fac.edu.tt';
-const TEST_PASS = 'Education@2000';
-const RESPONSE_URL =
-  'https://forms.office.com/Pages/ResponsePage.aspx?id=CbuQlSzO4kCBgfrQp-3r_tvUSA6KacpEuguukFzQeBdUN0hITFc3U0pWMTYxRENMMU9BM0NDTjk1VC4u';
+const TEST_PASS = process.env.PILOT_TEST_PASSWORD;
+const RESPONSE_URL_PATH = join(
+  process.cwd(),
+  'extensions/moe-principal-assistant/forms/suspensions-test-fac-url.txt',
+);
+
+function loadResponseUrl() {
+  const fromEnv = process.env.CLAWX_SUSPENSIONS_FORM_URL?.trim();
+  if (fromEnv) return fromEnv;
+  return readFileSync(RESPONSE_URL_PATH, 'utf8').trim();
+}
+
+function redactUrl(url: string) {
+  return url
+    .replace(/(https:\/\/forms\.(?:office\.com|cloud\.microsoft)\/Pages\/ResponsePage\.aspx\?id=)[^&\s]+/i, '$1<redacted>')
+    .replace(/(#token=)[^&\s]+/i, '$1<redacted>');
+}
 
 async function main() {
+  if (!TEST_PASS) {
+    throw new Error('PILOT_TEST_PASSWORD is required for the test.fac relogin helper.');
+  }
+  const responseUrl = loadResponseUrl();
+
   const browser = await chromium.connectOverCDP('http://127.0.0.1:18792');
   const all = browser.contexts().flatMap((c) => c.pages());
   let page = all.find(
-    (p) => /forms\.office\.com/i.test(p.url()) || /login\.microsoftonline\.com/i.test(p.url()),
+    (p) => /forms\.(office\.com|cloud\.microsoft)/i.test(p.url()) || /login\.microsoftonline\.com/i.test(p.url()),
   );
   if (!page) {
     const ctx = browser.contexts()[0];
@@ -31,12 +52,12 @@ async function main() {
   }
   await page.bringToFront();
 
-  console.log(`Navigating to: ${RESPONSE_URL.slice(0, 90)}...`);
-  await page.goto(RESPONSE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+  console.log(`Navigating to: ${redactUrl(responseUrl)}`);
+  await page.goto(responseUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   await page.waitForTimeout(2_500);
 
   let url = page.url();
-  console.log(`After nav: ${url.slice(0, 100)}`);
+  console.log(`After nav: ${redactUrl(url)}`);
 
   // STEP 1: Email
   if (/login\.microsoftonline\.com/i.test(url)) {
@@ -74,17 +95,17 @@ async function main() {
       console.log('Waiting up to 90s for redirect back to forms.office.com...');
       const start = Date.now();
       while (Date.now() - start < 90_000) {
-        if (/forms\.office\.com/i.test(page.url())) break;
+        if (/forms\.(office\.com|cloud\.microsoft)/i.test(page.url())) break;
         await page.waitForTimeout(1_000);
       }
     }
   }
 
   url = page.url();
-  console.log(`\nFinal URL: ${url.slice(0, 120)}`);
-  if (/forms\.office\.com\/.*ResponsePage/i.test(url)) {
+  console.log(`\nFinal URL: ${redactUrl(url)}`);
+  if (/forms\.(office\.com|cloud\.microsoft)\/.*ResponsePage/i.test(url)) {
     console.log('✓ Logged in and on the response page.');
-  } else if (/forms\.office\.com/i.test(url)) {
+  } else if (/forms\.(office\.com|cloud\.microsoft)/i.test(url)) {
     console.log('✓ Logged in. May need to navigate to the response URL manually.');
   } else {
     console.log('? Not on Forms yet. Continue manually if needed.');

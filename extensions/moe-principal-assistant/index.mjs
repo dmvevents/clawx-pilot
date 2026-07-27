@@ -28,6 +28,14 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  readPdf as docReadPdf,
+  readDocx as docReadDocx,
+  writeDocx as docWriteDocx,
+  readXlsx as docReadXlsx,
+  writeXlsx as docWriteXlsx,
+  readImage as docReadImage,
+} from './doc-tools.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = __dirname;
@@ -386,6 +394,121 @@ function normalizeSuspensionPreviewPayload(rawPayload, cfg) {
  * not exposed as user-facing skills, so they don't need to be added.
  */
 
+/**
+ * Register native document-processing tools. These are Windows-safe because
+ * they never shell out to Python or any other external binary — the
+ * underlying JS deps (pdf-parse, mammoth, xlsx, docx, sharp) are bundled
+ * with the installer via EXTRA_BUNDLED_PACKAGES.
+ *
+ * Naming: everything is namespaced under `document.*` so agent tool-picking
+ * clearly distinguishes it from the browser-driven `outlook.*` / `forms.*`
+ * families and the Python-backed `pdf` / `docx` / `xlsx` skills. On systems
+ * that DO have Python, the agent may still pick the skills; on the pilot
+ * Windows laptop these are the only path that works.
+ */
+function registerDocumentTools({ registerTool, log }) {
+  const readableSchema = { type: 'string', description: 'Absolute path, ~/ path, or filename to look up in ~/.openclaw/media/outbound, ~/Downloads, ~/Documents, or ~/Desktop.' };
+  const numberSchema = { type: 'number', minimum: 1 };
+
+  registerTool({
+    name: 'document.read_pdf',
+    description:
+      "Extract text from a PDF file WITHOUT invoking Python. Uses the bundled pdf-parse dep, so this works on Windows even if the pdf/nano-pdf skills' Python runtime is unavailable. Args: { path, maxChars? (default 200000) }. Returns { path, bytes, pages, info, text, truncated, totalChars }. Prefer this over the pdf skill when handling emailed attachments or files the principal dropped into chat.",
+    parameters: toolParameters(
+      { path: readableSchema, maxChars: numberSchema },
+      ['path'],
+    ),
+    execute: async (_toolCallId, args = {}) => docReadPdf(args),
+  });
+
+  registerTool({
+    name: 'document.read_docx',
+    description:
+      'Extract text from a Word (.docx) document WITHOUT invoking Python. Uses the bundled mammoth dep. Args: { path, format? ("markdown"|"html"|"text", default "markdown") }. Returns the parsed content plus any conversion messages. Works on Windows where python-docx is not installed.',
+    parameters: toolParameters(
+      {
+        path: readableSchema,
+        format: { type: 'string', enum: ['markdown', 'html', 'text', 'plain'] },
+      },
+      ['path'],
+    ),
+    execute: async (_toolCallId, args = {}) => docReadDocx(args),
+  });
+
+  registerTool({
+    name: 'document.write_docx',
+    description:
+      'Create a new Word (.docx) document using the bundled `docx` dep. Args: { path, title?, paragraphs: string[] }. Relative paths land in ~/.openclaw/media/outbound so ClawX auto-attaches. Returns { path, bytes, paragraphs }. Use this after drafting a letter or report so the principal can attach it to Outlook.',
+    parameters: toolParameters(
+      {
+        path: readableSchema,
+        title: { type: 'string' },
+        paragraphs: { type: 'array', items: { type: 'string' } },
+      },
+      ['path', 'paragraphs'],
+    ),
+    execute: async (_toolCallId, args = {}) => docWriteDocx(args),
+  });
+
+  registerTool({
+    name: 'document.read_xlsx',
+    description:
+      'Read an Excel (.xlsx / .xls / .csv) spreadsheet WITHOUT invoking Python. Uses the bundled xlsx (SheetJS) dep. Args: { path, sheet? (name or index — first sheet by default), maxRows? (default 500) }. Returns { path, sheets, sheet, rows (2D array), totalRows, truncated }. Works on Windows where openpyxl/pandas are not installed.',
+    parameters: toolParameters(
+      {
+        path: readableSchema,
+        sheet: { anyOf: [{ type: 'string' }, { type: 'number', minimum: 0 }] },
+        maxRows: numberSchema,
+      },
+      ['path'],
+    ),
+    execute: async (_toolCallId, args = {}) => docReadXlsx(args),
+  });
+
+  registerTool({
+    name: 'document.write_xlsx',
+    description:
+      'Create a new Excel (.xlsx) workbook using the bundled xlsx (SheetJS) dep. Args: { path, sheets: [{ name, rows: string[][] }] }. Relative paths land in ~/.openclaw/media/outbound. Returns { path, bytes, sheets }.',
+    parameters: toolParameters(
+      {
+        path: readableSchema,
+        sheets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              rows: {
+                type: 'array',
+                items: { type: 'array', items: {} },
+              },
+            },
+            required: ['name', 'rows'],
+            additionalProperties: false,
+          },
+        },
+      },
+      ['path', 'sheets'],
+    ),
+    execute: async (_toolCallId, args = {}) => docWriteXlsx(args),
+  });
+
+  registerTool({
+    name: 'document.read_image',
+    description:
+      'Read an image (.png/.jpg/.gif/.webp/.bmp/.avif/.tiff) from disk and return its metadata plus a base64 data URL suitable for VLM analysis. Uses Electron\'s bundled sharp module — no Python or ImageMagick. Args: { path, maxDim? (default 768) }. Large images are downscaled server-side so the response stays within model limits. Returns { path, bytes, width, height, format, mimeType, dataUrl, resized }.',
+    parameters: toolParameters(
+      { path: readableSchema, maxDim: numberSchema },
+      ['path'],
+    ),
+    execute: async (_toolCallId, args = {}) => docReadImage(args),
+  });
+
+  log?.info?.(
+    'moe-principal-assistant: document.* tools registered (read_pdf, read_docx, write_docx, read_xlsx, write_xlsx, read_image)',
+  );
+}
+
 export function register(api) {
   // Gateway register-API contract (build/openclaw/dist/api-builder-d3jBS7ML.js):
   //   api.pluginConfig — THIS plugin's `plugins.entries[<id>].config` (validated)
@@ -404,13 +527,22 @@ export function register(api) {
     (pluginConfig && typeof pluginConfig === 'object' ? pluginConfig : null) ??
     (typeof config === 'function' ? config() : config) ??
     {};
+
+  // Document-processing tools have no dependency on principal config, so we
+  // register them BEFORE the config gate. They matter on Windows especially:
+  // the Anthropic pdf/xlsx/docx skills call Python (pypdf, pdfplumber,
+  // openpyxl, python-docx) which is not shipped in the pilot runtime. These
+  // native handlers use the deps already bundled via EXTRA_BUNDLED_PACKAGES
+  // (pdf-parse, mammoth, xlsx, docx, sharp) and never shell out.
+  registerDocumentTools({ registerTool, log });
+
   const required = ['principalName', 'schoolName', 'educationDistrict', 'schoolType'];
   const missing = required.filter((k) => !cfg[k]);
   if (missing.length) {
     log.warn?.(
-      `moe-principal-assistant: missing config (${missing.join(', ')}) — tools will not be registered.`,
+      `moe-principal-assistant: missing config (${missing.join(', ')}) — principal.* tools will not be registered.`,
     );
-    return { registered: false };
+    return { registered: false, docToolsRegistered: true };
   }
   if (!VALID_DISTRICTS.includes(cfg.educationDistrict)) {
     log.warn?.(`moe-principal-assistant: educationDistrict "${cfg.educationDistrict}" is not one of the seven MoE districts.`);
@@ -1046,6 +1178,28 @@ export function register(api) {
   // routes return 404 and the tool handlers surface that error.
   const hostApiPort = process.env.CLAWX_HOST_API_PORT;
   const hostApiToken = process.env.CLAWX_HOST_API_TOKEN;
+  const browser =
+    hostApiPort && hostApiToken
+      ? createHostApiBrowserFacade(hostApiPort, hostApiToken)
+      : null;
+  if (browser) {
+    registerTool({
+      name: 'browser.diagnose',
+      description:
+        'Diagnose browser automation readiness for Outlook and Microsoft Forms. Returns Chrome/CDP state such as cdp_ready, chrome_not_found, profile_locked_close_chrome, or cdp_down_chrome_closed, plus the next safe action. Call this after any Outlook/Forms Chrome attach failure. Never give a principal manual Chrome setup, flags-page, online troubleshooting, or command-line instructions.',
+      parameters: emptyParameters,
+      execute: async (_toolCallId, _params = {}) => browser.diagnose(),
+    });
+
+    registerTool({
+      name: 'browser.repair_chrome_cdp',
+      description:
+        'Repair Chrome browser automation by launching the system Chrome profile with the ClawX-required automation port when safe. Never force-closes Chrome. If Chrome is already open without CDP, returns profile_locked_close_chrome; ask the principal to close all Chrome windows and retry from ClawX. Do not ask the principal to run manual Chrome commands or configure Chrome automation manually.',
+      parameters: emptyParameters,
+      execute: async (_toolCallId, _params = {}) => browser.repairChromeCdp(),
+    });
+  }
+
   const outlook =
     hostApiPort && hostApiToken
       ? createHostApiOutlookFacade(hostApiPort, hostApiToken)
@@ -1063,7 +1217,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.open',
       description:
-        'Open Outlook Web (https://outlook.office.com/mail/) in the principal\'s existing Chrome session. Returns { status: "opened" | "needs_signin", url, message? }. If sign-in is required, ask the principal to sign in to Outlook in the Chrome window that just opened, then call outlook.open again.',
+        'Open Outlook Web (https://outlook.office.com/mail/) in the principal\'s existing Chrome session. Use outlook.open first for Outlook email tasks, then use the explicit Outlook tools for read/search/read-email/reply/forward/send instead of generic browser/Chrome MCP tools. Returns { status: "opened" | "needs_signin", url, message?, transport?, source?, implementation?, version? }. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy; do not infer it when absent. If a Chrome/CDP attach error occurs, call browser.diagnose then browser.repair_chrome_cdp before asking the principal to do anything manually. Never give the principal manual Chrome debugging, manual Chrome setup, flags-page, online troubleshooting, or command-line instructions. If sign-in is required, ask the principal to sign in to Outlook in the Chrome window that just opened, then call outlook.open again.',
       parameters: emptyParameters,
       execute: async (_toolCallId, _params = {}) => {
         const result = await outlook.open();
@@ -1074,7 +1228,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.read_inbox',
       description:
-        'Return the top N unread/recent messages from the principal\'s Outlook inbox by scraping Outlook Web. Args: { top?: number (default 10) }. Returns { status: "ok" | "needs_signin", messages: [{ id, subject, sender, snippet, receivedAt, unread }] }.',
+        'Read the top N recent messages from the principal\'s Outlook Inbox through the ClawX Outlook tool path. Canonical action: read. Args: { top?: number (default 10) }. This is a bounded recent Inbox window, not an exhaustive mailbox export. For "all emails", "this month", or audit-style summaries, use outlook.search_inbox with top 100-200, report scan.scannedCount/scan.scope, and do not claim all mail unless scan.exhaustive is true. If transport/source/implementation/version is present in the result, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy; do not infer it when absent. If Chrome attach fails, use browser.diagnose and browser.repair_chrome_cdp; do not give manual Chrome setup instructions. Returns { status: "ok" | "needs_signin", messages: [{ id, subject, sender, snippet, receivedAt, unread }], scan, transport?, source?, implementation?, version? }.',
       parameters: toolParameters({
         top: nonNegativeNumberSchema,
       }),
@@ -1088,7 +1242,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.draft_email',
       description:
-        'Compose a new email in Outlook Web and leave the draft open for the principal to review. Does NOT send. Args: { to: string | string[], subject, body, cc?, bcc? }. Returns { status, draftLeftOpen, preview }.',
+        'Compose a new email in Outlook Web and leave the draft open for the principal to review. Does NOT send. Use this only for a new draft, not to recover from a draft-related send refusal. Args: { to: string | string[], subject, body, cc?, bcc? }. The body is email content and belongs only in the Outlook message body editor, never in To/Cc/Bcc. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy. Returns { status, draftLeftOpen, preview, transport?, source?, implementation?, version? }.',
       parameters: toolParameters(
         {
           to: stringOrStringArraySchema,
@@ -1115,7 +1269,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.send_email',
       description:
-        'Send an email via Outlook Web. HARD GATE: refuses unless { confirm: true } is set. The agent MUST show the draft to the principal and obtain explicit confirmation ("yes, send") before passing confirm=true. Default behaviour is to draft and stop. Args: { to, subject, body, cc?, bcc?, confirm: boolean }.',
+        'Send the single visible reviewed draft in Outlook Web. Canonical action: send. HARD GATE: refuses unless { confirm: true } is set. The agent MUST show or leave the draft open for the principal and obtain explicit confirmation ("yes, send") before passing confirm=true. After the principal reviews an open draft, call outlook.send_email with { confirm: true } only; do not regenerate, redraft, or resend to/subject/body from memory. If the result refuses or fails because of drafts (no open draft, multiple drafts, stale saved draft, mismatched draft, or unverified Send button), do not call outlook.draft_email again. Run browser.diagnose when the result indicates browser/CDP state; otherwise ask one concrete diagnostic question about whether exactly one reviewed Outlook compose pane is visible, then retry outlook.send_email with { confirm: true } only after that visible draft state is clear. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy. Optional to/cc/bcc/subject/body are safety assertions for advanced flows, not required for the normal reviewed-draft send.',
       parameters: toolParameters(
         {
           to: stringOrStringArraySchema,
@@ -1125,14 +1279,10 @@ export function register(api) {
           bcc: stringOrStringArraySchema,
           confirm: booleanSchema,
         },
-        ['to', 'subject', 'body', 'confirm'],
+        ['confirm'],
       ),
       execute: async (_toolCallId, args = {}) => {
         const { to, subject, body, cc, bcc, confirm } = args;
-        requireString('subject', subject);
-        if (typeof body !== 'string') {
-          throw new Error('body is required (string).');
-        }
         return outlook.sendEmail({
           to,
           subject,
@@ -1151,7 +1301,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.search_inbox',
       description:
-        'Filter the principal\'s inbox by sender, subject, date, unread, or attachment presence. Args: { from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top? (default 25) }. Returns { status, messages, capped }. dateGte/dateLt are ISO 8601 strings. Prefer this over read_inbox when the user mentions a sender or date or topic.',
+        'Search the principal\'s Inbox by sender, subject, date, unread, or attachment presence. Canonical action: search. Args: { from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top? (default 25) }. Returns { status, messages, capped, scan, transport?, source?, implementation?, version? }. dateGte/dateLt are ISO 8601 strings. Prefer this over read_inbox when the user mentions a sender, date, month, or topic. For broad month/all-inbox searches use top 100-200, report the bounded scan, and say capped/incomplete/not exhaustive when capped is true or scan.exhaustive is false. Do not say "these are all emails" unless scan.exhaustive is true. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy; do not infer it when absent.',
       parameters: toolParameters({
         from: stringSchema,
         subjectContains: stringSchema,
@@ -1169,7 +1319,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.read_email',
       description:
-        'Open a specific message and return its full body, sender, recipients, and attachment list. Args: { id }. id is the InboxMessage.id from read_inbox or search_inbox (sender|subject|received fingerprint). Returns { status, id, subject, sender, receivedAt, body, recipients, attachments: [{ filename, sizeBytes?, mimeType? }] }. Use this when the user asks "what does it say" or "summarise that email".',
+        'Open a specific message and return its full body, sender, recipients, and attachment list. Canonical action: read-email. Args: { id }. id is the InboxMessage.id from read_inbox or search_inbox (sender|subject|received fingerprint). Returns { status, id, subject, sender, receivedAt, body, recipients, attachments: [{ filename, sizeBytes?, mimeType? }], transport?, source?, implementation?, version? }. Use this before summarising a specific message or drafting a reply/forward. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy; do not infer it when absent.',
       parameters: toolParameters(
         {
           id: stringSchema,
@@ -1186,7 +1336,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.reply',
       description:
-        'Reply (or reply-all) to a specific message. Opens the reply pane in Outlook with To/Subject pre-filled by Outlook; we fill the body. Leaves the draft open for the principal to review — does NOT send. Args: { id, body, replyAll? (default false) }.',
+        'Reply (or reply-all) to a specific message. Canonical action: reply. Use this explicit Outlook tool for replies; do not use generic browser clicks or toolbar guessing to find Reply. Opens the reply pane in Outlook with To/Subject pre-filled by Outlook; we fill only the message body editor. Do not ask for a recipient after Outlook pre-fills the reply draft, and never place body text in To/Cc/Bcc. Leaves the draft open for the principal to review — does NOT send. Args: { id, body, replyAll? (default false) }. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy.',
       parameters: toolParameters(
         {
           id: stringSchema,
@@ -1206,7 +1356,7 @@ export function register(api) {
     registerTool({
       name: 'outlook.forward',
       description:
-        'Forward a specific message to a new recipient. Opens the forward pane in Outlook with the original message quoted; we fill To and an optional commentary body. Leaves the draft open. Args: { id, to: string | string[], body? }.',
+        'Forward a specific message to a new recipient. Canonical action: forward. Use this explicit Outlook tool for forwards; do not use generic browser clicks or toolbar guessing to find Forward. Opens the forward pane in Outlook with the original message quoted; To/Cc/Bcc are recipients only, and optional body is commentary that belongs only in the message body editor. Leaves the draft open. Args: { id, to: string | string[], body? }. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy.',
       parameters: toolParameters(
         {
           id: stringSchema,
@@ -1318,7 +1468,7 @@ export function register(api) {
     registerTool({
       name: 'forms.preview_suspension',
       description:
-        'Open the Suspensions form in the principal\'s browser and fill every field from a typed payload. Accepts either the exact flat Forms field schema or the nested principal.suspension_payload result and normalizes it before filling. Does NOT submit. Returns { status: "previewed", url, filledCount, skippedCount, errors[] }. Use this AFTER the user has reviewed the extracted fields and asked you to fill the form. Always call this before forms.submit_suspension.',
+        'Open the Suspensions form in the principal\'s browser and fill every field from a typed payload. Accepts either the exact flat Forms field schema or the nested principal.suspension_payload result and normalizes it before filling. Does NOT submit. Returns { status: "previewed", url, filledCount, skippedCount, errors[] }. If a Chrome/CDP attach error occurs, call browser.diagnose then browser.repair_chrome_cdp before asking the principal to do anything manually. Use this AFTER the user has reviewed the extracted fields and asked you to fill the form. Always call this before forms.submit_suspension.',
       parameters: toolParameters(
         {
           payload: looseObjectSchema,
@@ -1336,7 +1486,7 @@ export function register(api) {
     registerTool({
       name: 'forms.preview_daily_report',
       description:
-        'Open the Primary School Daily Report form in the principal\'s browser and fill every visible field from a typed payload. Does NOT submit. Returns { status: "previewed", filledCount, skippedCount, errors[] }. Use principal.daily_report_form_payload first, show the result to the principal, then call this for browser preview.',
+        'Open the Primary School Daily Report form in the principal\'s browser and fill every visible field from a typed payload. Does NOT submit. Returns { status: "previewed", filledCount, skippedCount, errors[] }. If a Chrome/CDP attach error occurs, call browser.diagnose then browser.repair_chrome_cdp before asking the principal to do anything manually. Use principal.daily_report_form_payload first, show the result to the principal, then call this for browser preview.',
       parameters: toolParameters(
         {
           payload: looseObjectSchema,
@@ -1386,6 +1536,51 @@ export function register(api) {
     `moe-principal-assistant: registered (school=${cfg.schoolName}, district=${cfg.educationDistrict})`,
   );
   return { registered: true };
+}
+
+/**
+ * Build a browser automation facade for shared Outlook/Forms diagnostics.
+ */
+function createHostApiBrowserFacade(port, token) {
+  const base = `http://127.0.0.1:${port}/api/browser`;
+  const REQUEST_TIMEOUT_MS = 30_000;
+
+  async function call(path, body) {
+    const url = `${base}${path}`;
+    const init = {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: body == null ? '{}' : JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    };
+    let resp;
+    try {
+      resp = await fetch(url, init);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`browser host-API ${path} unreachable: ${msg}`);
+    }
+    const text = await resp.text().catch(() => '');
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { /* fall through */ }
+    if (!resp.ok) {
+      const errMsg = (data && (data.error || data.message)) || text.slice(0, 200) || `HTTP ${resp.status}`;
+      throw new Error(`browser host-API ${path}: ${errMsg}`);
+    }
+    if (data && typeof data === 'object' && 'success' in data) {
+      if ('data' in data) return data.data;
+      if ('result' in data) return data.result;
+    }
+    return data;
+  }
+
+  return {
+    diagnose: () => call('/diagnose'),
+    repairChromeCdp: () => call('/repair-chrome-cdp'),
+  };
 }
 
 /**
@@ -1456,12 +1651,31 @@ function createHostApiFormsFacade(port, token) {
  * Errors:
  *   - 404 from the host-API → 'outlook' was removed from the allowlist;
  *     surface a clear error so the agent can tell the user.
- *   - Network / timeout       → wrap as { status: 'error', message }
- *     so the agent can retry or fall back gracefully.
+ *   - Network / timeout       → wrap as a structured tool result instead
+ *     of throwing. Send/download use { status: 'unknown' } and tell the
+ *     agent not to retry automatically because side effects may have happened.
  */
 function createHostApiOutlookFacade(port, token) {
   const base = `http://127.0.0.1:${port}/api/outlook`;
   const REQUEST_TIMEOUT_MS = 60_000; // generous: drafts can include slow DOM waits.
+
+  function structuredError(path, message) {
+    if (path === '/send') {
+      return {
+        status: 'unknown',
+        message:
+          `${message}. Outlook send result could not be confirmed. Do not retry automatically; ask the principal to check the open draft or Sent Items in Outlook before trying again.`,
+      };
+    }
+    if (path === '/download-attachment') {
+      return {
+        status: 'unknown',
+        message:
+          `${message}. Outlook attachment download result could not be confirmed. Do not retry automatically; ask the principal to check the Downloads folder before trying again.`,
+      };
+    }
+    return { status: 'error', message };
+  }
 
   async function call(path, body) {
     const url = `${base}${path}`;
@@ -1479,7 +1693,7 @@ function createHostApiOutlookFacade(port, token) {
       resp = await fetch(url, init);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`outlook host-API ${path} unreachable: ${msg}`);
+      return structuredError(path, `outlook host-API ${path} unreachable: ${msg}`);
     }
     if (resp.status === 404) {
       throw new Error(
@@ -1491,7 +1705,7 @@ function createHostApiOutlookFacade(port, token) {
     try { data = text ? JSON.parse(text) : null; } catch { /* fall through */ }
     if (!resp.ok) {
       const errMsg = (data && (data.error || data.message)) || text.slice(0, 200) || `HTTP ${resp.status}`;
-      throw new Error(`outlook host-API ${path}: ${errMsg}`);
+      return structuredError(path, `outlook host-API ${path}: ${errMsg}`);
     }
     // The host-API wraps results as { success: true, data } (current shape)
     // or { success: true, result } (older). Tolerate both, plus a bare

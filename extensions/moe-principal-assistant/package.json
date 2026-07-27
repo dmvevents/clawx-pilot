@@ -7,10 +7,12 @@
   "main": "index.mjs",
   "exports": {
     ".": "./index.mjs",
-    "./persona": "./persona.mjs"
+    "./persona": "./persona.mjs",
+    "./doc-tools": "./doc-tools.mjs"
   },
   "engines": {
     "node": ">=20"
   },
+  "//doc-tools-runtime-deps": "The document.* tools in doc-tools.mjs depend on pdf-parse, mammoth, xlsx, docx, and sharp. These live in the root package.json dependencies (except sharp, which ships as an Electron dep). All five are already in EXTRA_BUNDLED_PACKAGES in scripts/openclaw-bundle-config.mjs, so they are copied into resources/openclaw/node_modules when electron-builder packages. Do NOT remove them from that list — dependency-class-auditor will fail the build.",
   "license": "UNLICENSED"
 }

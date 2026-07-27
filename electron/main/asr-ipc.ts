@@ -14,11 +14,10 @@
  *   4. Delete the original after a successful transcode.
  *
  * Why no hard dep on `@ffmpeg-installer/ffmpeg`?
- *   We don't want to bloat the bundle for users on systems where ffmpeg is
- *   already installed (every macOS/Windows dev box with brew/winget). The
- *   resolveFfmpegBinary() chain favours an explicit env override, then the
- *   optional npm package, then a PATH lookup. README documents the install
- *   options.
+ *   Windows pilot builds now bundle ffmpeg.exe under resources/bin so fresh
+ *   installs can normalize mic recordings without PATH setup. The resolver
+ *   still supports an explicit env override, optional npm package, and PATH
+ *   fallback for local developer builds.
  */
 import { app, ipcMain } from 'electron';
 import { execFile } from 'node:child_process';
@@ -88,6 +87,81 @@ export function getPathLookupCommand(
     : { command: '/usr/bin/which', args: [binaryName] };
 }
 
+function cleanCandidatePaths(values: Array<string | undefined>): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+function safeAppPath(): string | undefined {
+  try {
+    return app.getAppPath();
+  } catch {
+    return undefined;
+  }
+}
+
+export function getFfmpegBinaryName(platform: NodeJS.Platform = process.platform): string {
+  return platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+}
+
+export function getFfmpegCandidatePaths(options: {
+  platform?: NodeJS.Platform;
+  arch?: string;
+  isPackaged?: boolean;
+  resourcesPath?: string;
+  cwd?: string;
+  appPath?: string;
+  envPath?: string;
+} = {}): string[] {
+  const platform = options.platform ?? process.platform;
+  const arch = options.arch ?? process.arch;
+  const binaryName = getFfmpegBinaryName(platform);
+  const resourcesPath = options.resourcesPath ?? (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  const cwd = options.cwd ?? process.cwd();
+  const appPath = options.appPath ?? safeAppPath();
+
+  const packagedCandidates = resourcesPath
+    ? [
+        path.join(resourcesPath, 'bin', binaryName),
+        path.join(resourcesPath, 'bin', `${platform}-${arch}`, binaryName),
+      ]
+    : [];
+
+  const appRelativeCandidates = appPath && (options.isPackaged || appPath.endsWith('.asar'))
+    ? [
+        path.join(path.dirname(appPath), 'bin', binaryName),
+        path.join(path.dirname(appPath), 'bin', `${platform}-${arch}`, binaryName),
+      ]
+    : [];
+
+  const devCandidates = options.isPackaged
+    ? []
+    : [
+        path.join(cwd, 'resources', 'bin', `${platform}-${arch}`, binaryName),
+        path.join(cwd, 'resources', 'bin', binaryName),
+      ];
+
+  const systemCandidates =
+    platform === 'win32'
+      ? []
+      : ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'];
+
+  return cleanCandidatePaths([
+    options.envPath,
+    ...packagedCandidates,
+    ...appRelativeCandidates,
+    ...devCandidates,
+    ...systemCandidates,
+  ]);
+}
+
 async function transcribeAzureIfPreferred(
   audioPath: string,
   language?: string,
@@ -136,10 +210,15 @@ async function resolveBinaryFromPath(binaryName: string): Promise<string | null>
 
 async function resolveFfmpegBinary(): Promise<string | null> {
   if (cachedFfmpegPath !== undefined) return cachedFfmpegPath;
-  const fromEnv = process.env.FFMPEG_PATH?.trim();
-  if (fromEnv && existsSync(fromEnv)) {
-    cachedFfmpegPath = fromEnv;
-    return cachedFfmpegPath;
+  const fromEnv = (process.env.CLAWX_FFMPEG_PATH ?? process.env.FFMPEG_PATH)?.trim();
+  for (const candidate of getFfmpegCandidatePaths({
+    envPath: fromEnv,
+    isPackaged: app.isPackaged,
+  })) {
+    if (existsSync(candidate)) {
+      cachedFfmpegPath = candidate;
+      return cachedFfmpegPath;
+    }
   }
   // Optional npm dep, only loaded if installed.
   try {
@@ -151,16 +230,6 @@ async function resolveFfmpegBinary(): Promise<string | null> {
     }
   } catch {
     /* not installed — fine */
-  }
-  const candidates =
-    process.platform === 'win32'
-      ? []
-      : ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg', 'ffmpeg'];
-  for (const candidate of candidates) {
-    if (path.isAbsolute(candidate) && existsSync(candidate)) {
-      cachedFfmpegPath = candidate;
-      return cachedFfmpegPath;
-    }
   }
   const pathBinary = await resolveBinaryFromPath(process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
   if (pathBinary) {

@@ -42,6 +42,7 @@
     ${endIf}
     ${if} ${isUpdated} ; skip the dialog for auto-updates
     ${else}
+      IfSilent doStopProcess
       MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "$(appRunning)" /SD IDOK IDOK doStopProcess
       Quit
     ${endIf}
@@ -297,6 +298,7 @@
   _cu_pathDone:
 
   ; Ask user if they want to remove AppData (preserves .openclaw)
+  IfSilent _cu_skipRemove
   MessageBox MB_YESNO|MB_ICONQUESTION \
     "Do you want to remove ClawX application data?$\r$\n$\r$\nThis will delete:$\r$\n  • AppData\Local\clawx (local app data)$\r$\n  • AppData\Roaming\clawx (roaming app data)$\r$\n$\r$\nYour .openclaw folder (configuration & skills) will be preserved.$\r$\nSelect 'No' to keep all data for future reinstallation." \
     /SD IDNO IDYES _cu_removeData IDNO _cu_skipRemove

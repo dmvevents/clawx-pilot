@@ -38,7 +38,7 @@ Outlook and Forms must run through the installed app:
 
 - Draft tools leave drafts open.
 - `outlook.send_email` requires `confirm: true`.
-- v2 send verifies an open draft and subject match before clicking Send.
+- v2 send verifies exactly one visible reviewed draft before clicking Send. Normal reviewed sends use `{ confirm: true }` only; optional recipient/subject/body args are advanced assertions, not the default path.
 - `outlook.download_attachment` requires `confirm: true`.
 - `forms.preview_suspension` fills but does not submit.
 - `forms.submit_suspension` requires `confirm: true`.

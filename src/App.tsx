@@ -124,10 +124,13 @@ function App() {
     initProviders();
   }, [initProviders]);
 
-  // Redirect to setup wizard if not complete
+  // Redirect to setup wizard if not complete; seeded Ministry builds can be
+  // marked complete by the main process after settings hydrate.
   useEffect(() => {
     if (!setupComplete && !skipSetupForE2E && !location.pathname.startsWith('/setup')) {
       navigate('/setup');
+    } else if (setupComplete && location.pathname.startsWith('/setup')) {
+      navigate('/');
     }
   }, [setupComplete, skipSetupForE2E, location.pathname, navigate]);
 

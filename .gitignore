@@ -23,6 +23,7 @@ release/
 .env
 .env.local
 .env.*.local
+.tmp/
 
 # Logs
 logs
@@ -46,6 +47,9 @@ test-results/
 .cache/
 .turbo/
 *.tsbuildinfo
+__pycache__/
+**/__pycache__/
+*.py[cod]
 
 # Electron
 *.dmg
@@ -56,18 +60,31 @@ test-results/
 
 resources/bin
 
+# Native helper build intermediates
+electron/native/**/bin/
+electron/native/**/obj/
+
 # Secrets
 *.p12
 *.pem
 *.key
+cloud-gateway.json
+resources/cloud-gateway.json
+resources/microsoft-graph.json
+azure-speech.json
+resources/azure-speech.json
 
 build/
 artifacts/
 docs/pr-session-notes-*.md
+docs/reports/multi-llm/outputs/
 
 .cursor/
 .claude/*
 !.claude/agents/
+!.claude/commands/
+!.claude/skills/
+.omc/
 .pnpm-store/
 package-lock.json
 

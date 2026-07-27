@@ -265,7 +265,7 @@ export const graphCalls = {
     if (await shouldUseMockMailbox()) {
       return { value: filterMockMessages(args), __mock: true } as { value: unknown[] };
     }
-    return graph<{ value: unknown[] }>('GET', '/me/messages', undefined, {
+    return graph<{ value: unknown[] }>('GET', '/me/mailFolders/inbox/messages', undefined, {
       $top: args.top ?? 25,
       ...(args.filter ? { $filter: args.filter } : {}),
       ...(args.search ? { $search: `"${args.search}"` } : {}),

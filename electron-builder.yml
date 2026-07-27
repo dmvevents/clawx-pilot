@@ -1,4 +1,4 @@
-appId: app.clawx.desktop
+appId: tt.gov.moe.assistant
 productName: Ministry of Education
 copyright: Copyright © 2026 Ministry of Education, Trinidad & Tobago
 compression: maximum
@@ -116,8 +116,8 @@ mac:
   entitlementsInherit: entitlements.mac.plist
   notarize: true
   extendInfo:
-    NSMicrophoneUsageDescription: ClawX requires microphone access for voice features
-    NSCameraUsageDescription: ClawX requires camera access for video features
+    NSMicrophoneUsageDescription: Ministry of Education requires microphone access for voice features
+    NSCameraUsageDescription: Ministry of Education requires camera access for video features
 
 dmg:
   # Explicit volume size prevents dmg-builder@1.2.0 auto-calculation from
@@ -191,10 +191,10 @@ linux:
       arch:
         - x64
   category: Utility
-  maintainer: ClawX Team <public@valuecell.ai>
+  maintainer: Ministry of Education, Trinidad and Tobago <public@valuecell.ai>
   vendor: Ministry of Education, Trinidad and Tobago
   synopsis: Administrative assistant for primary-school principals
-  description: Ministry of Education is the AI-supported administrative assistant for Trinidad & Tobago primary-school principals (built on ClawX/OpenClaw).
+  description: Ministry of Education is the AI-supported administrative assistant for Trinidad & Tobago primary-school principals.
   desktop:
     entry:
       Name: Ministry of Education

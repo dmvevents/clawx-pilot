@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "tenantId": "moe.gov.tt",
+  "clientId": "00000000-0000-0000-0000-000000000000",
+  "redirectUri": "http://localhost:53682/callback",
+  "scopes": [
+    "openid",
+    "profile",
+    "email",
+    "offline_access",
+    "User.Read",
+    "Mail.Read",
+    "Mail.ReadWrite",
+    "Mail.Send",
+    "Calendars.Read"
+  ]
+}

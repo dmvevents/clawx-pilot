@@ -2,6 +2,7 @@
 
 import 'zx/globals';
 import { readFileSync, existsSync, mkdirSync, rmSync, cpSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -60,23 +61,50 @@ function shouldCopySkillFile(srcPath) {
   return true;
 }
 
-async function extractArchive(archiveFileName, cwd) {
-  const prevCwd = $.cwd;
-  $.cwd = cwd;
-  try {
-    try {
-      await $`tar -xf ${archiveFileName}`;
-      return;
-    } catch (tarError) {
-      if (process.platform === 'win32') {
-        // Some Windows images expose bsdtar instead of tar.
-        await $`bsdtar -xf ${archiveFileName}`;
+function run(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      shell: false,
+      stdio: options.capture ? ['ignore', 'pipe', 'pipe'] : 'inherit',
+    });
+
+    let stdout = '';
+    let stderr = '';
+    if (options.capture) {
+      child.stdout?.on('data', (chunk) => {
+        stdout += chunk.toString();
+      });
+      child.stderr?.on('data', (chunk) => {
+        stderr += chunk.toString();
+      });
+    }
+
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
         return;
       }
-      throw tarError;
+
+      const rendered = [command, ...args].join(' ');
+      const detail = stderr.trim() ? `\n${stderr.trim()}` : '';
+      reject(new Error(`Command failed (${code}): ${rendered}${detail}`));
+    });
+  });
+}
+
+async function extractArchive(archiveFileName, cwd) {
+  try {
+    await run('tar', ['-xf', archiveFileName], { cwd });
+    return;
+  } catch (tarError) {
+    if (process.platform === 'win32') {
+      // Some Windows images expose bsdtar instead of tar.
+      await run('bsdtar', ['-xf', archiveFileName], { cwd });
+      return;
     }
-  } finally {
-    $.cwd = prevCwd;
+    throw tarError;
   }
 }
 
@@ -88,16 +116,16 @@ async function fetchSparseRepo(repo, ref, paths, checkoutDir) {
   const archivePath = join(checkoutDir, archiveFileName);
   const archivePaths = [...new Set(paths.map(normalizeRepoPath))];
 
-  await $`git init ${gitCheckoutDir}`;
-  await $`git -C ${gitCheckoutDir} remote add origin ${remote}`;
-  await $`git -C ${gitCheckoutDir} fetch --depth 1 origin ${ref}`;
+  await run('git', ['init', gitCheckoutDir]);
+  await run('git', ['-C', gitCheckoutDir, 'remote', 'add', 'origin', remote]);
+  await run('git', ['-C', gitCheckoutDir, 'fetch', '--depth', '1', 'origin', ref]);
   // Do not checkout working tree on Windows: upstream repos may contain
   // Windows-invalid paths. Export only requested directories via git archive.
-  await $`git -C ${gitCheckoutDir} archive --format=tar --output ${archiveFileName} FETCH_HEAD ${archivePaths}`;
+  await run('git', ['-C', gitCheckoutDir, 'archive', '--format=tar', '--output', archiveFileName, 'FETCH_HEAD', ...archivePaths]);
   await extractArchive(archiveFileName, checkoutDir);
   rmSync(archivePath, { force: true });
 
-  const commit = (await $`git -C ${gitCheckoutDir} rev-parse FETCH_HEAD`).stdout.trim();
+  const commit = (await run('git', ['-C', gitCheckoutDir, 'rev-parse', 'FETCH_HEAD'], { capture: true })).stdout.trim();
   return commit;
 }
 

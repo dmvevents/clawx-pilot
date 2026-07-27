@@ -28,6 +28,13 @@ export const EXTRA_BUNDLED_PACKAGES = [
   // transitive dependency graph from the app bundle context.
   'playwright-core',
 
+  // Demo document analysis and Office-file skills resolve document parsers
+  // from resources/openclaw/node_modules in packaged Windows builds.
+  'xlsx',
+  'docx',
+  'mammoth',
+  'pdf-parse',
+
   // Electron main process QR login flows resolve these files from the
   // bundled OpenClaw runtime context in packaged builds.
   'qrcode-terminal',

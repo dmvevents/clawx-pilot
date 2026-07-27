@@ -6,6 +6,20 @@
 
 ClawX is a cross-platform **Electron desktop app** (React 19 + Vite + TypeScript) providing a GUI for the OpenClaw AI agent runtime. It uses pnpm as its package manager (pinned version in `package.json`'s `packageManager` field).
 
+### Current GA release packet
+
+For GA, release-candidate, Windows installer, Outlook/Forms, model Gateway, or cross-agent handoff work, start with:
+
+- `docs/AGENT_SKILL_INTEROPERABILITY.md`
+- `docs/GA_RELEASE_PLAN_2026-06-09.md`
+- `.agents/skills/ga-e2e-regression/SKILL.md`
+- `.agents/skills/windows-vm-smoke/SKILL.md`
+- `.agents/skills/ga-release-readiness/SKILL.md`
+- `.codex/agents/ga-e2e-regression-verifier.toml`
+- `.codex/agents/ga-release-conductor.toml`
+
+The repo supports both official Codex surfaces (`.agents/skills`, `.codex/agents`) and Claude Code surfaces (`CLAUDE.md`, `.claude/skills`, `.claude/agents`). Keep those surfaces behaviorally aligned when adding release-critical workflows.
+
 ### Quick reference
 
 Standard dev commands are in `package.json` scripts and `README.md`. Key ones:
