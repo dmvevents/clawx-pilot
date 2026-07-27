@@ -1,0 +1,19 @@
+{
+  "id": "P5-image-fields",
+  "tool_called": "document.read_image",
+  "result_schema": {
+    "path": "string",
+    "bytes": "number",
+    "width": "any",
+    "height": "any",
+    "format": "any",
+    "mimeType": "string",
+    "dataUrl": "string",
+    "resized": "boolean"
+  },
+  "assertions": {
+    "bytes_min": 1,
+    "mimeType_matches": "^image/",
+    "dataUrl_matches": "^data:image/(png|jpeg);base64,"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "id": "P1-docx-summarize",
+  "tool_called": "document.read_docx",
+  "result_schema": {
+    "path": "string",
+    "bytes": "number",
+    "format": "string",
+    "markdown": "string",
+    "messages": "array"
+  },
+  "assertions": {
+    "format_equals": "markdown",
+    "bytes_min": 1,
+    "markdown_matches": "attendance reporting|academic calendar|staff meeting"
+  }
+}
