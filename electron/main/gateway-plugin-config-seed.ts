@@ -32,6 +32,10 @@ import { logger } from '../utils/logger';
 import { withConfigLock } from '../utils/config-mutex';
 import { readOpenClawConfig, writeOpenClawConfig } from '../utils/channel-config';
 
+function _getConfigPath(): string {
+  return join(homedir(), '.openclaw', 'openclaw.json');
+}
+
 // Placeholder values chosen to satisfy each plugin's JSON schema while
 // remaining obviously-not-real so the onboarding flow can detect them.
 const MS_GRAPH_PLACEHOLDER = {
