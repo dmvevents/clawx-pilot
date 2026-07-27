@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs';
 const URL_PATH = 'extensions/moe-principal-assistant/forms/suspensions-test-fac-url.txt';
 const SHOULD_SUBMIT = process.env.DEMO === '1';
 
-type Field =
+type _Field =
   | { id: string; label: string; type: 'text' | 'number' | 'date'; required?: boolean }
   | { id: string; label: string; type: 'single_choice' | 'multi_choice'; required?: boolean; options?: string[] };
 

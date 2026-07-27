@@ -20,7 +20,7 @@
  */
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 
 const ROUTES: Array<{ hash: string; name: string; settle?: number }> = [

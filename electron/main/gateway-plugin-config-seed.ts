@@ -32,7 +32,7 @@ import { logger } from '../utils/logger';
 import { withConfigLock } from '../utils/config-mutex';
 import { readOpenClawConfig, writeOpenClawConfig } from '../utils/channel-config';
 
-function getConfigPath(): string {
+function _getConfigPath(): string {
   return join(homedir(), '.openclaw', 'openclaw.json');
 }
 

@@ -112,7 +112,6 @@ async function clickNewForm(page: Page): Promise<void> {
 async function setFormTitleAndDescription(page: Page, title: string, description: string): Promise<void> {
   console.log('[3/4] Set title + description');
   // Title
-  const titleField = page.locator('input, textarea').filter({ hasText: '' }).first();
   // The title input usually shows "Untitled form" placeholder — target by placeholder.
   const titleInput = page.locator('input[placeholder*="Untitled" i], textarea[placeholder*="Untitled" i]').first();
   if (await titleInput.count() > 0) {
