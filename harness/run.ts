@@ -27,7 +27,7 @@
  *   pnpm harness:windows-e2e --mode=binary  # reserved; SKIPs (exit 0)
  */
 
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -352,7 +352,7 @@ async function main(): Promise<void> {
     await mkdir(promptWork, { recursive: true });
     const start = Date.now();
     let status: RunResult['status'] = 'PASS';
-    let reason = '';
+    let reason: string;
     let detail = '';
     try {
       const runner = args.mode === 'binary' ? runBinary : runDirect;
