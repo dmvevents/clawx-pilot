@@ -1,0 +1,154 @@
+name: Windows Installer E2E (5-prompt doc-tooling, on-demand)
+
+# Downloads a candidate Ministry-of-Education Windows installer, silent-
+# installs it on a fresh windows-latest runner, then invokes the 5-prompt
+# doc-tooling E2E harness (harness/run.ts via `pnpm harness:doc-tooling-e2e`)
+# against the packaged runtime.
+#
+# References:
+#   - PR dmvevents/clawx-pilot#13 — introduces harness:doc-tooling-e2e
+#   - commit bf6c0d26            — the E2E harness restructure
+#
+# Depends on PR #13 being merged first (harness:doc-tooling-e2e script,
+# tests/e2e/prompts.json, tests/e2e/golden/*.json, harness/run.ts).
+#
+# Inputs:
+#   installer_url    — public / pre-signed URL to Ministry-of-Education-Setup-*.exe
+#   installer_sha256 — optional; verifies the downloaded artifact
+#
+# Artifacts:
+#   install.log                — installer's own log (/log flag)
+#   nsis-verbose.log           — verbose NSIS log
+#   harness-junit-<run>.xml    — JUnit XML from the 5-prompt harness
+#   post-state.zip             — %APPDATA%\Ministry of Education snapshot
+#
+# Not triggered automatically — workflow_dispatch only. Runs are
+# unattended once an installer URL is supplied.
+
+on:
+  workflow_dispatch:
+    inputs:
+      installer_url:
+        description: 'Direct URL to Ministry-of-Education-Setup-*.exe'
+        required: true
+      installer_sha256:
+        description: 'Expected SHA-256 (optional, verifies download)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  install-and-e2e:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        shell: pwsh
+        run: |
+          npm install -g pnpm@10.33.4
+          pnpm --version
+
+      - name: Install workspace deps (for harness)
+        shell: pwsh
+        run: |
+          # --ignore-scripts skips electron download / postinstall — the
+          # harness only needs docx/xlsx/mammoth/pdf-parse/sharp, which
+          # resolve from the lockfile without native rebuilds.
+          pnpm install --ignore-scripts --frozen-lockfile
+
+      - name: Download installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = "$env:RUNNER_TEMP\installer.exe"
+          Invoke-WebRequest -Uri "${{ inputs.installer_url }}" -OutFile $out
+          Get-Item $out | Select Length, LastWriteTime | Format-List
+          if ("${{ inputs.installer_sha256 }}" -ne "") {
+            $actual = (Get-FileHash $out -Algorithm SHA256).Hash
+            if ($actual -ine "${{ inputs.installer_sha256 }}") {
+              throw "SHA-256 mismatch: expected ${{ inputs.installer_sha256 }}, got $actual"
+            }
+            Write-Host "SHA-256 verified: $actual"
+          }
+          "INSTALLER_PATH=$out" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Snapshot fresh-Windows baseline
+        shell: pwsh
+        run: |
+          $b = "$env:RUNNER_TEMP\baseline.txt"
+          "===== Installed Programs (baseline) ====="        | Out-File $b
+          Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue |
+            Select DisplayName, DisplayVersion | Where DisplayName | Sort DisplayName | Format-Table -AutoSize | Out-File $b -Append
+
+      - name: Silent install
+        shell: pwsh
+        run: |
+          $log = "$env:RUNNER_TEMP\install.log"
+          $verbose = "$env:RUNNER_TEMP\nsis-verbose.log"
+          Write-Host "Launching installer silently..."
+          $p = Start-Process -FilePath "$env:INSTALLER_PATH" `
+            -ArgumentList "/S","/log=$log","/verbose=$verbose" `
+            -Wait -PassThru -NoNewWindow
+          Write-Host "Installer exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) {
+            throw "Installer exited $($p.ExitCode) — see install.log artifact"
+          }
+          if (Test-Path $log) { Write-Host "--- install.log tail ---"; Get-Content $log -Tail 40 }
+
+      - name: Verify installed layout
+        shell: pwsh
+        run: |
+          $resources = "$env:LOCALAPPDATA\Programs\Ministry of Education\resources"
+          if (-not (Test-Path $resources)) {
+            throw "expected resources dir missing after install: $resources"
+          }
+          Write-Host "resources: $resources"
+          Get-ChildItem $resources | Select Name, Length | Format-Table -AutoSize
+          "CLAWX_APP_RESOURCES=$resources" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Run 5-prompt doc-tooling E2E harness against installed runtime
+        shell: pwsh
+        run: |
+          $junit = "$env:RUNNER_TEMP\harness-junit.xml"
+          pnpm harness:doc-tooling-e2e --junit $junit
+          if ($LASTEXITCODE -ne 0) {
+            throw "harness:doc-tooling-e2e failed (exit $LASTEXITCODE)"
+          }
+          Write-Host "harness JUnit: $junit"
+          Get-Content $junit -TotalCount 40
+
+      - name: Snapshot post-install state
+        if: always()
+        shell: pwsh
+        run: |
+          $out = "$env:RUNNER_TEMP\post-state.zip"
+          $tmp = "$env:RUNNER_TEMP\post-state"
+          New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+          $appdata = Join-Path $env:APPDATA 'Ministry of Education'
+          $openclaw = Join-Path $env:USERPROFILE '.openclaw'
+          if (Test-Path $appdata) { Copy-Item $appdata -Destination "$tmp\appdata" -Recurse -Force }
+          if (Test-Path $openclaw) { Copy-Item $openclaw -Destination "$tmp\openclaw" -Recurse -Force }
+          Compress-Archive -Path "$tmp\*" -DestinationPath $out -Force -ErrorAction SilentlyContinue
+
+      - name: Upload logs + JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-e2e-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/install.log
+            ${{ runner.temp }}/nsis-verbose.log
+            ${{ runner.temp }}/baseline.txt
+            ${{ runner.temp }}/harness-junit.xml
+            ${{ runner.temp }}/post-state.zip
+          if-no-files-found: warn
