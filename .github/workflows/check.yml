@@ -72,6 +72,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # safeRmSync exists to stop plugin cleanup from following an NTFS junction
+      # out of the plugin tree, so it has to be exercised on a real Windows
+      # runner and not only in the linux `test` job. Upstream ran it alongside
+      # the attachment open-with tests; this fork does not carry those.
+      - name: Test Windows-safe recursive removal
+        run: pnpm exec vitest run tests/unit/safe-fs.test.ts
+
       - name: Generate extension bridge
         run: pnpm run ext:bridge
 
