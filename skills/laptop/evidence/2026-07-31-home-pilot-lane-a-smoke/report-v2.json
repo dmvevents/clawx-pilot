@@ -1,0 +1,28 @@
+{
+  "model_state": {
+    "url": "file:///C:/Users/VYONIX/AppData/Local/Programs/Ministry%20of%20Education/resources/app.asar/dist/index.html",
+    "title": "Ministry of Education",
+    "smokeHits": [
+      {
+        "tag": "DIV",
+        "cls": "relative rounded-2xl px-4 py-3 w-full bg-black/5 dark:bg-white/5 text-foreground"
+      },
+      {
+        "tag": "DIV",
+        "cls": "prose prose-sm dark:prose-invert max-w-none break-words"
+      },
+      {
+        "tag": "P",
+        "cls": null
+      }
+    ],
+    "candidateClasses": [],
+    "settings": "{\"state\":{\"theme\":\"light\",\"language\":\"en\",\"startMinimized\":false,\"launchAtStartup\":false,\"telemetryEnabled\":true,\"gatewayAutoStart\":true,\"gatewayPort\":18789,\"proxyEnabled\":false,\"proxyServer\":\"\",\"proxyHttpServer\":\"\",\"proxyHttpsServer\":\"\",\"proxyAllServer\":\"\",\"proxyBypassRules\":\"<local>;localhost;127.0.0.1;::1\",\"updateChannel\":\"stable\",\"autoCheckUpdate\":true,\"autoDownloadUpdate\":false,\"sidebarCollapsed\":false,\"sidebarWidth\":280,\"devModeUnlocked\":true,\"setupComplete\":true,\"reasoningVisibility\":\"auto\",\"preferredChannel\":\"online\",\"machineId\":\"621be36285654ac057b12460337ccb22e93959e97ee046dd843dfaff006d2b3b\",\"hasReportedInstall\":true,\"gatewayToken\":\"clawx-ca5412ccccafc7148731ea00ba55db91\",\"skippedVersions\":[],\"selectedBundles\":[\"principal\"],\"enabledSkills\":[],\"disabledSkills\":[]},\"version\":0}",
+    "modelBadgeText": "Online",
+    "gatewayStatus": "Ministry of Education\nNew Chat\nModels\nAgents\nChannels\nSkills\nCron Tasks\nDreams\nToday\nMain Agent\nwebchat:g-agent-main-main\nOlder than 1 Month\nMain Agent\nVerification only. Verification token: pilot-saf"
+  },
+  "model_dropdown": {
+    "ok": true,
+    "items": []
+  }
+}

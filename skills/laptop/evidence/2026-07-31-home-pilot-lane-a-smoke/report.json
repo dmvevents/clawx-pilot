@@ -1,0 +1,31 @@
+{
+  "model_state": {
+    "url": "file:///C:/Users/VYONIX/AppData/Local/Programs/Ministry%20of%20Education/resources/app.asar/dist/index.html",
+    "ready": "complete",
+    "title": "Ministry of Education",
+    "bodyPreview": "Ministry of Education\nNew Chat\nModels\nAgents\nChannels\nSkills\nCron Tasks\nDreams\nOlder than 1 Month\nMain Agent\nVerification only. Verification token: pilot-safe-\u2026\nMain Agent\nwebchat:g-agent-main-main\nMain Agent\nVerification only. Verification token: pilot-safe-\u2026\nMain Agent\nVerification only. Verification token: pilot-safe-\u2026\nMain Agent\nVerification only. Verification token: pilot-safe-\u2026\nMain Agent\nVerification only. Verification token: pilot-safe-\u2026\nMain Agent\nVerification only. Verification token: ",
+    "modelWidgets": [],
+    "chatInputs": [
+      {
+        "tag": "TEXTAREA",
+        "placeholder": null,
+        "rect": {}
+      }
+    ],
+    "preferredChannel_LS": null,
+    "LS_keys": [
+      "clawx:image-cache",
+      "clawx.artifact-panel",
+      "clawx-settings"
+    ]
+  },
+  "screenshot_initial": "/tmp/moe-smoke-2026-07-31/screenshot-initial.png",
+  "chat_send": {
+    "ok": true,
+    "clicked": true,
+    "hasSendBtn": true,
+    "elapsed_ms": 30318,
+    "response": null
+  },
+  "screenshot_after_send": "/tmp/moe-smoke-2026-07-31/screenshot-after-send.png"
+}
