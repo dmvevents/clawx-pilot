@@ -55,7 +55,7 @@ import { syncAllProviderAuthToRuntime } from '../services/providers/provider-run
 import { seedCloudGatewayProvider } from './cloud-gateway-provider-seed';
 import { seedDefaultLocalProvider } from './local-provider-seed';
 import { seedGatewayPluginConfig } from './gateway-plugin-config-seed';
-import { runChannelPreflight } from '../services/providers/channel-router';
+import { runChannelPreflight, ensureBootableAgentsConfig } from '../services/providers/channel-router';
 
 const WINDOWS_APP_USER_MODEL_ID = 'tt.gov.moe.assistant';
 const isE2EMode = process.env.CLAWX_E2E === '1';
@@ -563,6 +563,16 @@ async function initialize(): Promise<void> {
       const desired = (await getSetting('preferredChannel')) ?? 'on-device';
       const result = await runChannelPreflight(desired as 'online' | 'on-device', gatewayManager);
       logger.info('[main] Channel preflight result', result);
+
+      // BUG-012 boot-path safety net: preflight early-returns without writing
+      // an agents block when no provider account resolves (truly fresh install,
+      // cloud seed skipped + Ollama not yet registered). Without an agents
+      // block the gateway boots with configuredChannelCount:0 and its RPC
+      // router never comes up, hanging the renderer on a chat.history timeout.
+      // Guarantee a bootable agents block regardless of preflight outcome;
+      // idempotent, never clobbers a populated list.
+      const ensured = await ensureBootableAgentsConfig(result.modelRef);
+      logger.info('[main] Ensured bootable agents config', ensured);
     } catch (error) {
       logger.warn('Channel preflight failed (non-fatal):', error);
     }

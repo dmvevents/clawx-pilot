@@ -36,6 +36,8 @@ import {
   syncDefaultProviderToRuntime,
 } from './provider-runtime-sync';
 
+export { ensureBootableAgentsConfig } from '../../utils/agent-config';
+
 export type ProviderChannel = 'online' | 'on-device';
 
 const LOCAL_HOST_PATTERN = /^(?:https?:\/\/)?(?:127(?:\.\d{1,3}){3}|localhost|::1|\[::1\])(?::\d+)?(?:\/|$)/i;
