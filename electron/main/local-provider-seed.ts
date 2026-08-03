@@ -20,7 +20,9 @@
  */
 import { logger } from '../utils/logger';
 import type { GatewayManager } from '../gateway/manager';
-import { SEED_LOCAL_LLM_PROVIDER } from '../../shared/feature-flags';
+import { SEED_LOCAL_LLM_PROVIDER, TRIM_ONDEVICE_TOOL_CATALOG } from '../../shared/feature-flags';
+import { readOpenClawConfig, writeOpenClawConfig } from '../utils/channel-config';
+import { applyOnDeviceToolTrim } from '../utils/ondevice-tool-policy';
 import type { ProviderAccount } from '../shared/providers/types';
 import {
   listProviderAccounts,
@@ -115,6 +117,30 @@ export async function seedDefaultLocalProvider(
     logger.warn(
       `[local-provider-seed] patchProviderModelCompat (always-run) failed: ${err instanceof Error ? err.message : String(err)}`,
     );
+  }
+
+  // Always-run tool-catalog trim: the on-device model (qwen2.5:3b) tool-cascades
+  // when the full built-in catalog is injected. Write a per-provider deny policy
+  // so the gateway strips the orchestration/media/web tools for the local
+  // provider only — cloud providers keep the full catalog. Idempotent: only
+  // writes when the deny entries aren't already present. See
+  // electron/utils/ondevice-tool-policy.ts for why the sandbox path can't do this.
+  if (TRIM_ONDEVICE_TOOL_CATALOG) {
+    try {
+      const runtimeProviderKey = getOpenClawProviderKey('ollama', LOCAL_ACCOUNT_ID);
+      const config = await readOpenClawConfig();
+      const { config: nextConfig, changed } = applyOnDeviceToolTrim(config, runtimeProviderKey);
+      if (changed) {
+        await writeOpenClawConfig(nextConfig);
+        logger.info(
+          `[local-provider-seed] Trimmed on-device tool catalog for provider "${runtimeProviderKey}"`,
+        );
+      }
+    } catch (err) {
+      logger.warn(
+        `[local-provider-seed] on-device tool-catalog trim failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   // Always-run re-sync: if our canonical account exists, push its current

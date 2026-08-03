@@ -95,6 +95,33 @@ export const HIDE_COST_IN_UI = flagFromEnv('CLAWX_HIDE_COST_IN_UI', PILOT_MODE);
 export const SEED_LOCAL_LLM_PROVIDER = flagFromEnv('CLAWX_SEED_LOCAL_LLM_PROVIDER', true);
 
 /**
+ * Trim the tool catalog exposed to the on-device (local Ollama) model.
+ *
+ * The default on-device model (qwen2.5:3b-instruct) has weak tool-calling
+ * discipline: when the full built-in tool catalog is injected it emits its
+ * answer as a spurious tool_call instead of replying, and cascades into an
+ * infinite `process -> sessions_list -> subagents` loop or hangs on a `tts`
+ * call with no provider — the chat turn never terminates. Evidence:
+ * skills/laptop/evidence/2026-08-03-windows-install-ui-flows/REPORT.md.
+ *
+ * When enabled, the local-provider seed writes a top-level
+ * `tools.byProvider[<local-provider-key>].deny` policy so the gateway strips
+ * the orchestration/media/web tools a principal chat turn never needs, ONLY
+ * for the on-device provider. Cloud providers keep the full catalog because
+ * their models (Gemini/Sonnet) call tools correctly.
+ *
+ * The `agents.defaults.tools.sandbox.tools.deny` path does NOT work for this
+ * (proven live 2026-08-03): tool-policy resolution reads top-level
+ * `config.tools` and per-list-entry `tools`, never `agents.defaults.tools`,
+ * and the `sandbox.tools` sub-path only binds when a sandbox backend is
+ * active — the desktop app has none.
+ *
+ * Override with `CLAWX_TRIM_ONDEVICE_TOOLS=0` to expose the full catalog to
+ * the on-device model (e.g. when validating a stronger local model).
+ */
+export const TRIM_ONDEVICE_TOOL_CATALOG = flagFromEnv('CLAWX_TRIM_ONDEVICE_TOOLS', true);
+
+/**
  * One-shot seed for the managed online model gateway. When enabled, ClawX can
  * read a bundled/user/env cloud-gateway config on launch and create a custom
  * OpenAI-compatible provider account that points at our LiteLLM gateway.
