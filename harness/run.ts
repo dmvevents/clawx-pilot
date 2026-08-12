@@ -33,6 +33,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// @ts-expect-error — sibling .mjs, no bundled .d.ts
+import { renderJUnitXml, truncateStdout, validateReport } from './src/junit-schema.mjs';
+import { classifyFailure } from './failure_classifier.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -76,6 +80,8 @@ interface RunResult {
   reason: string;
   detail: string;
   durationMs: number;
+  stdout: string;
+  screenshot: string;
 }
 
 function parseArgs(argv: string[]): { mode: Mode; junit: string | null; filter: string | null } {
@@ -311,30 +317,86 @@ async function runBinary(_p: Prompt, _w: string): Promise<never> {
   throw new Error('binary mode not enabled in scaffold — awaits installer URL follow-up');
 }
 
-function junitXml(results: RunResult[]): string {
-  const total = results.length;
+const SUITE_NAME = 'clawx.harness.doc-tooling-e2e';
+
+/**
+ * Build the canonical JUnit report object. run.ts hands this to
+ * validateReport() BEFORE rendering XML so a malformed row (missing
+ * name, non-numeric time, unknown status) aborts the run with a schema
+ * error instead of producing a report a downstream CI parser will
+ * silently accept.
+ */
+interface Attachments {
+  screenshot: string;
+  stdout_tail: string;
+  stdout_truncated: boolean;
+}
+
+interface Testcase {
+  name: string;
+  classname: string;
+  time: number;
+  status: 'pass' | 'fail' | 'skip';
+  reason?: string;
+  detail?: string;
+  attachments: Attachments;
+}
+
+export function buildReport(results: RunResult[]): {
+  testsuites: Array<{
+    name: string;
+    tests: number;
+    failures: number;
+    skipped: number;
+    testcases: Testcase[];
+  }>;
+} {
   const failures = results.filter((r) => r.status === 'FAIL').length;
   const skipped = results.filter((r) => r.status === 'SKIP').length;
-  const escape = (s: string): string =>
-    String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-  const cases = results
-    .map((r) => {
-      const attrs = `name="${escape(r.id)}" classname="clawx.harness.doc-tooling-e2e" time="${(r.durationMs / 1000).toFixed(3)}"`;
-      if (r.status === 'PASS') return `    <testcase ${attrs}/>`;
-      if (r.status === 'SKIP')
-        return `    <testcase ${attrs}><skipped message="${escape(r.reason)}"/></testcase>`;
-      return `    <testcase ${attrs}><failure message="${escape(r.reason)}"><![CDATA[${r.detail}]]></failure></testcase>`;
-    })
-    .join('\n');
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    `<testsuites tests="${total}" failures="${failures}" skipped="${skipped}">`,
-    `  <testsuite name="clawx.harness.doc-tooling-e2e" tests="${total}" failures="${failures}" skipped="${skipped}">`,
-    cases,
-    '  </testsuite>',
-    '</testsuites>',
-    '',
-  ].join('\n');
+  const testcases: Testcase[] = results.map((r) => {
+    const status: 'pass' | 'fail' | 'skip' =
+      r.status === 'PASS' ? 'pass' : r.status === 'SKIP' ? 'skip' : 'fail';
+    const { stdout_tail, stdout_truncated } = truncateStdout(r.stdout) as {
+      stdout_tail: string;
+      stdout_truncated: boolean;
+    };
+    const tc: Testcase = {
+      name: r.id,
+      classname: SUITE_NAME,
+      time: r.durationMs / 1000,
+      status,
+      attachments: {
+        screenshot: r.screenshot,
+        stdout_tail,
+        stdout_truncated,
+      },
+    };
+    if (status !== 'pass') {
+      tc.reason = r.reason;
+      if (status === 'fail') tc.detail = r.detail;
+    }
+    return tc;
+  });
+  return {
+    testsuites: [
+      {
+        name: SUITE_NAME,
+        tests: results.length,
+        failures,
+        skipped,
+        testcases,
+      },
+    ],
+  };
+}
+
+/**
+ * Legacy JUnit renderer kept for exported callers. The runtime path in
+ * main() validates the report first, then renders through renderJUnitXml.
+ */
+function junitXml(results: RunResult[]): string {
+  const report = validateReport(buildReport(results));
+  return renderJUnitXml(report, { classify: classifyFailure });
 }
 
 async function main(): Promise<void> {
@@ -370,7 +432,24 @@ async function main(): Promise<void> {
       reason = e.message.split('\n')[0].slice(0, 200);
       detail = e.stack ?? '';
     }
-    results.push({ id: p.id, status, reason, detail, durationMs: Date.now() - start });
+    // Direct-mode harness is offline — no browser, so no screenshot to
+    // attach today. Attachments block still carries an empty string so
+    // the schema stays uniform across modes; binary-mode/Windows CI
+    // will populate this once the installer smoke lands.
+    const screenshot = '';
+    // stdout captured for the tail: the runner's own status line plus
+    // any preview it produced. Real per-testcase stdout piping arrives
+    // with binary mode.
+    const stdoutCapture = `[${status}] ${p.id}\n${reason}\n${detail}`;
+    results.push({
+      id: p.id,
+      status,
+      reason,
+      detail,
+      durationMs: Date.now() - start,
+      stdout: stdoutCapture,
+      screenshot,
+    });
     process.stdout.write(
       `  [${status}] ${p.id.padEnd(24)} ${(Date.now() - start)}ms  ${reason.slice(0, 100)}\n`,
     );
@@ -379,7 +458,19 @@ async function main(): Promise<void> {
   if (args.junit) {
     const dest = path.resolve(args.junit);
     await mkdir(path.dirname(dest), { recursive: true });
-    await writeFile(dest, junitXml(results));
+    // Validation gate: if buildReport() emits a malformed row (missing
+    // name, non-numeric time, unknown status), validateReport() throws
+    // and the harness exits with code 3 — the report never reaches disk.
+    let xml: string;
+    try {
+      const report = validateReport(buildReport(results));
+      xml = renderJUnitXml(report, { classify: classifyFailure });
+    } catch (err) {
+      const e = err as Error;
+      process.stderr.write(`clawx-harness: JUnit schema violation — ${e.message}\n`);
+      process.exit(3);
+    }
+    await writeFile(dest, xml);
     process.stdout.write(`clawx-harness: wrote JUnit XML → ${dest}\n`);
   }
 

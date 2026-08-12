@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://clawx.local/schemas/junit-report.json",
+  "title": "Clawx harness JUnit report",
+  "description": "Canonical in-memory model of the JUnit XML that harness/run.ts emits. Validated before the XML string is rendered so a malformed row fails the run instead of producing a report a downstream CI parser will silently accept.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["testsuites"],
+  "properties": {
+    "testsuites": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/testsuite" }
+    }
+  },
+  "definitions": {
+    "testsuite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "tests", "failures", "skipped", "testcases"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "tests": { "type": "integer", "minimum": 0 },
+        "failures": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "testcases": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/testcase" }
+        }
+      }
+    },
+    "testcase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "classname", "time", "status", "attachments"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "classname": { "type": "string", "minLength": 1 },
+        "time": { "type": "number", "minimum": 0 },
+        "status": {
+          "type": "string",
+          "enum": ["pass", "fail", "skip"]
+        },
+        "reason": { "type": "string" },
+        "detail": { "type": "string" },
+        "attachments": { "$ref": "#/definitions/attachments" }
+      }
+    },
+    "attachments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["screenshot", "stdout_tail", "stdout_truncated"],
+      "properties": {
+        "screenshot": {
+          "type": "string",
+          "description": "Absolute or relative path to a PNG screenshot, OR empty string when no screenshot was captured (e.g. offline direct-mode fixtures).",
+          "pattern": "^(|.*\\.[Pp][Nn][Gg])$"
+        },
+        "stdout_tail": {
+          "type": "string",
+          "description": "Last ≤10240 bytes of the testcase stdout. If the pre-truncation length exceeded 10KB, this string MUST end with the marker '\\n[...TRUNCATED >10KB]\\n' (enforced at runtime, not by the schema)."
+        },
+        "stdout_truncated": {
+          "type": "boolean",
+          "description": "True iff the runner shortened stdout to fit the 10KB tail budget. When true, stdout_tail must carry the truncation marker; enforced by validateReport()."
+        }
+      }
+    }
+  }
+}
