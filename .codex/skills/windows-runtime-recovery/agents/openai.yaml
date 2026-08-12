@@ -1,0 +1,4 @@
+interface:
+  display_name: "Windows Runtime Recovery"
+  short_description: "Diagnose Windows Gateway, model-provider, Office, ASR, and demo runtime failures."
+  default_prompt: "Use this skill to recover the ClawX Windows demo runtime by proving app-facing Gateway/model coherence, isolating Office parsing from model failures, and validating fixes through Mac, VM, and pilot checks."

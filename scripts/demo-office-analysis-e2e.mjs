@@ -168,6 +168,31 @@ function summarizeDocx(filePath) {
   };
 }
 
+function summarizePptx(filePath) {
+  const buffer = readFileSync(filePath);
+  const slideEntries = readCentralDirectory(buffer)
+    .map((entry) => entry.fileName)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name))
+    .sort((a, b) => slideNumberFromEntry(a) - slideNumberFromEntry(b));
+  const slides = slideEntries.map((entryName, index) => {
+    const xml = extractZipEntry(buffer, entryName).toString('utf8');
+    const paragraphs = extractPresentationParagraphs(xml);
+    return {
+      index: index + 1,
+      entry: entryName,
+      paragraphCount: paragraphs.length,
+      firstParagraphs: paragraphs.slice(0, 10),
+    };
+  });
+  return {
+    fileName: path.basename(filePath),
+    bytes: statSync(filePath).size,
+    parser: 'pptx-ooxml',
+    slideCount: slides.length,
+    slides,
+  };
+}
+
 function parseWorkbookRelationships(xml) {
   const rels = new Map();
   for (const attrs of matchTags(xml, 'Relationship')) {
@@ -253,7 +278,7 @@ function textBetween(xml, tagName) {
 }
 
 function extractTextRuns(xml) {
-  return Array.from(xml.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g))
+  return Array.from(xml.matchAll(/<(?:[\w-]+:)?t\b[^>]*>([\s\S]*?)<\/(?:[\w-]+:)?t>/g))
     .map((match) => decodeXml(match[1]))
     .join('');
 }
@@ -265,6 +290,18 @@ function extractParagraphs(xml) {
     .split(/<\/w:p>/g)
     .map((chunk) => decodeXml(chunk.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()))
     .filter(Boolean);
+}
+
+function extractPresentationParagraphs(xml) {
+  return xml
+    .split(/<\/a:p>/g)
+    .map((chunk) => extractTextRuns(chunk).replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+function slideNumberFromEntry(entryName) {
+  const match = /slide(\d+)\.xml$/i.exec(entryName);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
 }
 
 function extractZipEntry(buffer, entryName) {
@@ -316,7 +353,7 @@ function readCentralDirectory(buffer) {
     const extraLength = buffer.readUInt16LE(offset + 30);
     const commentLength = buffer.readUInt16LE(offset + 32);
     const localHeaderOffset = buffer.readUInt32LE(offset + 42);
-    const fileName = buffer.subarray(offset + 46, offset + 46 + fileNameLength).toString('utf8');
+    const fileName = buffer.subarray(offset + 46, offset + 46 + fileNameLength).toString('utf8').replace(/\\/g, '/');
     entries.push({ fileName, method, compressedSize, localHeaderOffset });
     offset += 46 + fileNameLength + extraLength + commentLength;
   }
@@ -333,14 +370,21 @@ function decodeXml(value) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const excelPath = requireFile('Excel', args.excel);
-const wordPath = requireFile('Word', args.word);
+const excelPath = args.excel ? requireFile('Excel', args.excel) : null;
+const wordPath = args.word ? requireFile('Word', args.word) : null;
+const powerpointPath = args.pptx || args.powerpoint
+  ? requireFile('PowerPoint', args.pptx || args.powerpoint)
+  : null;
+if (!excelPath && !wordPath && !powerpointPath) {
+  throw new Error('At least one --excel, --word, --pptx, or --powerpoint path is required');
+}
 const result = {
   ok: true,
   generatedAt: new Date().toISOString(),
-  excel: summarizeWorkbook(excelPath),
-  word: summarizeDocx(wordPath),
 };
+if (excelPath) result.excel = summarizeWorkbook(excelPath);
+if (wordPath) result.word = summarizeDocx(wordPath);
+if (powerpointPath) result.powerpoint = summarizePptx(powerpointPath);
 
 if (args['json-out']) {
   writeFileSync(args['json-out'], `${JSON.stringify(result, null, 2)}\n`);

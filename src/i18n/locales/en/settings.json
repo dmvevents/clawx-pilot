@@ -276,8 +276,8 @@
     "tagline": "Graphical AI Assistant",
     "basedOn": "AI-supported administrative assistant",
     "version": "Version {{version}}",
-    "docs": "Website",
-    "github": "GitHub",
+    "docs": "Release Notes",
+    "github": "Support",
     "faq": "FAQ"
   }
 }

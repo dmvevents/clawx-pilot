@@ -30,7 +30,9 @@ async function pdfPagesToImages(pdf: string): Promise<string[]> {
   let list: string[] = [];
   try {
     list = execSync(`ls ${tmpPrefix}-*.png | sort`).toString().trim().split('\n').filter(Boolean);
-  } catch {}
+  } catch {
+    // Missing cached pages; render them below.
+  }
   if (list.length === 0) {
     execSync(`pdftoppm -png -r 110 "${pdf}" "${tmpPrefix}"`, { stdio: 'inherit' });
     list = execSync(`ls ${tmpPrefix}-*.png | sort`).toString().trim().split('\n').filter(Boolean);

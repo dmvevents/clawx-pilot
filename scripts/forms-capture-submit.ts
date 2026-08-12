@@ -94,9 +94,9 @@ async function main() {
     }
   });
 
-  console.log('\n→ Now in Chrome: fill 4-5 fields and click Submit. Watching for 120s...\n');
+  console.log('\n→ Now in Chrome: fill ALL required fields then click Submit. Watching for 240s...\n');
   const start = Date.now();
-  while (Date.now() - start < 120_000 && !captured) {
+  while (Date.now() - start < 240_000 && !captured) {
     await new Promise((r) => setTimeout(r, 500));
   }
 

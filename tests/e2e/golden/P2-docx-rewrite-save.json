@@ -1,0 +1,15 @@
+{
+  "id": "P2-docx-rewrite-save",
+  "tool_called": "document.write_docx",
+  "result_schema": {
+    "path": "string",
+    "bytes": "number",
+    "paragraphs": "number"
+  },
+  "assertions": {
+    "bytes_min": 200,
+    "paragraphs_min": 1,
+    "path_matches": "Staff_Memo_Final\\.docx$",
+    "file_exists_at_path": true
+  }
+}

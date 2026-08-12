@@ -1,6 +1,6 @@
 ---
 name: gateway-recovery
-description: ClawX gateway crash-loop recovery specialist. Use PROACTIVELY when the chat composer shows `gateway error | port: 18789 | pid: …`, when logs show `Gateway process exited before becoming ready (code=1)`, or after any `~/.openclaw` wipe. Diagnoses plugin schema violations, patches `~/.openclaw/openclaw.json` with valid placeholders, and verifies the gateway returns to a healthy state. Read-write — may modify config and run shell commands.
+description: "ClawX gateway crash-loop recovery specialist. Use PROACTIVELY when the chat composer shows gateway error / port 18789 / pid, when logs show Gateway process exited before becoming ready, or after any ~/.openclaw wipe. Diagnoses plugin schema violations, patches ~/.openclaw/openclaw.json with valid placeholders, and verifies the gateway returns to a healthy state. Read-write; may modify config and run shell commands."
 tools: Read, Edit, Write, Bash, Grep
 ---
 

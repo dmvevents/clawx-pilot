@@ -58,14 +58,15 @@ describe('POST /api/sessions/summaries', () => {
     });
 
     readFileMock.mockImplementation(async (path: string) => {
-      if (path.endsWith('/agents/main/sessions/sessions.json')) {
+      const normalized = path.replace(/\\/g, '/');
+      if (normalized.endsWith('/agents/main/sessions/sessions.json')) {
         return JSON.stringify({
           sessions: [
             { key: 'agent:main:session-a', file: 'session-a.jsonl' },
           ],
         });
       }
-      if (path.endsWith('/agents/main/sessions/session-a.jsonl')) {
+      if (normalized.endsWith('/agents/main/sessions/session-a.jsonl')) {
         return [
           JSON.stringify({
             type: 'message',
@@ -116,14 +117,15 @@ describe('POST /api/sessions/summaries', () => {
     });
 
     readFileMock.mockImplementation(async (path: string) => {
-      if (path.endsWith('/agents/main/sessions/sessions.json')) {
+      const normalized = path.replace(/\\/g, '/');
+      if (normalized.endsWith('/agents/main/sessions/sessions.json')) {
         return JSON.stringify({
           sessions: [
             { key: 'agent:main:session-json', file: 'session-json.jsonl' },
           ],
         });
       }
-      if (path.endsWith('/agents/main/sessions/session-json.jsonl')) {
+      if (normalized.endsWith('/agents/main/sessions/session-json.jsonl')) {
         return [
           JSON.stringify({
             type: 'message',

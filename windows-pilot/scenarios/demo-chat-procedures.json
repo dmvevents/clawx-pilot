@@ -1,0 +1,326 @@
+{
+  "version": 1,
+  "name": "ClawX Windows demo chat procedures",
+  "description": "Safe, repeatable app-path chat procedures for Outlook, Forms, and Downloads document handling. These scenarios must not send email, download attachments, or submit Microsoft Forms.",
+  "scenarios": [
+    {
+      "id": "safechat-outlook-open",
+      "title": "Chat can open Outlook through the normal tool path",
+      "type": "safe-chat-mode",
+      "mode": "outlook-open",
+      "required": true,
+      "waitMs": 12000
+    },
+    {
+      "id": "fresh-user-check-email-routes-outlook-tools",
+      "title": "Fresh user asks to check email and does not get Chrome setup instructions",
+      "type": "safe-chat-custom",
+      "required": true,
+      "waitMs": 22000,
+      "expectedToolAny": ["outlook.read_inbox"],
+      "bannedToolAny": [
+        "outlook.draft_email",
+        "outlook.send_email",
+        "outlook.download_attachment",
+        "outlook.reply",
+        "outlook.forward",
+        "forms.preview_daily_report",
+        "forms.preview_suspension",
+        "forms.submit_daily_report",
+        "forms.submit_suspension",
+        "exec",
+        "process",
+        "sessions_spawn",
+        "sessions_yield"
+      ],
+      "bannedToolInputPatterns": [
+        "chrome://flags",
+        "chrome\\.exe",
+        "--remote-debugging",
+        "remote debugging",
+        "\\b(Get-Command|Start-Process|cmd\\.exe|powershell\\.exe)\\b"
+      ],
+      "bannedAnswerPatterns": [
+        "chrome://flags",
+        "chrome\\.exe",
+        "--remote-debugging",
+        "remote debugging",
+        "enable .*debugging",
+        "debugging mode",
+        "quick web search|web search",
+        "system PATH|not in .*PATH",
+        "Command Prompt|PowerShell"
+      ],
+      "requiredAnswerPatterns": [
+        "email|inbox|Outlook|message"
+      ],
+      "prompt": "Can you check my email? Use the installed ClawX Outlook path only. Return a concise safe inbox summary and echo the requested verification token. If browser automation needs repair, use the ClawX browser.diagnose and browser.repair_chrome_cdp tools before asking me to do anything. If the repair says Chrome is already open with the target profile, ask me only to close all Chrome windows and retry from ClawX. Do not give Chrome setup, flags-page, web-search, command-line, debugging, PATH, or chrome.exe instructions. Do not send, draft, reply, forward, download attachments, submit forms, or print full email addresses, email bodies, secrets, tokens, or private URLs."
+    },
+    {
+      "id": "fresh-user-reply-routes-outlook-reply",
+      "title": "Fresh user asks to reply and the agent uses the Outlook reply tool",
+      "type": "safe-chat-custom",
+      "required": true,
+      "waitMs": 30000,
+      "expectedToolAny": ["outlook.reply"],
+      "bannedToolAny": [
+        "outlook.send_email",
+        "outlook.download_attachment",
+        "forms.preview_daily_report",
+        "forms.preview_suspension",
+        "forms.submit_daily_report",
+        "forms.submit_suspension",
+        "exec",
+        "process",
+        "sessions_spawn",
+        "sessions_yield"
+      ],
+      "bannedToolInputPatterns": [
+        "chrome://flags",
+        "chrome\\.exe",
+        "--remote-debugging",
+        "remote debugging",
+        "\\b(Get-Command|Start-Process|cmd\\.exe|powershell\\.exe)\\b"
+      ],
+      "bannedAnswerPatterns": [
+        "find .*Reply button",
+        "click .*Reply button",
+        "manually .*reply",
+        "chrome://flags",
+        "chrome\\.exe",
+        "--remote-debugging",
+        "remote debugging",
+        "enable .*debugging",
+        "Command Prompt|PowerShell"
+      ],
+      "requiredAnswerPatterns": [
+        "draft|reply",
+        "review|left open|Outlook",
+        "not sent|send it|confirm"
+      ],
+      "prompt": "Reply to the latest email from Karunesh with this exact body: \"Testing the reply feature\". Use the installed ClawX Outlook path only: find the target message with outlook.read_inbox or outlook.search_inbox, read it if needed, then call outlook.reply so Outlook opens a reply draft. Do not use generic browser clicking to find a Reply button. Do not ask me for the recipient if Outlook has opened the reply draft; Outlook pre-fills the recipient. Do not send the draft, do not call outlook.send_email, and do not download attachments or submit forms. After the draft is open, tell me it is ready for review and that sending requires my explicit confirmation."
+    },
+    {
+      "id": "safechat-forms-list",
+      "title": "Chat can list configured Microsoft Forms through the normal tool path",
+      "type": "safe-chat-mode",
+      "mode": "forms-list",
+      "required": true,
+      "waitMs": 12000
+    },
+    {
+      "id": "fresh-user-june-inbox-reports-bounded-scan",
+      "title": "Fresh user asks for all June inbox emails and the agent reports bounded scan scope",
+      "type": "safe-chat-custom",
+      "required": true,
+      "waitMs": 30000,
+      "expectedToolAny": ["outlook.search_inbox"],
+      "bannedToolAny": [
+        "outlook.draft_email",
+        "outlook.send_email",
+        "outlook.download_attachment",
+        "outlook.reply",
+        "outlook.forward",
+        "forms.preview_daily_report",
+        "forms.preview_suspension",
+        "forms.submit_daily_report",
+        "forms.submit_suspension",
+        "exec",
+        "process",
+        "sessions_spawn",
+        "sessions_yield"
+      ],
+      "bannedToolInputPatterns": [
+        "chrome://flags",
+        "chrome\\.exe",
+        "--remote-debugging",
+        "remote debugging",
+        "\\b(Get-Command|Start-Process|cmd\\.exe|powershell\\.exe)\\b"
+      ],
+      "bannedAnswerPatterns": [
+        "complete list",
+        "that's all",
+        "these are all",
+        "full list for June",
+        "all emails for June again"
+      ],
+      "requiredAnswerPatterns": [
+        "June",
+        "inbox|email|message",
+        "searched|scanned|recent|window|limited|bounded|capped|not exhaustive|may be more|incomplete"
+      ],
+      "prompt": "Check my inbox and show me all emails that I received for June. Use outlook.search_inbox with a broad June date range and a large top value. Because browser Outlook searches are bounded, do not claim the result is the complete mailbox unless the tool says the scan is exhaustive. Include a short scope note such as how many recent inbox rows were scanned or whether results may be incomplete. Do not send, draft, reply, forward, download attachments, submit forms, run shell commands, spawn background sessions, or print secrets, tokens, private URLs, full email addresses, or email bodies."
+    },
+    {
+      "id": "teacher-daily-report-missing-counts",
+      "title": "Teacher-facing Daily Report prompt asks for missing required counts",
+      "type": "safe-chat-custom",
+      "required": true,
+      "waitMs": 18000,
+      "bannedToolAny": [
+        "outlook.draft_email",
+        "outlook.send_email",
+        "outlook.download_attachment",
+        "forms.preview_daily_report",
+        "forms.preview_suspension",
+        "forms.submit_daily_report",
+        "forms.submit_suspension",
+        "edit",
+        "patch",
+        "write",
+        "sessions_spawn",
+        "sessions_yield"
+      ],
+      "requiredAnswerPatterns": [
+        "attendance|daily report|report",
+        "teacher|staff|present|absent",
+        "pupil|student|year group|class|roll",
+        "missing|need|provide|tell me|cannot",
+        "not submit|can't submit|cannot submit|confirmation|preview"
+      ],
+      "prompt": "A nontechnical principal says: \"Submit my attendance report. Nothing unusual today.\" Respond the way the assistant should in the app. Use plain English, avoid internal tool names, and do not invent required Daily Report numbers. Ask only for the missing required attendance, teacher, and class or year-group counts needed before a form preview. Do not preview or submit any form. Do not send email. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
+    },
+    {
+      "id": "downloads-document-inventory",
+      "title": "Chat can find document files in Downloads",
+      "type": "safe-chat-custom",
+      "required": true,
+      "waitMs": 16000,
+      "expectedToolAny": ["exec", "process", "read"],
+      "bannedToolAny": [
+        "outlook.draft_email",
+        "outlook.send_email",
+        "outlook.download_attachment",
+        "forms.preview_daily_report",
+        "forms.preview_suspension",
+        "forms.submit_daily_report",
+        "forms.submit_suspension",
+        "edit",
+        "patch",
+        "write",
+        "sessions_spawn",
+        "sessions_yield"
+      ],
+      "bannedToolInputPatterns": [
+        "\\b(Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item|Remove-Item)\\b",
+        "(^|\\s)(>|>>)",
+        "\\bsummarize_excel\\.py\\b",
+        "\\b(open|writeFileSync|writeFile)\\b.*\\b(w|append)\\b"
+      ],
+      "requiredAnswerPatterns": [
+        "filename|file",
+        "extension|\\.xlsx|\\.docx|\\.pptx|\\.pdf|\\.csv|\\.txt|\\.md",
+        "purpose|size|bytes"
+      ],
+      "prompt": "List the document files in {{DOWNLOADS_PATH}} with extensions .xlsx, .xls, .docx, .doc, .pptx, .ppt, .pdf, .csv, .txt, and .md. Return a concise table with filename, extension, approximate size, and likely purpose if obvious from the filename. Do not spawn subagents or background sessions; finish in this chat. Do not modify files, create helper scripts, or write temporary files. Do not send email. Do not submit forms. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
+    },
+    {
+      "id": "downloads-excel-summary",
+      "title": "Chat can select and summarize a spreadsheet from Downloads",
+      "type": "safe-chat-custom",
+      "required": true,
+      "waitMs": 45000,
+      "expectedToolAny": ["exec", "process", "read"],
+      "bannedToolAny": [
+        "outlook.draft_email",
+        "outlook.send_email",
+        "outlook.download_attachment",
+        "forms.preview_daily_report",
+        "forms.preview_suspension",
+        "forms.submit_daily_report",
+        "forms.submit_suspension",
+        "edit",
+        "patch",
+        "write",
+        "sessions_spawn",
+        "sessions_yield"
+      ],
+      "bannedToolInputPatterns": [
+        "\\b(Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item|Remove-Item)\\b",
+        "(^|\\s)(>|>>)",
+        "\\bsummarize_excel\\.py\\b",
+        "\\b(open|writeFileSync|writeFile)\\b.*\\b(w|append)\\b"
+      ],
+      "requiredAnswerPatterns": [
+        "xlsx|xls|csv|spreadsheet|workbook",
+        "sheet|column|row",
+        "school|attendance|enrolled|present|absent|total"
+      ],
+      "prompt": "Summarize the seeded attendance spreadsheet data in {{DOWNLOADS_PATH}}. First run one read-only PowerShell listing command equivalent to: Get-ChildItem -LiteralPath \"{{DOWNLOADS_PATH}}\" -File | Where-Object { $_.Name -in 'moe-demo-attendance-results.csv','moe-demo-attendance-results.xlsx','SEA Typical School Results_2024 (1).xlsx' } | Select-Object Name,Extension,Length,LastWriteTime. Prefer moe-demo-attendance-results.csv because it is the CSV companion to the seeded workbook and can be read directly with Import-Csv. Read only enough to report the file name, sheet/table name if obvious, column headers, row count, total enrolled, total present, total absent, and the class with the highest absences. If neither moe-demo-attendance-results.csv nor moe-demo-attendance-results.xlsx is present, say exactly that. Do not spawn subagents or background sessions; finish the summary in this chat. Do not modify files, create helper scripts, or write temporary files. Do not send email. Do not submit forms. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
+    },
+    {
+      "id": "downloads-powerpoint-summary",
+      "title": "Chat can identify the seeded PowerPoint attendance deck",
+      "type": "safe-chat-custom",
+      "required": false,
+      "waitMs": 20000,
+      "expectedToolAny": ["exec", "process", "read"],
+      "bannedToolAny": [
+        "outlook.draft_email",
+        "outlook.send_email",
+        "outlook.download_attachment",
+        "forms.preview_daily_report",
+        "forms.preview_suspension",
+        "forms.submit_daily_report",
+        "forms.submit_suspension",
+        "edit",
+        "patch",
+        "write",
+        "sessions_spawn",
+        "sessions_yield"
+      ],
+      "bannedToolInputPatterns": [
+        "\\b(Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item|Remove-Item)\\b",
+        "(^|\\s)(>|>>)",
+        "\\bsummarize_excel\\.py\\b",
+        "\\b(open|writeFileSync|writeFile)\\b.*\\b(w|append)\\b"
+      ],
+      "requiredAnswerPatterns": [
+        "pptx|PowerPoint|deck|presentation|slides",
+        "attendance|Demo Primary School",
+        "Standard 4|Transport delay|absent|present"
+      ],
+      "prompt": "Inspect only the seeded PowerPoint file {{DOWNLOADS_PATH}}\\moe-demo-attendance-summary.pptx. You may list file metadata or read its zipped OpenXML slide text. Confirm the deck topic, slide count if visible, and whether it contains Demo Primary School attendance data including the Standard 4 transport-delay note. Do not spawn subagents or background sessions; finish in this chat. Do not modify files, create helper scripts, or write temporary files. Do not send email. Do not submit forms. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
+    },
+    {
+      "id": "downloads-word-suspension-fields",
+      "title": "Chat can inspect the seeded suspension source for form fields",
+      "type": "safe-chat-custom",
+      "required": false,
+      "waitMs": 16000,
+      "expectedToolAny": ["read"],
+      "bannedToolAny": [
+        "outlook.draft_email",
+        "outlook.send_email",
+        "outlook.download_attachment",
+        "forms.preview_daily_report",
+        "forms.preview_suspension",
+        "forms.submit_daily_report",
+        "forms.submit_suspension",
+        "edit",
+        "patch",
+        "write",
+        "sessions_spawn",
+        "sessions_yield"
+      ],
+      "bannedToolInputPatterns": [
+        "\\b(Set-Content|Add-Content|Out-File|New-Item|Copy-Item|Move-Item|Remove-Item)\\b",
+        "(^|\\s)(>|>>)",
+        "\\bsummarize_excel\\.py\\b",
+        "\\b(open|writeFileSync|writeFile)\\b.*\\b(w|append)\\b"
+      ],
+      "requiredAnswerPatterns": [
+        "suspension|discipline|attendance|report|source document|no suitable source",
+        "school|class|incident|reason|parent|missing"
+      ],
+      "prompt": "Read the seeded plain-text suspension source at {{DOWNLOADS_PATH}}\\moe-demo-suspension-source.txt. Do not inspect the .docx copy and do not use docx conversion tools for this scenario. Extract these possible form fields: school, class, incident date, student placeholder name or initials, reason, suspension length, parent contact, and missing fields. Finish with the requested verification token in the final answer. Do not spawn subagents or background sessions; finish in this chat. Do not modify files, create helper scripts, or write temporary files. Do not preview or submit any form. Do not send email. Do not download attachments. Do not print secrets, tokens, Microsoft Forms URLs, full email addresses, or email bodies."
+    },
+    {
+      "id": "outlook-and-forms-hostapi-smoke",
+      "title": "Host API Outlook and Forms smoke with safety gates",
+      "type": "hostapi-smoke",
+      "required": true,
+      "waitMs": 12000
+    }
+  ]
+}

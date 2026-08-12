@@ -7,12 +7,125 @@ on:
         description: 'Git ref to build (branch, tag, or SHA). Leave empty for current default ref.'
         required: false
         default: ''
+      requireCloudGatewaySeed:
+        description: 'Fail the build unless CLAWX_CLOUD_GATEWAY_CONFIG_JSON and CLAWX_CLOUD_GATEWAY_KEY secrets are available.'
+        required: true
+        type: boolean
+        default: true
+      requireMicrosoftGraphSeed:
+        description: 'Fail the build unless CLAWX_MICROSOFT_GRAPH_CONFIG_JSON secret or variable is available.'
+        required: true
+        type: boolean
+        default: false
+      requireAzureSpeechSeed:
+        description: 'Fail the build unless CLAWX_AZURE_SPEECH_CONFIG_JSON and CLAWX_AZURE_SPEECH_KEY are available.'
+        required: true
+        type: boolean
+        default: false
+      publishFromRunId:
+        description: 'Optional completed workflow run ID whose Windows artifacts should be published to a release instead of building.'
+        required: false
+        default: ''
+      publishReleaseTag:
+        description: 'Release tag to receive the Windows artifacts when publishFromRunId is set.'
+        required: false
+        default: ''
+      publishReleaseTitle:
+        description: 'Optional release title to apply when publishing existing artifacts.'
+        required: false
+        default: ''
 
 permissions:
-  contents: read
+  actions: read
+  contents: write
 
 jobs:
+  publish-existing-windows-run:
+    if: ${{ inputs.publishFromRunId != '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout docs for release notes
+        uses: actions/checkout@v4
+
+      - name: Download Windows artifacts from completed run
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.publishFromRunId }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: release-artifacts
+          pattern: windows-*
+
+      - name: Publish Windows artifacts to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.publishReleaseTag }}
+          RELEASE_TITLE: ${{ inputs.publishReleaseTitle }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$RELEASE_TAG" ]]; then
+            echo "::error::publishReleaseTag is required when publishFromRunId is set."
+            exit 1
+          fi
+
+          echo "Downloaded Windows artifacts:"
+          find release-artifacts -maxdepth 3 -type f -print -exec ls -lh {} \;
+
+          mapfile -t release_assets < <(
+            find release-artifacts -type f \
+              \( -name '*.exe' -o -name '*.blockmap' -o -name '*.yml' \) \
+              | sort
+          )
+
+          if [[ "${#release_assets[@]}" -eq 0 ]]; then
+            echo "::error::No Windows release assets found in run ${{ inputs.publishFromRunId }}."
+            exit 1
+          fi
+
+          docs=(
+            windows-pilot/plans/MOE_WINDOWS_RC_2026-06-10_USER_INSTRUCTIONS.md
+            windows-pilot/plans/MOE_WINDOWS_CUSTOMER_FEEDBACK_2026-06-10.md
+            windows-pilot/plans/MOE_WINDOWS_GA_STATUS_2026-06-10.md
+          )
+          for doc in "${docs[@]}"; do
+            if [[ ! -f "$doc" ]]; then
+              echo "::error::Required release document is missing: $doc"
+              exit 1
+            fi
+          done
+
+          echo "SHA256 checksums to publish:"
+          sha256sum "${release_assets[@]}" "${docs[@]}"
+
+          gh release upload "$RELEASE_TAG" \
+            "${release_assets[@]}" \
+            "${docs[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+          if [[ -f windows-pilot/plans/MOE_WINDOWS_RC_2026-06-10_RELEASE_NOTES.md ]]; then
+            if [[ -n "$RELEASE_TITLE" ]]; then
+              gh release edit "$RELEASE_TAG" \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "$RELEASE_TITLE" \
+                --notes-file windows-pilot/plans/MOE_WINDOWS_RC_2026-06-10_RELEASE_NOTES.md
+            else
+              gh release edit "$RELEASE_TAG" \
+                --repo "$GITHUB_REPOSITORY" \
+                --notes-file windows-pilot/plans/MOE_WINDOWS_RC_2026-06-10_RELEASE_NOTES.md
+            fi
+          fi
+
+          echo "Published assets:"
+          gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json assets \
+            --jq '.assets[] | [.name,.size,.digest,.updatedAt] | @tsv'
+
   package-windows:
+    if: ${{ inputs.publishFromRunId == '' }}
     runs-on: windows-latest
 
     steps:
@@ -48,6 +161,138 @@ jobs:
 
       - name: Download uv binaries for Windows
         run: pnpm run uv:download:win
+
+      - name: Prepare cloud gateway seed
+        shell: pwsh
+        env:
+          CLOUD_GATEWAY_CONFIG_JSON: ${{ secrets.CLAWX_CLOUD_GATEWAY_CONFIG_JSON }}
+          CLOUD_GATEWAY_KEY: ${{ secrets.CLAWX_CLOUD_GATEWAY_KEY }}
+          REQUIRE_CLOUD_GATEWAY_SEED: ${{ inputs.requireCloudGatewaySeed }}
+        run: |
+          $resourcesDir = Join-Path $PWD 'resources'
+          New-Item -ItemType Directory -Force -Path $resourcesDir | Out-Null
+
+          $hasConfig = -not [string]::IsNullOrWhiteSpace($env:CLOUD_GATEWAY_CONFIG_JSON)
+          $hasKey = -not [string]::IsNullOrWhiteSpace($env:CLOUD_GATEWAY_KEY)
+          if (-not ($hasConfig -and $hasKey)) {
+            $message = 'Cloud gateway seed secrets are incomplete. Set CLAWX_CLOUD_GATEWAY_CONFIG_JSON and CLAWX_CLOUD_GATEWAY_KEY before building a release installer.'
+            if ($env:REQUIRE_CLOUD_GATEWAY_SEED -eq 'true') {
+              throw $message
+            }
+            Write-Warning $message
+            exit 0
+          }
+
+          $configPath = Join-Path $resourcesDir 'cloud-gateway.json'
+          $keyPath = Join-Path $resourcesDir 'cloud-gateway.key'
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+          [System.IO.File]::WriteAllText($configPath, $env:CLOUD_GATEWAY_CONFIG_JSON.Trim(), $utf8NoBom)
+          [System.IO.File]::WriteAllText($keyPath, ($env:CLOUD_GATEWAY_KEY.Trim() + [Environment]::NewLine), $utf8NoBom)
+
+          $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$config.baseUrl)) {
+            throw 'CLAWX_CLOUD_GATEWAY_CONFIG_JSON is missing baseUrl.'
+          }
+          if ([string]::IsNullOrWhiteSpace([string]$config.apiKeyFile)) {
+            throw 'CLAWX_CLOUD_GATEWAY_CONFIG_JSON is missing apiKeyFile.'
+          }
+          if ($config.apiKeyFile -ne 'cloud-gateway.key') {
+            throw 'CLAWX_CLOUD_GATEWAY_CONFIG_JSON apiKeyFile must be cloud-gateway.key for packaged release builds.'
+          }
+          if ((Get-Item $keyPath).Length -lt 8) {
+            throw 'CLAWX_CLOUD_GATEWAY_KEY is too short to be a usable gateway client key.'
+          }
+
+          Write-Host "Cloud gateway seed prepared for packaged release (providerId=$($config.providerId), model=$($config.model), key redacted)."
+
+      - name: Prepare Microsoft Graph seed
+        shell: pwsh
+        env:
+          MICROSOFT_GRAPH_CONFIG_JSON: ${{ secrets.CLAWX_MICROSOFT_GRAPH_CONFIG_JSON || vars.CLAWX_MICROSOFT_GRAPH_CONFIG_JSON }}
+          REQUIRE_MICROSOFT_GRAPH_SEED: ${{ inputs.requireMicrosoftGraphSeed }}
+        run: |
+          $resourcesDir = Join-Path $PWD 'resources'
+          New-Item -ItemType Directory -Force -Path $resourcesDir | Out-Null
+
+          $hasConfig = -not [string]::IsNullOrWhiteSpace($env:MICROSOFT_GRAPH_CONFIG_JSON)
+          if (-not $hasConfig) {
+            $message = 'Microsoft Graph seed config is missing. Set CLAWX_MICROSOFT_GRAPH_CONFIG_JSON to package Outlook Graph defaults.'
+            if ($env:REQUIRE_MICROSOFT_GRAPH_SEED -eq 'true') {
+              throw $message
+            }
+            Write-Warning $message
+            exit 0
+          }
+
+          $configPath = Join-Path $resourcesDir 'microsoft-graph.json'
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+          [System.IO.File]::WriteAllText($configPath, $env:MICROSOFT_GRAPH_CONFIG_JSON.Trim(), $utf8NoBom)
+
+          $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$config.tenantId)) {
+            throw 'CLAWX_MICROSOFT_GRAPH_CONFIG_JSON is missing tenantId.'
+          }
+          if ([string]::IsNullOrWhiteSpace([string]$config.clientId)) {
+            throw 'CLAWX_MICROSOFT_GRAPH_CONFIG_JSON is missing clientId.'
+          }
+          foreach ($blocked in @('clientSecret', 'client_secret', 'apiKey', 'password', 'refreshToken')) {
+            if ($null -ne $config.PSObject.Properties[$blocked]) {
+              throw "CLAWX_MICROSOFT_GRAPH_CONFIG_JSON must not contain secret field: $blocked."
+            }
+          }
+
+          Write-Host "Microsoft Graph seed prepared for packaged release (tenant=$($config.tenantId), clientId=$($config.clientId), no secrets)."
+
+      - name: Prepare Azure Speech seed
+        shell: pwsh
+        env:
+          AZURE_SPEECH_CONFIG_JSON: ${{ secrets.CLAWX_AZURE_SPEECH_CONFIG_JSON || vars.CLAWX_AZURE_SPEECH_CONFIG_JSON }}
+          AZURE_SPEECH_KEY: ${{ secrets.CLAWX_AZURE_SPEECH_KEY }}
+          REQUIRE_AZURE_SPEECH_SEED: ${{ inputs.requireAzureSpeechSeed }}
+        run: |
+          $resourcesDir = Join-Path $PWD 'resources'
+          New-Item -ItemType Directory -Force -Path $resourcesDir | Out-Null
+
+          $hasConfig = -not [string]::IsNullOrWhiteSpace($env:AZURE_SPEECH_CONFIG_JSON)
+          $hasKey = -not [string]::IsNullOrWhiteSpace($env:AZURE_SPEECH_KEY)
+          if (-not ($hasConfig -and $hasKey)) {
+            $message = 'Azure Speech seed secrets are incomplete. Set CLAWX_AZURE_SPEECH_CONFIG_JSON and CLAWX_AZURE_SPEECH_KEY before building a high-quality ASR release installer.'
+            if ($env:REQUIRE_AZURE_SPEECH_SEED -eq 'true') {
+              throw $message
+            }
+            Write-Warning $message
+            exit 0
+          }
+
+          $configPath = Join-Path $resourcesDir 'azure-speech.json'
+          $keyPath = Join-Path $resourcesDir 'azure-speech.key'
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+          [System.IO.File]::WriteAllText($configPath, $env:AZURE_SPEECH_CONFIG_JSON.Trim(), $utf8NoBom)
+          [System.IO.File]::WriteAllText($keyPath, ($env:AZURE_SPEECH_KEY.Trim() + [Environment]::NewLine), $utf8NoBom)
+
+          $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$config.region)) {
+            throw 'CLAWX_AZURE_SPEECH_CONFIG_JSON is missing region.'
+          }
+          if ([string]::IsNullOrWhiteSpace([string]$config.apiKeyFile)) {
+            throw 'CLAWX_AZURE_SPEECH_CONFIG_JSON is missing apiKeyFile.'
+          }
+          if ($config.apiKeyFile -ne 'azure-speech.key') {
+            throw 'CLAWX_AZURE_SPEECH_CONFIG_JSON apiKeyFile must be azure-speech.key for packaged release builds.'
+          }
+          foreach ($blocked in @('apiKey', 'key', 'subscriptionKey', 'password', 'token')) {
+            if ($null -ne $config.PSObject.Properties[$blocked]) {
+              throw "CLAWX_AZURE_SPEECH_CONFIG_JSON must not contain secret field: $blocked. Use CLAWX_AZURE_SPEECH_KEY instead."
+            }
+          }
+          if ((Get-Item $keyPath).Length -lt 8) {
+            throw 'CLAWX_AZURE_SPEECH_KEY is too short to be a usable Speech resource key.'
+          }
+
+          $locale = if ([string]::IsNullOrWhiteSpace([string]$config.locale)) { 'en-TT' } else { [string]$config.locale }
+          Write-Host "Azure Speech seed prepared for packaged release (region=$($config.region), locale=$locale, key redacted)."
 
       - name: Build Windows package (no publish)
         env:

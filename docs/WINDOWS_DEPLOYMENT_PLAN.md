@@ -13,7 +13,7 @@ end-to-end against the test.fac@fac.edu.tt account:
   agent via `api.pluginConfig` and a host-API HTTP facade
 - 14/14 eval rows pass on a populated inbox (1 skipped on empty-inbox)
 - Live-tested: open in 41ms, draft in 2.1s, send-protection refuses
-  on subject mismatch, parser returns clean sender/subject
+  without confirmation, parser returns clean sender/subject
 
 Current commit stack is 13 commits ahead of origin. The unblocked
 agentic workflow now needs to ship to Windows.

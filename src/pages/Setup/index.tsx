@@ -345,7 +345,7 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
       nodejs: { status: 'success', message: t('runtime.status.success') },
     }));
 
-    // Check OpenClaw package status
+    // Check bundled gateway package status
     try {
       const openclawStatus = await invokeIpc('openclaw:status') as {
         packageExists: boolean;
@@ -361,7 +361,7 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
           ...prev,
           openclaw: {
             status: 'error',
-            message: `OpenClaw package not found at: ${openclawStatus.dir}`
+            message: `Gateway package not found at: ${openclawStatus.dir}`
           },
         }));
       } else if (!openclawStatus.isBuilt) {
@@ -369,7 +369,7 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
           ...prev,
           openclaw: {
             status: 'error',
-            message: 'OpenClaw package found but dist is missing'
+            message: 'Gateway package found but dist is missing'
           },
         }));
       } else {
@@ -378,7 +378,7 @@ function RuntimeContent({ onStatusChange }: RuntimeContentProps) {
           ...prev,
           openclaw: {
             status: 'success',
-            message: `OpenClaw package ready${versionLabel}`
+            message: `Gateway package ready${versionLabel}`
           },
         }));
       }

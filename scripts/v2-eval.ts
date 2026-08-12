@@ -40,7 +40,7 @@ async function runRow(
 ): Promise<void> {
   const t0 = Date.now();
   let status: EvalRow['status'] = 'fail';
-  let notes = '';
+  let notes: string;
   try {
     const r = await fn();
     if (r.skip) status = 'skip';

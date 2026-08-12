@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { MicrosoftGraphSection } from './MicrosoftGraphSection';
+import { MoePrincipalSetupSection } from './MoePrincipalSetupSection';
 import { OutlookBrowserSection } from './OutlookBrowserSection';
 import { AzureSpeechSection } from './AzureSpeechSection';
 import { Badge } from '@/components/ui/badge';
@@ -655,6 +656,10 @@ export function Settings() {
 
           <Separator className="bg-black/5 dark:bg-white/5" />
 
+          <MoePrincipalSetupSection />
+
+          <Separator className="bg-black/5 dark:bg-white/5" />
+
           <OutlookBrowserSection />
 
           <Separator className="bg-black/5 dark:bg-white/5" />
@@ -1183,14 +1188,14 @@ export function Settings() {
                 <Button
                   variant="link"
                   className="h-auto p-0 text-sm text-blue-500 hover:text-blue-600 font-medium"
-                  onClick={() => window.electron.openExternal('https://claw-x.com')}
+                  onClick={() => window.electron.openExternal('https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260610-bbc4eb1')}
                 >
                   {t('about.docs')}
                 </Button>
                 <Button
                   variant="link"
                   className="h-auto p-0 text-sm text-blue-500 hover:text-blue-600 font-medium"
-                  onClick={() => window.electron.openExternal('https://github.com/ValueCell-ai/ClawX')}
+                  onClick={() => window.electron.openExternal('https://github.com/dmvevents/clawx-pilot')}
                 >
                   {t('about.github')}
                 </Button>

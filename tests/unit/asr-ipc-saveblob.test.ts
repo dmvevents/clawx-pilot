@@ -2,7 +2,71 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { app, ipcMain } from 'electron';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { access, mkdtemp, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+
+// Mock node:child_process before importing the module under test so that
+// the real ffmpeg binary is never invoked. This keeps the test runnable on
+// Windows hosts where the previous shell-script shim could not be exec'd
+// (Node's CVE-2024-27980 mitigation refuses to launch .cmd/.bat via
+// execFile without shell:true, and a plain .exe shim isn't available).
+// The behaviour under test -- asr:saveBlob must not ask ffmpeg to overwrite
+// its own input WAV (see WINDOWS_PROBLEMS_ATLAS §14) -- is platform-agnostic
+// application logic, so a fake exec that asserts the invariant directly is
+// stronger than spawning a real subprocess.
+//
+// vi.hoisted ensures the fake is created before vi.mock factories run, since
+// vi.mock is hoisted above all imports. The require() inside the fake helper
+// is necessary because static imports are not yet evaluated at hoist time;
+// the resulting module is the same object the real production code receives.
+const { fakeExecFile } = vi.hoisted(() => {
+  type ExecFileCallback = (err: Error | null, stdout: string, stderr: string) => void;
+  return {
+    fakeExecFile: (
+      _file: string,
+      args: readonly string[] | undefined,
+      options: unknown,
+      callback?: ExecFileCallback,
+    ): unknown => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- hoisted helper runs before imports are evaluated.
+      const { copyFile } = require('node:fs/promises') as typeof import('node:fs/promises');
+      const cb: ExecFileCallback | null =
+        typeof callback === 'function'
+          ? callback
+          : typeof options === 'function'
+            ? (options as ExecFileCallback)
+            : null;
+      const argv = Array.from(args ?? []);
+      const inputIdx = argv.indexOf('-i');
+      const input = inputIdx !== -1 ? argv[inputIdx + 1] : '';
+      const output = argv[argv.length - 1] ?? '';
+      if (!input || !output) {
+        cb?.(new Error('missing input or output'), '', 'missing input or output');
+        return {};
+      }
+      if (input === output) {
+        cb?.(new Error('input and output must differ'), '', 'in-place edit blocked');
+        return {};
+      }
+      copyFile(input, output)
+        .then(() => cb?.(null, '', ''))
+        .catch((err: unknown) => cb?.(err as Error, '', String(err)));
+      return {};
+    },
+  };
+});
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  const stub = { ...actual, execFile: fakeExecFile as unknown as typeof actual.execFile };
+  return { ...stub, default: stub };
+});
+
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('child_process')>();
+  const stub = { ...actual, execFile: fakeExecFile as unknown as typeof actual.execFile };
+  return { ...stub, default: stub };
+});
+
 import { _resetAsrIpcCaches, registerAsrIpcHandlers } from '@electron/main/asr-ipc';
 
 type IpcHandler = (_event: unknown, args: unknown) => Promise<unknown>;
@@ -16,36 +80,6 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-async function writeFakeFfmpeg(dir: string): Promise<string> {
-  const scriptPath = path.join(dir, 'fake-ffmpeg.sh');
-  await writeFile(
-    scriptPath,
-    `#!/bin/sh
-input=""
-previous=""
-output=""
-for arg in "$@"; do
-  if [ "$previous" = "-i" ]; then
-    input="$arg"
-  fi
-  previous="$arg"
-  output="$arg"
-done
-if [ -z "$input" ] || [ -z "$output" ]; then
-  echo "missing input or output" >&2
-  exit 2
-fi
-if [ "$input" = "$output" ]; then
-  echo "input and output must differ" >&2
-  exit 64
-fi
-cp "$input" "$output"
-`,
-    { mode: 0o755 },
-  );
-  return scriptPath;
-}
-
 function getRegisteredHandler(channel: string): IpcHandler {
   const handleMock = ipcMain.handle as unknown as Mock;
   const call = handleMock.mock.calls.find(([name]) => name === channel);
@@ -55,10 +89,33 @@ function getRegisteredHandler(channel: string): IpcHandler {
 
 describe('ASR saveBlob IPC', () => {
   const originalFfmpegPath = process.env.FFMPEG_PATH;
+  const originalClawxFfmpegPath = process.env.CLAWX_FFMPEG_PATH;
+  const originalPlatform = process.platform;
+  const originalResourcesPath = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
+  const originalIsPackaged = app.isPackaged;
   let tempRoot: string;
+  let fakeFfmpegPath: string;
+
+  function setPlatform(platform: NodeJS.Platform): void {
+    Object.defineProperty(process, 'platform', {
+      value: platform,
+      configurable: true,
+    });
+  }
+
+  function setResourcesPath(resourcesPath: string): void {
+    Object.defineProperty(process, 'resourcesPath', {
+      value: resourcesPath,
+      configurable: true,
+    });
+  }
 
   beforeEach(async () => {
     tempRoot = await mkdtemp(path.join(tmpdir(), 'clawx-asr-saveblob-test-'));
+    fakeFfmpegPath = path.join(tempRoot, 'fake-ffmpeg-marker');
+    // resolveFfmpegBinary() requires the path to exist on disk before it
+    // accepts FFMPEG_PATH. The mocked execFile never actually runs it.
+    await writeFile(fakeFfmpegPath, '');
     vi.mocked(app.getPath).mockReturnValue(tempRoot);
     vi.mocked(ipcMain.handle).mockClear();
     _resetAsrIpcCaches();
@@ -70,11 +127,23 @@ describe('ASR saveBlob IPC', () => {
     } else {
       process.env.FFMPEG_PATH = originalFfmpegPath;
     }
+    if (originalClawxFfmpegPath == null) {
+      delete process.env.CLAWX_FFMPEG_PATH;
+    } else {
+      process.env.CLAWX_FFMPEG_PATH = originalClawxFfmpegPath;
+    }
+    setPlatform(originalPlatform);
+    if (originalResourcesPath) {
+      Object.defineProperty(process, 'resourcesPath', originalResourcesPath);
+    } else {
+      delete (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+    }
+    (app as unknown as { isPackaged: boolean }).isPackaged = originalIsPackaged;
     _resetAsrIpcCaches();
   });
 
   it('normalizes renderer WAV captures without asking ffmpeg to overwrite the input file', async () => {
-    process.env.FFMPEG_PATH = await writeFakeFfmpeg(tempRoot);
+    process.env.FFMPEG_PATH = fakeFfmpegPath;
     _resetAsrIpcCaches();
     registerAsrIpcHandlers();
 
@@ -99,5 +168,46 @@ describe('ASR saveBlob IPC', () => {
     });
     expect(result.data?.path).toBe(path.join(path.dirname(result.data?.path ?? ''), 'clip.wav'));
     await expect(pathExists(path.join(path.dirname(result.data?.path ?? ''), 'clip-input.wav'))).resolves.toBe(false);
+  });
+
+  it('uses bundled ffmpeg from packaged Windows resources without PATH setup', async () => {
+    delete process.env.FFMPEG_PATH;
+    delete process.env.CLAWX_FFMPEG_PATH;
+    setPlatform('win32');
+    (app as unknown as { isPackaged: boolean }).isPackaged = true;
+    const resourcesPath = path.join(tempRoot, 'resources');
+    setResourcesPath(resourcesPath);
+    const packagedFfmpeg = path.join(resourcesPath, 'bin', 'ffmpeg.exe');
+    await mkdir(path.dirname(packagedFfmpeg), { recursive: true });
+    await writeFile(packagedFfmpeg, '');
+    _resetAsrIpcCaches();
+    registerAsrIpcHandlers();
+
+    const saveBlob = getRegisteredHandler('asr:saveBlob');
+    const wavBytes = Buffer.from('RIFF----WAVEfmt data', 'ascii');
+    const result = await saveBlob(null, {
+      mime: 'audio/wav',
+      suggestedExt: 'wav',
+      base64: wavBytes.toString('base64'),
+    }) as {
+      ok: boolean;
+      data?: {
+        path: string;
+        bytes: number;
+        transcoded: boolean;
+        transcodeSkippedReason?: string;
+      };
+      error?: { message: string };
+    };
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        bytes: wavBytes.length,
+        transcoded: true,
+      },
+    });
+    expect(result.data?.transcodeSkippedReason).toBeUndefined();
+    expect(result.data?.path.endsWith(`${path.sep}clip.wav`)).toBe(true);
   });
 });

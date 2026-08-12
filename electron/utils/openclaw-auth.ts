@@ -10,7 +10,7 @@
  */
 import { access, mkdir, readFile, readdir, writeFile } from 'fs/promises';
 import { constants, readdirSync, readFileSync, existsSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, isAbsolute, join } from 'path';
 import { homedir } from 'os';
 import { listConfiguredAgentIds } from './agent-config';
 import { getOpenClawResolvedDir } from './paths';
@@ -2203,7 +2203,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
       if (Array.isArray(plugins)) {
         const validPlugins: unknown[] = [];
         for (const p of plugins) {
-          if (typeof p === 'string' && p.startsWith('/')) {
+          if (typeof p === 'string' && isAbsolute(p)) {
             if (isBundledOpenClawPluginPath(p) || !(await fileExists(p))) {
               console.log(`[sanitize] Removing stale/bundled plugin path "${p}" from openclaw.json`);
               modified = true;
@@ -2220,7 +2220,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
         if (Array.isArray(pluginsObj.load)) {
           const validLoad: unknown[] = [];
           for (const p of pluginsObj.load) {
-            if (typeof p === 'string' && p.startsWith('/')) {
+            if (typeof p === 'string' && isAbsolute(p)) {
               if (isBundledOpenClawPluginPath(p) || !(await fileExists(p))) {
                 console.log(`[sanitize] Removing stale/bundled plugin path "${p}" from openclaw.json`);
                 modified = true;
@@ -2239,7 +2239,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
             const validPaths: unknown[] = [];
             const countBefore = loadObj.paths.length;
             for (const p of loadObj.paths) {
-              if (typeof p === 'string' && p.startsWith('/')) {
+              if (typeof p === 'string' && isAbsolute(p)) {
                 if (isBundledOpenClawPluginPath(p) || !(await fileExists(p))) {
                   console.log(`[sanitize] Removing stale/bundled plugin path "${p}" from plugins.load.paths`);
                   modified = true;

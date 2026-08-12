@@ -1,5 +1,5 @@
 /**
- * Azure Speech-to-Text — cloud fallback ASR provider for ClawX.
+ * Azure Speech-to-Text — cloud fallback ASR provider for Ministry of Education.
  *
  * This is the *fallback* path: the macOS-native (Speech.framework) and
  * Windows-native (Windows.Media.SpeechRecognition) recognisers are the
@@ -240,7 +240,7 @@ function buildSpeechConfigFrame(requestId: string): string {
   ].join('\r\n');
   const body = JSON.stringify({
     context: {
-      system: { name: 'ClawX', version: '1.0' },
+      system: { name: 'Ministry of Education', version: '1.0' },
       os: { platform: process.platform, name: 'Electron', version: process.versions.electron ?? '' },
     },
   });

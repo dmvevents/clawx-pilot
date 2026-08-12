@@ -10,9 +10,13 @@
 import { PlaywrightDriver } from '../electron/services/outlook-browser-v2/playwright-driver.ts';
 
 const EMAIL = 'test.fac@fac.edu.tt';
-const PASSWORD = 'Education@2000';
+const PASSWORD = process.env.PILOT_TEST_PASSWORD;
 
 async function main() {
+  if (!PASSWORD) {
+    throw new Error('PILOT_TEST_PASSWORD is required for the test.fac sign-in helper.');
+  }
+
   const driver = new PlaywrightDriver({ cdpEndpoint: 'http://127.0.0.1:18792' });
   await driver.ensureBrowser();
   const page = await driver.ensureOutlookTab();

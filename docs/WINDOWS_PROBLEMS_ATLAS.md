@@ -103,7 +103,7 @@ Every Windows-specific bug we hit during the moe.1→moe.10 build sequence, with
 
 **Root cause:** `@moe.gov.tt` and `@fac.edu.tt` tenants both have Conditional Access policies that require the device to be Intune-enrolled OR run a "real" browser (not Playwright's bundled Chromium).
 
-**Fix (HARD RULE):** **Never** launch managed Chromium for Outlook/Forms. Always attach via CDP to the user's existing Chrome (`profile=user`, `--remote-debugging-port=18792`).
+**Fix (HARD RULE):** **Never** launch bundled Playwright Chromium for Outlook/Forms. Use system Chrome through the ClawX browser automation repair path. If Chrome is closed, ClawX can launch system Chrome in automation mode. If the default profile is locked, ClawX may launch a ClawX-owned system Chrome profile as a recovery path, but tenant Outlook/Forms data still requires the principal to sign in to Microsoft in that profile. If Chrome is already open without the required automation endpoint, ClawX must return `profile_locked_close_chrome` and ask for one action only: close all Chrome windows and retry from ClawX. Do not tell principals to configure Chrome flags or run Chrome commands.
 
 **Commit / memory:** documented at `~/.claude/projects/-Users-antonalexander-Github-moe-tt-ClawX/memory/feedback_browser_existing_session.md`.
 
@@ -187,6 +187,20 @@ Every Windows-specific bug we hit during the moe.1→moe.10 build sequence, with
 **Detection:** On a Windows install, verify `Test-Path "$env:LOCALAPPDATA\Programs\Ministry of Education\resources\bin\WinSpeechRecognize.exe"` is true and that a WAV smoke returns JSON: `WinSpeechRecognize.exe <wav> en-US` exits 0 with `{"text":"","language":"en-US"}` for silence. For the full save/transcribe shape, generate or capture a WAV, copy it to a temp `clip-input.wav`, run packaged `ffmpeg.exe -y -i clip-input.wav -ar 16000 -ac 1 -f wav clip.wav`, then run `WinSpeechRecognize.exe clip.wav en-US`; the pilot probe returned `{"text":"Send a circular tomorrow","language":"en-US"}`. If the helper is absent, `pnpm run prep:win-binaries` must fail unless `SKIP_WIN_ASR_HELPER=1` was deliberately set. Logs should no longer contain the native-helper-missing line in packaged builds.
 
 **Never:** Do not ship WinRT `SpeechRecognizer` file-input code without a real Windows publish/smoke. The API does not expose the file overload this helper needs.
+
+---
+
+## §15. Forms preview redirects to Microsoft sign-in
+
+**Symptom:** Forms list returns the Daily Report and Suspensions forms as available, but `forms.preview_*` waits 30s for `[data-automation-id="questionItem"], [role="listitem"]` and then fails with "Microsoft Forms response page did not render question items". The VM visual smoke can still show Chrome CDP, Electron CDP, Host API, Gateway, Office runtime, and Outlook safety probes as green.
+
+**Root cause:** The form URL is configured and Playwright is attached, but Microsoft redirects the response page to `login.microsoftonline.com/organizations/oauth2/v2.0/authorize` because the Chrome profile under automation is not signed in to the tenant account. This is an authentication/access state, not a DOM selector regression.
+
+**Fix:** The Forms driver now detects Microsoft sign-in and access interstitials before reporting the generic question-render timeout. For demo readiness, sign in to Microsoft in the Chrome profile ClawX opens, then rerun the form preview. For GA, prefer a first-run "Connect Microsoft" flow or an approved Microsoft Graph/Entra path; do not require principals to enable Chrome flags or run Chrome commands. If the administrator wants unauthenticated form response pages, they must explicitly configure the Forms collection policy to allow that audience.
+
+**Detection:** Run `windows-pilot/scripts/pilot-managed-cdp-visual-smoke.ps1`, then inspect Forms tabs with `windows-pilot/scripts/pilot-forms-cdp-inspect.js`. The redacted VM evidence on 2026-06-09 showed two Forms tabs at host `login.microsoftonline.com`, path `/organizations/oauth2/v2.0/authorize`, title `Sign in to your account`, and question count `0`.
+
+**Never:** Do not treat this as solved by broadening selectors. If the page host is Microsoft login and question count is zero, the required fix is authentication or form access policy.
 
 ---
 

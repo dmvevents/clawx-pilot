@@ -19,8 +19,10 @@
  *
  * If the browser plugin isn't running, we fall back to launching Chrome
  * ourselves with `--remote-debugging-port` AND `--user-data-dir=<user's
- * Default>`. We never use Playwright's bundled Chromium — managed Chromium
- * is blocked by Microsoft's Conditional Access (hard rule).
+ * Default>`. If current Chrome blocks CDP on that default profile, ClawX can
+ * launch a dedicated system-Chrome profile for the demo. We never use
+ * Playwright's bundled Chromium — managed Chromium is blocked by Microsoft's
+ * Conditional Access (hard rule).
  *
  * ## Single-tab discipline
  *
@@ -35,10 +37,14 @@ import {
   type BrowserContext,
   type Page,
 } from 'playwright-core';
-import { join } from 'path';
-import { homedir, platform } from 'os';
-import { existsSync } from 'fs';
 import { logger } from '../../utils/logger';
+import {
+  CHROME_CDP_ENDPOINT,
+  CHROME_CDP_PORT,
+  defaultChromeUserDataDir,
+  ensureChromeCdpReady,
+  resolveChromeExecutable,
+} from '../chrome-cdp';
 
 /**
  * Outlook entrypoints we'll consider "this is Outlook" for tab matching.
@@ -53,44 +59,6 @@ const OUTLOOK_HOST_PATTERNS = [
   /^https:\/\/outlook\.live\.com\//i,
 ];
 
-/** Where the user's Chrome stores its profile, per OS. */
-function defaultChromeUserDataDir(): string {
-  switch (platform()) {
-    case 'darwin':
-      return join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome');
-    case 'win32': {
-      const localAppData = process.env.LOCALAPPDATA
-        ?? join(homedir(), 'AppData', 'Local');
-      return join(localAppData, 'Google', 'Chrome', 'User Data');
-    }
-    case 'linux':
-      return join(homedir(), '.config', 'google-chrome');
-    default:
-      return join(homedir(), '.chrome');
-  }
-}
-
-/** Chrome executable paths we'll probe in order. */
-function defaultChromeExecutables(): string[] {
-  switch (platform()) {
-    case 'darwin':
-      return [
-        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        '/Applications/Google Chrome Beta.app/Contents/MacOS/Google Chrome Beta',
-      ];
-    case 'win32':
-      return [
-        join(process.env['ProgramFiles'] ?? 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe'),
-        join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe'),
-        join(process.env.LOCALAPPDATA ?? '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
-      ];
-    case 'linux':
-      return ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium'];
-    default:
-      return [];
-  }
-}
-
 export interface DriverConfig {
   /** CDP endpoint exposed by the running Chrome (e.g. http://127.0.0.1:18792). */
   cdpEndpoint?: string;
@@ -100,7 +68,7 @@ export interface DriverConfig {
   chromeExecutable?: string;
   /** Action timeout in ms (per click / fill / navigate). 30s default. */
   actionTimeoutMs?: number;
-  /** When self-launching Chrome, the port we tell Chrome to expose. */
+  /** When ClawX launches system Chrome for CDP repair, the port it exposes. */
   selfLaunchDebugPort?: number;
 }
 
@@ -108,25 +76,17 @@ export class PlaywrightDriver {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private page: Page | null = null;
+  private readonly dialogHandledPages = new WeakSet<Page>();
   private readonly cfg: Required<DriverConfig>;
 
   constructor(cfg: DriverConfig = {}) {
     this.cfg = {
-      cdpEndpoint: cfg.cdpEndpoint ?? 'http://127.0.0.1:18792',
+      cdpEndpoint: cfg.cdpEndpoint ?? CHROME_CDP_ENDPOINT,
       userDataDir: cfg.userDataDir ?? defaultChromeUserDataDir(),
-      chromeExecutable: cfg.chromeExecutable ?? this.resolveChromeExecutable(),
+      chromeExecutable: cfg.chromeExecutable ?? resolveChromeExecutable(),
       actionTimeoutMs: cfg.actionTimeoutMs ?? 30_000,
-      selfLaunchDebugPort: cfg.selfLaunchDebugPort ?? 18792,
+      selfLaunchDebugPort: cfg.selfLaunchDebugPort ?? CHROME_CDP_PORT,
     };
-  }
-
-  private resolveChromeExecutable(): string {
-    for (const candidate of defaultChromeExecutables()) {
-      if (candidate && existsSync(candidate)) return candidate;
-    }
-    // Fallback — let Playwright's own resolver try, the launch will throw
-    // a clear error if it can't find Chrome.
-    return '';
   }
 
   /** Connect to a running Chrome via CDP, falling back to self-launch. */
@@ -144,39 +104,31 @@ export class PlaywrightDriver {
       return;
     } catch (err) {
       logger.warn(
-        `[outlook-v2] CDP attach failed (${err instanceof Error ? err.message : String(err)}) — self-launching Chrome`,
+        `[outlook-v2] CDP attach failed (${err instanceof Error ? err.message : String(err)}) — attempting Chrome CDP repair`,
       );
     }
 
-    // Path 2: self-launch with --remote-debugging-port + the user's Chrome
-    // profile. This will fail if the user has Chrome already running with
-    // the same profile; in that case we've exhausted our recovery and the
-    // caller should surface "please close other Chrome windows".
-    if (!this.cfg.chromeExecutable) {
-      throw new Error(
-        'Could not find Google Chrome on this system. Install Chrome or set CLAWX_CHROME_EXECUTABLE.',
-      );
+    // Path 2: product-owned CDP repair. We launch system Chrome with the
+    // user's profile only when it is not already locked. This mirrors the
+    // Windows pilot runbook and avoids the old loop where the agent told a
+    // principal to manually add Chrome debugging flags.
+    const status = await ensureChromeCdpReady({
+      cdpEndpoint: this.cfg.cdpEndpoint,
+      debugPort: this.cfg.selfLaunchDebugPort,
+      userDataDir: this.cfg.userDataDir,
+      chromeExecutable: this.cfg.chromeExecutable,
+      waitMs: this.cfg.actionTimeoutMs,
+      allowManagedProfileFallback: true,
+    });
+    if (status.state !== 'cdp_ready') {
+      throw new Error(`[${status.state}] ${status.message}`);
     }
-    // Wrap launchPersistentContext in a timeout — production crashes
-    // are the silent ones, and this call has been observed to hang
-    // indefinitely when Chrome is in a weird state (e.g. profile lock
-    // file leftover from an earlier crash). 30s is generous for a
-    // healthy Chrome launch.
-    const persistent = await this.withTimeout(
-      chromium.launchPersistentContext(this.cfg.userDataDir, {
-        executablePath: this.cfg.chromeExecutable,
-        headless: false,
-        channel: 'chrome',
-        args: [`--remote-debugging-port=${this.cfg.selfLaunchDebugPort}`],
-        viewport: null,
-      }),
-      'launchPersistentContext',
-    );
-    this.context = persistent;
-    // launchPersistentContext returns a BrowserContext directly; the Browser
-    // object isn't used downstream but we keep a non-null marker so
-    // ensureBrowser is idempotent.
-    this.browser = persistent.browser() ?? null;
+
+    this.browser = await chromium.connectOverCDP(this.cfg.cdpEndpoint, {
+      timeout: 5_000,
+    });
+    const contexts = this.browser.contexts();
+    this.context = contexts[0] ?? await this.browser.newContext();
   }
 
   /**
@@ -215,7 +167,22 @@ export class PlaywrightDriver {
     }
 
     this.page = outlookPage;
+    this.installDialogHandler(outlookPage);
     return outlookPage;
+  }
+
+  private installDialogHandler(page: Page): void {
+    if (this.dialogHandledPages.has(page)) return;
+    this.dialogHandledPages.add(page);
+    page.on('dialog', (dialog) => {
+      const message = dialog.message();
+      logger.warn(`[outlook-v2] Dismissing browser dialog from Outlook page: ${message.slice(0, 120)}`);
+      dialog.dismiss().catch((err) => {
+        logger.debug?.(
+          `[outlook-v2] Outlook dialog dismiss race ignored: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+    });
   }
 
   /** Returns the current Outlook page or throws — doesn't navigate. */
@@ -224,6 +191,19 @@ export class PlaywrightDriver {
       throw new Error('PlaywrightDriver: no Outlook tab — call ensureOutlookTab first');
     }
     return this.page;
+  }
+
+  /** Return all live Outlook tabs in the attached Chrome context. */
+  async outlookPages(): Promise<Page[]> {
+    await this.ensureBrowser();
+    if (!this.context) return [];
+    const pages = this.context
+      .pages()
+      .filter((page) => !page.isClosed() && OUTLOOK_HOST_PATTERNS.some((re) => re.test(page.url())));
+    for (const page of pages) {
+      this.installDialogHandler(page);
+    }
+    return pages;
   }
 
   /** Take a PNG screenshot of the visible viewport. Used by the VLM grounder. */

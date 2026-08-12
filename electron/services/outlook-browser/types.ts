@@ -42,6 +42,21 @@ export interface InboxMessage {
 export interface ReadInboxResult {
   status: 'ok' | 'needs_signin';
   messages: InboxMessage[];
+  /**
+   * Browser/CDP reads are a recent visible Inbox window, not a server-side
+   * exhaustive mailbox export. Agents must surface this when users ask for
+   * "all" mail or month-wide audits.
+   */
+  scan?: {
+    scope: 'recent_inbox_window' | 'graph_inbox';
+    requestedTop: number;
+    scannedCount: number;
+    returnedCount: number;
+    /** Number of list-scroll passes used to gather the bounded browser window. */
+    scrollPasses?: number;
+    exhaustive: boolean;
+    note?: string;
+  };
   message?: string;
 }
 
@@ -54,7 +69,7 @@ export interface DraftEmailArgs {
 }
 
 export interface DraftEmailResult {
-  status: 'drafted' | 'needs_signin';
+  status: 'drafted' | 'failed' | 'needs_signin';
   /** True when the New-mail compose pane was filled and left open. */
   draftLeftOpen: boolean;
   /** Echo of what we filled, for the agent's "show before you send" hand-off. */
@@ -68,7 +83,17 @@ export interface DraftEmailResult {
   message?: string;
 }
 
-export interface SendEmailArgs extends DraftEmailArgs {
+export interface SendEmailArgs {
+  /**
+   * Optional verification fields. After a principal has reviewed an already
+   * open Outlook draft, the model should normally send only { confirm: true }.
+   * When supplied, recipient fields are treated as safety assertions.
+   */
+  to?: string | string[];
+  subject?: string;
+  body?: string;
+  cc?: string | string[];
+  bcc?: string | string[];
   /**
    * Hard gate. send() refuses unless the caller explicitly sets confirm=true.
    * The agent must show the user the draft and get a "yes, send" before
@@ -109,6 +134,16 @@ export interface SearchInboxResult {
   messages: InboxMessage[];
   /** True when the result is the cap, not necessarily exhaustive. */
   capped?: boolean;
+  scan?: {
+    scope: 'recent_inbox_window' | 'graph_inbox';
+    requestedTop: number;
+    fetchedTop: number;
+    scannedCount: number;
+    matchedCount: number;
+    returnedCount: number;
+    exhaustive: boolean;
+    note?: string;
+  };
   message?: string;
 }
 

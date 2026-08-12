@@ -5,6 +5,8 @@
 # instructs the model not to send, draft, reply, forward, read inbox, or submit.
 # Explicit -SendEmail and -SubmitForms flags perform real side effects.
 # -DraftEmail drafts only and leaves the compose pane open for inspection.
+# -OutlookReplyMatrix drafts reply/reply-all/forward only and never sends.
+# -OutlookSendMatrix sends compose/reply/reply-all/forward only with confirm:true.
 
 param(
     [string]$Endpoint = "http://127.0.0.1:9223",
@@ -13,6 +15,10 @@ param(
     [string]$SafeChatMode = "outlook-open",
     [string]$SafeChatPrompt,
     [switch]$OutlookSmoke,
+    [switch]$OutlookStateMatrix,
+    [switch]$OutlookReplyMatrix,
+    [switch]$OutlookSendMatrix,
+    [string]$ChromeEndpoint = "http://127.0.0.1:18792",
     [switch]$FormsSmoke,
     [switch]$DraftEmail,
     [switch]$SendEmail,
@@ -20,6 +26,7 @@ param(
     [string]$EmailSubject,
     [string]$EmailBody,
     [switch]$SubmitForms,
+    [switch]$VisualAcceptance,
     [int]$WaitMs = 5000,
     [string]$ArtifactDir = "$env:USERPROFILE\Downloads"
 )
@@ -83,14 +90,20 @@ if (-not (Test-Endpoint -Url $Endpoint)) {
 "SafeChatMode:$SafeChatMode"
 "SafeChatCustom:$([bool]$SafeChatPrompt)"
 "OutlookSmoke:$($OutlookSmoke.IsPresent)"
+"OutlookStateMatrix:$($OutlookStateMatrix.IsPresent)"
+"OutlookReplyMatrix:$($OutlookReplyMatrix.IsPresent)"
+"OutlookSendMatrix:$($OutlookSendMatrix.IsPresent)"
+"ChromeEndpoint:$ChromeEndpoint"
 "FormsSmoke:  $($FormsSmoke.IsPresent)"
 "DraftEmail:  $($DraftEmail.IsPresent)"
 "SendEmail:   $($SendEmail.IsPresent)"
 "SubmitForms: $($SubmitForms.IsPresent)"
+"VisualAcceptance:$($VisualAcceptance.IsPresent)"
 
 $argsList = @(
     $scriptPath,
     "--endpoint", $Endpoint,
+    "--chrome-endpoint", $ChromeEndpoint,
     "--artifact-dir", $ArtifactDir,
     "--wait-ms", "$WaitMs"
 )
@@ -105,6 +118,21 @@ if ($SafeChatPrompt) {
 }
 if ($OutlookSmoke) {
     $argsList += "--outlook-smoke"
+}
+if ($OutlookStateMatrix) {
+    $argsList += "--outlook-state-matrix"
+}
+if ($OutlookReplyMatrix) {
+    $argsList += "--outlook-reply-matrix"
+}
+if ($OutlookSendMatrix) {
+    if (-not $EmailTo) {
+        "STATE: EMAIL_TO_REQUIRED"
+        exit 5
+    }
+    $argsList += "--outlook-send-matrix"
+    $argsList += "--email-to"
+    $argsList += $EmailTo
 }
 if ($FormsSmoke) {
     $argsList += "--forms-smoke"
@@ -145,6 +173,9 @@ if ($SendEmail) {
 }
 if ($SubmitForms) {
     $argsList += "--submit-forms"
+}
+if ($VisualAcceptance) {
+    $argsList += "--visual-acceptance"
 }
 
 & $node @argsList
