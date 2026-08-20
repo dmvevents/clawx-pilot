@@ -64,6 +64,20 @@ Use `docs/GA_VM_BROWSER_VISUAL_ACCEPTANCE_CRITERIA.md` for human or VLM review o
 - `windows-pilot/scripts/pilot-run-silent-install.ps1` now uses a 30-minute default timeout and records an install-tree JSON summary on timeout or exit so future failures identify which critical runtime files are missing.
 - `windows-pilot/scripts/pilot-mac-wait-run-demo.sh` now refuses to run hidden silent install by default when the installed `app.asar` is stale or missing. It emits `STATE:STALE_APP_REQUIRES_ASSISTED_INSTALL`; only an explicit `ALLOW_SILENT_INSTALL=1` run can enter the diagnostic path, and that path emits `STATE:DIAGNOSTIC_SILENT_INSTALL_ONLY`.
 
+## 2026-08-20 moe.11 IAP Windows Install + On-Device Tool-Trim
+
+- Evidence: `skills/laptop/evidence/2026-08-20-moe11-iap-install-trim/` (metadata.json, verdict.md, redaction-note.md).
+- Lane: GCP `clawx-win-rc-20260609` over IAP TCP forwarding. No pilot laptop, no public port, no whitelisted operator IP.
+- Build under test: `0.4.3-moe.11` from `7add864b` (`fix/tool-catalog-trim`), which has BUG-012 fix `fc435c6b` as an ancestor. This closes the version gap where `release/` topped out at moe.10 (June) — earlier runs validated June code, not the current tree.
+- Installer: `Ministry of Education-0.4.3-moe.11-win-x64.exe`, size `390097611`, SHA256 `b01bb6c3c01326d3efc1799baba314b5720b52bd6d9a1b3092d06227204062ec`, built with `SKIP_WIN_ASR_HELPER=1`, exit 0. SHA256 identical across Mac, `gs://clawx-rc-artifacts-622687731621/moe11/`, and the guest.
+- On-device tool-trim confirmed in runtime config on the guest: `tools.byProvider['ollama-ollamalo'].deny` carries all nine entries (tts, process, subagents, sessions_list, sessions_spawn, web_search, web_fetch, image, canvas). Provider-scoped, so cloud keeps the full catalog. `TRIM_ONDEVICE_TOOL_CATALOG` defaults to `true` (`shared/feature-flags.ts:122`), so the fix is active and not dormant. First confirmation outside unit tests.
+- Gateway and Host API bind after a detached visible launch: `18789` and `13210` LISTENING, with control port `9999` CLOSED in the same probe run. A positive port probe without a control leg is void — the first attempt in this session returned a false PASS through a stale tunnel from an earlier session.
+- Silent `/S` install did NOT reproduce the June RED partial-tree failure against this asset: `Ministry of Education.exe` (214315008), `app.asar` (242375661), `openclaw.mjs`, `playwright-core` (3 locations, 460 files each), `resources\bin\ffmpeg.exe`, and `resources\bin\WinSpeechRecognize.exe` all present; tree 131404 files / 1588 MB. This does not promote silent install to a supported end-user flow; assisted installer screens remain required.
+- Install duration is `RED`: 460.6s first install, 344.1s re-installing the identical already-installed version. Root cause is re-extraction of the full 131404-file / 1588 MB payload with Defender real-time scanning active (`DISABLE_REALTIME=False`) despite an INSTDIR exclusion. `scripts/installer.nsh` contains no dependency-installation step, so "the installer reinstalls dependencies every time" is a mischaracterization.
+- `agents.list` empty with `agents.defaults.model.primary` set is the designed BUG-012 bootable state, not a regression: `ensureBootableAgentsConfig` logged `ensured:true, created:false` and the Gateway bound an implicit main agent.
+- On-device 5-prompt tool-cascade re-test: `not run`. Ollama was absent from the VM; install and `qwen2.5:3b-instruct` pull were in flight at time of writing. The tool-cascade hang remains unproven-fixed at runtime.
+- No Outlook send, no attachment download, no Forms submit was executed. No credential was printed or reset to obtain guest access.
+
 ## Evidence Update Rules
 
 - Use exact commands and pass counts.
