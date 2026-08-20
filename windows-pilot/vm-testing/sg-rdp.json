@@ -1,0 +1,15 @@
+{
+  "_description": "Locked-down RDP ingress. Replace ANTON_IP_PLACEHOLDER/32 with Anton's current IPv4 at launch time (curl -s https://ipv4.icanhazip.com). Do NOT open 0.0.0.0/0.",
+  "GroupName": "clawx-winvm-rdp",
+  "Description": "RDP-only ingress for ClawX Windows installer testing VM",
+  "IngressRules": [
+    {
+      "IpProtocol": "tcp",
+      "FromPort": 3389,
+      "ToPort": 3389,
+      "IpRanges": [
+        { "CidrIp": "ANTON_IP_PLACEHOLDER/32", "Description": "Anton dev machine RDP" }
+      ]
+    }
+  ]
+}

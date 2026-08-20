@@ -1,0 +1,31 @@
+{
+  "run_date": "2026-08-20",
+  "lane": "gcp-iap-windows",
+  "host": {
+    "instance": "clawx-win-rc-20260609",
+    "zone": "us-central1-a",
+    "project": "gen-lang-client-0649986230",
+    "os": "Windows Server 2022 Datacenter",
+    "machine_type": "e2-standard-4",
+    "guest_user": "clawxtest",
+    "access": "IAP TCP forwarding; sshd 22 -> localhost:12222"
+  },
+  "build": {
+    "source_commit": "7add864b",
+    "source_branch": "fix/tool-catalog-trim",
+    "contains_bug012_fix_fc435c6b": true,
+    "installer": "Ministry of Education-0.4.3-moe.11-win-x64.exe",
+    "sha256": "b01bb6c3c01326d3efc1799baba314b5720b52bd6d9a1b3092d06227204062ec",
+    "bytes": 390097611,
+    "build_flags": "SKIP_WIN_ASR_HELPER=1",
+    "build_exit": 0,
+    "staging": "gs://clawx-rc-artifacts-622687731621/moe11/",
+    "hash_verified_on_guest": true
+  },
+  "installs": [
+    { "seq": 1, "over": "moe.10", "exit": 0, "seconds": 460.6 },
+    { "seq": 2, "over": "moe.11 (identical)", "exit": 0, "seconds": 344.1 }
+  ],
+  "payload": { "files": 131404, "megabytes": 1588 },
+  "defender_realtime_disabled": false
+}
