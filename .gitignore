@@ -102,3 +102,6 @@ ruvector.db
 *.db-shm
 *.db-wal
 docs/ui-snapshots/**/ruvector.db
+
+# Harness/eval JUnit reports written to repo root by the harness runner
+harness-*-junit.xml
