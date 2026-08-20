@@ -11,6 +11,13 @@ environment as provisioned.** We accept their architecture rather than argue for
 on-device-only state. That means we owe them an app server, and the reply below
 is built around delivering one.
 
+**Constraint that shapes the whole design: the application has to keep working
+offline.** A principal's laptop will lose connectivity — school networks drop, a
+principal works from home or between sites. The app server can be in the path for
+things that genuinely need the cloud, but it must not become a component that,
+when unreachable, leaves a principal with a dead application. Section 1.1 below
+sets out how we keep that true.
+
 ---
 
 ## Section 6 action list — our answers
@@ -58,14 +65,54 @@ So the revised shape is:
 
 ```
 Principal's laptop (ClawX desktop)
-        |
-        v
-App server in MoE Azure  ---> APIM ---> AI Foundry
-   (Docker, IP whitelisted)
-        |
-        v
-   PostgreSQL
+   |                        |
+   | on-device model        | when online
+   | + local file tools     v
+   | + local state     App server in MoE Azure ---> APIM ---> AI Foundry
+   |   (always works)    (Docker, IP whitelisted)
+   |                        |
+   |<--- sync when back --->v
+                        PostgreSQL
 ```
+
+## 1.1 Offline behaviour — the part we want to be explicit about
+
+The assistant runs an on-device model as its **default**, and the toggle between
+"On this device" and "Online" is already shipped and in principals' hands. That
+is not a fallback we are proposing; it is how the product works today. What
+matters for this design is that adding an app server must not quietly undo it.
+
+**Works with no connectivity at all** (verified in the current build, not
+aspirational):
+
+- Chat with the on-device model — this is the default channel
+- Reading, summarising and drafting from local Word, Excel, PowerPoint and PDF
+  files, plus OCR of images. These tools are pure local file access with no
+  network dependency of any kind
+- Reading previously synced email and calendar content
+- Reminders and scheduled prompts, which run from local state
+- All existing app state, which lives on the device in `~/.openclaw/`
+
+**Needs connectivity, and degrades honestly when it is absent:**
+
+- Cloud model turns through APIM, for the harder or vision-heavy requests. With
+  no connection the assistant stays on the on-device model rather than failing
+- Fetching new email and calendar data through Graph
+- Form submission to Ministry systems
+- Writing the audit trail and preferences to PostgreSQL
+
+**The design rule we'll hold to: PostgreSQL is where records are *durably kept*,
+not where the application *reads to function*.** The laptop keeps working from
+local state and reconciles when the connection returns. Anything a principal does
+offline that needs to reach the Ministry — a form submission, an audit record —
+is queued locally and sent when connectivity is back, rather than lost or
+blocking. Being honest about scope: that store-and-forward queue does not exist
+in the app yet and is new work for us, alongside the data layer itself.
+
+The practical consequence for the Ministry: **the app server being briefly
+unreachable is a degraded experience, not an outage.** That is worth designing
+for deliberately, because a principal on a dropped school connection at 3:30pm
+still needs to get their daily report done.
 
 **What we need from the Ministry to proceed:**
 
@@ -73,6 +120,11 @@ App server in MoE Azure  ---> APIM ---> AI Foundry
   work from schools across seven districts, on networks the Ministry does not
   control) or restricted to iGovTT-reachable networks only. This is the one
   answer that most shapes the build, so it's the first thing we'd like settled.
+  Offline capability makes an iGovTT-only answer *survivable* rather than fatal —
+  a principal off-network would still have the on-device assistant and their
+  local documents, with cloud turns and syncing resuming on Ministry premises.
+  But it would meaningfully narrow what the assistant can do away from a Ministry
+  network, so it should be an explicit choice rather than a default.
 - A hostname / DNS name and certificate for it, if it is internet-facing.
 - Confirmation the container will be given the DB credentials as environment
   variables or via their secret store — we don't want them baked into the image.
@@ -80,6 +132,22 @@ App server in MoE Azure  ---> APIM ---> AI Foundry
 **What we'd store there** (so the scope is concrete, not open-ended): per-
 principal preferences, an audit trail of assistant actions, form-submission
 records, and reminder/cron schedules. No email bodies at rest.
+
+## 1.2 One consequence worth naming: sign-in when offline
+
+Moving the client secret and token handling into the app server (Section 2) has
+one cost we should be upfront about: **the interactive sign-in itself needs
+connectivity**, because it goes through Entra. A principal who has never signed
+in, or whose refresh token has expired while they were offline for an extended
+period, will need a connection once to get back to a working authenticated state.
+
+This is inherent to any Entra-backed design rather than something the app server
+introduces, and it does not affect the offline capabilities listed above — the
+on-device model and local document work do not depend on a Microsoft token at
+all. Flagging it so token lifetimes get set with this in mind: **longer refresh
+token lifetimes directly reduce how often a principal is forced online purely to
+re-authenticate.** We'd rather agree that with ICT policy than discover the limit
+in the field.
 
 ## 2. Client secret: the app server changes our answer
 
@@ -148,11 +216,14 @@ possible since Sections 2 and 5 are his:
 
 1. **App server hostname and reachability** — internet-facing over TLS, or
    iGovTT-only? Everything else keys off this.
-2. **Confirm the backend-for-frontend approach**, then the redirect URI closes on
-   the spot.
-3. **Developer IPs** for the DB whitelist, and how the container receives its
+2. **Confirm the offline posture in Section 1.1 is acceptable to the Ministry** —
+   specifically that the laptop keeps working from local state and reconciles
+   later, rather than requiring a live connection to function.
+3. **Confirm the backend-for-frontend approach**, then the redirect URI closes on
+   the spot. Worth covering refresh token lifetimes here too (Section 1.2).
+4. **Developer IPs** for the DB whitelist, and how the container receives its
    secrets.
-4. Application Insights monthly-consumption visibility.
+5. Application Insights monthly-consumption visibility.
 
 We'll have the Docker image ready to hand over once item 1 is settled.
 
@@ -171,6 +242,17 @@ We'll have the Docker image ready to hand over once item 1 is settled.
   (no `pg` client in `package.json` yet), plus routing ClawX inference through
   the broker instead of calling providers directly. The container and its auth
   and model allow-listing already exist and pass tests.
+- **The offline story is the biggest piece of new work, and I want to be straight
+  that part of it is a promise rather than a description.** What I verified in the
+  current build: on-device is already the default channel, the Online / On this
+  device toggle is shipped, and `doc-tools.mjs` is pure `node:fs` with zero
+  network calls — so local document work genuinely runs offline today. What does
+  **not** exist: any outbox, queue, retry or sync concept anywhere in the tree
+  (I grepped `electron`, `extensions` and `src` for all of them — nothing). So
+  "queued locally and sent when connectivity returns" is a commitment we'd be
+  making, not a capability we have. It's the right design and Section 1.1 flags it
+  as new work, but if you'd rather not commit to store-and-forward before we've
+  scoped it, that paragraph is the one to soften.
 - **The hostname question is the real blocker**, not the credentials. Principals
   are in schools across seven districts on networks the Ministry doesn't control,
   so an iGovTT-only app server would mean the assistant only works on Ministry
