@@ -424,7 +424,7 @@ function registerDocumentTools({ registerTool, log }) {
   registerTool({
     name: 'document.read_docx',
     description:
-      'Extract text from a Word (.docx) document WITHOUT invoking Python. Uses the bundled mammoth dep. Args: { path, format? ("markdown"|"html"|"text", default "markdown") }. Returns the parsed content plus any conversion messages. Works on Windows where python-docx is not installed.',
+      'Extract text from a Word (.docx) document WITHOUT invoking Python. Uses the bundled mammoth dep. Args: { path, format? ("markdown"|"html"|"text", default "markdown") }. Returns the parsed content plus any conversion messages. Works on Windows where python-docx is not installed. Prefer this over the docx skill: that skill needs pandoc/python-docx, which are not installed on a principal laptop. Accepts a bare filename and searches Downloads, Documents, Desktop, and the OneDrive-redirected Desktop/Documents, including subfolders.',
     parameters: toolParameters(
       {
         path: readableSchema,
@@ -438,7 +438,7 @@ function registerDocumentTools({ registerTool, log }) {
   registerTool({
     name: 'document.write_docx',
     description:
-      'Create a new Word (.docx) document using the bundled `docx` dep. Args: { path, title?, paragraphs: string[] }. Relative paths land in ~/.openclaw/media/outbound so ClawX auto-attaches. Returns { path, bytes, paragraphs }. Use this after drafting a letter or report so the principal can attach it to Outlook.',
+      'Create a new Word (.docx) document WITHOUT invoking Python, using the bundled `docx` dep. Args: { path, title?, paragraphs: string[] }. Relative paths land in ~/.openclaw/media/outbound so ClawX auto-attaches. Returns { path, bytes, paragraphs }. Use this after drafting a letter or report so the principal can attach it to Outlook. Prefer this over the docx skill: that skill needs pandoc/python-docx, which are not installed on a principal laptop.',
     parameters: toolParameters(
       {
         path: readableSchema,
@@ -453,7 +453,7 @@ function registerDocumentTools({ registerTool, log }) {
   registerTool({
     name: 'document.read_xlsx',
     description:
-      'Read an Excel (.xlsx / .xls / .csv) spreadsheet WITHOUT invoking Python. Uses the bundled xlsx (SheetJS) dep. Args: { path, sheet? (name or index — first sheet by default), maxRows? (default 500) }. Returns { path, sheets, sheet, rows (2D array), totalRows, truncated }. Works on Windows where openpyxl/pandas are not installed.',
+      'Read an Excel (.xlsx / .xls / .csv) spreadsheet WITHOUT invoking Python. Uses the bundled xlsx (SheetJS) dep. Args: { path, sheet? (name or index — first sheet by default), maxRows? (default 500) }. Returns { path, sheets, sheet, rows (2D array), totalRows, truncated }. Works on Windows where openpyxl/pandas are not installed. Prefer this over the xlsx skill: that skill needs pandas/openpyxl, which are not installed on a principal laptop. Accepts a bare filename and searches Downloads, Documents, Desktop, and the OneDrive-redirected Desktop/Documents, including subfolders.',
     parameters: toolParameters(
       {
         path: readableSchema,
@@ -468,7 +468,7 @@ function registerDocumentTools({ registerTool, log }) {
   registerTool({
     name: 'document.write_xlsx',
     description:
-      'Create a new Excel (.xlsx) workbook using the bundled xlsx (SheetJS) dep. Args: { path, sheets: [{ name, rows: string[][] }] }. Relative paths land in ~/.openclaw/media/outbound. Returns { path, bytes, sheets }.',
+      'Create a new Excel (.xlsx) workbook WITHOUT invoking Python, using the bundled xlsx (SheetJS) dep. Args: { path, sheets: [{ name, rows: string[][] }] }. Relative paths land in ~/.openclaw/media/outbound. Returns { path, bytes, sheets }. Prefer this over the xlsx skill: that skill needs pandas/openpyxl, which are not installed on a principal laptop.',
     parameters: toolParameters(
       {
         path: readableSchema,
@@ -496,7 +496,7 @@ function registerDocumentTools({ registerTool, log }) {
   registerTool({
     name: 'document.read_image',
     description:
-      'Read an image (.png/.jpg/.gif/.webp/.bmp/.avif/.tiff) from disk and return its metadata plus a base64 data URL suitable for VLM analysis. Uses Electron\'s bundled sharp module — no Python or ImageMagick. Args: { path, maxDim? (default 768) }. Large images are downscaled server-side so the response stays within model limits. Returns { path, bytes, width, height, format, mimeType, dataUrl, resized }.',
+      'Read an image (.png/.jpg/.gif/.webp/.bmp/.avif/.tiff) from disk and return its metadata plus a base64 data URL suitable for VLM analysis. Uses Electron\'s bundled sharp module — no Python or ImageMagick. Args: { path, maxDim? (default 768) }. Large images are downscaled server-side so the response stays within model limits. Returns { path, bytes, width, height, format, mimeType, dataUrl, resized }. Prefer this over any OCR skill: you read the returned image directly, so pytesseract/Pillow/Tesseract are never needed and must never be requested from the principal. Accepts a bare filename and searches Downloads, Documents, Desktop, and the OneDrive-redirected Desktop/Documents, including subfolders.',
     parameters: toolParameters(
       { path: readableSchema, maxDim: numberSchema },
       ['path'],

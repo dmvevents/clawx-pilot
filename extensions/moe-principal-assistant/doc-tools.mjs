@@ -30,7 +30,7 @@
  *   Refuses to read from anywhere outside the user's home directory.
  */
 
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import Module from 'node:module';
@@ -42,9 +42,28 @@ import path from 'node:path';
  * covers everyday principal work; os.tmpdir() covers unit-test fixtures
  * plus renderer file:stage outputs that briefly land outside home on
  * some platforms.
+ *
+ * Each root is added both raw and realpath-resolved. On macOS os.tmpdir()
+ * reports `/var/folders/…` (itself a symlink) and `/tmp` is a symlink to
+ * `/private/tmp`; because candidates are realpath-resolved before the
+ * check, comparing against unresolved roots refused paths the error
+ * message claimed were allowed.
  */
 function sandboxRoots() {
-  return [os.homedir(), os.tmpdir()].map((r) => path.resolve(r));
+  const roots = [];
+  for (const base of [os.homedir(), os.tmpdir(), '/tmp']) {
+    if (!base) continue;
+    const resolved = path.resolve(base);
+    if (!existsSync(resolved)) continue;
+    roots.push(resolved);
+    try {
+      const real = realpathSync(resolved);
+      if (real !== resolved) roots.push(real);
+    } catch {
+      // unreadable root — the raw form above still applies
+    }
+  }
+  return roots;
 }
 
 function insideSandbox(resolved) {
@@ -110,6 +129,155 @@ function loadDep(name) {
 }
 
 /**
+ * Directories searched, in order, when the principal names a file without a
+ * path ("the Staff Meeting Memo Draft"). Relative to the user's home.
+ *
+ * OneDrive entries are not optional. Under Windows OneDrive Known Folder
+ * Move — the default on a managed Ministry laptop — the real Desktop and
+ * Documents live at %USERPROFILE%\OneDrive\Desktop and
+ * %USERPROFILE%\OneDrive\Documents, so probing only ~/Desktop misses every
+ * file the principal can see. This produced the Ministry's 2026-07-21
+ * "I couldn't find any files in that folder", which only resolved once the
+ * tester pasted an absolute path.
+ *
+ * `OneDrive - <Tenant>` is the shape OneDrive uses for work/school accounts
+ * (e.g. "OneDrive - Ministry of Education"); those are discovered at
+ * runtime by oneDriveRoots() rather than hard-coded.
+ */
+const RELATIVE_SEARCH_DIRS = [
+  ['.openclaw', 'media', 'outbound'],
+  ['Downloads'],
+  ['Documents'],
+  ['Desktop'],
+];
+
+/**
+ * OneDrive roots under the user's home: plain `OneDrive` (personal / single
+ * tenant) plus any `OneDrive - <Tenant>` business folder.
+ */
+function oneDriveRoots(home) {
+  const roots = [];
+  const plain = path.join(home, 'OneDrive');
+  if (existsSync(plain)) roots.push(plain);
+  try {
+    for (const entry of readdirSync(home, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name === 'OneDrive') continue; // already added
+      if (entry.name.startsWith('OneDrive - ')) {
+        roots.push(path.join(home, entry.name));
+      }
+    }
+  } catch {
+    // unreadable home listing — the plain root above still applies
+  }
+  return roots;
+}
+
+/**
+ * Every directory a bare filename is looked up in, in priority order.
+ * Exported so the not-found error can report exactly what was searched and
+ * so tests can assert the OneDrive coverage.
+ */
+export function relativeSearchDirs(home = os.homedir()) {
+  const dirs = RELATIVE_SEARCH_DIRS.map((parts) => path.join(home, ...parts));
+  // Mirror the user-facing folders inside each OneDrive root, then the root
+  // itself (a principal may drop files straight into OneDrive).
+  for (const root of oneDriveRoots(home)) {
+    for (const folder of ['Desktop', 'Documents', 'Downloads']) {
+      dirs.push(path.join(root, folder));
+    }
+    dirs.push(root);
+  }
+  return dirs;
+}
+
+/**
+ * Depth-limited scan for `name` beneath `dir`. Principals keep files in
+ * subfolders ("MoE Agent Testing Folder", "Output_Files"), so an exact-hit
+ * probe is not enough — but an unbounded walk of a synced OneDrive tree is
+ * far too slow, hence the depth and breadth caps.
+ *
+ * BREADTH-FIRST, deliberately. A depth-first walk spends its whole entry
+ * budget diving into whichever subfolder happens to sort first, and never
+ * reaches the sibling at depth 1. On a real ~/Documents (46 subfolders,
+ * thousands of descendants) that means `Output_Files/report.docx` — where
+ * the Ministry's P2 and P4 prompts write their output — is never found even
+ * though it sits one level down. Breadth-first visits every depth-1 folder
+ * before any depth-2 folder, so the shallowest match wins, which is also
+ * the likeliest one.
+ */
+export function findWithinDir(dir, name, maxDepth = 3, maxEntries = 4000) {
+  let budget = maxEntries;
+  let queue = [dir];
+  for (let depth = 0; depth <= maxDepth && queue.length; depth++) {
+    const next = [];
+    for (const current of queue) {
+      // The direct-hit probe is one existsSync on a directory we already paid
+      // to enumerate, so it runs regardless of the remaining budget. Skipping
+      // it would mean a sibling that was already queued never gets checked
+      // just because an earlier sibling had a large subtree — which is the
+      // depth-first bug reintroduced one level up.
+      const direct = path.join(current, name);
+      try {
+        if (existsSync(direct) && statSync(direct).isFile()) return direct;
+      } catch {
+        // fall through to the listing below
+      }
+      if (depth === maxDepth || budget <= 0) continue;
+      let entries;
+      try {
+        entries = readdirSync(current, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (budget-- <= 0) break;
+        if (!entry.isDirectory()) continue;
+        if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+        next.push(path.join(current, entry.name));
+      }
+    }
+    queue = next;
+  }
+  return null;
+}
+
+/**
+ * The superseded depth-first walk, kept and exported ONLY so the eval
+ * pipeline can demonstrate the traversal-order bug rather than assert it:
+ * `eval/run.mjs` lane C runs both against the same tree and requires this
+ * one to miss a depth-1 sibling that the breadth-first scan finds. Never
+ * call this from a tool path.
+ */
+export function findWithinDirLegacyDepthFirst(dir, name, maxDepth = 3, maxEntries = 4000) {
+  let budget = maxEntries;
+  const walk = (current, depth) => {
+    if (depth > maxDepth || budget <= 0) return null;
+    const direct = path.join(current, name);
+    try {
+      if (existsSync(direct) && statSync(direct).isFile()) return direct;
+    } catch {
+      // fall through to the listing below
+    }
+    let entries;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      return null;
+    }
+    for (const entry of entries) {
+      if (budget-- <= 0) return null;
+      if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      const hit = walk(path.join(current, entry.name), depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  return walk(dir, 0);
+}
+
+/**
  * Resolve a user-supplied path spec to an absolute path we're willing to
  * read from. Throws with a helpful message if the file is missing or
  * outside the user's home directory.
@@ -123,15 +291,20 @@ export function resolveReadablePath(input) {
   if (candidate.startsWith('~/') || candidate === '~') {
     candidate = path.join(home, candidate.slice(1));
   }
+  const searchDirs = relativeSearchDirs(home);
   const candidates = [];
   if (path.isAbsolute(candidate)) {
     candidates.push(candidate);
   } else {
-    candidates.push(path.join(home, '.openclaw', 'media', 'outbound', candidate));
-    candidates.push(path.join(home, 'Downloads', candidate));
-    candidates.push(path.join(home, 'Documents', candidate));
-    candidates.push(path.join(home, 'Desktop', candidate));
+    // Exact hits first across every search dir (cheap), …
+    for (const dir of searchDirs) candidates.push(path.join(dir, candidate));
     candidates.push(path.resolve(candidate));
+    // … then a bounded subfolder scan, so "MoE Agent Testing Folder/…" works.
+    for (const dir of searchDirs) {
+      if (!existsSync(dir)) continue;
+      const hit = findWithinDir(dir, candidate);
+      if (hit) candidates.push(hit);
+    }
   }
   for (const c of candidates) {
     try {
@@ -154,8 +327,11 @@ export function resolveReadablePath(input) {
       }
     }
   }
+  const searched = relativeSearchDirs(os.homedir())
+    .map((d) => d.replace(os.homedir(), '~'))
+    .join(', ');
   throw new Error(
-    `file not found: ${input} (searched absolute path, ~/.openclaw/media/outbound, ~/Downloads, ~/Documents, ~/Desktop).`,
+    `file not found: ${input} (searched absolute path, then ${searched}, each including subfolders up to 3 deep).`,
   );
 }
 
