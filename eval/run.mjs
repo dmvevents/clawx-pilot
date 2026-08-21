@@ -21,6 +21,10 @@
  *   D  steering     Are the catalogue's steering claims actually present?
  *   E  capability   Delegates to harness/run.ts — handlers still work.
  *   F  live         Real LLM tool-pick. SKIPs loudly with no model.
+ *   G  offline      Does the document path work with the network cut? Blocks
+ *                   non-loopback fetch/socket/DNS and fails on any attempt, so
+ *                   a pass means "provably did not reach the network" rather
+ *                   than "the network happened to be unused".
  *
  * Every lane is deterministic except F. Exit 0 only if no lane FAILs; a
  * SKIP is reported but does not fail the run, and the report says which
@@ -591,6 +595,315 @@ async function laneLive(enabled) {
   return lane;
 }
 
+// --------------------------------------------------------- lane G: offline
+
+/**
+ * Offline capability.
+ *
+ * The Ministry design puts an app server between the laptop and PostgreSQL. If
+ * that server being unreachable can stop a principal working, the pilot fails
+ * on the first dropped school connection — so "works offline" needs to be a
+ * tested property, not a claim in a design doc.
+ *
+ * The probe runs in a CHILD process because it monkey-patches global fetch,
+ * net.Socket.prototype.connect and dns.lookup to reject any non-loopback
+ * address. Doing that in-process would poison the rest of the pipeline. Every
+ * blocked attempt is recorded, so the lane distinguishes "did not need the
+ * network" from "was denied the network and still worked" — only the latter is
+ * evidence.
+ *
+ * Ollama is treated as optional infrastructure: absent, the model leg SKIPs
+ * rather than failing, because a missing local runtime on a CI box is not a
+ * regression in the app. The document leg has no such excuse and must pass.
+ */
+async function laneOffline() {
+  const lane = new Lane(
+    'G',
+    'offline — network-cut document path',
+    'blocks non-loopback fetch/socket/DNS; a pass proves the path never reached out',
+  );
+
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'clawx-offline-'));
+  try {
+    const fixture = path.join(dir, 'Daily Report.docx');
+    await writeDocxFixture(fixture);
+
+    const probePath = path.join(dir, 'probe.mjs');
+    await writeFile(probePath, OFFLINE_PROBE_SRC, 'utf8');
+
+    const ollama = await sh('curl', [
+      '-s', '-m', '4', '-o', '/dev/null', '-w', '%{http_code}',
+      'http://127.0.0.1:11434/api/tags',
+    ]);
+    const ollamaUp = ollama.stdout.trim() === '200';
+
+    const out = await sh('node', [probePath, fixture, ollamaUp ? '--with-model' : '--no-model']);
+    let report;
+    try {
+      report = JSON.parse(out.stdout.slice(out.stdout.indexOf('{'), out.stdout.lastIndexOf('}') + 1));
+    } catch {
+      lane.add('G-probe', 'FAIL', `probe produced no parseable report (exit ${out.code}): ${out.stderr.slice(0, 200)}`);
+      return lane;
+    }
+
+    // The document leg is mandatory: pure-local file access, no excuses.
+    lane.add(
+      'G-doc-read',
+      report.extractedChars > 80 ? 'PASS' : 'FAIL',
+      report.extractedChars > 80
+        ? `read ${report.extractedChars} chars from .docx with the network blocked`
+        : `expected >80 chars of extracted text, got ${report.extractedChars}`,
+    );
+
+    // The whole point of the lane: were there any escape attempts?
+    // Read the snapshot taken BEFORE the negative control ran, not the running
+    // total — the control deliberately adds violations of its own.
+    const v = report.docPathViolations ?? report.networkViolations ?? [];
+    lane.add(
+      'G-no-egress',
+      v.length === 0 ? 'PASS' : 'FAIL',
+      v.length === 0
+        ? 'zero non-loopback fetch/socket/DNS attempts during the document path'
+        : `document path attempted egress: ${v.join(', ')}`,
+    );
+
+    // Negative control. Without this, G-no-egress is unfalsifiable: an inert
+    // guard reports zero violations and looks identical to a real pass. An
+    // earlier version of this lane did exactly that — it missed every raw
+    // socket connection because Node packs connect() args into an array.
+    const attempts = report.controlAttempts ?? 0;
+    const caught = report.controlCaught ?? 0;
+    lane.add(
+      'G-guard-live',
+      attempts > 0 && caught >= attempts ? 'PASS' : 'FAIL',
+      attempts > 0 && caught >= attempts
+        ? `egress guard caught all ${attempts} deliberate attempts (${report.controlRoutes?.join(', ')}) — G-no-egress can go red`
+        : `guard is blind: ${attempts} deliberate egress attempts, only ${caught} recorded — treat G-no-egress as unproven`,
+    );
+
+    if (!ollamaUp) {
+      lane.add(
+        'G-model',
+        'SKIP',
+        'no local model runtime on 127.0.0.1:11434 — on-device inference unverified on this host',
+      );
+    } else {
+      const grounded = report.groundedOnAbsences && report.groundedOnRepair;
+      lane.add(
+        'G-model',
+        grounded ? 'PASS' : 'FAIL',
+        grounded
+          ? `on-device model answered from local file content in ${report.modelLatencyMs}ms (${report.modelUsed})`
+          : `on-device answer missed the grounded facts: ${String(report.modelAnswer).slice(0, 160)}`,
+      );
+    }
+    return lane;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/** Minimal valid .docx — avoids depending on a checked-in binary fixture. */
+async function writeDocxFixture(target) {
+  const src = `
+import sys
+from zipfile import ZipFile, ZIP_DEFLATED
+doc = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+<w:p><w:r><w:t>Daily Report - Rosary Boys RC School - 20 August 2026</w:t></w:r></w:p>
+<w:p><w:r><w:t>Enrolment 412. Present 388. Absent 24.</w:t></w:r></w:p>
+<w:p><w:r><w:t>Two teachers on approved leave. Water tank repair pending since 12 August.</w:t></w:r></w:p>
+</w:body></w:document>'''
+ct = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'''
+rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'''
+with ZipFile(sys.argv[1], 'w', ZIP_DEFLATED) as z:
+    z.writestr('[Content_Types].xml', ct)
+    z.writestr('_rels/.rels', rels)
+    z.writestr('word/document.xml', doc)
+`;
+  const scriptPath = path.join(path.dirname(target), 'mkfixture.py');
+  await writeFile(scriptPath, src, 'utf8');
+  const out = await sh('python3', [scriptPath, target]);
+  if (!existsSync(target)) {
+    throw new Error(`fixture creation failed (exit ${out.code}): ${out.stderr.slice(0, 200)}`);
+  }
+}
+
+/**
+ * Child-process probe source. Patches egress paths BEFORE importing doc-tools,
+ * so the import itself is covered too.
+ *
+ * Two traps this guard is written around, both found by running a negative
+ * control against an earlier version that looked correct and caught nothing:
+ *
+ *  1. `net.connect({host, port})` does reach `net.Socket.prototype.connect`,
+ *     but Node normalises the arguments first and hands the prototype a single
+ *     PACKED ARRAY — `[[{host, port}, cb]]`. Reading `args[0].host` therefore
+ *     yields undefined, defaults to loopback, and the violation is never seen.
+ *     So the guard walks the whole argument shape instead of assuming one form.
+ *  2. Throwing synchronously out of `connect()` leaves a half-built socket with
+ *     no error handler, which hung the run for the full handle timeout (2 min).
+ *     The guard records, then destroys on nextTick, and returns the socket.
+ */
+const OFFLINE_PROBE_SRC = `
+import net from 'node:net';
+import dns from 'node:dns';
+
+const fixture = process.argv[2];
+const withModel = process.argv[3] === '--with-model';
+const violations = [];
+const LOOPBACK = /^(127\\.\\d+\\.\\d+\\.\\d+|::1|\\[::1\\]|localhost)$/i;
+const isLocal = (h) => !h || LOOPBACK.test(String(h).trim());
+const realFetch = globalThis.fetch;
+
+// Collect every host-ish value anywhere in a connect() argument list.
+function targetsOf(args) {
+  const found = [];
+  const walk = (v, depth) => {
+    if (v == null || depth > 4) return;
+    if (Array.isArray(v)) { for (const x of v) walk(x, depth + 1); return; }
+    if (typeof v === 'object') {
+      for (const k of ['host', 'hostname']) if (typeof v[k] === 'string') found.push(v[k]);
+      return;
+    }
+    if (typeof v === 'string' && !v.startsWith('/')) found.push(v); // '/x' = unix socket
+  };
+  for (const a of args) walk(a, 0);
+  return found;
+}
+
+globalThis.fetch = async (input, init) => {
+  const url = typeof input === 'string' ? input : input?.url ?? String(input);
+  let host = url;
+  try { host = new URL(url).hostname; } catch {}
+  if (!isLocal(host)) {
+    violations.push('fetch -> ' + host);
+    throw new Error('BLOCKED: fetch to ' + host);
+  }
+  return realFetch(input, init);
+};
+
+const realConnect = net.Socket.prototype.connect;
+net.Socket.prototype.connect = function (...args) {
+  const remote = targetsOf(args).filter((h) => !isLocal(h));
+  if (remote.length) {
+    violations.push('socket -> ' + remote.join(','));
+    const err = new Error('BLOCKED: socket to ' + remote[0]);
+    process.nextTick(() => { this.destroy(err); });
+    return this;
+  }
+  return realConnect.apply(this, args);
+};
+
+for (const fn of ['lookup', 'resolve', 'resolve4', 'resolve6']) {
+  const real = dns[fn];
+  if (typeof real !== 'function') continue;
+  dns[fn] = function (hostname, ...rest) {
+    if (!isLocal(hostname)) {
+      violations.push('dns.' + fn + ' -> ' + hostname);
+      const cb = rest[rest.length - 1];
+      if (typeof cb === 'function') {
+        const e = new Error('BLOCKED: dns ' + hostname);
+        e.code = 'ENOTFOUND';
+        return process.nextTick(() => cb(e));
+      }
+      throw new Error('BLOCKED: dns ' + hostname);
+    }
+    return real.call(dns, hostname, ...rest);
+  };
+}
+
+const results = {};
+const docTools = await import(${JSON.stringify(pathToFileURL(path.join(REPO_ROOT, 'extensions/moe-principal-assistant/doc-tools.mjs')).href)});
+
+const readFn = docTools.readDocument ?? docTools.documentRead ?? docTools.handleDocumentRead ??
+  Object.entries(docTools).find(([k, v]) => /read/i.test(k) && typeof v === 'function')?.[1];
+
+let extracted = '';
+if (typeof readFn === 'function') {
+  try {
+    const out = await readFn({ path: fixture });
+    extracted = typeof out === 'string' ? out : (out?.markdown ?? out?.text ?? out?.content ?? JSON.stringify(out));
+  } catch (err) {
+    results.readError = err.message;
+  }
+} else {
+  results.readError = 'no read-shaped export found in doc-tools.mjs';
+}
+
+extracted = String(extracted ?? '');
+results.extractedChars = extracted.trim().length;
+results.networkViolations = violations;
+
+if (withModel && results.extractedChars > 80) {
+  const prompt = 'Using ONLY this school daily report, answer in one short sentence.\\n\\n' +
+    extracted.trim() +
+    '\\n\\nQuestion: how many pupils were absent, and what repair is outstanding?';
+  const t0 = Date.now();
+  try {
+    const res = await realFetch('http://127.0.0.1:11434/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'qwen2.5:3b-instruct',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 120,
+        temperature: 0,
+      }),
+    });
+    const json = await res.json();
+    results.modelLatencyMs = Date.now() - t0;
+    results.modelAnswer = json?.choices?.[0]?.message?.content?.trim() ?? '';
+    results.modelUsed = json?.model;
+    const a = String(results.modelAnswer).toLowerCase();
+    results.groundedOnAbsences = a.includes('24');
+    results.groundedOnRepair = /water|tank/.test(a);
+  } catch (err) {
+    results.modelAnswer = 'ERROR ' + err.message;
+    results.groundedOnAbsences = false;
+    results.groundedOnRepair = false;
+  }
+}
+
+// --- negative control ------------------------------------------------------
+// Run LAST, after the real measurement, so it cannot contaminate it. Makes six
+// deliberate egress attempts across every route the app could plausibly use. If
+// the guard fails to record all six, then the zero-violation result above is
+// meaningless and the lane must go red. A guard that cannot go red proves
+// nothing when it passes.
+results.docPathViolations = [...violations];
+const before = violations.length;
+const routes = [];
+const attempt = async (name, fn) => { try { await fn(); } catch {} routes.push(name); };
+
+await attempt('fetch', () => fetch('https://graph.microsoft.com/v1.0/me'));
+await attempt('net.connect(options)', () => {
+  const s = net.connect({ host: '8.8.8.8', port: 53 }); s.on('error', () => {});
+});
+await attempt('net.connect(port,host)', () => {
+  const s = net.connect(53, '1.1.1.1'); s.on('error', () => {});
+});
+await attempt('net.createConnection', () => {
+  const s = net.createConnection({ host: '9.9.9.9', port: 443 }); s.on('error', () => {});
+});
+await attempt('dns.lookup', () => new Promise((r) => dns.lookup('login.microsoftonline.com', () => r())));
+await attempt('http.get', () => new Promise((r) => {
+  import('node:http').then(({ default: http }) => {
+    const q = http.get('http://example.com/', () => r());
+    q.on('error', () => r());
+  }).catch(() => r());
+}));
+
+await new Promise((r) => setTimeout(r, 250));
+results.controlAttempts = routes.length;
+results.controlCaught = violations.length - before;
+results.controlRoutes = routes;
+
+console.log(JSON.stringify(results, null, 2));
+`;
+
 // --------------------------------------------------------------- reporting
 
 function sh(cmd, args) {
@@ -655,6 +968,7 @@ async function main() {
     ['D', laneSteering],
     ['E', laneCapability],
     ['F', () => laneLive(args.live)],
+    ['G', laneOffline],
   ];
 
   for (const [id, fn] of plan) {
