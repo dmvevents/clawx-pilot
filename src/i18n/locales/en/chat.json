@@ -1,6 +1,6 @@
 {
     "runError": {
-        "title": "Model API call error"
+        "title": "Model call failed"
     },
     "gatewayNotRunning": "Gateway Not Running",
     "gatewayRequired": "The Gateway needs to be running to use chat. It will start automatically, or you can start it from Settings.",
@@ -25,9 +25,6 @@
         "modified": "Modified",
         "openFolder": "Open folder",
         "viewAll": "View all changes"
-    },
-    "runError": {
-        "title": "Model call failed"
     },
     "artifactPanel": {
         "tabs": {
@@ -193,5 +190,12 @@
         "withinTwoWeeks": "Within 2 Weeks",
         "withinMonth": "Within 1 Month",
         "older": "Older than 1 Month"
+    },
+    "degradeNotice": {
+        "resentUnreachable": "No internet connection — this answer came from the model on this device.",
+        "resentRateLimited": "The online service is busy right now — this answer came from the model on this device.",
+        "switchedUnreachable": "No internet connection. Switched to the model on this device — send your message again to continue.",
+        "switchedRateLimited": "The online service is busy right now. Switched to the model on this device — send your message again to continue.",
+        "restoreHint": "Online will be used again automatically once it's available."
     }
 }

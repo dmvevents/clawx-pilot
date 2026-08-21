@@ -1,6 +1,8 @@
 # Offline architecture — what works, what doesn't, and what we're building
 
-**Status: design doc. Written 2026-08-20 against commit `c9f1aa34`.**
+**Status: design doc. Written 2026-08-20 against commit `c9f1aa34`.
+Updated 2026-08-21 — §3.1 (cloud-turn degradation) is now built and tested; §3.2
+(synchronisation) remains the open gap.**
 
 The Ministry's infrastructure handoff (`MOE Email AI Assistant Handoff.docx`,
 Ansari Khan, 2026-08-18) puts PostgreSQL and an app server in the Ministry's
@@ -19,10 +21,12 @@ short version:
 | Can the local model still run? | **Yes** | Proven under a blocked network — `eval` lane G |
 | Can we persist locally? | **Yes, partially** | Local state exists; not everything routes through it |
 | Can we synchronise with the database? | **No — does not exist** | Grepped the tree; no outbox/queue/retry/sync |
-| Does a cloud turn degrade gracefully when offline? | **No — it fails** | Fallback is launch-time and reachability-blind |
+| Does a cloud turn degrade gracefully when offline? | **Yes, since 2026-08-21** | §3.1; 25 unit tests + lane G `G-degrade-classify` |
 
-The last two rows are the work. They are not hedges — they are named gaps with
-owners and a design below.
+The synchronisation row is the remaining work. It is not a hedge — it is a named
+gap with a design in §5. The degradation row was the same kind of gap when this
+document was written on 2026-08-20 and is now closed; §3.1 keeps the original
+diagnosis alongside what shipped.
 
 ---
 
@@ -128,11 +132,13 @@ Requires connectivity:
 
 ---
 
-## 3. What does not work — the two real gaps
+## 3. The two real gaps — one closed, one open
 
-### 3.1 Gap 1: a cloud turn during an outage fails instead of degrading
+### 3.1 Gap 1: a cloud turn during an outage fails instead of degrading — **CLOSED 2026-08-21**
 
-This is the more urgent of the two, and it is not what I assumed before checking.
+This was the more urgent of the two, and it is not what I assumed before checking.
+The diagnosis below is kept because it explains why the fix has the shape it does;
+what shipped is at the end of this section.
 
 `preferredChannel` is **sticky persisted state** (`electron/utils/store.ts:69`,
 default `'on-device'` at line 127), changed only by an explicit user toggle
@@ -154,18 +160,51 @@ and the turn fails at send time. The assistant goes silent — the exact symptom
 the four-store coherence work was built to eliminate, arriving through a
 different door.
 
-**Fix (new work):** reachability-aware channel selection. On send failure with a
-network-class error, degrade to on-device for that turn, surface it in the UI in
-the product's existing vocabulary ("On this device" — no model IDs, per the
-CLAUDE.md hard rule), and return to the user's preference when connectivity
-comes back. The user's explicit toggle must remain authoritative; this is
-degradation, not preference-editing, and `preferredChannel` should not be
-silently rewritten.
+**What shipped.** Send-time failover, not launch-time selection:
 
-**Test to write:** extend lane G with a cloud-turn-under-blocked-network check
-asserting the turn completes on-device rather than erroring. Lane G already has
-the harness for it — the network-cut child process — so this is a check, not new
-infrastructure.
+| Piece | Where | Role |
+|---|---|---|
+| Failure classifier + policy | `src/lib/channel-degrade.ts` | Pure `(error, context) -> {degrade, resend, reason}`. No gateway, no network, no Electron needed to test it. |
+| Runtime-only channel move | `POST /api/settings/degradeChannel` (`electron/api/routes/settings.ts`) | Runs the four-store `applyChannelChange` transaction and **skips** the `setSetting('preferredChannel')` write. |
+| Wiring + resend | `src/stores/chat.ts` (`maybeDegradeChannel`) | Fires on the terminal `error` event, claims the turn before any `await`, then optionally replays the message. |
+| Notice | `src/pages/Chat/index.tsx`, `src/i18n/locales/en/chat.json` | Amber callout in channel vocabulary only — "the model on this device", never a model ID. |
+
+Three design points worth not re-deriving:
+
+1. **`preferredChannel` is never rewritten.** The principal's toggle stays
+   authoritative, so the app returns to Online by itself when the link comes
+   back. Silently persisting the degrade would turn one dropped packet into a
+   permanent downgrade nobody discovers. This is the load-bearing assertion of
+   `tests/unit/chat-channel-degrade.test.ts`, and it is a *separate route* rather
+   than a flag on the existing `preferredChannel` PUT precisely because the only
+   difference is one call that must not happen.
+2. **Fail closed.** `NEVER_DEGRADE_PATTERNS` is checked first and unrecognised
+   errors do not degrade. A 401/403 from APIM means a wrong subscription key
+   (Ministry handoff §4.2); degrading would mask that indefinitely, turning "your
+   key is wrong" into "the assistant is oddly always on-device".
+3. **`resend` is a strict subset of `degrade`.** A turn that already ran tools
+   may have had side effects — a compose pane opened, a mailbox read — so it is
+   not replayed. The channel still moves, and the principal's own resend lands
+   on-device.
+
+Rate-limiting shares the mechanism but gets distinct copy: a fleet-wide 429 on
+the shared APIM bucket (`docs/SCALE_ANALYSIS_2026-08-20.md` §3) reports as
+"service busy", not "no internet". Telling a principal on a working network that
+they are offline is a support call waiting to happen.
+
+**Tests.** 25 unit tests across `tests/unit/channel-degrade.test.ts` (policy) and
+`tests/unit/chat-channel-degrade.test.ts` (plumbing), plus lane G's
+`G-degrade-classify`.
+
+That lane check exists because unit tests can only assert against error strings
+*we chose*, which cannot catch "our regexes do not match reality". It transpiles
+the real `channel-degrade.ts` and feeds it two genuine Node failures — an
+`ECONNREFUSED` from an ephemeral port bound-then-closed, and a `getaddrinfo
+ENOTFOUND` against a reserved `.invalid` host — asserting both classify as
+`unreachable`. An earlier version fed it the probe's own `BLOCKED: fetch to …`
+string, which proved nothing: that text is invented by the probe, not by Node. If
+a future Node release changes the `fetch failed` shape, this is the leg that
+notices before a principal sees a dead composer.
 
 ### 3.2 Gap 2: there is no synchronisation at all
 
@@ -267,7 +306,8 @@ Lane G is the harness. The additional checks, in dependency order:
   assert one logical record.
 - **G-outbox-drain** — unblock the network and assert entries reach the stub and
   transition to `acked`.
-- **G-cloud-degrades** — the §3.1 check.
+- ~~**G-cloud-degrades** — the §3.1 check.~~ **Shipped** as
+  `G-degrade-classify`; see §3.1.
 
 Each needs its own negative control, for the reason §2.2 documents: a queue test
 that cannot fail when the queue is inert is not a test. Specifically,
@@ -303,15 +343,22 @@ in the app server, not on laptops.
 | Local document path is network-free | **Done** | lane G `G-doc-read` + `G-no-egress` |
 | Egress guard is falsifiable | **Done** | lane G `G-guard-live`, mutation-tested |
 | Local state persists | **Partial** | `~/.openclaw/`; not all writes route through it |
-| Cloud turn degrades when offline | **Not built** | §3.1 — reachability-aware selection |
+| Cloud turn degrades when offline | **Done** | §3.1; 25 unit tests + lane G `G-degrade-classify`, mutation-tested both ways |
+| Degrade leaves `preferredChannel` intact | **Done** | `chat-channel-degrade.test.ts`; mutation-tested against the PUT-route regression |
 | Store-and-forward outbox | **Not built** | §5 |
 | PostgreSQL data layer | **Not built** | no `pg` in `package.json` |
 | App server container | **Partial** | `services/model-broker` + Dockerfile exist, tested |
 
-**Ordering recommendation:** §3.1 before §5. The cloud-turn fallback is smaller,
-removes a silent-failure mode principals would hit in the pilot, and needs no
-Ministry-side dependency. The outbox needs the app server's write API to exist
-before it can be tested against anything real.
+**Ordering recommendation:** §3.1 was taken first — it was smaller, removed a
+silent-failure mode principals would hit in the pilot, and needed no
+Ministry-side dependency. Next is per-user metering and caps in
+`services/model-broker/server.mjs` (`SCALE_ANALYSIS_2026-08-20.md` §7), then §5.
+The outbox needs the app server's write API to exist before it can be tested
+against anything real.
+
+**What §3.1 does *not* cover.** The failover keeps the assistant answering; it
+does not make the turn's *output* durable. A form submission or email that failed
+mid-flight is still lost — that is §5's job, and it is the remaining offline gap.
 
 ---
 

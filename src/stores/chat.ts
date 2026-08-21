@@ -7,6 +7,10 @@ import { create } from 'zustand';
 import { hostApiFetch } from '@/lib/host-api';
 import { useGatewayStore } from './gateway';
 import { useAgentsStore } from './agents';
+import { useSettingsStore } from './settings';
+import { useProviderStore } from './providers';
+import { classifyFailure, shouldDegradeToOnDevice } from '@/lib/channel-degrade';
+import { pickAccountForChannel, type ProviderClass } from '@/lib/provider-display';
 import { buildBaselineRunKey, captureBaseline, clearBaselines } from './baseline-cache';
 import { buildCronSessionHistoryPath, isCronSessionKey } from './chat/cron-session-utils';
 import {
@@ -1651,6 +1655,101 @@ function isRecoverableChatSendTimeout(error: string): boolean {
   return error.includes('RPC timeout: chat.send');
 }
 
+/**
+ * Send-time cloud → on-device failover.
+ *
+ * Called from the terminal `error` event when a turn failed while sending.
+ * Policy lives in `src/lib/channel-degrade.ts` (pure, unit-tested); this
+ * function is only the plumbing: read the current channel and what's
+ * configured, ask the classifier, then move the runtime and optionally replay.
+ *
+ * Two things it must never do:
+ *
+ *   - **Rewrite `preferredChannel`.** It POSTs `/api/settings/degradeChannel`,
+ *     which runs the same four-store transaction as the toggle but skips the
+ *     `setSetting` call. The principal's explicit choice survives, so the app
+ *     returns to Online by itself once the network or the token budget
+ *     recovers. Using `setPreferredChannel` here would silently make the
+ *     degrade permanent.
+ *   - **Clobber the visible error before it knows the failover worked.** The
+ *     error state is already set by the caller; we only clear `runError` after
+ *     a resend has actually been dispatched.
+ */
+async function maybeDegradeChannel(
+  set: ChatSet,
+  get: ChatGet,
+  errorMsg: string,
+  toolsRan: boolean,
+): Promise<void> {
+  const state = get();
+  if (state.degradedThisTurn) return;
+
+  // Cheap string check first — avoids reading provider state for the common
+  // case of an ordinary model error.
+  if (classifyFailure(errorMsg) === 'other') return;
+
+  const settings = useSettingsStore.getState();
+  const accounts = useProviderStore.getState().accounts ?? [];
+  const onDevice = pickAccountForChannel(accounts, 'on-device');
+  const online = pickAccountForChannel(accounts, 'online');
+
+  // What the runtime was actually on, not merely what was preferred: a boot
+  // preflight may already have put us on-device despite an Online preference.
+  const activeChannel: ProviderClass = online && settings.preferredChannel === 'online'
+    ? 'online'
+    : (onDevice ? 'on-device' : 'online');
+
+  const decision = shouldDegradeToOnDevice(errorMsg, {
+    activeChannel,
+    onDeviceAvailable: onDevice !== null && !!onDevice.model,
+    alreadyDegraded: state.degradedThisTurn,
+    toolsRan,
+    haveMessageText: !!state.lastSentPayload?.text?.trim(),
+  });
+  if (!decision.degrade) return;
+
+  const reason = decision.reason === 'rate-limited' ? 'rate-limited' : 'unreachable';
+
+  // Claim the flag before any await so two error events for the same run
+  // cannot both start a failover.
+  set({ degradedThisTurn: true });
+
+  try {
+    const res = await hostApiFetch('/api/settings/degradeChannel', {
+      method: 'POST',
+      body: JSON.stringify({ channel: 'on-device', reason }),
+    });
+    if (res && typeof res === 'object' && (res as { success?: boolean }).success === false) {
+      throw new Error(String((res as { error?: unknown }).error ?? 'degradeChannel failed'));
+    }
+  } catch (error) {
+    // Failover itself failed. Leave the original error on screen — it is the
+    // more actionable of the two — and do not resend.
+    console.warn('[chat] channel degrade failed, leaving original error visible:', error);
+    set({ degradeNotice: null });
+    return;
+  }
+
+  const payload = get().lastSentPayload;
+  if (!decision.resend || !payload?.text?.trim()) {
+    // Channel moved but we are not replaying. The principal's own retry will
+    // now run on-device.
+    set({ degradeNotice: { reason, resent: false } });
+    return;
+  }
+
+  set({ degradeNotice: { reason, resent: true }, runError: null, error: null });
+  try {
+    await get().sendMessage(payload.text, payload.attachments, payload.targetAgentId);
+    // sendMessage resets degradedThisTurn for the new turn; re-assert it so a
+    // second failure (now on-device) surfaces instead of looping.
+    set({ degradedThisTurn: true, degradeNotice: { reason, resent: true } });
+  } catch (error) {
+    console.warn('[chat] on-device resend failed:', error);
+    set({ degradeNotice: { reason, resent: false } });
+  }
+}
+
 function collectToolUpdates(message: unknown, eventState: string): ToolStatus[] {
   const updates: ToolStatus[] = [];
   const toolResultUpdate = extractToolResultUpdate(message, eventState);
@@ -1697,6 +1796,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   pendingFinal: false,
   lastUserMessageAt: null,
   pendingToolImages: [],
+
+  lastSentPayload: null,
+  degradedThisTurn: false,
+  degradeNotice: null,
 
   sessions: [],
   currentSessionKey: DEFAULT_SESSION_KEY,
@@ -2497,6 +2600,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       streamingTools: [],
       pendingFinal: false,
       lastUserMessageAt: nowMs,
+      // Retain the payload so a network-class failure can be replayed on the
+      // on-device channel (see `src/lib/channel-degrade.ts`). Cleared on
+      // `final`. `degradedThisTurn` resets here because this is a fresh turn —
+      // the degrade resend path re-sets it to true immediately after calling in.
+      lastSentPayload: { text, attachments, targetAgentId },
+      degradedThisTurn: false,
+      degradeNotice: null,
     }));
 
     // Update session label with first user message text as soon as it's sent
@@ -2706,12 +2816,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // way to track progress when the gateway doesn't stream intermediate turns.
     const hasUsefulData = resolvedState === 'delta' || resolvedState === 'final'
       || resolvedState === 'error' || resolvedState === 'aborted';
+    // Whether THIS client had a send in flight, read before the adoption block
+    // below can set `sending` for a run we never started. The `error` case uses
+    // this to decide whether a channel failover is ours to perform: replaying a
+    // turn typed in another client (the console at 127.0.0.1:18789) would resend
+    // whatever stale payload we happen to be holding.
+    const hadLocalSendInFlight = get().sending;
     if (hasUsefulData) {
       clearHistoryPoll();
       // Adopt run started from another client (e.g. console at 127.0.0.1:18789):
       // show loading/streaming in the app when this session has an active run.
-      const { sending } = get();
-      if (!sending && runId) {
+      if (!hadLocalSendInFlight && runId) {
           set({ sending: true, activeRunId: runId, error: null, runError: null });
       }
     }
@@ -2755,6 +2870,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       case 'final': {
         clearErrorRecoveryTimer();
         if (get().error || get().runError) set({ error: null, runError: null });
+        // The turn produced a real answer, so the retained resend payload is no
+        // longer needed. `degradeNotice` is deliberately left alone — if this
+        // final came from an on-device resend, the principal should still see
+        // that their turn was answered on this device rather than online.
+        if (get().lastSentPayload) set({ lastSentPayload: null });
         // Message complete - add to history and clear streaming
         const finalMsg = event.message as RawMessage | undefined;
         if (finalMsg) {
@@ -2980,6 +3100,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         );
         const terminalAssistantError = isTerminalAssistantErrorMessage(event.message);
         const wasSending = get().sending;
+        // Capture before the state reset below wipes `streamingTools`. A turn
+        // that already invoked a tool must not be replayed automatically.
+        const toolsRanThisTurn = get().streamingTools.length > 0
+          || get().pendingToolImages.length > 0;
 
         // Snapshot the current streaming message into messages[] so partial
         // content ("Let me get that written down...") is preserved in the UI
@@ -3013,6 +3137,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
         clearErrorRecoveryTimer();
         if (wasSending) {
           void get().loadHistory(true);
+        }
+
+        // Send-time channel degradation. A cloud turn that died because the
+        // provider was unreachable, or because the Ministry's shared token
+        // budget returned 429, should continue on the on-device model rather
+        // than leaving the principal with a dead composer at 3:40pm.
+        //
+        // Deliberately runs AFTER the error state is set, so if any step of the
+        // failover itself fails the user is still looking at the real error.
+        //
+        // Gated on `hadLocalSendInFlight`, not `wasSending`: `wasSending` is
+        // true for runs adopted from another client too, and failing over one of
+        // those would replay a payload the principal never typed here.
+        if (hadLocalSendInFlight) {
+          void maybeDegradeChannel(set, get, errorMsg, toolsRanThisTurn);
         }
         break;
       }
@@ -3057,4 +3196,5 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   clearError: () => set({ error: null, runError: null }),
+  clearDegradeNotice: () => set({ degradeNotice: null }),
 }));

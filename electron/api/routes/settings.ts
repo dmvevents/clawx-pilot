@@ -93,6 +93,50 @@ export async function handleSettingsRoutes(
     return true;
   }
 
+  /**
+   * Degrade the runtime onto a channel WITHOUT persisting `preferredChannel`.
+   *
+   * This is the send-time failover path (`docs/OFFLINE_ARCHITECTURE.md` §3.1):
+   * a cloud turn failed because the provider was unreachable or the fleet token
+   * budget returned 429, and we want the next turn to run on-device instead of
+   * failing. Crucially it must NOT rewrite the principal's stored preference —
+   * their explicit toggle stays authoritative so the app returns to Online on
+   * its own once connectivity or budget recovers.
+   *
+   * That is why this is a separate route rather than a flag on the
+   * `preferredChannel` PUT: the only difference is the `setSetting` call, and
+   * making it conditional there is exactly the kind of subtlety that later
+   * silently starts persisting again.
+   */
+  if (url.pathname === '/api/settings/degradeChannel' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody<{ channel?: unknown; reason?: unknown }>(req);
+      if (!isProviderChannel(body.channel)) {
+        sendJson(res, 400, { success: false, error: `Invalid channel: ${String(body.channel)}` });
+        return true;
+      }
+      const persisted = await getSetting('preferredChannel');
+      const result = await applyChannelChange(body.channel, ctx.gatewayManager);
+      logger.info('[settings] Degraded channel without persisting preference', {
+        channel: body.channel,
+        reason: typeof body.reason === 'string' ? body.reason : 'unspecified',
+        persistedPreferenceLeftAt: persisted,
+        modelRef: result.modelRef,
+      });
+      sendJson(res, 200, {
+        success: true,
+        channel: body.channel,
+        modelRef: result.modelRef,
+        accountId: result.accountId,
+        preferredChannelUnchanged: persisted,
+      });
+    } catch (error) {
+      logger.warn('[settings] degradeChannel failed:', error);
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
   if (url.pathname.startsWith('/api/settings/') && req.method === 'GET') {
     const key = url.pathname.slice('/api/settings/'.length) as keyof AppSettings;
     try {

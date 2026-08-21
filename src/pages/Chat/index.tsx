@@ -5,7 +5,7 @@
  * are in the toolbar; messages render with markdown + streaming.
  */
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import { AlertCircle, Laptop, Loader2, Sparkles } from 'lucide-react';
 import { useChatStore, type RawMessage } from '@/stores/chat';
 import { buildBaselineRunKey, getBaseline } from '@/stores/baseline-cache';
 import { useGatewayStore } from '@/stores/gateway';
@@ -131,6 +131,8 @@ export function Chat() {
   const sendMessage = useChatStore((s) => s.sendMessage);
   const abortRun = useChatStore((s) => s.abortRun);
   const clearError = useChatStore((s) => s.clearError);
+  const degradeNotice = useChatStore((s) => s.degradeNotice);
+  const clearDegradeNotice = useChatStore((s) => s.clearDegradeNotice);
   const fetchAgents = useAgentsStore((s) => s.fetchAgents);
   const agents = useAgentsStore((s) => s.agents);
 
@@ -855,6 +857,33 @@ export function Chat() {
 
         </div>
       </div>
+
+      {/* Channel-degrade notice. Informational, not an error: the turn either
+          already completed on this device or is ready to be resent there.
+          Deliberately anonymised — channel vocabulary only, never a model id. */}
+      {degradeNotice && (
+        <div className="px-4 pt-2" data-testid="chat-degrade-notice">
+          <div className="max-w-4xl mx-auto rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                <Laptop className="h-4 w-4" />
+                {t(degradeNotice.resent
+                  ? (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.resentRateLimited' : 'degradeNotice.resentUnreachable')
+                  : (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.switchedRateLimited' : 'degradeNotice.switchedUnreachable'))}
+              </p>
+              <p className="mt-1 text-xs text-amber-600/80 dark:text-amber-400/80">
+                {t('degradeNotice.restoreHint')}
+              </p>
+            </div>
+            <button
+              onClick={clearDegradeNotice}
+              className="shrink-0 text-xs text-amber-600/70 hover:text-amber-600 underline"
+            >
+              {t('common:actions.dismiss')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Run error callout */}
       {runError && (

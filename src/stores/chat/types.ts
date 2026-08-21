@@ -109,6 +109,34 @@ export interface ChatState {
   /** Images collected from tool results, attached to the next assistant message */
   pendingToolImages: AttachedFileMeta[];
 
+  // ── Send-time channel degradation ──────────────────────────────
+  // See `src/lib/channel-degrade.ts` and `docs/OFFLINE_ARCHITECTURE.md` §3.1.
+  /**
+   * Text + attachments of the in-flight turn, kept only so a turn that failed
+   * for network reasons can be replayed on-device. Cleared on success.
+   */
+  lastSentPayload: {
+    text: string;
+    attachments?: Array<{
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
+      stagedPath: string;
+      preview: string | null;
+    }>;
+    targetAgentId?: string | null;
+  } | null;
+  /**
+   * Set once we have already moved this turn onto the on-device channel.
+   * Prevents a failing cloud and a failing local runtime from ping-ponging.
+   */
+  degradedThisTurn: boolean;
+  /**
+   * User-facing notice that the turn moved to the on-device model, or null.
+   * Anonymised per the hard rules: channel vocabulary only, never a model id.
+   */
+  degradeNotice: { reason: 'unreachable' | 'rate-limited'; resent: boolean } | null;
+
   // Sessions
   sessions: ChatSession[];
   currentSessionKey: string;
@@ -145,6 +173,8 @@ export interface ChatState {
   handleChatEvent: (event: Record<string, unknown>) => void;
   refresh: () => Promise<void>;
   clearError: () => void;
+  /** Dismiss the "moved to on-device" notice. */
+  clearDegradeNotice: () => void;
 }
 
 export const DEFAULT_CANONICAL_PREFIX = 'agent:main';

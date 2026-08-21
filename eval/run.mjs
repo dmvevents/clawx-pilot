@@ -631,6 +631,20 @@ async function laneOffline() {
     const probePath = path.join(dir, 'probe.mjs');
     await writeFile(probePath, OFFLINE_PROBE_SRC, 'utf8');
 
+    // Transpile the real failover classifier into the probe's directory so the
+    // probe can import it. Using the actual module (rather than restating its
+    // regexes in the probe) is the whole point: the question this lane answers
+    // is whether `channel-degrade.ts` recognises the error string that Node
+    // ACTUALLY produces with the network cut — not the strings I guessed.
+    const degradeSrc = path.join(REPO_ROOT, 'src/lib/channel-degrade.ts');
+    const degradeOut = path.join(dir, 'channel-degrade.mjs');
+    const built = await sh(path.join(REPO_ROOT, 'node_modules/.bin/esbuild'), [
+      degradeSrc, '--format=esm', '--platform=node', `--outfile=${degradeOut}`,
+    ]);
+    if (built.code !== 0) {
+      lane.add('G-degrade-classify', 'FAIL', `could not build channel-degrade.ts: ${built.stderr.slice(0, 200)}`);
+    }
+
     const ollama = await sh('curl', [
       '-s', '-m', '4', '-o', '/dev/null', '-w', '%{http_code}',
       'http://127.0.0.1:11434/api/tags',
@@ -680,6 +694,37 @@ async function laneOffline() {
         ? `egress guard caught all ${attempts} deliberate attempts (${report.controlRoutes?.join(', ')}) — G-no-egress can go red`
         : `guard is blind: ${attempts} deliberate egress attempts, only ${caught} recorded — treat G-no-egress as unproven`,
     );
+
+    // Does the send-time failover actually fire on a REAL offline error? The
+    // unit tests assert against error strings I picked; this asserts against
+    // the string Node produced when a Ministry-shaped cloud call was cut off.
+    // If these ever diverge — a Node version changes `fetch failed`, say — the
+    // failover silently stops working and every principal sees a dead composer
+    // instead of an on-device answer. This is the leg that would notice.
+    if (report.classifierImportError) {
+      lane.add('G-degrade-classify', 'FAIL', `could not load the failover classifier: ${report.classifierImportError}`);
+    } else {
+      // Two independent shapes of real Node failure, because a provider call can
+      // die either way and the classifier must catch both.
+      const legs = [
+        ['connection-refused', report.cloudCallRefused],
+        ['dns-failure', report.cloudCallDns],
+      ];
+      const bad = legs.filter(
+        ([, r]) => !r || r.error === null || r.class !== 'unreachable' || r.wouldDegrade !== true,
+      );
+      const describe = ([name, r]) =>
+        !r || r.error === null
+          ? `${name}: did not fail at all (probe cannot reach a real Node error)`
+          : `${name}: "${String(r.error).slice(0, 70)}" -> ${r.class}, degrade=${r.wouldDegrade}`;
+      lane.add(
+        'G-degrade-classify',
+        bad.length === 0 ? 'PASS' : 'FAIL',
+        bad.length === 0
+          ? `both real Node failure shapes classify as unreachable and would fail over (${legs.map(describe).join('; ')})`
+          : `${bad.length}/2 real Node failure shapes would NOT fail over — the composer would just die. ${bad.map(describe).join('; ')}`,
+      );
+    }
 
     if (!ollamaUp) {
       lane.add(
@@ -757,6 +802,9 @@ const violations = [];
 const LOOPBACK = /^(127\\.\\d+\\.\\d+\\.\\d+|::1|\\[::1\\]|localhost)$/i;
 const isLocal = (h) => !h || LOOPBACK.test(String(h).trim());
 const realFetch = globalThis.fetch;
+// Captured before the patch loop below replaces dns.* — the failover-classification
+// leg needs a route to a GENUINE Node resolver error. See its comment for why.
+const realDnsLookup = dns.promises.lookup.bind(dns.promises);
 
 // Collect every host-ish value anywhere in a connect() argument list.
 function targetsOf(args) {
@@ -867,13 +915,88 @@ if (withModel && results.extractedChars > 80) {
   }
 }
 
+// Snapshot the document-path measurement NOW, before the two blocks below make
+// deliberate egress attempts of their own. G-no-egress reads this snapshot; if
+// it read the running total it would go red because of our own probes.
+results.docPathViolations = [...violations];
+
+// --- send-time failover classification -------------------------------------
+// The failover in src/stores/chat.ts only fires if classifyFailure() recognises
+// the error text. Unit tests can only assert against strings I chose, so they
+// cannot catch "our regexes do not match reality". This leg can — but only if
+// the errors it feeds the classifier are produced by NODE, not by this probe's
+// own egress guard. An earlier version fed it 'BLOCKED: fetch to <host>', which
+// is a string this file invented; that proves nothing at all.
+//
+// So both sub-legs below deliberately route AROUND the guard to reach a genuine
+// Node failure:
+//   * closed loopback port  -> the real 'fetch failed' / ECONNREFUSED shape a
+//     provider produces when nothing is listening (guard permits loopback).
+//   * reserved .invalid TLD -> the real getaddrinfo ENOTFOUND / EAI_AGAIN shape
+//     produced when DNS is gone, via the dns.promises handle captured before the
+//     patch loop above. RFC 2606 guarantees no such host exists, so this emits
+//     one resolver query and carries no payload. It runs after the
+//     docPathViolations snapshot, so G-no-egress is unaffected.
+try {
+  const { classifyFailure, shouldDegradeToOnDevice } = await import('./channel-degrade.mjs');
+  const classify = (raw) => {
+    const message = String(raw && raw.message ? raw.message : raw);
+    // Flatten the cause chain the way a provider SDK's error string does: Node's
+    // fetch reports only 'fetch failed' at the top level and hides the code in
+    // .cause, so a classifier that only ever sees the top level is under-tested.
+    const cause = raw && raw.cause ? String(raw.cause.code ?? raw.cause.message ?? raw.cause) : '';
+    const text = cause ? message + ' (' + cause + ')' : message;
+    return {
+      error: text,
+      class: classifyFailure(text),
+      wouldDegrade: shouldDegradeToOnDevice(text, {
+        activeChannel: 'online',
+        onDeviceAvailable: true,
+        alreadyDegraded: false,
+      }).degrade,
+    };
+  };
+
+  // Sub-leg 1: real Node fetch error, nothing listening. Bind an ephemeral port
+  // and close it before connecting, so the port is guaranteed free and the error
+  // is a genuine ECONNREFUSED. A hardcoded port risks either a false pass (Node
+  // rejects some low ports as 'bad port' without ever connecting) or a false
+  // fail (something happens to be listening on it).
+  const deadPort = await new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+  try {
+    await realFetch('http://127.0.0.1:' + deadPort + '/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'gpt-4o', messages: [] }),
+    });
+    results.cloudCallRefused = { error: null, class: 'NO-ERROR', wouldDegrade: false };
+  } catch (err) {
+    results.cloudCallRefused = classify(err);
+  }
+
+  // Sub-leg 2: real Node DNS error.
+  try {
+    await realDnsLookup('moe-apim-does-not-exist-clawx.invalid');
+    results.cloudCallDns = { error: null, class: 'NO-ERROR', wouldDegrade: false };
+  } catch (err) {
+    results.cloudCallDns = classify(err);
+  }
+} catch (err) {
+  results.classifierImportError = String(err && err.message ? err.message : err);
+}
+
 // --- negative control ------------------------------------------------------
 // Run LAST, after the real measurement, so it cannot contaminate it. Makes six
 // deliberate egress attempts across every route the app could plausibly use. If
 // the guard fails to record all six, then the zero-violation result above is
 // meaningless and the lane must go red. A guard that cannot go red proves
 // nothing when it passes.
-results.docPathViolations = [...violations];
 const before = violations.length;
 const routes = [];
 const attempt = async (name, fn) => { try { await fn(); } catch {} routes.push(name); };
