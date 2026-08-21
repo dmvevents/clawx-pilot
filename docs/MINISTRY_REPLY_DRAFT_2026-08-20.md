@@ -28,11 +28,19 @@ sets out how we keep that true.
 | 2 | Submit developer IPs for DB whitelisting | Will send on confirmation. Needs a short exchange on which IPs. |
 | 3 | Credentials into secret manager, no plaintext | Accepted. Link still unopened, so nothing to scrub yet. |
 | 4 | Run the Section 4 Python smoke test | Ready to run as soon as credentials land. |
-| 5 | `UserId` header on all authenticated requests | Accepted, and the app server is the right place to enforce it. |
+| 5 | `UserId` header on all authenticated requests | Accepted, stamped server-side from the authenticated session. One question on `oid` vs UPN — Section 4.2. |
 
 We accept Section 2.2 as written: the database firewall stays closed, end-user
 laptops never touch PostgreSQL, all traffic goes through the whitelisted app
-server. We are not asking for a broader firewall opening.
+server. We are not asking for a broader firewall opening. We also accept Section
+2.1 (no SSL on the internal path), Section 2.3 (no Redis), Section 5.2 (read-only
+delegated scopes) and Section 5.3 (`Contacts.Read` declined) as written.
+
+**Three things we're raising that weren't on your list**, all in Section 4: the
+token budget is tighter than it appears at rollout scale and most of that is our
+overhead to fix; the single shared subscription key has a fleet-wide failure mode
+worth a backstop; and we'd like to settle the migration mechanism before it blocks
+a release.
 
 ---
 
@@ -205,18 +213,114 @@ Ansari's reasoning in 5.3 is correct, and the prompt-injection path he describes
 is the realistic one precisely because reading untrusted inbound mail is the
 assistant's core function. Declining it is the right call.
 
-## 4. Token budget and metrics
+## 4. Token budget: comfortable for the pilot, and we owe you the rollout number
 
-100M tokens/month is comfortable for pilot scale, so no concern about the
-allocation itself. One practical note on Section 3.2: the gateway returns
-per-request `consumed-tokens` but no remaining-budget figure, so neither side
-sees the month's trajectory until a 429 arrives — which would surface as a
-principal's assistant going silent mid-day. Two mitigations, both cheap:
+100M tokens/month is fine for pilot scale. But we measured what a turn actually
+costs us before answering, and the honest picture for a full rollout is worth
+putting in front of you now rather than at go-live.
 
-- We'll log every per-request header in the app server and track our own running
-  total (easy now that requests funnel through one place).
-- If Application Insights can surface monthly consumption to us, even weekly,
-  we'd catch a runaway well before it becomes a hard stop.
+A single cloud turn currently costs us roughly **10,650 tokens** — and about
+**71% of that is fixed overhead** we resend on every turn (the assistant's tool
+definitions and instructions), before the principal has typed anything. A typical
+task like "summarise my last five emails" runs three turns, so ~38,000 tokens.
+
+That means 100M/month buys about **2,600 cloud tasks for the entire fleet** —
+roughly 0.6 tasks per principal per day at 200 schools. At meaningful cloud usage
+across 200 schools the requirement is closer to **1.5–2B tokens/month**.
+
+**We are not asking for an increase yet, because the first fix is ours.** That
+71% overhead is our design, not your limit, and we have work in progress to cut
+it (trimming the per-turn tool catalog), which alone buys roughly 78% more
+capacity for no change in what the assistant can do. The assistant also defaults
+to its on-device model, which costs you nothing — the budget math is one more
+reason that default is right.
+
+What would help from your side:
+
+- **Is prompt caching available on the Foundry deployment behind APIM, and are
+  cached prefix tokens billed against the 100M?** Our fixed overhead is identical
+  on every request from every user, which is exactly what caching is for. This is
+  potentially the single highest-leverage answer available, and free if it exists.
+- **Agreement to review the allocation against measured pilot telemetry**, which
+  Section 3.2 already anticipates. We'll supply real numbers rather than estimates.
+
+## 4.1 One risk in Section 3.2 + 3.1 worth naming: a shared bucket with no gauge
+
+The subscription key is a single credential against a single monthly budget, and
+the gateway returns per-request `consumed-tokens` but no remaining figure. Taken
+together, one principal bulk-processing a mailbox could consume a large share of
+the fleet's month, and **the first symptom would be every principal's assistant
+returning 429 at once, with no warning beforehand.**
+
+We'd like to prevent that on our side, and the app server is the right place:
+
+- **Per-user token accounting**, keyed on the same identity as the `UserId`
+  header, summing the per-request headers you already return.
+- **Per-user soft caps with a fleet reserve**, so one heavy user cannot starve the
+  other 199. A principal hitting their own cap degrades to the on-device model
+  rather than getting an error.
+- **Our own running fleet total** — the gauge Section 3.2 doesn't provide. This
+  turns "429 on an unknown date" into a forecast we can act on.
+- **Graceful 429 handling**: on a fleet-level 429, clients fall back to on-device
+  rather than failing.
+
+Flagging it rather than just building it, since it means the app server is
+enforcing policy on your behalf and you should agree with that. If you'd rather
+the cap live at APIM, that works too — we just don't want the only backstop to be
+a fleet-wide outage.
+
+If Application Insights can also surface monthly consumption to us, even weekly,
+that's a useful independent check on our own accounting.
+
+## 4.2 On the `UserId` header (Section 3.3) — accepted, with one question
+
+Agreed, and the app server is the right place to enforce it: it will stamp
+`UserId` **from the authenticated session rather than from anything the client
+sends**, so the Application Insights attribution is trustworthy rather than
+dependent on each laptop being honest. It's also the key our per-user caps above
+need, so we want it as much as you do.
+
+One question: **should `UserId` be the Entra object ID (`oid`) or the UPN?** We'd
+suggest `oid` — it's opaque rather than PII-shaped, and it survives a name or
+email change, which UPN doesn't. Your document says "identifier of the signed-in
+user" without specifying, and it's much easier to agree now than to re-key metrics
+later.
+
+Being straight about sequencing: the assistant today identifies the principal
+implicitly, by riding whichever account is signed into their Chrome session. That
+works well for Outlook and is the only approach Conditional Access permits, but it
+means the app never learns the user's identity in a form it can put in a header.
+So `UserId` arrives with the interactive Entra sign-in described in Section 2 —
+they're the same piece of work, not two.
+
+## 4.3 One item we'd like to settle early: migrations (Section 2.1)
+
+Section 2.1 notes no admin or migration credential is issued, and to request
+elevated privileges through the infrastructure owner if schema migrations need
+them. **They will** — the data layer needs schema creation on day one and
+migrations on most releases afterwards.
+
+We'd rather agree the mechanism now than discover it during a deployment. Either
+works for us:
+
+- a migration credential used only by a gated migration job, not by the running
+  app; or
+- we submit reviewed migration SQL and your team applies it.
+
+The second is more conservative and we're happy with it; it just needs a turnaround
+expectation attached so releases don't stall.
+
+## 4.4 Connection management (Section 2.3) — agreed, one consequence
+
+No Redis is the right call at this scale and we're not asking for it. One
+consequence worth flagging: it removes the obvious home for the per-user token
+counters above, so **we plan to keep them in PostgreSQL**. At 200 principals the
+write volume is negligible, and it keeps everything in one durable store.
+
+Related, so it stays true if you later enable PgBouncer as Section 2.3
+anticipates: **our data layer will avoid session-level features** (server-side
+prepared statements, session `SET`, advisory locks) so transaction-mode pooling
+stays available to you. Cheap to honour now, awkward to retrofit.
 
 ## 5. On the credential link
 
@@ -246,7 +350,19 @@ possible since Sections 2 and 5 are his:
    the spot. Worth covering refresh token lifetimes here too (Section 1.2).
 4. **Developer IPs** for the DB whitelist, and how the container receives its
    secrets.
-5. Application Insights monthly-consumption visibility.
+5. **Prompt caching behind APIM** — available, and billed against the 100M? This
+   is the cheapest possible win on the budget math in Section 4.
+6. **Per-user caps enforced by the app server** — agree the approach, or would you
+   rather it sat at APIM? Either way we want a backstop that isn't a fleet-wide
+   429.
+7. **`UserId` = `oid` or UPN** (Section 4.2), and the **migration mechanism**
+   (Section 4.3). Both are small decisions that block larger work.
+8. Application Insights monthly-consumption visibility.
+
+On fleet size: our arithmetic assumes ~200 primary schools because that's what our
+existing costing uses. **If the intended rollout curve is different, tell us — the
+budget is comfortable for a small pilot and tight for a full rollout, so the
+expected number changes what we prioritise.**
 
 We'll have the Docker image ready to hand over once item 1 is settled.
 
@@ -293,6 +409,44 @@ We'll have the Docker image ready to hand over once item 1 is settled.
     paragraph in 1.1 is the one to soften — but the idempotency-key ask on the
     Ministry side is worth keeping either way, since it's much cheaper to design
     in now than to retrofit.
+- **The token budget is tighter than it looks, and that's on us.** Full working in
+  `docs/SCALE_ANALYSIS_2026-08-20.md`. Measured from our own code: 31 tool
+  definitions (~3,594 tok) + their schemas (~1,918) + persona (~1,880) = a
+  **~7,550-token floor resent on every single turn**, which is ~71% of a typical
+  10,650-token turn. So 100M/month is ~2,600 cloud tasks for the whole fleet, or
+  0.6 tasks per principal per day at 200 schools. Only ~6% of tasks can go to the
+  cloud at that scale.
+  - I deliberately did **not** open the reply with a request for more tokens.
+    Asking for a 16x increase to fund a 71%-overhead design wouldn't survive
+    scrutiny, and it would spend goodwill on the wrong thing. The draft shows the
+    measurement, commits us to fixing our side first, and gives them the ~1.5–2B
+    rollout figure as a forecast.
+  - **This puts `fix/tool-catalog-trim` (`7add864b`) on the critical path for
+    scale.** It's under HOLD awaiting a reviewer pass, and I haven't touched it —
+    flagging that the HOLD is now blocking scale work rather than routing around
+    it. Trimming the floor to ~2,000 buys ~78% more capacity with no product
+    change. Your call on whether to unblock the review.
+  - **Prompt caching is the free win if it exists** — our fixed prefix is identical
+    across every turn and every user. Worth pushing on in the call.
+- **The shared-bucket risk is the one I'd most want fixed before rollout.** One key,
+  one budget, no remaining-budget figure returned. One principal bulk-processing
+  could burn a large share of the fleet's month, and the first symptom is *every*
+  principal getting 429 simultaneously. There is no cap anywhere today — the only
+  hit in the tree is an unused `RATE_LIMITED` enum in `gateway/protocol.ts:77`, and
+  `model-broker/server.mjs` authenticates but does no accounting at all. Note the
+  429 mitigation and the offline fallback from `OFFLINE_ARCHITECTURE.md` §3.1 are
+  **the same fix**, which is why I'd rank it first overall.
+- **`UserId` is not a one-liner.** The app has no signed-in-user identity today —
+  the only `userPrincipalName` in the tree is the stub `'principal@school.example'`
+  at `microsoft-graph/manager.ts:257`, and the real Outlook path identifies the
+  principal only implicitly via their Chrome session. So C3 arrives with Entra
+  sign-in, and **per-user caps can't exist before identity does.** That dependency
+  chain is why sign-in is a scale blocker, not just a feature.
+- **Delegated-only Graph means no overnight fleet processing.** Every Graph call
+  needs a signed-in user context; there's no service-principal path to "classify
+  all 200 mailboxes overnight." I think we accept that rather than design around
+  it, but it's a real constraint on anything cron-shaped and worth you knowing
+  before someone promises it in a demo.
 - **The hostname question is the real blocker**, not the credentials. Principals
   are in schools across seven districts on networks the Ministry doesn't control,
   so an iGovTT-only app server would mean the assistant only works on Ministry
