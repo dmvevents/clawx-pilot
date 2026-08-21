@@ -82,8 +82,12 @@ The assistant runs an on-device model as its **default**, and the toggle between
 is not a fallback we are proposing; it is how the product works today. What
 matters for this design is that adding an app server must not quietly undo it.
 
-**Works with no connectivity at all** (verified in the current build, not
-aspirational):
+**Works with no connectivity at all.** This is tested, not asserted — we added
+an automated check that runs the document path in a process with the network
+deliberately blocked at the socket and DNS level, so a pass means it provably did
+not reach out rather than merely happening not to. On-device inference answered a
+question grounded in a local Word file in under three seconds with the network
+cut. Details in `docs/OFFLINE_ARCHITECTURE.md`.
 
 - Chat with the on-device model — this is the default channel
 - Reading, summarising and drafting from local Word, Excel, PowerPoint and PDF
@@ -95,19 +99,35 @@ aspirational):
 
 **Needs connectivity, and degrades honestly when it is absent:**
 
-- Cloud model turns through APIM, for the harder or vision-heavy requests. With
-  no connection the assistant stays on the on-device model rather than failing
+- Cloud model turns through APIM, for the harder or vision-heavy requests
 - Fetching new email and calendar data through Graph
 - Form submission to Ministry systems
 - Writing the audit trail and preferences to PostgreSQL
+
+Two things in that second list are ours to fix rather than inherent limits, and
+we'd rather name them than let them surface in the field:
+
+- **A cloud turn during an outage currently fails instead of falling back to the
+  on-device model.** The on-device model is the default and works offline, but if
+  a principal has switched to "Online" the app keeps trying the cloud route. We're
+  making channel selection connectivity-aware so that turn completes on-device
+  instead of going silent.
+- **Anything that needs to reach the Ministry offline needs a local queue**, so it
+  is held and sent when the link returns rather than lost. That queue is new work
+  for us, alongside the data layer itself.
 
 **The design rule we'll hold to: PostgreSQL is where records are *durably kept*,
 not where the application *reads to function*.** The laptop keeps working from
 local state and reconciles when the connection returns. Anything a principal does
 offline that needs to reach the Ministry — a form submission, an audit record —
 is queued locally and sent when connectivity is back, rather than lost or
-blocking. Being honest about scope: that store-and-forward queue does not exist
-in the app yet and is new work for us, alongside the data layer itself.
+blocking.
+
+**One requirement this places on the Ministry side:** the app server needs to
+tolerate replayed and out-of-order writes, because a laptop that has been offline
+will send records late and may retry one it never saw acknowledged. In practice
+that means accepting a client-generated idempotency key per record and deduping
+on it. Cheap to design in now; awkward to retrofit once there is data.
 
 The practical consequence for the Ministry: **the app server being briefly
 unreachable is a degraded experience, not an outage.** That is worth designing
@@ -218,7 +238,10 @@ possible since Sections 2 and 5 are his:
    iGovTT-only? Everything else keys off this.
 2. **Confirm the offline posture in Section 1.1 is acceptable to the Ministry** —
    specifically that the laptop keeps working from local state and reconciles
-   later, rather than requiring a live connection to function.
+   later, rather than requiring a live connection to function. The one thing we
+   need agreed on their side is that the app server accepts **replayed and
+   out-of-order writes with a client-supplied idempotency key**, since a laptop
+   returning from an outage will send records late and may retry.
 3. **Confirm the backend-for-frontend approach**, then the redirect URI closes on
    the spot. Worth covering refresh token lifetimes here too (Section 1.2).
 4. **Developer IPs** for the DB whitelist, and how the container receives its
@@ -242,17 +265,34 @@ We'll have the Docker image ready to hand over once item 1 is settled.
   (no `pg` client in `package.json` yet), plus routing ClawX inference through
   the broker instead of calling providers directly. The container and its auth
   and model allow-listing already exist and pass tests.
-- **The offline story is the biggest piece of new work, and I want to be straight
-  that part of it is a promise rather than a description.** What I verified in the
-  current build: on-device is already the default channel, the Online / On this
-  device toggle is shipped, and `doc-tools.mjs` is pure `node:fs` with zero
-  network calls — so local document work genuinely runs offline today. What does
-  **not** exist: any outbox, queue, retry or sync concept anywhere in the tree
-  (I grepped `electron`, `extensions` and `src` for all of them — nothing). So
-  "queued locally and sent when connectivity returns" is a commitment we'd be
-  making, not a capability we have. It's the right design and Section 1.1 flags it
-  as new work, but if you'd rather not commit to store-and-forward before we've
-  scoped it, that paragraph is the one to soften.
+- **The offline story is now half tested and half promised, and the draft says
+  which is which.** Full analysis in `docs/OFFLINE_ARCHITECTURE.md`.
+  - **Tested:** `eval` lane G runs the document path in a child process with
+    egress blocked at the fetch, socket and DNS level, and fails on any attempt.
+    On-device inference answered a question grounded in a local `.docx` in
+    0.5–2.6s with the network cut. So "works offline" is a measured property now.
+  - **Worth knowing about that test:** my first version of it was green and
+    worthless — it caught none of the raw socket connections, because
+    `net.connect()` packs its arguments into an array and the guard was reading
+    the wrong field. Zero violations looks identical whether the guard is perfect
+    or inert. It now makes six deliberate egress attempts and fails if it can't
+    catch all six; I mutation-tested that by reintroducing the bug, and the lane
+    goes red. Flagging it because it's the same trap as the tool-selection lanes.
+  - **Not built, and I found one of these by checking rather than assuming:**
+    (a) there is **no send-time cloud→on-device fallback** — `preferredChannel` is
+    sticky, and the launch-time fallback in `channel-router.ts` keys off whether an
+    *account* is configured, never reachability. So a principal switched to
+    "Online" on a dead link gets silence, not degradation. (b) No outbox, queue,
+    retry or sync exists anywhere in `electron`, `extensions`, `src` or `services`,
+    and there's no `pg` client. Both are named in the reply as our work.
+  - **My recommendation on sequencing:** the fallback fix before the outbox. It's
+    smaller, it removes a silent-failure mode principals would actually hit during
+    the pilot, and it needs nothing from the Ministry. The outbox can't be tested
+    against anything real until the app server's write API exists.
+  - If you'd rather not commit to store-and-forward before we've scoped it, the
+    paragraph in 1.1 is the one to soften — but the idempotency-key ask on the
+    Ministry side is worth keeping either way, since it's much cheaper to design
+    in now than to retrofit.
 - **The hostname question is the real blocker**, not the credentials. Principals
   are in schools across seven districts on networks the Ministry doesn't control,
   so an iGovTT-only app server would mean the assistant only works on Ministry
