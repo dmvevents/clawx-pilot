@@ -20,10 +20,15 @@ only when the user has said, in this conversation, to send it. Then:
 1. **Draft first.** The note lives as a file under
    `~/openclaw-agent/outbound-drafts/` (e.g. the "more time + reissue link" note).
    Show the exact text you will send and the recipient.
-2. **Confirm the recipient.** Raj = `18684743280` → JID
-   `18684743280@s.whatsapp.net`. Verify the thread resolves to `raj ramdass`
-   (see health check) before sending. Wrong-number sends to a Ministry official
-   are real harm.
+2. **Confirm the recipient.** Raj's number is **not stored in this repo** (it is
+   PII and this repo may be public — see CLWX-18). Load it locally from the
+   off-repo monitor config, which never leaves the machine:
+   ```bash
+   LIAISON="$(grep -oE '[0-9]{10,}@s\.whatsapp\.net' ~/openclaw-agent/raj-kiran-monitor.sh | head -1)"
+   # masked, it ends in ...3280; export LIAISON so the commands below resolve it
+   ```
+   Verify the thread resolves to `raj ramdass` (see health check) before sending.
+   Wrong-number sends to a Ministry official are real harm.
 3. **Send** via the bridge (below).
 4. **Verify honestly.** A `HTTP 200 {"success":true}` plus the message body in
    `bridge.log` is the proof of transmission. The bridge's `messages.db` only
@@ -36,10 +41,11 @@ only when the user has said, in this conversation, to send it. Then:
 launchctl list | grep com.anton.whatsapp-bridge          # status 0 + PID = running
 curl -s -X POST http://localhost:8080/api/send | head -1 # API alive (rejects empty body)
 DB=~/Github/whatsapp-mcp/whatsapp-bridge/store/messages.db
-sqlite3 -readonly "$DB" "SELECT jid,name FROM chats WHERE jid LIKE '18684743280%';"  # -> raj ramdass
+NUM="${LIAISON%@*}"                                        # digits only, from the off-repo config above
+sqlite3 -readonly "$DB" "SELECT jid,name FROM chats WHERE jid LIKE '${NUM}%';"  # -> raj ramdass
 sqlite3 -readonly -separator ' | ' "$DB" \
   "SELECT substr(timestamp,1,16),CASE is_from_me WHEN 1 THEN 'ME' ELSE 'RAJ' END,substr(content,1,60) \
-   FROM messages WHERE chat_jid LIKE '18684743280%' ORDER BY timestamp DESC LIMIT 6;"  # thread context
+   FROM messages WHERE chat_jid LIKE '${NUM}%' ORDER BY timestamp DESC LIMIT 6;"  # thread context
 ```
 
 If the bridge is logged out (`bridge.log` shows `logged out`/401), re-pair:
@@ -52,12 +58,17 @@ for the full recovery matrix.
 Build the JSON with a real JSON encoder (never hand-concatenate — newlines and
 quotes in the body will break a naive string):
 
+The recipient comes from the `$LIAISON` shell var loaded above (off-repo), passed
+into Python via the environment — never hard-coded here:
+
 ```bash
+export LIAISON  # the JID resolved from ~/openclaw-agent/raj-kiran-monitor.sh (see step 2)
 python3 - <<'PY'
-import json, urllib.request
-msg = open('/Users/antonalexander/openclaw-agent/outbound-drafts/2026-09-01-raj-more-time-reissue-link-DRAFT.md').read()  # or paste the approved text
+import json, os, urllib.request
+recipient = os.environ["LIAISON"].split("@")[0]  # digits only; not stored in the repo
+msg = open(os.path.expanduser('~/openclaw-agent/outbound-drafts/2026-09-01-raj-more-time-reissue-link-DRAFT.md')).read()  # or paste the approved text
 # ... strip the markdown header; send only the note body ...
-payload = json.dumps({"recipient": "18684743280", "message": msg}).encode()
+payload = json.dumps({"recipient": recipient, "message": msg}).encode()
 req = urllib.request.Request("http://localhost:8080/api/send", data=payload,
                              headers={"Content-Type": "application/json"}, method="POST")
 with urllib.request.urlopen(req, timeout=30) as r:
@@ -66,7 +77,7 @@ PY
 ```
 
 Then confirm transmission: `tail -20 ~/Github/whatsapp-mcp/whatsapp-bridge/bridge.log`
-should show the body ending in `Message sent true Message sent to 18684743280`.
+should show the body ending in `Message sent true Message sent to …3280`.
 
 ## Hard rules (enforced by the whatsapp-send-guard hook)
 

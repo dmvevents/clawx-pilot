@@ -30,12 +30,12 @@ They use the local bridge that already runs on this Mac:
   WhatsApp Web via `whatsmeow`, exposes a REST send API on
   `http://localhost:8080/api/send`, and stores **inbound** messages in
   `~/Github/whatsapp-mcp/whatsapp-bridge/store/messages.db`.
-- **Recipient** Raj = `18684743280` → `18684743280@s.whatsapp.net` (thread name
+- **Recipient** Raj = `868…3280` → `868…3280@s.whatsapp.net` (thread name
   `raj ramdass`).
 
 Because the bridge only persists inbound messages, a successful outbound send is
 proven by the **HTTP 200 `{"success":true}` response** and the message body
-appearing in `bridge.log` (`Message sent true Message sent to 18684743280`) — not
+appearing in `bridge.log` (`Message sent true Message sent to 868…3280`) — not
 by a new row in `messages.db`. Reporting must reflect that; never infer "sent"
 from the DB.
 
