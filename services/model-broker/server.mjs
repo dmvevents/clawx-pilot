@@ -3,6 +3,13 @@ import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 
+import {
+  createUsageMeter,
+  parseConsumedTokens,
+  perUserCapsEnabled,
+  usageMeterConfigFromEnv,
+} from './usage-meter.mjs';
+
 const DEFAULT_TIMEOUT_MS = 120_000;
 const BROKER_OWNER = 'clawx-model-broker';
 const GOOGLE_ADC_AUTH = 'google-adc';
@@ -52,6 +59,9 @@ export function buildConfig(env = process.env) {
     modelMap: parseModelMap(env.MODEL_BROKER_MODEL_MAP),
     defaultModel: String(env.MODEL_BROKER_DEFAULT_MODEL || '').trim(),
     timeoutMs: Number.parseInt(String(env.MODEL_BROKER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS), 10) || DEFAULT_TIMEOUT_MS,
+    // KR6 per-user caps — behind CLAWX_PER_USER_CAPS, default off.
+    perUserCaps: perUserCapsEnabled(env),
+    usage: usageMeterConfigFromEnv(env),
   };
 }
 
@@ -94,6 +104,17 @@ function getBearer(req) {
 function isAuthorized(req, config) {
   const bearer = getBearer(req);
   return Boolean(bearer && config.clientKeys.includes(bearer));
+}
+
+// Metering identity: the `UserId` header the Ministry APIM lane already
+// requires on authenticated requests (docs/SCALE_ANALYSIS_2026-08-20.md §3.3).
+// Per-principal identity does not exist yet (KR7), so absent/blank collapses
+// to 'anonymous'. Never key on the bearer client key — it is a secret and the
+// usage state file is plain JSON.
+function meterUserId(req) {
+  const raw = req.headers.userid;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return String(value || '').trim() || 'anonymous';
 }
 
 function upstreamUrl(config, path) {
@@ -196,7 +217,7 @@ function createUpstreamAuthHeaderResolver(config) {
   };
 }
 
-async function proxyModelRequest(req, res, path, config, resolveUpstreamAuthHeaders) {
+async function proxyModelRequest(req, res, path, config, resolveUpstreamAuthHeaders, usage = null) {
   const body = await readJsonBody(req);
   const resolved = resolveModel(body, config);
   if (resolved.error) {
@@ -223,6 +244,12 @@ async function proxyModelRequest(req, res, path, config, resolveUpstreamAuthHead
       body: JSON.stringify(upstreamBody),
       signal: controller.signal,
     });
+    if (usage && upstreamResponse.ok) {
+      // The APIM lane reports each request's cost in `consumed-tokens`;
+      // absent/garbage header records 0 (token counts only, never content).
+      const consumed = parseConsumedTokens(upstreamResponse.headers);
+      usage.meter.recordUsage(usage.userId, consumed.tokens, new Date());
+    }
     await pipeFetchResponse(upstreamResponse, res);
   } finally {
     clearTimeout(timeout);
@@ -232,6 +259,9 @@ async function proxyModelRequest(req, res, path, config, resolveUpstreamAuthHead
 export function createBrokerServer(config = buildConfig()) {
   const configErrors = validateConfig(config);
   const resolveUpstreamAuthHeaders = createUpstreamAuthHeaderResolver(config);
+  // KR6: meter exists only when the flag is on; with the flag off the request
+  // path below is byte-for-byte the pre-caps behavior.
+  const usageMeter = config.perUserCaps ? createUsageMeter(config.usage) : null;
 
   return createServer(async (req, res) => {
     try {
@@ -270,6 +300,27 @@ export function createBrokerServer(config = buildConfig()) {
       }
 
       if (req.method === 'POST' && (url.pathname === '/v1/chat/completions' || url.pathname === '/v1/responses')) {
+        if (usageMeter) {
+          const userId = meterUserId(req);
+          const verdict = usageMeter.checkCap(userId, new Date());
+          if (!verdict.allowed) {
+            // Structured 429 — the client's degrade classifier (KR4) treats
+            // this as degrade-to-on-device. No model identity in the message.
+            sendJson(res, 429, {
+              reason: verdict.reason,
+              error: {
+                code: 'USAGE_CAP',
+                message: 'Online usage limit reached for now; continuing on this device.',
+              },
+            });
+            return;
+          }
+          await proxyModelRequest(req, res, url.pathname, config, resolveUpstreamAuthHeaders, {
+            meter: usageMeter,
+            userId,
+          });
+          return;
+        }
         await proxyModelRequest(req, res, url.pathname, config, resolveUpstreamAuthHeaders);
         return;
       }
