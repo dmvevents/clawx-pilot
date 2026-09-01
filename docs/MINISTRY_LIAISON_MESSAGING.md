@@ -79,7 +79,7 @@ Override the ledger path with `CLAWX_WA_SEND_LEDGER` if needed.
 H=.claude/hooks/whatsapp-send-guard.sh
 echo '{"tool_input":{"command":"ls"}}' | $H; echo "allow non-send exit=$?"           # 0
 echo '{"tool_input":{"command":"curl .../api/send -d {\"message\":\"hi\"}"}}' | $H   # 0 + ledger
-echo '{"tool_input":{"command":"curl .../api/send -d {\"message\":\"pwd: Education@2000\"}"}}' | $H  # exit 2
+echo '{"tool_input":{"command":"curl .../api/send -d {\"message\":\"client_secret: abc123\"}"}}' | $H  # exit 2
 ```
 
 ## What was sent (record)
