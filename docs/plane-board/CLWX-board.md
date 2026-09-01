@@ -76,8 +76,9 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Backlog  |  **Priority:** urgent
 
-**Comments (1):**
+**Comments (2):**
 
+- 
 - 
 
 ### CLWX-19 — Rotate the sk-clawx API key shared in WhatsApp (2026-06-05)
@@ -108,6 +109,14 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - 
 - 
+
+### CLWX-33 — [CLWX-9] Install gcloud SDK to unblock the Windows IAP lane (B2)
+
+- **State:** Backlog  |  **Priority:** high
+
+### CLWX-34 — [CLWX-bug] Verify/triage Raj's 2026-06-21 email defects
+
+- **State:** Backlog  |  **Priority:** medium
 
 ## Unstarted
 
@@ -147,8 +156,9 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Todo  |  **Priority:** none
 
-**Comments (3):**
+**Comments (4):**
 
+- 
 - 
 - 
 - 
@@ -157,14 +167,19 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Ready  |  **Priority:** low
 
+**Comments (1):**
+
+- 
+
 ## Started
 
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA
 
 - **State:** In Progress  |  **Priority:** none
 
-**Comments (3):**
+**Comments (4):**
 
+- 
 - 
 - 
 - 

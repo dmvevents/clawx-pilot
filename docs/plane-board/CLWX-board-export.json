@@ -44,6 +44,26 @@
   ],
   "issues": [
     {
+      "id": "9eb84512-fe5d-4d62-8802-99db80466c8b",
+      "sequence_id": 34,
+      "name": "[CLWX-bug] Verify/triage Raj's 2026-06-21 email defects",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "6e5f63a3-753b-4460-a027-6f7b6e12f29d",
+      "sequence_id": 33,
+      "name": "[CLWX-9] Install gcloud SDK to unblock the Windows IAP lane (B2)",
+      "priority": "high",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
       "id": "df18bbee-7fd5-47fd-a929-46f4000889a1",
       "sequence_id": 32,
       "name": "Chain-of-custody baseline for liaison archive (raj/karunesh threads + attachments)",
@@ -51,7 +71,12 @@
       "state": "Ready",
       "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "",
-      "comments": []
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-09-01T10:10:00.159070Z"
+        }
+      ]
     },
     {
       "id": "576aa218-15c8-4ba0-a1c4-32c13e644b1e",
@@ -62,6 +87,10 @@
       "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "",
       "comments": [
+        {
+          "text": "",
+          "created": "2026-09-01T10:10:00.089313Z"
+        },
         {
           "text": "",
           "created": "2026-09-01T09:56:18.045875Z"
@@ -215,6 +244,10 @@
       "comments": [
         {
           "text": "",
+          "created": "2026-09-01T10:10:00.229617Z"
+        },
+        {
+          "text": "",
           "created": "2026-09-01T09:38:26.762049Z"
         },
         {
@@ -266,6 +299,10 @@
       "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
       "description": "",
       "comments": [
+        {
+          "text": "",
+          "created": "2026-09-01T10:10:00.017694Z"
+        },
         {
           "text": "",
           "created": "2026-09-01T09:56:17.964190Z"
