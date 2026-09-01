@@ -33,6 +33,7 @@ modules/cycles.
 
 | Page | What it holds | Freshness |
 |---|---|---|
+| [`GA_READINESS.md`](./GA_READINESS.md) | **The GO/NO-GO document**: chronological gap ledger, test evidence, GA gate checklist, critical path | 2026-09-01 |
 | [`REPO_AND_RELEASE_MAP.md`](./REPO_AND_RELEASE_MAP.md) | Every repo we use, visibility, role, and the release/distribution + security plan | 2026-09-01 |
 | [`EXTRACTION_PLAYBOOK.md`](./EXTRACTION_PLAYBOOK.md) | How to turn session JSONL / threads into wiki+board content with LLM prompts + meta-prompts | 2026-09-01 |
 | [`LIAISON_LOG.md`](./LIAISON_LOG.md) | Chronological Raj (ClawX) + Karunesh (video) record, open asks, defects, Ministry-docs inventory | (generated) |
