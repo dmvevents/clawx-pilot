@@ -100,8 +100,9 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Backlog  |  **Priority:** none
 
-**Comments (1):**
+**Comments (2):**
 
+- 
 - 
 
 ## Unstarted
@@ -142,9 +143,14 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Todo  |  **Priority:** none
 
-**Comments (1):**
+**Comments (2):**
 
 - 
+- 
+
+### CLWX-32 — Chain-of-custody baseline for liaison archive (raj/karunesh threads + attachments)
+
+- **State:** Ready  |  **Priority:** low
 
 ## Started
 
@@ -152,16 +158,19 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** In Progress  |  **Priority:** none
 
-**Comments (1):**
+**Comments (3):**
 
+- 
+- 
 - 
 
 ### CLWX-23 — [CLWX-0] Timeline — ClawX GA work history (chronological spine)
 
 - **State:** In Progress  |  **Priority:** none
 
-**Comments (1):**
+**Comments (2):**
 
+- 
 - 
 
 ### CLWX-24 — [CLWX-1] Verify doc-tooling steering in a live in-app LLM run (Raj's 5 prompts + discovery)
