@@ -69,6 +69,26 @@ owner action; everything off that chain is parallelizable *now*.
 zero-dependency and directly move KR1/KR2 to Ready), land KR5 in Lane B, and put
 the owner decision for Lane C in front of the user.
 
+**Lane C detail (deep-dive 2026-09-01).** The unlock is the 459-line reply
+`docs/MINISTRY_REPLY_DRAFT_2026-08-20.md`, which already resolves the four
+conflicts from the Aug-18 handoff packet:
+
+| # | Handoff conflict | Reply resolution | Residual |
+|---|---|---|---|
+| 1 | Read-only Graph scopes vs our design | Accepted as granted (§3) | none |
+| 2 | Client secret vs PKCE | App-server (Docker) holds the secret server-side (§2) | needs the app-server decision confirmed |
+| 3 | Redirect URI not issued | Explicitly requested for the session | **B4 — owed by Raj; gates KR7** |
+| 4 | App-server/Docker vs desktop | Addressed (§1); offline (§1.1) + offline sign-in (§1.2) named as consequences | none |
+
+The token/identity chain is strict: **send reply → real APIM hostname + Entra
+values (incl. redirect URI) → KR7 stable per-principal `UserId` → KR6 per-user
+caps.** §4 owns the rollout math (100M tok/mo is fine for the pilot but ~71% of
+every turn is our fixed 7,550-tok floor, so a shared key 429s fleet-wide at ~20
+schools — §4.1). All 20 handoff values are still placeholders, so KR6/KR7 can
+only be built behind a flag until the hostname lands. §5 declines to carry the
+expired moevault credential link and asks Raj to reissue — consistent with the
+send-guard hook.
+
 ---
 
 ## 2. Bug-reporting process
@@ -162,13 +182,25 @@ the `test-lane-prober` sub-agent exists to catch this before we report a stall.
 
 ## 5. Standing security items (not KRs, but block a safe GA)
 
-- **CLWX-18** — `dmvevents/clawx-pilot` is **public** (`gh repo view` →
-  `isPrivate:false`). Recommend making it private; confirm before flipping a
-  shared org repo. The liaison phone number has been redacted from the working
-  tree (commit a1ff2cc7); two prior *unpushed* commits still carry it in history —
-  scrub before any push.
-- **CLWX-19** — the `sk-clawx` key was shared over WhatsApp and is un-rotated.
-  Rotate it; it should never have left a secure channel.
+Investigated 2026-09-01 — the picture is worse than "the repo is public":
+
+- **CLWX-18** — `dmvevents/clawx-pilot` is **public and hosts the full source
+  tree** (901 files, 13 branches: `electron/`, `docs/`, `extensions/`,
+  `CLAUDE.md`), despite its own description saying "source lives in a private
+  repo; this repo distributes signed releases only." The dev workflow
+  ("push to `pilot/main`") has been publishing source to a public repo.
+  - **A live credential is already public:** the test password `Education@2000`
+    is in **3 public files** — `scripts/v2-signin.ts`,
+    `scripts/forms-relogin-helper.ts`, `CLAUDE.md`. Violates the hard rule.
+  - **The liaison phone number never leaked** — redacted before any push
+    (commits `a1ff2cc7`, `2a0f55c8`); the two files carrying it are absent on
+    public. This session pushes nothing.
+  - **Recommended (owner-gated):** (1) rotate the test.fac password now;
+    (2) make `clawx-pilot` private OR strip source to release artifacts only;
+    (3) scrub `Education@2000` from the 3 public files + history. Confirm before
+    flipping a shared org repo or rewriting history.
+- **CLWX-19** — the `sk-clawx` key shared over WhatsApp is un-rotated (public
+  code-search shows 0 hits, so not leaked in the repo — but rotate regardless).
 
 ---
 

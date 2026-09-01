@@ -64,6 +64,10 @@
       "comments": [
         {
           "text": "",
+          "created": "2026-09-01T09:56:18.045875Z"
+        },
+        {
+          "text": "",
           "created": "2026-09-01T09:13:20.335561Z"
         },
         {
@@ -261,7 +265,12 @@
       "state": "Backlog",
       "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
       "description": "",
-      "comments": []
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-09-01T09:56:17.964190Z"
+        }
+      ]
     },
     {
       "id": "6c2e6304-65a2-457e-9104-82488747a98a",

@@ -76,6 +76,10 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Backlog  |  **Priority:** urgent
 
+**Comments (1):**
+
+- 
+
 ### CLWX-19 — Rotate the sk-clawx API key shared in WhatsApp (2026-06-05)
 
 - **State:** Backlog  |  **Priority:** urgent
@@ -143,8 +147,9 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Todo  |  **Priority:** none
 
-**Comments (2):**
+**Comments (3):**
 
+- 
 - 
 - 
 
