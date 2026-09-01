@@ -1,0 +1,407 @@
+{
+  "exported_at_date": "2026-09-01",
+  "source": {
+    "base": "http://localhost:8090",
+    "workspace": "issues-agent",
+    "project_id": "81a2ea23-e060-49b4-a344-1ab0339f46d5"
+  },
+  "project": {
+    "id": "81a2ea23-e060-49b4-a344-1ab0339f46d5",
+    "name": "ClawX — Windows installer + agent",
+    "identifier": "CLWX"
+  },
+  "states": [
+    {
+      "id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "name": "Backlog",
+      "group": "backlog"
+    },
+    {
+      "id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "name": "Todo",
+      "group": "unstarted"
+    },
+    {
+      "id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
+      "name": "In Progress",
+      "group": "started"
+    },
+    {
+      "id": "d32b7895-980c-47d7-b3c0-df873a86180d",
+      "name": "Done",
+      "group": "completed"
+    },
+    {
+      "id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
+      "name": "Cancelled",
+      "group": "cancelled"
+    },
+    {
+      "id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
+      "name": "Ready",
+      "group": "unstarted"
+    }
+  ],
+  "issues": [
+    {
+      "id": "576aa218-15c8-4ba0-a1c4-32c13e644b1e",
+      "sequence_id": 31,
+      "name": "[CLWX-8] Close Ministry infra decisions (reply + working session)",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "",
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-08-27T17:55:20.854250Z"
+        }
+      ]
+    },
+    {
+      "id": "05d9823b-7831-4d2b-bfdd-77cd7f697846",
+      "sequence_id": 30,
+      "name": "[CLWX-7] Real Entra sign-in + stable UserId identity",
+      "priority": "none",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-08-27T17:55:20.787914Z"
+        }
+      ]
+    },
+    {
+      "id": "20d75aaf-da8f-4f83-a799-2084a3879c32",
+      "sequence_id": 29,
+      "name": "[CLWX-6] Cloud economics: trim per-turn floor + per-user metering/caps",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "",
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-08-27T17:55:20.718205Z"
+        }
+      ]
+    },
+    {
+      "id": "cb2b559b-5097-4220-a7aa-973b1b1414f7",
+      "sequence_id": 28,
+      "name": "[CLWX-5] Store-and-forward outbox for durable offline records",
+      "priority": "none",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-08-27T17:55:20.610041Z"
+        }
+      ]
+    },
+    {
+      "id": "449d3c54-9449-4bf8-8323-c8640eedda46",
+      "sequence_id": 27,
+      "name": "[CLWX-4] Cloud turn degrades to on-device instead of going silent",
+      "priority": "none",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
+      "description": "",
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-08-27T17:55:20.541429Z"
+        }
+      ]
+    },
+    {
+      "id": "f2f4fb66-872a-4b22-896f-543d298c6fb4",
+      "sequence_id": 26,
+      "name": "[CLWX-3] On-device default operates fully offline",
+      "priority": "none",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
+      "description": "",
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-08-27T17:55:20.474566Z"
+        }
+      ]
+    },
+    {
+      "id": "6f440ca4-72b5-4fee-9dca-69a42017429a",
+      "sequence_id": 25,
+      "name": "[CLWX-2] Windows moe.11 unattended clean-VM install (assisted-screen supported flow)",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "",
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-08-27T17:55:20.404950Z"
+        }
+      ]
+    },
+    {
+      "id": "2693f1c5-754b-4b19-902a-e35845c37300",
+      "sequence_id": 24,
+      "name": "[CLWX-1] Verify doc-tooling steering in a live in-app LLM run (Raj's 5 prompts + discovery)",
+      "priority": "none",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
+      "description": "",
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-08-27T17:55:20.336111Z"
+        }
+      ]
+    },
+    {
+      "id": "8573446b-60f0-4b2a-8c3b-dbc477aba9ea",
+      "sequence_id": 23,
+      "name": "[CLWX-0] Timeline — ClawX GA work history (chronological spine)",
+      "priority": "none",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
+      "description": "",
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-08-27T17:55:20.262391Z"
+        }
+      ]
+    },
+    {
+      "id": "22b9bf4f-6237-4f17-8e85-d245b5f93743",
+      "sequence_id": 22,
+      "name": "★ OKR ANCHOR — ClawX GA",
+      "priority": "none",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
+      "description": "",
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-08-27T17:55:20.190000Z"
+        }
+      ]
+    },
+    {
+      "id": "3dab91d3-53c7-48e3-932b-5a181db32bed",
+      "sequence_id": 21,
+      "name": "State marker: MoE Windows RC 2026-06-23 'Outlook Green' (b38b620) published",
+      "priority": "low",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "40e31f48-98fa-4234-9718-b8fb8b0f89cf",
+      "sequence_id": 20,
+      "name": "clawx-asr voice-note path fails with ffmpeg-not-found on user machines",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "1bc5fe9b-e052-4590-9381-8f1aa4c0631e",
+      "sequence_id": 19,
+      "name": "Rotate the sk-clawx API key shared in WhatsApp (2026-06-05)",
+      "priority": "urgent",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "87948e4e-6735-47c4-a8c5-cb2304d7244a",
+      "sequence_id": 18,
+      "name": "HUMAN-GATED: dmvevents/clawx-pilot is PUBLIC — violates all-repos-private rule",
+      "priority": "urgent",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "6c2e6304-65a2-457e-9104-82488747a98a",
+      "sequence_id": 17,
+      "name": "dmvevents/clawx-pilot#13 — test(harness): 5-prompt Windows E2E scaffold — awaits installer URL",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "8a04ea62-745e-4e2f-a6d0-d3a7ab6e3b91",
+      "sequence_id": 16,
+      "name": "dmvevents/clawx-pilot#14 — ci(windows): windows-installer-e2e.yml — installer + 5-prompt harness pipeline",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "0573de19-7450-41d2-895b-38847db6d321",
+      "sequence_id": 15,
+      "name": "dmvevents/clawx-pilot#15 — test(harness): corpus expansion — P6..P10 fixtures (10 total)",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "144ec301-ec56-45a0-a497-44292a87df43",
+      "sequence_id": 14,
+      "name": "dmvevents/clawx-pilot#17 — ci(windows): windows-installer-e2e.yml — dispatch-only harness run",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "d55cbf06-bc97-4108-af84-b14460f0c2be",
+      "sequence_id": 13,
+      "name": "dmvevents/clawx-pilot#16 — test(harness): JUnit report schema + runtime validation gate",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "cf177066-1737-481e-a0ab-bba1f7c8ba90",
+      "sequence_id": 12,
+      "name": "dmvevents/clawx-pilot#12 — feat(principal-assistant): bundle native document.* tools (Lane A)",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "ef910d40-fd6f-4f29-9614-cf6c14057413",
+      "sequence_id": 11,
+      "name": "dmvevents/clawx-pilot#11 — Collect customer feedback for Windows RC 2026-06-10",
+      "priority": "medium",
+      "state": "Cancelled",
+      "state_id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "9301c26d-2ef4-4994-a763-0464cfc8bc01",
+      "sequence_id": 10,
+      "name": "dmvevents/clawx-pilot#10 — Assemble final GA evidence packet",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "2953ef19-ccba-485c-8b4d-18010a3de255",
+      "sequence_id": 9,
+      "name": "dmvevents/clawx-pilot#6 — Run Forms preview/prefill/dry-run/submit-refusal bug bash",
+      "priority": "low",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "3c90cdee-75cc-4b84-95ae-8e9c522205b5",
+      "sequence_id": 8,
+      "name": "dmvevents/clawx-pilot#8 — Create production Outlook teacher login and support logging flow",
+      "priority": "low",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "2e2dae9c-f57d-4efe-93ee-d0728a00bcb7",
+      "sequence_id": 7,
+      "name": "dmvevents/clawx-pilot#9 — Define production Forms destination via SharePoint or Power Automate",
+      "priority": "low",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "0cc548bf-a9bb-43ca-83f4-6e6c380e13b8",
+      "sequence_id": 6,
+      "name": "dmvevents/clawx-pilot#3 — Verify Outlook send requires explicit same-session confirmation",
+      "priority": "low",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "79e11600-7bc2-4254-bf28-b5d4e319a9c7",
+      "sequence_id": 5,
+      "name": "dmvevents/clawx-pilot#5 — Run Outlook read/search/draft/send-safe bug bash",
+      "priority": "low",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "977d221b-0fd4-4611-a46d-923e888f1f73",
+      "sequence_id": 4,
+      "name": "dmvevents/clawx-pilot#2 — Capture repeat clean-install tester evidence",
+      "priority": "low",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "6e906e46-1dec-483e-8554-8e2b4642b725",
+      "sequence_id": 3,
+      "name": "dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "fafe686e-08cb-49e9-868c-c85913689a9c",
+      "sequence_id": 2,
+      "name": "dmvevents/clawx-pilot#1 — Measure and reduce Gateway cold-start time",
+      "priority": "low",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    },
+    {
+      "id": "d56b28d7-f560-4283-af0c-967589eb4e34",
+      "sequence_id": 1,
+      "name": "dmvevents/clawx-pilot#4 — Expand file smoke into Excel / Word / PDF matrix",
+      "priority": "low",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "",
+      "comments": []
+    }
+  ]
+}
