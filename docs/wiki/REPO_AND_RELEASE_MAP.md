@@ -32,10 +32,13 @@ a *plaintext credential* ride along on the same public repo.
 
 ## The recommendation (three decisions)
 
-**Decision 1 — Rotate the test password now.** `Education@2000` is in 3 public
-files (`scripts/v2-signin.ts`, `scripts/forms-relogin-helper.ts`, `CLAUDE.md`).
-Zero downside to rotating; do it first. Update `PILOT_TEST_PASSWORD` locally and
-the test.fac account.
+**Decision 1 — Keep the test password local-only (owner decision, 2026-09-01).**
+The test.fac plaintext password is in 3 public files on the pilot branch
+(`scripts/v2-signin.ts`, `scripts/forms-relogin-helper.ts`, `CLAUDE.md`); this
+working branch already reads it from `process.env.PILOT_TEST_PASSWORD`. The
+password value is never committed here — it stays in local operator context and
+is handed to a tester directly if they need it. Scrub the literal from the 3
+public files (and history) as part of the source/releases split (Decision 2).
 
 **Decision 2 — Split distribution from source.** Recommended target state:
 

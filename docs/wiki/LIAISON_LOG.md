@@ -70,8 +70,8 @@ dataset (Slack/in-person/email). Do not attribute a numeric score without a sour
 
 ## D. Ministry documents inventory
 
-**ClawX — add to repo:**
-- **MOE Email AI Assistant Handoff (2026-08-18)** → recommend `docs/MINISTRY_INFRA_HANDOFF_2026-08-18.md`; have `MINISTRY_REPLY_DRAFT_2026-08-20.md` cite it as the source packet.
+**ClawX — in repo:**
+- **MOE Email AI Assistant Handoff (2026-08-18)** → **added** at `docs/MINISTRY_INFRA_HANDOFF_2026-08-18.md` (verbatim, all fields `{{ placeholders }}`, no secrets). It is the source packet the unsent `MINISTRY_REPLY_DRAFT_2026-08-20.md` answers.
 - **SSMD Practitioner Series Day-9 agenda (AI in admin functions)** → project attribution unclear; park in `docs/context/` or ask Raj which project it ties to.
 
 **Video project — do NOT add to this repo** (kept in `~/openclaw-agent/`): pyth-theorem, flower, Test 1–5 QA batches, VIDEO_QA_TRACKER.

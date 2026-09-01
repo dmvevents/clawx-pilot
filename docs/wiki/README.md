@@ -45,7 +45,8 @@ modules/cycles.
 - `docs/PRODUCT_PRINCIPAL_ASSISTANT.md` — feature-by-feature product description.
 - `docs/plane-board/` — the board backup + card map.
 - `docs/project-history/TIMELINE.md` — chronological build history.
-- `docs/MINISTRY_REPLY_DRAFT_2026-08-20.md` — the unsent Lane-C infra reply.
+- `docs/MINISTRY_INFRA_HANDOFF_2026-08-18.md` — the inbound Ministry infra packet (placeholders only).
+- `docs/MINISTRY_REPLY_DRAFT_2026-08-20.md` — the unsent Lane-C infra reply (answers the handoff).
 
 ## Conventions
 

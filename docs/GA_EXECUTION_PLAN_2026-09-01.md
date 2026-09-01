@@ -189,16 +189,20 @@ Investigated 2026-09-01 — the picture is worse than "the repo is public":
   `CLAUDE.md`), despite its own description saying "source lives in a private
   repo; this repo distributes signed releases only." The dev workflow
   ("push to `pilot/main`") has been publishing source to a public repo.
-  - **A live credential is already public:** the test password `Education@2000`
-    is in **3 public files** — `scripts/v2-signin.ts`,
-    `scripts/forms-relogin-helper.ts`, `CLAUDE.md`. Violates the hard rule.
+  - **A live credential is already public:** the test.fac plaintext password
+    (value kept out of this repo) is in **3 public files on the pilot branch** —
+    `scripts/v2-signin.ts`, `scripts/forms-relogin-helper.ts`, `CLAUDE.md`.
+    Violates the hard rule. (This working branch already uses
+    `process.env.PILOT_TEST_PASSWORD` in those scripts.)
   - **The liaison phone number never leaked** — redacted before any push
     (commits `a1ff2cc7`, `2a0f55c8`); the two files carrying it are absent on
     public. This session pushes nothing.
   - **Recommended (owner-gated):** (1) rotate the test.fac password now;
     (2) make `clawx-pilot` private OR strip source to release artifacts only;
-    (3) scrub `Education@2000` from the 3 public files + history. Confirm before
-    flipping a shared org repo or rewriting history.
+    (3) scrub the plaintext test password from the 3 public files + history.
+    Owner decision 2026-09-01: **keep the password local-only** — hand it to a
+    tester directly if needed, never commit it. Confirm before flipping a shared
+    org repo or rewriting history.
 - **CLWX-19** — the `sk-clawx` key shared over WhatsApp is un-rotated (public
   code-search shows 0 hits, so not leaked in the repo — but rotate regardless).
 
