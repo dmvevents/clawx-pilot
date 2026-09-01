@@ -84,6 +84,8 @@ docs/reports/multi-llm/outputs/
 !.claude/agents/
 !.claude/commands/
 !.claude/skills/
+!.claude/settings.json
+!.claude/hooks/
 .omc/
 .pnpm-store/
 package-lock.json
