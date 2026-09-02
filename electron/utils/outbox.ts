@@ -283,7 +283,7 @@ export class Outbox {
             // an empty one — an empty one would manufacture false
             // confidence that everything synced.
             logger.error('Outbox file is corrupt', { filePath: this.filePath, error });
-            throw new Error(`Outbox file is corrupt: ${this.filePath}`);
+            throw new Error(`Outbox file is corrupt: ${this.filePath}`, { cause: error });
         }
     }
 

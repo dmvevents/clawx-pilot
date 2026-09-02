@@ -60,7 +60,6 @@ function resolvePlaywrightCore() {
   for (const candidate of candidates) {
     try {
       if (fs.existsSync(path.join(candidate, 'package.json'))) {
-        // eslint-disable-next-line global-require, import/no-dynamic-require
         return require(candidate);
       }
     } catch {
