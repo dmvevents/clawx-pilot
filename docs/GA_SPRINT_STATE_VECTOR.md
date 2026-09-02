@@ -61,6 +61,25 @@ C (ASR) and gap D (cron) — owner's assisted-GUI desktop validation. VM stopped
 (TERMINATED) after the run. Evidence:
 `skills/laptop/evidence/2026-09-02-moe15-install-verify/RESULT.md`._
 
+_**Graph/Entra unblock — L1–L3 PASS live (2026-09-02, sprint tick).** The
+~6-week external gate CLEARED: the Ministry (Ansari) delivered the real
+Application (client) ID + registered the dev redirect URI
+`http://localhost:53682/callback` with read-only admin consent (profile + inbox
+read + offline_access). Built `scripts/graph-signin-smoke.ts` (PKCE loopback over
+the shipped `extensions/microsoft-graph` modules) and ran it with the sandbox
+`test.fac@fac.edu.tt`: **L1 PASS** (token via PURE PKCE, no client secret;
+refresh token from offline_access), **L2 PASS** (stable `oid` present = the KR7
+UserId key; `tid=9590bb09`), **L3 PASS** (`/me` + inbox read, 5 msgs). typecheck
+exit 0. Non-secret config in gitignored `~/openclaw-agent/secrets/graph.env`; the
+client secret is stored NOWHERE (recommend rotation — it passed through chat).
+This is an O→P promotion: **CLWX-39 (flag-gated sign-in) Todo→In Progress** and
+**CLWX-30 (KR7 UserId) Todo→In Progress** — held below Ready because the in-app
+`CLAWX_GRAPH_AUTH` flag wiring + host `getAccessToken`/token persistence are still
+pending (`plugins.microsoft-graph.enabled` stays false: `register()` throws
+without host wiring). Next atomic item: the host token wiring that lights up the
+6 parked Graph tools in-chat. Evidence:
+`skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/RESULT.md`._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three

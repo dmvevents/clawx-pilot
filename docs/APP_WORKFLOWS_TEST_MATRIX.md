@@ -171,9 +171,19 @@ runtime)**. **Missing: `pilot-asr-smoke.ps1`.**
 
 W1–W3 today run through the **browser lane** (Playwright + the signed-in Chrome
 tab). That works but is Chrome-dependent and ~103s/turn. The **Graph path** (the
-6 parked tools) makes email work on a Chrome-less laptop and fast — it needs one
-thing from the Ministry: the **Application (client) ID** + one dev **redirect
-URI** on the existing Entra app (tenant ID already resolved:
-`9590bb09-…ebfe`). Full ladder in `docs/GRAPH_TEST_PLAN.md`; the owner-delivered
-ask is `~/openclaw-agent/outbound-drafts/closeout-pack-2026-09-02/08-PASTE-FROM-PHONE-raj.md`.
-Until then, the demo runs the browser lane (works, just slower and Chrome-bound).
+6 parked tools) makes email work on a Chrome-less laptop and fast.
+
+**UPDATE 2026-09-02 — the external dependency is CLEARED and the OAuth path is
+PROVEN.** The Ministry delivered the **Application (client) ID** and registered
+the dev **redirect URI** `http://localhost:53682/callback` with read-only admin
+consent (profile + inbox read + offline_access) on the existing Entra app (tenant
+`9590bb09-…ebfe`). `scripts/graph-signin-smoke.ts` ran the ladder's **L1–L3 PASS
+live** against the real tenant with sandbox `test.fac@fac.edu.tt`: token via pure
+PKCE (no client secret), stable `oid` (KR7 UserId key), `/me` + inbox read (5
+msgs). Evidence: `skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/`. The
+remaining Graph work is **ours, not the Ministry's**: wire the in-app
+`CLAWX_GRAPH_AUTH` flow + host `getAccessToken`/token persistence so the 6 parked
+tools become callable in-chat (`microsoft-graph.enabled` stays false until then —
+`register()` crashes boot without host wiring). Full ladder + rungs L4–L7 in
+`docs/GRAPH_TEST_PLAN.md`. Until the in-app path lands, the demo still runs the
+browser lane (works, just slower and Chrome-bound).

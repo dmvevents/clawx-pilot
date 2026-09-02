@@ -122,6 +122,10 @@
       "description": "docs/MINISTRY_GRAPH_ACCESS_PLAN.md step C: on a clean install with NO Chrome session, sign in via Entra and run the 14-row Outlook eval against the GRAPH transport (same suite, different path — the routes are already dual-path). Proves the GA-durable Outlook lane end-to-end. Blocked by [Graph-B] + the four Raj decision items (scopes, PKCE public client, loopback redirect, no-app-server identity) on the CLWX-31 session agenda.",
       "comments": [
         {
+          "text": "Prerequisite unblocked and de-risked: L1-L3 of the Graph ladder PASS (CLWX-39). The Chrome-less transport eval (L4/L5) can now run once the in-app path is wired. Stays Todo.",
+          "created": "2026-09-02T14:17:29.156654Z"
+        },
+        {
           "text": "Acceptance sharpened by the test plan (L4/L5): re-run the existing 14-row eval with the Graph transport active — read rows must pass at the same 15/15 bar the browser lane hit on 09-02; draft/send rows must show GRACEFUL REFUSAL under the read-only scope baseline (assert the refusal, not silence). L5 = the whole ladder on a Chrome-less fresh install (\"any other system\" proof). docs/GRAPH_TEST_PLAN.md.",
           "created": "2026-09-02T09:11:19.712193Z"
         }
@@ -132,10 +136,14 @@
       "sequence_id": 39,
       "name": "[Graph-B] Flag-gated Entra sign-in on dev loopback (pull-forward)",
       "priority": "none",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "Pull-forward from docs/MINISTRY_GRAPH_ACCESS_PLAN.md step B: wire the EXISTING microsoft-graph oauth flow (manager.ts + microsoft-graph-oauth.ts, already built) behind a flag (CLAWX_GRAPH_AUTH=1) against a dev Entra tenant with a loopback redirect. Acceptance: sign-in → token → one Graph read on a dev account. Makes the Ministry values a config swap and collapses most of KR7 (UserId from token oid claim). Agent-executable now (P class).",
       "comments": [
+        {
+          "text": "Tick 2026-09-02: external gate CLEARED and L1-L3 PASS live against the REAL Ministry tenant. The Ministry delivered the real Application (client) ID and registered the dev redirect URI (http://localhost:53682/callback) with read-only admin consent (profile + inbox read + offline_access). Built scripts/graph-signin-smoke.ts (PKCE loopback, using the shipped extensions/microsoft-graph auth+client modules). Ran it with the sandbox account: L1 PASS - token acquired via PURE PKCE, no client secret in play (refresh token present from offline_access); L2 PASS - stable oid claim present (the KR7 UserId key), tid=9590bb09; L3 PASS - /me resolved + inbox read returned 5 messages. typecheck exit 0. Non-secret config in gitignored ~/openclaw-agent/secrets/graph.env; the client secret is stored NOWHERE. Held below Ready: the in-app flag wiring (CLAWX_GRAPH_AUTH) + host getAccessToken/token-persistence are still pending - openclaw.json keeps plugins.microsoft-graph.enabled=false because register() throws without that host wiring. Evidence: skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/.",
+          "created": "2026-09-02T14:17:29.084736Z"
+        },
         {
           "text": "Card scope transformed by the deep-dive discovery: moe.gov.tt and fac.edu.tt are ONE Entra tenant (9590bb09-ce2c-40e2-8181-fad0a7edebfe — public OpenID metadata, confirmed by the Ministry-branded sign-in on test.fac). The twin registration is now a FALLBACK only: our sandbox account already lives in the Ministry tenant, so once Ansari registers the dev URI + consents the read-only scopes on the REAL app, test.fac signs into it directly — ladder L1–L5 run against production registration with zero twin work. Remaining needs: the client id (tenant id is now public knowledge) + the dev URI (both asked in 01b, SENT). One owner decision parked in GRAPH_TEST_PLAN §4: whether to MFA-enroll test.fac for portal read access (recommendation: no — lane risk; the client id from Raj is the zero-risk path).",
           "created": "2026-09-02T09:21:40.786899Z"
@@ -317,10 +325,14 @@
       "sequence_id": 30,
       "name": "[CLWX-7] Real Entra sign-in + stable UserId identity",
       "priority": "none",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "The app has no signed-in-user identity today, which blocks both the mandatory UserId header (Ministry §3.3) and per-user caps.\nFACTS: the only userPrincipalName in the tree is the stub 'principal@school.example' (microsoft-graph/manager.ts:257). The live Outlook path identifies the principal only implicitly, by riding whichever account is signed into their Chrome session over CDP — deliberate and the only thing Conditional Access permits, but the app never learns the identity in a header-able form.\nINFERENCE / design: backend-for-frontend — desktop does the interactive sign-in, the app server holds the client secret + tokens and stamps UserId from the authenticated session (never client-supplied). This also resolves the client-secret objection (a public/PKCE client is no longer needed once a confidential app server exists). Recommend oid over UPN (opaque, survives renames).\nOPEN QUESTIONS (Ministry-gated): redirect URI — becomes https://<app-server-host>/auth/callback, so it depends on the hostname decision Raj has been asking about since 2026-07-20. UserId = oid vs UPN. Refresh-token lifetimes (longer = fewer forced-online re-auths).\nAccept (KR7): a live interactive Entra sign-in produces a stable non-stub oid; an authenticated request to the app server carries a UserId stamped server-side, verified in App Insights.",
       "comments": [
+        {
+          "text": "Materially advanced by the same run: L2 of scripts/graph-signin-smoke.ts captured a stable oid claim for the sandbox account (tenant 9590bb09) - that is exactly the KR7 UserId key. L1-L3 PASS end to end. Todo->In Progress. Remaining for KR7: stamp UserId=oid on broker/gateway calls and surface it in per-user metering (L7). Evidence: skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/.",
+          "created": "2026-09-02T14:17:29.123572Z"
+        },
         {
           "text": "Provenance note (2026-09-01). Entra/redirect-URI request originated 2026-07-10 (Raj thread). Ansari Khan handoff (2026-08-18) still lists the redirect URI as owed &mdash; blocked on the public-desktop-client vs confidential-client decision (see docs/MINISTRY_REPLY_DRAFT_2026-08-20.md). Owner/Ministry-gated.",
           "created": "2026-09-01T09:13:20.433025Z"

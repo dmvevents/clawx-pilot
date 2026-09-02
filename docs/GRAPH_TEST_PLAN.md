@@ -69,6 +69,27 @@ L5–L6 verify when the real values land — by then it is a config swap
 | L6 | Ministry tenant repeat | L1–L5 against real values + designated test account; CA/CAE behaviors observed and documented |
 | L7 | KR7 tie-in | UserId=`oid` stamped on broker calls; visible in per-user metering (caps flag) |
 
+## Ladder status (2026-09-02 sprint tick)
+
+**L1–L3 PASS live against the REAL Ministry tenant.** Ansari delivered the real
+client-id + registered the dev redirect URI (`http://localhost:53682/callback`)
+with read-only admin consent — so P1/P2/P3 are met and the twin (P6) is not
+needed. `scripts/graph-signin-smoke.ts` (PKCE loopback over the shipped
+`extensions/microsoft-graph` modules) ran with the sandbox `test.fac@fac.edu.tt`:
+
+- **L1 PASS** — consent → loopback callback → token exchange via **pure PKCE, no
+  client secret** (refresh token present from `offline_access`).
+- **L2 PASS** — stable `oid` claim present (the KR7 UserId key); `tid=9590bb09…`.
+- **L3 PASS** — `/me` resolved + inbox list returned 5 messages.
+
+Evidence: `skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/RESULT.md`.
+**Next:** L4 (transport eval) + L5 (Chrome-less) run once the in-app
+`CLAWX_GRAPH_AUTH` flow + host `getAccessToken`/token persistence are wired
+(that host wiring is what lets `microsoft-graph.enabled=true` without crashing
+gateway boot). L6 (Ministry tenant repeat) is largely satisfied already — L1–L3
+were against the real tenant, not a twin; only CA/CAE-under-load observation
+remains. L7 (UserId=`oid` on broker calls) is the KR7 tie-in.
+
 ## Stakeholder RACI
 
 | Item | Responsible | Accountable | Consulted | Informed |

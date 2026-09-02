@@ -239,21 +239,6 @@ Accept (KR5): lane G G-outbox-durable (survives process kill), G-outbox-idempote
 - Build started (2026-09-01): kr5-outbox-builder subagent implementing electron/utils/outbox.ts per OFFLINE_ARCHITECTURE §5 (atomic+idempotent writer, client idempotency keys, pending→sent→acked/failed-permanent, bounded backoff, payload secret-guard) + tests/unit/outbox.test.ts covering G-outbox-durable / -idempotent / -drain each with negative controls. Files landed in worktree; tests running. Evidence comment with verbatim results to follow.
 - Evidence: docs/OFFLINE_ARCHITECTURE.md §3.2 (open gap) + §5 (design). Not built — Backlog. Depends on CLWX-8 (app-server write API) and CLWX-7 (identity).
 
-### CLWX-30 — [CLWX-7] Real Entra sign-in + stable UserId identity
-
-- **State:** Todo  |  **Priority:** none
-
-The app has no signed-in-user identity today, which blocks both the mandatory UserId header (Ministry §3.3) and per-user caps.
-FACTS: the only userPrincipalName in the tree is the stub 'principal@school.example' (microsoft-graph/manager.ts:257). The live Outlook path identifies the principal only implicitly, by riding whichever account is signed into their Chrome session over CDP — deliberate and the only thing Conditional Access permits, but the app never learns the identity in a header-able form.
-INFERENCE / design: backend-for-frontend — desktop does the interactive sign-in, the app server holds the client secret + tokens and stamps UserId from the authenticated session (never client-supplied). This also resolves the client-secret objection (a public/PKCE client is no longer needed once a confidential app server exists). Recommend oid over UPN (opaque, survives renames).
-OPEN QUESTIONS (Ministry-gated): redirect URI — becomes https://<app-server-host>/auth/callback, so it depends on the hostname decision Raj has been asking about since 2026-07-20. UserId = oid vs UPN. Refresh-token lifetimes (longer = fewer forced-online re-auths).
-Accept (KR7): a live interactive Entra sign-in produces a stable non-stub oid; an authenticated request to the app server carries a UserId stamped server-side, verified in App Insights.
-
-**Comments (2):**
-
-- Provenance note (2026-09-01). Entra/redirect-URI request originated 2026-07-10 (Raj thread). Ansari Khan handoff (2026-08-18) still lists the redirect URI as owed &mdash; blocked on the public-desktop-client vs confidential-client decision (see docs/MINISTRY_REPLY_DRAFT_2026-08-20.md). Owner/Ministry-gated.
-- Evidence: docs/SCALE_ANALYSIS_2026-08-20.md §4, docs/MINISTRY_REPLY_DRAFT_2026-08-20.md §2/§4.2. Blocked on CLWX-8 (hostname &rarr; redirect URI). Not built — Backlog.
-
 ### CLWX-32 — Chain-of-custody baseline for liaison archive (raj/karunesh threads + attachments)
 
 - **State:** Ready  |  **Priority:** low
@@ -320,25 +305,15 @@ Fix directions: plugin-side breaker (after N identical failures return a success
 
 - Fix landed earlier this session; card sync (sprint-driver tick). Commit fee7294d: consecutive-identical-failure breaker wraps every registerTool in moe-principal-assistant — after 3 identical failing calls the tool returns a success-shaped STOP instruction (the only signal 3B-class models reliably act on); success/different-args reset the counter. 12/12 plugin tests green including loop-break and reset cases. Live re-verify on the shipped build rides the next installer (moe.15) — the unit contract is the acceptance for this card. Moving to Ready.
 
-### CLWX-39 — [Graph-B] Flag-gated Entra sign-in on dev loopback (pull-forward)
-
-- **State:** Todo  |  **Priority:** none
-
-Pull-forward from docs/MINISTRY_GRAPH_ACCESS_PLAN.md step B: wire the EXISTING microsoft-graph oauth flow (manager.ts + microsoft-graph-oauth.ts, already built) behind a flag (CLAWX_GRAPH_AUTH=1) against a dev Entra tenant with a loopback redirect. Acceptance: sign-in → token → one Graph read on a dev account. Makes the Ministry values a config swap and collapses most of KR7 (UserId from token oid claim). Agent-executable now (P class).
-
-**Comments (2):**
-
-- Card scope transformed by the deep-dive discovery: moe.gov.tt and fac.edu.tt are ONE Entra tenant (9590bb09-ce2c-40e2-8181-fad0a7edebfe — public OpenID metadata, confirmed by the Ministry-branded sign-in on test.fac). The twin registration is now a FALLBACK only: our sandbox account already lives in the Ministry tenant, so once Ansari registers the dev URI + consents the read-only scopes on the REAL app, test.fac signs into it directly — ladder L1–L5 run against production registration with zero twin work. Remaining needs: the client id (tenant id is now public knowledge) + the dev URI (both asked in 01b, SENT). One owner decision parked in GRAPH_TEST_PLAN §4: whether to MFA-enroll test.fac for portal read access (recommendation: no — lane risk; the client id from Raj is the zero-risk path).
-- Test plan uploaded: docs/GRAPH_TEST_PLAN.md. Prerequisites matrix (P1–P6), the 7-rung test ladder (L1 sign-in round-trip → L7 UserId stamping), stakeholder RACI, and timeline. Key insight for this card: the best twin tenant is fac.edu.tt itself — the test mailbox already lives there, so a twin registration there lets the ENTIRE ladder run today against the same mailbox the browser evidence used. One owner decision needed: do we hold admin on the fac.edu.tt tenant? (Fallback: free M365 dev tenant, ~15 min owner signup.) Scope note: this card models the flag-gated sign-in per the agreed BFF architecture; rungs L1–L5 are agent-executable once the twin exists.
-
 ### CLWX-40 — [Graph-C] Graph-transport Outlook eval on a Chrome-less install
 
 - **State:** Todo  |  **Priority:** none
 
 docs/MINISTRY_GRAPH_ACCESS_PLAN.md step C: on a clean install with NO Chrome session, sign in via Entra and run the 14-row Outlook eval against the GRAPH transport (same suite, different path — the routes are already dual-path). Proves the GA-durable Outlook lane end-to-end. Blocked by [Graph-B] + the four Raj decision items (scopes, PKCE public client, loopback redirect, no-app-server identity) on the CLWX-31 session agenda.
 
-**Comments (1):**
+**Comments (2):**
 
+- Prerequisite unblocked and de-risked: L1-L3 of the Graph ladder PASS (CLWX-39). The Chrome-less transport eval (L4/L5) can now run once the in-app path is wired. Stays Todo.
 - Acceptance sharpened by the test plan (L4/L5): re-run the existing 14-row eval with the Graph transport active — read rows must pass at the same 15/15 bar the browser lane hit on 09-02; draft/send rows must show GRACEFUL REFUSAL under the read-only scope baseline (assert the refusal, not silence). L5 = the whole ladder on a Chrome-less fresh install ("any other system" proof). docs/GRAPH_TEST_PLAN.md.
 
 ### CLWX-41 — Stakeholder record: thread extraction + bug/fix/eval correlation report
@@ -454,6 +429,22 @@ Accept (KR6): per-turn floor measured <=2,500 tokens; model-broker meters per-us
 - Build started (2026-09-01): kr6-caps-builder subagent implementing services/model-broker/usage-meter.mjs behind flag CLAWX_PER_USER_CAPS (default OFF): per-user daily soft cap (env CLAWX_USER_DAILY_CAP, default 500k), fleet-reserve rule (deny cloud fleet-wide at 90% of CLAWX_FLEET_MONTHLY_BUDGET → clients degrade on-device per KR4), consumed-tokens header parsing, injected clock, atomic persistence + tests/unit/model-broker-caps.test.ts. This is the 5b half; 5a (trim merge) stays owner-gated. Fleet verification still gated on KR7 UserId.
 - Evidence: docs/SCALE_ANALYSIS_2026-08-20.md (commit 982fd5d4). Trim branch fix/tool-catalog-trim @ 7add864b — HOLD, not self-approved, not merged. Owner gate: unblocking the trim review is Anton's call (do not push/merge).
 
+### CLWX-30 — [CLWX-7] Real Entra sign-in + stable UserId identity
+
+- **State:** In Progress  |  **Priority:** none
+
+The app has no signed-in-user identity today, which blocks both the mandatory UserId header (Ministry §3.3) and per-user caps.
+FACTS: the only userPrincipalName in the tree is the stub 'principal@school.example' (microsoft-graph/manager.ts:257). The live Outlook path identifies the principal only implicitly, by riding whichever account is signed into their Chrome session over CDP — deliberate and the only thing Conditional Access permits, but the app never learns the identity in a header-able form.
+INFERENCE / design: backend-for-frontend — desktop does the interactive sign-in, the app server holds the client secret + tokens and stamps UserId from the authenticated session (never client-supplied). This also resolves the client-secret objection (a public/PKCE client is no longer needed once a confidential app server exists). Recommend oid over UPN (opaque, survives renames).
+OPEN QUESTIONS (Ministry-gated): redirect URI — becomes https://<app-server-host>/auth/callback, so it depends on the hostname decision Raj has been asking about since 2026-07-20. UserId = oid vs UPN. Refresh-token lifetimes (longer = fewer forced-online re-auths).
+Accept (KR7): a live interactive Entra sign-in produces a stable non-stub oid; an authenticated request to the app server carries a UserId stamped server-side, verified in App Insights.
+
+**Comments (3):**
+
+- Materially advanced by the same run: L2 of scripts/graph-signin-smoke.ts captured a stable oid claim for the sandbox account (tenant 9590bb09) - that is exactly the KR7 UserId key. L1-L3 PASS end to end. Todo->In Progress. Remaining for KR7: stamp UserId=oid on broker/gateway calls and surface it in per-user metering (L7). Evidence: skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/.
+- Provenance note (2026-09-01). Entra/redirect-URI request originated 2026-07-10 (Raj thread). Ansari Khan handoff (2026-08-18) still lists the redirect URI as owed &mdash; blocked on the public-desktop-client vs confidential-client decision (see docs/MINISTRY_REPLY_DRAFT_2026-08-20.md). Owner/Ministry-gated.
+- Evidence: docs/SCALE_ANALYSIS_2026-08-20.md §4, docs/MINISTRY_REPLY_DRAFT_2026-08-20.md §2/§4.2. Blocked on CLWX-8 (hostname &rarr; redirect URI). Not built — Backlog.
+
 ### CLWX-31 — [CLWX-8] Close Ministry infra decisions (reply + working session)
 
 - **State:** In Progress  |  **Priority:** none
@@ -490,6 +481,18 @@ Accept: each defect reproduced-or-refuted against moe.11 with evidence (trace/lo
 - MAJOR triage progress — live stress session on the Mac test.fac lane (owner-directed, 2026-09-02, the day the outlook.cloud.microsoft migration reached our tenant). Per-defect dispositions: - RAJ-1 (subject-gate error, HIGH): ROOT-CAUSED + FIXED (a8322ad9). Two-sided: (a) the "changed after review" branch was a gate FALSE NEGATIVE — a subject-drifted draft actually went out during testing once the pipeline worked end-to-end (self-addressed sandbox message; contained). Historically the path refused by ACCIDENT because post-dispatch verification kept failing — producing exactly the "draft subject has been changed" error Raj saw. (b) Verification now works on the new domain (origin-derived URLs + SPA sidebar navigation). Subject drift now refuses at the hard gate; only body drift (principal edits after review) is allowed. Live 4-step gate proof PASS + 73/73 contract units. - RAJ-4 (text in To: field, LOW): ROOT-CAUSED + FIXED (a8322ad9). The verifier classified inbox message-list ROWS as recipient fields via loose aria-label substring selectors — any list row echoing the draft text (e.g. a reply quoting visible text) failed a correct draft. Recipient wells now require editable fields. Reproduced live, fix verified by the 15/15 eval on the new domain. - RAJ-2 (content misread, MED): PARTIALLY COVERED. Read-fidelity rows (W3.1, W7.1) pass; the specific meal-preferences email no longer exists to replay. Needs a content-fidelity fixture scenario — remaining item. - RAJ-3 (reply archives original, MED): NOT YET REPRODUCED. W5.1 reply-pane row passes; a targeted reply→check-folder scenario is the remaining item. Also: full lane revalidation on outlook.cloud.microsoft (15/15 eval, 3-turn LLM smoke, 4-step gate proof) — the migration itself was the trigger for this defect class, and the lane now survives it. Debug protocol codified in .claude/skills/outlook-lane-debug/SKILL.md. Remaining for Ready: RAJ-2 fixture scenario + RAJ-3 targeted scenario.
 - Card made self-contained (2026-09-02): the four defects Raj reported 2026-06-21 (source: docs/wiki/LIAISON_LOG.md §C — this card was an empty stub until now): - RAJ-1 (HIGH): send fails with "draft subject has been changed before it can be sent" — suspected send-gate false positive; the moe.10 hard-confirm gate likely fixes it but this is UNPROVEN. - RAJ-2 (MED): reply misinterprets email content (meal preferences read as shirt sizes) — extraction/classification, untriaged. - RAJ-3 (MED): reply action archives the original email — unintended side effect, untriaged. - RAJ-4 (LOW): a draft response landed in the "To:" field — one-off; file only if reproducible. Acceptance (GA box #9): each reproduced-or-refuted on moe.13, confirmed ones fixed, with per-defect evidence. Lane: user Chrome CDP + test.fac session on the persona VM (blocked on gcloud auth; plan in earlier comment). Register: docs/DEFECT_REGISTER_2026-09-02.md group A.
 - Lane assessment for the June-21 defect triage: requires the Outlook lane (user Chrome + test.fac session on CDP :18792). Probe on the test VM shows Chrome not running, port 18792 closed — AND the whole VM lane is now blocked on gcloud auth login (owner, interactive). Additionally standing up the test.fac session needs PILOT_TEST_PASSWORD in local operator context at run time (never committed; never for *@moe.gov.tt). Plan when unblocked: launch user Chrome with --remote-debugging-port=18792, sign in test.fac, reproduce each of the 4 reported defects against moe.13, classify reproduced/refuted/fixed-since with per-defect evidence. The persona-base L1 snapshot (docs/VM_TEST_BASE.md) will make this repeatable.
+
+### CLWX-39 — [Graph-B] Flag-gated Entra sign-in on dev loopback (pull-forward)
+
+- **State:** In Progress  |  **Priority:** none
+
+Pull-forward from docs/MINISTRY_GRAPH_ACCESS_PLAN.md step B: wire the EXISTING microsoft-graph oauth flow (manager.ts + microsoft-graph-oauth.ts, already built) behind a flag (CLAWX_GRAPH_AUTH=1) against a dev Entra tenant with a loopback redirect. Acceptance: sign-in → token → one Graph read on a dev account. Makes the Ministry values a config swap and collapses most of KR7 (UserId from token oid claim). Agent-executable now (P class).
+
+**Comments (3):**
+
+- Tick 2026-09-02: external gate CLEARED and L1-L3 PASS live against the REAL Ministry tenant. The Ministry delivered the real Application (client) ID and registered the dev redirect URI (http://localhost:53682/callback) with read-only admin consent (profile + inbox read + offline_access). Built scripts/graph-signin-smoke.ts (PKCE loopback, using the shipped extensions/microsoft-graph auth+client modules). Ran it with the sandbox account: L1 PASS - token acquired via PURE PKCE, no client secret in play (refresh token present from offline_access); L2 PASS - stable oid claim present (the KR7 UserId key), tid=9590bb09; L3 PASS - /me resolved + inbox read returned 5 messages. typecheck exit 0. Non-secret config in gitignored ~/openclaw-agent/secrets/graph.env; the client secret is stored NOWHERE. Held below Ready: the in-app flag wiring (CLAWX_GRAPH_AUTH) + host getAccessToken/token-persistence are still pending - openclaw.json keeps plugins.microsoft-graph.enabled=false because register() throws without that host wiring. Evidence: skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/.
+- Card scope transformed by the deep-dive discovery: moe.gov.tt and fac.edu.tt are ONE Entra tenant (9590bb09-ce2c-40e2-8181-fad0a7edebfe — public OpenID metadata, confirmed by the Ministry-branded sign-in on test.fac). The twin registration is now a FALLBACK only: our sandbox account already lives in the Ministry tenant, so once Ansari registers the dev URI + consents the read-only scopes on the REAL app, test.fac signs into it directly — ladder L1–L5 run against production registration with zero twin work. Remaining needs: the client id (tenant id is now public knowledge) + the dev URI (both asked in 01b, SENT). One owner decision parked in GRAPH_TEST_PLAN §4: whether to MFA-enroll test.fac for portal read access (recommendation: no — lane risk; the client id from Raj is the zero-risk path).
+- Test plan uploaded: docs/GRAPH_TEST_PLAN.md. Prerequisites matrix (P1–P6), the 7-rung test ladder (L1 sign-in round-trip → L7 UserId stamping), stakeholder RACI, and timeline. Key insight for this card: the best twin tenant is fac.edu.tt itself — the test mailbox already lives there, so a twin registration there lets the ENTIRE ladder run today against the same mailbox the browser evidence used. One owner decision needed: do we hold admin on the fac.edu.tt tenant? (Fallback: free M365 dev tenant, ~15 min owner signup.) Scope note: this card models the flag-gated sign-in per the agreed BFF architecture; rungs L1–L5 are agent-executable once the twin exists.
 
 ### CLWX-43 — Latency budget + measurement (LATENCY-UX -- Raj twice-volunteered complaint)
 
