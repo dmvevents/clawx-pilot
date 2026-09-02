@@ -40,7 +40,11 @@ function Write-PackageText {
 }
 
 function Add-ZipAssembly {
+  # FileSystem holds ZipFile; the Compression assembly holds ZipArchive /
+  # ZipArchiveMode on .NET Framework (PowerShell 5.1). New-ZipFromDirectory uses
+  # ZipArchive directly, so both must be loaded or New-Object throws.
   Add-Type -AssemblyName System.IO.Compression.FileSystem
+  Add-Type -AssemblyName System.IO.Compression
 }
 
 function New-ZipFromDirectory {
