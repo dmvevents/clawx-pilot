@@ -789,19 +789,28 @@ export async function ensureBootableAgentsConfig(
     const existingListModel = existingList?.find((e) => (
       typeof e.model === 'object' && (e.model as AgentModelConfig).primary
     ));
+    const alreadyHasModel = existingDefaultsModel !== undefined || existingListModel !== undefined;
 
-    // Already bootable: a defaults block exists (with or without a model) or a
-    // populated list carries a model. Nothing to do — keep idempotent.
-    if (existing && (existingDefaults !== undefined || existingListModel !== undefined)) {
+    const trimmedModelRef = typeof modelRef === 'string' ? modelRef.trim() : '';
+    const useModel = trimmedModelRef && isValidModelRef(trimmedModelRef) ? trimmedModelRef : undefined;
+
+    // Already bootable AND nothing to improve. Keep idempotent when either:
+    //   - a bindable model already exists (defaults.model or a list entry), or
+    //   - a (possibly empty) defaults block exists and we have no valid model to
+    //     upgrade it with.
+    // The one case we must NOT short-circuit: a present-but-model-less defaults
+    // block (seeded by a prior boot when preflight resolved no model) while THIS
+    // boot has a valid modelRef. That block boots the gateway but carries no
+    // bindable channel, so the composer stays disabled until the gateway's slow
+    // ready-fallback loop; upgrading it in place makes the channel bindable at
+    // boot. Idempotent: the next run sees the model and short-circuits here.
+    if (existing && (alreadyHasModel || (existingDefaults !== undefined && !useModel))) {
       return {
         ensured: true,
         created: false,
         modelRef: existingDefaultsModel ?? (existingListModel?.model as AgentModelConfig | undefined)?.primary,
       };
     }
-
-    const trimmedModelRef = typeof modelRef === 'string' ? modelRef.trim() : '';
-    const useModel = trimmedModelRef && isValidModelRef(trimmedModelRef) ? trimmedModelRef : undefined;
 
     const nextDefaults: AgentDefaultsConfig = {
       ...(existing?.defaults ?? {}),

@@ -172,4 +172,39 @@ describe('BUG-012 fresh-install boot chain', () => {
     const agents = config.agents as { defaults?: { model?: { primary?: string } } };
     expect(agents.defaults?.model?.primary).toBe('custom-moecloud/moe-demo-pro');
   });
+
+  /**
+   * Slow-ready repro (KR2): a prior boot seeded a present-but-model-less
+   * defaults block (preflight resolved no model). A later boot that DOES have a
+   * valid modelRef must upgrade the empty block in place rather than
+   * short-circuiting on "defaults exists" — otherwise the gateway boots with an
+   * unbindable channel and the composer stays disabled for minutes while the
+   * ready-fallback loop churns.
+   */
+  it('upgrades a present-but-model-less defaults block when a modelRef becomes available', async () => {
+    const { ensureBootableAgentsConfig } = await import('@electron/services/providers/channel-router');
+
+    // First boot: no model resolvable → seeds an empty defaults block.
+    const seeded = await ensureBootableAgentsConfig();
+    expect(seeded.ensured).toBe(true);
+    let config = await readOpenClawJson();
+    let agents = config.agents as { defaults?: { model?: { primary?: string } } };
+    expect(agents.defaults, 'empty defaults block must be seeded').toBeDefined();
+    expect(agents.defaults?.model?.primary, 'no model yet on first boot').toBeUndefined();
+
+    // Second boot: a valid modelRef is now available → must be written in.
+    const upgraded = await ensureBootableAgentsConfig('custom-moecloud/moe-demo-pro');
+    expect(upgraded.modelRef).toBe('custom-moecloud/moe-demo-pro');
+    config = await readOpenClawJson();
+    agents = config.agents as { defaults?: { model?: { primary?: string } } };
+    expect(
+      agents.defaults?.model?.primary,
+      'model-less defaults must be upgraded, not left unbindable',
+    ).toBe('custom-moecloud/moe-demo-pro');
+
+    // Third boot with no modelRef: now short-circuits and preserves the model.
+    const stable = await ensureBootableAgentsConfig();
+    expect(stable.created).toBe(false);
+    expect(stable.modelRef).toBe('custom-moecloud/moe-demo-pro');
+  });
 });
