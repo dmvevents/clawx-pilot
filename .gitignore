@@ -107,3 +107,8 @@ docs/ui-snapshots/**/ruvector.db
 
 # Harness/eval JUnit reports written to repo root by the harness runner
 harness-*-junit.xml
+
+# Playwright trace archives in evidence dirs are 10MB+ each — keep local-only
+# (RESULT.md records their existence; video + screenshots are committed)
+skills/laptop/evidence/**/trace.zip
+skills/laptop/evidence/**/run-01-pass-fallback/

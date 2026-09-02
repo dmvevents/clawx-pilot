@@ -1,0 +1,36 @@
+[t+0.0s] preflight: checking CDP 127.0.0.1:18792
+(node:80084) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[t+0.0s] preflight: CDP up (user Chrome, profile=user)
+  pinned clone form id: CbuQlSzO4kCB... host: forms.office.com
+[t+0.0s] open: attaching to clone form tab
+[2026-09-02T22:00:58.071Z] [INFO ] [forms-v2] Connecting via CDP at http://127.0.0.1:18792
+[t+6.4s] open: OK (visible title "Untitled form")
+[t+6.4s] verify: reading responses count BEFORE
+[t+17.0s] verify: BEFORE count=5 via analysis page scrape (view responses\s+(\d[\d,]*)\b)
+[t+17.0s] record: starting tracing + screencast
+  recorder: playwright tracing ON
+  recorder: CDP screencast ON
+[t+17.2s] record: re-opening clone form on camera
+[t+23.3s] fill: driving 32-field payload through SuspensionsActions
+[2026-09-02T22:01:28.960Z] [INFO ] [forms-v2/suspensions] fill done: filled=29 skipped=4 errors=0
+[t+30.9s] fill: status=filled filled=29 skipped=4 errors=0
+[t+31.3s] evidence: before-submit.png captured
+[t+31.3s] gate: submitting WITHOUT confirm (must refuse)
+[t+31.3s] gate: refused as required ("Submit blocked: confirm:true required. Re-call with confirm:true after the princ...")
+[t+31.3s] submit: confirm:true (exactly one submission this run)
+[t+32.2s] submit: status=submitted Form submitted via Microsoft Forms.
+[t+32.2s] verify: independent success-marker check
+[t+33.1s] verify: success marker FOUND via body text "response was submitted"
+[t+33.3s] evidence: after-submit.png captured
+[t+33.3s] record: stopping recorders
+  recorder: trace saved -> /Users/antonalexander/Github/moe-tt/ClawX/skills/laptop/evidence/2026-09-03-forms-submit-recorded/trace.zip
+[t+33.7s] record: stopped (28 frames)
+[t+33.7s] verify: reading responses count AFTER
+[t+41.4s] verify: AFTER count=6 via analysis page scrape (view responses\s+(\d[\d,]*)\b)
+[t+41.4s] record: assembling MP4
+[t+42.3s] record: mp4 OK — /opt/homebrew/bin/ffmpeg assembled 28 frames
+[t+42.3s] record: raw frames removed (mp4 retained)
+
+=== PASS (responses count incremented by exactly 1) ===
+evidence: /Users/antonalexander/Github/moe-tt/ClawX/skills/laptop/evidence/2026-09-03-forms-submit-recorded

@@ -1,0 +1,134 @@
+{
+  "verdict": "PASS (responses count incremented by exactly 1)",
+  "target": {
+    "host": "forms.office.com",
+    "formIdPrefix": "CbuQlSzO4kCB"
+  },
+  "fill": {
+    "filled": 29,
+    "skipped": 4,
+    "errors": 0
+  },
+  "refusalPath": "refused",
+  "confirmedSubmit": "submitted",
+  "successMarker": {
+    "ok": true,
+    "strategy": "body text \"response was submitted\""
+  },
+  "responsesCount": {
+    "before": 5,
+    "beforeStrategy": "analysis page scrape (view responses\\s+(\\d[\\d,]*)\\b)",
+    "after": 6,
+    "afterStrategy": "analysis page scrape (view responses\\s+(\\d[\\d,]*)\\b)",
+    "incrementedByOne": true
+  },
+  "recording": {
+    "tracing": true,
+    "frames": 28,
+    "mp4": true,
+    "mp4Detail": "/opt/homebrew/bin/ffmpeg assembled 28 frames"
+  },
+  "timings": [
+    {
+      "step": "preflight: checking CDP 127.0.0.1:18792",
+      "atMs": 0
+    },
+    {
+      "step": "preflight: CDP up (user Chrome, profile=user)",
+      "atMs": 8
+    },
+    {
+      "step": "open: attaching to clone form tab",
+      "atMs": 8
+    },
+    {
+      "step": "open: OK (visible title \"Untitled form\")",
+      "atMs": 6375
+    },
+    {
+      "step": "verify: reading responses count BEFORE",
+      "atMs": 6375
+    },
+    {
+      "step": "verify: BEFORE count=5 via analysis page scrape (view responses\\s+(\\d[\\d,]*)\\b)",
+      "atMs": 16953
+    },
+    {
+      "step": "record: starting tracing + screencast",
+      "atMs": 16968
+    },
+    {
+      "step": "record: re-opening clone form on camera",
+      "atMs": 17196
+    },
+    {
+      "step": "fill: driving 32-field payload through SuspensionsActions",
+      "atMs": 23297
+    },
+    {
+      "step": "fill: status=filled filled=29 skipped=4 errors=0",
+      "atMs": 30899
+    },
+    {
+      "step": "evidence: before-submit.png captured",
+      "atMs": 31263
+    },
+    {
+      "step": "gate: submitting WITHOUT confirm (must refuse)",
+      "atMs": 31263
+    },
+    {
+      "step": "gate: refused as required (\"Submit blocked: confirm:true required. Re-call with confirm:true after the princ...\")",
+      "atMs": 31263
+    },
+    {
+      "step": "submit: confirm:true (exactly one submission this run)",
+      "atMs": 31278
+    },
+    {
+      "step": "submit: status=submitted Form submitted via Microsoft Forms.",
+      "atMs": 32153
+    },
+    {
+      "step": "verify: independent success-marker check",
+      "atMs": 32153
+    },
+    {
+      "step": "verify: success marker FOUND via body text \"response was submitted\"",
+      "atMs": 33061
+    },
+    {
+      "step": "evidence: after-submit.png captured",
+      "atMs": 33259
+    },
+    {
+      "step": "record: stopping recorders",
+      "atMs": 33260
+    },
+    {
+      "step": "record: stopped (28 frames)",
+      "atMs": 33674
+    },
+    {
+      "step": "verify: reading responses count AFTER",
+      "atMs": 33674
+    },
+    {
+      "step": "verify: AFTER count=6 via analysis page scrape (view responses\\s+(\\d[\\d,]*)\\b)",
+      "atMs": 41425
+    },
+    {
+      "step": "record: assembling MP4",
+      "atMs": 41426
+    },
+    {
+      "step": "record: mp4 OK — /opt/homebrew/bin/ffmpeg assembled 28 frames",
+      "atMs": 42284
+    },
+    {
+      "step": "record: raw frames removed (mp4 retained)",
+      "atMs": 42286
+    }
+  ],
+  "totalMs": 42287
+}
