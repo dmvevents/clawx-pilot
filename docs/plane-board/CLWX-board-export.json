@@ -1,5 +1,5 @@
 {
-  "exported_at_date": "2026-09-01",
+  "exported_at_date": "2026-09-02",
   "source": {
     "base": "http://localhost:8090",
     "workspace": "issues-agent",
@@ -58,10 +58,19 @@
       "sequence_id": 33,
       "name": "[CLWX-9] Install gcloud SDK to unblock the Windows IAP lane (B2)",
       "priority": "high",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "",
-      "comments": []
+      "comments": [
+        {
+          "text": "",
+          "created": "2026-09-01T10:36:41.289736Z"
+        },
+        {
+          "text": "",
+          "created": "2026-09-01T10:29:12.360051Z"
+        }
+      ]
     },
     {
       "id": "df18bbee-7fd5-47fd-a929-46f4000889a1",
@@ -83,10 +92,14 @@
       "sequence_id": 31,
       "name": "[CLWX-8] Close Ministry infra decisions (reply + working session)",
       "priority": "none",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "",
       "comments": [
+        {
+          "text": "",
+          "created": "2026-09-01T10:57:37.787675Z"
+        },
         {
           "text": "",
           "created": "2026-09-01T10:10:00.089313Z"
@@ -129,10 +142,18 @@
       "sequence_id": 29,
       "name": "[CLWX-6] Cloud economics: trim per-turn floor + per-user metering/caps",
       "priority": "none",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "",
       "comments": [
+        {
+          "text": "",
+          "created": "2026-09-01T11:01:06.092804Z"
+        },
+        {
+          "text": "",
+          "created": "2026-09-01T10:52:50.779660Z"
+        },
         {
           "text": "",
           "created": "2026-08-27T17:55:20.718205Z"
@@ -144,10 +165,18 @@
       "sequence_id": 28,
       "name": "[CLWX-5] Store-and-forward outbox for durable offline records",
       "priority": "none",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "",
       "comments": [
+        {
+          "text": "",
+          "created": "2026-09-01T11:01:06.047472Z"
+        },
+        {
+          "text": "",
+          "created": "2026-09-01T10:52:50.736933Z"
+        },
         {
           "text": "",
           "created": "2026-08-27T17:55:20.610041Z"
@@ -163,6 +192,10 @@
       "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "",
       "comments": [
+        {
+          "text": "",
+          "created": "2026-09-01T10:52:50.693345Z"
+        },
         {
           "text": "",
           "created": "2026-08-27T17:55:20.541429Z"
@@ -189,8 +222,8 @@
       "sequence_id": 25,
       "name": "[CLWX-2] Windows moe.11 unattended clean-VM install (assisted-screen supported flow)",
       "priority": "none",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "",
       "comments": [
         {
@@ -204,10 +237,26 @@
       "sequence_id": 24,
       "name": "[CLWX-1] Verify doc-tooling steering in a live in-app LLM run (Raj's 5 prompts + discovery)",
       "priority": "none",
-      "state": "In Progress",
-      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "",
       "comments": [
+        {
+          "text": "",
+          "created": "2026-09-02T02:18:58.283820Z"
+        },
+        {
+          "text": "",
+          "created": "2026-09-02T01:59:51.866401Z"
+        },
+        {
+          "text": "",
+          "created": "2026-09-01T10:52:50.651057Z"
+        },
+        {
+          "text": "",
+          "created": "2026-09-01T10:21:24.456662Z"
+        },
         {
           "text": "",
           "created": "2026-08-27T17:55:20.336111Z"
@@ -242,6 +291,10 @@
       "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "",
       "comments": [
+        {
+          "text": "",
+          "created": "2026-09-01T10:29:12.311333Z"
+        },
         {
           "text": "",
           "created": "2026-09-01T10:10:00.229617Z"

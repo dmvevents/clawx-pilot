@@ -1,6 +1,6 @@
 # CLWX Plane board — snapshot
 
-Exported 2026-09-01 from `http://localhost:8090` (workspace `issues-agent`, project `ClawX — Windows installer + agent`).
+Exported 2026-09-02 from `http://localhost:8090` (workspace `issues-agent`, project `ClawX — Windows installer + agent`).
 Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This markdown is the human-readable mirror; the JSON is authoritative.
 
 > The live board is source of truth for *what to work on*. This file is a
@@ -93,14 +93,6 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Backlog  |  **Priority:** low
 
-### CLWX-28 — [CLWX-5] Store-and-forward outbox for durable offline records
-
-- **State:** Backlog  |  **Priority:** none
-
-**Comments (1):**
-
-- 
-
 ### CLWX-30 — [CLWX-7] Real Entra sign-in + stable UserId identity
 
 - **State:** Backlog  |  **Priority:** none
@@ -110,22 +102,22 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 - 
 - 
 
-### CLWX-33 — [CLWX-9] Install gcloud SDK to unblock the Windows IAP lane (B2)
-
-- **State:** Backlog  |  **Priority:** high
-
 ### CLWX-34 — [CLWX-bug] Verify/triage Raj's 2026-06-21 email defects
 
 - **State:** Backlog  |  **Priority:** medium
 
 ## Unstarted
 
-### CLWX-25 — [CLWX-2] Windows moe.11 unattended clean-VM install (assisted-screen supported flow)
+### CLWX-24 — [CLWX-1] Verify doc-tooling steering in a live in-app LLM run (Raj's 5 prompts + discovery)
 
-- **State:** Todo  |  **Priority:** none
+- **State:** Ready  |  **Priority:** none
 
-**Comments (1):**
+**Comments (5):**
 
+- 
+- 
+- 
+- 
 - 
 
 ### CLWX-26 — [CLWX-3] On-device default operates fully offline
@@ -140,26 +132,8 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Ready  |  **Priority:** none
 
-**Comments (1):**
+**Comments (2):**
 
-- 
-
-### CLWX-29 — [CLWX-6] Cloud economics: trim per-turn floor + per-user metering/caps
-
-- **State:** Todo  |  **Priority:** none
-
-**Comments (1):**
-
-- 
-
-### CLWX-31 — [CLWX-8] Close Ministry infra decisions (reply + working session)
-
-- **State:** Todo  |  **Priority:** none
-
-**Comments (4):**
-
-- 
-- 
 - 
 - 
 
@@ -171,14 +145,24 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - 
 
+### CLWX-33 — [CLWX-9] Install gcloud SDK to unblock the Windows IAP lane (B2)
+
+- **State:** Ready  |  **Priority:** high
+
+**Comments (2):**
+
+- 
+- 
+
 ## Started
 
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA
 
 - **State:** In Progress  |  **Priority:** none
 
-**Comments (4):**
+**Comments (5):**
 
+- 
 - 
 - 
 - 
@@ -193,12 +177,44 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 - 
 - 
 
-### CLWX-24 — [CLWX-1] Verify doc-tooling steering in a live in-app LLM run (Raj's 5 prompts + discovery)
+### CLWX-25 — [CLWX-2] Windows moe.11 unattended clean-VM install (assisted-screen supported flow)
 
 - **State:** In Progress  |  **Priority:** none
 
 **Comments (1):**
 
+- 
+
+### CLWX-28 — [CLWX-5] Store-and-forward outbox for durable offline records
+
+- **State:** In Progress  |  **Priority:** none
+
+**Comments (3):**
+
+- 
+- 
+- 
+
+### CLWX-29 — [CLWX-6] Cloud economics: trim per-turn floor + per-user metering/caps
+
+- **State:** In Progress  |  **Priority:** none
+
+**Comments (3):**
+
+- 
+- 
+- 
+
+### CLWX-31 — [CLWX-8] Close Ministry infra decisions (reply + working session)
+
+- **State:** In Progress  |  **Priority:** none
+
+**Comments (5):**
+
+- 
+- 
+- 
+- 
 - 
 
 ## Cancelled
