@@ -88,8 +88,8 @@ Status legend: ● proven · ◐ built, partial proof · ○ untested on that pl
 | W3 | ◐ forms lane live (29/32+gate) | ● 29/32 fields, submit gate refuses w/o confirm | `scripts/forms-fill-suspensions.ts`; VM `pilot-forms-cdp-inspect.js` |
 | W4 | ● payload+preview | ● preview verified on VM | forms vitest; `/api/forms/preview-daily-report` |
 | W5 | ● cron fires | ○ no live cron-fire captured on Windows | `/api/cron/trigger` — **gap D** |
-| W6 | ● write+read round-trip proven (fn-level, `docx`+`mammoth`) | ◐ deps import (runtime-check); write-smoke ready, VM off | `/tmp/docwrite-roundtrip.mjs` 8/8 PASS 2026-09-02; VM: `pilot-office-write-smoke.ps1` — **gap B** |
-| W7 | ● write+read round-trip proven (fn-level, `xlsx`/SheetJS) | ● read GREEN (KR1); ◐ write-smoke ready, VM off | same round-trip harness (2 sheets, data row); VM: `pilot-office-write-smoke.ps1` — **gap B** |
+| W6 | ● write+read round-trip (fn-level, `docx`+`mammoth`) | ● **write GREEN on VM** — packaged runtime wrote valid .docx (8582 B) + read back | VM `pilot-office-write-smoke.ps1` `STATE: OFFICE_WRITE_OK` 2026-09-02; Mac `/tmp/docwrite-roundtrip.mjs` 8/8. b2 (in-app turn) open |
+| W7 | ● write+read round-trip (fn-level, `xlsx`/SheetJS) | ● **read + write GREEN on VM** — wrote valid .xlsx (16077 B) + read back | same VM smoke `OFFICE_WRITE_OK`; read GREEN (KR1). b2 (in-app turn) open |
 | W8 | ◐ whisper skill | ○ `WinSpeechRecognize.exe` bundled, no ASR smoke | **gap C** — no `pilot-asr-smoke.ps1` yet |
 | W9 | ● on-device + cloud | ● online (`moe-demo-pro`) + on-device (`qwen2.5:3b`) present on VM | live eval 15/15 |
 | W10 | ● degrade path | ○ untested on Windows | degradeChannel unit test |
@@ -131,12 +131,16 @@ failures) — the supported path is the assisted GUI install.
   (`SHA256 d10de580…18df`), assisted GUI install, launch from shortcut, run
   `pilot-run-installed-gateway-smoke.ps1` + `pilot-managed-cdp-visual-smoke.ps1`.
   *(This is the highest-leverage item — it re-greens W1–W4/W9 on the GA build.)*
-- [ ] **B — Document WRITING on Windows.** Function-level round-trip already
-  GREEN on Mac (8/8, `/tmp/docwrite-roundtrip.mjs`). Windows leg: (b1) start the
-  VM, run `pilot-office-write-smoke.ps1` → expect `STATE: OFFICE_WRITE_OK`
-  (runtime executes the write + reads it back); (b2) one live in-app chat turn
-  ("rewrite X.docx → Y.docx", "build a workbook from Z") asserting
-  `document.write_docx`/`write_xlsx` fired in the gateway log. (W6, W7)
+- [x] **B (b1) — Document WRITING in the packaged Windows runtime.** DONE
+  2026-09-02: `pilot-office-write-smoke.ps1` on VM `clawx-win-rc-20260609`
+  returned `STATE: OFFICE_WRITE_OK` — wrote valid .docx (8582 B) + .xlsx
+  (16077 B) to `media/outbound` and read both back. Evidence:
+  `skills/laptop/evidence/2026-09-02-office-write-smoke/RESULT.md`. Mac
+  fn-level round-trip 8/8 (`/tmp/docwrite-roundtrip.mjs`) same day.
+- [ ] **B (b2) — Live in-app write turn on Windows.** One chat turn ("rewrite
+  X.docx → Y.docx", "build a workbook from Z") asserting
+  `document.write_docx`/`write_xlsx` fired in the gateway log (needs the app +
+  a model turn, not just the runtime). (W6, W7)
 - [ ] **C — ASR/voice smoke.** Confirm `WinSpeechRecognize.exe` present + Azure
   Speech seed (or documented fallback); mic→WAV→transcribe→JSON. **Create
   `pilot-asr-smoke.ps1`** (none exists). (W8)
