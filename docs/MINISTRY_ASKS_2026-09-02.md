@@ -82,3 +82,35 @@ it. Production teacher/support accounts (CLWX-8) ride along.
 - CLWX-40: Chrome-less Graph eval (behind CLWX-39 + ASK 1).
 - Continue GA on our broker + sandbox tenant — every capability lane is
   provable there, as today's Outlook/Forms/doc-tooling evidence shows.
+
+---
+
+## Addendum — liaison-archive sweep (ministry-liaison-monitor, same day)
+
+The full-archive sweep (7 inbound docs 2026-05-01→08-19, 3 outbound, 9
+referenced-but-missing items) confirms the disposition above and ADDS:
+
+### Asks the archive surfaces beyond the five (merged, renumbered 6–9)
+
+| # | Ask | Why it matters |
+|---|---|---|
+| 6 | **Prompt caching availability on the Foundry deployment** | The sweep flags this the **highest-leverage win**: our fixed floor is ~7,550 tokens/turn (~71% of every turn). If APIM/Foundry honors prompt caching, the effective floor cost collapses without waiting for the trim unhold — it attacks KR6 from the infrastructure side. |
+| 7 | **Reissue the moevault credential link** | The original expired unopened (~2026-08-26, deliberately unopened per policy). Whatever it carried needs a fresh, short-lived reissue at the session. |
+| 8 | **Idempotency/replay tolerance of Ministry endpoints** | The KR5 outbox replays with client idempotency keys; the server contract must dedupe on them (or state its tolerance) before the drain points at real endpoints. |
+| 9 | **Migration credential mechanism** | How future credential handoffs happen (the vault-link pattern failed once) — agree a durable channel. |
+
+### Timeline reality (sweep estimate)
+
+Raj responds → working session → 1–2 weeks decisions → 2–4 weeks Ministry
+provisioning ⇒ **late September 2026 earliest real Ministry connectivity.**
+Reinforces the headline: GA rides our stack; Ministry integration is a
+post-GA production milestone.
+
+### The reverse direction — what RAJ is still waiting on from US
+
+Five open (per the archive): dev egress IPs, a smoke test they can run,
+our secret-management statement, a Docker image (moot if ASK 3 ratifies
+desktop-direct — say so explicitly at the session), and the UserId header
+proposal (answered by ASK 1+2: Entra `oid`). Three already closed:
+deployment approach, scopes, client-secret question. These go on the same
+session agenda so both sides clear their queues in one sitting.
