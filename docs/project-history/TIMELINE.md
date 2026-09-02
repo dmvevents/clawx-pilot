@@ -111,3 +111,31 @@ Windows RC tester — that is a testing favour, not the video workstream.
 
 *Compiled from on-disk sources only; commit shas and session paths are quoted as
 found and should be spot-checked before external citation.*
+
+---
+
+## 2026-09-02 — the evidence day (appended by the finish audit)
+
+One session, four lanes, all with live proof (each item has a commit + an
+evidence doc; see `docs/GA_EVIDENCE_PACKET.md` for the index):
+
+- **KR1 closed live**: full in-app doc-tooling PASS on shipped moe.12; the
+  earlier failure was a malformed OOXML fixture (PS 5.1 backslash zip
+  entries), not the product.
+- **KR2 proven twice**: fresh-state installs of moe.13 and moe.14; gateway
+  ready in 50–51s vs the historical ~285s window; two new boot defects found
+  live and fixed same-day (channel-choice clobber, EPERM rename race).
+- **Outlook lane survived the office.com→cloud.microsoft migration the day
+  it reached our tenant**, and the stress pass found + closed a subject-gate
+  FALSE NEGATIVE (`a8322ad9`) — the probable source of RAJ-1's June error.
+  3 of Raj's 4 June defects dispositioned (2 fixed-verified, 1 refuted).
+- **Forms fill proven live**: 29/32 fields on the cloned suspensions form,
+  submit gate held.
+- **The full stakeholder record extracted** from the WhatsApp store (381-msg
+  thread, 23 documents): REPORTED→FIXED→EVAL matrix, 4 missed-by-register
+  defects registered, the structural finding (the 07-20 permissions-list +
+  redirect-URI ask was never answered — the stall was ours), and the
+  9-ask session agenda (`docs/MINISTRY_ASKS_2026-09-02.md`).
+- **Latency quantified**: median successful cloud turn ≈103s on the VM lane
+  vs a proposed 15s p50 budget — Raj's standing complaint, now with data.
+- Board driven throughout: 45 cards, zero backlog, all mirrors synced.
