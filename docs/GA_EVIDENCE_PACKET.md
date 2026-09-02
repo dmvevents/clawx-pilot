@@ -9,13 +9,14 @@ evidence behind its boxes.*
 
 | Build | Artifact | SHA256 | Carries |
 |---|---|---|---|
-| **moe.14** (current RC) | `release/Ministry of Education-0.4.3-moe.14-win-x64.exe` (390 MB, signed) | `8634bd74…65d7` (verified guest==build host) | channel-choice + EPERM boot fixes |
+| **moe.15 (GA-tag candidate)** | `release/…moe.15-win-x64.exe` (390 MB, signed; also in GCS) | `d10de580…18df` | moe.14 + retry breaker (`fee7294d`), KFM tilde resolver (`97004aa6`), Outlook gate + migration (`a8322ad9`) |
+| moe.14 | `release/…moe.14-win-x64.exe` (signed) | `8634bd74…65d7` (verified guest==build host) | channel-choice + EPERM boot fixes |
 | moe.13 | `release/…moe.13-win-x64.exe` | `a8494ec0…3ecf` (verified) | slow-ready fix, outbox wiring, fixed seeder |
 | moe.12 | `release/…moe.12-win-x64.exe` (shipped, on VM) | `0a3bbf27…5ee64` | doc-tooling steering |
 | VM restore point | GCP snapshot `clawx-l2-moe12-kr1pass-20260902` | READY, VSS-consistent | L2 per docs/VM_TEST_BASE.md |
 
-Pending: **moe.15** cut with `fee7294d` (retry breaker), `97004aa6` (KFM
-tilde), `a8322ad9` (Outlook gate + migration) — the GA-tag candidate.
+Remaining on moe.15: one VM install + smoke (fresh-state boot + green turn)
+to stamp it — then it is the tag.
 
 ## 2. Suite evidence (at HEAD)
 

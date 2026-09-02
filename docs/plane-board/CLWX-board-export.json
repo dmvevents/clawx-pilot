@@ -48,10 +48,15 @@
       "sequence_id": 45,
       "name": "Dropped-ball closeout pack (7 draft-and-hold replies incl. the 07-20 owed deliverable)",
       "priority": "none",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "The stakeholder sweep surfaced 7 dropped balls (unanswered asks, Raj's own reminders confirm several). Scope: DRAFT-AND-HOLD closeout messages into the outbox drafts dir — one per item: HuggingFace model access answer (05-02), Turnitin/Discord delivery (promised 2x), Plaud status, daily-form prompt answer (06-21), demo-verdict ask (G5 — never cite 0/5 without an artifact), NSCC answer (pairs with the NSCC card), and THE OPENER: the permissions list + redirect URI owed to Ansari since 07-20 (per the structural finding, this is what stalled the lane). Nothing sends without explicit owner GO — every draft goes to the ledger flow.",
-      "comments": []
+      "comments": [
+        {
+          "text": "All 7 drafts staged (draft-and-hold) at ~/openclaw-agent/outbound-drafts/closeout-pack-2026-09-02/. Each file carries a HOLD header; NOTHING sends without per-item owner GO, then the ledger flow applies. Order: 01 is THE OPENER (the 07-20 permissions + redirect deliverable — dev loopback registrable immediately, production URI tied to the hostname decision); 02 HuggingFace closure; 03 Turnitin/Discord (owner chooses deliver-vs-close variant); 04 Plaud status honest-close; 05 daily-form prompt answer; 06 NSCC in-progress answer (pairs with CLWX-42); 07 the June-23 demo-verdict ask (closes the G5 hole). Card scope (draft the pack) is met → Ready; the SENDING is the owner GO in the finish vector bucket B.",
+          "created": "2026-09-02T08:41:09.974035Z"
+        }
+      ]
     },
     {
       "id": "22ebec93-c119-4c61-b030-18c7a566b377",

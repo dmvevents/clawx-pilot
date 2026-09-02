@@ -7,6 +7,12 @@ Pairs with `GA_SPRINT_PLAN_2026-09-02.md` (sequencing), `docs/wiki/GA_READINESS.
 (GO/NO-GO scorecard), `docs/VM_TEST_BASE.md` (persona test base) and the Plane
 board (live state). Ceiling for agents is **Ready**; a human declares GA._
 
+_Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
+Ready (GA packet assembled; stakeholder report complete; timeline current;
+7 closeout drafts staged draft-and-hold). **moe.15 built + signed
+(`d10de580…18df`), uploaded to GCS — one VM smoke from being the GA tag.**
+Board: 18 Ready / 5 In Progress / 10 Todo / 0 Backlog._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
