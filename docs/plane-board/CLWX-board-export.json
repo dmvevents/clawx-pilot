@@ -137,6 +137,10 @@
       "description": "Pull-forward from docs/MINISTRY_GRAPH_ACCESS_PLAN.md step B: wire the EXISTING microsoft-graph oauth flow (manager.ts + microsoft-graph-oauth.ts, already built) behind a flag (CLAWX_GRAPH_AUTH=1) against a dev Entra tenant with a loopback redirect. Acceptance: sign-in → token → one Graph read on a dev account. Makes the Ministry values a config swap and collapses most of KR7 (UserId from token oid claim). Agent-executable now (P class).",
       "comments": [
         {
+          "text": "Card scope transformed by the deep-dive discovery: moe.gov.tt and fac.edu.tt are ONE Entra tenant (9590bb09-ce2c-40e2-8181-fad0a7edebfe — public OpenID metadata, confirmed by the Ministry-branded sign-in on test.fac). The twin registration is now a FALLBACK only: our sandbox account already lives in the Ministry tenant, so once Ansari registers the dev URI + consents the read-only scopes on the REAL app, test.fac signs into it directly — ladder L1–L5 run against production registration with zero twin work. Remaining needs: the client id (tenant id is now public knowledge) + the dev URI (both asked in 01b, SENT). One owner decision parked in GRAPH_TEST_PLAN §4: whether to MFA-enroll test.fac for portal read access (recommendation: no — lane risk; the client id from Raj is the zero-risk path).",
+          "created": "2026-09-02T09:21:40.786899Z"
+        },
+        {
           "text": "Test plan uploaded: docs/GRAPH_TEST_PLAN.md. Prerequisites matrix (P1–P6), the 7-rung test ladder (L1 sign-in round-trip → L7 UserId stamping), stakeholder RACI, and timeline. Key insight for this card: the best twin tenant is fac.edu.tt itself — the test mailbox already lives there, so a twin registration there lets the ENTIRE ladder run today against the same mailbox the browser evidence used. One owner decision needed: do we hold admin on the fac.edu.tt tenant? (Fallback: free M365 dev tenant, ~15 min owner signup.) Scope note: this card models the flag-gated sign-in per the agreed BFF architecture; rungs L1–L5 are agent-executable once the twin exists.",
           "created": "2026-09-02T09:11:11.591699Z"
         }
