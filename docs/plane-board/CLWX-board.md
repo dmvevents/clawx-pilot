@@ -128,6 +128,29 @@ TODO: build / OS / model
 
 Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
 
+### CLWX-54 — [bug/other] Outlook browser attach fails with stale Playwright handle despite live CDP + Outlook tab
+
+- **State:** Backlog  |  **Priority:** medium
+
+Area: other   Severity: medium (priority medium)
+
+Steps to reproduce
+TODO: exact steps
+
+Expected
+TODO: what should happen
+
+Actual
+TODO: what happens instead
+
+Evidence
+TODO: log path / screenshot / trace id
+
+Environment
+TODO: build / OS / model
+
+Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
+
 ## Unstarted
 
 ### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy

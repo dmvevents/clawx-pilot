@@ -112,3 +112,5 @@ harness-*-junit.xml
 # (RESULT.md records their existence; video + screenshots are committed)
 skills/laptop/evidence/**/trace.zip
 skills/laptop/evidence/**/run-01-pass-fallback/
+skills/laptop/evidence/**/full-capture.mov
+skills/laptop/evidence/**/permission-probe.mov

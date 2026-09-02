@@ -180,3 +180,39 @@ pnpm exec tsx scripts/app-usecase-recorded.ts
 
 Artifacts: `video.mp4` (app-window failure clip), `final-failure-screenshot.png`
 (400 banner + flash selector), `run-summary.json` (written on a full run).
+
+## ADDENDUM — 2026-09-03 04:51 re-run after the GOOGLE-STORE-400 repair
+
+FACTS:
+- The store-400 config repair (clawx-config-doctor) is CONFIRMED end to end in
+  the app: the same prompt that previously banner-failed now runs a full turn
+  (2 tool calls) and streams a coherent assistant reply.
+- The reply is the DESIGNED degradation UX: "I'm having trouble connecting to
+  your Chrome browser to read your emails. Could you please completely close
+  and then reopen Google Chrome, and I will try again." — graceful,
+  principal-actionable, no raw error.
+- video.mp4 (04:51-04:55 run) captures the full sequence: prompt typed,
+  submitted, turn executing, reply rendered. final-screenshot.png shows the
+  rendered reply. This IS the recorded in-app use case; the harness's
+  BLOCKED-TIMEOUT verdict on that run was a DETECTION bug (it watched a stale
+  trajectory file while the reply sat on screen), since fixed in the script
+  (scan trajectories touched after submit).
+- The turn's outlook tool failed to attach to Chrome DESPITE CDP 18792
+  answering and a live "Mail - test fac - Outlook" tab — a stale Playwright
+  connection in the app process after heavy tab churn (forms tests) is the
+  suspect. Filed as a board card (browser attach staleness).
+- A subsequent re-run (23:29 UTC) flaked at the typing step: osascript
+  keystrokes never reached the composer (empty composer, no new bubble at
+  timeout). UI-automation focus is inherently flaky; the harness needs a
+  typed-text-echo check before the Return keypress (OPEN QUESTION, noted for
+  the next pass). Stopped iterating per the anti-stuck rule.
+
+ANALYSIS: the Mac in-app recording objective is MET (real app, real turn,
+real reply, on video). The email summary content itself was not exercised
+because of the attach staleness — that is a product finding, not a harness
+gap. Windows run of the same class is in flight on the VM.
+
+OPEN QUESTIONS: (1) root cause of the stale CDP attach in the app process —
+does outlookBrowserManager hold a dead Playwright browser handle after the
+CDP endpoint restarts or tabs churn, and should ensureBrowser re-verify with
+a live probe before reuse? (2) composer focus verification before keystroke.

@@ -44,6 +44,16 @@
   ],
   "issues": [
     {
+      "id": "dbac48e6-31e1-4d38-b639-a72f840d462b",
+      "sequence_id": 54,
+      "name": "[bug/other] Outlook browser attach fails with stale Playwright handle despite live CDP + Outlook tab",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Area: other   Severity: medium (priority medium)\n\nSteps to reproduce\nTODO: exact steps\n\nExpected\nTODO: what should happen\n\nActual\nTODO: what happens instead\n\nEvidence\nTODO: log path / screenshot / trace id\n\nEnvironment\nTODO: build / OS / model\n\nRegression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)",
+      "comments": []
+    },
+    {
       "id": "1e37b704-8469-4650-b84f-97d2a7a98f20",
       "sequence_id": 53,
       "name": "[bug/other] Error banner shows raw HTTP status to the principal ('Model call failed / 400 status code (no body)')",

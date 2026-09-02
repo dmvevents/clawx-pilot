@@ -39,7 +39,7 @@
  * Evidence: skills/laptop/evidence/2026-09-03-app-usecase-recorded/
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
@@ -136,9 +136,18 @@ async function preflight(): Promise<void> {
   // Screen Recording permission probe: self-terminating 2s video.
   log('preflight: screen-recording permission probe (2s)');
   const probe = join(EVIDENCE_DIR, 'permission-probe.mov');
+  // screencapture refuses to overwrite an existing file ("Failed to save to
+  // final location") — a stale probe from a prior run makes the permission
+  // check a false negative. Clear it first.
+  rmSync(probe, { force: true });
   const pr = spawnSync('/usr/sbin/screencapture', ['-v', '-V', '2', '-D', '1', probe], { encoding: 'utf-8', timeout: 15_000 });
   if (pr.status !== 0 || !existsSync(probe) || statSync(probe).size < 1000) {
-    fatal(4, 'screen-recording permission NOT granted (probe produced no video). Grant Screen Recording to the terminal in System Settings > Privacy.');
+    const size = existsSync(probe) ? statSync(probe).size : 'missing';
+    fatal(
+      4,
+      `screen-recording probe failed (status=${pr.status} signal=${pr.signal} size=${size} stderr=${(pr.stderr ?? '').trim().slice(0, 300)}). ` +
+        'If status/signal look clean, grant Screen Recording to the terminal in System Settings > Privacy.',
+    );
   }
   log(`preflight: screen recording OK (probe ${(statSync(probe).size / 1024).toFixed(0)}KB)`);
 
@@ -174,12 +183,18 @@ tell application "System Events" to tell process "${APP_NAME}"
   else
     set p to position of window 1
     set s to size of window 1
-    return (item 1 of p) & "," & (item 2 of p) & "," & (item 1 of s) & "," & (item 2 of s)
+    -- Coerce each item to text: integer & string otherwise builds a LIST,
+    -- which osascript renders as "224, ,, 95, ,, ..." and breaks parsing.
+    return ((item 1 of p) as text) & "," & ((item 2 of p) as text) & "," & ((item 1 of s) as text) & "," & ((item 2 of s) as text)
   end if
 end tell
 `);
   if (!g.ok || g.out === 'none') fatal(5, `could not surface app window: ${g.out}`);
-  const [x, y, w, h] = g.out.split(',').map((n) => Math.round(Number(n)));
+  // Regex-extract the four integers regardless of separator shape (defends
+  // against any residual AppleScript list rendering).
+  const nums = (g.out.match(/-?\d+/g) ?? []).map((n) => Math.round(Number(n)));
+  const [x, y, w, h] = nums;
+  if (nums.length !== 4) fatal(5, `bad window geometry: "${g.out}"`);
   if (![x, y, w, h].every(Number.isFinite) || w < 100 || h < 100) fatal(5, `bad window geometry: "${g.out}"`);
 
   // Detect display scale (retina) = full-screen pixel width / logical points width.
@@ -266,9 +281,24 @@ interface Settled { outcome: 'reply' | 'model-error' | 'timeout'; entry?: ModelC
 
 async function waitForSettle(trajPath: string, baselineSeq: number): Promise<Settled> {
   const deadline = Date.now() + TURN_TIMEOUT_MS;
+  const submitWallClock = Date.now();
   while (Date.now() < deadline) {
-    const entries = readModelCompletions(trajPath);
-    const fresh = entries.filter((e) => e.seq > baselineSeq && e.finalPromptText.includes(PROMPT));
+    // The submit can spawn a NEW session (its trajectory file did not exist at
+    // baseline time) — the first run of this harness timed out watching a
+    // stale file while the reply sat rendered on screen. Scan the baseline
+    // file PLUS any trajectory touched since submit, newest first.
+    const dir = join(OPENCLAW_DIR, 'agents', 'main', 'sessions');
+    const recent = existsSync(dir)
+      ? readdirSync(dir)
+          .filter((f) => f.endsWith('.trajectory.jsonl'))
+          .map((f) => join(dir, f))
+          .filter((p) => statSync(p).mtimeMs >= submitWallClock - 10_000)
+      : [];
+    const candidates = [...new Set([trajPath, ...recent])];
+    const entries = candidates.flatMap((p) => readModelCompletions(p).map((e) => ({ ...e, __file: p })));
+    const fresh = entries.filter(
+      (e) => e.finalPromptText.includes(PROMPT) && (e.__file !== trajPath || e.seq > baselineSeq),
+    );
     const target = fresh[fresh.length - 1];
     if (target) {
       if (target.promptErrorSource) return { outcome: 'model-error', entry: target, reply: '' };
@@ -300,6 +330,9 @@ function assertReply(reply: string): Assertions {
 // ── Recording ───────────────────────────────────────────────────────────────────
 
 function startRecording(outMov: string): ChildProcess {
+  // screencapture -v cannot overwrite an existing file — clear any stale
+  // recording from a prior run first (same trap as the permission probe).
+  rmSync(outMov, { force: true });
   // Full display; -V omitted so it records until SIGINT (finalises the .mov).
   const child = spawn('/usr/sbin/screencapture', ['-v', '-D', '1', outMov], { stdio: 'ignore' });
   return child;
