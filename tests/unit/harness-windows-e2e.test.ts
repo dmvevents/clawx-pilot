@@ -66,7 +66,10 @@ describe('harness/run.ts — 5-prompt doc-tooling E2E', () => {
     expect(combined).toMatch(/\[PASS\] P4-xlsx-grade/);
     expect(combined).toMatch(/\[PASS\] P5-image-fields/);
     expect(combined).not.toMatch(/\[FAIL\]/);
-  });
+    // vitest per-test timeout must exceed the spawnSync child ceiling (60s) so a
+    // slow cold `tsx` start under CPU contention (e.g. running inside the full
+    // preflight suite) is not mis-flagged as a failure. Default 5s was too tight.
+  }, 90_000);
 
   it('binary mode SKIPs cleanly with exit 0 (does not red-fail CI)', () => {
     const res = spawnSync(TSX, [RUNNER, '--mode=binary'], {
@@ -79,5 +82,5 @@ describe('harness/run.ts — 5-prompt doc-tooling E2E', () => {
     expect(combined).toMatch(/\[SKIP\] P1-docx-summarize/);
     expect(combined).toMatch(/binary mode not enabled/);
     expect(combined).not.toMatch(/\[FAIL\]/);
-  });
+  }, 45_000); // vitest ceiling above the 30s spawnSync child ceiling
 });
