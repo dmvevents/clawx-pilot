@@ -16,19 +16,11 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Backlog  |  **Priority:** low
 
-### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy
-
-- **State:** Backlog  |  **Priority:** medium
-
 ### CLWX-4 — dmvevents/clawx-pilot#2 — Capture repeat clean-install tester evidence
 
 - **State:** Backlog  |  **Priority:** low
 
 ### CLWX-5 — dmvevents/clawx-pilot#5 — Run Outlook read/search/draft/send-safe bug bash
-
-- **State:** Backlog  |  **Priority:** low
-
-### CLWX-6 — dmvevents/clawx-pilot#3 — Verify Outlook send requires explicit same-session confirmation
 
 - **State:** Backlog  |  **Priority:** low
 
@@ -44,40 +36,53 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Backlog  |  **Priority:** low
 
-### CLWX-10 — dmvevents/clawx-pilot#10 — Assemble final GA evidence packet
-
-- **State:** Backlog  |  **Priority:** medium
-
-### CLWX-12 — dmvevents/clawx-pilot#12 — feat(principal-assistant): bundle native document.* tools (Lane A)
-
-- **State:** Backlog  |  **Priority:** medium
-
 ### CLWX-13 — dmvevents/clawx-pilot#16 — test(harness): JUnit report schema + runtime validation gate
 
 - **State:** Backlog  |  **Priority:** medium
+
+**Comments (1):**
+
+- 
 
 ### CLWX-14 — dmvevents/clawx-pilot#17 — ci(windows): windows-installer-e2e.yml — dispatch-only harness run
 
 - **State:** Backlog  |  **Priority:** medium
 
+**Comments (1):**
+
+- 
+
 ### CLWX-15 — dmvevents/clawx-pilot#15 — test(harness): corpus expansion — P6..P10 fixtures (10 total)
 
 - **State:** Backlog  |  **Priority:** medium
+
+**Comments (1):**
+
+- 
 
 ### CLWX-16 — dmvevents/clawx-pilot#14 — ci(windows): windows-installer-e2e.yml — installer + 5-prompt harness pipeline
 
 - **State:** Backlog  |  **Priority:** medium
 
+**Comments (1):**
+
+- 
+
 ### CLWX-17 — dmvevents/clawx-pilot#13 — test(harness): 5-prompt Windows E2E scaffold — awaits installer URL
 
 - **State:** Backlog  |  **Priority:** medium
+
+**Comments (1):**
+
+- 
 
 ### CLWX-18 — HUMAN-GATED: dmvevents/clawx-pilot is PUBLIC — violates all-repos-private rule
 
 - **State:** Backlog  |  **Priority:** urgent
 
-**Comments (2):**
+**Comments (3):**
 
+- 
 - 
 - 
 
@@ -85,9 +90,9 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Backlog  |  **Priority:** urgent
 
-### CLWX-20 — clawx-asr voice-note path fails with ffmpeg-not-found on user machines
+**Comments (1):**
 
-- **State:** Backlog  |  **Priority:** medium
+- 
 
 ### CLWX-21 — State marker: MoE Windows RC 2026-06-23 'Outlook Green' (b38b620) published
 
@@ -106,7 +111,35 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Backlog  |  **Priority:** medium
 
+**Comments (1):**
+
+- 
+
 ## Unstarted
+
+### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy
+
+- **State:** Ready  |  **Priority:** medium
+
+### CLWX-6 — dmvevents/clawx-pilot#3 — Verify Outlook send requires explicit same-session confirmation
+
+- **State:** Ready  |  **Priority:** low
+
+### CLWX-12 — dmvevents/clawx-pilot#12 — feat(principal-assistant): bundle native document.* tools (Lane A)
+
+- **State:** Ready  |  **Priority:** medium
+
+**Comments (1):**
+
+- 
+
+### CLWX-20 — clawx-asr voice-note path fails with ffmpeg-not-found on user machines
+
+- **State:** Ready  |  **Priority:** medium
+
+**Comments (1):**
+
+- 
 
 ### CLWX-24 — [CLWX-1] Verify doc-tooling steering in a live in-app LLM run (Raj's 5 prompts + discovery)
 
@@ -137,6 +170,17 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 - 
 - 
 
+### CLWX-28 — [CLWX-5] Store-and-forward outbox for durable offline records
+
+- **State:** Ready  |  **Priority:** none
+
+**Comments (4):**
+
+- 
+- 
+- 
+- 
+
 ### CLWX-32 — Chain-of-custody baseline for liaison archive (raj/karunesh threads + attachments)
 
 - **State:** Ready  |  **Priority:** low
@@ -149,19 +193,25 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Ready  |  **Priority:** high
 
-**Comments (2):**
+**Comments (3):**
 
+- 
 - 
 - 
 
 ## Started
 
+### CLWX-10 — dmvevents/clawx-pilot#10 — Assemble final GA evidence packet
+
+- **State:** In Progress  |  **Priority:** medium
+
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA
 
 - **State:** In Progress  |  **Priority:** none
 
-**Comments (5):**
+**Comments (6):**
 
+- 
 - 
 - 
 - 
@@ -172,21 +222,13 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** In Progress  |  **Priority:** none
 
-**Comments (2):**
+**Comments (3):**
 
+- 
 - 
 - 
 
 ### CLWX-25 — [CLWX-2] Windows moe.11 unattended clean-VM install (assisted-screen supported flow)
-
-- **State:** In Progress  |  **Priority:** none
-
-**Comments (2):**
-
-- 
-- 
-
-### CLWX-28 — [CLWX-5] Store-and-forward outbox for durable offline records
 
 - **State:** In Progress  |  **Priority:** none
 
