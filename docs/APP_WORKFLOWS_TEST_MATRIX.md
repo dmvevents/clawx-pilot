@@ -85,7 +85,7 @@ Status legend: ● proven · ◐ built, partial proof · ○ untested on that pl
 |---|---|---|---|
 | W1 | ● live smoke | ● 15/15 eval on VM | `pnpm exec tsx scripts/v2-chatbot-e2e.ts`; VM `pilot-managed-cdp-visual-smoke.ps1` |
 | W2 | ● 2-gate proven | ● 4-step send-gate proof on VM (new outlook.cloud domain) | `scripts/v2-send-test.ts` + `outlook-actions-safety.test.ts` (73/73) |
-| W3 | ● **29/32 + gate refusal proven on Mac 2026-09-03** (matches VM bar; no submit, no sign-in, CDP attach to user Chrome) | ● 29/32 fields, submit gate refuses w/o confirm | `scripts/forms-fill-suspensions.ts`; Mac evidence `skills/laptop/evidence/2026-09-03-w3-mac-forms/`; VM `pilot-forms-cdp-inspect.js` |
+| W3 | ● **FULL cycle proven + RECORDED on Mac 2026-09-03**: 29/32 fill, refusal-without-confirm proved first, then ONE confirmed submit VERIFIED landed (owner responses count 5→6, success marker, 2xx POST) — with video.mp4 + Playwright trace + before/after screenshots | ● 29/32 fields, submit gate refuses w/o confirm | `scripts/forms-submit-recorded.ts` (hard-pinned to the test.fac clone URL — cannot target any other form); evidence `skills/laptop/evidence/2026-09-03-forms-submit-recorded/`; fill-only: `scripts/forms-fill-suspensions.ts` |
 | W4 | ● payload+preview | ● preview verified on VM | forms vitest; `/api/forms/preview-daily-report` |
 | W5 | ● cron fires | ○ no live cron-fire captured on Windows | `/api/cron/trigger` — **gap D** |
 | W6 | ● write+read round-trip (fn-level, `docx`+`mammoth`) | ● **write GREEN on VM** — packaged runtime wrote valid .docx (8582 B) + read back | VM `pilot-office-write-smoke.ps1` `STATE: OFFICE_WRITE_OK` 2026-09-02; Mac `/tmp/docwrite-roundtrip.mjs` 8/8. b2 (in-app turn) open |

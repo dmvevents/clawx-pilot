@@ -31,6 +31,34 @@ TODO: build / OS / model
 
 Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
 
+**Comments (1):**
+
+- 2026-09-03 resilience pack fold-in (docs/FLOW_STATE_DIAGRAMS.md flow 3): fix spec for this card is TB-1 + TB-2. TB-1 settle-on-expected-item guard: after clicking an inbox row, bounded poll until the reading pane's subject AND sender match the clicked row before any extraction; never retry through a confirm gate; detection owner ga-e2e-regression-verifier. TB-2: replace the readEmail subject heading selector (currently returns the UI heading 'Navigation pane') under the 3-fallback rotated-selector rule; detection owner dom-selector-regression-tester. Both in electron/services/outlook-browser-v2/outlook-actions.ts. Recommended pre-GA: an agent describing the WRONG email is the trust-killer class.
+
+### CLWX-47 — Slow-turn watchdog: 'still working' notice at 30s + per-turn duration log (TB-3)
+
+- **State:** Backlog  |  **Priority:** none
+
+From docs/FLOW_STATE_DIAGRAMS.md flow 2 (LATENCY-UX, measured ~103s median vs proposed 15s p50; Raj's twice-volunteered complaint). Build: renderer notice when a cloud turn exceeds 30s ('still working — you can keep typing'), backend per-turn duration log line for the latency ledger. The p50/p90 budget NUMBER stays owner-gated (bucket B); this card is the UX mitigation that works at any budget.
+
+### CLWX-48 — config-coherence-auditor rule: Graph signed-in implies UserId header on cloud provider (TB-4)
+
+- **State:** Backlog  |  **Priority:** none
+
+From flow 5: the KR7 UserId stamp (seed + refreshCloudGatewayUserIdHeader) is best-effort/warn-only — a failed re-stamp silently drops per-principal attribution. Add a coherence rule: IF clawx-microsoft-graph.json has an account THEN the moe-cloud-gateway provider entry in openclaw.json must carry headers.UserId == account oid; flag drift like the four-store rules. Detection owner: config-coherence-auditor.
+
+### CLWX-49 — Loud frame-capture failure in pilot-chat-turn-driver.js (TB-5)
+
+- **State:** Backlog  |  **Priority:** none
+
+From flow 6: the Windows chat-turn driver can silently produce zero-frame evidence. Add frameCaptureFailed counter + non-zero exit on zero-frame runs, matching the loud {ok,detail} contract scripts/forms-submit-recorded.ts establishes. Detection owner: windows-smoke.
+
+### CLWX-50 — Write Windows Problems Atlas sections 16-18 (TB-6)
+
+- **State:** Backlog  |  **Priority:** none
+
+Doc-only: hidden-launch Gateway trap (IF-4), moe-principal-assistant path move to resources/extensions on Lane A, Windows Firewall silent-drop breaking nc -z (PF-3 control-leg). All three behaviors are codified as flight checks but the atlas entries were never written — they are the install/runtime debugging front door.
+
 ## Unstarted
 
 ### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy
@@ -368,13 +396,6 @@ Follow-ups tracked here: (1) one bridge-download pass to vault the original docu
 
 - Scope delivered in full: report committed (0dc85ac9 + b593399d) with both agent matrices spliced (16-row REPORTED→FIXED→EVAL correlation, 26-document chronology, feature-extensiveness verdicts, the structural finding, 4 missed defects registered, 7-item dropped-ball list); action cards CLWX-42–45 created; agenda v4 reframed on CLWX-31. Follow-on work lives on its own cards. Ready.
 
-### CLWX-42 — NSCC knowledge pack + run the stakeholder-authored Q&A eval
-
-- **State:** Todo  |  **Priority:** none
-
-Raj's clearest explicit feature ask (2026-06-27, NSCC-2026.pdf): have the Code of Conduct in the AI's memory instead of file lookups. He also supplied a FREE stakeholder-authored eval set (NSCC_2026__Test_QnA.docx, 2026-05-14) that was never run. HARD FLAG in the stakeholder sweep — under-built exactly where he asked in plain words.
-Scope: (1) ingest NSCC-2026.pdf as a preloaded knowledge pack (workspace bootstrap doc or persona knowledge section); (2) convert the Q&A doc into an eval fixture and run it; (3) acceptance: fresh session, no file attached, a Code-of-Conduct question answers correctly with an NSCC citation + the Q&A eval passes. Agent-executable now. Source: docs/STAKEHOLDER_REPORT_2026-09-02.md.
-
 ### CLWX-44 — Verify-or-fix the 3 missed-by-register defects (exec-noise, idle-timeout, Plaud)
 
 - **State:** Ready  |  **Priority:** none
@@ -526,6 +547,17 @@ Pull-forward from docs/MINISTRY_GRAPH_ACCESS_PLAN.md step B: wire the EXISTING m
 - Tick 2026-09-02: external gate CLEARED and L1-L3 PASS live against the REAL Ministry tenant. The Ministry delivered the real Application (client) ID and registered the dev redirect URI (http://localhost:53682/callback) with read-only admin consent (profile + inbox read + offline_access). Built scripts/graph-signin-smoke.ts (PKCE loopback, using the shipped extensions/microsoft-graph auth+client modules). Ran it with the sandbox account: L1 PASS - token acquired via PURE PKCE, no client secret in play (refresh token present from offline_access); L2 PASS - stable oid claim present (the KR7 UserId key), tid=9590bb09; L3 PASS - /me resolved + inbox read returned 5 messages. typecheck exit 0. Non-secret config in gitignored ~/openclaw-agent/secrets/graph.env; the client secret is stored NOWHERE. Held below Ready: the in-app flag wiring (CLAWX_GRAPH_AUTH) + host getAccessToken/token-persistence are still pending - openclaw.json keeps plugins.microsoft-graph.enabled=false because register() throws without that host wiring. Evidence: skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/.
 - Card scope transformed by the deep-dive discovery: moe.gov.tt and fac.edu.tt are ONE Entra tenant (9590bb09-ce2c-40e2-8181-fad0a7edebfe — public OpenID metadata, confirmed by the Ministry-branded sign-in on test.fac). The twin registration is now a FALLBACK only: our sandbox account already lives in the Ministry tenant, so once Ansari registers the dev URI + consents the read-only scopes on the REAL app, test.fac signs into it directly — ladder L1–L5 run against production registration with zero twin work. Remaining needs: the client id (tenant id is now public knowledge) + the dev URI (both asked in 01b, SENT). One owner decision parked in GRAPH_TEST_PLAN §4: whether to MFA-enroll test.fac for portal read access (recommendation: no — lane risk; the client id from Raj is the zero-risk path).
 - Test plan uploaded: docs/GRAPH_TEST_PLAN.md. Prerequisites matrix (P1–P6), the 7-rung test ladder (L1 sign-in round-trip → L7 UserId stamping), stakeholder RACI, and timeline. Key insight for this card: the best twin tenant is fac.edu.tt itself — the test mailbox already lives there, so a twin registration there lets the ENTIRE ladder run today against the same mailbox the browser evidence used. One owner decision needed: do we hold admin on the fac.edu.tt tenant? (Fallback: free M365 dev tenant, ~15 min owner signup.) Scope note: this card models the flag-gated sign-in per the agreed BFF architecture; rungs L1–L5 are agent-executable once the twin exists.
+
+### CLWX-42 — NSCC knowledge pack + run the stakeholder-authored Q&A eval
+
+- **State:** In Progress  |  **Priority:** none
+
+Raj's clearest explicit feature ask (2026-06-27, NSCC-2026.pdf): have the Code of Conduct in the AI's memory instead of file lookups. He also supplied a FREE stakeholder-authored eval set (NSCC_2026__Test_QnA.docx, 2026-05-14) that was never run. HARD FLAG in the stakeholder sweep — under-built exactly where he asked in plain words.
+Scope: (1) ingest NSCC-2026.pdf as a preloaded knowledge pack (workspace bootstrap doc or persona knowledge section); (2) convert the Q&A doc into an eval fixture and run it; (3) acceptance: fresh session, no file attached, a Code-of-Conduct question answers correctly with an NSCC citation + the Q&A eval passes. Agent-executable now. Source: docs/STAKEHOLDER_REPORT_2026-09-02.md.
+
+**Comments (1):**
+
+- 2026-09-03: the stakeholder-authored eval is BUILT and RUN LIVE. Raj's NSCC_2026__Test_QnA.docx (20 questions) converted verbatim to eval/fixtures/nscc-qna.json (re-extraction diff 40/40 identical); scripts/nscc-qna-eval.ts drives the live cloud model with the verified NSCC 2026 text as context: 18/20 PASS (90 percent, floor 80), 20/20 answers cite the NSCC, 17/20 cite the stakeholder's expected page. The 2 fails are genuine model misses, not matcher bugs — the eval discriminates. Wrong-edition guard proven live (refuses the 2018 revision, exit 3). Evidence: skills/laptop/evidence/2026-09-03-nscc-qna-eval/. Remaining for full acceptance (fresh session, no file attached, in-app): ship the knowledge pack — extensions/moe-principal-assistant/data/nscc-2026.txt + a principal.nscc_lookup tool (find_school pattern) + one persona steering line. Deliberately NOT a workspace bootstrap doc (would add ~55k tokens/turn against the KR6 floor). The runner's default knowledge path already points at the future in-app location, so the eval re-runs unchanged once it ships. Provenance note: ran on the content-verified 2026 text extraction (hash recorded); re-pull of Raj's original PDF binary staged as an owner ask.
 
 ### CLWX-43 — Latency budget + measurement (LATENCY-UX -- Raj twice-volunteered complaint)
 

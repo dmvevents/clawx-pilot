@@ -44,6 +44,46 @@
   ],
   "issues": [
     {
+      "id": "43db2bc9-fd19-401d-ba29-35ab03344fbd",
+      "sequence_id": 50,
+      "name": "Write Windows Problems Atlas sections 16-18 (TB-6)",
+      "priority": "none",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Doc-only: hidden-launch Gateway trap (IF-4), moe-principal-assistant path move to resources/extensions on Lane A, Windows Firewall silent-drop breaking nc -z (PF-3 control-leg). All three behaviors are codified as flight checks but the atlas entries were never written — they are the install/runtime debugging front door.",
+      "comments": []
+    },
+    {
+      "id": "ee030676-2625-45c2-ab92-78187efb5811",
+      "sequence_id": 49,
+      "name": "Loud frame-capture failure in pilot-chat-turn-driver.js (TB-5)",
+      "priority": "none",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "From flow 6: the Windows chat-turn driver can silently produce zero-frame evidence. Add frameCaptureFailed counter + non-zero exit on zero-frame runs, matching the loud {ok,detail} contract scripts/forms-submit-recorded.ts establishes. Detection owner: windows-smoke.",
+      "comments": []
+    },
+    {
+      "id": "2b27ef75-3bbb-4ff2-8b07-1d2ac93d5359",
+      "sequence_id": 48,
+      "name": "config-coherence-auditor rule: Graph signed-in implies UserId header on cloud provider (TB-4)",
+      "priority": "none",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "From flow 5: the KR7 UserId stamp (seed + refreshCloudGatewayUserIdHeader) is best-effort/warn-only — a failed re-stamp silently drops per-principal attribution. Add a coherence rule: IF clawx-microsoft-graph.json has an account THEN the moe-cloud-gateway provider entry in openclaw.json must carry headers.UserId == account oid; flag drift like the four-store rules. Detection owner: config-coherence-auditor.",
+      "comments": []
+    },
+    {
+      "id": "4433556e-91b0-4859-807e-156dfcfa882d",
+      "sequence_id": 47,
+      "name": "Slow-turn watchdog: 'still working' notice at 30s + per-turn duration log (TB-3)",
+      "priority": "none",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "From docs/FLOW_STATE_DIAGRAMS.md flow 2 (LATENCY-UX, measured ~103s median vs proposed 15s p50; Raj's twice-volunteered complaint). Build: renderer notice when a cloud turn exceeds 30s ('still working — you can keep typing'), backend per-turn duration log line for the latency ledger. The p50/p90 budget NUMBER stays owner-gated (bucket B); this card is the UX mitigation that works at any budget.",
+      "comments": []
+    },
+    {
       "id": "e77cba12-61a0-47ec-b459-fa5d201fbaaf",
       "sequence_id": 46,
       "name": "[bug/other] Outlook readEmail can return a stale reading-pane body (wrong email content)",
@@ -51,7 +91,12 @@
       "state": "Backlog",
       "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
       "description": "Area: other   Severity: medium (priority medium)\n\nSteps to reproduce\nTODO: exact steps\n\nExpected\nTODO: what should happen\n\nActual\nTODO: what happens instead\n\nEvidence\nTODO: log path / screenshot / trace id\n\nEnvironment\nTODO: build / OS / model\n\nRegression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)",
-      "comments": []
+      "comments": [
+        {
+          "text": "2026-09-03 resilience pack fold-in (docs/FLOW_STATE_DIAGRAMS.md flow 3): fix spec for this card is TB-1 + TB-2. TB-1 settle-on-expected-item guard: after clicking an inbox row, bounded poll until the reading pane's subject AND sender match the clicked row before any extraction; never retry through a confirm gate; detection owner ga-e2e-regression-verifier. TB-2: replace the readEmail subject heading selector (currently returns the UI heading 'Navigation pane') under the 3-fallback rotated-selector rule; detection owner dom-selector-regression-tester. Both in electron/services/outlook-browser-v2/outlook-actions.ts. Recommended pre-GA: an agent describing the WRONG email is the trust-killer class.",
+          "created": "2026-09-02T22:07:36.894600Z"
+        }
+      ]
     },
     {
       "id": "71c548f1-ba2b-43cf-b4e4-9b4f7ee9fc94",
@@ -107,10 +152,15 @@
       "sequence_id": 42,
       "name": "NSCC knowledge pack + run the stakeholder-authored Q&A eval",
       "priority": "none",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "Raj's clearest explicit feature ask (2026-06-27, NSCC-2026.pdf): have the Code of Conduct in the AI's memory instead of file lookups. He also supplied a FREE stakeholder-authored eval set (NSCC_2026__Test_QnA.docx, 2026-05-14) that was never run. HARD FLAG in the stakeholder sweep — under-built exactly where he asked in plain words.\nScope: (1) ingest NSCC-2026.pdf as a preloaded knowledge pack (workspace bootstrap doc or persona knowledge section); (2) convert the Q&A doc into an eval fixture and run it; (3) acceptance: fresh session, no file attached, a Code-of-Conduct question answers correctly with an NSCC citation + the Q&A eval passes. Agent-executable now. Source: docs/STAKEHOLDER_REPORT_2026-09-02.md.",
-      "comments": []
+      "comments": [
+        {
+          "text": "2026-09-03: the stakeholder-authored eval is BUILT and RUN LIVE. Raj's NSCC_2026__Test_QnA.docx (20 questions) converted verbatim to eval/fixtures/nscc-qna.json (re-extraction diff 40/40 identical); scripts/nscc-qna-eval.ts drives the live cloud model with the verified NSCC 2026 text as context: 18/20 PASS (90 percent, floor 80), 20/20 answers cite the NSCC, 17/20 cite the stakeholder's expected page. The 2 fails are genuine model misses, not matcher bugs — the eval discriminates. Wrong-edition guard proven live (refuses the 2018 revision, exit 3). Evidence: skills/laptop/evidence/2026-09-03-nscc-qna-eval/.\nRemaining for full acceptance (fresh session, no file attached, in-app): ship the knowledge pack — extensions/moe-principal-assistant/data/nscc-2026.txt + a principal.nscc_lookup tool (find_school pattern) + one persona steering line. Deliberately NOT a workspace bootstrap doc (would add ~55k tokens/turn against the KR6 floor). The runner's default knowledge path already points at the future in-app location, so the eval re-runs unchanged once it ships. Provenance note: ran on the content-verified 2026 text extraction (hash recorded); re-pull of Raj's original PDF binary staged as an owner ask.",
+          "created": "2026-09-02T22:07:36.728696Z"
+        }
+      ]
     },
     {
       "id": "1c64bddd-7cea-4118-ab25-8c36199c877c",

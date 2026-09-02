@@ -120,6 +120,31 @@ plausible root cause for Raj's original report; plus a cosmetic
 subject-selector defect. Recommend the settle-guard fix before GA. Evidence:
 `skills/laptop/evidence/2026-09-03-raj2-fidelity/RESULT.md`._
 
+_**Stakeholder-test + resilience tick (2026-09-03 evening, owner-directed).**
+Five more agents, all PASS: (1) **stakeholder regression battery re-run live**:
+118/118 unit contracts + **15/15 v2-eval** on the live tab + RAJ-3 re-refuted —
+Raj's June-21 list stays closed under fresh evidence; **consolidated update
+SENT to Raj (owner GO on record; bridge success; ledgered)**. (2) **CLWX-42
+NSCC eval BUILT + RUN**: Raj's 20 Q&A rows verbatim → fixture + live runner —
+**18/20 (90%)**, 20/20 NSCC citations, wrong-edition guard proven; in-app
+knowledge pack designed (data + `principal.nscc_lookup` + persona line, not a
+workspace doc — protects the KR6 floor) = P12. (3) **Recorded-verified form
+submission** (`forms-submit-recorded.ts`, URL hard-pinned to the test.fac
+clone): refusal proved, then ONE confirmed submit verified landed (responses
+5→6, marker, 2xx POST) with video + trace — the demo-evidence machinery and
+the KR2-recording pattern. (4) **Resilience pack**: `FLOW_STATE_DIAGRAMS.md`
+(6 flows, every transition → real incident → recovery owner) + the
+`demo-flow-recovery` skill (10 symptoms → probe → command); TO-BUILD gaps
+carded TB-3..TB-6, TB-1/2 fold into CLWX-46. (5) **Karunesh sweep**
+(liaison-monitor): his ClawX items = Prompt-Tests 0/5 (fixed, KR1 in-app proof
+owed), KAR-PDF/DOCSEARCH (need repro or current-build proof); video project
+SEPARATE — VIDEO_QA_TRACKER reply drafted, unsent 6+ days; NSCC doc is RAJ's,
+not his. (6) **Tester release packet**: moe.15 exe hash-verified locally,
+`docs/TESTER_QUICKSTART.md` authored, Karunesh handoff draft staged;
+distribution = GCS signed URL (interim path per REPO_AND_RELEASE_MAP) —
+**blocked on `gcloud auth login`** (storage token verified expired), which now
+gates BOTH the VM lane and the tester link._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
@@ -320,8 +345,11 @@ Chrome CDP/gateway state probed per-lane by the executing agents.
 | P6 | W8 Mac whisper smoke (say → WAV → transcribe → assert) | W8 Mac ◐→● | **DONE 09-03** — real transcript ×2, duration non-zero |
 | P7 | W3 Mac forms fill to the 29/32+gate bar (submit-gate refusal is the assertion) | W3 Mac ◐→● | **DONE 09-03** — 29/32 + gate refusal, VM bar matched |
 | P8 | RAJ-2 fidelity scenario (CLWX-34, last of Raj's 4) — draft-only, never send | Ext-val A last leg + register row + card | **DONE 09-03** — model layer NOT reproduced (dual deterministic assertion PASS, nothing sent); CLWX-34 → Ready; NEW suspect STALE-READ filed as CLWX-46 |
-| P9 | CLWX-42 NSCC knowledge pack + Q&A eval | Raj's clearest feature ask | next tick (external download) |
+| P9 | CLWX-42 NSCC knowledge pack + Q&A eval | Raj's clearest feature ask | **eval half DONE 09-03** — 18/20 (90%) live on Raj's own 20 questions; in-app knowledge pack = P12 |
 | P10 | KR4 kill-egress e2e residual | zero GA boxes (already checked) | do last |
+| P11 | CLWX-46 stale-read settle guard + subject-selector fix (TB-1/TB-2) | trust-killer class; recommended pre-GA | **next tick's top P item** |
+| P12 | NSCC in-app knowledge pack: `data/nscc-2026.txt` + `principal.nscc_lookup` tool + persona line (NOT a workspace doc — protects the KR6 floor) | closes CLWX-42 full acceptance | agent-executable |
+| P13 | TB-3 slow-turn watchdog + TB-4 UserId coherence-auditor rule + TB-5 frame-capture loudness + TB-6 Atlas §16–18 | resilience hardening (carded) | agent-executable, batchable |
 
 ### S — serial chains (irreducible, with the exact predecessor)
 
