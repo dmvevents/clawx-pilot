@@ -295,6 +295,22 @@ export function resolveReadablePath(input) {
   const candidates = [];
   if (path.isAbsolute(candidate)) {
     candidates.push(candidate);
+    // KFM gap (found live 2026-09-02, P6 run): models naturally say
+    // "~/Desktop/<name>", which expands to the CLASSIC Desktop — but on
+    // OneDrive Known-Folder-Move machines the real Desktop lives under
+    // ~/OneDrive/Desktop, so the literal absolute path misses a file that
+    // is exactly where the user says it is. For under-home absolute paths,
+    // fall back to resolving the basename across the search roots (same
+    // roots the bare-filename path uses; sandbox check below still applies).
+    if (path.resolve(candidate).startsWith(path.resolve(home))) {
+      const base = path.basename(candidate);
+      for (const dir of searchDirs) candidates.push(path.join(dir, base));
+      for (const dir of searchDirs) {
+        if (!existsSync(dir)) continue;
+        const hit = findWithinDir(dir, base);
+        if (hit) candidates.push(hit);
+      }
+    }
   } else {
     // Exact hits first across every search dir (cheap), …
     for (const dir of searchDirs) candidates.push(path.join(dir, candidate));

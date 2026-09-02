@@ -100,6 +100,26 @@ describe('Defect A — file discovery must find the OneDrive-redirected Desktop'
     }
   });
 
+  it('resolves "~/Desktop/<name>" when the file lives on the KFM-redirected Desktop', async () => {
+    // Found live on the P6 run (2026-09-02): models naturally pass
+    // "~/Desktop/<name>". Tilde expansion makes it ABSOLUTE, which used to
+    // skip the search roots entirely — missing a file that sits exactly in
+    // ~/OneDrive/Desktop. Under-home absolute misses must fall back to
+    // resolving the basename across the search roots.
+    const { resolveReadablePath } = await loadDocTools();
+    const home = os.homedir();
+    const dir = path.join(home, 'OneDrive', 'Desktop');
+    const name = `moe-kfm-tilde-${process.pid}.png`;
+    const file = path.join(dir, name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(file, 'probe');
+    try {
+      expect(resolveReadablePath(`~/Desktop/${name}`)).toBe(file);
+    } finally {
+      await rm(file, { force: true });
+    }
+  });
+
   it('still refuses a path outside the sandbox', async () => {
     // The KFM fix must not widen the sandbox. /etc/hosts exists on macOS+Linux.
     const { resolveReadablePath } = await loadDocTools();
