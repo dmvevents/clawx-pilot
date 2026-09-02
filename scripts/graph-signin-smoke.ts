@@ -18,10 +18,28 @@
  *   pnpm exec tsx scripts/graph-signin-smoke.ts
  * Sign in with the sandbox account test.fac@fac.edu.tt (NEVER a *@moe.gov.tt
  * mailbox for automation).
+ *
+ * PERSIST (L4 hand-off):
+ *   pnpm exec tsx scripts/graph-signin-smoke.ts --persist [path]
+ * After a successful exchange, merges config/account/secret into the app's
+ * clawx-microsoft-graph.json store (electron-store file) so installed builds
+ * and scripts/v2-eval-graph.ts can run on the persisted session. Default path
+ * is the packaged-app userData store; pass an explicit path for a dev store.
+ * The write is atomic (temp file + rename) and merges with any existing file,
+ * preserving unknown keys (schemaVersion, mockMailbox, config flags owned by
+ * the app). Token values are never printed — only the path and lengths.
+ *
+ * SELFTEST (no operator, no network):
+ *   pnpm exec tsx scripts/graph-signin-smoke.ts --selftest-persist --persist <path>
+ * Exercises the persist merge with synthetic values against an explicit path
+ * only, then exits. Refuses to run against the default app store.
  */
 
 import http from 'node:http';
 import { spawn } from 'node:child_process';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { buildAuthorizeUrl, endpointsFor } from '../extensions/microsoft-graph/auth.mjs';
 import { createGraphClient } from '../extensions/microsoft-graph/graph-client.mjs';
 
@@ -32,6 +50,16 @@ const scopes = (process.env.AZURE_GRAPH_SCOPES || 'offline_access User.Read Mail
   .split(/\s+/)
   .filter(Boolean);
 const clientSecret = process.env.AZURE_CLIENT_SECRET || null; // fallback only
+
+// --persist [path] — write the session into the app's electron-store file.
+const persistArgIndex = process.argv.indexOf('--persist');
+const persistRequested = persistArgIndex !== -1;
+const persistExplicitPath =
+  persistRequested
+  && process.argv[persistArgIndex + 1]
+  && !process.argv[persistArgIndex + 1].startsWith('--')
+    ? process.argv[persistArgIndex + 1]
+    : null;
 
 function reqEnv(name: string): string {
   const v = process.env[name];
@@ -54,6 +82,99 @@ function decodeClaims(jwt?: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+/**
+ * Packaged-app userData store for the Microsoft Graph session. Matches the
+ * electron-store file `clawx-microsoft-graph.json` read by
+ * electron/services/microsoft-graph/store.ts. Dev-mode stores live under a
+ * different userData dir — pass an explicit `--persist <path>` for those.
+ */
+function defaultStorePath(): string {
+  const fileName = 'clawx-microsoft-graph.json';
+  if (process.platform === 'darwin') {
+    return join(homedir(), 'Library', 'Application Support', 'Ministry of Education', fileName);
+  }
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA || join(homedir(), 'AppData', 'Roaming');
+    return join(appData, 'Ministry of Education', fileName);
+  }
+  return join(homedir(), '.config', 'Ministry of Education', fileName);
+}
+
+interface TokenSet {
+  access_token: string;
+  refresh_token?: string;
+  id_token?: string;
+  expires_in: number;
+  scope?: string;
+}
+
+/**
+ * Merge config/account/secret into the store file atomically (temp + rename).
+ * Unknown keys — and known keys we don't own here, like `mockMailbox` or the
+ * config transport flags — are preserved so the app's own writers stay
+ * authoritative for them. Never logs token values.
+ */
+function persistSession(path: string, tok: TokenSet, claims: Record<string, unknown>): void {
+  const oid = typeof claims.oid === 'string' ? claims.oid : '';
+  if (!oid) {
+    throw new Error('--persist: access token has no oid claim; cannot build the account block');
+  }
+  const email = (claims.preferred_username ?? claims.upn) as string | undefined;
+  const tid = typeof claims.tid === 'string' && claims.tid ? claims.tid : tenantId;
+
+  let existing: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) existing = parsed;
+  } catch {
+    // Missing or unreadable file — start from an empty store.
+  }
+  const existingConfig =
+    existing.config && typeof existing.config === 'object' && !Array.isArray(existing.config)
+      ? (existing.config as Record<string, unknown>)
+      : {};
+
+  const next = {
+    schemaVersion: 1,
+    mockMailbox: false,
+    ...existing,
+    config: {
+      ...existingConfig,
+      tenantId,
+      clientId,
+      scopes,
+      redirectUri,
+    },
+    account: {
+      accountId: oid,
+      email,
+      tenantId: tid,
+      signedInAt: Date.now(),
+    },
+    secret: {
+      access: tok.access_token,
+      refresh: tok.refresh_token ?? '',
+      expires: Date.now() + tok.expires_in * 1000,
+      scope: tok.scope ?? scopes.join(' '),
+    },
+  };
+
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
+  // Tab indentation matches electron-store's serializer, and 0600 keeps the
+  // token file owner-only. rename() makes the swap atomic.
+  writeFileSync(tmp, JSON.stringify(next, null, '\t'), { mode: 0o600 });
+  renameSync(tmp, path);
+
+  if (!tok.refresh_token) {
+    console.log('[persist] WARNING: no refresh_token granted (missing offline_access?) — the session cannot auto-refresh after expiry');
+  }
+  console.log(`[persist] wrote ${path}`);
+  console.log(
+    `[persist] secret: access ${redactToken(tok.access_token)}, refresh ${redactToken(tok.refresh_token)}, expires_in=${tok.expires_in}s, scope="${tok.scope ?? '(unstated)'}"`,
+  );
 }
 
 /** Token exchange. PKCE-public first; on "secret required" retry with the env secret. */
@@ -92,7 +213,48 @@ async function exchange(code: string, codeVerifier: string) {
   return json as { access_token: string; refresh_token?: string; id_token?: string; expires_in: number; scope?: string };
 }
 
+/**
+ * Offline proof for the persist path: runs persistSession twice with the same
+ * synthetic token set (idempotency), then re-reads the file and checks the
+ * merge preserved pre-existing keys it does not own. No browser, no network.
+ */
+function selftestPersist(): never {
+  if (!persistExplicitPath) {
+    console.error('[selftest-persist] requires an explicit --persist <path>; refusing to touch the app store');
+    process.exit(2);
+  }
+  const path = resolve(persistExplicitPath);
+  const tok: TokenSet = {
+    access_token: 'selftest-access-token',
+    refresh_token: 'selftest-refresh-token',
+    expires_in: 3600,
+    scope: scopes.join(' '),
+  };
+  const claims = {
+    oid: '00000000-0000-0000-0000-00000000000a',
+    tid: tenantId,
+    preferred_username: 'selftest@example.test',
+  };
+  persistSession(path, tok, claims);
+  persistSession(path, tok, claims); // second write must be a clean overwrite
+  const readBack = JSON.parse(readFileSync(path, 'utf8'));
+  const checks: Array<[string, boolean]> = [
+    ['secret persisted', readBack?.secret?.access === tok.access_token && readBack?.secret?.refresh === tok.refresh_token],
+    ['account.accountId = oid', readBack?.account?.accountId === claims.oid],
+    ['config tenant/client set', readBack?.config?.tenantId === tenantId && readBack?.config?.clientId === clientId],
+    ['expires is a future ms epoch', typeof readBack?.secret?.expires === 'number' && readBack.secret.expires > Date.now()],
+  ];
+  let ok = true;
+  for (const [name, pass] of checks) {
+    console.log(`[selftest-persist] ${pass ? 'PASS' : 'FAIL'} — ${name}`);
+    if (!pass) ok = false;
+  }
+  process.exit(ok ? 0 : 1);
+}
+
 async function main() {
+  if (process.argv.includes('--selftest-persist')) selftestPersist();
+
   console.log('=== Graph sign-in smoke (L1..L3) ===');
   console.log(`tenant=${tenantId}`);
   console.log(`client=${clientId}`);
@@ -165,6 +327,11 @@ async function main() {
   const claims = decodeClaims(tok.access_token);
   const oid = claims.oid as string | undefined;
   console.log(`[L2] ${oid ? 'PASS' : 'FAIL'} — oid=${oid ?? '<missing>'} tid=${claims.tid ?? '?'} upn=${claims.preferred_username ?? claims.upn ?? '?'} scp="${claims.scp ?? '?'}"`);
+
+  if (persistRequested) {
+    const storePath = resolve(persistExplicitPath ?? defaultStorePath());
+    persistSession(storePath, tok, claims);
+  }
 
   // L3 — one real Graph read, via the shipped client
   const graph = createGraphClient({ getAccessToken: async () => tok.access_token });
