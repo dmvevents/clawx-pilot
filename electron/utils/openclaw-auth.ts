@@ -1221,6 +1221,38 @@ function mergeProviderModels(
   return merged;
 }
 
+/**
+ * Google's OpenAI-compat endpoint (generativelanguage.googleapis.com) rejects
+ * requests that carry the OpenAI-only `store` field with a bodyless HTTP 400
+ * ("Unknown name \"store\""), which the chat surfaces as "Model call failed /
+ * 400 status code (no body)". The bundled gateway only sends `store` when a
+ * model's compat marks it supported, so every model entry written for that
+ * endpoint must carry `supportsStore: false`. Applied at both writer choke
+ * points (openclaw.json models.providers and per-agent models.json) so every
+ * rebuild path — channel toggle, provider save, agent-model sync — converges
+ * to the same safe state instead of stripping the flag.
+ */
+function baseUrlTargetsGoogleGenerativeLanguage(baseUrl: unknown): boolean {
+  if (typeof baseUrl !== 'string' || !baseUrl) return false;
+  try {
+    return new URL(baseUrl).hostname.toLowerCase() === 'generativelanguage.googleapis.com';
+  } catch {
+    return false;
+  }
+}
+
+function applyEndpointModelCompatDefaults(
+  baseUrl: unknown,
+  models: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  if (!baseUrlTargetsGoogleGenerativeLanguage(baseUrl)) return models;
+  return models.map((model) => {
+    const compat = isPlainRecord(model.compat) ? model.compat : {};
+    if (compat.supportsStore === false) return model;
+    return { ...model, compat: { ...compat, supportsStore: false } };
+  });
+}
+
 function upsertOpenClawProviderEntry(
   config: Record<string, unknown>,
   provider: string,
@@ -1247,7 +1279,10 @@ function upsertOpenClawProviderEntry(
     ...existingProvider,
     baseUrl: options.baseUrl,
     api: options.api,
-    models: mergeProviderModels(registryModels, existingModels, runtimeModels),
+    models: applyEndpointModelCompatDefaults(
+      options.baseUrl,
+      mergeProviderModels(registryModels, existingModels, runtimeModels),
+    ),
   };
   if (options.apiKeyEnv) nextProvider.apiKey = options.apiKeyEnv;
   if (options.headers !== undefined) {
@@ -2101,7 +2136,9 @@ async function updateModelsJsonProviderEntriesForAgents(
 
     if (entry.baseUrl !== undefined) existing.baseUrl = entry.baseUrl;
     if (entry.api !== undefined) existing.api = entry.api;
-    if (mergedModels.length > 0) existing.models = mergedModels;
+    if (mergedModels.length > 0) {
+      existing.models = applyEndpointModelCompatDefaults(existing.baseUrl, mergedModels);
+    }
     if (entry.apiKey !== undefined) existing.apiKey = entry.apiKey;
     if (entry.authHeader !== undefined) existing.authHeader = entry.authHeader;
 
