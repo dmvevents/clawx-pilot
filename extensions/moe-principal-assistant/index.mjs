@@ -406,6 +406,69 @@ function normalizeSuspensionPreviewPayload(rawPayload, cfg) {
  * that DO have Python, the agent may still pick the skills; on the pilot
  * Windows laptop these are the only path that works.
  */
+/**
+ * Consecutive-identical-failure breaker (CLWX-38).
+ *
+ * Found live on the moe.14 KR2 run: the 3B on-device model called
+ * `principal.summarise_circular` with empty `circular_text`, got the
+ * validation error, and retried the IDENTICAL call for 13+ minutes — small
+ * models ignore error text and there is no agent-side retry cap. Wrap every
+ * tool so that after MAX consecutive failures with the same arguments the
+ * tool returns a SUCCESS-shaped plain-text instruction to answer directly.
+ * A success result is the only signal this class of model reliably acts on.
+ *
+ * Scope: consecutive + identical-args only — a genuine transient (different
+ * args, or a success in between) resets the counter, so retry semantics for
+ * healthy tools are unchanged.
+ */
+function withRetryBreaker(registerTool, log = console) {
+  const MAX_IDENTICAL_FAILURES = 3;
+  return (tool) => {
+    let lastFailureKey = null;
+    let failureCount = 0;
+    const innerExecute = tool.execute;
+    registerTool({
+      ...tool,
+      execute: async (toolCallId, args = {}) => {
+        let key;
+        try {
+          key = JSON.stringify(args ?? {});
+        } catch {
+          key = String(args);
+        }
+        try {
+          const result = await innerExecute(toolCallId, args);
+          lastFailureKey = null;
+          failureCount = 0;
+          return result;
+        } catch (err) {
+          if (key === lastFailureKey) {
+            failureCount += 1;
+          } else {
+            lastFailureKey = key;
+            failureCount = 1;
+          }
+          if (failureCount >= MAX_IDENTICAL_FAILURES) {
+            const message = err instanceof Error ? err.message : String(err);
+            log.warn?.(
+              `[retry-breaker] ${tool.name} failed ${failureCount}x with identical args — breaking the loop`,
+            );
+            lastFailureKey = null;
+            failureCount = 0;
+            return {
+              text:
+                `STOP: the tool ${tool.name} was called ${MAX_IDENTICAL_FAILURES} times with the same ` +
+                `arguments and failed every time (${message}). Do not call ${tool.name} again for this ` +
+                'request. Answer the user directly in plain language using what you already know.',
+            };
+          }
+          throw err;
+        }
+      },
+    });
+  };
+}
+
 function registerDocumentTools({ registerTool, log }) {
   const readableSchema = { type: 'string', description: 'Absolute path, ~/ path, or filename to look up in ~/.openclaw/media/outbound, ~/Downloads, ~/Documents, or ~/Desktop.' };
   const numberSchema = { type: 'number', minimum: 1 };
@@ -522,7 +585,8 @@ export function register(api) {
   //
   // Fallbacks: tolerate config-as-function (very old gateway API) and
   // config-as-direct-object (a custom host that bypasses the gateway loader).
-  const { pluginConfig, config, registerTool, log = console, host = {} } = api;
+  const { pluginConfig, config, registerTool: rawRegisterTool, log = console, host = {} } = api;
+  const registerTool = withRetryBreaker(rawRegisterTool, log);
   const cfg =
     (pluginConfig && typeof pluginConfig === 'object' ? pluginConfig : null) ??
     (typeof config === 'function' ? config() : config) ??

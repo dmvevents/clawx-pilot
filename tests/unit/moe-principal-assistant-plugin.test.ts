@@ -561,3 +561,50 @@ describe('moe-principal-assistant plugin registration', () => {
     }
   });
 });
+
+describe('retry breaker (CLWX-38)', () => {
+  async function registerAndFind(name: string) {
+    const { register } = await loadPlugin();
+    const tools: RegisteredTool[] = [];
+    register({
+      pluginConfig,
+      registerTool: (tool: RegisteredTool) => tools.push(tool),
+      log: { info() {}, warn() {} },
+    });
+    const tool = tools.find((t) => t.name === name);
+    expect(tool, `${name} must be registered`).toBeDefined();
+    return tool!;
+  }
+
+  it('breaks the loop after 3 identical failing calls with a success-shaped instruction', async () => {
+    const tool = await registerAndFind('principal.summarise_circular');
+
+    // The live moe.14 failure: empty circular_text, retried identically.
+    await expect(tool.execute!('t1', { circular_text: '' })).rejects.toThrow();
+    await expect(tool.execute!('t2', { circular_text: '' })).rejects.toThrow();
+
+    const broken = (await tool.execute!('t3', { circular_text: '' })) as { text: string };
+    expect(broken.text).toContain('STOP');
+    expect(broken.text).toContain('principal.summarise_circular');
+    expect(broken.text).toContain('Answer the user directly');
+  });
+
+  it('different arguments or a success reset the counter', async () => {
+    const tool = await registerAndFind('principal.summarise_circular');
+
+    await expect(tool.execute!('t1', { circular_text: '' })).rejects.toThrow();
+    await expect(tool.execute!('t2', { circular_text: '' })).rejects.toThrow();
+
+    // A successful call resets the breaker...
+    const ok = (await tool.execute!('t3', { circular_text: 'Circular 42: school closes early Friday.' })) as Record<string, unknown>;
+    expect(ok).toHaveProperty('summary');
+
+    // ...so the next two identical failures still throw (no premature break).
+    await expect(tool.execute!('t4', { circular_text: '' })).rejects.toThrow();
+    await expect(tool.execute!('t5', { circular_text: '' })).rejects.toThrow();
+
+    // Distinct failing args also do not trip the identical-args breaker.
+    const distinct = tool.execute!('t6', {} as Record<string, unknown>);
+    await expect(distinct).rejects.toThrow();
+  });
+});
