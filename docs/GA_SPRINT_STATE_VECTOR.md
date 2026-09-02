@@ -36,6 +36,19 @@ Ministry tenant); only the client id + dev-URI registration remain (asked in
 gate on test.fac — owner decision documented in GRAPH_TEST_PLAN (recommend:
 don't enroll; zero lane risk path is Raj handing over the client id)._
 
+_Office-write + preflight tick (2026-09-02): **Word/Excel WRITE is now GREEN on
+Windows** — `pilot-office-write-smoke.ps1` drove the packaged VM node through the
+real write path (write .docx 8582 B + .xlsx 16077 B to media/outbound, read both
+back) → `STATE: OFFICE_WRITE_OK`; Mac fn-level round-trip 8/8. Gap-B leg b1
+(runtime write) DONE; b2 (live in-app write turn) still open. The **enforced
+preflight gate** (commit 617a6ceb) now fronts package:mac/package:win/build:win
+(`typecheck && vitest run && harness:doc-tooling-e2e`, full run GREEN 5/5) and
+caught + hardened one flaky harness test under CPU contention. moe.15 verified by
+hash (`d10de580…18df`); Phase A (assisted install + Windows smoke incl. b2)
+underway on the running VM. GHIP #354 (full-toolset laptop-verification card,
+project `c6717c2c`, the GitHub-Issues project — NOT the CLWX board mirrored in
+`docs/plane-board/`) moved Todo → In Progress with evidence._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
