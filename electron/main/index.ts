@@ -56,6 +56,7 @@ import { seedCloudGatewayProvider } from './cloud-gateway-provider-seed';
 import { seedDefaultLocalProvider } from './local-provider-seed';
 import { seedGatewayPluginConfig } from './gateway-plugin-config-seed';
 import { runChannelPreflight, ensureBootableAgentsConfig } from '../services/providers/channel-router';
+import { startOutboxDrain, stopOutboxDrain } from '../services/outbox-service';
 
 const WINDOWS_APP_USER_MODEL_ID = 'tt.gov.moe.assistant';
 const isE2EMode = process.env.CLAWX_E2E === '1';
@@ -596,6 +597,13 @@ async function initialize(): Promise<void> {
     logger.info('Gateway auto-start disabled in settings');
   }
 
+  // Store-and-forward outbox (OFFLINE_ARCHITECTURE §5): background drain of
+  // audit/form records. With no app server configured it only surfaces the
+  // pending count; records accumulate durably until KR8 provides real values.
+  if (!isE2EMode) {
+    startOutboxDrain();
+  }
+
   // Merge Ministry context snippets into the workspace bootstrap files.
   // The gateway seeds workspace files asynchronously after its HTTP server
   // is ready, so ensureClawXContext will retry until the target files appear.
@@ -632,6 +640,7 @@ if (gotTheLock) {
   process.once('SIGTERM', () => requestQuitOnSignal('SIGTERM'));
 
   app.on('will-quit', () => {
+    stopOutboxDrain();
     releaseProcessInstanceFileLock();
   });
 

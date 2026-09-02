@@ -35,6 +35,7 @@ import {
   searchInboxWithGraph,
   sendEmailWithGraph,
 } from '../../services/microsoft-graph/outlook-adapter';
+import { recordOutlookSendAudit } from '../../services/outbox-service';
 import type {
   DraftEmailArgs,
   SendEmailArgs,
@@ -165,6 +166,18 @@ export async function handleOutlookRoutes(
         ? await sendEmailWithGraph(body)
         : await outlookBrowserManager.sendEmail(body);
       logger.info(`[host-api outlook/send] transport=${graphAvailable ? 'graph' : 'browser'} result=${result.status}`);
+      if (result.status === 'sent') {
+        // Audit trail is written first to the durable outbox (§5.3); replay
+        // to the app server happens in the background once one is configured.
+        await recordOutlookSendAudit({
+          subject: body.subject,
+          to: body.to,
+          cc: body.cc,
+          bcc: body.bcc,
+          transport: graphAvailable ? 'graph' : 'browser',
+          status: result.status,
+        });
+      }
       sendJson(res, 200, { success: true, data: result });
       return true;
     }
