@@ -15,13 +15,17 @@
  * On a fresh install (or after a wipe of ~/.openclaw/openclaw.json) those
  * blocks are absent, the doctor refuses, and the gateway never comes up.
  * This seeder writes schema-valid placeholder config that:
- *   - keeps microsoft-graph DISABLED until the Entra app-registration packet
- *     comes back from MoE IT (see /tmp/moe-entra-app-registration-request.md);
+ *   - keeps microsoft-graph DISABLED — always. The host-API adapter
+ *     (electron/services/microsoft-graph) is the sole Graph lane; the
+ *     gateway plugin stub crashes gateway boot when enabled without host
+ *     wiring, so enabled=false is forced even over a hand edit;
  *   - leaves moe-principal-assistant ENABLED but with "Unconfigured *"
  *     defaults so it's effectively a no-op until first onboarding writes
  *     real values.
  *
- * Idempotent: only fills missing keys, never overwrites real values.
+ * Idempotent: only fills missing keys, never overwrites real values — with
+ * the one deliberate policy exception above (microsoft-graph.enabled is
+ * pinned to false).
  *
  * Disable via env: `CLAWX_SEED_GATEWAY_PLUGIN_CONFIG=0`.
  */
@@ -43,7 +47,9 @@ const MS_GRAPH_PLACEHOLDER = {
   clientId: 'pending-entra-registration',
   redirectUri: 'http://localhost:18789/oauth/callback',
   authFlow: 'auth-code-pkce' as const,
-  scopes: ['User.Read', 'Mail.Send', 'Files.ReadWrite'],
+  // Read-only baseline. Mail.Send and write scopes are requested through the
+  // host-API sign-in flow when compose is enabled, never seeded here.
+  scopes: ['offline_access', 'User.Read', 'Mail.Read'],
 };
 
 const MOE_ASSISTANT_PLACEHOLDER = {
@@ -134,9 +140,12 @@ export async function seedGatewayPluginConfig(): Promise<void> {
 
     let changed = false;
 
-    // microsoft-graph: stub config, keep disabled until Entra packet returns.
+    // microsoft-graph: stub config, forced disabled ALWAYS. The host-API
+    // adapter is the sole Graph lane; the gateway stub crashes gateway boot
+    // when enabled without host wiring, so this is pinned rather than
+    // fill-if-missing like everything else in this seeder.
     const mg: PluginEntry = entries['microsoft-graph'] ?? {};
-    if (mg.enabled === undefined) {
+    if (mg.enabled !== false) {
       mg.enabled = false;
       changed = true;
     }

@@ -5,6 +5,7 @@
  * requiring Chrome/CDP setup. Browser automation remains the fallback for
  * visible compose review, attachments, and any action not mapped here yet.
  */
+import { logger } from '../../utils/logger';
 import {
   getStatus,
   graphCalls,
@@ -15,6 +16,7 @@ import {
 import type {
   DraftEmailArgs,
   DraftEmailResult,
+  EmailAttachmentInfo,
   InboxMessage,
   ReadEmailArgs,
   ReadEmailResult,
@@ -40,12 +42,75 @@ interface GraphMessage {
   bodyPreview?: string;
   receivedDateTime?: string;
   isRead?: boolean;
+  hasAttachments?: boolean;
   from?: { emailAddress?: GraphEmailAddress };
   sender?: { emailAddress?: GraphEmailAddress };
   toRecipients?: GraphRecipient[];
   ccRecipients?: GraphRecipient[];
   bccRecipients?: GraphRecipient[];
   body?: { content?: string; contentType?: string };
+}
+
+interface GraphAttachment {
+  name?: string;
+  size?: number;
+  contentType?: string;
+}
+
+/**
+ * Cross-transport message-id marker.
+ *
+ * The browser lane identifies messages by a DOM fingerprint —
+ * sender|subject|renderedDate, built in outlook-browser-v2/outlook-actions.ts.
+ * The renderedDate component is Outlook Web's locale/relative display string
+ * ("Tue", "Mon 5/22", "9:42 AM"), which cannot be cleanly computed from
+ * Graph's ISO receivedDateTime, so Graph reads cannot emit browser-compatible
+ * ids. Instead every Graph-emitted id carries this prefix; browser-lane
+ * operations (reply/forward/mark-read/attachments) must detect the prefix and
+ * refuse with structured guidance rather than scroll the inbox hunting for a
+ * fingerprint that can never match. The raw Graph REST id is preserved in a
+ * separate `graphId` field for Graph-side follow-up calls.
+ */
+export const GRAPH_MESSAGE_ID_PREFIX = 'graph:';
+
+export function isGraphMessageId(id: string): boolean {
+  return id.startsWith(GRAPH_MESSAGE_ID_PREFIX);
+}
+
+function toPrefixedGraphId(restId: string): string {
+  return `${GRAPH_MESSAGE_ID_PREFIX}${restId}`;
+}
+
+function toGraphRestId(id: string): string {
+  return isGraphMessageId(id) ? id.slice(GRAPH_MESSAGE_ID_PREFIX.length) : id;
+}
+
+/** InboxMessage plus the Graph-only fields the adapter carries alongside. */
+export type GraphInboxMessage = InboxMessage & {
+  /** Raw Microsoft Graph REST id, for Graph-side follow-up calls. */
+  graphId: string;
+  /** From Graph's hasAttachments; feeds the search hasAttachment filter. */
+  hasAttachments: boolean;
+};
+
+/** Structured refusal shared with SendEmailResult's refused variant; used
+ *  where the browser-lane result type has no refused member (draft). */
+export interface GraphOutlookRefusal {
+  status: 'refused';
+  reason: string;
+}
+
+const GRAPH_WRITE_REFUSAL_REASON =
+  'Microsoft 365 denied the request (403 ErrorAccessDenied). The signed-in '
+  + 'account\'s Microsoft 365 access is read-only right now, so drafting and '
+  + 'sending through Microsoft Graph are not permitted. Ask the tenant '
+  + 'administrator to grant Mail.ReadWrite / Mail.Send, or use the Outlook '
+  + 'browser lane instead.';
+
+function isGraphAccessDenied(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const { status, code } = err as { status?: number; code?: string };
+  return status === 403 || code === 'ErrorAccessDenied';
 }
 
 function addressLabel(value?: GraphEmailAddress): string {
@@ -76,19 +141,22 @@ function stripHtml(value: string): string {
     .trim();
 }
 
-function toInboxMessage(message: GraphMessage): InboxMessage {
+function toInboxMessage(message: GraphMessage): GraphInboxMessage {
   const sender = message.from?.emailAddress ?? message.sender?.emailAddress;
+  const restId = message.id ?? '';
   return {
-    id: message.id ?? '',
+    id: restId ? toPrefixedGraphId(restId) : '',
+    graphId: restId,
     subject: message.subject ?? '',
     sender: addressLabel(sender),
     snippet: message.bodyPreview ?? '',
     receivedAt: message.receivedDateTime ?? '',
     unread: message.isRead === false,
+    hasAttachments: message.hasAttachments === true,
   };
 }
 
-function matchesSearch(message: InboxMessage, args: SearchInboxArgs): boolean {
+function matchesSearch(message: GraphInboxMessage, args: SearchInboxArgs): boolean {
   if (args.from && !message.sender.toLowerCase().includes(args.from.toLowerCase())) return false;
   if (
     args.subjectContains
@@ -101,6 +169,9 @@ function matchesSearch(message: InboxMessage, args: SearchInboxArgs): boolean {
     return false;
   }
   if (args.dateLt && message.receivedAt && new Date(message.receivedAt) >= new Date(args.dateLt)) {
+    return false;
+  }
+  if (typeof args.hasAttachment === 'boolean' && message.hasAttachments !== args.hasAttachment) {
     return false;
   }
   return true;
@@ -180,17 +251,43 @@ export async function searchInboxWithGraph(args: SearchInboxArgs): Promise<Searc
   };
 }
 
-export async function readEmailWithGraph(args: ReadEmailArgs): Promise<ReadEmailResult> {
-  const message = await graphCalls.getMessage(args.id) as GraphMessage;
+async function fetchGraphAttachmentInfo(restId: string): Promise<EmailAttachmentInfo[]> {
+  try {
+    const data = await graphCalls.listAttachments(restId);
+    return ((data as { value?: GraphAttachment[] }).value ?? [])
+      .filter((attachment) => Boolean(attachment?.name))
+      .map((attachment) => ({
+        filename: attachment.name as string,
+        sizeBytes: typeof attachment.size === 'number' ? attachment.size : undefined,
+        mimeType: attachment.contentType || undefined,
+      }));
+  } catch (err) {
+    // Metadata is a nice-to-have on read; never fail the whole read over it.
+    logger.warn(
+      `[msgraph] attachment metadata fetch failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return [];
+  }
+}
+
+export async function readEmailWithGraph(
+  args: ReadEmailArgs,
+): Promise<ReadEmailResult & { graphId?: string }> {
+  const restId = toGraphRestId(args.id);
+  const message = await graphCalls.getMessage(restId) as GraphMessage;
   if (!message?.id) {
     return { status: 'not_found', id: args.id, message: 'Message not found' };
   }
   const body = message.body?.content
     ? stripHtml(message.body.content)
     : message.bodyPreview;
+  const attachments = message.hasAttachments === true
+    ? await fetchGraphAttachmentInfo(message.id)
+    : [];
   return {
     status: 'ok',
-    id: message.id,
+    id: toPrefixedGraphId(message.id),
+    graphId: message.id,
     subject: message.subject ?? '',
     sender: addressLabel(message.from?.emailAddress ?? message.sender?.emailAddress),
     receivedAt: message.receivedDateTime ?? '',
@@ -200,12 +297,21 @@ export async function readEmailWithGraph(args: ReadEmailArgs): Promise<ReadEmail
       cc: recipientAddresses(message.ccRecipients),
       bcc: recipientAddresses(message.bccRecipients),
     },
-    attachments: [],
+    attachments,
   };
 }
 
-export async function draftEmailWithGraph(args: DraftEmailArgs): Promise<DraftEmailResult> {
-  await graphCalls.createDraft(normalizeGraphDraftArgs(args));
+export async function draftEmailWithGraph(
+  args: DraftEmailArgs,
+): Promise<DraftEmailResult | GraphOutlookRefusal> {
+  try {
+    await graphCalls.createDraft(normalizeGraphDraftArgs(args));
+  } catch (err) {
+    if (isGraphAccessDenied(err)) {
+      return { status: 'refused', reason: GRAPH_WRITE_REFUSAL_REASON };
+    }
+    throw err;
+  }
   return {
     status: 'drafted',
     draftLeftOpen: false,
@@ -234,12 +340,19 @@ export async function sendEmailWithGraph(args: SendEmailArgs): Promise<SendEmail
         'Graph send requires explicit to, subject, and body because it cannot verify a visible reviewed Outlook draft.',
     };
   }
-  await graphCalls.sendMail(normalizeGraphSendArgs({
-    to: args.to,
-    subject: args.subject,
-    body: args.body,
-    cc: args.cc,
-    bcc: args.bcc,
-  }));
+  try {
+    await graphCalls.sendMail(normalizeGraphSendArgs({
+      to: args.to,
+      subject: args.subject,
+      body: args.body,
+      cc: args.cc,
+      bcc: args.bcc,
+    }));
+  } catch (err) {
+    if (isGraphAccessDenied(err)) {
+      return { status: 'refused', reason: GRAPH_WRITE_REFUSAL_REASON };
+    }
+    throw err;
+  }
   return { status: 'sent', message: 'Sent through Microsoft Graph' };
 }

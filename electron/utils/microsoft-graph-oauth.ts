@@ -24,19 +24,15 @@ const REDIRECT_URI = 'http://localhost:53682/callback';
 const REDIRECT_PORT = 53682;
 const REDIRECT_PATH = '/callback';
 
-// Default delegated scopes. Must match the scopes that the tenant's app
-// registration has consented to. Caller can override if their registration
-// uses a narrower set.
+// Default delegated scopes. This is the read-only baseline the Ministry's
+// admin consent actually covers (offline_access + User.Read + Mail.Read).
+// Requesting anything richer by default makes every in-app sign-in fail with
+// a consent error, so richer sets (Mail.ReadWrite, Mail.Send, Calendars.Read)
+// must be opted into explicitly via config.scopes once consent is granted.
 export const DEFAULT_GRAPH_SCOPES = [
   'offline_access',
-  'openid',
-  'profile',
-  'email',
   'User.Read',
   'Mail.Read',
-  'Mail.ReadWrite',
-  'Mail.Send',
-  'Calendars.Read',
 ];
 
 const SUCCESS_HTML = `<!doctype html>

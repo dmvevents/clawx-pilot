@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getStatus, graphCalls } from '../../electron/services/microsoft-graph/manager';
 import {
   draftEmailWithGraph,
+  isGraphMessageId,
   isGraphOutlookAvailable,
   readEmailWithGraph,
   readInboxWithGraph,
@@ -15,6 +16,7 @@ vi.mock('../../electron/services/microsoft-graph/manager', () => ({
   graphCalls: {
     listMessages: vi.fn(),
     getMessage: vi.fn(),
+    listAttachments: vi.fn(),
     createDraft: vi.fn(),
     sendMail: vi.fn(),
   },
@@ -31,6 +33,7 @@ describe('Microsoft Graph Outlook adapter', () => {
       signedIn: true,
       account: { accountId: 'user-1', email: 'principal@example.edu', tenantId: 'tenant-1' },
       expiresAt: Date.now() + 60_000,
+      grantedScopes: ['offline_access', 'User.Read', 'Mail.Read'],
       mockMailbox: false,
       effectiveMock: false,
     });
@@ -44,6 +47,7 @@ describe('Microsoft Graph Outlook adapter', () => {
       signedIn: false,
       account: null,
       expiresAt: null,
+      grantedScopes: [],
       mockMailbox: true,
       effectiveMock: true,
     });
@@ -54,6 +58,7 @@ describe('Microsoft Graph Outlook adapter', () => {
       signedIn: false,
       account: null,
       expiresAt: null,
+      grantedScopes: [],
       mockMailbox: false,
       effectiveMock: true,
     });
@@ -69,6 +74,7 @@ describe('Microsoft Graph Outlook adapter', () => {
           bodyPreview: 'Please submit today',
           receivedDateTime: '2026-06-06T12:00:00Z',
           isRead: false,
+          hasAttachments: true,
           from: { emailAddress: { name: 'District Office', address: 'district@example.edu' } },
         },
       ],
@@ -80,12 +86,14 @@ describe('Microsoft Graph Outlook adapter', () => {
       status: 'ok',
       messages: [
         {
-          id: 'AAMkAGI',
+          id: 'graph:AAMkAGI',
+          graphId: 'AAMkAGI',
           subject: 'Suspension report',
           sender: 'District Office <district@example.edu>',
           snippet: 'Please submit today',
           receivedAt: '2026-06-06T12:00:00Z',
           unread: true,
+          hasAttachments: true,
         },
       ],
       scan: {
@@ -98,6 +106,27 @@ describe('Microsoft Graph Outlook adapter', () => {
       },
     });
     expect(mockGraphCalls.listMessages).toHaveBeenCalledWith({ top: 5 });
+  });
+
+  it('emits graph-prefixed ids so browser-lane ops can detect and refuse them', async () => {
+    mockGraphCalls.listMessages.mockResolvedValueOnce({
+      value: [
+        {
+          id: 'AAMkAGI',
+          subject: 'Suspension report',
+          bodyPreview: '',
+          isRead: false,
+          from: { emailAddress: { address: 'district@example.edu' } },
+        },
+      ],
+    });
+
+    const result = await readInboxWithGraph(1);
+
+    // The browser lane's sender|subject|renderedDate fingerprint cannot be
+    // rebuilt from Graph fields, so the id is marked instead of imitated.
+    expect(isGraphMessageId(result.messages[0].id)).toBe(true);
+    expect(isGraphMessageId('District Office|Suspension report|Tue')).toBe(false);
   });
 
   it('filters Graph inbox rows for search requests', async () => {
@@ -122,7 +151,7 @@ describe('Microsoft Graph Outlook adapter', () => {
 
     const result = await searchInboxWithGraph({ subjectContains: 'suspension', unread: true });
 
-    expect(result.messages.map((message) => message.id)).toEqual(['2']);
+    expect(result.messages.map((message) => message.id)).toEqual(['graph:2']);
     expect(result).toMatchObject({
       capped: false,
       scan: {
@@ -155,7 +184,7 @@ describe('Microsoft Graph Outlook adapter', () => {
       top: 25,
     });
 
-    expect(result.messages.map((message) => message.id)).toEqual(['message-2']);
+    expect(result.messages.map((message) => message.id)).toEqual(['graph:message-2']);
     expect(result.capped).toBe(true);
     expect(result.scan).toMatchObject({
       scope: 'graph_inbox',
@@ -179,11 +208,15 @@ describe('Microsoft Graph Outlook adapter', () => {
       body: { contentType: 'html', content: '<p>Hello&nbsp;Principal<br/>Please submit.</p>' },
     });
 
-    const result = await readEmailWithGraph({ id: '2' });
+    const result = await readEmailWithGraph({ id: 'graph:2' });
 
+    // The graph: prefix is stripped before the REST call and re-applied on
+    // the way out so follow-up Graph reads round-trip cleanly.
+    expect(mockGraphCalls.getMessage).toHaveBeenCalledWith('2');
     expect(result).toMatchObject({
       status: 'ok',
-      id: '2',
+      id: 'graph:2',
+      graphId: '2',
       subject: 'Suspension report',
       body: 'Hello Principal\nPlease submit.',
       recipients: {
@@ -191,7 +224,63 @@ describe('Microsoft Graph Outlook adapter', () => {
         cc: ['supervisor@example.edu'],
         bcc: [],
       },
+      attachments: [],
     });
+    expect(mockGraphCalls.listAttachments).not.toHaveBeenCalled();
+  });
+
+  it('fetches attachment metadata when the Graph message has attachments', async () => {
+    mockGraphCalls.getMessage.mockResolvedValueOnce({
+      id: '3',
+      subject: 'Suspension report with form',
+      hasAttachments: true,
+      from: { emailAddress: { address: 'district@example.edu' } },
+      body: { contentType: 'html', content: '<p>See attached.</p>' },
+    });
+    mockGraphCalls.listAttachments.mockResolvedValueOnce({
+      value: [
+        { name: 'suspension-form.pdf', size: 34567, contentType: 'application/pdf' },
+        { name: 'photo.png', contentType: 'image/png' },
+      ],
+    });
+
+    const result = await readEmailWithGraph({ id: 'graph:3' });
+
+    expect(mockGraphCalls.listAttachments).toHaveBeenCalledWith('3');
+    expect(result).toMatchObject({
+      status: 'ok',
+      attachments: [
+        { filename: 'suspension-form.pdf', sizeBytes: 34567, mimeType: 'application/pdf' },
+        { filename: 'photo.png', sizeBytes: undefined, mimeType: 'image/png' },
+      ],
+    });
+  });
+
+  it('filters Graph search rows by hasAttachment', async () => {
+    mockGraphCalls.listMessages.mockResolvedValueOnce({
+      value: [
+        {
+          id: '1',
+          subject: 'No attachment',
+          bodyPreview: '',
+          isRead: true,
+          hasAttachments: false,
+          from: { emailAddress: { address: 'district@example.edu' } },
+        },
+        {
+          id: '2',
+          subject: 'With attachment',
+          bodyPreview: '',
+          isRead: true,
+          hasAttachments: true,
+          from: { emailAddress: { address: 'district@example.edu' } },
+        },
+      ],
+    });
+
+    const result = await searchInboxWithGraph({ hasAttachment: true });
+
+    expect(result.messages.map((message) => message.id)).toEqual(['graph:2']);
   });
 
   it('creates a Graph draft without claiming a browser compose pane is open', async () => {
@@ -213,6 +302,50 @@ describe('Microsoft Graph Outlook adapter', () => {
       cc: undefined,
       bcc: undefined,
     });
+  });
+
+  it('maps a Graph 403 on draft to a structured refusal instead of throwing', async () => {
+    mockGraphCalls.createDraft.mockRejectedValueOnce(
+      Object.assign(new Error('Access is denied.'), { status: 403, code: 'ErrorAccessDenied' }),
+    );
+
+    const result = await draftEmailWithGraph({
+      to: 'teacher@example.edu',
+      subject: 'Draft',
+      body: 'Body',
+    });
+
+    expect(result).toMatchObject({ status: 'refused' });
+    expect((result as { reason?: string }).reason).toMatch(/read-only/i);
+  });
+
+  it('maps a Graph 403 on send to a structured refusal instead of throwing', async () => {
+    mockGraphCalls.sendMail.mockRejectedValueOnce(
+      Object.assign(new Error('Access is denied.'), { status: 403, code: 'ErrorAccessDenied' }),
+    );
+
+    const result = await sendEmailWithGraph({
+      to: 'teacher@example.edu',
+      subject: 'Send',
+      body: 'Body',
+      confirm: true,
+    });
+
+    expect(result).toMatchObject({ status: 'refused' });
+    expect(result.reason).toMatch(/read-only/i);
+  });
+
+  it('rethrows non-403 Graph write failures', async () => {
+    mockGraphCalls.sendMail.mockRejectedValueOnce(
+      Object.assign(new Error('Service unavailable'), { status: 503 }),
+    );
+
+    await expect(sendEmailWithGraph({
+      to: 'teacher@example.edu',
+      subject: 'Send',
+      body: 'Body',
+      confirm: true,
+    })).rejects.toThrow('Service unavailable');
   });
 
   it('preserves the send confirmation gate for Graph sends', async () => {

@@ -14,6 +14,10 @@ export interface MicrosoftGraphConfig {
   clientId: string;
   scopes?: string[];
   redirectUri?: string;
+  /** When true, inbox reads go through Microsoft Graph instead of the Chrome tab. */
+  graphOutlookRead?: boolean;
+  /** When true, draft/send go through Microsoft Graph instead of the Chrome tab. */
+  graphOutlookCompose?: boolean;
 }
 
 export interface MicrosoftGraphAccount {
@@ -29,6 +33,8 @@ export interface MicrosoftGraphStatus {
   expiresAt: number | null;
   mockMailbox: boolean;
   effectiveMock: boolean;
+  /** Delegated scopes granted at sign-in; empty when signed out. */
+  grantedScopes: string[];
 }
 
 export interface ManualCodePrompt {

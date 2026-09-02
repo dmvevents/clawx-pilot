@@ -72,14 +72,9 @@ export function register(api) {
     handler: async (args) => await graph.createDraft(args),
   });
 
-  registerTool({
-    name: 'outlook.send_mail',
-    description: 'Send a message. Args: { subject, body, to, cc?, bcc?, saveToSent? }.',
-    handler: async (args) => {
-      await graph.sendMail(args);
-      return { ok: true };
-    },
-  });
+  // No outlook.send_mail here: send stays with the confirm-gated host-API
+  // lane (electron/api/routes/outlook.ts) so the agent can never bypass the
+  // confirm:true gate through the gateway plugin.
 
   registerTool({
     name: 'outlook.list_events',

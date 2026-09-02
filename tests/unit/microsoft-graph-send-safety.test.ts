@@ -35,4 +35,24 @@ describe('Microsoft Graph send safety', () => {
     expect(result).toMatchObject({ status: 'refused' });
     expect(mockGraphCalls.sendMail).not.toHaveBeenCalled();
   });
+
+  it('turns an ErrorAccessDenied 403 from Graph into a refusal, not a crash', async () => {
+    mockGraphCalls.sendMail.mockRejectedValueOnce(
+      Object.assign(new Error('Access is denied. Check credentials and try again.'), {
+        status: 403,
+        code: 'ErrorAccessDenied',
+      }),
+    );
+
+    const result = await sendEmailWithGraph({
+      to: 'teacher@example.edu',
+      subject: 'Follow up',
+      body: 'Body',
+      confirm: true,
+    });
+
+    expect(result).toMatchObject({ status: 'refused' });
+    expect(result.reason).toMatch(/read-only/i);
+    expect(mockGraphCalls.sendMail).toHaveBeenCalledTimes(1);
+  });
 });

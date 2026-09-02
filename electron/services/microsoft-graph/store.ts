@@ -33,6 +33,10 @@ export interface MicrosoftGraphConfig {
   scopes?: string[];
   /** Redirect URI; only override if your app registration uses a different one. */
   redirectUri?: string;
+  /** Enable Graph-backed Outlook read endpoints (config-based transport toggle). */
+  graphOutlookRead?: boolean;
+  /** Enable Graph-backed Outlook draft/send endpoints (config-based transport toggle). */
+  graphOutlookCompose?: boolean;
 }
 
 export interface MicrosoftGraphAccount {
@@ -64,6 +68,8 @@ let storeInstance: any = null;
 type RawMicrosoftGraphConfig = Partial<MicrosoftGraphConfig & {
   enabled: boolean | string;
   scopes: string[] | string;
+  graphOutlookRead: boolean | string;
+  graphOutlookCompose: boolean | string;
 }>;
 
 const CONFIG_FILE_NAME = 'microsoft-graph.json';
@@ -76,6 +82,17 @@ function boolFromUnknown(value: unknown, fallback: boolean): boolean {
   if (['1', 'true', 'yes', 'on'].includes(raw)) return true;
   if (['0', 'false', 'no', 'off'].includes(raw)) return false;
   return fallback;
+}
+
+/** Tri-state boolean: undefined when absent or unparseable, so an omitted
+ *  toggle stays "not configured" rather than silently defaulting. */
+function optionalBoolFromUnknown(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value;
+  if (typeof value !== 'string') return undefined;
+  const raw = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(raw)) return true;
+  if (['0', 'false', 'no', 'off'].includes(raw)) return false;
+  return undefined;
 }
 
 function cleanList(values: string[] | string | undefined): string[] | undefined {
@@ -100,7 +117,9 @@ function normalizeMicrosoftGraphConfig(
   if (!tenantId || !clientId) return null;
   const scopes = cleanList(raw.scopes);
   const redirectUri = raw.redirectUri?.trim() || undefined;
-  return { tenantId, clientId, scopes, redirectUri };
+  const graphOutlookRead = optionalBoolFromUnknown(raw.graphOutlookRead);
+  const graphOutlookCompose = optionalBoolFromUnknown(raw.graphOutlookCompose);
+  return { tenantId, clientId, scopes, redirectUri, graphOutlookRead, graphOutlookCompose };
 }
 
 export function readMicrosoftGraphConfigFromEnv(
@@ -116,6 +135,10 @@ export function readMicrosoftGraphConfigFromEnv(
       ?? env.CLAWX_MS_GRAPH_SCOPES,
     redirectUri: env.CLAWX_MICROSOFT_GRAPH_REDIRECT_URI
       ?? env.CLAWX_MS_GRAPH_REDIRECT_URI,
+    graphOutlookRead: env.CLAWX_MICROSOFT_GRAPH_OUTLOOK_READ
+      ?? env.CLAWX_MS_GRAPH_OUTLOOK_READ,
+    graphOutlookCompose: env.CLAWX_MICROSOFT_GRAPH_OUTLOOK_COMPOSE
+      ?? env.CLAWX_MS_GRAPH_OUTLOOK_COMPOSE,
   });
 }
 
@@ -230,6 +253,8 @@ export async function setMicrosoftGraphConfig(
     clientId: config.clientId.trim(),
     scopes: config.scopes,
     redirectUri: config.redirectUri,
+    graphOutlookRead: config.graphOutlookRead,
+    graphOutlookCompose: config.graphOutlookCompose,
   });
 }
 

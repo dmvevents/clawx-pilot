@@ -114,6 +114,26 @@ export interface SignInOptions {
   onManualCodeInput?: () => Promise<string>;
 }
 
+/**
+ * Contract C3 consumer: after the Graph account changes, re-stamp (or remove)
+ * the UserId header on the saved moe-cloud-gateway provider account.
+ * Best-effort by design — a stamping failure must never fail sign-in/sign-out,
+ * and the export may not exist yet while that seed module is being built.
+ */
+async function refreshCloudGatewayUserIdStamp(): Promise<void> {
+  try {
+    const mod: Record<string, unknown> = await import('../../main/cloud-gateway-provider-seed');
+    const refresh = mod.refreshCloudGatewayUserIdHeader;
+    if (typeof refresh === 'function') {
+      await (refresh as () => Promise<void>)();
+    }
+  } catch (err) {
+    logger.warn(
+      `[msgraph] cloud gateway UserId header refresh failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
 export async function signIn(options: SignInOptions = {}): Promise<{
   accountId: string;
   email?: string;
@@ -133,6 +153,7 @@ export async function signIn(options: SignInOptions = {}): Promise<{
     onManualCodeInput: options.onManualCodeInput,
   });
   await persistCredentials(credentials);
+  await refreshCloudGatewayUserIdStamp();
   return {
     accountId: credentials.accountId,
     email: credentials.email,
@@ -142,6 +163,7 @@ export async function signIn(options: SignInOptions = {}): Promise<{
 
 export async function signOut(): Promise<void> {
   await clearMicrosoftGraph();
+  await refreshCloudGatewayUserIdStamp();
 }
 
 export interface MicrosoftGraphStatus {
@@ -149,10 +171,26 @@ export interface MicrosoftGraphStatus {
   signedIn: boolean;
   account: { accountId: string; email?: string; tenantId: string } | null;
   expiresAt: number | null;
+  /** Scopes the token endpoint actually granted (space-split, deduped from
+   *  the persisted secret.scope). Empty when there is no secret. */
+  grantedScopes: string[];
   /** When true, list/read/draft/send operate against fixtures, not Graph. */
   mockMailbox: boolean;
   /** Whether the current request will be served by the mock layer. */
   effectiveMock: boolean;
+}
+
+function parseGrantedScopes(scope: string | undefined): string[] {
+  if (!scope) return [];
+  const seen = new Set<string>();
+  const scopes: string[] = [];
+  for (const entry of scope.split(/\s+/)) {
+    const value = entry.trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    scopes.push(value);
+  }
+  return scopes;
 }
 
 export async function getStatus(): Promise<MicrosoftGraphStatus> {
@@ -167,6 +205,7 @@ export async function getStatus(): Promise<MicrosoftGraphStatus> {
       ? { accountId: account.accountId, email: account.email, tenantId: account.tenantId }
       : null,
     expiresAt: secret?.expires ?? null,
+    grantedScopes: parseGrantedScopes(secret?.scope),
     mockMailbox: mock,
     effectiveMock: mock || !secret,
   };
@@ -270,7 +309,7 @@ export const graphCalls = {
       ...(args.filter ? { $filter: args.filter } : {}),
       ...(args.search ? { $search: `"${args.search}"` } : {}),
       $select:
-        'id,subject,from,toRecipients,receivedDateTime,isRead,bodyPreview,webLink',
+        'id,subject,from,toRecipients,receivedDateTime,isRead,bodyPreview,hasAttachments,webLink',
     });
   },
   getMessage: async (id: string) => {
@@ -284,6 +323,21 @@ export const graphCalls = {
       return found as unknown as Record<string, unknown>;
     }
     return graph<Record<string, unknown>>('GET', `/me/messages/${encodeURIComponent(id)}`);
+  },
+  listAttachments: async (id: string) => {
+    if (await shouldUseMockMailbox()) {
+      // Fixtures carry no attachments; return an empty page so the adapter
+      // path stays uniform in demo mode.
+      return { value: [], __mock: true } as { value: unknown[] };
+    }
+    // Metadata only (Mail.Read covers this); contentBytes is deliberately not
+    // selected so attachment payloads never transit this call.
+    return graph<{ value: unknown[] }>(
+      'GET',
+      `/me/messages/${encodeURIComponent(id)}/attachments`,
+      undefined,
+      { $select: 'name,size,contentType' },
+    );
   },
   createDraft: async (args: DraftReplyArgs) => {
     if (await shouldUseMockMailbox()) {
