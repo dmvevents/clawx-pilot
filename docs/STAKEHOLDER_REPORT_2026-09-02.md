@@ -46,8 +46,20 @@ bridge-download pass to vault the originals (CLWX-32 adjacent).
 | 06-27 | IN | NSCC-2026.pdf | test content |
 | 07-17 | IN | TOR-TT-AI Textbooks (MoE markup) | new workstream proposal (unactioned — deliberate scope hold) |
 
-*(Agent-verified detail per document, including unactioned flags, in the
-chronology section below.)*
+### Never-acted-on documents (agent-verified against the repo)
+
+- **NSCC-2026.pdf (06-27) — HARD FLAG.** Raj's clearest explicit feature ask:
+  "any way we can have that document in the AI's memory instead of asking it
+  to check for the file?" Zero trace: no knowledge pack, no ingestion.
+- **NSCC_2026__Test_QnA.docx (05-14)** — a free, stakeholder-authored eval
+  set for routine-query answering. Never run; no fixture in the repo.
+- **AI Tool Usage Agreement MPAAI↔MoE (05-26)** — never reviewed against our
+  architecture.
+- **The 05-14 all-forms Drive folder** — only 2 of the corpus ever
+  schematised.
+- Soft flags: AI_Email_Management_ideas.docx never folded into an email
+  roadmap; the SEA results xlsx used live in demos but never committed as a
+  regression fixture.
 
 ## Bug report — REPORTED → FIXED → EVALUATION CRITERIA
 
@@ -63,6 +75,46 @@ register side. Headline rows, all with live 2026-09-02 evidence:)*
 | Reply misreads content (RAJ-2, 06-21) | tool layer verified faithful; model-layer scenario pending | OPEN | seeded structured email → agent summary → fidelity assertion (designed, on CLWX-34) |
 | PDF read inconsistencies (Karunesh via Raj, 06-30) | doc-tooling steering + fixture classes since fixed | `c1b18125` + KR1 evidence | live in-app turn returns faithful summary (KR1 PASS); P4 xlsx PASS 09-02 |
 | Files "not found" though present (07-17 class) | KFM redirection + tilde-path resolution | `fc435c6b` era + `97004aa6` (09-02) | `~/Desktop/<name>` resolves on a KFM machine — unit `doc-tooling-steering.test.ts` 20/20 |
+
+## THE STRUCTURAL FINDING (chronology agent, verified to thread line numbers)
+
+**The last inbound message on this product (2026-07-20) was an APPROVAL plus
+a small concrete request** — Ansari (Ministry IT) approved the delegated app
+registration and asked only for the permissions list and redirect URIs. We
+replied "on it" — and the deliverable never went back. **The engagement did
+not stall on Ministry silence; it stalled on OUR unanswered deliverable**,
+while Raj remained demonstrably responsive on every other lane (electrical
+clarifications answered 08-11, GPU RFP progressing through 08-26). The 09-01
+reply restarted the channel but the permissions list + concrete redirect URI
+remain the owed opener for the session.
+
+## Missed-by-register defects (correlation agent — now registered)
+
+| Date | Report | Status |
+|---|---|---|
+| 05-08 | **Exec-noise leak**: raw `Exec:/run python3` internals rendered in the stakeholder's chat | OPEN — trust-facing; never registered, never confirmed fixed. Criterion: transcript assertion — no tool-frame markup in any assistant bubble |
+| 05-08 | **Model idle timeout** surfaced raw to the user | OPEN-unverified — degrade fix (bde78d94) is adjacent; criterion: stalled provider yields a visible on-device answer, never the raw error |
+| 05-19 | **Plaud 0.0-minute recordings** (fix promised in-thread, never confirmed) | OPEN — the workflow Raj personally tried three times |
+| 05-27 + 06-27 | **LATENCY** — the only complaint Raj volunteered twice; cost a Minister demo slot | OPEN — exists only as the cause-side KR6 token-floor row; needs a user-facing budget (e.g. p50 ≤15s on the 3 demo prompts, pilot laptop, moe.14) |
+
+## Dropped-ball list (no captured answer; Raj's own follow-ups confirm 1–4 real)
+
+1. Hugging Face model access (05-02) — never answered.
+2. Turnitin advice / Discord invite — promised twice, gentle reminder 05-28, never delivered.
+3. Plaud recordings fix — promised, never confirmed.
+4. Daily-form prompt reminder (06-21) — never answered.
+5. June-23 demo verdict — never chased (the G5 hole; never cite "0/5" without an artifact).
+6. NSCC-in-memory (06-27) — related work shipped later but never relayed as an answer.
+7. **The 07-20 permissions list + redirect URIs** — the structural one above.
+
+## Feature extensiveness (asked vs built — correlation to capability map)
+
+Build effort tracked Raj's forms+email pressure almost perfectly; forms are
+defensibly over-built (routing around Ministry IT); **systematically
+under-built exactly where he asked in plain words rather than lists: the NSCC
+knowledge base (he supplied both the corpus AND the eval set) and latency
+(his only standing complaint).** Full per-capability table in the agent
+matrices (transcripts).
 
 ## Project analysis in light of the stakeholder record
 
