@@ -317,7 +317,14 @@ describe('OutlookActions safety gates', () => {
     expect(actions.clickSendInVerifiedDraft).not.toHaveBeenCalled();
   });
 
-  it('sends the single reviewed draft when subject changed after review', async () => {
+  it('REFUSES when the open draft subject differs from the confirmed subject (hard gate)', async () => {
+    // This test previously asserted the OPPOSITE — that a subject-drifted
+    // draft still sends via the "changed after review" allowance. That
+    // allowance was a gate FALSE-NEGATIVE (a mismatched send went out live
+    // on 2026-09-02 once the new-domain fixes let the pipeline complete).
+    // The CLAUDE.md hard rule makes subject-match the second send gate:
+    // subject drift refuses; only BODY drift is the legitimate
+    // principal-edited-the-draft case.
     const { actions } = createActions();
     actions.readOpenDraftProbe = vi.fn(async () => ({
       snapshot: {
@@ -337,8 +344,39 @@ describe('OutlookActions safety gates', () => {
       confirm: true,
     });
 
+    expect(result).toMatchObject({ status: 'refused' });
+    expect(result.reason).toMatch(/subject/i);
+    expect(actions.clickSendInCurrentReviewedDraft).not.toHaveBeenCalled();
+    expect(actions.clickSendInVerifiedDraft).not.toHaveBeenCalled();
+  });
+
+  it('sends the single reviewed draft when only the BODY changed after review', async () => {
+    const { actions } = createActions();
+    actions.readOpenDraftProbe = vi.fn(async () => ({
+      snapshot: {
+        ...matchingDraft,
+        bodyText: 'Principal edited this body after reviewing the draft.',
+        searchableText: 'recipient@example.invalid Demo subject Principal edited this body after reviewing the draft.',
+      },
+      clickedSend: false,
+      draftCount: 1,
+      sendableDraftCount: 1,
+    }));
+
+    const result = await actions.sendEmail({
+      to: 'recipient@example.invalid',
+      subject: 'Demo subject',
+      body: 'Body is not logged by this test.',
+      confirm: true,
+    });
+
     expect(result).toEqual({ status: 'sent', message: 'Email sent via Outlook Web.' });
-    expect(actions.clickSendInCurrentReviewedDraft).toHaveBeenCalledTimes(1);
+    // Body drift must NOT refuse. Which click path handles it (verified vs
+    // current-reviewed) depends on how fuzzy the body comparison is — both
+    // are legitimate; the contract under test is send-not-refuse.
+    const clicks = (actions.clickSendInVerifiedDraft as ReturnType<typeof vi.fn>).mock.calls.length
+      + (actions.clickSendInCurrentReviewedDraft as ReturnType<typeof vi.fn>).mock.calls.length;
+    expect(clicks).toBe(1);
   });
 
   it('refuses confirmed send when open draft recipients differ', async () => {
@@ -555,8 +593,12 @@ describe('OutlookActions safety gates', () => {
     });
 
     expect(result).toMatchObject({ status: 'refused' });
-    expect(result.reason).toMatch(/multiple open drafts/i);
+    // Subject drift now refuses at the hard gate, BEFORE the multiple-draft
+    // check can matter (previously this refused with a multiple-drafts
+    // reason because the subject allowance let it through to the click).
+    expect(result.reason).toMatch(/subject/i);
     expect(actions.clickSendInVerifiedDraft).not.toHaveBeenCalled();
+    expect(actions.clickSendInCurrentReviewedDraft).not.toHaveBeenCalled();
   });
 
   it('refuses attachment download without confirm before touching Outlook', async () => {

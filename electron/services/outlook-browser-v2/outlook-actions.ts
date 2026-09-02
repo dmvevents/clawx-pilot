@@ -523,8 +523,8 @@ export class OutlookActions {
       };
     }
 
-    const probe = await this.readOpenDraftProbe(page);
-    const snapshot = probe.snapshot;
+    let probe = await this.readOpenDraftProbe(page);
+    let snapshot = probe.snapshot;
     if (snapshot == null || probe.draftCount === 0) {
       return {
         status: 'refused',
@@ -533,7 +533,25 @@ export class OutlookActions {
       };
     }
 
-    const recipientMismatch = this.describeRecipientAssertionMismatch(snapshot, args);
+    let recipientMismatch = this.describeRecipientAssertionMismatch(snapshot, args);
+    if (recipientMismatch) {
+      // Outlook resolves typed addresses into recipient pills ASYNCHRONOUSLY
+      // (visibly slower on a fresh profile with a cold contacts cache). A
+      // single-shot DOM read races that resolution and refused a legitimate
+      // confirmed send — the RAJ-1 false-positive class, reproduced live
+      // 2026-09-02. Re-probe briefly before refusing: a genuine mismatch
+      // stays mismatched across the window; a resolution race clears.
+      for (let attempt = 0; attempt < 8 && recipientMismatch; attempt += 1) {
+        await this.driver.sleep(600);
+        probe = await this.readOpenDraftProbe(page);
+        if (probe.snapshot == null || probe.draftCount === 0) break;
+        snapshot = probe.snapshot;
+        recipientMismatch = this.describeRecipientAssertionMismatch(snapshot, args);
+      }
+      if (!recipientMismatch) {
+        logger.info('[outlook-v2] Recipient assertion settled after re-probe (async pill resolution)');
+      }
+    }
     if (recipientMismatch) {
       logger.warn(`[outlook-v2] Send refused: recipient assertion mismatch (${recipientMismatch})`);
       return {
@@ -547,9 +565,17 @@ export class OutlookActions {
       const mismatch = this.describeDraftMismatch(snapshot, args);
       if (!mismatch) {
         clicked = await this.clickSendInVerifiedDraft(page, args);
-      } else if (/subject|body/i.test(mismatch)) {
+      } else if (/body/i.test(mismatch) && !/subject/i.test(mismatch)) {
+        // BODY drift after review is the legitimate principal-edited-the-
+        // draft case. SUBJECT drift is NOT sendable: the CLAUDE.md hard rule
+        // makes subject-match the second send gate, and this branch used to
+        // accept subject mismatches too — a gate FALSE-NEGATIVE that only
+        // surfaced 2026-09-02 once the new-domain fixes made the send
+        // pipeline actually complete (previously this path failed later in
+        // verification, refusing by accident — the likely source of RAJ-1's
+        // "draft subject has been changed" error text).
         logger.info(
-          `[outlook-v2] Exact draft assertion changed after review (${mismatch}); attempting single visible draft send`,
+          `[outlook-v2] Draft body edited after review (${mismatch}); attempting single visible draft send`,
         );
         clicked = await this.clickSendInCurrentReviewedDraft(page, args);
       } else {
@@ -1071,11 +1097,30 @@ export class OutlookActions {
    * loads the message into the reading pane synchronously enough that
    * subsequent waitForSelector for the body works ~immediately.
    */
+  /**
+   * Mail URL on the SAME origin the tab currently lives on. Microsoft is
+   * migrating outlook.office.com → outlook.cloud.microsoft per-tenant;
+   * navigating a cloud.microsoft tab to an office.com URL mid-session dies
+   * with net::ERR_ABORTED (seen live 2026-09-02, the day the redirect
+   * reached our tenant), which broke folder inspection after Send.
+   */
+  private outlookMailUrl(page: Page, path: string): string {
+    try {
+      const current = new URL(page.url());
+      if (/^outlook\.(office\.com|office365\.com|cloud\.microsoft|live\.com)$/i.test(current.hostname)) {
+        return `${current.origin}/mail/${path}`;
+      }
+    } catch {
+      // fall through to the classic origin
+    }
+    return `https://outlook.office.com/mail/${path}`;
+  }
+
   private async ensureInboxFolder(page: Page): Promise<void> {
     const url = page.url();
     if (!isOutlookInboxUrl(url)) {
       logger.info('[outlook-v2] Navigating Outlook tab to Inbox before inbox-scoped action');
-      await page.goto('https://outlook.office.com/mail/inbox', {
+      await page.goto(this.outlookMailUrl(page, 'inbox'), {
         timeout: 30_000,
         waitUntil: 'domcontentloaded',
       }).catch((err) => {
@@ -1139,15 +1184,41 @@ export class OutlookActions {
       // Navigate below.
     }
 
-    const targetUrl = `https://outlook.office.com/mail/${folder}`;
-    await page.goto(targetUrl, {
-      timeout: 30_000,
-      waitUntil: 'domcontentloaded',
-    }).catch((err) => {
+    // SPA-native first: click the folder in the sidebar. On the new domain a
+    // hard page.goto is aborted by the SPA whenever a compose dialog is in
+    // flight (net::ERR_ABORTED seen live 2026-09-02), which broke the
+    // post-Send Drafts inspection. The sidebar click is what a principal
+    // does and never triggers a full navigation.
+    const folderDisplayName = folder === 'drafts' ? 'Drafts' : 'Sent Items';
+    const folderLink = page.locator([
+      `[role="treeitem"][aria-label*="${folderDisplayName}" i]`,
+      `[title="${folderDisplayName}"]`,
+      `a:has-text("${folderDisplayName}")`,
+      `div[role="treeitem"]:has-text("${folderDisplayName}")`,
+    ].join(','));
+    let clicked = false;
+    try {
+      if ((await folderLink.count()) > 0) {
+        await folderLink.first().click({ timeout: 5_000 });
+        clicked = true;
+        await this.driver.sleep(1_500);
+      }
+    } catch (err) {
       logger.debug?.(
-        `[outlook-v2] ${folder} navigation failed: ${err instanceof Error ? err.message : String(err)}`,
+        `[outlook-v2] ${folder} sidebar click failed, falling back to goto: ${err instanceof Error ? err.message : String(err)}`,
       );
-    });
+    }
+    if (!clicked) {
+      const targetUrl = this.outlookMailUrl(page, folder);
+      await page.goto(targetUrl, {
+        timeout: 30_000,
+        waitUntil: 'domcontentloaded',
+      }).catch((err) => {
+        logger.debug?.(
+          `[outlook-v2] ${folder} navigation failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
+    }
     await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
     await page.waitForSelector(
       [
@@ -1653,7 +1724,7 @@ export class OutlookActions {
     }
 
     logger.info('[outlook-v2] New mail hidden behind compose surface; resetting Outlook tab to inbox');
-    await page.goto('https://outlook.office.com/mail/inbox', {
+    await page.goto(this.outlookMailUrl(page, 'inbox'), {
       timeout: 30_000,
       waitUntil: 'domcontentloaded',
     });
@@ -3028,13 +3099,23 @@ export class OutlookActions {
           '[contenteditable="true"][aria-multiline="true"]',
           '[role="textbox"][aria-multiline="true"]',
         ].join(','))).filter((el) => isVisible(el) && isEditableBodyElement(el) && !isRecipientOrSubjectField(el) && isComposeBody(el));
+        // Recipient wells must be EDITABLE fields. The earlier loose
+        // substring selectors ([aria-label*="To" i] on any element) matched
+        // inbox message-list rows whose aria-label carried the word "to"
+        // and whose preview text echoed the draft body — producing "message
+        // text appears in a recipient field" on a perfectly correct draft
+        // (reproduced live 2026-09-02 on outlook.cloud.microsoft; the same
+        // mechanism fires when a reply quotes text visible in the list).
         const recipientFields = Array.from(document.querySelectorAll([
-          '[aria-label="To"]',
-          '[aria-label="Cc"]',
-          '[aria-label="Bcc"]',
-          '[aria-label*="To" i]',
-          '[aria-label*="Cc" i]',
-          '[aria-label*="Bcc" i]',
+          '[contenteditable="true"][aria-label="To"]',
+          '[contenteditable="true"][aria-label="Cc"]',
+          '[contenteditable="true"][aria-label="Bcc"]',
+          'input[aria-label="To"]',
+          'input[aria-label="Cc"]',
+          'input[aria-label="Bcc"]',
+          '[role="textbox"][aria-label="To"]',
+          '[role="textbox"][aria-label="Cc"]',
+          '[role="textbox"][aria-label="Bcc"]',
           '[role="textbox"][aria-label*="recipient" i]',
           '[contenteditable="true"][aria-label*="recipient" i]',
         ].join(','))).filter((el) => isVisible(el) && isRecipientField(el));
