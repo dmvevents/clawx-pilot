@@ -10,8 +10,8 @@
 
 | # | Prerequisite | Owner | Status | Effort |
 |---|---|---|---|---|
-| P1 | Dev redirect URI `http://localhost:53682/callback` registered on the Ministry Entra app | **Ansari** | ASKED — the 01b delta message (permissions list + URI, owner-executed send staged) | 5 min portal |
-| P2 | `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` | **Raj/Ansari** | owed with P1 (not secrets — chat-transmittable) | minutes |
+| P1 | Dev redirect URI `http://localhost:53682/callback` registered on the Ministry Entra app | **Ansari** | ASK PENDING — owner delivers `08-PASTE-FROM-PHONE-raj.md` from own phone (bridge undelivered, see delivery note) | 5 min portal |
+| P2 | `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` | **Raj/Ansari** | TENANT known (`9590bb09-…ebfe`); CLIENT_ID owed with P1 (not a secret — chat-transmittable) | minutes |
 | P3 | Delegated consent: `User.Read`, `Mail.Read`, `offline_access` (read-only baseline as agreed) | **Ansari** | part of P1 change | included |
 | P4 | Ministry-designated TEST account for sign-in (never automation on personal `*@moe.gov.tt`) | **Raj** | pairs with the CLWX-8 production-accounts ask | minutes |
 | P5 | Flag-gated sign-in flow wired (`CLAWX_GRAPH_AUTH=1`) | **us** | oauth flow + adapter BUILT; flag wiring = CLWX-39 | 1 sitting |

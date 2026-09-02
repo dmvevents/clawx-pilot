@@ -20,20 +20,38 @@ only when the user has said, in this conversation, to send it. Then:
 1. **Draft first.** The note lives as a file under
    `~/openclaw-agent/outbound-drafts/` (e.g. the "more time + reissue link" note).
    Show the exact text you will send and the recipient.
-2. **Confirm the recipient.** Raj's number is **not stored in this repo** (it is
-   PII and this repo may be public — see CLWX-18). Load it locally from the
-   off-repo monitor config, which never leaves the machine:
+2. **Confirm the recipient — this is where it broke.** Raj's JID is **not stored
+   in this repo** (PII; repo may be public — see CLWX-18). CORRECTION
+   (2026-09-02): Raj's LIVE thread is the `@lid` privacy JID whose push_name is
+   "Raj Ramdass" (masked: `3027…@lid`), NOT the old `…3280@s.whatsapp.net` number,
+   which has been dead since 2026-07-20. Resolve the LIVE JID by push_name from
+   the whatsmeow contacts DB, never by hard-coding:
    ```bash
-   LIAISON="$(grep -oE '[0-9]{10,}@s\.whatsapp\.net' ~/openclaw-agent/raj-kiran-monitor.sh | head -1)"
-   # masked, it ends in ...3280; export LIAISON so the commands below resolve it
+   WDB=~/Github/whatsapp-mcp/whatsapp-bridge/store/whatsapp.db
+   LIAISON="$(sqlite3 -readonly "$WDB" "SELECT their_jid FROM whatsmeow_contacts WHERE (full_name='Raj Ramdass' OR push_name='Raj Ramdass') AND their_jid LIKE '%@lid' ORDER BY their_jid LIMIT 1;")"
+   # Confirm it is the LIVE thread: it must have is_from_me=1 rows dated within days.
+   DB=~/Github/whatsapp-mcp/whatsapp-bridge/store/messages.db
+   sqlite3 -readonly "$DB" "SELECT MAX(timestamp) FROM messages WHERE chat_jid='$LIAISON';"
    ```
-   Verify the thread resolves to `raj ramdass` (see health check) before sending.
-   Wrong-number sends to a Ministry official are real harm.
+   If that MAX timestamp is not recent, STOP — do not send; the thread is stale.
+   Wrong-recipient sends to a Ministry official are real harm.
+
+   **Bridge-send to a `@lid` recipient is UNVERIFIED** — the send endpoint may
+   need the full `@lid` JID (not digits-only). Until a bridge send to Raj is
+   confirmed by an `is_from_me=1` echo row, the reliable channel for Raj is the
+   **owner's own phone** (paste the drafted note). Prefer that for anything
+   demo-critical.
 3. **Send** via the bridge (below).
-4. **Verify honestly.** A `HTTP 200 {"success":true}` plus the message body in
-   `bridge.log` is the proof of transmission. The bridge's `messages.db` only
-   stores *inbound* messages, so an outbound send will NOT appear there — its
-   absence is expected, not a failure. Never claim "sent" without the 200 + log.
+4. **Verify honestly.** CORRECTION (2026-09-02): the earlier claim that
+   `messages.db` "only stores inbound" is **FALSE** — the whatsmeow bridge writes
+   *outgoing* messages too (verified: 20 `is_from_me=1` rows on 2026-09-02). A
+   truly delivered send echoes back and appears in the thread within seconds.
+   Therefore: `HTTP 200 {"success":true}` alone is NOT proof of delivery — it only
+   means the bridge accepted the request. **Proof of delivery = the message
+   appears as an `is_from_me=1` row in the recipient's thread in `messages.db`.**
+   If the 200 came back but no row appears, the send did NOT reach WhatsApp
+   (likely a stale/wrong recipient JID). This exact failure sent three notes into
+   a dead thread in Aug–Sep 2026.
 
 ## Health check (before relying on it)
 
