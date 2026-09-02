@@ -42,21 +42,30 @@ the exact class Graph eliminates. Graph is not a nice-to-have; it is the
 GA-durable Outlook path. The browser lane remains for visible-compose review
 UX and as fallback.
 
-## The four conflicts to resolve with Raj (unchanged since 08-18)
+## The four 08-18 conflicts — status after the full-archive reconciliation
 
-1. **Scopes are read-only.** Handoff grants read/classify mail. The
-   assistant's send/draft features need `Mail.ReadWrite` + send permission —
-   delegated (per-user), not application-wide.
-2. **Client secret vs PKCE.** The registration assumes a confidential client
-   (server) with a secret. A desktop app cannot hold a secret; it must be a
-   PUBLIC client using authorization-code + PKCE. Ask: enable
-   "Allow public client flows" / add a desktop platform.
-3. **Redirect URI never registered.** Desktop needs a loopback redirect
-   (`http://localhost:<port>` or `msal://` style). We already offered the
-   dev-loopback URI (G7); it was never added.
-4. **App-server assumption.** The handoff models an always-on backend; the
-   product is a desktop app. Identity (KR7 UserId) can still be stamped
-   per-user from the Entra token without any server in the middle.
+> **Correction (2026-09-02, v2).** The liaison-archive sweep shows the sent
+> 2026-09-01 reply already SETTLED two of these: the Docker/backend-for-
+> frontend app-server architecture was confirmed, and with it the
+> confidential client (secret held by the SERVER, never the desktop) is
+> correct, not a conflict. This doc's v1 recommended desktop-direct PKCE —
+> superseded; do not raise it at the session.
+
+1. **Scopes are read-only — AGREED as the baseline** (Contacts.Read refusal
+   agreed). Draft/send via Graph needs a scope expansion request tied to the
+   concrete feature when the browser-lane send path is retired. Until then
+   the hardened two-gate browser send remains the send path.
+2. **Client secret vs PKCE — RESOLVED**: confidential client accepted; the
+   app server holds the secret and performs OAuth (BFF). The desktop never
+   sees it.
+3. **Redirect URI — STILL OPEN, and gated on the app-server hostname
+   decision** (asks 1–2 in docs/MINISTRY_ASKS_2026-09-02.md). Production:
+   `https://<app-server-host>/auth/callback`. The dev-loopback
+   `http://localhost:53682/callback` can be registered NOW.
+4. **App-server assumption — RESOLVED the Ministry's way**: Docker BFF
+   confirmed in the 09-01 reply. Identity (KR7 UserId = Entra `oid`) is
+   stamped by the app server from the authenticated session, never
+   client-supplied.
 
 ## Plan (board cards)
 
