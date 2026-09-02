@@ -63,8 +63,8 @@
       "sequence_id": 34,
       "name": "[CLWX-bug] Verify/triage Raj's 2026-06-21 email defects",
       "priority": "medium",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "Liaison log surfaced 4 reproducible defects Raj reported the day before the Principals demo (source: docs/wiki/LIAISON_LOG.md §C, WhatsApp archive): (1) send fails with \"draft subject has been changed before it can be sent\"; (2) reply misinterprets content (meal prefs read as shirt sizes); (3) reply archives the original email; (4) draft landed in the To: field (one-off). Plus 2 vague: PDF read inconsistency, document-search inconsistency. No post-demo verdict was ever captured. Note: (1) may already be fixed by the moe.10 hard-confirm gate.\nAccept: each defect reproduced-or-refuted against moe.11 with evidence (trace/log path); confirmed-live ones filed as individual bug cards via scripts/report-bug.mjs; the send-gate one verified against the moe.10 gate. Ladders to KR1 (live-LLM correctness) on the OKR anchor.",
       "comments": [
         {
@@ -151,8 +151,8 @@
       "sequence_id": 30,
       "name": "[CLWX-7] Real Entra sign-in + stable UserId identity",
       "priority": "none",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "The app has no signed-in-user identity today, which blocks both the mandatory UserId header (Ministry §3.3) and per-user caps.\nFACTS: the only userPrincipalName in the tree is the stub 'principal@school.example' (microsoft-graph/manager.ts:257). The live Outlook path identifies the principal only implicitly, by riding whichever account is signed into their Chrome session over CDP — deliberate and the only thing Conditional Access permits, but the app never learns the identity in a header-able form.\nINFERENCE / design: backend-for-frontend — desktop does the interactive sign-in, the app server holds the client secret + tokens and stamps UserId from the authenticated session (never client-supplied). This also resolves the client-secret objection (a public/PKCE client is no longer needed once a confidential app server exists). Recommend oid over UPN (opaque, survives renames).\nOPEN QUESTIONS (Ministry-gated): redirect URI — becomes https://<app-server-host>/auth/callback, so it depends on the hostname decision Raj has been asking about since 2026-07-20. UserId = oid vs UPN. Refresh-token lifetimes (longer = fewer forced-online re-auths).\nAccept (KR7): a live interactive Entra sign-in produces a stable non-stub oid; an authenticated request to the app server carries a UserId stamped server-side, verified in App Insights.",
       "comments": [
         {
@@ -374,8 +374,8 @@
       "sequence_id": 21,
       "name": "State marker: MoE Windows RC 2026-06-23 'Outlook Green' (b38b620) published",
       "priority": "low",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Cancelled",
+      "state_id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
       "description": "Last published pilot state: release page shows source b38b620, Actions run 28034003516, installer SHA256 a19a9c62...c6ee, Outlook validation summary. Next-RC checklist should start from here; 17 GitHub items were auto-routed onto this board by the scanner for triage.\nSource: local WhatsApp store 2026-06-23 + clawx-pilot releases. Tier: verified_at_commit (store read 2026-08-25).",
       "comments": []
     },
@@ -399,8 +399,8 @@
       "sequence_id": 19,
       "name": "Rotate the sk-clawx API key shared in WhatsApp (2026-06-05)",
       "priority": "urgent",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "A gateway API key with the sk-clawx prefix was pasted in full into a WhatsApp chat on 2026-06-05 (key value deliberately NOT reproduced here). Chat history is exportable/syncable — treat as exposed. Rotate the key, audit usage since 2026-06-05, and move future credential handoffs to a secret channel.\nSource: local WhatsApp store 2026-06-05. Tier: verified_at_commit (store read 2026-08-25).",
       "comments": [
         {
@@ -414,8 +414,8 @@
       "sequence_id": 18,
       "name": "HUMAN-GATED: dmvevents/clawx-pilot is PUBLIC — violates all-repos-private rule",
       "priority": "urgent",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "gh repo view confirms visibility PUBLIC (updated 2026-07-27). The estate hard rule is all repos private, BUT MoE pilot users download Windows RC installers from this repo's Releases pages — flipping it private breaks their access. Human decision required: make private + provide an alternate distribution channel, or grant an explicit exception. Command when decided: gh repo edit dmvevents/clawx-pilot --visibility private\nSource: gh repo view 2026-08-25. Tier: verified_at_commit.",
       "comments": [
         {
@@ -437,8 +437,8 @@
       "sequence_id": 17,
       "name": "dmvevents/clawx-pilot#13 — test(harness): 5-prompt Windows E2E scaffold — awaits installer URL",
       "priority": "medium",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Cancelled",
+      "state_id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
       "description": "- Source: dmvevents/clawx-pilot#13\n- Type: Pull request\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 10\n- Last updated: 2026-08-15",
       "comments": [
         {
@@ -452,8 +452,8 @@
       "sequence_id": 16,
       "name": "dmvevents/clawx-pilot#14 — ci(windows): windows-installer-e2e.yml — installer + 5-prompt harness pipeline",
       "priority": "medium",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Cancelled",
+      "state_id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
       "description": "- Source: dmvevents/clawx-pilot#14\n- Type: Pull request\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 10\n- Last updated: 2026-08-15",
       "comments": [
         {
@@ -467,8 +467,8 @@
       "sequence_id": 15,
       "name": "dmvevents/clawx-pilot#15 — test(harness): corpus expansion — P6..P10 fixtures (10 total)",
       "priority": "medium",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Cancelled",
+      "state_id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
       "description": "- Source: dmvevents/clawx-pilot#15\n- Type: Pull request\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 30\n- Last updated: 2026-07-25",
       "comments": [
         {
@@ -482,8 +482,8 @@
       "sequence_id": 14,
       "name": "dmvevents/clawx-pilot#17 — ci(windows): windows-installer-e2e.yml — dispatch-only harness run",
       "priority": "medium",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Cancelled",
+      "state_id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
       "description": "- Source: dmvevents/clawx-pilot#17\n- Type: Pull request\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 10\n- Last updated: 2026-08-15",
       "comments": [
         {
@@ -497,8 +497,8 @@
       "sequence_id": 13,
       "name": "dmvevents/clawx-pilot#16 — test(harness): JUnit report schema + runtime validation gate",
       "priority": "medium",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Cancelled",
+      "state_id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
       "description": "- Source: dmvevents/clawx-pilot#16\n- Type: Pull request\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 10\n- Last updated: 2026-08-15",
       "comments": [
         {
@@ -552,8 +552,8 @@
       "sequence_id": 9,
       "name": "dmvevents/clawx-pilot#6 — Run Forms preview/prefill/dry-run/submit-refusal bug bash",
       "priority": "low",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Cancelled",
+      "state_id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
       "description": "- Source: dmvevents/clawx-pilot#6\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
       "comments": [
         {
@@ -567,8 +567,8 @@
       "sequence_id": 8,
       "name": "dmvevents/clawx-pilot#8 — Create production Outlook teacher login and support logging flow",
       "priority": "low",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "- Source: dmvevents/clawx-pilot#8\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
       "comments": [
         {
@@ -582,8 +582,8 @@
       "sequence_id": 7,
       "name": "dmvevents/clawx-pilot#9 — Define production Forms destination via SharePoint or Power Automate",
       "priority": "low",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "- Source: dmvevents/clawx-pilot#9\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
       "comments": [
         {
@@ -612,8 +612,8 @@
       "sequence_id": 5,
       "name": "dmvevents/clawx-pilot#5 — Run Outlook read/search/draft/send-safe bug bash",
       "priority": "low",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Cancelled",
+      "state_id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
       "description": "- Source: dmvevents/clawx-pilot#5\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
       "comments": [
         {
@@ -627,8 +627,8 @@
       "sequence_id": 4,
       "name": "dmvevents/clawx-pilot#2 — Capture repeat clean-install tester evidence",
       "priority": "low",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Cancelled",
+      "state_id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
       "description": "- Source: dmvevents/clawx-pilot#2\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
       "comments": [
         {
@@ -657,8 +657,8 @@
       "sequence_id": 2,
       "name": "dmvevents/clawx-pilot#1 — Measure and reduce Gateway cold-start time",
       "priority": "low",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Cancelled",
+      "state_id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
       "description": "- Source: dmvevents/clawx-pilot#1\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
       "comments": [
         {
@@ -672,8 +672,8 @@
       "sequence_id": 1,
       "name": "dmvevents/clawx-pilot#4 — Expand file smoke into Excel / Word / PDF matrix",
       "priority": "low",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Cancelled",
+      "state_id": "c7b8c643-31a4-4ccf-80a2-2947cab5474a",
       "description": "- Source: dmvevents/clawx-pilot#4\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
       "comments": [
         {

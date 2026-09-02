@@ -24,12 +24,13 @@ board (live state). Ceiling for agents is **Ready**; a human declares GA._
   VM-dependent is pre-staged and documented on the cards.
 - **Persona test-base designed** (`docs/VM_TEST_BASE.md`): L0/L1/L2 snapshot
   layers so tests stop running on a hand-tended mutable VM.
-- **Full backlog triaged (all 34 cards).** Board now: **10 Ready** (CLWX-3, 6,
-  12, 20, 24, 26, 27, 28, 32, 33), 6 In Progress (22 anchor, 23 timeline,
-  25 KR2-recording, 29 KR6, 31 KR8, 10 GA-packet), 17 Backlog each carrying a
-  triage disposition (superseded-by / Ministry-gated / non-blocking), 1
-  Cancelled. Duplicate-close recommendations (human decision): CLWX-2→25,
-  CLWX-4→25, CLWX-5→34, CLWX-17→25/10.
+- **Full backlog triaged AND cleared (owner-authorized 2026-09-02).** Board:
+  **11 Ready** (CLWX-3, 6, 12, 20, 24, 26, 27, 28, 32, 33, 35), 6 In Progress
+  (22 anchor, 23 timeline, 25 KR2-recording, 29 KR6, 31 KR8, 10 GA-packet),
+  **6 Todo** — every one dependency-tagged (7/8/30 Ministry-KR8/KR7 chain,
+  34 VM+Outlook lane, 18/19 owner security sitting), **12 Cancelled**
+  (superseded/obsolete per triage: 1, 2, 4, 5, 9, 11, 13–17, 21).
+  **Backlog: zero.**
 - **Branding sweep done** (CLWX-3, commit `dc30f9db`): last user-visible
   ClawX/OpenClaw strings removed.
 

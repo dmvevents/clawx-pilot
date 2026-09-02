@@ -6,270 +6,6 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 > The live board is source of truth for *what to work on*. This file is a
 > persisted backup so the plan survives on clone and history is versioned.
 
-## Backlog
-
-### CLWX-1 — dmvevents/clawx-pilot#4 — Expand file smoke into Excel / Word / PDF matrix
-
-- **State:** Backlog  |  **Priority:** low
-
-- Source: dmvevents/clawx-pilot#4
-- Type: Issue
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 76
-- Last updated: 2026-06-10
-
-**Comments (1):**
-
-- Triage 2026-09-02: partially superseded. The docx leg is proven live (KR1 PASS, CLWX-24). The Excel/PDF legs remain worth running as part of the moe.13 regression matrix on the persona VM (fixtures for xlsx/pptx already come from the fixed seeder). Fold into the CLWX-10 GA evidence packet run.
-
-### CLWX-2 — dmvevents/clawx-pilot#1 — Measure and reduce Gateway cold-start time
-
-- **State:** Backlog  |  **Priority:** low
-
-- Source: dmvevents/clawx-pilot#1
-- Type: Issue
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 76
-- Last updated: 2026-06-10
-
-**Comments (1):**
-
-- Triage 2026-09-02: superseded by CLWX-25 (KR2). The dominant cold-start contributor was found and fixed there: a present-but-model-less agents.defaults block caused a ~4–5 min unbindable-channel window (fix 61be816e, ships in moe.13). Timed before/after first-boot measurement is part of the CLWX-25 recording. Recommend closing this card as duplicate once CLWX-25 lands.
-
-### CLWX-4 — dmvevents/clawx-pilot#2 — Capture repeat clean-install tester evidence
-
-- **State:** Backlog  |  **Priority:** low
-
-- Source: dmvevents/clawx-pilot#2
-- Type: Issue
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 76
-- Last updated: 2026-06-10
-
-**Comments (1):**
-
-- Triage 2026-09-02: superseded by CLWX-25 (KR2 clean-VM evidence) — same acceptance (repeatable clean-install evidence), now with a stronger base: the layered persona snapshot design in docs/VM_TEST_BASE.md makes repeat installs start from a blessed L1 image instead of hand-cleaned state. Recommend closing as duplicate of CLWX-25.
-
-### CLWX-5 — dmvevents/clawx-pilot#5 — Run Outlook read/search/draft/send-safe bug bash
-
-- **State:** Backlog  |  **Priority:** low
-
-- Source: dmvevents/clawx-pilot#5
-- Type: Issue
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 76
-- Last updated: 2026-06-10
-
-**Comments (1):**
-
-- Triage 2026-09-02: absorbed into CLWX-34. The Outlook bug bash and Raj-defect triage share the same lane (user Chrome CDP + test.fac session on the persona VM) and the same evidence format. Run as one session when the VM lane returns. Recommend closing as duplicate of CLWX-34.
-
-### CLWX-7 — dmvevents/clawx-pilot#9 — Define production Forms destination via SharePoint or Power Automate
-
-- **State:** Backlog  |  **Priority:** low
-
-- Source: dmvevents/clawx-pilot#9
-- Type: Issue
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 76
-- Last updated: 2026-06-10
-
-**Comments (1):**
-
-- Triage 2026-09-02: Ministry-gated (KR8 family). Production Forms destination needs real tenant decisions from Raj (SharePoint list vs Power Automate flow URL). Tracked in the Lane-3 owner packet of docs/GA_SPRINT_PLAN_2026-09-02.md. Not blocking single-school GA (cloned form on test.fac covers the demo path).
-
-### CLWX-8 — dmvevents/clawx-pilot#8 — Create production Outlook teacher login and support logging flow
-
-- **State:** Backlog  |  **Priority:** low
-
-- Source: dmvevents/clawx-pilot#8
-- Type: Issue
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 76
-- Last updated: 2026-06-10
-
-**Comments (1):**
-
-- Triage 2026-09-02: Ministry-gated (KR8 family). Production teacher login + support account creation sits with MoE IT. Grouped into the Lane-3 owner packet; unblocks CLWX-34-class triage against production accounts later. Not blocking single-school GA.
-
-### CLWX-9 — dmvevents/clawx-pilot#6 — Run Forms preview/prefill/dry-run/submit-refusal bug bash
-
-- **State:** Backlog  |  **Priority:** low
-
-- Source: dmvevents/clawx-pilot#6
-- Type: Issue
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 76
-- Last updated: 2026-06-10
-
-**Comments (1):**
-
-- Triage 2026-09-02: keep, sequence after CLWX-34. Forms bug bash needs the same persona-VM Outlook/Chrome lane; the Forms production destination itself is Ministry-gated (CLWX-7). Non-blocking for single-school GA; required before fleet scale-out.
-
-### CLWX-13 — dmvevents/clawx-pilot#16 — test(harness): JUnit report schema + runtime validation gate
-
-- **State:** Backlog  |  **Priority:** medium
-
-- Source: dmvevents/clawx-pilot#16
-- Type: Pull request
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 10
-- Last updated: 2026-08-15
-
-**Comments (1):**
-
-- Triage 2026-09-02: harness enhancement, non-blocking for GA. Keep in Backlog; schedule after the GA evidence packet (CLWX-10) lands.
-
-### CLWX-14 — dmvevents/clawx-pilot#17 — ci(windows): windows-installer-e2e.yml — dispatch-only harness run
-
-- **State:** Backlog  |  **Priority:** medium
-
-- Source: dmvevents/clawx-pilot#17
-- Type: Pull request
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 10
-- Last updated: 2026-08-15
-
-**Comments (1):**
-
-- Triage 2026-09-02: CI enhancement, non-blocking for GA (installer e2e currently runs on the persona VM lane instead). Keep in Backlog.
-
-### CLWX-15 — dmvevents/clawx-pilot#15 — test(harness): corpus expansion — P6..P10 fixtures (10 total)
-
-- **State:** Backlog  |  **Priority:** medium
-
-- Source: dmvevents/clawx-pilot#15
-- Type: Pull request
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 30
-- Last updated: 2026-07-25
-
-**Comments (1):**
-
-- Triage 2026-09-02: corpus expansion is worthwhile but non-blocking — the live in-app PASS (CLWX-24) is stronger evidence than more BM25 rows. Keep in Backlog.
-
-### CLWX-16 — dmvevents/clawx-pilot#14 — ci(windows): windows-installer-e2e.yml — installer + 5-prompt harness pipeline
-
-- **State:** Backlog  |  **Priority:** medium
-
-- Source: dmvevents/clawx-pilot#14
-- Type: Pull request
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 10
-- Last updated: 2026-08-15
-
-**Comments (1):**
-
-- Triage 2026-09-02: CI enhancement, non-blocking for GA. Keep in Backlog; revisit when a Windows CI runner exists.
-
-### CLWX-17 — dmvevents/clawx-pilot#13 — test(harness): 5-prompt Windows E2E scaffold — awaits installer URL
-
-- **State:** Backlog  |  **Priority:** medium
-
-- Source: dmvevents/clawx-pilot#13
-- Type: Pull request
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 10
-- Last updated: 2026-08-15
-
-**Comments (1):**
-
-- Triage 2026-09-02: superseded in practice — the 5-prompt E2E now runs live via the committed chat-turn driver + last-message reader on the persona VM (KR1 evidence used exactly this path). Recommend closing as duplicate of the CLWX-25/CLWX-10 evidence runs.
-
-### CLWX-18 — HUMAN-GATED: dmvevents/clawx-pilot is PUBLIC — violates all-repos-private rule
-
-- **State:** Backlog  |  **Priority:** urgent
-
-gh repo view confirms visibility PUBLIC (updated 2026-07-27). The estate hard rule is all repos private, BUT MoE pilot users download Windows RC installers from this repo's Releases pages — flipping it private breaks their access. Human decision required: make private + provide an alternate distribution channel, or grant an explicit exception. Command when decided: gh repo edit dmvevents/clawx-pilot --visibility private
-Source: gh repo view 2026-08-25. Tier: verified_at_commit.
-
-**Comments (3):**
-
-- Standing reminder (owner-gated, URGENT class): repo is still PUBLIC with full source + leaked test credential in 3 files. One-sitting fix plan: make repo private (or split source→private, releases→public), purge the credential from history (git filter-repo), rotate the credential (pairs with CLWX-19). Agent-side prep is done — needs the owner because it is destructive + affects external visibility.
-- Wiki evidence (commit 59e1ba26): docs/wiki/REPO_AND_RELEASE_MAP.md now documents every repo, the legitimate reason clawx-pilot is public (tester downloads the ~300MB installer from Releases, no GitHub account needed), and the recommended 3-decision split: (D1) rotate the leaked test password [see CLWX-19], (D2) keep releases public + move source to a private repo, (D3) hold the Lane-C reply. The public leak of [REDACTED — local operator context only] in 3 files is confirmed; the liaison phone number was redacted before any push and never leaked. All decisions owner-gated.
-- Investigated 2026-09-01 — the exposure is worse than "repo is public". - The public repo hosts full SOURCE, not releases. dmvevents/clawx-pilot (PUBLIC, 901 files, 13 branches) contains electron/, docs/, extensions/, CLAUDE.md — the entire tree. Its own description says "Source lives in private repo; this repo distributes signed releases only." Reality contradicts the description. The dev workflow in CLAUDE.md ("push to pilot/main") has been publishing source to a public repo. - A live credential is already public. The test-account password [REDACTED — local operator context only] appears in 3 public files: scripts/v2-signin.ts, scripts/forms-relogin-helper.ts, and CLAUDE.md. This violates the hard rule "never print or commit the plaintext password". Anyone can read it and sign into test.fac@fac.edu.tt. - Good news: the liaison phone number was redacted BEFORE any push — the two files carrying it are absent on public (verified). Local commits a1ff2cc7 + 2a0f55c8 keep the working tree clean of both the number and the plaintext password. - There is a private-repo intent. Private candidates exist (dmvevents/anton-claw, trinidad-moe-platform, openclaw-personal) — the intended dev home, per the repo description. Recommended (owner-gated): (1) rotate the test.fac password now — it is public; (2) make clawx-pilot private OR strip source and use it for release artifacts only; (3) scrub [REDACTED — local operator context only] from the 3 public files + history. Nothing here is pushed by this session; these are pre-existing public commits.
-
-### CLWX-19 — Rotate the sk-clawx API key shared in WhatsApp (2026-06-05)
-
-- **State:** Backlog  |  **Priority:** urgent
-
-A gateway API key with the sk-clawx prefix was pasted in full into a WhatsApp chat on 2026-06-05 (key value deliberately NOT reproduced here). Chat history is exportable/syncable — treat as exposed. Rotate the key, audit usage since 2026-06-05, and move future credential handoffs to a secret channel.
-Source: local WhatsApp store 2026-06-05. Tier: verified_at_commit (store read 2026-08-25).
-
-**Comments (1):**
-
-- Standing reminder (owner-gated): rotate sk-clawx (shared in WhatsApp 2026-06-05, also exposed via CLWX-18). Best done in the same sitting as the CLWX-18 scrub so the leaked history becomes worthless.
-
-### CLWX-21 — State marker: MoE Windows RC 2026-06-23 'Outlook Green' (b38b620) published
-
-- **State:** Backlog  |  **Priority:** low
-
-Last published pilot state: release page shows source b38b620, Actions run 28034003516, installer SHA256 a19a9c62...c6ee, Outlook validation summary. Next-RC checklist should start from here; 17 GitHub items were auto-routed onto this board by the scanner for triage.
-Source: local WhatsApp store 2026-06-23 + clawx-pilot releases. Tier: verified_at_commit (store read 2026-08-25).
-
-### CLWX-30 — [CLWX-7] Real Entra sign-in + stable UserId identity
-
-- **State:** Backlog  |  **Priority:** none
-
-The app has no signed-in-user identity today, which blocks both the mandatory UserId header (Ministry §3.3) and per-user caps.
-FACTS: the only userPrincipalName in the tree is the stub 'principal@school.example' (microsoft-graph/manager.ts:257). The live Outlook path identifies the principal only implicitly, by riding whichever account is signed into their Chrome session over CDP — deliberate and the only thing Conditional Access permits, but the app never learns the identity in a header-able form.
-INFERENCE / design: backend-for-frontend — desktop does the interactive sign-in, the app server holds the client secret + tokens and stamps UserId from the authenticated session (never client-supplied). This also resolves the client-secret objection (a public/PKCE client is no longer needed once a confidential app server exists). Recommend oid over UPN (opaque, survives renames).
-OPEN QUESTIONS (Ministry-gated): redirect URI — becomes https://<app-server-host>/auth/callback, so it depends on the hostname decision Raj has been asking about since 2026-07-20. UserId = oid vs UPN. Refresh-token lifetimes (longer = fewer forced-online re-auths).
-Accept (KR7): a live interactive Entra sign-in produces a stable non-stub oid; an authenticated request to the app server carries a UserId stamped server-side, verified in App Insights.
-
-**Comments (2):**
-
-- Provenance note (2026-09-01). Entra/redirect-URI request originated 2026-07-10 (Raj thread). Ansari Khan handoff (2026-08-18) still lists the redirect URI as owed &mdash; blocked on the public-desktop-client vs confidential-client decision (see docs/MINISTRY_REPLY_DRAFT_2026-08-20.md). Owner/Ministry-gated.
-- Evidence: docs/SCALE_ANALYSIS_2026-08-20.md §4, docs/MINISTRY_REPLY_DRAFT_2026-08-20.md §2/§4.2. Blocked on CLWX-8 (hostname &rarr; redirect URI). Not built — Backlog.
-
-### CLWX-34 — [CLWX-bug] Verify/triage Raj's 2026-06-21 email defects
-
-- **State:** Backlog  |  **Priority:** medium
-
-Liaison log surfaced 4 reproducible defects Raj reported the day before the Principals demo (source: docs/wiki/LIAISON_LOG.md §C, WhatsApp archive): (1) send fails with "draft subject has been changed before it can be sent"; (2) reply misinterprets content (meal prefs read as shirt sizes); (3) reply archives the original email; (4) draft landed in the To: field (one-off). Plus 2 vague: PDF read inconsistency, document-search inconsistency. No post-demo verdict was ever captured. Note: (1) may already be fixed by the moe.10 hard-confirm gate.
-Accept: each defect reproduced-or-refuted against moe.11 with evidence (trace/log path); confirmed-live ones filed as individual bug cards via scripts/report-bug.mjs; the send-gate one verified against the moe.10 gate. Ladders to KR1 (live-LLM correctness) on the OKR anchor.
-
-**Comments (2):**
-
-- Card made self-contained (2026-09-02): the four defects Raj reported 2026-06-21 (source: docs/wiki/LIAISON_LOG.md §C — this card was an empty stub until now): - RAJ-1 (HIGH): send fails with "draft subject has been changed before it can be sent" — suspected send-gate false positive; the moe.10 hard-confirm gate likely fixes it but this is UNPROVEN. - RAJ-2 (MED): reply misinterprets email content (meal preferences read as shirt sizes) — extraction/classification, untriaged. - RAJ-3 (MED): reply action archives the original email — unintended side effect, untriaged. - RAJ-4 (LOW): a draft response landed in the "To:" field — one-off; file only if reproducible. Acceptance (GA box #9): each reproduced-or-refuted on moe.13, confirmed ones fixed, with per-defect evidence. Lane: user Chrome CDP + test.fac session on the persona VM (blocked on gcloud auth; plan in earlier comment). Register: docs/DEFECT_REGISTER_2026-09-02.md group A.
-- Lane assessment for the June-21 defect triage: requires the Outlook lane (user Chrome + test.fac session on CDP :18792). Probe on the test VM shows Chrome not running, port 18792 closed — AND the whole VM lane is now blocked on gcloud auth login (owner, interactive). Additionally standing up the test.fac session needs PILOT_TEST_PASSWORD in local operator context at run time (never committed; never for *@moe.gov.tt). Plan when unblocked: launch user Chrome with --remote-debugging-port=18792, sign in test.fac, reproduce each of the 4 reported defects against moe.13, classify reproduced/refuted/fixed-since with per-defect evidence. The persona-base L1 snapshot (docs/VM_TEST_BASE.md) will make this repeatable.
-
 ## Unstarted
 
 ### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy
@@ -306,6 +42,40 @@ Accept: each defect reproduced-or-refuted against moe.11 with evidence (trace/lo
 
 - Triage 2026-09-02: acceptance already met. The send path has TWO gates — confirm:true AND the open compose pane subject must match args.subject — proven by scripts/v2-send-test.ts (live send + gate proof) and covered by the submit/send-gate unit suites (85 tests green today). Moving to Ready for human close.
 
+### CLWX-7 — dmvevents/clawx-pilot#9 — Define production Forms destination via SharePoint or Power Automate
+
+- **State:** Todo  |  **Priority:** low
+
+- Source: dmvevents/clawx-pilot#9
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
+
+**Comments (1):**
+
+- Triage 2026-09-02: Ministry-gated (KR8 family). Production Forms destination needs real tenant decisions from Raj (SharePoint list vs Power Automate flow URL). Tracked in the Lane-3 owner packet of docs/GA_SPRINT_PLAN_2026-09-02.md. Not blocking single-school GA (cloned form on test.fac covers the demo path).
+
+### CLWX-8 — dmvevents/clawx-pilot#8 — Create production Outlook teacher login and support logging flow
+
+- **State:** Todo  |  **Priority:** low
+
+- Source: dmvevents/clawx-pilot#8
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
+
+**Comments (1):**
+
+- Triage 2026-09-02: Ministry-gated (KR8 family). Production teacher login + support account creation sits with MoE IT. Grouped into the Lane-3 owner packet; unblocks CLWX-34-class triage against production accounts later. Not blocking single-school GA.
+
 ### CLWX-12 — dmvevents/clawx-pilot#12 — feat(principal-assistant): bundle native document.* tools (Lane A)
 
 - **State:** Ready  |  **Priority:** medium
@@ -322,6 +92,30 @@ Accept: each defect reproduced-or-refuted against moe.11 with evidence (trace/lo
 **Comments (1):**
 
 - Triage 2026-09-02: shipped and live-proven. The document.* toolset is bundled and the KR1 in-app PASS on moe.12 (CLWX-24, Ready) proves the full path live: agent selects document.read_docx, resolves an OneDrive-KFM path, parses, summarises. Evidence: docs/evidence/KR1_INAPP_RUN_2026-09-02.md. Moving to Ready.
+
+### CLWX-18 — HUMAN-GATED: dmvevents/clawx-pilot is PUBLIC — violates all-repos-private rule
+
+- **State:** Todo  |  **Priority:** urgent
+
+gh repo view confirms visibility PUBLIC (updated 2026-07-27). The estate hard rule is all repos private, BUT MoE pilot users download Windows RC installers from this repo's Releases pages — flipping it private breaks their access. Human decision required: make private + provide an alternate distribution channel, or grant an explicit exception. Command when decided: gh repo edit dmvevents/clawx-pilot --visibility private
+Source: gh repo view 2026-08-25. Tier: verified_at_commit.
+
+**Comments (3):**
+
+- Standing reminder (owner-gated, URGENT class): repo is still PUBLIC with full source + leaked test credential in 3 files. One-sitting fix plan: make repo private (or split source→private, releases→public), purge the credential from history (git filter-repo), rotate the credential (pairs with CLWX-19). Agent-side prep is done — needs the owner because it is destructive + affects external visibility.
+- Wiki evidence (commit 59e1ba26): docs/wiki/REPO_AND_RELEASE_MAP.md now documents every repo, the legitimate reason clawx-pilot is public (tester downloads the ~300MB installer from Releases, no GitHub account needed), and the recommended 3-decision split: (D1) rotate the leaked test password [see CLWX-19], (D2) keep releases public + move source to a private repo, (D3) hold the Lane-C reply. The public leak of [REDACTED — local operator context only] in 3 files is confirmed; the liaison phone number was redacted before any push and never leaked. All decisions owner-gated.
+- Investigated 2026-09-01 — the exposure is worse than "repo is public". - The public repo hosts full SOURCE, not releases. dmvevents/clawx-pilot (PUBLIC, 901 files, 13 branches) contains electron/, docs/, extensions/, CLAUDE.md — the entire tree. Its own description says "Source lives in private repo; this repo distributes signed releases only." Reality contradicts the description. The dev workflow in CLAUDE.md ("push to pilot/main") has been publishing source to a public repo. - A live credential is already public. The test-account password [REDACTED — local operator context only] appears in 3 public files: scripts/v2-signin.ts, scripts/forms-relogin-helper.ts, and CLAUDE.md. This violates the hard rule "never print or commit the plaintext password". Anyone can read it and sign into test.fac@fac.edu.tt. - Good news: the liaison phone number was redacted BEFORE any push — the two files carrying it are absent on public (verified). Local commits a1ff2cc7 + 2a0f55c8 keep the working tree clean of both the number and the plaintext password. - There is a private-repo intent. Private candidates exist (dmvevents/anton-claw, trinidad-moe-platform, openclaw-personal) — the intended dev home, per the repo description. Recommended (owner-gated): (1) rotate the test.fac password now — it is public; (2) make clawx-pilot private OR strip source and use it for release artifacts only; (3) scrub [REDACTED — local operator context only] from the 3 public files + history. Nothing here is pushed by this session; these are pre-existing public commits.
+
+### CLWX-19 — Rotate the sk-clawx API key shared in WhatsApp (2026-06-05)
+
+- **State:** Todo  |  **Priority:** urgent
+
+A gateway API key with the sk-clawx prefix was pasted in full into a WhatsApp chat on 2026-06-05 (key value deliberately NOT reproduced here). Chat history is exportable/syncable — treat as exposed. Rotate the key, audit usage since 2026-06-05, and move future credential handoffs to a secret channel.
+Source: local WhatsApp store 2026-06-05. Tier: verified_at_commit (store read 2026-08-25).
+
+**Comments (1):**
+
+- Standing reminder (owner-gated): rotate sk-clawx (shared in WhatsApp 2026-06-05, also exposed via CLWX-18). Best done in the same sitting as the CLWX-18 scrub so the leaked history becomes worthless.
 
 ### CLWX-20 — clawx-asr voice-note path fails with ffmpeg-not-found on user machines
 
@@ -398,6 +192,21 @@ Accept (KR5): lane G G-outbox-durable (survives process kill), G-outbox-idempote
 - Build started (2026-09-01): kr5-outbox-builder subagent implementing electron/utils/outbox.ts per OFFLINE_ARCHITECTURE §5 (atomic+idempotent writer, client idempotency keys, pending→sent→acked/failed-permanent, bounded backoff, payload secret-guard) + tests/unit/outbox.test.ts covering G-outbox-durable / -idempotent / -drain each with negative controls. Files landed in worktree; tests running. Evidence comment with verbatim results to follow.
 - Evidence: docs/OFFLINE_ARCHITECTURE.md §3.2 (open gap) + §5 (design). Not built — Backlog. Depends on CLWX-8 (app-server write API) and CLWX-7 (identity).
 
+### CLWX-30 — [CLWX-7] Real Entra sign-in + stable UserId identity
+
+- **State:** Todo  |  **Priority:** none
+
+The app has no signed-in-user identity today, which blocks both the mandatory UserId header (Ministry §3.3) and per-user caps.
+FACTS: the only userPrincipalName in the tree is the stub 'principal@school.example' (microsoft-graph/manager.ts:257). The live Outlook path identifies the principal only implicitly, by riding whichever account is signed into their Chrome session over CDP — deliberate and the only thing Conditional Access permits, but the app never learns the identity in a header-able form.
+INFERENCE / design: backend-for-frontend — desktop does the interactive sign-in, the app server holds the client secret + tokens and stamps UserId from the authenticated session (never client-supplied). This also resolves the client-secret objection (a public/PKCE client is no longer needed once a confidential app server exists). Recommend oid over UPN (opaque, survives renames).
+OPEN QUESTIONS (Ministry-gated): redirect URI — becomes https://<app-server-host>/auth/callback, so it depends on the hostname decision Raj has been asking about since 2026-07-20. UserId = oid vs UPN. Refresh-token lifetimes (longer = fewer forced-online re-auths).
+Accept (KR7): a live interactive Entra sign-in produces a stable non-stub oid; an authenticated request to the app server carries a UserId stamped server-side, verified in App Insights.
+
+**Comments (2):**
+
+- Provenance note (2026-09-01). Entra/redirect-URI request originated 2026-07-10 (Raj thread). Ansari Khan handoff (2026-08-18) still lists the redirect URI as owed &mdash; blocked on the public-desktop-client vs confidential-client decision (see docs/MINISTRY_REPLY_DRAFT_2026-08-20.md). Owner/Ministry-gated.
+- Evidence: docs/SCALE_ANALYSIS_2026-08-20.md §4, docs/MINISTRY_REPLY_DRAFT_2026-08-20.md §2/§4.2. Blocked on CLWX-8 (hostname &rarr; redirect URI). Not built — Backlog.
+
 ### CLWX-32 — Chain-of-custody baseline for liaison archive (raj/karunesh threads + attachments)
 
 - **State:** Ready  |  **Priority:** low
@@ -426,6 +235,18 @@ Accept: gcloud installed + authed; a tunnel to clawx-win-rc-20260609 established
 - Post-Ready operational note: the IAP lane works but has a recurring single point of failure — user gcloud tokens expire and re-auth is interactive, which killed the lane mid-sprint (2026-09-02). Recommendation recorded in docs/VM_TEST_BASE.md: mint a dedicated service account with roles/iap.tunnelResourceAccessor + compute instance admin, activate with a key file on the operator machine. Owner approval needed (new credential).
 - Accept MET (2026-09-01): gcloud SDK installed (/opt/homebrew/bin/gcloud) + authed (interactive login by owner). Tunnel probe via windows-pilot/vm-testing/gcp-iap-lane.sh probe: VM RUNNING, RDP PASS (guest :3389 → localhost:13389), sshd PASS (guest :22 → localhost:12222), control leg :9999 correctly REFUSED — so the PASS results are meaningful, not tunnel false-positives. B2 gap closed; KR1 in-app + KR2 lanes now unblocked and In Progress.
 - Progress: gcloud SDK installed via brew (exit 0, /opt/homebrew/bin/gcloud). Existing credentialed account found but token stale — gcloud compute instances list fails with reauth-needed. Remaining for Accept: interactive gcloud auth login (human, ~1 min), then tunnel probe to clawx-win-rc-20260609. Config already points at us-central1-a.
+
+### CLWX-34 — [CLWX-bug] Verify/triage Raj's 2026-06-21 email defects
+
+- **State:** Todo  |  **Priority:** medium
+
+Liaison log surfaced 4 reproducible defects Raj reported the day before the Principals demo (source: docs/wiki/LIAISON_LOG.md §C, WhatsApp archive): (1) send fails with "draft subject has been changed before it can be sent"; (2) reply misinterprets content (meal prefs read as shirt sizes); (3) reply archives the original email; (4) draft landed in the To: field (one-off). Plus 2 vague: PDF read inconsistency, document-search inconsistency. No post-demo verdict was ever captured. Note: (1) may already be fixed by the moe.10 hard-confirm gate.
+Accept: each defect reproduced-or-refuted against moe.11 with evidence (trace/log path); confirmed-live ones filed as individual bug cards via scripts/report-bug.mjs; the send-gate one verified against the moe.10 gate. Ladders to KR1 (live-LLM correctness) on the OKR anchor.
+
+**Comments (2):**
+
+- Card made self-contained (2026-09-02): the four defects Raj reported 2026-06-21 (source: docs/wiki/LIAISON_LOG.md §C — this card was an empty stub until now): - RAJ-1 (HIGH): send fails with "draft subject has been changed before it can be sent" — suspected send-gate false positive; the moe.10 hard-confirm gate likely fixes it but this is UNPROVEN. - RAJ-2 (MED): reply misinterprets email content (meal preferences read as shirt sizes) — extraction/classification, untriaged. - RAJ-3 (MED): reply action archives the original email — unintended side effect, untriaged. - RAJ-4 (LOW): a draft response landed in the "To:" field — one-off; file only if reproducible. Acceptance (GA box #9): each reproduced-or-refuted on moe.13, confirmed ones fixed, with per-defect evidence. Lane: user Chrome CDP + test.fac session on the persona VM (blocked on gcloud auth; plan in earlier comment). Register: docs/DEFECT_REGISTER_2026-09-02.md group A.
+- Lane assessment for the June-21 defect triage: requires the Outlook lane (user Chrome + test.fac session on CDP :18792). Probe on the test VM shows Chrome not running, port 18792 closed — AND the whole VM lane is now blocked on gcloud auth login (owner, interactive). Additionally standing up the test.fac session needs PILOT_TEST_PASSWORD in local operator context at run time (never committed; never for *@moe.gov.tt). Plan when unblocked: launch user Chrome with --remote-debugging-port=18792, sign in test.fac, reproduce each of the 4 reported defects against moe.13, classify reproduced/refuted/fixed-since with per-defect evidence. The persona-base L1 snapshot (docs/VM_TEST_BASE.md) will make this repeatable.
 
 ### CLWX-35 — Board exporter drops description/comment bodies (mirror is titles-only)
 
@@ -576,6 +397,91 @@ Accept (KR8): reply sent (by Anton); working-session notes record the hostname d
 
 ## Cancelled
 
+### CLWX-1 — dmvevents/clawx-pilot#4 — Expand file smoke into Excel / Word / PDF matrix
+
+- **State:** Cancelled  |  **Priority:** low
+
+- Source: dmvevents/clawx-pilot#4
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
+
+**Comments (1):**
+
+- Triage 2026-09-02: partially superseded. The docx leg is proven live (KR1 PASS, CLWX-24). The Excel/PDF legs remain worth running as part of the moe.13 regression matrix on the persona VM (fixtures for xlsx/pptx already come from the fixed seeder). Fold into the CLWX-10 GA evidence packet run.
+
+### CLWX-2 — dmvevents/clawx-pilot#1 — Measure and reduce Gateway cold-start time
+
+- **State:** Cancelled  |  **Priority:** low
+
+- Source: dmvevents/clawx-pilot#1
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
+
+**Comments (1):**
+
+- Triage 2026-09-02: superseded by CLWX-25 (KR2). The dominant cold-start contributor was found and fixed there: a present-but-model-less agents.defaults block caused a ~4–5 min unbindable-channel window (fix 61be816e, ships in moe.13). Timed before/after first-boot measurement is part of the CLWX-25 recording. Recommend closing this card as duplicate once CLWX-25 lands.
+
+### CLWX-4 — dmvevents/clawx-pilot#2 — Capture repeat clean-install tester evidence
+
+- **State:** Cancelled  |  **Priority:** low
+
+- Source: dmvevents/clawx-pilot#2
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
+
+**Comments (1):**
+
+- Triage 2026-09-02: superseded by CLWX-25 (KR2 clean-VM evidence) — same acceptance (repeatable clean-install evidence), now with a stronger base: the layered persona snapshot design in docs/VM_TEST_BASE.md makes repeat installs start from a blessed L1 image instead of hand-cleaned state. Recommend closing as duplicate of CLWX-25.
+
+### CLWX-5 — dmvevents/clawx-pilot#5 — Run Outlook read/search/draft/send-safe bug bash
+
+- **State:** Cancelled  |  **Priority:** low
+
+- Source: dmvevents/clawx-pilot#5
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
+
+**Comments (1):**
+
+- Triage 2026-09-02: absorbed into CLWX-34. The Outlook bug bash and Raj-defect triage share the same lane (user Chrome CDP + test.fac session on the persona VM) and the same evidence format. Run as one session when the VM lane returns. Recommend closing as duplicate of CLWX-34.
+
+### CLWX-9 — dmvevents/clawx-pilot#6 — Run Forms preview/prefill/dry-run/submit-refusal bug bash
+
+- **State:** Cancelled  |  **Priority:** low
+
+- Source: dmvevents/clawx-pilot#6
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
+
+**Comments (1):**
+
+- Triage 2026-09-02: keep, sequence after CLWX-34. Forms bug bash needs the same persona-VM Outlook/Chrome lane; the Forms production destination itself is Ministry-gated (CLWX-7). Non-blocking for single-school GA; required before fleet scale-out.
+
 ### CLWX-11 — dmvevents/clawx-pilot#11 — Collect customer feedback for Windows RC 2026-06-10
 
 - **State:** Cancelled  |  **Priority:** medium
@@ -588,4 +494,96 @@ Accept (KR8): reply sent (by Anton); working-session notes record the hostname d
 - Unresolved review threads: 0
 - Days idle: 13
 - Last updated: 2026-08-12
+
+### CLWX-13 — dmvevents/clawx-pilot#16 — test(harness): JUnit report schema + runtime validation gate
+
+- **State:** Cancelled  |  **Priority:** medium
+
+- Source: dmvevents/clawx-pilot#16
+- Type: Pull request
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 10
+- Last updated: 2026-08-15
+
+**Comments (1):**
+
+- Triage 2026-09-02: harness enhancement, non-blocking for GA. Keep in Backlog; schedule after the GA evidence packet (CLWX-10) lands.
+
+### CLWX-14 — dmvevents/clawx-pilot#17 — ci(windows): windows-installer-e2e.yml — dispatch-only harness run
+
+- **State:** Cancelled  |  **Priority:** medium
+
+- Source: dmvevents/clawx-pilot#17
+- Type: Pull request
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 10
+- Last updated: 2026-08-15
+
+**Comments (1):**
+
+- Triage 2026-09-02: CI enhancement, non-blocking for GA (installer e2e currently runs on the persona VM lane instead). Keep in Backlog.
+
+### CLWX-15 — dmvevents/clawx-pilot#15 — test(harness): corpus expansion — P6..P10 fixtures (10 total)
+
+- **State:** Cancelled  |  **Priority:** medium
+
+- Source: dmvevents/clawx-pilot#15
+- Type: Pull request
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 30
+- Last updated: 2026-07-25
+
+**Comments (1):**
+
+- Triage 2026-09-02: corpus expansion is worthwhile but non-blocking — the live in-app PASS (CLWX-24) is stronger evidence than more BM25 rows. Keep in Backlog.
+
+### CLWX-16 — dmvevents/clawx-pilot#14 — ci(windows): windows-installer-e2e.yml — installer + 5-prompt harness pipeline
+
+- **State:** Cancelled  |  **Priority:** medium
+
+- Source: dmvevents/clawx-pilot#14
+- Type: Pull request
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 10
+- Last updated: 2026-08-15
+
+**Comments (1):**
+
+- Triage 2026-09-02: CI enhancement, non-blocking for GA. Keep in Backlog; revisit when a Windows CI runner exists.
+
+### CLWX-17 — dmvevents/clawx-pilot#13 — test(harness): 5-prompt Windows E2E scaffold — awaits installer URL
+
+- **State:** Cancelled  |  **Priority:** medium
+
+- Source: dmvevents/clawx-pilot#13
+- Type: Pull request
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 10
+- Last updated: 2026-08-15
+
+**Comments (1):**
+
+- Triage 2026-09-02: superseded in practice — the 5-prompt E2E now runs live via the committed chat-turn driver + last-message reader on the persona VM (KR1 evidence used exactly this path). Recommend closing as duplicate of the CLWX-25/CLWX-10 evidence runs.
+
+### CLWX-21 — State marker: MoE Windows RC 2026-06-23 'Outlook Green' (b38b620) published
+
+- **State:** Cancelled  |  **Priority:** low
+
+Last published pilot state: release page shows source b38b620, Actions run 28034003516, installer SHA256 a19a9c62...c6ee, Outlook validation summary. Next-RC checklist should start from here; 17 GitHub items were auto-routed onto this board by the scanner for triage.
+Source: local WhatsApp store 2026-06-23 + clawx-pilot releases. Tier: verified_at_commit (store read 2026-08-25).
 
