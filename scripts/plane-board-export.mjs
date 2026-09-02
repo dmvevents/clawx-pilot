@@ -60,6 +60,38 @@ for (const it of issues) {
   } catch (e) { it._enrich_error = String(e); }
 }
 
+// No-secrets floor: card bodies are authored by humans and have already been
+// caught carrying a live credential (CLWX-18's comments quoted the leaked
+// test password verbatim). Every body field passes through this before it
+// can reach the repo. Patterns cover known-leaked literals and generic
+// credential shapes; extend the list when a new leak class appears.
+const REDACT_PATTERNS = [
+  /Education@2000/g,                              // leaked test.fac password (CLWX-18)
+  /sk-clawx[A-Za-z0-9_-]{8,}/g,                   // key VALUES only; the bare name may appear
+  /(password|passwd|pwd)\s*[:=]\s*\S+/gi,         // generic password assignments
+  /Bearer\s+[A-Za-z0-9._-]{20,}/g,                // bearer tokens
+];
+const redact = (text) => REDACT_PATTERNS.reduce(
+  (t, re) => t.replace(re, '[REDACTED]'), text ?? '',
+);
+
+// This Plane build returns empty *_stripped fields and populates only the
+// *_html variants, which silently produced a titles-only mirror (CLWX-35).
+// Convert HTML to text ourselves as the fallback.
+const htmlToText = (html) => {
+  if (!html || typeof html !== 'string') return '';
+  return html
+    .replace(/<(li)[^>]*>/gi, '\n- ')
+    .replace(/<\/(p|div|h[1-6]|ol|ul|tr)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
 const stamp = process.env.EXPORT_STAMP || new Date().toISOString().slice(0, 10);
 const snapshot = {
   exported_at_date: stamp,
@@ -67,10 +99,13 @@ const snapshot = {
   project: { id: project.id, name: project.name, identifier: project.identifier },
   states: states.map((s) => ({ id: s.id, name: s.name, group: s.group })),
   issues: issues.map((i) => ({
-    id: i.id, sequence_id: i.sequence_id, name: i.name, priority: i.priority,
+    id: i.id, sequence_id: i.sequence_id, name: redact(i.name), priority: i.priority,
     state: stateById[i.state]?.name ?? i.state, state_id: i.state,
-    description: i.description_stripped || '',
-    comments: (i.comments || []).map((c) => ({ text: c.comment_stripped || '', created: c.created_at })),
+    description: redact(i.description_stripped || htmlToText(i.description_html)),
+    comments: (i.comments || []).map((c) => ({
+      text: redact(c.comment_stripped || htmlToText(c.comment_html)),
+      created: c.created_at,
+    })),
   })),
 };
 

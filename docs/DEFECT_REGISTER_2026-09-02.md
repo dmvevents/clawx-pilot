@@ -1,0 +1,90 @@
+# Defect & feedback register — compiled 2026-09-02
+
+*Compiled by the defect-registrar sweep (sources: WINDOWS_PROBLEMS_ATLAS §1–§15,
+board mirror, docs/wiki/GA_READINESS.md gap ledger G1–G15, docs/wiki/LIAISON_LOG.md §C,
+GA_SPRINT_STATE_VECTOR flight checks, evidence docs, repo-wide BUG- grep).
+48 entries. **Read the "Register deltas" section first** — several group-A rows
+were closed by work that landed the same day, after the sweep's read of the tree.*
+
+## Register deltas (same-day, post-sweep — authoritative over the rows below)
+
+| Register row | Delta |
+|---|---|
+| KR5 (CLWX-28) "no real action wired" | **CLOSED @ `ebc4be75`**: Outlook send + both form submits enqueue audit records; boot drain; restart + mid-send-crash + idempotent-replay tests. Card at Ready. |
+| KR2 / BOOT-EMPTY "fix in tree only" | **moe.13 built + signed same day** (sha256 `a8494ec0…deb3ecf`) carrying `61be816e`. Remaining: recorded assisted fresh-VM install (gated on `gcloud auth login`, owner). |
+| DRIVER-SETTLE "needs one green run under fixed driver" | Still owed — first Lane-2 run under moe.13 doubles as this regression proof. |
+| CLWX-3 branding "final sweep unrecorded" | **CLOSED @ `dc30f9db`** — sweep run, 3 strings fixed, card at Ready. |
+| CLWX-20 ffmpeg | Verified: packaged path maps exactly to the resolver's first candidate; card at Ready pending one voice-note smoke on the persona VM. |
+| NEW: BOARD-EXPORT-STRIP | The Plane board exporter (`scripts/plane-board-export.mjs`) writes **empty description/comment bodies** for every card — the repo mirror preserves only titles/states/timestamps. Both analyst agents independently hit this. OPEN, group B: the mirror cannot serve as a substance backup until fixed; card substance must be cross-referenced from docs/wiki. |
+
+## A. OPEN and blocking GA (unchecked boxes on the docs/wiki/GA_READINESS.md §4 gate / security floor)
+
+| ID | Surface | Symptom | Root cause | Status | Blocking GA? | Evidence/source |
+|---|---|---|---|---|---|---|
+| RAJ-1 (G4, CLWX-34) | outlook | Send fails: "draft subject has been changed before it can be sent" (HIGH) | Suspected send-gate false positive; moe.10 hard-confirm gate *likely* fixes — unproven | UNVERIFIED | Yes — explicit GA checkbox: reproduce-or-refute on moe.11+ | docs/wiki/LIAISON_LOG.md §C; GA_READINESS G4 |
+| RAJ-2 (G4, CLWX-34) | outlook | Reply misinterprets email content (meal preferences read as shirt sizes) (MED) | UNKNOWN — extraction/classification, untriaged | OPEN | Yes — same checkbox | docs/wiki/LIAISON_LOG.md §C |
+| RAJ-3 (G4, CLWX-34) | outlook | Reply action archives the original email (MED) | UNKNOWN — unintended side effect, untriaged | OPEN | Yes — same checkbox | docs/wiki/LIAISON_LOG.md §C |
+| RAJ-4 (G4, CLWX-34) | outlook | Draft response landed in the "To:" field (one-off) (LOW) | UNKNOWN — file only if reproducible | UNVERIFIED | Yes — same checkbox (reproduce-or-refute) | docs/wiki/LIAISON_LOG.md §C |
+| CLWX-18 (G12) | security | Public repo dmvevents/clawx-pilot hosts full source; plaintext test password was in 3 files | Fork pushed public with source instead of releases-only | OPEN (partial: working tree scrubbed at f99f2c1f, 0 literals; public-branch HISTORY scrub + source/releases split still owner-gated) | Yes — security-floor checkbox | Board CLWX-18; G12 |
+| CLWX-19 (G13) | security | sk-clawx API key shared over WhatsApp (2026-06-05), never rotated | Key shared over insecure channel; rotation = owner action | OPEN | Yes — security-floor checkbox | Board CLWX-19; G13 |
+| G9 / KR6 (CLWX-29) | infra | ~7,550-token fixed floor = ~71% of every turn; fleet-wide 429 at ~20 schools on shared 100M/mo | Oversized per-turn tool catalog/system floor; shared APIM key | OPEN — trim branch `7add864b` (~2,000 floor) ON HOLD (owner); per-user caps landed behind `CLAWX_PER_USER_CAPS` (`deff5c7d`); fleet-verify needs KR7 | Yes — KR6 checkbox | docs/SCALE_ANALYSIS_2026-08-20.md; G9 |
+| KR7 (CLWX-30) | infra/security | No real Entra sign-in → no stable per-principal UserId in the APIM header | Ministry identity conflicts (secret vs PKCE, redirect URI unregistered); real values owed | OPEN — externally gated on KR8. Pull-forward available: build sign-in behind a flag on the dev-loopback redirect (G7) so real values = config swap | Yes — KR7 checkbox | docs/MINISTRY_INFRA_HANDOFF_2026-08-18.md |
+| KR8 (CLWX-31, G8) | infra | All 20 Ministry handoff values are placeholders; credential link expired unopened | Ministry has not returned real values | OPEN — condensed reply SENT via WhatsApp 2026-09-01 (ledgered, `~/openclaw-agent/outbound-sent/`); awaiting Raj: session + values | Yes — KR8 checkbox; gates KR7→KR6 | GA_READINESS G7/G8; LIAISON_LOG §B |
+| KR2 (CLWX-25) | boot/packaging | Fresh/empty-config install: composer disabled ~4–5 min (retryAfterMs≈285000) on moe.11 AND moe.12 | `ensureBootableAgentsConfig` skipped upgrading a model-less `agents.defaults` block | Fix `61be816e` **shipped in moe.13 artifact** (see deltas); recorded assisted clean-VM install still owed | Yes — KR2 checkbox | KR1_INAPP_RUN secondary #1–2 |
+| ~~KR5 (CLWX-28, G10)~~ | offline | ~~no real action wired through outbox~~ | — | **CLOSED @ `ebc4be75`** (see deltas) | was Yes | OFFLINE_ARCHITECTURE §5; G10 |
+| EXT-TESTER | packaging | No independent tester has completed download→install→first-turn from the public Release | Never run (original feedback card CLWX-11 Cancelled) | OPEN | Yes — external-validation checkbox | GA_READINESS §4 |
+
+## B. OPEN, not blocking
+
+| ID | Surface | Symptom | Root cause | Status | Source |
+|---|---|---|---|---|---|
+| CLWX-20 | asr | voice-note ffmpeg-not-found on user machines | ffmpeg historically not bundled | Bundled in moe.12+ (packaged-path verified 2026-09-02); one persona-VM voice smoke closes it | Board CLWX-20; Atlas §14 |
+| BOARD-EXPORT-STRIP | tooling | Board mirror JSON/MD carry empty description/comment bodies for every card | Exporter captures titles/states/timestamps only | OPEN — fix `scripts/plane-board-export.mjs` to include bodies (respecting the no-secrets floor) | Both analyst sweeps, 2026-09-02 |
+| ATLAS-15 | forms | forms.preview_* times out; redirect to login.microsoftonline.com | Chrome automation profile not signed in to tenant — auth state, not selectors | OPEN (partial: sign-in interstitial detection shipped; GA path gated on KR7/KR8) | Atlas §15 |
+| KAR-PDF (G6a) | docs | PDF read inconsistencies (Karunesh via Raj, 2026-06-30) — no repro detail | UNKNOWN; mitigations shipped (steering c1b18125, KR1 PASS) | UNVERIFIED vs original report | LIAISON_LOG §C; G6 |
+| DOCSEARCH (G6b) | docs | Document-search inconsistency (2026-07-17) — no repro detail | UNKNOWN | UNVERIFIED | LIAISON_LOG §C |
+| ACPX-NOISE | boot | acpx runtime backend probe fails every boot; adds handshake latency | Codex ACP backend can't spawn on guest; non-fatal | OPEN | KR1_INAPP_RUN secondary #3 |
+| STEER-READ | docs | On read_docx parse failure, agent falls back to generic workspace-rooted `read` instead of surfacing the parse error | Persona covers "no Python fallback" but not "no generic-read fallback" | OPEN (low) | KR1_INAPP_RUN follow-ups |
+| FIXTURE-HYG | docs | Stale malformed fixture copies in Downloads/Documents shadow the valid Desktop copy (resolver prefers Downloads) | Multiple seeded copies across profile | OPEN (process: purge + re-seed via fixed seeder before demos) | KR1_INAPP_RUN re-run |
+| G5-VERDICT | feedback | No post-demo verdict captured for 2026-06-23 principals demo; circulating "0/5" score has NO source | Feedback-loop gap | OPEN — never cite "0/5" without a source | G5; LIAISON_LOG §C |
+| COMPOSER-OVERRIDE | boot | Chat picked Flash though config said Pro (2026-05-25) | UNKNOWN; likely absorbed by the four-store channel-router work | UNVERIFIED — likely stale, never explicitly closed | CLAUDE.md |
+| UPSTREAM-GAP | infra | Fork ~102 commits behind upstream | Deliberate audit-then-cherry-pick posture | OPEN (accepted risk) | UPSTREAM_MERGE_ASSESSMENT_2026-08-20 |
+| ATLAS-DOCGAP | docs | Atlas §16–§18 known but unwritten (hidden-launch trap; extension path move; firewall silent-drop) | Documentation backlog; behaviors codified as flight checks | OPEN (doc-only) | state vector IF-4 |
+
+## C. FIXED, needing regression coverage in a shipped installer
+
+| ID | Surface | Fix | Coverage owed |
+|---|---|---|---|
+| BOOT-EMPTY | boot | `61be816e` — upgrade model-less agents.defaults when modelRef resolves | In moe.13 artifact; clean-VM recorded install (CLWX-25) verifies live |
+| DRIVER-SETTLE | test tooling | `ecf31c4b` — placeholder rejection + 9s stable window in chat-turn driver | One green Lane-2 run under the fixed driver |
+| SEED-OOXML | test fixture | `1804aaab` + `128fcab6` — forward-slash ZIP entries + strict validator | **Already re-verified** (KR1 re-run PASS 02:13 UTC); keep FIXTURE-HYG purge in demo prep |
+| KR5-WIRING | offline | `ebc4be75` — real actions through outbox + restart tests | Unit-level restart proof done; optional live kill-9 smoke on persona VM |
+
+## D. MOOT / closed (22 entries — summary)
+
+Atlas §1–§14 all FIXED or MOOT-by-design with named commits and guard agents
+(playwright-core devDep→`e26a702`+auditor; enum reseed→`21bce2b`/`ef9801c`;
+Mac-binaries-in-Win→`7040b24`; auto-update→`b1d2b8a`; mklink→`8cf30ab`;
+AV cold-start→`ffdd04e`; vcruntime→`6581a9a`; AADSTS53003→profile=user rule;
+Forms editor rotation→response-page pivot; CI Session 0→build+static only;
+chflags/EPERM→canonical atomic writer; four-store drift→`applyChannelChange`
+transaction; Gemini thinking/400→preflight override removal; Win ASR
+helper→prep:win-binaries + two-file transcode). Plus: BUG-012 (`fc435c6b`),
+doc-tooling steering (`c1b18125`, verified in-app), CLWX-KFM (moot — parse
+error proved resolution), G11 tool-cascade (trim verified live), KR4 degrade
+(`bde78d94`), G15 outbound ledger, EGRESS-GUARD (falsifiable lane G), and the
+operational flight-check rules (IF-1..8, PF-2/3/8) codified in the state vector.
+
+## Count summary (post-delta)
+
+- **A. OPEN blocking GA: 11** — 4 Raj email defects (one lane, one session),
+  2 security-floor (owner), KR2 recording (owner unblocks lane), KR6 floor
+  (owner unhold), KR7 identity + KR8 values (Ministry), external tester run.
+- **B. OPEN not blocking: 12** (4 UNVERIFIED for lack of repro detail).
+- **C. FIXED needing shipped regression coverage: 4** (all covered by the
+  first Lane-2 run under moe.13).
+- **D. MOOT/closed: 22.**
+
+**Highest-leverage next cycle:** one Lane-2 session under moe.13 retires the
+KR2 recording, the DRIVER-SETTLE proof, the CLWX-20 voice smoke, and stages the
+Raj-defect triage — four register rows for one VM window.

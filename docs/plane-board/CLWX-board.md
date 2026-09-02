@@ -12,108 +12,239 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Backlog  |  **Priority:** low
 
+- Source: dmvevents/clawx-pilot#4
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
+
 ### CLWX-2 — dmvevents/clawx-pilot#1 — Measure and reduce Gateway cold-start time
 
 - **State:** Backlog  |  **Priority:** low
+
+- Source: dmvevents/clawx-pilot#1
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
 
 ### CLWX-4 — dmvevents/clawx-pilot#2 — Capture repeat clean-install tester evidence
 
 - **State:** Backlog  |  **Priority:** low
 
+- Source: dmvevents/clawx-pilot#2
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
+
 ### CLWX-5 — dmvevents/clawx-pilot#5 — Run Outlook read/search/draft/send-safe bug bash
 
 - **State:** Backlog  |  **Priority:** low
+
+- Source: dmvevents/clawx-pilot#5
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
 
 ### CLWX-7 — dmvevents/clawx-pilot#9 — Define production Forms destination via SharePoint or Power Automate
 
 - **State:** Backlog  |  **Priority:** low
 
+- Source: dmvevents/clawx-pilot#9
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
+
 ### CLWX-8 — dmvevents/clawx-pilot#8 — Create production Outlook teacher login and support logging flow
 
 - **State:** Backlog  |  **Priority:** low
+
+- Source: dmvevents/clawx-pilot#8
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
 
 ### CLWX-9 — dmvevents/clawx-pilot#6 — Run Forms preview/prefill/dry-run/submit-refusal bug bash
 
 - **State:** Backlog  |  **Priority:** low
 
+- Source: dmvevents/clawx-pilot#6
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
+
+**Comments (1):**
+
+- Triage 2026-09-02: keep, sequence after CLWX-34. Forms bug bash needs the same persona-VM Outlook/Chrome lane; the Forms production destination itself is Ministry-gated (CLWX-7). Non-blocking for single-school GA; required before fleet scale-out.
+
 ### CLWX-13 — dmvevents/clawx-pilot#16 — test(harness): JUnit report schema + runtime validation gate
 
 - **State:** Backlog  |  **Priority:** medium
 
+- Source: dmvevents/clawx-pilot#16
+- Type: Pull request
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 10
+- Last updated: 2026-08-15
+
 **Comments (1):**
 
-- 
+- Triage 2026-09-02: harness enhancement, non-blocking for GA. Keep in Backlog; schedule after the GA evidence packet (CLWX-10) lands.
 
 ### CLWX-14 — dmvevents/clawx-pilot#17 — ci(windows): windows-installer-e2e.yml — dispatch-only harness run
 
 - **State:** Backlog  |  **Priority:** medium
 
+- Source: dmvevents/clawx-pilot#17
+- Type: Pull request
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 10
+- Last updated: 2026-08-15
+
 **Comments (1):**
 
-- 
+- Triage 2026-09-02: CI enhancement, non-blocking for GA (installer e2e currently runs on the persona VM lane instead). Keep in Backlog.
 
 ### CLWX-15 — dmvevents/clawx-pilot#15 — test(harness): corpus expansion — P6..P10 fixtures (10 total)
 
 - **State:** Backlog  |  **Priority:** medium
 
+- Source: dmvevents/clawx-pilot#15
+- Type: Pull request
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 30
+- Last updated: 2026-07-25
+
 **Comments (1):**
 
-- 
+- Triage 2026-09-02: corpus expansion is worthwhile but non-blocking — the live in-app PASS (CLWX-24) is stronger evidence than more BM25 rows. Keep in Backlog.
 
 ### CLWX-16 — dmvevents/clawx-pilot#14 — ci(windows): windows-installer-e2e.yml — installer + 5-prompt harness pipeline
 
 - **State:** Backlog  |  **Priority:** medium
 
+- Source: dmvevents/clawx-pilot#14
+- Type: Pull request
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 10
+- Last updated: 2026-08-15
+
 **Comments (1):**
 
-- 
+- Triage 2026-09-02: CI enhancement, non-blocking for GA. Keep in Backlog; revisit when a Windows CI runner exists.
 
 ### CLWX-17 — dmvevents/clawx-pilot#13 — test(harness): 5-prompt Windows E2E scaffold — awaits installer URL
 
 - **State:** Backlog  |  **Priority:** medium
 
+- Source: dmvevents/clawx-pilot#13
+- Type: Pull request
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 10
+- Last updated: 2026-08-15
+
 **Comments (1):**
 
-- 
+- Triage 2026-09-02: superseded in practice — the 5-prompt E2E now runs live via the committed chat-turn driver + last-message reader on the persona VM (KR1 evidence used exactly this path). Recommend closing as duplicate of the CLWX-25/CLWX-10 evidence runs.
 
 ### CLWX-18 — HUMAN-GATED: dmvevents/clawx-pilot is PUBLIC — violates all-repos-private rule
 
 - **State:** Backlog  |  **Priority:** urgent
 
+gh repo view confirms visibility PUBLIC (updated 2026-07-27). The estate hard rule is all repos private, BUT MoE pilot users download Windows RC installers from this repo's Releases pages — flipping it private breaks their access. Human decision required: make private + provide an alternate distribution channel, or grant an explicit exception. Command when decided: gh repo edit dmvevents/clawx-pilot --visibility private
+Source: gh repo view 2026-08-25. Tier: verified_at_commit.
+
 **Comments (3):**
 
-- 
-- 
-- 
+- Standing reminder (owner-gated, URGENT class): repo is still PUBLIC with full source + leaked test credential in 3 files. One-sitting fix plan: make repo private (or split source→private, releases→public), purge the credential from history (git filter-repo), rotate the credential (pairs with CLWX-19). Agent-side prep is done — needs the owner because it is destructive + affects external visibility.
+- Wiki evidence (commit 59e1ba26): docs/wiki/REPO_AND_RELEASE_MAP.md now documents every repo, the legitimate reason clawx-pilot is public (tester downloads the ~300MB installer from Releases, no GitHub account needed), and the recommended 3-decision split: (D1) rotate the leaked test password [see CLWX-19], (D2) keep releases public + move source to a private repo, (D3) hold the Lane-C reply. The public leak of [REDACTED — local operator context only] in 3 files is confirmed; the liaison phone number was redacted before any push and never leaked. All decisions owner-gated.
+- Investigated 2026-09-01 — the exposure is worse than "repo is public". - The public repo hosts full SOURCE, not releases. dmvevents/clawx-pilot (PUBLIC, 901 files, 13 branches) contains electron/, docs/, extensions/, CLAUDE.md — the entire tree. Its own description says "Source lives in private repo; this repo distributes signed releases only." Reality contradicts the description. The dev workflow in CLAUDE.md ("push to pilot/main") has been publishing source to a public repo. - A live credential is already public. The test-account password [REDACTED — local operator context only] appears in 3 public files: scripts/v2-signin.ts, scripts/forms-relogin-helper.ts, and CLAUDE.md. This violates the hard rule "never print or commit the plaintext password". Anyone can read it and sign into test.fac@fac.edu.tt. - Good news: the liaison phone number was redacted BEFORE any push — the two files carrying it are absent on public (verified). Local commits a1ff2cc7 + 2a0f55c8 keep the working tree clean of both the number and the plaintext password. - There is a private-repo intent. Private candidates exist (dmvevents/anton-claw, trinidad-moe-platform, openclaw-personal) — the intended dev home, per the repo description. Recommended (owner-gated): (1) rotate the test.fac password now — it is public; (2) make clawx-pilot private OR strip source and use it for release artifacts only; (3) scrub [REDACTED — local operator context only] from the 3 public files + history. Nothing here is pushed by this session; these are pre-existing public commits.
 
 ### CLWX-19 — Rotate the sk-clawx API key shared in WhatsApp (2026-06-05)
 
 - **State:** Backlog  |  **Priority:** urgent
 
+A gateway API key with the sk-clawx prefix was pasted in full into a WhatsApp chat on 2026-06-05 (key value deliberately NOT reproduced here). Chat history is exportable/syncable — treat as exposed. Rotate the key, audit usage since 2026-06-05, and move future credential handoffs to a secret channel.
+Source: local WhatsApp store 2026-06-05. Tier: verified_at_commit (store read 2026-08-25).
+
 **Comments (1):**
 
-- 
+- Standing reminder (owner-gated): rotate sk-clawx (shared in WhatsApp 2026-06-05, also exposed via CLWX-18). Best done in the same sitting as the CLWX-18 scrub so the leaked history becomes worthless.
 
 ### CLWX-21 — State marker: MoE Windows RC 2026-06-23 'Outlook Green' (b38b620) published
 
 - **State:** Backlog  |  **Priority:** low
 
+Last published pilot state: release page shows source b38b620, Actions run 28034003516, installer SHA256 a19a9c62...c6ee, Outlook validation summary. Next-RC checklist should start from here; 17 GitHub items were auto-routed onto this board by the scanner for triage.
+Source: local WhatsApp store 2026-06-23 + clawx-pilot releases. Tier: verified_at_commit (store read 2026-08-25).
+
 ### CLWX-30 — [CLWX-7] Real Entra sign-in + stable UserId identity
 
 - **State:** Backlog  |  **Priority:** none
 
+The app has no signed-in-user identity today, which blocks both the mandatory UserId header (Ministry §3.3) and per-user caps.
+FACTS: the only userPrincipalName in the tree is the stub 'principal@school.example' (microsoft-graph/manager.ts:257). The live Outlook path identifies the principal only implicitly, by riding whichever account is signed into their Chrome session over CDP — deliberate and the only thing Conditional Access permits, but the app never learns the identity in a header-able form.
+INFERENCE / design: backend-for-frontend — desktop does the interactive sign-in, the app server holds the client secret + tokens and stamps UserId from the authenticated session (never client-supplied). This also resolves the client-secret objection (a public/PKCE client is no longer needed once a confidential app server exists). Recommend oid over UPN (opaque, survives renames).
+OPEN QUESTIONS (Ministry-gated): redirect URI — becomes https://<app-server-host>/auth/callback, so it depends on the hostname decision Raj has been asking about since 2026-07-20. UserId = oid vs UPN. Refresh-token lifetimes (longer = fewer forced-online re-auths).
+Accept (KR7): a live interactive Entra sign-in produces a stable non-stub oid; an authenticated request to the app server carries a UserId stamped server-side, verified in App Insights.
+
 **Comments (2):**
 
-- 
-- 
+- Provenance note (2026-09-01). Entra/redirect-URI request originated 2026-07-10 (Raj thread). Ansari Khan handoff (2026-08-18) still lists the redirect URI as owed &mdash; blocked on the public-desktop-client vs confidential-client decision (see docs/MINISTRY_REPLY_DRAFT_2026-08-20.md). Owner/Ministry-gated.
+- Evidence: docs/SCALE_ANALYSIS_2026-08-20.md §4, docs/MINISTRY_REPLY_DRAFT_2026-08-20.md §2/§4.2. Blocked on CLWX-8 (hostname &rarr; redirect URI). Not built — Backlog.
 
 ### CLWX-34 — [CLWX-bug] Verify/triage Raj's 2026-06-21 email defects
 
 - **State:** Backlog  |  **Priority:** medium
 
-**Comments (1):**
+Liaison log surfaced 4 reproducible defects Raj reported the day before the Principals demo (source: docs/wiki/LIAISON_LOG.md §C, WhatsApp archive): (1) send fails with "draft subject has been changed before it can be sent"; (2) reply misinterprets content (meal prefs read as shirt sizes); (3) reply archives the original email; (4) draft landed in the To: field (one-off). Plus 2 vague: PDF read inconsistency, document-search inconsistency. No post-demo verdict was ever captured. Note: (1) may already be fixed by the moe.10 hard-confirm gate.
+Accept: each defect reproduced-or-refuted against moe.11 with evidence (trace/log path); confirmed-live ones filed as individual bug cards via scripts/report-bug.mjs; the send-gate one verified against the moe.10 gate. Ladders to KR1 (live-LLM correctness) on the OKR anchor.
 
-- 
+**Comments (2):**
+
+- Card made self-contained (2026-09-02): the four defects Raj reported 2026-06-21 (source: docs/wiki/LIAISON_LOG.md §C — this card was an empty stub until now): - RAJ-1 (HIGH): send fails with "draft subject has been changed before it can be sent" — suspected send-gate false positive; the moe.10 hard-confirm gate likely fixes it but this is UNPROVEN. - RAJ-2 (MED): reply misinterprets email content (meal preferences read as shirt sizes) — extraction/classification, untriaged. - RAJ-3 (MED): reply action archives the original email — unintended side effect, untriaged. - RAJ-4 (LOW): a draft response landed in the "To:" field — one-off; file only if reproducible. Acceptance (GA box #9): each reproduced-or-refuted on moe.13, confirmed ones fixed, with per-defect evidence. Lane: user Chrome CDP + test.fac session on the persona VM (blocked on gcloud auth; plan in earlier comment). Register: docs/DEFECT_REGISTER_2026-09-02.md group A.
+- Lane assessment for the June-21 defect triage: requires the Outlook lane (user Chrome + test.fac session on CDP :18792). Probe on the test VM shows Chrome not running, port 18792 closed — AND the whole VM lane is now blocked on gcloud auth login (owner, interactive). Additionally standing up the test.fac session needs PILOT_TEST_PASSWORD in local operator context at run time (never committed; never for *@moe.gov.tt). Plan when unblocked: launch user Chrome with --remote-debugging-port=18792, sign in test.fac, reproduce each of the 4 reported defects against moe.13, classify reproduced/refuted/fixed-since with per-defect evidence. The persona-base L1 snapshot (docs/VM_TEST_BASE.md) will make this repeatable.
 
 ## Unstarted
 
@@ -121,83 +252,160 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** Ready  |  **Priority:** medium
 
+- Source: dmvevents/clawx-pilot#7
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 13
+- Last updated: 2026-08-12
+
 ### CLWX-6 — dmvevents/clawx-pilot#3 — Verify Outlook send requires explicit same-session confirmation
 
 - **State:** Ready  |  **Priority:** low
+
+- Source: dmvevents/clawx-pilot#3
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 76
+- Last updated: 2026-06-10
 
 ### CLWX-12 — dmvevents/clawx-pilot#12 — feat(principal-assistant): bundle native document.* tools (Lane A)
 
 - **State:** Ready  |  **Priority:** medium
 
+- Source: dmvevents/clawx-pilot#12
+- Type: Pull request
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 29
+- Last updated: 2026-07-27
+
 **Comments (1):**
 
-- 
+- Triage 2026-09-02: shipped and live-proven. The document.* toolset is bundled and the KR1 in-app PASS on moe.12 (CLWX-24, Ready) proves the full path live: agent selects document.read_docx, resolves an OneDrive-KFM path, parses, summarises. Evidence: docs/evidence/KR1_INAPP_RUN_2026-09-02.md. Moving to Ready.
 
 ### CLWX-20 — clawx-asr voice-note path fails with ffmpeg-not-found on user machines
 
 - **State:** Ready  |  **Priority:** medium
 
+2026-06-22 (WhatsApp, pilot user machine): voice-note transcription emitted '[voice note: ...clawx-asr...clip-input.wav (raw audio; ffmpeg ffmpeg-not-found)]'. The ASR path assumes ffmpeg on PATH. Bundle ffmpeg with the Windows installer or degrade gracefully with a user-visible message.
+Source: local WhatsApp store 2026-06-22. Tier: verified_at_commit (store read 2026-08-25).
+
 **Comments (1):**
 
-- 
+- Triage 2026-09-02: fixed in current builds. Windows builds bundle ffmpeg.exe (electron-builder maps resources/bin/win32-x64 → resources/bin) and the ASR resolver checks exactly that packaged path first (electron/main/asr-ipc.ts); commit befeb43f additionally keeps Windows transcription off the Whisper-only path. Present in moe.12 and moe.13 artifacts. Moving to Ready — voice-note smoke on the persona VM will be part of the moe.13 matrix (CLWX-25 lane).
 
 ### CLWX-24 — [CLWX-1] Verify doc-tooling steering in a live in-app LLM run (Raj's 5 prompts + discovery)
 
 - **State:** Ready  |  **Priority:** none
 
-**Comments (5):**
+Raj's 0/5 was a tool-selection failure, not a missing capability: the agent consulted ~/.openclaw/skills/pdf/SKILL.md, which steered it to pdfplumber/pandas, burned 7 tool calls, and gave up. Capability and steering are now fixed in config + eval, but the only test that reproduces Raj's failure mode — a live, LLM-driven, in-app run — has not been done.
+FACTS: handler replay 7/7 PASS (raj-prompt-replay REPORT); persona now carries a hard document.* routing rule; the 4 Python doc skills flipped to autoEnable:false; 6-lane BM25 tool-selection eval added (73514b4f). c1b18125 also rewrote findWithinDir breadth-first so a sibling of the search root is found.
+INFERENCE / RISK: both the handler replay and the harness call handlers directly with absolute paths — structurally blind to tool selection and discovery, the two things that broke. A re-test could reproduce Raj's transcript despite 7/7.
+OPEN QUESTIONS: OneDrive-redirected Desktop (%USERPROFILE%\OneDrive\Desktop) is not in resolveReadablePath's search roots — every Ministry laptop with Known Folder Move has this shape; unverified on Windows. Ministry's real fixture bytes were never supplied (fixtures are reconstructed).
+Accept (KR1): a live in-app run on Windows executes P1–P5 + the discovery prompt; the tool-call trace shows document.* selected every time and a Python skill selected zero times; discovery finds files without the user pasting an absolute path, including under OneDrive redirection.
 
-- 
-- 
-- 
-- 
-- 
+**Comments (6):**
+
+- Note for the human closer (from the card-vs-acceptance audit): the GO/NO-GO box (docs/wiki/GA_READINESS.md §4 box 1) reads "document.* 6/6 (P1–P6)". The live in-app evidence covers ONE P-style prompt end-to-end on the shipped build, plus the BM25 harness for the remaining prompts. Either accept that combination as satisfying the box, or request the cheap P2–P6 in-app top-up run — it is queued as an optional Lane-2 item and takes ~15 min of VM time with the committed driver.
+- KR1 — full in-app PASS (2026-09-02, live moe.12 on the Windows IAP VM). All three sub-criteria green against a real LLM turn, not the BM25 proxy. - Tool-selection: agent's first call is document.read_docx. - Path-resolution: bare filename resolves to a real user-profile copy (OneDrive KFM Desktop + Downloads both resolvable). - Parse + summarise: valid docx parsed; agent returned a faithful summary of the seeded suspension source (female student, Standard 4, age 10; St. George East; physical altercation + refusal to follow direction; 2-day suspension, first this term; Demo Guardian present, signature pending at pickup; discipline matrix Level 2; SSSD not required). Every point traces to a seeded source line — no hallucination. Root cause of the earlier fail was a malformed test fixture, not a product bug: the PS 5.1 seeder wrote ZIP entry names with backslash separators (violates OPC/ZIP APPNOTE 4.4.17) so Word/the parser could not resolve _rels/.rels. Fixed via forward-slash entries (New-ZipFromDirectory), loading both compression assemblies, and a strict backslash-reject validator (commits 1804aaab, 128fcab6). A stale malformed copy in Downloads\ also shadowed the valid Desktop copy because resolveReadablePath checks Downloads before OneDrive\Desktop — overwriting it cleared the last failure (commit 85da132e). Follow-ups (non-blocking): fold the placeholder-rejecting reader (pilot-read-last-message.js) into the chat-turn driver to fix the IF-8 false-settle; minor persona steering nit on parse-failure fallback to generic read. Evidence: docs/evidence/KR1_INAPP_RUN_2026-09-02.md (re-run section), gateway log clawx-2026-09-02.log 02:13 turn, driver JSON chat-turn-2026-09-02T02-13-16-314Z.json.
+- 2026-09-02 — first live in-app KR1 turn on shipped moe.12 (Windows IAP VM). Two of three KR1 sub-criteria proven; blocker isolated to a test fixture, not the product. - PASS — doc-tooling selection live. Real LLM turn picked document.read_docx as its first call (not the BM25 proxy). Steering fix c1b18125 works against the live model path. - PASS — OneDrive KFM path-resolution works. read_docx returned "Could not find main document part" (a docx PARSE error, not ENOENT) on a bare filename whose only copy lives at %USERPROFILE%\OneDrive\Desktop. A parse error proves resolveReadablePath found+opened the KFM-redirected file. - ROOT CAUSE — malformed seed fixture (BUG). pilot-seed-demo-documents.ps1 produced docx/xlsx/pptx with ZIP entry names using backslashes (word\document.xml, _rels\.rels) instead of spec-required forward slashes. [ZipFile]::CreateFromDirectory on PowerShell 5.1 (.NET Framework) writes OS-separator names, violating OPC/ZIP APPNOTE 4.4.17 → Word can't resolve _rels/.rels. Validator masked it by normalizing \ → / before comparing. - FIX (this session). Replaced CreateFromDirectory with a hand-built New-ZipFromDirectory that always emits forward-slash entry names; tightened Assert-OpenXmlPackage to reject any backslash entry (strict compare) so the regression can't silently pass again. One fix covers docx+xlsx+pptx. - SECONDARY (minor steering). After the parse failure the agent fell back to the generic workspace-rooted read tool (KFM-unaware) instead of surfacing the parse error. Low priority. Next: re-seed on guest with fixed script, re-run the turn → expect a real file summary = full KR1 in-app PASS. Evidence: docs/evidence/KR1_INAPP_RUN_2026-09-02.md. Ceiling remains Ready pending the re-run.
+- Lane progress (2026-09-01): (1) IAP lane live — SSH as guest user via operator key, tunnel verified with control leg. (2) Finding: installed moe.11 (from 7add864b) PREDATES the doc-tooling steering fix c1b18125 — 25 commits behind HEAD. Testing KR1 on it would test the old behavior Raj reported. Therefore building moe.12 from HEAD 67843f99 now (pnpm build:win, in progress). (3) Guest prepped: ollama serve up with qwen2.5:3b-instruct (tools-capable), demo docs seeded via pilot-seed-demo-documents.ps1, KFM path staged at %USERPROFILE%\OneDrive\Desktop with .docx+.xlsx. (4) Turn-driver plan: launch app with --remote-debugging-port (established ShellExecute pattern), drive composer via CDP using data-testid chat-composer-input / chat-composer-send, assert tool-pick trace + chat-message growth.
+- First-party code-layer evidence @ HEAD f99f2c1f (2026-09-01): pnpm typecheck 0 errors; pnpm harness:doc-tooling-e2e 5/5 PASS (P1-docx, P2-docx-save, P3-pdf, P4-xlsx, P5-image); pnpm eval:ci 61 PASS / 0 FAIL / 9 SKIP. The code/handler layer is GREEN. The gap is unchanged and explicit: lane F (live in-app model tool-pick) SKIPs — every eval lane is a BM25 proxy. This KR stays open until an in-app live-LLM run on Windows passes with real fixtures, which is gated by CLWX-9 (install gcloud to reach the IAP VM, B2). Ceiling stays open, not Ready.
+- Evidence: commit c1b18125 (route + breadth-first discovery), 73514b4f (eval lanes), 98e805d8 (native tools). Replay verdict = skills/laptop/evidence/2026-08-20-raj-prompt-replay/REPORT.md — 7/7 handler PASS, in-app run explicitly OUTSTANDING. Branch: fix/doc-tooling-steering (current HEAD).
 
 ### CLWX-26 — [CLWX-3] On-device default operates fully offline
 
 - **State:** Ready  |  **Priority:** none
 
+The on-device model and local document tools must work with no connectivity — the 3:45pm daily-report deadline does not move when a school network drops.
+FACTS: eval lane G runs the document path in a child process with fetch, net.Socket.prototype.connect, and DNS all patched to record+block every non-loopback target. Result: G-doc-read read 176 chars from a .docx with the network blocked; G-no-egress zero non-loopback attempts; G-model qwen2.5:3b-instruct answered from local file content in 2577ms (0.5–2.6s across runs); G-guard-live the guard caught all 6 deliberate egress attempts. On-device is already the default channel (electron/utils/store.ts:127).
+INFERENCE: the guard is trustworthy because it is falsifiable — mutation-tested by reintroducing the net.connect packed-array bug, which turns the lane red while a naive G-no-egress still shows PASS. An inert guard is indistinguishable from a clean run, so the negative control is what makes the lane worth anything.
+Accept (KR3): GREEN — met. Awaiting human close (agent ceiling is Ready).
+
 **Comments (1):**
 
-- 
+- Evidence: commits c9f1aa34 (lane G + egress guard), c45c5bc4 (design doc). docs/OFFLINE_ARCHITECTURE.md §2. Run: pnpm eval:ci lane G — 4P 0F 0S.
 
 ### CLWX-27 — [CLWX-4] Cloud turn degrades to on-device instead of going silent
 
 - **State:** Ready  |  **Priority:** none
 
+A principal toggled to "Online" on a dead link must get a degraded answer on-device, not a silent dead composer.
+FACTS (built + tested 2026-08-21, bde78d94): send-time failover shipped — pure classifier src/lib/channel-degrade.ts, a runtime-only POST /api/settings/degradeChannel that runs the four-store transaction but skips the preferredChannel write, wiring in src/stores/chat.ts (maybeDegradeChannel), and an amber channel-vocabulary notice (never a model ID). 25 unit tests across channel-degrade + chat-channel-degrade, plus lane G G-degrade-classify feeding real Node ECONNREFUSED / ENOTFOUND failures.
+Design invariants not to re-derive: preferredChannel is never rewritten (app returns to Online by itself when the link returns); fail-closed on unrecognised errors (a 401/403 = wrong APIM key, must not be masked as "always on-device"); resend is a strict subset of degrade (a turn that already ran tools is not replayed).
+INFERENCE: §3.1 keeps the assistant answering; it does not make the turn's output durable — a form/email that failed mid-flight is still lost. That is CLWX-5's job.
+Accept (KR4): GREEN — met. Awaiting human close.
+
 **Comments (2):**
 
-- 
-- 
+- Live acceptance opportunity found (2026-09-01): the guest config resolves to custom-moecloud/moe-demo-pro whose Cloud Run LiteLLM gateway is DEAD (curl timeout from Mac; unreachable). moe.12 (building now) includes the degrade feat bde78d94 + the chat-degrade-notice testid. Plan: send the KR1 doc prompt with the broker dead → cloud turn cannot reach provider → assert chat-degrade-notice appears AND the on-device qwen answer lands. One turn = KR1 steering + KR4 degrade evidence on real Windows.
+- Evidence: commit bde78d94. docs/OFFLINE_ARCHITECTURE.md §3.1 (CLOSED). Tests: tests/unit/channel-degrade.test.ts, tests/unit/chat-channel-degrade.test.ts, lane G G-degrade-classify (mutation-tested both ways).
 
 ### CLWX-28 — [CLWX-5] Store-and-forward outbox for durable offline records
 
 - **State:** Ready  |  **Priority:** none
 
+Anything a principal does offline that must reach the Ministry — a form submission, an audit record — has to be queued locally and delivered when the link returns, rather than lost.
+FACTS: grep of electron/extensions/src/services found no outbox, queue, retry ledger or sync engine anywhere, and no pg client in package.json. "Queued locally and sent when connectivity returns" is a commitment, not a capability.
+Design (OFFLINE_ARCHITECTURE §5): append-only durable outbox with client-generated idempotency keys, explicit terminal states (pending→sent→acked + failed-permanent), bounded visible retry, no secrets/email bodies at rest, atomic temp-file+rename writes (state-idempotency-auditor invariant). Requires a Ministry-side commitment: the app server must accept replayed / out-of-order writes and dedupe on the idempotency key.
+OPEN QUESTIONS: cannot be tested against anything real until the app server's write API exists (blocked on CLWX-8 hostname + CLWX-7 identity).
+Accept (KR5): lane G G-outbox-durable (survives process kill), G-outbox-idempotent (replay twice = one record), G-outbox-drain (unblock → acked), each with a negative control that goes red when the queue is stubbed inert.
+
 **Comments (4):**
 
-- 
-- 
-- 
-- 
+- KR5 acceptance met — real app actions now wired through the durable outbox (commit ebc4be75). - Wired actions: confirmed Outlook send (/api/outlook/send, status=sent) enqueues outlook.send.audit; confirmed form submissions (daily-report + suspension) enqueue forms.submit.audit. Payloads honor the compliance floor: subject truncated to 120 chars, address counts only, never bodies/recipients — enforced by the outbox forbidden-key guard. - Boot wiring: background drain starts at app boot, stops on quit. With no app server configured (KR8 values are placeholders) records accumulate durably and the pending count is surfaced — the designed §5.3 "written first" behavior. When MOE_APP_SERVER_URL lands, drain POSTs with an Idempotency-Key header. - Restart test: new suite proves the record survives a simulated app restart, drains to a stub server exactly once (idempotent double-replay), a mid-send crash (sent-never-acked) is retried with no lost record, and an audit failure never breaks the user's action. 13/13 outbox tests + 85 adjacent route/gate tests green; typecheck clean. Remaining (tracked under KR8, not this card): point the drain at the real Ministry app server once real endpoint values exist. Moving to Ready.
+- Module landed (commit fc4c3772): electron/utils/outbox.ts + tests/unit/outbox.test.ts. Independently verified by the main loop (not the author agent): suite green inside 1225/6skip/0fail full run, typecheck 0 errors. Covers G-outbox-durable (crash-simulated re-open), G-outbox-idempotent (duplicate id = one logical record/one send), G-outbox-drain (N=3 blocked→flushed→acked; bounded retry → failed-permanent), each with the negative control OFFLINE_ARCHITECTURE §5.4 requires, plus the forbidden-payload guard (/body|password|token|secret|recipient/i throws). Remaining for Ready: wire a real app action (queued send / form record) through the outbox and add the app-level restart test. Not self-approved: author = kr5-outbox-builder subagent, review + verify = main loop.
+- Build started (2026-09-01): kr5-outbox-builder subagent implementing electron/utils/outbox.ts per OFFLINE_ARCHITECTURE §5 (atomic+idempotent writer, client idempotency keys, pending→sent→acked/failed-permanent, bounded backoff, payload secret-guard) + tests/unit/outbox.test.ts covering G-outbox-durable / -idempotent / -drain each with negative controls. Files landed in worktree; tests running. Evidence comment with verbatim results to follow.
+- Evidence: docs/OFFLINE_ARCHITECTURE.md §3.2 (open gap) + §5 (design). Not built — Backlog. Depends on CLWX-8 (app-server write API) and CLWX-7 (identity).
 
 ### CLWX-32 — Chain-of-custody baseline for liaison archive (raj/karunesh threads + attachments)
 
 - **State:** Ready  |  **Priority:** low
 
+Archive baseline established 2026-09-01: 109 files, SHA256SUMS.txt, copy-only snapshot at ~/openclaw-agent/liaison-archive/2026-09-01/.
+
+- 71 artifacts catalogued with sender, date, channel, project attribution (CHAIN_OF_CUSTODY.md).
+- Raj Ramdass identity confirmed: single person, two projects (ClawX infra + curriculum video).
+- 2 artifacts undetermined (SSMD agenda, Sattaur packet); 7 open provenance questions documented.
+- Cross-referenced with docs/project-history/TIMELINE.md and docs/MINISTRY_REPLY_DRAFT_2026-08-20.md.
+Reference artifact — no further action unless new liaison comms require re-establishing custody. Prevents conflation of the two Ministry projects in status/scope conversations.
+
 **Comments (1):**
 
-- 
+- Wiki evidence (commit 59e1ba26): docs/wiki/LIAISON_LOG.md §A/E consumes the SHA256-verified liaison-archive/2026-09-01/ (381 WhatsApp msgs, 109 files). Confirms Raj Ramdass = single person, two workstreams (ClawX + video); Karunesh = video only. Log keeps them strictly separated per the two-project rule.
 
 ### CLWX-33 — [CLWX-9] Install gcloud SDK to unblock the Windows IAP lane (B2)
 
 - **State:** Ready  |  **Priority:** high
 
+The GCP IAP Windows lane (clawx-win-rc-20260609) is the only reachable Windows test lane (home-pilot is unreachable). which gcloud returns not-found on this Mac, so the lane is tooling-gated, not artifact-gated (the moe.11 installer is on disk, sha256 b01bb6c3). This single B2 gap blocks the two highest-value KR tests. Source: docs/wiki/TEST_PLAN.md §4.
+Accept: gcloud installed + authed; a tunnel to clawx-win-rc-20260609 established; evidence = gcloud compute ssh reaching the VM. Unblocks KR1 (in-app P1-P6 + OneDrive KFM) and KR2 (assisted-screen install recording) on the OKR anchor.
+
 **Comments (3):**
 
-- 
-- 
-- 
+- Post-Ready operational note: the IAP lane works but has a recurring single point of failure — user gcloud tokens expire and re-auth is interactive, which killed the lane mid-sprint (2026-09-02). Recommendation recorded in docs/VM_TEST_BASE.md: mint a dedicated service account with roles/iap.tunnelResourceAccessor + compute instance admin, activate with a key file on the operator machine. Owner approval needed (new credential).
+- Accept MET (2026-09-01): gcloud SDK installed (/opt/homebrew/bin/gcloud) + authed (interactive login by owner). Tunnel probe via windows-pilot/vm-testing/gcp-iap-lane.sh probe: VM RUNNING, RDP PASS (guest :3389 → localhost:13389), sshd PASS (guest :22 → localhost:12222), control leg :9999 correctly REFUSED — so the PASS results are meaningful, not tunnel false-positives. B2 gap closed; KR1 in-app + KR2 lanes now unblocked and In Progress.
+- Progress: gcloud SDK installed via brew (exit 0, /opt/homebrew/bin/gcloud). Existing credentialed account found but token stale — gcloud compute instances list fails with reauth-needed. Remaining for Accept: interactive gcloud auth login (human, ~1 min), then tunnel probe to clawx-win-rc-20260609. Config already points at us-central1-a.
+
+### CLWX-35 — Board exporter drops description/comment bodies (mirror is titles-only)
+
+- **State:** Ready  |  **Priority:** none
+
+Found independently by two audit agents 2026-09-02: scripts/plane-board-export.mjs writes EMPTY description and comment bodies for every card — the repo mirror (docs/plane-board/) preserves only titles, states, and timestamps. Consequence: the mirror cannot serve as a board-substance backup, and any analysis run against the export alone silently loses all card content (both audits had to cross-reference docs/wiki instead).
+Fix: include description_html and comment bodies in the export, subject to the no-secrets floor (the exporter must keep redacting anything matching credential patterns). Acceptance: re-export shows non-empty bodies for cards that have them; a grep for known-secret patterns over the export returns nothing.
+Register: docs/DEFECT_REGISTER_2026-09-02.md group B (BOARD-EXPORT-STRIP).
+
+**Comments (1):**
+
+- Fixed same-day. Root cause: this Plane build returns empty *_stripped fields; the exporter now falls back to HTML→text conversion. And the fix surfaced why the bug was load-bearing: with bodies flowing, the leaked test password appeared 3× in CLWX-18's comments — a standing no-secrets-floor violation on the board itself. Response: (1) mandatory redaction pass in the exporter (known literals + generic credential shapes, incl. card titles); (2) the two offending board comments patched at source; (3) re-export verified: 0 secret hits, 35/35 descriptions preserved. Acceptance met: non-empty bodies + clean secret scan. Moving to Ready.
 
 ## Started
 
@@ -205,64 +413,146 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** In Progress  |  **Priority:** medium
 
+- Source: dmvevents/clawx-pilot#10
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 13
+- Last updated: 2026-08-12
+
+**Comments (1):**
+
+- Triage 2026-09-02: this is the GA close-out card — activating. Assembly plan per docs/GA_SPRINT_PLAN_2026-09-02.md: installer sha256 (moe.13 a8494ec0…deb3ecf), unit evidence (1230/1230 green 2026-09-02), KR evidence index (KR1/KR3/KR4/KR5 Ready today), fresh-install recording (pending VM lane), defect register, known-limitations sheet. Moving to In Progress.
+
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA
 
 - **State:** In Progress  |  **Priority:** none
 
+OBJECTIVE: Ship ClawX (Ministry of Education fork) to GA for T&T primary-school principals — an on-device-default desktop assistant that survived Raj's 2026-07-21 Ministry test (scored 0/5) and now provably passes it, installs unattended on Windows, works offline, and scales without a fleet-wide outage.
+Source of truth is this board, not any doc. Ceiling for the agent is Ready; only a human moves a card to Done.
+KEY RESULTS (each falsifiable):
+
+- KR1 — Doc-tooling passes Raj's suite in-app. All 5 Ministry prompts (P1 .docx read, P2 .docx write, P3 .pdf, P4 .xlsx, P5 image) + folder discovery pass in a live, LLM-driven, in-app run on Windows; the model selects document.* every time and reaches for a Python skill zero times. Evidence = in-app transcript + tool-call trace. Status: capability GREEN, in-app run RED (outstanding).
+- KR2 — Windows installer unattended on a clean VM. moe.11 installs on a clean Windows VM with a complete file tree; Gateway (18789) + host-API (13210) bind; 0 manual dependency steps. Evidence = install exit 0 + port probe + sha256. Status: GREEN on IAP lane (assisted/silent).
+- KR3 — On-device default works with the network cut. On-device model answers a question grounded in a local document offline; local document path makes zero non-loopback egress. Evidence = eval lane G. Status: GREEN.
+- KR4 — A cloud turn degrades instead of going silent. When a cloud turn cannot reach the provider, it fails over to on-device; the principal's Online/On-device toggle is not rewritten. Evidence = 25 unit tests + lane G G-degrade-classify. Status: GREEN (2026-08-21).
+- KR5 — Offline records are durable. A form submission / audit record created offline is queued locally and delivered exactly once when the link returns. Evidence = lane G outbox checks. Status: RED — not built.
+- KR6 — Cloud economics survive the fleet. Per-turn floor trimmed and per-user metering/caps in place so one heavy user cannot silently spend the fleet's month and trigger a fleet-wide 429. Evidence = trimmed floor measurement + broker accounting tests. Status: RED — trim on HOLD, caps not built.
+- KR7 — A signed-in identity exists. Interactive Entra sign-in yields a stable oid; the app server stamps UserId from the authenticated session. Evidence = live sign-in producing a non-stub identifier. Status: RED — only a stub identity today; blocked on Ministry redirect URI.
+- KR8 — The Ministry infra decisions are closed. Reply sent (owner gate) and a working session settles app-server hostname/reachability, the redirect URI, and prompt-caching. Evidence = sent reply + meeting notes. Status: DRAFT ready, owner-gated, UNSENT.
+FACTS (in git/docs): Raj scored 0/5 on 2026-07-21 (commit 794cce74). Native document.* tools landed 2026-07-25 (98e805d8), 4 days after his test — he tested a build predating the fix. Steering + discovery fix landed 2026-08-20 (c1b18125); a 6-lane tool-selection eval was added the same day (73514b4f). moe.11 installs clean over the GCP IAP lane (verdict.md, sha256 b01bb6c3). Offline + degradation are built and tested (lane G, bde78d94).
+INFERENCE (not yet proven end-to-end): Because the handler replay and the BM25 eval both bypass the live LLM, Raj's exact transcript could still reproduce in-app despite 7/7 handler pass. This is the one open GA risk on the doc-tooling line — a live in-app run is the only thing that closes it.
+OPEN QUESTIONS (Ministry-owned): app-server hostname/reachability (internet-TLS vs iGovTT-only) — blocks the redirect URI; prompt-caching availability behind APIM; UserId = oid vs UPN; migration credential mechanism.
+Failure → fix matrix (Raj 2026-07-21):
+PromptRaj 0/5 failure (verbatim)FixVerified where
+P1 read .docx"tools to read Word documents are not available"native document.read_docx + persona routing (c1b18125)handler 7/7; in-app RED
+P2 write .docx"pandoc and python are not installed"document.write_docx; Python skills autoEnable:false (c1b18125)handler 7/7; in-app RED
+P3 read .pdf"pdfplumber / pdftotext not installed"document.read_pdf, "Prefer this over the pdf skill"handler 7/7; in-app RED
+P4 read .xlsx"pandas is not installed"document.read_xlsx + write_xlsxhandler 7/7; in-app RED
+P5 read image"pytesseract and Pillow are required"document.read_image (base64 to VLM, no OCR binary)handler 7/7; in-app RED
+Discovery"I couldn't find any files in that folder"breadth-first findWithinDir (c1b18125); OneDrive Desktop still unhandledeval lane; Windows OneDrive path UNVERIFIED
+Accept (GA): every KR above GREEN with cited evidence, and a human closes each workstream card. No card reaches Done by the agent.
+
 **Comments (6):**
 
-- 
-- 
-- 
-- 
-- 
-- 
+- Sprint status 2026-09-02 — GA push, second pass. - Ready today: CLWX-24 (KR1, full in-app PASS), CLWX-28 (KR5, outbox wired + restart test), CLWX-3 (branding sweep), CLWX-6 (send double-gate, evidence), CLWX-12 (document tools live-proven), CLWX-20 (ffmpeg bundled) — joining CLWX-26/27/32/33. 10 cards at Ready. - moe.13 built + signed (sha256 a8494ec0…deb3ecf): boot slow-ready fix, outbox wiring, fixed seeder, driver fix. 1230/1230 unit tests. - Reproducible testing designed: docs/VM_TEST_BASE.md (persona L0/L1/L2 snapshot layers). Sprint plan: docs/GA_SPRINT_PLAN_2026-09-02.md. - Single hard blocker for all VM evidence: gcloud auth expired — owner runs gcloud auth login (~2 min), then Lane 2 executes: snapshot → moe.13 install + fresh-boot recording (CLWX-25) → Outlook lane → Raj defect triage (CLWX-34). - Owner packet: CLWX-18/19 security scrub+rotation (one sitting), trim unhold (KR6), Raj values (KR7/KR8), GA-scope decision on KR6–KR8 (fleet-scale vs single-school GA).
+- GA gate defined (docs/wiki/GA_READINESS.md, commit follows f99f2c1f): single GO/NO-GO document now exists — 15-row chronological gap/feedback ledger (G1-G15, each dated + sourced + mitigated), full test-evidence table, and a falsifiable checklist: 8 KR boxes (KR3+KR4 already checked), 2 external-validation boxes (Raj defect triage, tester download path), 2 security boxes (public-branch password scrub, key rotation), 2 hygiene boxes (green suite at tag, evidence packet). Critical path: (1) interactive gcloud auth login [gcloud SDK now INSTALLED — CLWX-9 install-half done], (2) IAP VM run flips KR1+KR2+defect triage, (3) build KR5 outbox, (4) owner: send Ministry reply + unhold trim, (5) KR6/KR7 behind flag, (6) evidence packet. Human declares GA; agent ceiling stays Ready.
+- Wiki + test audit (commit 59e1ba26): docs/wiki/TEST_PLAN.md (read-only test-lane-prober, HEAD bde78d94) records the runnable-now floor: typecheck 0 err, unit 1197/6skip/0fail, eval:ci 61 PASS/9 SKIP, doc-tooling harness 5/5. KR3/KR4 GREEN. KR1 in-app + KR2 assisted-screen are blocked ONLY by B2 (gcloud not installed) [new card]. KR5/6/7/8 are the owner/Ministry-gated Lane-C chain. Also added: DECISION_LOG (13 ADRs) + EXTRACTION_PLAYBOOK (JSONL->LLM prompt design).
+- GA execution plan committed 2026-09-01 — docs/GA_EXECUTION_PLAN_2026-09-01.md (repo f9fdbfd1). Ground truth: code GREEN (typecheck 0; unit 1197 pass / 6 skip / 0 fail; eval 61 PASS / 0 FAIL / 9 SKIP; doc-tooling harness 5/5). Local runtime RED but self-serviceable (~2 min: app+ports down). Windows GCP-IAP lane operator-gated (needs gcloud on the Mac). Self-test cron ran fresh today: local=pass, cloud=reachable, canaries 3/3; overall=fail only because app not running. Three parallel lanes: - Lane A (zero-dependency, start now): KR1 doc-tooling in-app + OneDrive/KFM resolveReadablePath fix (CLWX-1); KR2 clean-VM install recording (CLWX-2); revive self-test cron. - Lane B (code-only offline/resilience): KR4 degrade->on-device feat landed (bde78d94) — needs an egress-kill acceptance test; KR5 outbox (CLWX-5) closes KR3 gap 1; then re-verify KR3 (CLWX-3). - Lane C (serial, owner-gated): KR8 send Section-6 infra reply (CLWX-8) -> unlocks real APIM hostname -> KR7 Entra + UserId (CLWX-7) -> KR6 per-user caps (CLWX-6). Build behind a flag; verify when hostname lands. Blocker taxonomy: B0 self-serviceable / B1 artifact-on-disk / B2 tooling-gap / B3 owner-decision / B4 external-party. Only B3+B4 are real blockers; probe before declaring blocked. Standing security (urgent, off-KR): CLWX-18 repo public (liaison phone redacted in working tree, commit a1ff2cc7; two unpushed commits still carry it in history — scrub before push); CLWX-19 sk-clawx key un-rotated. Bug front door: node scripts/report-bug.mjs. Board backup: docs/plane-board/. Ceiling stays Ready — no card moved to Done.
+- Progress 2026-09-01. Code health GREEN: pnpm typecheck exit 0; unit tests 1197 passed / 6 skipped / 0 failed (156 files). New this session: project-history folder, CLWX board backup in-repo (docs/plane-board/), ministry-liaison send skill + WhatsApp send-guard hook, Raj note delivered. Commits 083f8857, 31b74822. Next: GA execution plan (parallel workstreams + bug-reporting + acceptance criteria).
+- Evidence: 0/5 transcript = commit 794cce74 (incoming-tests/ClawX Agent Tests/Prompt Tests.docx + CHAT-001*.png; CHAT-001-6.png shows the Python-cascade tool trace). Fixes = 98e805d8 (native tools), c1b18125 (steering+discovery), 73514b4f (eval). Windows = skills/laptop/evidence/2026-08-20-moe11-iap-install-trim/verdict.md. Offline/degrade = docs/OFFLINE_ARCHITECTURE.md + bde78d94. Scale = docs/SCALE_ANALYSIS_2026-08-20.md. Ministry reply (UNSENT) = docs/MINISTRY_REPLY_DRAFT_2026-08-20.md (7dfb43d9).
 
 ### CLWX-23 — [CLWX-0] Timeline — ClawX GA work history (chronological spine)
 
 - **State:** In Progress  |  **Priority:** none
 
+Purpose: the dated, evidence-anchored spine the OKR anchor and GA_PLAN.md build on. FACTS = in git/docs; INFERENCE labelled.
+FACTS:
+
+- 2026-06-09/10 — Windows RC line: seeded VM release proof, Microsoft-365 bootstrap installer, model-gateway seed required in release builds (b4e6ccde, 82c7c04c, 059bb8f5).
+- 2026-06-22/23 — Outlook "Green" RC hardening: send/draft/reply stabilised, same-session hard-confirm gate, RC installer moe.10 built (b38b6208 line; installer sha256 e35ee6cd, built 2026-06-23).
+- 2026-07-25 — Native document.* tools land (98e805d8); 5-prompt harness scaffold (bf6c0d26, 8710784f); windows-installer-e2e.yml scaffold (2d4e318a).
+- 2026-07-27 — Harness E2E + windows-installer-e2e merged into Lane A (e4eccf57, 1fea016a); lint/skills CI unblocked.
+- 2026-07-31 — Consolidated Windows laptop knowledge pack (afff7f15); clean-slate rebuild surfaces BUG-012 first-run crash (0fb4918e); PowerShell BOM regression (9311f107).
+- 2026-08-01 — BUG-012 fixed: bootable agents block on fresh install (fc435c6b).
+- 2026-08-03 — On-device tool-catalog trim to stop tool-cascade hang (7add864b, branch fix/tool-catalog-trim); Windows install NO-GO on on-device chat documented (18383948).
+- 2026-08-19 — GCP IAP Windows test lane established, EC2 lane retired as IAM-dead (gcp-iap-windows-lane REPORT). Static-IP question dissolved.
+- 2026-08-20 — Ministry-supplied 0/5 transcript committed (794cce74); doc-tooling steering+discovery fix (c1b18125); 6-lane tool-selection eval (73514b4f); moe.11 built + installs clean over IAP, trim verified live 6/6→4/6→0/6 (de8e9759, verdict.md); Ministry reply drafted UNSENT (7dfb43d9), rebuilt around app server accepting PostgreSQL (78fd6fe0); offline made an explicit reply constraint (fbb3743a); scale analysis vs 200 schools (982fd5d4); offline design doc + lane G egress-guard (c45c5bc4, c9f1aa34).
+- 2026-08-21 — Cloud→on-device send-time degradation shipped + tested (bde78d94; 25 unit tests + lane G G-degrade-classify). HEAD of branch fix/doc-tooling-steering.
+INFERENCE: the doc-tooling capability gap closed 2026-07-25 but the steering gap stayed open into 2026-08-20; on a fresh install the auto-enabled pdf skill still told the model to reach for Python. c1b18125 closes it in config + eval, but no in-app LLM run has confirmed it against Raj's exact fixtures.
+OPEN QUESTIONS: moe.11 has never been through an assisted-screen clean-VM end-user install (only silent /S and IAP); OneDrive-redirected Desktop discovery is unverified on Windows.
+Accept: timeline stays current with each shippable commit; it is the reference for every workstream card's evidence.
+
 **Comments (3):**
 
-- 
-- 
-- 
+- Timeline append 2026-09-02: KR1 full in-app PASS on moe.12 (fixture root cause: PS 5.1 backslash ZIP entries); KR2 slow-ready root cause fixed (61be816e); KR5 outbox wired to real actions (ebc4be75); branding sweep (dc30f9db); moe.13 built + signed; VM_TEST_BASE.md + GA_SPRINT_PLAN_2026-09-02.md authored; board fully triaged (10 Ready); VM lane blocked on gcloud reauth (owner).
+- Two-project separation confirmed (2026-09-01). Raj Ramdass = ClawX ICT liaison AND curriculum-video coordinator (two hats, one person). Karunesh Ramdass tests both (ClawX Windows RC + video generator) but the video workstream is not in this repo. Enforced by the ministry-liaison-monitor skill/agent. Full history persisted: docs/project-history/TIMELINE.md; board backup: docs/plane-board/.
+- Evidence: git log on branch fix/doc-tooling-steering, HEAD bde78d94. Commit shas cited inline are all present on the pilot remote per gcp-iap-windows-lane REPORT F9. Docs: verdict.md, gcp-iap-windows-lane/REPORT.md, OFFLINE_ARCHITECTURE.md, SCALE_ANALYSIS_2026-08-20.md, raj-prompt-replay/REPORT.md.
 
 ### CLWX-25 — [CLWX-2] Windows moe.11 unattended clean-VM install (assisted-screen supported flow)
 
 - **State:** In Progress  |  **Priority:** none
 
+Prove the current tree installs on a clean Windows VM through the supported assisted-installer flow, not only silent /S.
+FACTS: moe.11 installer exists (sha256 b01bb6c3, 390,097,611 bytes, build exit 0), closing the version gap where release/ topped out at moe.10. Over the GCP IAP lane: artifact integrity Mac→GCS→guest identical; install over moe.10 exit 0; complete file tree (131,404 files / 1588 MB — Ministry of Education.exe, app.asar, openclaw.mjs, playwright-core in 3 locations, ffmpeg.exe, WinSpeechRecognize.exe all present); Gateway 18789 + host-API 13210 LISTENING, control 9999 CLOSED. BUG-012 fixed (fc435c6b) — AGENTS_COUNT=0 is the designed state, not a regression.
+INFERENCE: install-time RED was payload re-extraction under Defender (131k files, 460s first / 344s reinstall), NOT dependency reinstallation — installer.nsh has no package-install step. Optimising deps would target the wrong layer.
+OPEN QUESTIONS: the assisted-screen end-user flow (not silent /S, not hidden-WinRM) has not been run on a clean VM; Defender real-time scanning still walks the payload (INSTDIR exclusion present, DISABLE_REALTIME=False).
+Accept (KR2): clean Windows VM, assisted installer screens, 0 manual dependency steps, complete tree, both ports bind, gateway healthy — screen recording + exit code 0.
+
 **Comments (3):**
 
-- 
-- 
-- 
+- BLOCKED (owner action): VM lane down — gcloud auth expired. Token refresh fails non-interactively; the live IAP tunnel resets on data; a new tunnel cannot start; no alternate service-account credentials exist. Owner must run gcloud auth login (interactive). Verified 3 ways before reporting (test-lane-prober discipline). Ready to execute the moment the lane returns: (1) take the L2 snapshot per docs/VM_TEST_BASE.md — command is written and ready; (2) fresh-state first-boot recording on the guest (backup .openclaw + %APPDATA%, wipe, visible relaunch, timed poll to composer-enabled, one green turn via the fixed chat-turn driver); (3) moe.13 installer (building now on the Mac) carries the slow-ready fix 61be816e for a before/after comparison. Also recommended: a dedicated service account for unattended IAP so token expiry stops killing this lane (design in VM_TEST_BASE.md).
+- Slow-ready root cause found + fixed (contributing cause). On a fresh install the composer stayed disabled ~4–5 min while the gateway ready-fallback loop churned (retryAfterMs≈285000). Traced the boot chain: seedDefaultLocalProvider → runChannelPreflight → ensureBootableAgentsConfig → gateway start. Found a real gap in ensureBootableAgentsConfig: it short-circuited whenever an agents.defaults block existed at all — including an empty {} seeded by a prior boot when preflight resolved no model. A later boot that did resolve a valid modelRef then skipped writing it, leaving the gateway with a bootable-but-unbindable channel → composer disabled until the slow ready-fallback. Fix (commit 61be816e): only short-circuit when the block already carries a bindable model, or when there's no valid modelRef to upgrade with; otherwise write the model into the existing defaults in place. Idempotent. Added a regression test (empty→upgrade→stable); 4 boot-chain + 59 related config/router tests green, typecheck clean. Still owed for this card: the fresh clean-VM install recording (install → gateway ready → green on-device turn) on moe.12. This fix removes one persistent-empty-defaults contributor; the recording is the acceptance evidence. Leaving In Progress.
+- Evidence: skills/laptop/evidence/2026-08-20-moe11-iap-install-trim/verdict.md (all gates), skills/laptop/evidence/2026-08-19-gcp-iap-windows-lane/REPORT.md (lane proof + control leg), commit de8e9759. Lane runner: windows-pilot/vm-testing/gcp-iap-lane.sh.
 
 ### CLWX-29 — [CLWX-6] Cloud economics: trim per-turn floor + per-user metering/caps
 
 - **State:** In Progress  |  **Priority:** none
 
+100M tokens/month is exhausted at ~20 schools, and one principal bulk-processing a mailbox can spend the fleet's month with no warning — the first symptom is every principal getting 429 at once.
+FACTS: a cloud turn costs ~10,650 tokens, ~71% of it a ~7,550-token fixed floor (31 tool defs ~3,594 + schemas ~1,918 + persona ~1,880) resent every turn. 100M/mo ≈ 2,635 cloud tasks for the whole fleet ≈ 0.6 tasks/principal/day at 200 schools; only ~6% of tasks can go to cloud. Branch fix/tool-catalog-trim (7add864b) cuts the floor toward ~2,000 for ~78% more capacity — it is on the pilot remote but under HOLD awaiting a reviewer pass, main untouched. No metering exists: the only rate-limit hit in the tree is an unused RATE_LIMITED enum (gateway/protocol.ts:77); model-broker authenticates but does not account.
+INFERENCE: per-user caps cannot exist before identity (CLWX-7) does, since the cap key is the same as the UserId header. Counters live in PostgreSQL (no Redis) — negligible write volume at 200 principals.
+OPEN QUESTIONS (Ministry): is prompt caching available behind APIM and are cached prefix tokens billed against the 100M? (free win if yes). Rollout curve / real fleet size.
+Accept (KR6): per-turn floor measured <=2,500 tokens; model-broker meters per-user consumed-tokens, enforces per-user soft caps with a fleet reserve, and degrades a capped user to on-device rather than erroring; a fleet-level 429 degrades all clients (shares CLWX-4's mechanism).
+
 **Comments (3):**
 
-- 
-- 
-- 
+- 5b cap logic landed (commit deff5c7d): services/model-broker/usage-meter.mjs + flag-gated wiring in server.mjs + tests/unit/model-broker-caps.test.ts (28 new tests across KR5/KR6, all green in the 1225-test full run; typecheck 0). Per-user daily soft cap + 90% fleet-reserve rule → structured 429 the KR4 client degrade path consumes; UserId header identity with anonymous fallback until KR7; flag OFF = byte-for-byte pre-caps behavior. Remaining for Ready: (a) 5a trim merge — owner-gated HOLD on fix/tool-catalog-trim; (b) fleet verification — gated on KR7 real UserId + real APIM hostname (reply now SENT, awaiting Raj).
+- Build started (2026-09-01): kr6-caps-builder subagent implementing services/model-broker/usage-meter.mjs behind flag CLAWX_PER_USER_CAPS (default OFF): per-user daily soft cap (env CLAWX_USER_DAILY_CAP, default 500k), fleet-reserve rule (deny cloud fleet-wide at 90% of CLAWX_FLEET_MONTHLY_BUDGET → clients degrade on-device per KR4), consumed-tokens header parsing, injected clock, atomic persistence + tests/unit/model-broker-caps.test.ts. This is the 5b half; 5a (trim merge) stays owner-gated. Fleet verification still gated on KR7 UserId.
+- Evidence: docs/SCALE_ANALYSIS_2026-08-20.md (commit 982fd5d4). Trim branch fix/tool-catalog-trim @ 7add864b — HOLD, not self-approved, not merged. Owner gate: unblocking the trim review is Anton's call (do not push/merge).
 
 ### CLWX-31 — [CLWX-8] Close Ministry infra decisions (reply + working session)
 
 - **State:** In Progress  |  **Priority:** none
 
+The redirect URI, app-server reachability, and prompt-caching answers gate CLWX-5/6/7. A drafted reply to Ansari Khan's handoff (2026-08-18) is ready and answers all of Section 6.
+FACTS: docs/MINISTRY_REPLY_DRAFT_2026-08-20.md is complete and UNSENT. It accepts the Docker app-server route (building on services/model-broker), accepts read-only Graph scopes + the Contacts.Read refusal, reverses the earlier drop-PostgreSQL position (PostgreSQL runs in their cloud), and puts the app server in the inference path so the APIM key and client secret live in one Ministry-controlled place rather than on every laptop. The moevault credential link is deliberately unopened (5 accesses, expires ~2026-08-26).
+OPEN QUESTIONS to settle in-session: app-server hostname/reachability (internet-TLS vs iGovTT-only) — the single answer everything else keys off; prompt caching behind APIM (billed against 100M?); UserId oid vs UPN; migration credential mechanism (§4.3); per-user caps at broker vs APIM.
+HARD RULE / owner gate: the reply is DRAFT only. The agent does not send it, does not open the moevault link, does not email Raj/Ministry. Anton's send is the gate.
+Accept (KR8): reply sent (by Anton); working-session notes record the hostname decision, a final redirect URI, and the prompt-caching answer.
+
 **Comments (5):**
 
-- 
-- 
-- 
-- 
-- 
+- REPLY SENT (owner-authorized, 2026-09-01): condensed WhatsApp version of the Section-6 infra reply delivered to Raj Ramdass. Proof: bridge HTTP 200 {success:true} + message body in bridge.log (recipient masked …3280, thread verified = raj ramdass pre-send). Content (faithful to docs/MINISTRY_REPLY_DRAFT_2026-08-20.md): (1) Docker app-server accepted, model-broker head start, APIM key server-side; (2) keep confidential client, secret lives in app server, redirect URI = https://<app-server-host>/auth/callback + offer to register localhost:53682/callback for dev now; (3) read-only Graph scopes agreed, Contacts.Read refusal endorsed; (4) one-time link expired unopened, reissue requested; (5) 45-min working session requested with Ansari, hostname = item 1. Sent copy ledgered at ~/openclaw-agent/outbound-sent/ (first entry of the outbound ledger — closes gap G15 process fix). Send-guard hook correctly blocked the first attempt on phrase false-positives; reworded, not bypassed. Remaining for Ready: session booked + full written reply emailed. Ball is with Raj (B4).
+- Wiki evidence (commit 59e1ba26): docs/wiki/LIAISON_LOG.md — agent-generated chronological Raj log. Last inbound from Raj 2026-07-20 (gap ~6wk). We owe: redirect URI (drafted, ~6wk overdue), deployment-model/client-type decision, working-session windows, APIM smoke-test (blocked on expired credential link, never opened). Handoff doc 2026-08-18 has redirect URI + APIM/PostgreSQL hostnames as placeholders. Reply draft complete + UNSENT (owner-gated).
+- Lane C deep-dive 2026-09-01 — the reply is the single unlock for KR7 + KR6. The Section-6 infra reply (docs/MINISTRY_REPLY_DRAFT_2026-08-20.md, 459 lines) already resolves the four handoff conflicts from the Aug-18 packet: - Conflict 1 — Graph scopes: resolved. We accept read-only Graph scopes as granted (draft §3). - Conflict 2 — client secret vs PKCE: the app-server posture changes our answer — with a Docker app server we can hold a client secret server-side (draft §2), rather than needing PKCE on a desktop. - Conflict 3 — redirect URI: still OWED by Raj; explicitly asked for in "What we'd like from the session" (§ end). This is the B4 external-party blocker on KR7. - Conflict 4 — app-server/Docker vs desktop: addressed head-on (draft §1) — we have a Docker head start; offline behaviour (§1.1) and offline sign-in (§1.2) are named as the desktop-side consequences. Token/identity chain (KR6 ← KR7): draft §4 owns the rollout number — 100M tok/mo is comfortable for the pilot but ~71% of every turn is our fixed 7,550-tok floor, so a shared key 429s fleet-wide at ~20 schools (§4.1). §4.2 accepts the APIM UserId header but flags that a stable per-principal identity does not exist yet — which is exactly KR7 (CLWX-30). So: send reply → get real APIM hostname + Entra values (incl. redirect URI) → KR7 stable UserId → KR6 per-user caps. Until the hostname/identity land, KR6/KR7 can only be built behind a flag against placeholders (all 20 handoff values are still placeholders — see "Ministry endpoints unverifiable"). Decision framing (owner-gated, B3): sending is outward-facing to a Ministry official; it is drafted and reviewed but UNSENT. §5 declines to carry the moevault credential link (expired ~2026-08-26; never opened/forwarded) and asks Raj to reissue through his secure channel — consistent with the send-guard hook. Options: send as-is, send edited, or hold for owner review. No auto-send.
+- Chain of custody confirmed (2026-09-01). MOE Email AI Assistant Handoff: Ansari Khan (MoE ICT, 2026-08-18) &rarr; Raj Ramdass (WhatsApp forward 2026-08-19 22:23) &rarr; Anton. SHA-256 prefix 5cd7e28b2f89. Archive baseline: ~/openclaw-agent/liaison-archive/2026-09-01/ (109 files, SHA256SUMS verified). Raj Ramdass identity confirmed as the single ICT liaison for this pilot (also coordinates the separate curriculum-video project; code/repos stay separate). Sent 2026-09-01: WhatsApp note to Raj &mdash; buys time on the reply, asks him to reissue the expired secure-send link (5 accesses, lapsed ~26 Aug; never opened, 0 accesses used). Delivery verified (HTTP 200 + bridge log). Draft: outbound-drafts/2026-09-01-raj-more-time-reissue-link-DRAFT.md.
+- Evidence: commits 7dfb43d9 (draft), 78fd6fe0 (app-server rebuild), fbb3743a (offline constraint). Owner-gated: UNSENT; moevault link unopened. No outbound performed by the agent.
 
 ## Cancelled
 
 ### CLWX-11 — dmvevents/clawx-pilot#11 — Collect customer feedback for Windows RC 2026-06-10
 
 - **State:** Cancelled  |  **Priority:** medium
+
+- Source: dmvevents/clawx-pilot#11
+- Type: Issue
+- State: CLOSED
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 13
+- Last updated: 2026-08-12
 

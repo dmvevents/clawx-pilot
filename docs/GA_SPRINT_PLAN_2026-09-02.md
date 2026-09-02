@@ -81,21 +81,29 @@ Raj values (3.5) ──► KR7 identity (3.6) ──► KR6 fleet caps (3.7) ─
 Everything else is parallel-now and largely DONE.
 ```
 
-## GA acceptance bar (testable statements)
+## GA acceptance bar
 
-GA is declared when ALL of:
-1. KR1–KR5 cards at Ready with captured evidence on a persona-faithful base
-   (KR1 ✅, KR3 ✅, KR4 ✅, KR5 ✅, KR2 = recording owed).
-2. moe.13 (or later) installed cleanly on a fresh persona base with first-boot
-   → green turn recorded, no manual state surgery.
-3. Raj's June-21 defects each reproduced-or-refuted with evidence (CLWX-34).
-4. Zero OPEN defects classed "blocking GA" in the defect register.
-5. Security cards (CLWX-18/19) closed by the owner OR explicitly risk-accepted
-   in writing.
-6. KR6–KR8 either closed or formally descoped from GA by the owner (they gate
-   FLEET scale-out, not single-school GA — decision needed).
-7. GA evidence packet (CLWX-10) assembled: installer hash, test matrix,
-   evidence index, known-limitations sheet.
+The authoritative GO/NO-GO scorecard is **`docs/wiki/GA_READINESS.md` §4** —
+13 boxes, all checked by a human. Status as of 2026-09-02:
+
+| # | Box | Status |
+|---|---|---|
+| 1 | KR1: in-app live trace shows `document.*` + KFM resolve on shipped build | **Ready** (CLWX-24). Closer nuance: the box says "6/6" (P1–P6); live evidence covers P-style prompt ×1 + BM25 harness for the rest — accept or ask for a cheap P2–P6 top-up run (Lane 2). |
+| 2 | KR2: recorded ASSISTED fresh-VM install → gateway ready → green on-device turn, zero manual steps | Open — fix shipped in moe.13 artifact; recording gated on `gcloud auth login` |
+| 3 | KR3: offline lane G 5/5 | **CHECKED** |
+| 4 | KR4: degrade evidence | **CHECKED** |
+| 5 | KR5: outbox durable/idempotent/drain + real action wired + restart proof | **Ready** (CLWX-28, `ebc4be75`) |
+| 6 | KR6: floor ≤2,500 (trim merged) + caps flag-tested | Caps landed (`deff5c7d`); trim `7add864b` on OWNER HOLD |
+| 7 | KR7: Entra sign-in → stable UserId in App Insights | Ministry-blocked; pull-forward = flag-gated sign-in on dev loopback |
+| 8 | KR8: reply + session + real values | Reply SENT 2026-09-01 (ledgered); session/values await Raj |
+| 9 | Ext-val A: Raj's 4 defects reproduced-or-refuted | Open (CLWX-34; Lane 2) |
+| 10 | Ext-val B: one unaided tester install→first-turn | Open |
+| 11 | Security A: test password absent from public branches + history | Owner (CLWX-18) |
+| 12 | Security B: `sk-clawx` rotated | Owner (CLWX-19) |
+| 13 | Release hygiene: green suites at GA tag + evidence packet (CLWX-10) | Suites green at HEAD (1230/1230, 2026-09-02); packet in progress |
+
+Full defect landscape: `docs/DEFECT_REGISTER_2026-09-02.md` (48 entries;
+11 open-blocking post-delta, all mapped to boxes above).
 
 ## Operating rules for this sprint
 

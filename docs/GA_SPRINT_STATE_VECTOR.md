@@ -3,7 +3,7 @@
 _Authored 2026-09-02; **updated 2026-09-02 (second pass)** after KR1 full PASS,
 KR5 wiring, moe.13 build, and the VM-lane auth outage. The operating plan for
 driving the 8 KRs to GA with maximum parallelism and minimum re-debugging.
-Pairs with `GA_SPRINT_PLAN_2026-09-02.md` (sequencing), `GA_READINESS.md`
+Pairs with `GA_SPRINT_PLAN_2026-09-02.md` (sequencing), `docs/wiki/GA_READINESS.md`
 (GO/NO-GO scorecard), `docs/VM_TEST_BASE.md` (persona test base) and the Plane
 board (live state). Ceiling for agents is **Ready**; a human declares GA._
 
@@ -155,7 +155,7 @@ in-flight while it runs, post-flight before reporting a card to Ready.
 5. **Stop conditions (the only three):** don't loosen a quality gate to pass;
    outbound stakeholder comms stay draft-and-hold unless the owner opens the
    gate; destructive/irreversible actions park for a human.
-6. GA is declared by a human when every box in `GA_READINESS.md` §4 is checked.
+6. GA is declared by a human when every box in `docs/wiki/GA_READINESS.md` §4 is checked.
 
 ---
 
