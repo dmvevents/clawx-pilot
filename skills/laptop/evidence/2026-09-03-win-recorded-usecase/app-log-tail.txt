@@ -1,0 +1,80 @@
+  },
+  "configuredChannelCount": 0
+}
+[2026-09-02T23:12:00.419Z] [INFO ] Starting Gateway process (mode=packaged, port=18789, entry="C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\openclaw\openclaw.mjs", args="gateway --port 18789 --token [redacted] --allow-unconfigured", cwd="C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\openclaw", bundledBin=yes, providerKeys=1, channels=skipped(no configured channels), proxy=disabled)
+[2026-09-02T23:12:00.440Z] [INFO ] Gateway process started (pid=7708)
+[2026-09-02T23:12:00.891Z] [INFO ] Added Windows CLI directory to user PATH.
+[2026-09-02T23:12:18.007Z] [WARN ] [Gateway stderr] 2026-09-02T23:12:18.006+00:00 [ws] closed before connect conn=10159cca-5c35-41bc-a1e4-1716a03a09cc peer=[::1]:50518->[::1]:18789 remote=::1 fwd=n/a origin=n/a host=localhost:18789 ua=n/a code=1006 reason=n/a
+[2026-09-02T23:12:18.169Z] [WARN ] [Gateway stderr] 2026-09-02T23:12:18.168+00:00 [plugins] embedded acpx runtime backend probe failed: embedded ACP runtime probe failed (agent=codex; command=npx @zed-industries/codex-acp@^0.11.1; cwd=C:\Users\clawxtest\.openclaw\workspace; Failed to spawn agent command: npx @zed-industries/codex-acp@^0.11.1)
+[2026-09-02T23:12:18.311Z] [INFO ] [metric] gateway.startup {
+  "configSyncMs": 362,
+  "spawnToReadyMs": 17560,
+  "readyToConnectMs": 311,
+  "totalMs": 18233
+}
+[2026-09-02T23:12:18.311Z] [INFO ] [metric] gateway.restart.executed {
+  "gateway_restart_executed_total": 1,
+  "gateway_restart_suppressed_total": 0,
+  "gateway_restart_circuit_open_until": 0
+}
+[2026-09-02T23:12:18.312Z] [INFO ] [gateway-refresh] mode=restart result=applied pidBefore=5024 pidAfter=7708 suppressed=0 executed=1 circuitOpenUntil=0
+[2026-09-02T23:12:19.820Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-02T23:12:24.821Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+Error: RPC timeout: system-presence
+    at Timeout.<anonymous> (C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\app.asar\dist-electron\main\index.js:107:24790)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+[2026-09-02T23:12:24.823Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=293488)
+[2026-09-02T23:12:27.836Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-02T23:12:32.840Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+Error: RPC timeout: system-presence
+    at Timeout.<anonymous> (C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\app.asar\dist-electron\main\index.js:107:24790)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+[2026-09-02T23:12:32.840Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=285471)
+[2026-09-02T23:12:37.841Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-02T23:12:42.856Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+Error: RPC timeout: system-presence
+    at Timeout.<anonymous> (C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\app.asar\dist-electron\main\index.js:107:24790)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+[2026-09-02T23:12:42.856Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=275455)
+[2026-09-02T23:12:50.860Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-02T23:12:55.870Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+Error: RPC timeout: system-presence
+    at Timeout.<anonymous> (C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\app.asar\dist-electron\main\index.js:107:24790)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+[2026-09-02T23:12:55.871Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=262440)
+[2026-09-02T23:13:07.884Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-02T23:13:13.035Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+Error: RPC timeout: system-presence
+    at Timeout.<anonymous> (C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\app.asar\dist-electron\main\index.js:107:24790)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+[2026-09-02T23:13:13.035Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=245276)
+[2026-09-02T23:13:43.043Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-02T23:13:48.046Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+Error: RPC timeout: system-presence
+    at Timeout.<anonymous> (C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\app.asar\dist-electron\main\index.js:107:24790)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+[2026-09-02T23:13:48.047Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=210264)
+[2026-09-02T23:14:18.108Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-02T23:14:18.858Z] [WARN ] Gateway heartbeat missed (1/5, timeout=25000ms)
+[2026-09-02T23:14:23.178Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+Error: RPC timeout: system-presence
+    at Timeout.<anonymous> (C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\app.asar\dist-electron\main\index.js:107:24790)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+[2026-09-02T23:14:23.178Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=175133)
+[2026-09-02T23:14:53.189Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-02T23:14:57.341Z] [INFO ] OpenClaw completion cache generated
+[2026-09-02T23:14:58.192Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+Error: RPC timeout: system-presence
+    at Timeout.<anonymous> (C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\app.asar\dist-electron\main\index.js:107:24790)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+[2026-09-02T23:14:58.193Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=140118)
+[2026-09-02T23:15:28.206Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-02T23:15:28.208Z] [INFO ] Gateway ready fallback RPC router probe succeeded
