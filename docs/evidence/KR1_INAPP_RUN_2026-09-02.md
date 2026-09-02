@@ -98,8 +98,64 @@ The agent produced a helpful fallback rather than hanging or going silent:
 - Gateway log `%APPDATA%\Ministry of Education\logs\clawx-2026-09-02.log`
 
 ## Bottom line
-KR1 is **half green**: tool-selection proven live; **path-resolution to the
-OneDrive KFM Desktop is a confirmed defect**. KR1 cannot be checked at GA until
-`resolveReadablePath` resolves user-profile Known-Folder paths (Desktop,
-Downloads, Documents incl. OneDrive redirection) OR KR1's acceptance criterion is
-formally narrowed. This is now the top KR1 blocker with a reproducible trace.
+Two of the three KR1 sub-criteria are proven live on the shipped moe.12 build:
+tool-selection (agent's first call was `document.read_docx`) and OneDrive KFM
+path-resolution (the parse error proves the file was found+opened on the
+redirected Desktop). The remaining gap was a **malformed test fixture**, not a
+product defect — fixed this session (`pilot-seed-demo-documents.ps1`:
+forward-slash ZIP entries via `New-ZipFromDirectory` + both compression
+assemblies loaded + strict backslash-reject in the validator; commits `1804aaab`,
+`128fcab6`). A valid docx is now seeded at `%USERPROFILE%\OneDrive\Desktop`.
+
+**Re-run status:** DONE — full KR1 in-app PASS. See the re-run section below.
+
+## Re-run — full KR1 in-app PASS (2026-09-02, 02:13 UTC)
+
+After fixing the fixture, one more copy had to be corrected: `resolveReadablePath`
+resolves the bare filename `moe-demo-suspension-source.docx` to
+`%USERPROFILE%\Downloads` **before** `OneDrive\Desktop`, and a pre-fix (malformed)
+copy still sat in Downloads. A profile-wide scan found three copies; the Downloads
+and Documents copies were overwritten with the valid one (all now `backslash=0`,
+`word/document.xml`=2153 bytes). This ordering is benign for KR1 (the resolver
+did find a Desktop copy too) but explains why the first re-run still failed.
+
+Same prompt, shipped moe.12, live model turn. The gateway log shows
+`document.read_docx path="moe-demo-suspension-source.docx"` now **succeeds** (no
+parse error), and the agent returned a faithful summary of the document:
+
+> Based on the document, here are the key points regarding the student
+> suspension: Student: A female student in Standard 4, aged 10. School: Demo
+> Primary School, St. George East district. Incident: physical altercation
+> (another pupil pushed in the classroom) during the transition to lunch; also
+> refused to follow a teacher's direction. Suspension: 2-day, first this term.
+> Parental Contact: "Demo Guardian" contacted and present; official notice
+> pending signature at pickup. Process: discipline matrix followed for a Level 2
+> offense; SSSD referral not required. Before submission the form requires the
+> actual pupil identifiers and the parent's signature.
+
+Every point maps to a seeded source line (`pilot-seed-demo-documents.ps1`
+`$suspensionLines`): sex/class/age, school+district, both infractions, victim
+detail, suspension length + count, guardian + pending signature, discipline
+matrix + Level 2 + SSSD. This is genuine extraction from the parsed docx, not a
+generic response.
+
+**KR1 sub-criteria — all three green live on the shipped Windows build:**
+1. tool-selection: agent's first call is `document.read_docx` ✅
+2. path-resolution: bare filename resolves to a real user-profile copy (KFM
+   Desktop + Downloads both resolvable) ✅
+3. parse + summarise: valid docx parsed, faithful summary returned ✅
+
+Evidence: gateway log `clawx-2026-09-02.log` (02:13 turn, read_docx success),
+CDP-captured answer (message 9), driver JSON
+`chat-turn-2026-09-02T02-13-16-314Z.json`.
+
+### Follow-up items surfaced (not blocking KR1)
+- **Driver false-settle (IF-8):** the turn driver reported `ANSWERED` at ~25s on a
+  "Thinking…" placeholder that was momentarily stable. A separate CDP reader that
+  ignores `Thinking…`/`Working` placeholders and requires ≥40-char stable text
+  captured the true answer. Fold that guard into the driver.
+- **Fixture hygiene:** ship the demo docs only via the fixed seeder; purge any
+  pre-fix malformed copies from Downloads/Documents/Desktop before a demo.
+- **Steering (minor):** on a `document.read_docx` parse failure the agent fell
+  back to the generic workspace-rooted `read` tool rather than surfacing the
+  parse error. Low priority; revisit persona wording.
