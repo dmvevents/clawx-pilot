@@ -44,6 +44,18 @@ board (live state). Ceiling for agents is **Ready**; a human declares GA._
   On-device TURNS don't complete on the e2 VM (CPU starvation) — laptop
   lane remains the on-device turn anchor; new OPEN defect
   ONDEVICE-RETRY-LOOP (no cap on identical failing tool calls).
+- **Outlook lane: gate false-negative CLOSED + migration survived +
+  3/4 Raj defects dispositioned (owner-directed stress session).** The
+  outlook.cloud.microsoft tenant redirect hit us mid-session and exposed:
+  a subject-gate FALSE NEGATIVE (a drifted draft went out — self-addressed
+  sandbox; fixed `a8322ad9`, contract tests inverted), the RAJ-4 verifier
+  false positive (list rows classified as recipient wells), and hardcoded
+  navigation dying on the new domain. RAJ-1 root-caused (accidental-refusal
+  error text), RAJ-3 REFUTED by targeted scenario, RAJ-2 remaining
+  (model-layer fidelity scenario designed). Live proof: 4-step gate PASS,
+  15/15 eval, 73/73 units on the new domain. New skill:
+  `.claude/skills/outlook-lane-debug`. Graph plan:
+  `docs/MINISTRY_GRAPH_ACCESS_PLAN.md` + cards CLWX-39/40.
 - **Self-driving loop live:** `.claude/skills/ga-sprint-driver/SKILL.md`
   (universal tick: sense→analyze→act→sync→report) + durable cron `977942a5`
   every 6 h (7-day auto-expiry; renew or re-arm via /ga-sprint-driver).
