@@ -282,6 +282,13 @@ Pull-forward from docs/MINISTRY_GRAPH_ACCESS_PLAN.md step B: wire the EXISTING m
 
 docs/MINISTRY_GRAPH_ACCESS_PLAN.md step C: on a clean install with NO Chrome session, sign in via Entra and run the 14-row Outlook eval against the GRAPH transport (same suite, different path — the routes are already dual-path). Proves the GA-durable Outlook lane end-to-end. Blocked by [Graph-B] + the four Raj decision items (scopes, PKCE public client, loopback redirect, no-app-server identity) on the CLWX-31 session agenda.
 
+### CLWX-41 — Stakeholder record: thread extraction + bug/fix/eval correlation report
+
+- **State:** Todo  |  **Priority:** none
+
+Full stakeholder record extracted and correlated (docs/STAKEHOLDER_REPORT_2026-09-02.md, commit 0dc85ac9). Source: the bridge store — Raj direct thread (381 msgs, 23 documents, inbound span 2026-04-27→07-20) + two groups. Deliverables: document manifest with product traceability (the 8 capabilities transcribe the 05-12 spec doc; both form pipelines from the 05-14 Term-3 PDFs), REPORTED→FIXED→EVALUATION matrix (every June defect has a runnable criterion: 3 fixed-verified, 1 refuted, 1 open-designed), and the project analysis (product = transcription of Ministry asks; real risk = the 07-20 silence; re-engagement tool = the live-evidence pack).
+Follow-ups tracked here: (1) one bridge-download pass to vault the original document BLOBs (chain-of-custody, CLWX-32-adjacent); (2) splice in the two isolation-agent matrices when they deliver; (3) AI-Textbooks TOR (07-17) acknowledged-as-post-GA on the session agenda.
+
 ## Started
 
 ### CLWX-10 — dmvevents/clawx-pilot#10 — Assemble final GA evidence packet

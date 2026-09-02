@@ -44,6 +44,16 @@
   ],
   "issues": [
     {
+      "id": "1c64bddd-7cea-4118-ab25-8c36199c877c",
+      "sequence_id": 41,
+      "name": "Stakeholder record: thread extraction + bug/fix/eval correlation report",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Full stakeholder record extracted and correlated (docs/STAKEHOLDER_REPORT_2026-09-02.md, commit 0dc85ac9). Source: the bridge store — Raj direct thread (381 msgs, 23 documents, inbound span 2026-04-27→07-20) + two groups. Deliverables: document manifest with product traceability (the 8 capabilities transcribe the 05-12 spec doc; both form pipelines from the 05-14 Term-3 PDFs), REPORTED→FIXED→EVALUATION matrix (every June defect has a runnable criterion: 3 fixed-verified, 1 refuted, 1 open-designed), and the project analysis (product = transcription of Ministry asks; real risk = the 07-20 silence; re-engagement tool = the live-evidence pack).\nFollow-ups tracked here: (1) one bridge-download pass to vault the original document BLOBs (chain-of-custody, CLWX-32-adjacent); (2) splice in the two isolation-agent matrices when they deliver; (3) AI-Textbooks TOR (07-17) acknowledged-as-post-GA on the session agenda.",
+      "comments": []
+    },
+    {
       "id": "02843c3c-f5a1-4257-873e-578e83b63bfe",
       "sequence_id": 40,
       "name": "[Graph-C] Graph-transport Outlook eval on a Chrome-less install",
