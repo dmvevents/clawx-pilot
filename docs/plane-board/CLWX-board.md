@@ -181,8 +181,9 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - **State:** In Progress  |  **Priority:** none
 
-**Comments (1):**
+**Comments (2):**
 
+- 
 - 
 
 ### CLWX-28 — [CLWX-5] Store-and-forward outbox for durable offline records
