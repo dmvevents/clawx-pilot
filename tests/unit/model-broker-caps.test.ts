@@ -208,15 +208,20 @@ function chatRequest(brokerUrl: string, userId?: string) {
 
 function stubUpstream(consumedTokensHeader?: string) {
   let calls = 0;
-  const server = createServer((_req, res) => {
+  // KR7: record the UserId header each upstream call actually received
+  // (undefined when the broker did not forward one).
+  const seenUserIds: Array<string | undefined> = [];
+  const server = createServer((req, res) => {
     calls += 1;
+    const raw = req.headers.userid;
+    seenUserIds.push(Array.isArray(raw) ? raw[0] : raw);
     res.writeHead(200, {
       'Content-Type': 'application/json',
       ...(consumedTokensHeader != null ? { 'consumed-tokens': consumedTokensHeader } : {}),
     });
     res.end(JSON.stringify({ id: 'chatcmpl-test', choices: [] }));
   });
-  return { server, callCount: () => calls };
+  return { server, callCount: () => calls, seenUserIds };
 }
 
 describe('model broker cap wiring', () => {
@@ -236,6 +241,8 @@ describe('model broker cap wiring', () => {
     const response = await chatRequest(broker.url, 'principal-a');
     expect(response.status).toBe(200);
     expect(upstream.callCount()).toBe(1);
+    // KR7: attribution is forwarded upstream even with caps off.
+    expect(upstream.seenUserIds).toEqual(['principal-a']);
 
     // And the meter never recorded the turn: state on disk is unchanged.
     const state = JSON.parse(readFileSync(statePath, 'utf8'));
@@ -254,6 +261,8 @@ describe('model broker cap wiring', () => {
 
     const first = await chatRequest(broker.url, 'principal-a');
     expect(first.status).toBe(200);
+    // KR7: the metered identity is also forwarded upstream for attribution.
+    expect(upstream.seenUserIds).toEqual(['principal-a']);
 
     const state = JSON.parse(readFileSync(statePath, 'utf8'));
     expect(state.users['principal-a']).toBe(700);
@@ -290,6 +299,32 @@ describe('model broker cap wiring', () => {
     expect(response.status).toBe(200);
     const state = JSON.parse(readFileSync(statePath, 'utf8'));
     expect(state.users.anonymous).toBe(55);
+    // KR7: the anonymous fallback is a broker-internal metering bucket; it
+    // must never be forwarded upstream as an identity.
+    expect(upstream.seenUserIds).toEqual([undefined]);
+  });
+
+  it('forwards a sanitized UserId upstream and drops values outside the allowed charset', async () => {
+    const statePath = tempStatePath();
+    const upstream = stubUpstream('10');
+    const { url: upstreamUrl } = await listen(upstream.server);
+    const broker = await listen(createBrokerServer(brokerConfig({
+      upstreamBaseUrl: `${upstreamUrl}/v1`,
+      perUserCaps: true,
+      usage: { statePath, userDailyCap: 100_000, fleetMonthlyBudget: 100_000 },
+    })));
+
+    // Whitespace is stripped before forwarding.
+    const spaced = await chatRequest(broker.url, 'principal a');
+    expect(spaced.status).toBe(200);
+    // A value outside [A-Za-z0-9._@-] is metered but never forwarded.
+    const hostile = await chatRequest(broker.url, 'principal;drop');
+    expect(hostile.status).toBe(200);
+    // An explicit 'anonymous' is treated the same as no header.
+    const anonymous = await chatRequest(broker.url, 'anonymous');
+    expect(anonymous.status).toBe(200);
+
+    expect(upstream.seenUserIds).toEqual(['principala', undefined, undefined]);
   });
 
   it('flag on: fleet reserve denies every user with a structured 429', async () => {

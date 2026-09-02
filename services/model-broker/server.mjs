@@ -117,6 +117,22 @@ function meterUserId(req) {
   return String(value || '').trim() || 'anonymous';
 }
 
+// KR7: forward the metering identity upstream so the APIM lane can attribute
+// usage per principal, independent of CLAWX_PER_USER_CAPS. Client-stamped and
+// spoofable — acceptable for pilot metering; broker-side token validation is
+// a KR8-gated Ministry decision. Sanitized hard before proxying: single
+// value, whitespace stripped, capped at 128 chars, [A-Za-z0-9._@-] only;
+// anything else (including 'anonymous') is simply not forwarded.
+function upstreamUserId(req) {
+  const raw = req.headers.userid;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const cleaned = String(value || '').replace(/\s+/g, '').slice(0, 128);
+  if (!cleaned || cleaned === 'anonymous' || !/^[A-Za-z0-9._@-]+$/.test(cleaned)) {
+    return '';
+  }
+  return cleaned;
+}
+
 function upstreamUrl(config, path) {
   const suffix = config.upstreamBaseUrl.endsWith('/v1') && path.startsWith('/v1/')
     ? path.slice('/v1'.length)
@@ -230,6 +246,7 @@ async function proxyModelRequest(req, res, path, config, resolveUpstreamAuthHead
     model: resolved.upstreamModel,
   };
 
+  const forwardedUserId = upstreamUserId(req);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
   try {
@@ -240,6 +257,7 @@ async function proxyModelRequest(req, res, path, config, resolveUpstreamAuthHead
         ...config.upstreamHeaders,
         ...authHeaders,
         'Content-Type': 'application/json',
+        ...(forwardedUserId ? { UserId: forwardedUserId } : {}),
       },
       body: JSON.stringify(upstreamBody),
       signal: controller.signal,

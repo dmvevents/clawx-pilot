@@ -16,7 +16,8 @@ import { SEED_CLOUD_GATEWAY_PROVIDER } from '../../shared/feature-flags';
 import type { ProviderAccount, ProviderProtocol } from '../shared/providers/types';
 import { logger } from '../utils/logger';
 import { getSetting, setSetting } from '../utils/store';
-import { storeApiKey } from '../utils/secure-storage';
+import { getApiKey, storeApiKey } from '../utils/secure-storage';
+import { getMicrosoftGraphAccount } from '../services/microsoft-graph/store';
 import {
   getDefaultProviderAccountId,
   getProviderAccount,
@@ -265,9 +266,82 @@ export async function resolveCloudGatewaySeedConfig(): Promise<CloudGatewaySeedC
   };
 }
 
+// KR7: the broker meters per-principal usage on the `UserId` header, keyed on
+// the signed-in Graph account's Entra oid. The value is client-stamped and
+// spoofable — acceptable for pilot metering; broker-side token validation is
+// a KR8-gated Ministry decision. Only the UserId key is managed here; other
+// header entries on the account are preserved as-is.
+function withUserIdHeader(
+  headers: Record<string, string> | undefined,
+  accountId: string | undefined,
+): Record<string, string> | undefined {
+  const next = { ...(headers ?? {}) };
+  const oid = accountId?.trim();
+  if (oid) {
+    next.UserId = oid;
+  } else {
+    delete next.UserId;
+  }
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+// The gateway manager handed to seedCloudGatewayProvider at boot, kept so
+// mid-session refreshes (Graph sign-in/out) can schedule a live gateway
+// reload instead of leaving the header change parked until next restart.
+let refreshGatewayManager: GatewayManager | undefined;
+
+/**
+ * Contract C3 (KR7): re-read the Graph account and re-stamp or remove the
+ * UserId header on the saved cloud gateway provider account, then re-run the
+ * existing sync path so the gateway reloads with the new header set.
+ *
+ * Safe to call before the provider has been seeded (no-op) and idempotent:
+ * when the header already matches the current sign-in state nothing is
+ * written and no gateway reload is scheduled.
+ */
+export async function refreshCloudGatewayUserIdHeader(): Promise<void> {
+  const seed = await resolveCloudGatewaySeedConfig().catch(() => null);
+  const providerId = seed?.providerId ?? DEFAULT_PROVIDER_ID;
+  const existing = await getProviderAccount(providerId);
+  if (!existing) {
+    return;
+  }
+
+  const graphAccount = await getMicrosoftGraphAccount().catch(() => null);
+  const nextHeaders = withUserIdHeader(existing.headers, graphAccount?.accountId);
+  if (existing.headers?.UserId === nextHeaders?.UserId) {
+    return;
+  }
+
+  const account: ProviderAccount = {
+    ...existing,
+    updatedAt: new Date().toISOString(),
+  };
+  if (nextHeaders) {
+    account.headers = nextHeaders;
+  } else {
+    delete account.headers;
+  }
+
+  await saveProviderAccount(account);
+  const apiKey = await getApiKey(account.id).catch(() => null);
+  await syncSavedProviderToRuntime(
+    providerAccountToConfig(account),
+    apiKey ?? undefined,
+    refreshGatewayManager,
+  );
+  logger.debug('[cloud-gateway-seed] Refreshed UserId header on cloud gateway provider', {
+    providerId: account.id,
+    userIdPresent: Boolean(nextHeaders?.UserId),
+  });
+}
+
 export async function seedCloudGatewayProvider(
   gatewayManager?: GatewayManager,
 ): Promise<CloudGatewaySeedResult> {
+  if (gatewayManager) {
+    refreshGatewayManager = gatewayManager;
+  }
   if (!SEED_CLOUD_GATEWAY_PROVIDER) {
     logger.info('[cloud-gateway-seed] SEED_CLOUD_GATEWAY_PROVIDER disabled — skipping');
     return { status: 'skipped', reason: 'disabled' };
@@ -283,6 +357,17 @@ export async function seedCloudGatewayProvider(
   const defaultProviderId = await getDefaultProviderAccountId();
   const shouldBecomeDefault = seed.setDefault || !defaultProviderId || defaultProviderId === seed.providerId;
   const now = new Date().toISOString();
+
+  // KR7: stamp the metering identity when a Graph account is signed in; when
+  // absent, leave the headers key off entirely so unauthenticated turns fall
+  // through to the broker's anonymous path.
+  const graphAccount = await getMicrosoftGraphAccount().catch(() => null);
+  const userIdHeaders = withUserIdHeader(existing?.headers, graphAccount?.accountId);
+  if (graphAccount?.accountId) {
+    logger.debug('[cloud-gateway-seed] Stamping UserId header from Graph account', {
+      userIdPrefix: graphAccount.accountId.slice(0, 8),
+    });
+  }
 
   const account: ProviderAccount = {
     ...(existing ?? {}),
@@ -303,6 +388,11 @@ export async function seedCloudGatewayProvider(
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
+  if (userIdHeaders) {
+    account.headers = userIdHeaders;
+  } else {
+    delete account.headers;
+  }
 
   await saveProviderAccount(account);
   await storeApiKey(account.id, seed.apiKey);
@@ -343,6 +433,7 @@ export async function seedCloudGatewayProvider(
     model: account.model,
     defaulted: shouldBecomeDefault,
     apiKeyPresent: true,
+    userIdHeader: Boolean(userIdHeaders?.UserId),
   });
 
   return {
