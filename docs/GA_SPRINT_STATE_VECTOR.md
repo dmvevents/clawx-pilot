@@ -38,6 +38,12 @@ board (live state). Ceiling for agents is **Ready**; a human declares GA._
   clobber + EPERM rename race. moe.14 built as the re-verify RC. Evidence:
   `docs/evidence/KR2_FRESH_INSTALL_RUN_2026-09-02.md`. L2 snapshot
   `clawx-l2-moe12-kr1pass-20260902` READY.
+- **moe.14 re-verify DONE (same day):** both boot fixes proven live (EPERM
+  sync + channel persistence); fresh-install default channel is now
+  on-device as designed (owner note: demo-default decision now explicit).
+  On-device TURNS don't complete on the e2 VM (CPU starvation) — laptop
+  lane remains the on-device turn anchor; new OPEN defect
+  ONDEVICE-RETRY-LOOP (no cap on identical failing tool calls).
 - **Self-driving loop live:** `.claude/skills/ga-sprint-driver/SKILL.md`
   (universal tick: sense→analyze→act→sync→report) + durable cron `977942a5`
   every 6 h (7-day auto-expiry; renew or re-arm via /ga-sprint-driver).

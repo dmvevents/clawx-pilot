@@ -77,3 +77,39 @@ retry (5×, 100 ms backoff) on EPERM/EBUSY/EACCES in
 **Net:** the KR2 recording run on moe.14 is now a verification pass, not a
 debug session. The run already paid for itself: two shipped-build defects
 found and fixed that no amount of unit testing had surfaced.
+
+## moe.14 re-verify (same day, ~05:05–05:35 UTC)
+
+Fresh-state install of **moe.14** (sha256 `8634bd74…65d7`, verified
+guest==build host) on the same persona VM:
+
+| Check | Result |
+|---|---|
+| Gateway ready on fresh state | **50 s** (consistent with moe.13's 51 s) |
+| EPERM fix (3b) | ✅ **proven** — `models.providers` contains BOTH `custom-moecloud` and `ollama-ollamalo` at first boot (on moe.13 the ollama entry was missing) |
+| Channel-clobber fix (3a) | ✅ **proven** — preflight logged `desired=on-device, applied=on-device, reason=reconciled`; `preferredChannel=on-device` survived TWO app restarts |
+| Fresh-install default channel | Now **on-device** (`ollama-ollamalo/qwen2.5:3b-instruct`) — the clobber had been masking the product's stated design ("on-device by default"). moe.11–13 fresh installs came up online because the old seed forced it. **Owner note:** if the demo should default online, that's now an explicit seed decision, not an accident. |
+| Green on-device TURN on this VM | ✗ did not complete — two distinct signatures below |
+
+### On-device turn failures on the e2-standard-4 VM (4 vCPU, no GPU)
+
+1. **Tool retry loop (real defect, hardware-independent):** prompt containing
+   "Summarise" baited `principal.summarise_circular`; the 3B model called it
+   with empty `circular_text`, got the validation error, and retried the
+   IDENTICAL call for 13+ minutes. **There is no per-turn cap on identical
+   failing tool calls.** Registered as ONDEVICE-RETRY-LOOP; needs a breaker
+   (plugin-side: after N identical failures return a success-shaped "answer
+   directly" message; or agent-side retry cap).
+2. **CPU starvation:** even a plain greeting prompt produced a 51-element
+   thread ending in an `incomplete turn detected` (embedded agent) with no
+   final text. qwen2.5:3b tool-capable turns on shared CPU exceed practical
+   windows. The validated on-device turn evidence remains the moe.11
+   **laptop** lane (real persona hardware; trim verified live 6/6→0/6). The
+   e2 VM is fine for install/boot/cloud-turn evidence; use the laptop (or a
+   GPU VM) for on-device turn benchmarks.
+
+### KR2 posture after both runs
+Fresh install → gateway ready (50–51 s) ✅ · green first turn ✅ (moe.13,
+cloud) · on-device binding + persistence ✅ (moe.14) · on-device turn on
+persona hardware: anchor to the laptop lane or re-run there · assisted-GUI
+recording: human-at-screen session still owed.

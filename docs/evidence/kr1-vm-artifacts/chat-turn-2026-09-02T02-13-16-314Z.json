@@ -1,0 +1,16 @@
+{
+  "prompt": "Read the file moe-demo-suspension-source.docx on my Desktop and summarise the key points.",
+  "startedAt": "2026-09-02T02:13:16.315Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.12 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "messagesBefore": 6,
+  "messagesAfter": 8,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": "Read the file moe-demo-suspension-source.docx on my Desktop and summarise the key points. just now Working Thinking… Thinking . . .",
+  "settled": false,
+  "verdict": "TIMED_OUT_MID_TURN",
+  "finishedAt": "2026-09-02T02:13:36.963Z"
+}
