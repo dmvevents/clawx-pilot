@@ -17,7 +17,33 @@
 | P5 | Flag-gated sign-in flow wired (`CLAWX_GRAPH_AUTH=1`) | **us** | oauth flow + adapter BUILT; flag wiring = CLWX-39 | 1 sitting |
 | P6 | Twin registration for pre-Ministry testing | **us (+owner assist)** | see "Twin tenant" below | 1 sitting |
 
-## Twin tenant — test everything before the Ministry moves
+## DISCOVERY (2026-09-02 deep dive): one tenant, and what it changes
+
+Public OpenID metadata (unauthenticated) resolves BOTH `moe.gov.tt` AND
+`fac.edu.tt` to the SAME Entra tenant: **`9590bb09-ce2c-40e2-8181-fad0a7edebfe`**
+— confirmed visually by the Ministry-of-Education-branded sign-in page on the
+test.fac account. Consequences:
+
+1. **P2 is half-solved**: `AZURE_TENANT_ID` is public information — already
+   known. Only `AZURE_CLIENT_ID` remains to be handed over.
+2. **The twin-tenant section below is superseded in the best way**: our
+   sandbox account IS in the Ministry tenant. Once Ansari registers the dev
+   URI on the real app and consents the scopes, test.fac can sign into the
+   REAL app — no twin needed for L1–L5 (a twin remains a fallback if
+   assignment policies exclude test.fac).
+3. **Does the redirect URI already exist?** Almost certainly not: Ansari's
+   07-20 message says the redirect URI was the one thing he still needed —
+   the APP exists, the URI didn't. Our 01b message (sent 09-02) supplies it.
+   Direct verification via the Entra portal is blocked for test.fac by
+   Microsoft's admin-portal MFA-enrollment gate (see 4).
+4. **Owner decision — MFA on test.fac**: opening any admin portal with
+   test.fac triggers mandatory MFA registration. Enrolling would let us READ
+   App registrations (answering "does it exist" ourselves) and hardens the
+   account — but may break password-only automation sign-ins (the relogin
+   helper). Recommendation: DON'T enroll; get the client id from Raj (already
+   asked via 01b) — cheaper and zero lane risk.
+
+## Twin tenant — fallback only (superseded by the same-tenant discovery)
 
 **Best option: the `fac.edu.tt` sandbox tenant.** The test mailbox
 (`test.fac@fac.edu.tt`) already lives there — if we hold (or can get) admin

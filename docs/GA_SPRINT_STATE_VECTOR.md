@@ -28,6 +28,14 @@ owed deliverable is cleared — the ball is with the Ministry for the first
 time since July.** Next trigger: Ansari registers the dev URI → ladder
 L1–L4 runs pre-session._
 
+_Deep-dive discovery (09-02): `moe.gov.tt` and `fac.edu.tt` are ONE Entra
+tenant (`9590bb09-…ebfe`, public metadata + branded sign-in confirmation).
+Tenant-ID placeholder solved; twin tenant unnecessary (test.fac lives in the
+Ministry tenant); only the client id + dev-URI registration remain (asked in
+01b). Portal self-verification blocked by the admin-portal MFA-enrollment
+gate on test.fac — owner decision documented in GRAPH_TEST_PLAN (recommend:
+don't enroll; zero lane risk path is Raj handing over the client id)._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
