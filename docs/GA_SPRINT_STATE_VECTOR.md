@@ -13,6 +13,15 @@ Ready (GA packet assembled; stakeholder report complete; timeline current;
 (`d10de580…18df`), uploaded to GCS — one VM smoke from being the GA tag.**
 Board: 18 Ready / 5 In Progress / 10 Todo / 0 Backlog._
 
+_Graph-test thread (2026-09-02, owner-directed): `docs/GRAPH_TEST_PLAN.md`
+published — P1–P6 prerequisites matrix, 7-rung ladder (L1 sign-in → L7
+UserId), RACI, timeline. The 01b delta message (enumerated permissions +
+dev redirect URI) is SEND-READY with owner GO on record; the guard hook
+requires owner execution (`send-01b.sh`). Twin-tenant insight: fac.edu.tt
+can host the twin registration against the existing test mailbox — ONE
+owner answer needed (do we hold admin there?). CLWX-39/40 updated with the
+ladder; session card carries the pre-session L1–L4 opportunity._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three

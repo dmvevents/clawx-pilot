@@ -116,7 +116,12 @@
       "state": "Todo",
       "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "docs/MINISTRY_GRAPH_ACCESS_PLAN.md step C: on a clean install with NO Chrome session, sign in via Entra and run the 14-row Outlook eval against the GRAPH transport (same suite, different path — the routes are already dual-path). Proves the GA-durable Outlook lane end-to-end. Blocked by [Graph-B] + the four Raj decision items (scopes, PKCE public client, loopback redirect, no-app-server identity) on the CLWX-31 session agenda.",
-      "comments": []
+      "comments": [
+        {
+          "text": "Acceptance sharpened by the test plan (L4/L5): re-run the existing 14-row eval with the Graph transport active — read rows must pass at the same 15/15 bar the browser lane hit on 09-02; draft/send rows must show GRACEFUL REFUSAL under the read-only scope baseline (assert the refusal, not silence). L5 = the whole ladder on a Chrome-less fresh install (\"any other system\" proof). docs/GRAPH_TEST_PLAN.md.",
+          "created": "2026-09-02T09:11:19.712193Z"
+        }
+      ]
     },
     {
       "id": "88dea880-0512-4b73-9eb1-2fe95bb8353a",
@@ -126,7 +131,12 @@
       "state": "Todo",
       "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "Pull-forward from docs/MINISTRY_GRAPH_ACCESS_PLAN.md step B: wire the EXISTING microsoft-graph oauth flow (manager.ts + microsoft-graph-oauth.ts, already built) behind a flag (CLAWX_GRAPH_AUTH=1) against a dev Entra tenant with a loopback redirect. Acceptance: sign-in → token → one Graph read on a dev account. Makes the Ministry values a config swap and collapses most of KR7 (UserId from token oid claim). Agent-executable now (P class).",
-      "comments": []
+      "comments": [
+        {
+          "text": "Test plan uploaded: docs/GRAPH_TEST_PLAN.md. Prerequisites matrix (P1–P6), the 7-rung test ladder (L1 sign-in round-trip → L7 UserId stamping), stakeholder RACI, and timeline. Key insight for this card: the best twin tenant is fac.edu.tt itself — the test mailbox already lives there, so a twin registration there lets the ENTIRE ladder run today against the same mailbox the browser evidence used. One owner decision needed: do we hold admin on the fac.edu.tt tenant? (Fallback: free M365 dev tenant, ~15 min owner signup.) Scope note: this card models the flag-gated sign-in per the agreed BFF architecture; rungs L1–L5 are agent-executable once the twin exists.",
+          "created": "2026-09-02T09:11:11.591699Z"
+        }
+      ]
     },
     {
       "id": "1c6afc52-2f57-4a80-b81c-2562242627cb",
@@ -252,6 +262,10 @@
       "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "The redirect URI, app-server reachability, and prompt-caching answers gate CLWX-5/6/7. A drafted reply to Ansari Khan's handoff (2026-08-18) is ready and answers all of Section 6.\nFACTS: docs/MINISTRY_REPLY_DRAFT_2026-08-20.md is complete and UNSENT. It accepts the Docker app-server route (building on services/model-broker), accepts read-only Graph scopes + the Contacts.Read refusal, reverses the earlier drop-PostgreSQL position (PostgreSQL runs in their cloud), and puts the app server in the inference path so the APIM key and client secret live in one Ministry-controlled place rather than on every laptop. The moevault credential link is deliberately unopened (5 accesses, expires ~2026-08-26).\nOPEN QUESTIONS to settle in-session: app-server hostname/reachability (internet-TLS vs iGovTT-only) — the single answer everything else keys off; prompt caching behind APIM (billed against 100M?); UserId oid vs UPN; migration credential mechanism (§4.3); per-user caps at broker vs APIM.\nHARD RULE / owner gate: the reply is DRAFT only. The agent does not send it, does not open the moevault link, does not email Raj/Ministry. Anton's send is the gate.\nAccept (KR8): reply sent (by Anton); working-session notes record the hostname decision, a final redirect URI, and the prompt-caching answer.",
       "comments": [
+        {
+          "text": "Graph testing wired to the session (docs/GRAPH_TEST_PLAN.md): the 01b delta message (enumerated permissions list + dev redirect URI + session-windows nudge) is SEND-READY with owner GO on record — the guard hook requires owner execution: ! bash ~/openclaw-agent/outbound-drafts/closeout-pack-2026-09-02/send-01b.sh. If Ansari registers the dev URI this week, ladder rungs L1–L4 run BEFORE the session, and the session itself becomes the L6 live demo that the whole integration is a config swap.",
+          "created": "2026-09-02T09:11:27.836303Z"
+        },
         {
           "text": "Agenda v4 — the structural finding reframes the opener. The full-thread sweep (docs/STAKEHOLDER_REPORT_2026-09-02.md) shows the last inbound on this product (2026-07-20) was Ansari APPROVING the app registration and asking only for the permissions list + redirect URIs — we said \"on it\" and never delivered, while Raj stayed responsive on every other lane through 08-26. The session does not open with our asks; it opens with our owed deliverable.\n\nRevised running order: (0) deliver the permissions list + redirect URI answer (dev-loopback registrable immediately; production URI = the hostname decision) — this is drafted in the closeout pack (CLWX-45, draft-and-hold); (1–9) the nine asks as documented. Also on the table from the sweep: the NSCC knowledge-pack answer (CLWX-42 closes his clearest feature ask before the session), and the latency budget (CLWX-43) since it is his only twice-volunteered complaint.",
           "created": "2026-09-02T08:26:01.681570Z"
