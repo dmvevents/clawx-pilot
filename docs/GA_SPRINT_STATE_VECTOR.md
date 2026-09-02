@@ -102,6 +102,24 @@ lint 0 errors (4 pre-existing errors also cleared), **full suite 161 files /
 1264 tests green**. Board colours: this tick's remaining P-work = P8 RAJ-2,
 P9 NSCC, L4-after-sign-in._
 
+_**Sprint tick (2026-09-03, RAJ-2 disposition).** SENSE: tree clean, board
+mirror current, lane probes green (board 200, CDP 200, gateway up); no external
+gates cleared, so no promotions. ACT (single highest-leverage P item): the
+RAJ-2 model-layer fidelity scenario ran LIVE end-to-end —
+`scripts/raj2-reply-fidelity-check.ts` attached to the signed-in Chrome,
+surveyed the top-10 inbox, picked the richest real email (101 distinct content
+words), ran a live cloud summarise+draft-reply turn, and applied a dual
+deterministic assertion: coverage 4/8 (at the 50% floor) + ZERO invented
+entities. **RAJ-2 NOT REPRODUCED at the model layer**; no compose opened,
+nothing dispatched, confirm never set. That completes all four Raj 06-21
+dispositions (RAJ-1 fixed-verified, RAJ-2 refuted-at-model-layer, RAJ-3
+refuted, RAJ-4 fixed-verified) → **CLWX-34 → Ready** (Ext-val A last leg).
+The run also FOUND a new defect: **STALE-READ (filed CLWX-46)** — `readEmail`
+returned the wrong body for the same row across runs (stale reading pane), a
+plausible root cause for Raj's original report; plus a cosmetic
+subject-selector defect. Recommend the settle-guard fix before GA. Evidence:
+`skills/laptop/evidence/2026-09-03-raj2-fidelity/RESULT.md`._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
@@ -301,7 +319,7 @@ Chrome CDP/gateway state probed per-lane by the executing agents.
 | P5 | `pilot-asr-smoke.ps1` authoring (gap-C precursor — script didn't exist) | arms gap C for the next VM window | **DONE 09-03** (desk-checked; first run owed on pilot box) |
 | P6 | W8 Mac whisper smoke (say → WAV → transcribe → assert) | W8 Mac ◐→● | **DONE 09-03** — real transcript ×2, duration non-zero |
 | P7 | W3 Mac forms fill to the 29/32+gate bar (submit-gate refusal is the assertion) | W3 Mac ◐→● | **DONE 09-03** — 29/32 + gate refusal, VM bar matched |
-| P8 | RAJ-2 fidelity scenario (CLWX-34, last of Raj's 4) — draft-only, never send | Ext-val A last leg + register row + card | next tick (serialize: same Chrome lane) |
+| P8 | RAJ-2 fidelity scenario (CLWX-34, last of Raj's 4) — draft-only, never send | Ext-val A last leg + register row + card | **DONE 09-03** — model layer NOT reproduced (dual deterministic assertion PASS, nothing sent); CLWX-34 → Ready; NEW suspect STALE-READ filed as CLWX-46 |
 | P9 | CLWX-42 NSCC knowledge pack + Q&A eval | Raj's clearest feature ask | next tick (external download) |
 | P10 | KR4 kill-egress e2e residual | zero GA boxes (already checked) | do last |
 

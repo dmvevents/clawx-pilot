@@ -44,6 +44,16 @@
   ],
   "issues": [
     {
+      "id": "e77cba12-61a0-47ec-b459-fa5d201fbaaf",
+      "sequence_id": 46,
+      "name": "[bug/other] Outlook readEmail can return a stale reading-pane body (wrong email content)",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Area: other   Severity: medium (priority medium)\n\nSteps to reproduce\nTODO: exact steps\n\nExpected\nTODO: what should happen\n\nActual\nTODO: what happens instead\n\nEvidence\nTODO: log path / screenshot / trace id\n\nEnvironment\nTODO: build / OS / model\n\nRegression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)",
+      "comments": []
+    },
+    {
       "id": "71c548f1-ba2b-43cf-b4e4-9b4f7ee9fc94",
       "sequence_id": 45,
       "name": "Dropped-ball closeout pack (7 draft-and-hold replies incl. the 07-20 owed deliverable)",
@@ -222,10 +232,14 @@
       "sequence_id": 34,
       "name": "[CLWX-bug] Verify/triage Raj's 2026-06-21 email defects",
       "priority": "medium",
-      "state": "In Progress",
-      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "Liaison log surfaced 4 reproducible defects Raj reported the day before the Principals demo (source: docs/wiki/LIAISON_LOG.md §C, WhatsApp archive): (1) send fails with \"draft subject has been changed before it can be sent\"; (2) reply misinterprets content (meal prefs read as shirt sizes); (3) reply archives the original email; (4) draft landed in the To: field (one-off). Plus 2 vague: PDF read inconsistency, document-search inconsistency. No post-demo verdict was ever captured. Note: (1) may already be fixed by the moe.10 hard-confirm gate.\nAccept: each defect reproduced-or-refuted against moe.11 with evidence (trace/log path); confirmed-live ones filed as individual bug cards via scripts/report-bug.mjs; the send-gate one verified against the moe.10 gate. Ladders to KR1 (live-LLM correctness) on the OKR anchor.",
       "comments": [
+        {
+          "text": "2026-09-03 sprint tick: RAJ-2 dispositioned — MODEL LAYER NOT REPRODUCED. Live-lane scenario scripts/raj2-reply-fidelity-check.ts: CDP attach to the signed-in user Chrome, top-10 inbox survey with per-candidate full-body scoring, richest real email chosen (101 distinct content words), live cloud summarise+draft-reply turn, dual deterministic assertion PASSED: coverage 4/8 of frequency-ranked distinctive source words (50 percent floor met) and ZERO invented entities (proper nouns / date words / numbers all sourced). No compose pane opened, nothing dispatched, confirm never set; typecheck green. Exit-code contract for re-runs: 0 PASS / 1 FAIL / 2 lane / 3 seeding / 4 infra. Evidence: skills/laptop/evidence/2026-09-03-raj2-fidelity/RESULT.md.\nScorecard now 4/4: RAJ-1 FIXED-verified (a8322ad9), RAJ-2 refuted at the model layer (this run), RAJ-3 refuted (92015c75), RAJ-4 FIXED-verified (a8322ad9). Card acceptance met; moving to Ready for human close.\nIMPORTANT by-catch: the run surfaced a NEW tool-layer defect — readEmail can return a STALE reading-pane body (wrong email content for the clicked row), a plausible root cause for the original 06-21 report. Filed as CLWX-46 via the report-bug front door; recommend the settle-on-expected-item guard before GA.",
+          "created": "2026-09-02T20:31:25.958359Z"
+        },
         {
           "text": "RAJ-3 dispositioned: NOT REPRODUCED (targeted scenario, commit 92015c75). scripts/raj3-reply-archive-check.ts: read inbox → open reply on newest message → discard without dispatching → re-read inbox → original still present. Reply flow does not archive the original on current code + outlook.cloud.microsoft.\n\nScorecard: 3 of 4 defects dispositioned. RAJ-1 FIXED (gate false-negative + accidental-refusal error text), RAJ-4 FIXED (verifier misclassified list rows), RAJ-3 REFUTED (not reproducible). Remaining: RAJ-2 (content misread) — tool-layer read fidelity is verified (W3.1/W7.1); the misread was model-layer summarization, so the scenario needs a full LLM turn against a seeded structured email (design: seed meal-preferences email → agent turn \"summarize what this asks\" → assert fidelity). Next lane session or the sprint-driver tick can run it.",
           "created": "2026-09-02T06:52:10.120876Z"
