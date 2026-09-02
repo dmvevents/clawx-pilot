@@ -59,6 +59,75 @@ From flow 6: the Windows chat-turn driver can silently produce zero-frame eviden
 
 Doc-only: hidden-launch Gateway trap (IF-4), moe-principal-assistant path move to resources/extensions on Lane A, Windows Firewall silent-drop breaking nc -z (PF-3 control-leg). All three behaviors are codified as flight checks but the atlas entries were never written — they are the install/runtime debugging front door.
 
+### CLWX-51 — [bug/other] File > New Chat renders a blank window (navigates to /chat; route does not exist)
+
+- **State:** Backlog  |  **Priority:** medium
+
+Area: other   Severity: medium (priority medium)
+
+Steps to reproduce
+TODO: exact steps
+
+Expected
+TODO: what should happen
+
+Actual
+TODO: what happens instead
+
+Evidence
+TODO: log path / screenshot / trace id
+
+Environment
+TODO: build / OS / model
+
+Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
+
+### CLWX-52 — [bug/other] Composer surfaces raw model id in chat UI (hard-rule violation: anonymise model identity)
+
+- **State:** Backlog  |  **Priority:** medium
+
+Area: other   Severity: medium (priority medium)
+
+Steps to reproduce
+TODO: exact steps
+
+Expected
+TODO: what should happen
+
+Actual
+TODO: what happens instead
+
+Evidence
+TODO: log path / screenshot / trace id
+
+Environment
+TODO: build / OS / model
+
+Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
+
+### CLWX-53 — [bug/other] Error banner shows raw HTTP status to the principal ('Model call failed / 400 status code (no body)')
+
+- **State:** Backlog  |  **Priority:** medium
+
+Area: other   Severity: medium (priority medium)
+
+Steps to reproduce
+TODO: exact steps
+
+Expected
+TODO: what should happen
+
+Actual
+TODO: what happens instead
+
+Evidence
+TODO: log path / screenshot / trace id
+
+Environment
+TODO: build / OS / model
+
+Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
+
 ## Unstarted
 
 ### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy

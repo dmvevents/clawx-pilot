@@ -44,6 +44,36 @@
   ],
   "issues": [
     {
+      "id": "1e37b704-8469-4650-b84f-97d2a7a98f20",
+      "sequence_id": 53,
+      "name": "[bug/other] Error banner shows raw HTTP status to the principal ('Model call failed / 400 status code (no body)')",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Area: other   Severity: medium (priority medium)\n\nSteps to reproduce\nTODO: exact steps\n\nExpected\nTODO: what should happen\n\nActual\nTODO: what happens instead\n\nEvidence\nTODO: log path / screenshot / trace id\n\nEnvironment\nTODO: build / OS / model\n\nRegression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)",
+      "comments": []
+    },
+    {
+      "id": "b28c91a8-ffb9-4b72-bf03-7bb39ba9cc8c",
+      "sequence_id": 52,
+      "name": "[bug/other] Composer surfaces raw model id in chat UI (hard-rule violation: anonymise model identity)",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Area: other   Severity: medium (priority medium)\n\nSteps to reproduce\nTODO: exact steps\n\nExpected\nTODO: what should happen\n\nActual\nTODO: what happens instead\n\nEvidence\nTODO: log path / screenshot / trace id\n\nEnvironment\nTODO: build / OS / model\n\nRegression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)",
+      "comments": []
+    },
+    {
+      "id": "32009c0e-597e-46dd-8565-9f7baedf0ae2",
+      "sequence_id": 51,
+      "name": "[bug/other] File > New Chat renders a blank window (navigates to /chat; route does not exist)",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Area: other   Severity: medium (priority medium)\n\nSteps to reproduce\nTODO: exact steps\n\nExpected\nTODO: what should happen\n\nActual\nTODO: what happens instead\n\nEvidence\nTODO: log path / screenshot / trace id\n\nEnvironment\nTODO: build / OS / model\n\nRegression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)",
+      "comments": []
+    },
+    {
       "id": "43db2bc9-fd19-401d-ba29-35ab03344fbd",
       "sequence_id": 50,
       "name": "Write Windows Problems Atlas sections 16-18 (TB-6)",
