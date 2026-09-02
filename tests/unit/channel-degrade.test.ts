@@ -26,6 +26,12 @@ describe('classifyFailure', () => {
       'socket hang up',
       'Failed to fetch',
       'provider unreachable',
+      // The gateway's stalled-provider surface (IDLE-TIMEOUT-RAW, seen live
+      // 2026-05-08): a cloud model that stops answering mid-turn must degrade,
+      // not render the raw string.
+      'LLM idle timeout (60s): no response from model',
+      'llm idle timeout',
+      'no response from model',
     ];
     for (const c of cases) {
       expect(classifyFailure(c), c).toBe('unreachable');

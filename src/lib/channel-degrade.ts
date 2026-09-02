@@ -93,6 +93,12 @@ const UNREACHABLE_PATTERNS: readonly RegExp[] = [
   /(?:provider|gateway|upstream|endpoint|host) unreachable/i,
   /unable to (?:reach|connect)/i,
   /offline/i,
+  // The gateway's stalled-provider surface: "LLM idle timeout (Ns): no
+  // response from model". A cloud model that stops answering mid-turn is a
+  // provider failure from the principal's seat — degrade, don't show the
+  // raw string (IDLE-TIMEOUT-RAW, first seen 2026-05-08).
+  /llm idle timeout/i,
+  /no response from model/i,
 ];
 
 /**
