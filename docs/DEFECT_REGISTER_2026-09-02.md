@@ -15,7 +15,9 @@ were closed by work that landed the same day, after the sweep's read of the tree
 | DRIVER-SETTLE "needs one green run under fixed driver" | Still owed — first Lane-2 run under moe.13 doubles as this regression proof. |
 | CLWX-3 branding "final sweep unrecorded" | **CLOSED @ `dc30f9db`** — sweep run, 3 strings fixed, card at Ready. |
 | CLWX-20 ffmpeg | Verified: packaged path maps exactly to the resolver's first candidate; card at Ready pending one voice-note smoke on the persona VM. |
-| NEW: BOARD-EXPORT-STRIP | The Plane board exporter (`scripts/plane-board-export.mjs`) writes **empty description/comment bodies** for every card — the repo mirror preserves only titles/states/timestamps. Both analyst agents independently hit this. OPEN, group B: the mirror cannot serve as a substance backup until fixed; card substance must be cross-referenced from docs/wiki. |
+| NEW: CH-CLOBBER (boot) | preferredChannel silently reverted to 'online' every boot — a principal's "On this device" choice never survived relaunch (cloud-gateway seed forced online whenever the setting differed). **FIXED@38085ba3** (default only when unset; ships moe.14). Found live on the KR2 moe.13 run; was blocking the KR2 on-device leg. |
+| NEW: EPERM-RENAME (boot) | on-device provider missing from runtime config after first boot: Windows EPERM on the atomic rename while another process held openclaw.json open — the local-provider sync lost the race. **FIXED@38085ba3** (bounded retry on EPERM/EBUSY/EACCES; ships moe.14). Found live in the moe.13 first-boot log. |
+| NEW: BOARD-EXPORT-STRIP | Exporter wrote empty description/comment bodies (titles-only mirror); both analyst agents hit it independently. **FIXED@414bd1d1 + e7ebe8a6** (HTML→text fallback, mandatory secret redaction, 429 backoff); re-export verified 35/35 descriptions + 0 secret hits. Card CLWX-35 at Ready. |
 
 ## A. OPEN and blocking GA (unchecked boxes on the docs/wiki/GA_READINESS.md §4 gate / security floor)
 
@@ -39,7 +41,7 @@ were closed by work that landed the same day, after the sweep's read of the tree
 | ID | Surface | Symptom | Root cause | Status | Source |
 |---|---|---|---|---|---|
 | CLWX-20 | asr | voice-note ffmpeg-not-found on user machines | ffmpeg historically not bundled | Bundled in moe.12+ (packaged-path verified 2026-09-02); one persona-VM voice smoke closes it | Board CLWX-20; Atlas §14 |
-| BOARD-EXPORT-STRIP | tooling | Board mirror JSON/MD carry empty description/comment bodies for every card | Exporter captures titles/states/timestamps only | OPEN — fix `scripts/plane-board-export.mjs` to include bodies (respecting the no-secrets floor) | Both analyst sweeps, 2026-09-02 |
+| BOARD-EXPORT-STRIP | tooling | Board mirror carried empty bodies | *_stripped fields empty on this Plane build | **FIXED@414bd1d1+e7ebe8a6** (fallback + redaction + backoff); CLWX-35 Ready | Both analyst sweeps, 2026-09-02 |
 | ATLAS-15 | forms | forms.preview_* times out; redirect to login.microsoftonline.com | Chrome automation profile not signed in to tenant — auth state, not selectors | OPEN (partial: sign-in interstitial detection shipped; GA path gated on KR7/KR8) | Atlas §15 |
 | KAR-PDF (G6a) | docs | PDF read inconsistencies (Karunesh via Raj, 2026-06-30) — no repro detail | UNKNOWN; mitigations shipped (steering c1b18125, KR1 PASS) | UNVERIFIED vs original report | LIAISON_LOG §C; G6 |
 | DOCSEARCH (G6b) | docs | Document-search inconsistency (2026-07-17) — no repro detail | UNKNOWN | UNVERIFIED | LIAISON_LOG §C |

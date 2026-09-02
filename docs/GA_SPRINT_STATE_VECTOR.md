@@ -31,6 +31,16 @@ board (live state). Ceiling for agents is **Ready**; a human declares GA._
   34 VM+Outlook lane, 18/19 owner security sitting), **12 Cancelled**
   (superseded/obsolete per triage: 1, 2, 4, 5, 9, 11, 13–17, 21).
   **Backlog: zero.**
+- **KR2 fresh-state run executed on moe.13 (VM lane restored).** Gateway
+  ready in **51 s** on fresh state (vs ~285 s+ on moe.11/12) — `61be816e`
+  proven live. Green first turn captured under the fixed driver. TWO new
+  boot defects found live and fixed same-day (`38085ba3`): channel-choice
+  clobber + EPERM rename race. moe.14 built as the re-verify RC. Evidence:
+  `docs/evidence/KR2_FRESH_INSTALL_RUN_2026-09-02.md`. L2 snapshot
+  `clawx-l2-moe12-kr1pass-20260902` READY.
+- **Self-driving loop live:** `.claude/skills/ga-sprint-driver/SKILL.md`
+  (universal tick: sense→analyze→act→sync→report) + durable cron `977942a5`
+  every 6 h (7-day auto-expiry; renew or re-arm via /ga-sprint-driver).
 - **Branding sweep done** (CLWX-3, commit `dc30f9db`): last user-visible
   ClawX/OpenClaw strings removed.
 
