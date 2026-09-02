@@ -44,6 +44,13 @@ board (live state). Ceiling for agents is **Ready**; a human declares GA._
   On-device TURNS don't complete on the e2 VM (CPU starvation) — laptop
   lane remains the on-device turn anchor; new OPEN defect
   ONDEVICE-RETRY-LOOP (no cap on identical failing tool calls).
+- **Sprint-driver tick (cron, 09-02): latency baseline landed (CLWX-43).**
+  15 driver JSONs mined: median successful cloud turn ≈103s on the VM lane —
+  ~7× the proposed p50 ≤15s budget. Raj's twice-volunteered complaint is now
+  quantified (`docs/evidence/LATENCY_BASELINE_2026-09-02.md`); movers =
+  prompt-caching ask #7, trim unhold (owner), routing. CLWX-38 (retry-loop
+  breaker) moved to Ready — fix `fee7294d` had landed with 12/12 tests but
+  the card was never moved.
 - **Outlook lane: gate false-negative CLOSED + migration survived +
   3/4 Raj defects dispositioned (owner-directed stress session).** The
   outlook.cloud.microsoft tenant redirect hit us mid-session and exposed:

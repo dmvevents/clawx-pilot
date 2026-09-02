@@ -265,10 +265,14 @@ FIXED 38085ba3: bounded retry (5×, 100ms backoff) on EPERM/EBUSY/EACCES only. 6
 
 ### CLWX-38 — On-device model retries identical failing tool call with no cap (endless Working)
 
-- **State:** Todo  |  **Priority:** none
+- **State:** Ready  |  **Priority:** none
 
 Found live on the moe.14 KR2 re-verify (2026-09-02): the on-device qwen2.5:3b model called principal.summarise_circular with empty circular_text, received the validation error, and retried the IDENTICAL call for 13+ minutes. There is no per-turn cap on identical failing tool calls, so a compute-constrained model can burn CPU indefinitely and the principal sees an endless Working state.
 Fix directions: plugin-side breaker (after N identical failures return a success-shaped instruction to answer directly) or agent-side identical-failure retry cap. Register: ONDEVICE-RETRY-LOOP. Evidence: docs/evidence/KR2_FRESH_INSTALL_RUN_2026-09-02.md.
+
+**Comments (1):**
+
+- Fix landed earlier this session; card sync (sprint-driver tick). Commit fee7294d: consecutive-identical-failure breaker wraps every registerTool in moe-principal-assistant — after 3 identical failing calls the tool returns a success-shaped STOP instruction (the only signal 3B-class models reliably act on); success/different-args reset the counter. 12/12 plugin tests green including loop-break and reset cases. Live re-verify on the shipped build rides the next installer (moe.15) — the unit contract is the acceptance for this card. Moving to Ready.
 
 ### CLWX-39 — [Graph-B] Flag-gated Entra sign-in on dev loopback (pull-forward)
 
@@ -295,13 +299,6 @@ Follow-ups tracked here: (1) one bridge-download pass to vault the original docu
 
 Raj's clearest explicit feature ask (2026-06-27, NSCC-2026.pdf): have the Code of Conduct in the AI's memory instead of file lookups. He also supplied a FREE stakeholder-authored eval set (NSCC_2026__Test_QnA.docx, 2026-05-14) that was never run. HARD FLAG in the stakeholder sweep — under-built exactly where he asked in plain words.
 Scope: (1) ingest NSCC-2026.pdf as a preloaded knowledge pack (workspace bootstrap doc or persona knowledge section); (2) convert the Q&A doc into an eval fixture and run it; (3) acceptance: fresh session, no file attached, a Code-of-Conduct question answers correctly with an NSCC citation + the Q&A eval passes. Agent-executable now. Source: docs/STAKEHOLDER_REPORT_2026-09-02.md.
-
-### CLWX-43 — Latency budget + measurement (LATENCY-UX -- Raj twice-volunteered complaint)
-
-- **State:** Todo  |  **Priority:** none
-
-Latency is Raj's only twice-volunteered complaint (05-27 field test, 06-27 pre-presentation) and cost a Minister demo slot — yet it exists in our register only as the cause-side KR6 token-floor row. Registered as LATENCY-UX.
-Scope: define a user-facing budget (proposal: p50 ≤15s / p90 ≤30s wall-clock for the 3 demo prompts) and MEASURE on the pilot lane under moe.14 (driver JSONs already timestamp start/finish). Output: a latency row in the GA evidence packet + pass/fail vs budget + the trim/caching implications (asks 4/7 on the session agenda). Agent-executable now.
 
 ### CLWX-44 — Verify-or-fix the 3 missed-by-register defects (exec-noise, idle-timeout, Plaud)
 
@@ -469,6 +466,17 @@ Accept: each defect reproduced-or-refuted against moe.11 with evidence (trace/lo
 - MAJOR triage progress — live stress session on the Mac test.fac lane (owner-directed, 2026-09-02, the day the outlook.cloud.microsoft migration reached our tenant). Per-defect dispositions: - RAJ-1 (subject-gate error, HIGH): ROOT-CAUSED + FIXED (a8322ad9). Two-sided: (a) the "changed after review" branch was a gate FALSE NEGATIVE — a subject-drifted draft actually went out during testing once the pipeline worked end-to-end (self-addressed sandbox message; contained). Historically the path refused by ACCIDENT because post-dispatch verification kept failing — producing exactly the "draft subject has been changed" error Raj saw. (b) Verification now works on the new domain (origin-derived URLs + SPA sidebar navigation). Subject drift now refuses at the hard gate; only body drift (principal edits after review) is allowed. Live 4-step gate proof PASS + 73/73 contract units. - RAJ-4 (text in To: field, LOW): ROOT-CAUSED + FIXED (a8322ad9). The verifier classified inbox message-list ROWS as recipient fields via loose aria-label substring selectors — any list row echoing the draft text (e.g. a reply quoting visible text) failed a correct draft. Recipient wells now require editable fields. Reproduced live, fix verified by the 15/15 eval on the new domain. - RAJ-2 (content misread, MED): PARTIALLY COVERED. Read-fidelity rows (W3.1, W7.1) pass; the specific meal-preferences email no longer exists to replay. Needs a content-fidelity fixture scenario — remaining item. - RAJ-3 (reply archives original, MED): NOT YET REPRODUCED. W5.1 reply-pane row passes; a targeted reply→check-folder scenario is the remaining item. Also: full lane revalidation on outlook.cloud.microsoft (15/15 eval, 3-turn LLM smoke, 4-step gate proof) — the migration itself was the trigger for this defect class, and the lane now survives it. Debug protocol codified in .claude/skills/outlook-lane-debug/SKILL.md. Remaining for Ready: RAJ-2 fixture scenario + RAJ-3 targeted scenario.
 - Card made self-contained (2026-09-02): the four defects Raj reported 2026-06-21 (source: docs/wiki/LIAISON_LOG.md §C — this card was an empty stub until now): - RAJ-1 (HIGH): send fails with "draft subject has been changed before it can be sent" — suspected send-gate false positive; the moe.10 hard-confirm gate likely fixes it but this is UNPROVEN. - RAJ-2 (MED): reply misinterprets email content (meal preferences read as shirt sizes) — extraction/classification, untriaged. - RAJ-3 (MED): reply action archives the original email — unintended side effect, untriaged. - RAJ-4 (LOW): a draft response landed in the "To:" field — one-off; file only if reproducible. Acceptance (GA box #9): each reproduced-or-refuted on moe.13, confirmed ones fixed, with per-defect evidence. Lane: user Chrome CDP + test.fac session on the persona VM (blocked on gcloud auth; plan in earlier comment). Register: docs/DEFECT_REGISTER_2026-09-02.md group A.
 - Lane assessment for the June-21 defect triage: requires the Outlook lane (user Chrome + test.fac session on CDP :18792). Probe on the test VM shows Chrome not running, port 18792 closed — AND the whole VM lane is now blocked on gcloud auth login (owner, interactive). Additionally standing up the test.fac session needs PILOT_TEST_PASSWORD in local operator context at run time (never committed; never for *@moe.gov.tt). Plan when unblocked: launch user Chrome with --remote-debugging-port=18792, sign in test.fac, reproduce each of the 4 reported defects against moe.13, classify reproduced/refuted/fixed-since with per-defect evidence. The persona-base L1 snapshot (docs/VM_TEST_BASE.md) will make this repeatable.
+
+### CLWX-43 — Latency budget + measurement (LATENCY-UX -- Raj twice-volunteered complaint)
+
+- **State:** In Progress  |  **Priority:** none
+
+Latency is Raj's only twice-volunteered complaint (05-27 field test, 06-27 pre-presentation) and cost a Minister demo slot — yet it exists in our register only as the cause-side KR6 token-floor row. Registered as LATENCY-UX.
+Scope: define a user-facing budget (proposal: p50 ≤15s / p90 ≤30s wall-clock for the 3 demo prompts) and MEASURE on the pilot lane under moe.14 (driver JSONs already timestamp start/finish). Output: a latency row in the GA evidence packet + pass/fail vs budget + the trim/caching implications (asks 4/7 on the session agenda). Agent-executable now.
+
+**Comments (1):**
+
+- First-cut measurement DONE (sprint-driver tick, evidence: docs/evidence/LATENCY_BASELINE_2026-09-02.md). All 15 driver JSONs on the persona VM mined: successful tool-using cloud turns 79.6s / 103.4s / 182.2s; no-tool answer 107.9s; median ≈103s — ~7× over the proposed p50 ≤15s budget. Raj's complaint is quantified and current. Caveats: e2 VM ≠ persona laptop; ~9s driver settle tail; small sample. Movers already on the agenda: prompt caching (ask #7), trim unhold (owner), routing. Remaining for Ready: laptop-lane repeat of the 3 demo prompts + owner budget sign-off + GA-packet row.
 
 ## Cancelled
 

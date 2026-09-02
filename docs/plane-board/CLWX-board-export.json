@@ -68,10 +68,15 @@
       "sequence_id": 43,
       "name": "Latency budget + measurement (LATENCY-UX -- Raj twice-volunteered complaint)",
       "priority": "none",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "Latency is Raj's only twice-volunteered complaint (05-27 field test, 06-27 pre-presentation) and cost a Minister demo slot — yet it exists in our register only as the cause-side KR6 token-floor row. Registered as LATENCY-UX.\nScope: define a user-facing budget (proposal: p50 ≤15s / p90 ≤30s wall-clock for the 3 demo prompts) and MEASURE on the pilot lane under moe.14 (driver JSONs already timestamp start/finish). Output: a latency row in the GA evidence packet + pass/fail vs budget + the trim/caching implications (asks 4/7 on the session agenda). Agent-executable now.",
-      "comments": []
+      "comments": [
+        {
+          "text": "First-cut measurement DONE (sprint-driver tick, evidence: docs/evidence/LATENCY_BASELINE_2026-09-02.md). All 15 driver JSONs on the persona VM mined: successful tool-using cloud turns 79.6s / 103.4s / 182.2s; no-tool answer 107.9s; median ≈103s — ~7× over the proposed p50 ≤15s budget. Raj's complaint is quantified and current. Caveats: e2 VM ≠ persona laptop; ~9s driver settle tail; small sample. Movers already on the agenda: prompt caching (ask #7), trim unhold (owner), routing. Remaining for Ready: laptop-lane repeat of the 3 demo prompts + owner budget sign-off + GA-packet row.",
+          "created": "2026-09-02T08:30:33.723225Z"
+        }
+      ]
     },
     {
       "id": "62264ac7-50d1-4349-875e-2a6c66c5245f",
@@ -118,10 +123,15 @@
       "sequence_id": 38,
       "name": "On-device model retries identical failing tool call with no cap (endless Working)",
       "priority": "none",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "Found live on the moe.14 KR2 re-verify (2026-09-02): the on-device qwen2.5:3b model called principal.summarise_circular with empty circular_text, received the validation error, and retried the IDENTICAL call for 13+ minutes. There is no per-turn cap on identical failing tool calls, so a compute-constrained model can burn CPU indefinitely and the principal sees an endless Working state.\nFix directions: plugin-side breaker (after N identical failures return a success-shaped instruction to answer directly) or agent-side identical-failure retry cap. Register: ONDEVICE-RETRY-LOOP. Evidence: docs/evidence/KR2_FRESH_INSTALL_RUN_2026-09-02.md.",
-      "comments": []
+      "comments": [
+        {
+          "text": "Fix landed earlier this session; card sync (sprint-driver tick). Commit fee7294d: consecutive-identical-failure breaker wraps every registerTool in moe-principal-assistant — after 3 identical failing calls the tool returns a success-shaped STOP instruction (the only signal 3B-class models reliably act on); success/different-args reset the counter. 12/12 plugin tests green including loop-break and reset cases. Live re-verify on the shipped build rides the next installer (moe.15) — the unit contract is the acceptance for this card. Moving to Ready.",
+          "created": "2026-09-02T08:30:42.914640Z"
+        }
+      ]
     },
     {
       "id": "d6053840-a7af-4483-adb7-0b8f4c04966a",
