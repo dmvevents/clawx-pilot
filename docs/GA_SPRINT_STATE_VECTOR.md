@@ -1,9 +1,29 @@
 # GA sprint — state vector, parallelization, and flight checks
 
-_Authored 2026-09-02. The operating plan for driving the 8 KRs to GA with
-maximum parallelism and minimum re-debugging. Pairs with `GA_READINESS.md`
-(the GO/NO-GO scorecard) and the Plane board (live state). Ceiling for agents is
-**Ready**; a human declares GA._
+_Authored 2026-09-02; **updated 2026-09-02 (second pass)** after KR1 full PASS,
+KR5 wiring, moe.13 build, and the VM-lane auth outage. The operating plan for
+driving the 8 KRs to GA with maximum parallelism and minimum re-debugging.
+Pairs with `GA_SPRINT_PLAN_2026-09-02.md` (sequencing), `GA_READINESS.md`
+(GO/NO-GO scorecard), `docs/VM_TEST_BASE.md` (persona test base) and the Plane
+board (live state). Ceiling for agents is **Ready**; a human declares GA._
+
+## 0. Delta since first authoring (2026-09-02 second pass)
+
+- **KR1 / CLWX-24 → Ready.** Full in-app PASS on shipped moe.12: tool-select +
+  KFM resolve + parse + faithful summary. Root cause of the earlier fail was a
+  malformed fixture (PS 5.1 backslash ZIP entries), not the product.
+- **KR5 / CLWX-28 → Ready.** Outbox wired to real actions (Outlook send, both
+  form submits), boot drain, restart test. Commit `ebc4be75`.
+- **KR2 / CLWX-25:** slow-ready root cause found + fixed in code
+  (`61be816e`); the fresh-install RECORDING is the remaining acceptance item
+  and is VM-gated.
+- **moe.13 built + signed** (sha256 `a8494ec0…deb3ecf`) carrying all fixes;
+  1230/1230 unit tests, typecheck clean.
+- **VM lane DOWN: `gcloud auth login` expired** (verified: token refresh
+  fails, tunnel resets, no alternate creds). Owner action, ~2 min. Everything
+  VM-dependent is pre-staged and documented on the cards.
+- **Persona test-base designed** (`docs/VM_TEST_BASE.md`): L0/L1/L2 snapshot
+  layers so tests stop running on a hand-tended mutable VM.
 
 ---
 
@@ -45,13 +65,13 @@ named predecessor), **O** = owner-gated (needs a human decision/action).
 |---|---|---|---|---|
 | ~~CLWX-1/24 doc-tooling~~ | KR1 | ✅ **READY 2026-09-02** — full in-app PASS on moe.12: tool-select + KFM resolve + valid-docx parse + faithful summary. Evidence `docs/evidence/KR1_INAPP_RUN_2026-09-02.md`; card in Ready | — | done (human closes) |
 | ~~CLWX-KFM~~ (MOOT) | KR1 | ~~resolver handles OneDrive KFM~~ — already works; parse error proved the file was found+opened | — | closed by evidence, not code |
-| CLWX-2 clean-VM | KR2 | fresh-install → gateway ready → green on-device turn, recorded | **P** | none (VM lane) |
+| CLWX-2 clean-VM | KR2 | code fix ✅ (61be816e, ships in moe.13); fresh-install RECORDING on persona base | **S** | `gcloud auth login` (owner) |
 | CLWX-4 degrade | KR4 | ✅ landed (bde78d94); optional kill-egress e2e | **P** | none |
-| CLWX-5 outbox | KR5 | ✅ code+units; wire a real app action + restart test | **P** | none |
+| ~~CLWX-5 outbox~~ | KR5 | ✅ **READY 2026-09-02** — real actions wired (send + both form submits), boot drain, restart test (`ebc4be75`) | — | done (human closes); drain URL waits on KR8 |
 | CLWX-6 economics | KR6 | trim floor ≤2,500 + per-user caps behind flag | **S/O** | trim unhold (owner) + KR7 for fleet |
 | CLWX-8 ministry | KR8 | ✅ reply sent; working session + real values | **O/S** | Raj (B4) |
 | CLWX-7 identity | KR7 | Entra sign-in → stable UserId in APIM header | **S** | KR8 real values |
-| CLWX-bug | ext-val | Raj's 4 June-21 defects reproduced-or-refuted | **P** | none (Outlook lane) |
+| CLWX-bug | ext-val | Raj's 4 June-21 defects reproduced-or-refuted | **S** | VM lane (gcloud auth) + Outlook session (PILOT_TEST_PASSWORD local) |
 | CLWX-18 | security | public-branch scrub + source/releases split | **O** | owner (destructive) |
 | CLWX-19 | security | rotate `sk-clawx` | **O** | owner |
 
