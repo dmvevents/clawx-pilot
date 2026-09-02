@@ -149,11 +149,16 @@ async function main() {
         result.runErrorText = truncate(await page.locator(SEL.runError).innerText().catch(() => ''), 300);
       }
       if (result.messagesAfter >= result.messagesBefore + 2) {
-        const text = await page.locator(SEL.message).last().innerText().catch(() => '');
-        if (text && text === lastText) {
+        const raw = await page.locator(SEL.message).last().innerText().catch(() => '');
+        const text = raw.replace(/\s+/g, ' ').trim();
+        // Reject "Thinking…"/"Working" placeholders and sub-40-char fragments:
+        // the streaming placeholder is momentarily stable and would otherwise
+        // false-settle the turn (IF-8). Real answers are longer and non-placeholder.
+        const isPlaceholder = /Thinking\s*[.…]|^\s*Working\b/i.test(text) || text.length < 40;
+        if (text && text === lastText && !isPlaceholder) {
           if (stableSince === 0) stableSince = Date.now();
-          // 3 consecutive stable polls (~6s) = streaming finished.
-          if (Date.now() - stableSince >= 6_000) {
+          // 3 consecutive stable polls (~9s) of real content = streaming finished.
+          if (Date.now() - stableSince >= 9_000) {
             result.settled = true;
             result.answerText = truncate(text, 800);
             break;

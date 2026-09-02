@@ -43,7 +43,7 @@ named predecessor), **O** = owner-gated (needs a human decision/action).
 
 | Card | KR | What "done→Ready" needs | Class | Blocked by |
 |---|---|---|---|---|
-| CLWX-1/24 doc-tooling | KR1 | in-app turn returns a real file summary (tool-select + KFM resolve already PROVEN 2026-09-02) | **P** | fixture re-seed + re-run (VM lane) |
+| ~~CLWX-1/24 doc-tooling~~ | KR1 | ✅ **READY 2026-09-02** — full in-app PASS on moe.12: tool-select + KFM resolve + valid-docx parse + faithful summary. Evidence `docs/evidence/KR1_INAPP_RUN_2026-09-02.md`; card in Ready | — | done (human closes) |
 | ~~CLWX-KFM~~ (MOOT) | KR1 | ~~resolver handles OneDrive KFM~~ — already works; parse error proved the file was found+opened | — | closed by evidence, not code |
 | CLWX-2 clean-VM | KR2 | fresh-install → gateway ready → green on-device turn, recorded | **P** | none (VM lane) |
 | CLWX-4 degrade | KR4 | ✅ landed (bde78d94); optional kill-egress e2e | **P** | none |
@@ -57,9 +57,10 @@ named predecessor), **O** = owner-gated (needs a human decision/action).
 
 ### The three lanes
 
-- **Parallel-now (fan out today):** CLWX-KFM (KR1 fix), CLWX-2 (clean VM),
-  CLWX-5 (outbox app-wiring), CLWX-bug (defect triage), CLWX-4 optional hardening.
+- **Parallel-now (fan out today):** CLWX-2 (clean VM), CLWX-5 (outbox
+  app-wiring), CLWX-bug (defect triage), CLWX-4 optional hardening.
   These share no artifacts and can each be a concurrent agent.
+  (KR1 / CLWX-24 landed in Ready 2026-09-02 — full in-app PASS.)
 - **Serial chain (irreducible):** `CLWX-8 (real values) → CLWX-7 (UserId) →
   CLWX-6 fleet-verify`. Nothing collapses this — it waits on Raj, then on a real
   Entra token, then on fleet attribution. Build KR6/KR7 **behind a flag now** so
