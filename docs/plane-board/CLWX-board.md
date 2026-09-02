@@ -260,6 +260,20 @@ Register: docs/DEFECT_REGISTER_2026-09-02.md group B (BOARD-EXPORT-STRIP).
 
 - Fixed same-day. Root cause: this Plane build returns empty *_stripped fields; the exporter now falls back to HTML→text conversion. And the fix surfaced why the bug was load-bearing: with bodies flowing, the leaked test password appeared 3× in CLWX-18's comments — a standing no-secrets-floor violation on the board itself. Response: (1) mandatory redaction pass in the exporter (known literals + generic credential shapes, incl. card titles); (2) the two offending board comments patched at source; (3) re-export verified: 0 secret hits, 35/35 descriptions preserved. Acceptance met: non-empty bodies + clean secret scan. Moving to Ready.
 
+### CLWX-36 — Boot seed silently reverts principal channel choice to online
+
+- **State:** Ready  |  **Priority:** none
+
+Found live on the KR2 moe.13 fresh-install run (2026-09-02): cloud-gateway-provider-seed.ts forced preferredChannel=online on EVERY boot whenever it differed — a principal choosing "On this device" was silently reverted at next launch. Trust-class defect (the anonymised channel UI exists so principals never wonder why the AI changed).
+FIXED 38085ba3: default to online only when no choice exists (undefined/null). Tests updated: respect-existing-choice + fresh-default cases; 5/5 green. Ships in moe.14. Evidence: docs/evidence/KR2_FRESH_INSTALL_RUN_2026-09-02.md §3a.
+
+### CLWX-37 — EPERM race on atomic openclaw.json rename drops first-boot provider sync
+
+- **State:** Ready  |  **Priority:** none
+
+Found live in the moe.13 first-boot log: writeOpenClawConfig's atomic rename threw EPERM while another process held openclaw.json open (Windows share violation — gateway read or AV scan). The local-provider sync lost this race, so the on-device provider never reached models.providers on first boot.
+FIXED 38085ba3: bounded retry (5×, 100ms backoff) on EPERM/EBUSY/EACCES only. 64 config/seed/boot tests green. Ships in moe.14. Evidence: docs/evidence/KR2_FRESH_INSTALL_RUN_2026-09-02.md §3b.
+
 ## Started
 
 ### CLWX-10 — dmvevents/clawx-pilot#10 — Assemble final GA evidence packet
@@ -355,8 +369,9 @@ INFERENCE: install-time RED was payload re-extraction under Defender (131k files
 OPEN QUESTIONS: the assisted-screen end-user flow (not silent /S, not hidden-WinRM) has not been run on a clean VM; Defender real-time scanning still walks the payload (INSTDIR exclusion present, DISABLE_REALTIME=False).
 Accept (KR2): clean Windows VM, assisted installer screens, 0 manual dependency steps, complete tree, both ports bind, gateway healthy — screen recording + exit code 0.
 
-**Comments (3):**
+**Comments (4):**
 
+- KR2 fresh-state run EXECUTED on moe.13 (2026-09-02, VM lane restored). Full evidence: docs/evidence/KR2_FRESH_INSTALL_RUN_2026-09-02.md. - Slow-ready fix proven live: gateway ready in 51 s on completely fresh state vs ~4–5 min baseline on moe.11/12. Bindable model written at first boot. - Green first turn captured under the fixed driver (ANSWERED/settled, real persona answer) — doubles as the DRIVER-SETTLE regression proof. - Two NEW defects found live, fixed same-day (38085ba3): (a) channel-choice clobber — the cloud seed forced preferredChannel=online every boot, silently reverting "On this device"; (b) EPERM race on the atomic config rename that kept the on-device provider out of the runtime config at first boot. - Safety net: L2 disk snapshot clawx-l2-moe12-kr1pass-20260902 READY before any state surgery; installer sha256 verified guest==build host. Remaining for Ready: re-verify on moe.14 (built, carries both fixes): fresh-state boot + on-device green turn (unblocked by fix a), plus the assisted-GUI recording (needs human-at-screen or RDP). The re-verify is now a verification pass, not a debug session.
 - BLOCKED (owner action): VM lane down — gcloud auth expired. Token refresh fails non-interactively; the live IAP tunnel resets on data; a new tunnel cannot start; no alternate service-account credentials exist. Owner must run gcloud auth login (interactive). Verified 3 ways before reporting (test-lane-prober discipline). Ready to execute the moment the lane returns: (1) take the L2 snapshot per docs/VM_TEST_BASE.md — command is written and ready; (2) fresh-state first-boot recording on the guest (backup .openclaw + %APPDATA%, wipe, visible relaunch, timed poll to composer-enabled, one green turn via the fixed chat-turn driver); (3) moe.13 installer (building now on the Mac) carries the slow-ready fix 61be816e for a before/after comparison. Also recommended: a dedicated service account for unattended IAP so token expiry stops killing this lane (design in VM_TEST_BASE.md).
 - Slow-ready root cause found + fixed (contributing cause). On a fresh install the composer stayed disabled ~4–5 min while the gateway ready-fallback loop churned (retryAfterMs≈285000). Traced the boot chain: seedDefaultLocalProvider → runChannelPreflight → ensureBootableAgentsConfig → gateway start. Found a real gap in ensureBootableAgentsConfig: it short-circuited whenever an agents.defaults block existed at all — including an empty {} seeded by a prior boot when preflight resolved no model. A later boot that did resolve a valid modelRef then skipped writing it, leaving the gateway with a bootable-but-unbindable channel → composer disabled until the slow ready-fallback. Fix (commit 61be816e): only short-circuit when the block already carries a bindable model, or when there's no valid modelRef to upgrade with; otherwise write the model into the existing defaults in place. Idempotent. Added a regression test (empty→upgrade→stable); 4 boot-chain + 59 related config/router tests green, typecheck clean. Still owed for this card: the fresh clean-VM install recording (install → gateway ready → green on-device turn) on moe.12. This fix removes one persistent-empty-defaults contributor; the recording is the acceptance evidence. Leaving In Progress.
 - Evidence: skills/laptop/evidence/2026-08-20-moe11-iap-install-trim/verdict.md (all gates), skills/laptop/evidence/2026-08-19-gcp-iap-windows-lane/REPORT.md (lane proof + control leg), commit de8e9759. Lane runner: windows-pilot/vm-testing/gcp-iap-lane.sh.
