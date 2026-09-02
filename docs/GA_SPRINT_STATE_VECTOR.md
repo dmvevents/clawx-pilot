@@ -22,6 +22,12 @@ can host the twin registration against the existing test mailbox — ONE
 owner answer needed (do we hold admin there?). CLWX-39/40 updated with the
 ladder; session card carries the pre-session L1–L4 opportunity._
 
+_01b SENT (owner-authorized, 09-02): the enumerated permissions list +
+dev-redirect-URI ask delivered to Raj (bridge 200, ledgered). **The 07-20
+owed deliverable is cleared — the ball is with the Ministry for the first
+time since July.** Next trigger: Ansari registers the dev URI → ladder
+L1–L4 runs pre-session._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
