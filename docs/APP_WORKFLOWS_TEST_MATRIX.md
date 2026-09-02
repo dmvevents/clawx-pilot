@@ -99,9 +99,12 @@ Status legend: ● proven · ◐ built, partial proof · ○ untested on that pl
 ## 4. Laptop deployment state & gaps
 
 **Where evidence stands:** all Windows evidence is from the **GCP Windows VM**
-`clawx-win-rc-20260609` (over IAP), **not the physical pilot laptop**. moe.12 and
-moe.14 are installed+validated on the VM; **moe.15 (GA candidate) is built but not
-yet installed/smoked on Windows at all.**
+`clawx-win-rc-20260609` (over IAP), **not the physical pilot laptop**. moe.12,
+moe.14 **and now moe.15 (GA candidate)** are installed+validated on the VM:
+moe.15 installed 2026-09-02 (silent `/S`, tree complete, FileVersion
+`0.4.3-moe.15`), gateway boot `RESULT=COMPLETE` on 18789, office write
+`OFFICE_WRITE_OK`. The only unproven moe.15 legs are GUI-session-dependent
+(managed-CDP visual smoke, b2 in-app write turn) — owner's assisted-GUI path.
 
 **GREEN on the VM** (real evidence): Outlook email (read/draft/reply/forward/send
 with the 2-gate), Forms (fill + submit-gate), document **reading** (Word/Excel/PDF
@@ -127,10 +130,16 @@ failures) — the supported path is the assisted GUI install.
 
 ### Gap-closing checklist (to declare the FULL toolset laptop-verified)
 
-- [ ] **A — Install & smoke moe.15 on Windows.** Upload `…-moe.15-win-x64.exe`
-  (`SHA256 d10de580…18df`), assisted GUI install, launch from shortcut, run
-  `pilot-run-installed-gateway-smoke.ps1` + `pilot-managed-cdp-visual-smoke.ps1`.
-  *(This is the highest-leverage item — it re-greens W1–W4/W9 on the GA build.)*
+- [x] **A — Install & smoke moe.15 on Windows.** DONE 2026-09-02 on VM
+  `clawx-win-rc-20260609` (over IAP, silent `/S` — no desktop session available
+  for the assisted GUI path; `quser` empty). Uploaded `…-moe.15-win-x64.exe`
+  (SHA256 verified on the VM `d10de580…18df`), installed (exe FileVersion
+  `0.4.3-moe.15`, tree complete, docx/xlsx/mammoth/playwright-core all present),
+  and ran `pilot-run-installed-gateway-smoke.ps1` → `RESULT=COMPLETE`,
+  `GATEWAY_READY=True` on 18789 (playwright-core regression class clean). The
+  GUI-dependent legs (`pilot-managed-cdp-visual-smoke.ps1`, b2) still need an
+  interactive session — that is the owner's assisted-GUI validation. Evidence:
+  `skills/laptop/evidence/2026-09-02-moe15-install-verify/RESULT.md`.
 - [x] **B (b1) — Document WRITING in the packaged Windows runtime.** DONE
   2026-09-02: `pilot-office-write-smoke.ps1` on VM `clawx-win-rc-20260609`
   returned `STATE: OFFICE_WRITE_OK` — wrote valid .docx (8582 B) + .xlsx

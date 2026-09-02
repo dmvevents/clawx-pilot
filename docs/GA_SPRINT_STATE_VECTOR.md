@@ -49,6 +49,18 @@ underway on the running VM. GHIP #354 (full-toolset laptop-verification card,
 project `c6717c2c`, the GitHub-Issues project — NOT the CLWX board mirrored in
 `docs/plane-board/`) moved Todo → In Progress with evidence._
 
+_**moe.15 GA candidate INSTALLED + smoked on the VM (2026-09-02).**
+`clawx-win-rc-20260609` over IAP: uploaded (SHA256 verified `d10de580…18df`),
+silent `/S` install (no console session for the assisted GUI path; `quser`
+empty), exe FileVersion `0.4.3-moe.15`, tree complete, docx/xlsx/mammoth/
+playwright-core all present. **Gateway boot `RESULT=COMPLETE`** ready on 18789;
+**office write `OFFICE_WRITE_OK`** (.docx 8582 B + .xlsx 16077 B round-trip).
+Gap A DONE; W6/W7 GREEN on the GA build. Remaining moe.15 legs are
+GUI-session-dependent (b2 in-app write turn, managed-CDP visual smoke) plus gap
+C (ASR) and gap D (cron) — owner's assisted-GUI desktop validation. VM stopped
+(TERMINATED) after the run. Evidence:
+`skills/laptop/evidence/2026-09-02-moe15-install-verify/RESULT.md`._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
