@@ -44,6 +44,46 @@
   ],
   "issues": [
     {
+      "id": "71c548f1-ba2b-43cf-b4e4-9b4f7ee9fc94",
+      "sequence_id": 45,
+      "name": "Dropped-ball closeout pack (7 draft-and-hold replies incl. the 07-20 owed deliverable)",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "The stakeholder sweep surfaced 7 dropped balls (unanswered asks, Raj's own reminders confirm several). Scope: DRAFT-AND-HOLD closeout messages into the outbox drafts dir — one per item: HuggingFace model access answer (05-02), Turnitin/Discord delivery (promised 2x), Plaud status, daily-form prompt answer (06-21), demo-verdict ask (G5 — never cite 0/5 without an artifact), NSCC answer (pairs with the NSCC card), and THE OPENER: the permissions list + redirect URI owed to Ansari since 07-20 (per the structural finding, this is what stalled the lane). Nothing sends without explicit owner GO — every draft goes to the ledger flow.",
+      "comments": []
+    },
+    {
+      "id": "22ebec93-c119-4c61-b030-18c7a566b377",
+      "sequence_id": 44,
+      "name": "Verify-or-fix the 3 missed-by-register defects (exec-noise, idle-timeout, Plaud)",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Missed-by-register defects from the stakeholder sweep, now registered OPEN: (a) EXEC-NOISE-LEAK — raw Exec:/python internals rendered in Raj's chat (05-08, trust-facing, never confirmed fixed); criterion: transcript assertion that no tool-frame markup appears in assistant bubbles; (b) IDLE-TIMEOUT-RAW — raw provider timeout surfaced to user; criterion: stalled provider yields a visible on-device degrade answer (bde78d94 adjacent, unverified for this path); (c) PLAUD-ZERO-MIN — recordings indexed 0.0 minutes, fix promised 05-19 and never confirmed (the notes workflow Raj personally tried 3x).\nScope: verify-or-fix each with its criterion on current builds; report per-item disposition. Source: docs/STAKEHOLDER_REPORT_2026-09-02.md + DEFECT_REGISTER rows.",
+      "comments": []
+    },
+    {
+      "id": "341e4a1f-07c5-49c3-859c-743a42229865",
+      "sequence_id": 43,
+      "name": "Latency budget + measurement (LATENCY-UX -- Raj twice-volunteered complaint)",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Latency is Raj's only twice-volunteered complaint (05-27 field test, 06-27 pre-presentation) and cost a Minister demo slot — yet it exists in our register only as the cause-side KR6 token-floor row. Registered as LATENCY-UX.\nScope: define a user-facing budget (proposal: p50 ≤15s / p90 ≤30s wall-clock for the 3 demo prompts) and MEASURE on the pilot lane under moe.14 (driver JSONs already timestamp start/finish). Output: a latency row in the GA evidence packet + pass/fail vs budget + the trim/caching implications (asks 4/7 on the session agenda). Agent-executable now.",
+      "comments": []
+    },
+    {
+      "id": "62264ac7-50d1-4349-875e-2a6c66c5245f",
+      "sequence_id": 42,
+      "name": "NSCC knowledge pack + run the stakeholder-authored Q&A eval",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Raj's clearest explicit feature ask (2026-06-27, NSCC-2026.pdf): have the Code of Conduct in the AI's memory instead of file lookups. He also supplied a FREE stakeholder-authored eval set (NSCC_2026__Test_QnA.docx, 2026-05-14) that was never run. HARD FLAG in the stakeholder sweep — under-built exactly where he asked in plain words.\nScope: (1) ingest NSCC-2026.pdf as a preloaded knowledge pack (workspace bootstrap doc or persona knowledge section); (2) convert the Q&A doc into an eval fixture and run it; (3) acceptance: fresh session, no file attached, a Code-of-Conduct question answers correctly with an NSCC citation + the Q&A eval passes. Agent-executable now. Source: docs/STAKEHOLDER_REPORT_2026-09-02.md.",
+      "comments": []
+    },
+    {
       "id": "1c64bddd-7cea-4118-ab25-8c36199c877c",
       "sequence_id": 41,
       "name": "Stakeholder record: thread extraction + bug/fix/eval correlation report",
@@ -192,6 +232,10 @@
       "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "The redirect URI, app-server reachability, and prompt-caching answers gate CLWX-5/6/7. A drafted reply to Ansari Khan's handoff (2026-08-18) is ready and answers all of Section 6.\nFACTS: docs/MINISTRY_REPLY_DRAFT_2026-08-20.md is complete and UNSENT. It accepts the Docker app-server route (building on services/model-broker), accepts read-only Graph scopes + the Contacts.Read refusal, reverses the earlier drop-PostgreSQL position (PostgreSQL runs in their cloud), and puts the app server in the inference path so the APIM key and client secret live in one Ministry-controlled place rather than on every laptop. The moevault credential link is deliberately unopened (5 accesses, expires ~2026-08-26).\nOPEN QUESTIONS to settle in-session: app-server hostname/reachability (internet-TLS vs iGovTT-only) — the single answer everything else keys off; prompt caching behind APIM (billed against 100M?); UserId oid vs UPN; migration credential mechanism (§4.3); per-user caps at broker vs APIM.\nHARD RULE / owner gate: the reply is DRAFT only. The agent does not send it, does not open the moevault link, does not email Raj/Ministry. Anton's send is the gate.\nAccept (KR8): reply sent (by Anton); working-session notes record the hostname decision, a final redirect URI, and the prompt-caching answer.",
       "comments": [
+        {
+          "text": "Agenda v4 — the structural finding reframes the opener. The full-thread sweep (docs/STAKEHOLDER_REPORT_2026-09-02.md) shows the last inbound on this product (2026-07-20) was Ansari APPROVING the app registration and asking only for the permissions list + redirect URIs — we said \"on it\" and never delivered, while Raj stayed responsive on every other lane through 08-26. The session does not open with our asks; it opens with our owed deliverable.\n\nRevised running order: (0) deliver the permissions list + redirect URI answer (dev-loopback registrable immediately; production URI = the hostname decision) — this is drafted in the closeout pack (CLWX-45, draft-and-hold); (1–9) the nine asks as documented. Also on the table from the sweep: the NSCC knowledge-pack answer (CLWX-42 closes his clearest feature ask before the session), and the latency budget (CLWX-43) since it is his only twice-volunteered complaint.",
+          "created": "2026-09-02T08:26:01.681570Z"
+        },
         {
           "text": "Agenda v2 — liaison-archive sweep merged (docs/MINISTRY_ASKS_2026-09-02.md addendum). Now NINE asks: the five below plus (6) prompt caching on the Foundry deployment — flagged the single highest-leverage economics win (attacks the 7,550-token/turn floor infrastructure-side, independent of the trim unhold); (7) reissue the expired moevault link at the session (short-lived); (8) idempotency/replay contract for the outbox drain; (9) a durable credential-handoff mechanism (the vault-link pattern failed once).\n\nReverse queue (what Raj awaits from US — clear both queues in one sitting): dev egress IPs, a runnable smoke test, secret-management statement, Docker image (moot if ASK 3 ratifies desktop-direct — say so explicitly), UserId proposal (answer: Entra oid, per ASKs 1+2).\n\nTimeline reality: session → 1–2 wks decisions → 2–4 wks provisioning ⇒ late September earliest Ministry connectivity. GA rides our stack; Ministry integration is a post-GA production milestone.",
           "created": "2026-09-02T07:39:04.422740Z"

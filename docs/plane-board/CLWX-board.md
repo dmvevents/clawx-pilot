@@ -289,6 +289,33 @@ docs/MINISTRY_GRAPH_ACCESS_PLAN.md step C: on a clean install with NO Chrome ses
 Full stakeholder record extracted and correlated (docs/STAKEHOLDER_REPORT_2026-09-02.md, commit 0dc85ac9). Source: the bridge store — Raj direct thread (381 msgs, 23 documents, inbound span 2026-04-27→07-20) + two groups. Deliverables: document manifest with product traceability (the 8 capabilities transcribe the 05-12 spec doc; both form pipelines from the 05-14 Term-3 PDFs), REPORTED→FIXED→EVALUATION matrix (every June defect has a runnable criterion: 3 fixed-verified, 1 refuted, 1 open-designed), and the project analysis (product = transcription of Ministry asks; real risk = the 07-20 silence; re-engagement tool = the live-evidence pack).
 Follow-ups tracked here: (1) one bridge-download pass to vault the original document BLOBs (chain-of-custody, CLWX-32-adjacent); (2) splice in the two isolation-agent matrices when they deliver; (3) AI-Textbooks TOR (07-17) acknowledged-as-post-GA on the session agenda.
 
+### CLWX-42 — NSCC knowledge pack + run the stakeholder-authored Q&A eval
+
+- **State:** Todo  |  **Priority:** none
+
+Raj's clearest explicit feature ask (2026-06-27, NSCC-2026.pdf): have the Code of Conduct in the AI's memory instead of file lookups. He also supplied a FREE stakeholder-authored eval set (NSCC_2026__Test_QnA.docx, 2026-05-14) that was never run. HARD FLAG in the stakeholder sweep — under-built exactly where he asked in plain words.
+Scope: (1) ingest NSCC-2026.pdf as a preloaded knowledge pack (workspace bootstrap doc or persona knowledge section); (2) convert the Q&A doc into an eval fixture and run it; (3) acceptance: fresh session, no file attached, a Code-of-Conduct question answers correctly with an NSCC citation + the Q&A eval passes. Agent-executable now. Source: docs/STAKEHOLDER_REPORT_2026-09-02.md.
+
+### CLWX-43 — Latency budget + measurement (LATENCY-UX -- Raj twice-volunteered complaint)
+
+- **State:** Todo  |  **Priority:** none
+
+Latency is Raj's only twice-volunteered complaint (05-27 field test, 06-27 pre-presentation) and cost a Minister demo slot — yet it exists in our register only as the cause-side KR6 token-floor row. Registered as LATENCY-UX.
+Scope: define a user-facing budget (proposal: p50 ≤15s / p90 ≤30s wall-clock for the 3 demo prompts) and MEASURE on the pilot lane under moe.14 (driver JSONs already timestamp start/finish). Output: a latency row in the GA evidence packet + pass/fail vs budget + the trim/caching implications (asks 4/7 on the session agenda). Agent-executable now.
+
+### CLWX-44 — Verify-or-fix the 3 missed-by-register defects (exec-noise, idle-timeout, Plaud)
+
+- **State:** Todo  |  **Priority:** none
+
+Missed-by-register defects from the stakeholder sweep, now registered OPEN: (a) EXEC-NOISE-LEAK — raw Exec:/python internals rendered in Raj's chat (05-08, trust-facing, never confirmed fixed); criterion: transcript assertion that no tool-frame markup appears in assistant bubbles; (b) IDLE-TIMEOUT-RAW — raw provider timeout surfaced to user; criterion: stalled provider yields a visible on-device degrade answer (bde78d94 adjacent, unverified for this path); (c) PLAUD-ZERO-MIN — recordings indexed 0.0 minutes, fix promised 05-19 and never confirmed (the notes workflow Raj personally tried 3x).
+Scope: verify-or-fix each with its criterion on current builds; report per-item disposition. Source: docs/STAKEHOLDER_REPORT_2026-09-02.md + DEFECT_REGISTER rows.
+
+### CLWX-45 — Dropped-ball closeout pack (7 draft-and-hold replies incl. the 07-20 owed deliverable)
+
+- **State:** Todo  |  **Priority:** none
+
+The stakeholder sweep surfaced 7 dropped balls (unanswered asks, Raj's own reminders confirm several). Scope: DRAFT-AND-HOLD closeout messages into the outbox drafts dir — one per item: HuggingFace model access answer (05-02), Turnitin/Discord delivery (promised 2x), Plaud status, daily-form prompt answer (06-21), demo-verdict ask (G5 — never cite 0/5 without an artifact), NSCC answer (pairs with the NSCC card), and THE OPENER: the permissions list + redirect URI owed to Ansari since 07-20 (per the structural finding, this is what stalled the lane). Nothing sends without explicit owner GO — every draft goes to the ledger flow.
+
 ## Started
 
 ### CLWX-10 — dmvevents/clawx-pilot#10 — Assemble final GA evidence packet
@@ -418,8 +445,9 @@ OPEN QUESTIONS to settle in-session: app-server hostname/reachability (internet-
 HARD RULE / owner gate: the reply is DRAFT only. The agent does not send it, does not open the moevault link, does not email Raj/Ministry. Anton's send is the gate.
 Accept (KR8): reply sent (by Anton); working-session notes record the hostname decision, a final redirect URI, and the prompt-caching answer.
 
-**Comments (7):**
+**Comments (8):**
 
+- Agenda v4 — the structural finding reframes the opener. The full-thread sweep (docs/STAKEHOLDER_REPORT_2026-09-02.md) shows the last inbound on this product (2026-07-20) was Ansari APPROVING the app registration and asking only for the permissions list + redirect URIs — we said "on it" and never delivered, while Raj stayed responsive on every other lane through 08-26. The session does not open with our asks; it opens with our owed deliverable. Revised running order: (0) deliver the permissions list + redirect URI answer (dev-loopback registrable immediately; production URI = the hostname decision) — this is drafted in the closeout pack (CLWX-45, draft-and-hold); (1–9) the nine asks as documented. Also on the table from the sweep: the NSCC knowledge-pack answer (CLWX-42 closes his clearest feature ask before the session), and the latency budget (CLWX-43) since it is his only twice-volunteered complaint.
 - Agenda v2 — liaison-archive sweep merged (docs/MINISTRY_ASKS_2026-09-02.md addendum). Now NINE asks: the five below plus (6) prompt caching on the Foundry deployment — flagged the single highest-leverage economics win (attacks the 7,550-token/turn floor infrastructure-side, independent of the trim unhold); (7) reissue the expired moevault link at the session (short-lived); (8) idempotency/replay contract for the outbox drain; (9) a durable credential-handoff mechanism (the vault-link pattern failed once). Reverse queue (what Raj awaits from US — clear both queues in one sitting): dev egress IPs, a runnable smoke test, secret-management statement, Docker image (moot if ASK 3 ratifies desktop-direct — say so explicitly), UserId proposal (answer: Entra oid, per ASKs 1+2). Timeline reality: session → 1–2 wks decisions → 2–4 wks provisioning ⇒ late September earliest Ministry connectivity. GA rides our stack; Ministry integration is a post-GA production milestone.
 - Working-session agenda finalized: docs/MINISTRY_ASKS_2026-09-02.md (2026-09-02). Every handoff placeholder dispositioned. Headline: nothing Ministry-side is connectable today, and for single-school GA nothing needs to be — our broker + sandbox tenant cover every capability (all live-proven this week). The Ministry values buy production economics, identity, and governance. The five asks (leverage order): (1) Entra corrected for desktop — public client + PKCE, loopback redirect http://localhost:53682/auth/callback, delegated read/write/dispatch message scopes, and then only TWO values to hand over (tenant + client id; the client secret is DROPPED, not transmitted); (2) APIM real values + the 429-per-UserId-or-per-key answer; (3) ratify desktop-direct architecture (decision — kills the app-server/PostgreSQL assumption; the KR5 outbox already buffers durably); (4) Forms production destination — Power Automate flow URLs for the two real forms (Tier C, immune to the office.com→cloud.microsoft DOM migration that hit us live this week); (5) session logistics + production accounts. Self-serve in flight meanwhile: CLWX-39 dev-tenant Entra twin makes ASK-1 a config swap.
 - REPLY SENT (owner-authorized, 2026-09-01): condensed WhatsApp version of the Section-6 infra reply delivered to Raj Ramdass. Proof: bridge HTTP 200 {success:true} + message body in bridge.log (recipient masked …3280, thread verified = raj ramdass pre-send). Content (faithful to docs/MINISTRY_REPLY_DRAFT_2026-08-20.md): (1) Docker app-server accepted, model-broker head start, APIM key server-side; (2) keep confidential client, secret lives in app server, redirect URI = https://<app-server-host>/auth/callback + offer to register localhost:53682/callback for dev now; (3) read-only Graph scopes agreed, Contacts.Read refusal endorsed; (4) one-time link expired unopened, reissue requested; (5) 45-min working session requested with Ansari, hostname = item 1. Sent copy ledgered at ~/openclaw-agent/outbound-sent/ (first entry of the outbound ledger — closes gap G15 process fix). Send-guard hook correctly blocked the first attempt on phrase false-positives; reworded, not bypassed. Remaining for Ready: session booked + full written reply emailed. Ball is with Raj (B4).
