@@ -7,6 +7,57 @@ Pairs with `GA_SPRINT_PLAN_2026-09-02.md` (sequencing), `docs/wiki/GA_READINESS.
 (GO/NO-GO scorecard), `docs/VM_TEST_BASE.md` (persona test base) and the Plane
 board (live state). Ceiling for agents is **Ready**; a human declares GA._
 
+## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
+
+Every non-terminal card, its closing action, and who closes it. Three
+buckets; when bucket A is empty and bucket B is done in one sitting, a human
+can defensibly declare GA (bucket C is post-GA by design).
+
+### A. Agent-executable (finish order — no one to wait for)
+
+| Card | Closing action | Size |
+|---|---|---|
+| CLWX-10 GA packet | ✅ assembled this audit (`docs/GA_EVIDENCE_PACKET.md`) → Ready | done |
+| CLWX-41 stakeholder report | ✅ scope delivered (report + matrices + cards) → Ready | done |
+| CLWX-23 timeline | ✅ 09-02 evidence-day appended → Ready | done |
+| CLWX-45 closeout drafts | write the 7 draft-and-hold replies into outbound-drafts | 1 sitting |
+| CLWX-44 missed-defect verify | run the 3 criteria (exec-noise transcript assertion; idle-timeout degrade check; Plaud repro) | 1–2 lanes |
+| CLWX-42 NSCC pack | re-download NSCC-2026.pdf via the bridge → knowledge pack → run the free Q&A eval | 1 lane |
+| CLWX-34 RAJ-2 | seeded structured email → LLM reply → fidelity assertion (Mac Outlook lane) | 1 lane |
+| CLWX-43 latency | laptop-lane 3-prompt repeat (budget sign-off is bucket B) | 1 lane |
+| CLWX-39 Graph dev twin | BFF-model flag-gated sign-in on a dev tenant | 1–2 sittings |
+| moe.15 cut | build + hash + VM install/smoke (carries fee7294d, 97004aa6, a8322ad9) — the GA-tag candidate | 1 sitting |
+
+### B. Owner sitting (~one hour, unblocks GA declaration)
+
+| Item | Action |
+|---|---|
+| CLWX-18 | make repo private / split releases; scrub history (destructive — owner hands) |
+| CLWX-19 | rotate `sk-clawx` (same sitting as 18) |
+| Trim unhold | decide on `7add864b` — now tied to the quantified 103s latency miss |
+| Latency budget | sign off p50/p90 (proposal: 15s/30s) or set another number |
+| KR2 acceptance | accept silent+timed evidence OR schedule the assisted-GUI recording (human-at-screen) |
+| External tester | hand the moe.15 installer + quick-start to one unaided tester |
+| CLWX-45 GO | review the drafts, say GO per item (sends are gated on you) |
+| Human closes | move the 14+ Ready cards to Done as you verify each |
+
+### C. Ministry-gated (post-GA by design — late September earliest)
+
+| Card | Waits on |
+|---|---|
+| CLWX-31 KR8 | the 45-min session (agenda v4 ready; opener = the 07-20 owed deliverable) |
+| CLWX-30 KR7 | asks 1–2 (hostname + redirect) |
+| CLWX-29 KR6 fleet-verify | KR7 + trim/caching answers |
+| CLWX-7 / CLWX-8 | flow URLs / production accounts |
+| CLWX-40 Graph eval | CLWX-39 + ask 1 |
+
+**GA definition per this vector:** bucket A finished + bucket B sitting done
+⇒ all 13 scorecard boxes either checked or explicitly owner-accepted with the
+known-limitations sheet (`GA_EVIDENCE_PACKET.md` §5). Bucket C then becomes
+the production-integration milestone, not a GA blocker.
+
+---
+
 ## 0. Delta since first authoring (2026-09-02 second pass)
 
 - **KR1 / CLWX-24 → Ready.** Full in-app PASS on shipped moe.12: tool-select +

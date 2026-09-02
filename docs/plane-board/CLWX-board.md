@@ -77,6 +77,24 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 - Triage 2026-09-02: Ministry-gated (KR8 family). Production teacher login + support account creation sits with MoE IT. Grouped into the Lane-3 owner packet; unblocks CLWX-34-class triage against production accounts later. Not blocking single-school GA.
 
+### CLWX-10 — dmvevents/clawx-pilot#10 — Assemble final GA evidence packet
+
+- **State:** Ready  |  **Priority:** medium
+
+- Source: dmvevents/clawx-pilot#10
+- Type: Issue
+- State: OPEN
+- Author: dmvevents
+- We owe a response: no
+- Unresolved review threads: 0
+- Days idle: 13
+- Last updated: 2026-08-12
+
+**Comments (2):**
+
+- GA evidence packet ASSEMBLED (finish audit): docs/GA_EVIDENCE_PACKET.md. One index: 3 hashed installers + the L2 snapshot; 8 suite rows (1230/1230 units, 73/73 gate contracts, 15/15 live eval, 4-step gate proof); 9 live in-app evidence rows; defect posture; the 5 known limitations stated plainly (latency 7× over proposed budget, browser-session email until Graph, forms production destination, on-device on laptop-not-VM, RAJ-2 open); security-floor status; and a 30-minute re-verify script block. Pending inside the card: cut moe.15 as the GA-tag candidate. Moving to Ready — a human verifies the index and closes.
+- Triage 2026-09-02: this is the GA close-out card — activating. Assembly plan per docs/GA_SPRINT_PLAN_2026-09-02.md: installer sha256 (moe.13 a8494ec0…deb3ecf), unit evidence (1230/1230 green 2026-09-02), KR evidence index (KR1/KR3/KR4/KR5 Ready today), fresh-install recording (pending VM lane), defect register, known-limitations sheet. Moving to In Progress.
+
 ### CLWX-12 — dmvevents/clawx-pilot#12 — feat(principal-assistant): bundle native document.* tools (Lane A)
 
 - **State:** Ready  |  **Priority:** medium
@@ -128,6 +146,34 @@ Source: local WhatsApp store 2026-06-22. Tier: verified_at_commit (store read 20
 **Comments (1):**
 
 - Triage 2026-09-02: fixed in current builds. Windows builds bundle ffmpeg.exe (electron-builder maps resources/bin/win32-x64 → resources/bin) and the ASR resolver checks exactly that packaged path first (electron/main/asr-ipc.ts); commit befeb43f additionally keeps Windows transcription off the Whisper-only path. Present in moe.12 and moe.13 artifacts. Moving to Ready — voice-note smoke on the persona VM will be part of the moe.13 matrix (CLWX-25 lane).
+
+### CLWX-23 — [CLWX-0] Timeline — ClawX GA work history (chronological spine)
+
+- **State:** Ready  |  **Priority:** none
+
+Purpose: the dated, evidence-anchored spine the OKR anchor and GA_PLAN.md build on. FACTS = in git/docs; INFERENCE labelled.
+FACTS:
+
+- 2026-06-09/10 — Windows RC line: seeded VM release proof, Microsoft-365 bootstrap installer, model-gateway seed required in release builds (b4e6ccde, 82c7c04c, 059bb8f5).
+- 2026-06-22/23 — Outlook "Green" RC hardening: send/draft/reply stabilised, same-session hard-confirm gate, RC installer moe.10 built (b38b6208 line; installer sha256 e35ee6cd, built 2026-06-23).
+- 2026-07-25 — Native document.* tools land (98e805d8); 5-prompt harness scaffold (bf6c0d26, 8710784f); windows-installer-e2e.yml scaffold (2d4e318a).
+- 2026-07-27 — Harness E2E + windows-installer-e2e merged into Lane A (e4eccf57, 1fea016a); lint/skills CI unblocked.
+- 2026-07-31 — Consolidated Windows laptop knowledge pack (afff7f15); clean-slate rebuild surfaces BUG-012 first-run crash (0fb4918e); PowerShell BOM regression (9311f107).
+- 2026-08-01 — BUG-012 fixed: bootable agents block on fresh install (fc435c6b).
+- 2026-08-03 — On-device tool-catalog trim to stop tool-cascade hang (7add864b, branch fix/tool-catalog-trim); Windows install NO-GO on on-device chat documented (18383948).
+- 2026-08-19 — GCP IAP Windows test lane established, EC2 lane retired as IAM-dead (gcp-iap-windows-lane REPORT). Static-IP question dissolved.
+- 2026-08-20 — Ministry-supplied 0/5 transcript committed (794cce74); doc-tooling steering+discovery fix (c1b18125); 6-lane tool-selection eval (73514b4f); moe.11 built + installs clean over IAP, trim verified live 6/6→4/6→0/6 (de8e9759, verdict.md); Ministry reply drafted UNSENT (7dfb43d9), rebuilt around app server accepting PostgreSQL (78fd6fe0); offline made an explicit reply constraint (fbb3743a); scale analysis vs 200 schools (982fd5d4); offline design doc + lane G egress-guard (c45c5bc4, c9f1aa34).
+- 2026-08-21 — Cloud→on-device send-time degradation shipped + tested (bde78d94; 25 unit tests + lane G G-degrade-classify). HEAD of branch fix/doc-tooling-steering.
+INFERENCE: the doc-tooling capability gap closed 2026-07-25 but the steering gap stayed open into 2026-08-20; on a fresh install the auto-enabled pdf skill still told the model to reach for Python. c1b18125 closes it in config + eval, but no in-app LLM run has confirmed it against Raj's exact fixtures.
+OPEN QUESTIONS: moe.11 has never been through an assisted-screen clean-VM end-user install (only silent /S and IAP); OneDrive-redirected Desktop discovery is unverified on Windows.
+Accept: timeline stays current with each shippable commit; it is the reference for every workstream card's evidence.
+
+**Comments (4):**
+
+- Timeline brought current (f9fe6563): the 2026-09-02 evidence-day section appended to docs/project-history/TIMELINE.md (KR1/KR2 live proofs, the Outlook migration + gate false-negative, forms fill, the stakeholder record + structural finding, latency quantified). The chronological spine is current through today. Ready.
+- Timeline append 2026-09-02: KR1 full in-app PASS on moe.12 (fixture root cause: PS 5.1 backslash ZIP entries); KR2 slow-ready root cause fixed (61be816e); KR5 outbox wired to real actions (ebc4be75); branding sweep (dc30f9db); moe.13 built + signed; VM_TEST_BASE.md + GA_SPRINT_PLAN_2026-09-02.md authored; board fully triaged (10 Ready); VM lane blocked on gcloud reauth (owner).
+- Two-project separation confirmed (2026-09-01). Raj Ramdass = ClawX ICT liaison AND curriculum-video coordinator (two hats, one person). Karunesh Ramdass tests both (ClawX Windows RC + video generator) but the video workstream is not in this repo. Enforced by the ministry-liaison-monitor skill/agent. Full history persisted: docs/project-history/TIMELINE.md; board backup: docs/plane-board/.
+- Evidence: git log on branch fix/doc-tooling-steering, HEAD bde78d94. Commit shas cited inline are all present on the pilot remote per gcp-iap-windows-lane REPORT F9. Docs: verdict.md, gcp-iap-windows-lane/REPORT.md, OFFLINE_ARCHITECTURE.md, SCALE_ANALYSIS_2026-08-20.md, raj-prompt-replay/REPORT.md.
 
 ### CLWX-24 — [CLWX-1] Verify doc-tooling steering in a live in-app LLM run (Raj's 5 prompts + discovery)
 
@@ -288,10 +334,14 @@ docs/MINISTRY_GRAPH_ACCESS_PLAN.md step C: on a clean install with NO Chrome ses
 
 ### CLWX-41 — Stakeholder record: thread extraction + bug/fix/eval correlation report
 
-- **State:** Todo  |  **Priority:** none
+- **State:** Ready  |  **Priority:** none
 
 Full stakeholder record extracted and correlated (docs/STAKEHOLDER_REPORT_2026-09-02.md, commit 0dc85ac9). Source: the bridge store — Raj direct thread (381 msgs, 23 documents, inbound span 2026-04-27→07-20) + two groups. Deliverables: document manifest with product traceability (the 8 capabilities transcribe the 05-12 spec doc; both form pipelines from the 05-14 Term-3 PDFs), REPORTED→FIXED→EVALUATION matrix (every June defect has a runnable criterion: 3 fixed-verified, 1 refuted, 1 open-designed), and the project analysis (product = transcription of Ministry asks; real risk = the 07-20 silence; re-engagement tool = the live-evidence pack).
 Follow-ups tracked here: (1) one bridge-download pass to vault the original document BLOBs (chain-of-custody, CLWX-32-adjacent); (2) splice in the two isolation-agent matrices when they deliver; (3) AI-Textbooks TOR (07-17) acknowledged-as-post-GA on the session agenda.
+
+**Comments (1):**
+
+- Scope delivered in full: report committed (0dc85ac9 + b593399d) with both agent matrices spliced (16-row REPORTED→FIXED→EVAL correlation, 26-document chronology, feature-extensiveness verdicts, the structural finding, 4 missed defects registered, 7-item dropped-ball list); action cards CLWX-42–45 created; agenda v4 reframed on CLWX-31. Follow-on work lives on its own cards. Ready.
 
 ### CLWX-42 — NSCC knowledge pack + run the stakeholder-authored Q&A eval
 
@@ -314,23 +364,6 @@ Scope: verify-or-fix each with its criterion on current builds; report per-item 
 The stakeholder sweep surfaced 7 dropped balls (unanswered asks, Raj's own reminders confirm several). Scope: DRAFT-AND-HOLD closeout messages into the outbox drafts dir — one per item: HuggingFace model access answer (05-02), Turnitin/Discord delivery (promised 2x), Plaud status, daily-form prompt answer (06-21), demo-verdict ask (G5 — never cite 0/5 without an artifact), NSCC answer (pairs with the NSCC card), and THE OPENER: the permissions list + redirect URI owed to Ansari since 07-20 (per the structural finding, this is what stalled the lane). Nothing sends without explicit owner GO — every draft goes to the ledger flow.
 
 ## Started
-
-### CLWX-10 — dmvevents/clawx-pilot#10 — Assemble final GA evidence packet
-
-- **State:** In Progress  |  **Priority:** medium
-
-- Source: dmvevents/clawx-pilot#10
-- Type: Issue
-- State: OPEN
-- Author: dmvevents
-- We owe a response: no
-- Unresolved review threads: 0
-- Days idle: 13
-- Last updated: 2026-08-12
-
-**Comments (1):**
-
-- Triage 2026-09-02: this is the GA close-out card — activating. Assembly plan per docs/GA_SPRINT_PLAN_2026-09-02.md: installer sha256 (moe.13 a8494ec0…deb3ecf), unit evidence (1230/1230 green 2026-09-02), KR evidence index (KR1/KR3/KR4/KR5 Ready today), fresh-install recording (pending VM lane), defect register, known-limitations sheet. Moving to In Progress.
 
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA
 
@@ -361,8 +394,9 @@ P5 read image"pytesseract and Pillow are required"document.read_image (base64 to
 Discovery"I couldn't find any files in that folder"breadth-first findWithinDir (c1b18125); OneDrive Desktop still unhandledeval lane; Windows OneDrive path UNVERIFIED
 Accept (GA): every KR above GREEN with cited evidence, and a human closes each workstream card. No card reaches Done by the agent.
 
-**Comments (7):**
+**Comments (8):**
 
+- FINISH VECTOR published (audit 2026-09-02) — docs/GA_SPRINT_STATE_VECTOR.md top section + docs/GA_EVIDENCE_PACKET.md. Three buckets: - A — agent-executable (no waiting): 3 done this audit (GA packet, stakeholder report, timeline — all Ready); remaining: closeout drafts (45), missed-defect verifies (44), NSCC pack (42), RAJ-2 scenario (34), laptop latency (43), Graph dev twin (39), and the moe.15 cut — the GA-tag candidate carrying the retry-breaker + KFM + Outlook-gate fixes. - B — ONE owner sitting (~an hour) unblocks GA: CLWX-18 scrub + CLWX-19 rotation, trim unhold (now tied to the quantified 103s latency miss), latency budget sign-off, KR2 acceptance-or-recording decision, hand moe.15 to one external tester, GO on the closeout drafts, and closing the 17 Ready cards as you verify them. - C — Ministry-gated = post-GA by design (session agenda v4 ready; late-September earliest connectivity). GA per this vector: bucket A finished + bucket B sitting done ⇒ all 13 scorecard boxes checked or explicitly owner-accepted against the known-limitations sheet.
 - Analyst-team synthesis integrated (2026-09-02, second addendum). - Authoritative GA bar located and aligned: docs/wiki/GA_READINESS.md §4, 13 boxes. Current: 2 CHECKED (KR3, KR4), 2 more at Ready with evidence (KR1 — with a "6/6 vs 1-live-prompt" nuance for the closer, noted on CLWX-24 — and KR5). Full mapping in docs/GA_SPRINT_PLAN_2026-09-02.md. - Defect register landed: docs/DEFECT_REGISTER_2026-09-02.md — 48 entries; post-delta: 11 open-blocking (4 Raj defects, 2 security-floor, KR2 recording, KR6 trim-hold, KR7/KR8 Ministry, external tester), 12 open non-blocking, 4 fixed-awaiting-shipped-regression, 22 closed. - CLWX-35 filed and fixed same-day: board exporter wrote titles-only mirrors; fix surfaced the test password sitting in CLWX-18 comments — redacted at source + mandatory redaction in the exporter. Ready. - CLWX-34 made self-contained (was an empty stub; the four defects lived only in the liaison log). - Highest-leverage next cycle: ONE Lane-2 VM session under moe.13 retires four register rows at once (KR2 recording, driver-settle regression proof, CLWX-20 voice smoke, Raj-defect triage staging). Sole gate: owner runs gcloud auth login. - Pull-forward available: build KR7 Entra sign-in behind a flag against the dev-loopback redirect now, so Raj's real values become a config swap instead of a build.
 - Sprint status 2026-09-02 — GA push, second pass. - Ready today: CLWX-24 (KR1, full in-app PASS), CLWX-28 (KR5, outbox wired + restart test), CLWX-3 (branding sweep), CLWX-6 (send double-gate, evidence), CLWX-12 (document tools live-proven), CLWX-20 (ffmpeg bundled) — joining CLWX-26/27/32/33. 10 cards at Ready. - moe.13 built + signed (sha256 a8494ec0…deb3ecf): boot slow-ready fix, outbox wiring, fixed seeder, driver fix. 1230/1230 unit tests. - Reproducible testing designed: docs/VM_TEST_BASE.md (persona L0/L1/L2 snapshot layers). Sprint plan: docs/GA_SPRINT_PLAN_2026-09-02.md. - Single hard blocker for all VM evidence: gcloud auth expired — owner runs gcloud auth login (~2 min), then Lane 2 executes: snapshot → moe.13 install + fresh-boot recording (CLWX-25) → Outlook lane → Raj defect triage (CLWX-34). - Owner packet: CLWX-18/19 security scrub+rotation (one sitting), trim unhold (KR6), Raj values (KR7/KR8), GA-scope decision on KR6–KR8 (fleet-scale vs single-school GA).
 - GA gate defined (docs/wiki/GA_READINESS.md, commit follows f99f2c1f): single GO/NO-GO document now exists — 15-row chronological gap/feedback ledger (G1-G15, each dated + sourced + mitigated), full test-evidence table, and a falsifiable checklist: 8 KR boxes (KR3+KR4 already checked), 2 external-validation boxes (Raj defect triage, tester download path), 2 security boxes (public-branch password scrub, key rotation), 2 hygiene boxes (green suite at tag, evidence packet). Critical path: (1) interactive gcloud auth login [gcloud SDK now INSTALLED — CLWX-9 install-half done], (2) IAP VM run flips KR1+KR2+defect triage, (3) build KR5 outbox, (4) owner: send Ministry reply + unhold trim, (5) KR6/KR7 behind flag, (6) evidence packet. Human declares GA; agent ceiling stays Ready.
@@ -370,33 +404,6 @@ Accept (GA): every KR above GREEN with cited evidence, and a human closes each w
 - GA execution plan committed 2026-09-01 — docs/GA_EXECUTION_PLAN_2026-09-01.md (repo f9fdbfd1). Ground truth: code GREEN (typecheck 0; unit 1197 pass / 6 skip / 0 fail; eval 61 PASS / 0 FAIL / 9 SKIP; doc-tooling harness 5/5). Local runtime RED but self-serviceable (~2 min: app+ports down). Windows GCP-IAP lane operator-gated (needs gcloud on the Mac). Self-test cron ran fresh today: local=pass, cloud=reachable, canaries 3/3; overall=fail only because app not running. Three parallel lanes: - Lane A (zero-dependency, start now): KR1 doc-tooling in-app + OneDrive/KFM resolveReadablePath fix (CLWX-1); KR2 clean-VM install recording (CLWX-2); revive self-test cron. - Lane B (code-only offline/resilience): KR4 degrade->on-device feat landed (bde78d94) — needs an egress-kill acceptance test; KR5 outbox (CLWX-5) closes KR3 gap 1; then re-verify KR3 (CLWX-3). - Lane C (serial, owner-gated): KR8 send Section-6 infra reply (CLWX-8) -> unlocks real APIM hostname -> KR7 Entra + UserId (CLWX-7) -> KR6 per-user caps (CLWX-6). Build behind a flag; verify when hostname lands. Blocker taxonomy: B0 self-serviceable / B1 artifact-on-disk / B2 tooling-gap / B3 owner-decision / B4 external-party. Only B3+B4 are real blockers; probe before declaring blocked. Standing security (urgent, off-KR): CLWX-18 repo public (liaison phone redacted in working tree, commit a1ff2cc7; two unpushed commits still carry it in history — scrub before push); CLWX-19 sk-clawx key un-rotated. Bug front door: node scripts/report-bug.mjs. Board backup: docs/plane-board/. Ceiling stays Ready — no card moved to Done.
 - Progress 2026-09-01. Code health GREEN: pnpm typecheck exit 0; unit tests 1197 passed / 6 skipped / 0 failed (156 files). New this session: project-history folder, CLWX board backup in-repo (docs/plane-board/), ministry-liaison send skill + WhatsApp send-guard hook, Raj note delivered. Commits 083f8857, 31b74822. Next: GA execution plan (parallel workstreams + bug-reporting + acceptance criteria).
 - Evidence: 0/5 transcript = commit 794cce74 (incoming-tests/ClawX Agent Tests/Prompt Tests.docx + CHAT-001*.png; CHAT-001-6.png shows the Python-cascade tool trace). Fixes = 98e805d8 (native tools), c1b18125 (steering+discovery), 73514b4f (eval). Windows = skills/laptop/evidence/2026-08-20-moe11-iap-install-trim/verdict.md. Offline/degrade = docs/OFFLINE_ARCHITECTURE.md + bde78d94. Scale = docs/SCALE_ANALYSIS_2026-08-20.md. Ministry reply (UNSENT) = docs/MINISTRY_REPLY_DRAFT_2026-08-20.md (7dfb43d9).
-
-### CLWX-23 — [CLWX-0] Timeline — ClawX GA work history (chronological spine)
-
-- **State:** In Progress  |  **Priority:** none
-
-Purpose: the dated, evidence-anchored spine the OKR anchor and GA_PLAN.md build on. FACTS = in git/docs; INFERENCE labelled.
-FACTS:
-
-- 2026-06-09/10 — Windows RC line: seeded VM release proof, Microsoft-365 bootstrap installer, model-gateway seed required in release builds (b4e6ccde, 82c7c04c, 059bb8f5).
-- 2026-06-22/23 — Outlook "Green" RC hardening: send/draft/reply stabilised, same-session hard-confirm gate, RC installer moe.10 built (b38b6208 line; installer sha256 e35ee6cd, built 2026-06-23).
-- 2026-07-25 — Native document.* tools land (98e805d8); 5-prompt harness scaffold (bf6c0d26, 8710784f); windows-installer-e2e.yml scaffold (2d4e318a).
-- 2026-07-27 — Harness E2E + windows-installer-e2e merged into Lane A (e4eccf57, 1fea016a); lint/skills CI unblocked.
-- 2026-07-31 — Consolidated Windows laptop knowledge pack (afff7f15); clean-slate rebuild surfaces BUG-012 first-run crash (0fb4918e); PowerShell BOM regression (9311f107).
-- 2026-08-01 — BUG-012 fixed: bootable agents block on fresh install (fc435c6b).
-- 2026-08-03 — On-device tool-catalog trim to stop tool-cascade hang (7add864b, branch fix/tool-catalog-trim); Windows install NO-GO on on-device chat documented (18383948).
-- 2026-08-19 — GCP IAP Windows test lane established, EC2 lane retired as IAM-dead (gcp-iap-windows-lane REPORT). Static-IP question dissolved.
-- 2026-08-20 — Ministry-supplied 0/5 transcript committed (794cce74); doc-tooling steering+discovery fix (c1b18125); 6-lane tool-selection eval (73514b4f); moe.11 built + installs clean over IAP, trim verified live 6/6→4/6→0/6 (de8e9759, verdict.md); Ministry reply drafted UNSENT (7dfb43d9), rebuilt around app server accepting PostgreSQL (78fd6fe0); offline made an explicit reply constraint (fbb3743a); scale analysis vs 200 schools (982fd5d4); offline design doc + lane G egress-guard (c45c5bc4, c9f1aa34).
-- 2026-08-21 — Cloud→on-device send-time degradation shipped + tested (bde78d94; 25 unit tests + lane G G-degrade-classify). HEAD of branch fix/doc-tooling-steering.
-INFERENCE: the doc-tooling capability gap closed 2026-07-25 but the steering gap stayed open into 2026-08-20; on a fresh install the auto-enabled pdf skill still told the model to reach for Python. c1b18125 closes it in config + eval, but no in-app LLM run has confirmed it against Raj's exact fixtures.
-OPEN QUESTIONS: moe.11 has never been through an assisted-screen clean-VM end-user install (only silent /S and IAP); OneDrive-redirected Desktop discovery is unverified on Windows.
-Accept: timeline stays current with each shippable commit; it is the reference for every workstream card's evidence.
-
-**Comments (3):**
-
-- Timeline append 2026-09-02: KR1 full in-app PASS on moe.12 (fixture root cause: PS 5.1 backslash ZIP entries); KR2 slow-ready root cause fixed (61be816e); KR5 outbox wired to real actions (ebc4be75); branding sweep (dc30f9db); moe.13 built + signed; VM_TEST_BASE.md + GA_SPRINT_PLAN_2026-09-02.md authored; board fully triaged (10 Ready); VM lane blocked on gcloud reauth (owner).
-- Two-project separation confirmed (2026-09-01). Raj Ramdass = ClawX ICT liaison AND curriculum-video coordinator (two hats, one person). Karunesh Ramdass tests both (ClawX Windows RC + video generator) but the video workstream is not in this repo. Enforced by the ministry-liaison-monitor skill/agent. Full history persisted: docs/project-history/TIMELINE.md; board backup: docs/plane-board/.
-- Evidence: git log on branch fix/doc-tooling-steering, HEAD bde78d94. Commit shas cited inline are all present on the pilot remote per gcp-iap-windows-lane REPORT F9. Docs: verdict.md, gcp-iap-windows-lane/REPORT.md, OFFLINE_ARCHITECTURE.md, SCALE_ANALYSIS_2026-08-20.md, raj-prompt-replay/REPORT.md.
 
 ### CLWX-25 — [CLWX-2] Windows moe.11 unattended clean-VM install (assisted-screen supported flow)
 
