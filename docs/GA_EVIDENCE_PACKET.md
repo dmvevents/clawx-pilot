@@ -23,7 +23,7 @@ to stamp it — then it is the tag.
 | Suite | Result | Where |
 |---|---|---|
 | Typecheck | clean | every commit this sprint |
-| Unit tests | **1230/1230** (6 intentional platform/pilot skips, inspected) | full run 2026-09-02 |
+| Unit tests | **1235/1235** at HEAD (6 intentional platform/pilot skips) — the prod audit caught 4 stale domain assertions post-a8322ad9; fixed same day | full run 2026-09-02 (post-audit) |
 | Outlook safety contracts | 73/73 (incl. inverted subject-gate contract) | `tests/unit/outlook-actions-safety.test.ts` |
 | Outlook live eval | **15/15 on outlook.cloud.microsoft** | `scripts/v2-eval.ts` |
 | Send-gate live proof | 4-step PASS (draft / mismatch REFUSED / matching send delivered) | `scripts/v2-send-test.ts` |

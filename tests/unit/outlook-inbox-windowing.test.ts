@@ -274,7 +274,10 @@ describe('Outlook inbox windowing', () => {
 
     await actions.ensureInboxFolder(page as never);
 
-    expect(page.goto).toHaveBeenCalledWith('https://outlook.office.com/mail/inbox', expect.any(Object));
+    // Same-origin navigation (a8322ad9): the tab lives on
+    // outlook.cloud.microsoft, so the inbox reset must stay on that origin —
+    // a cross-origin goto to office.com mid-session dies with ERR_ABORTED.
+    expect(page.goto).toHaveBeenCalledWith('https://outlook.cloud.microsoft/mail/inbox', expect.any(Object));
   });
 
   it.each([
@@ -289,7 +292,10 @@ describe('Outlook inbox windowing', () => {
 
     await actions.ensureInboxFolder(page as never);
 
-    expect(page.goto).toHaveBeenCalledWith('https://outlook.office.com/mail/inbox', expect.any(Object));
+    // Same-origin navigation (a8322ad9): the tab lives on
+    // outlook.cloud.microsoft, so the inbox reset must stay on that origin —
+    // a cross-origin goto to office.com mid-session dies with ERR_ABORTED.
+    expect(page.goto).toHaveBeenCalledWith('https://outlook.cloud.microsoft/mail/inbox', expect.any(Object));
   });
 
   it('refuses to parse visible rows when Inbox cannot be confirmed after navigation', async () => {

@@ -20,15 +20,15 @@
 |---|---|---|---|
 | 1.1 | In-process seeder exists | `ls electron/main/gateway-plugin-config-seed.ts` | ✅ |
 | 1.2 | Seeder wired before gateway start | `grep -n "seedGatewayPluginConfig" electron/main/index.ts` shows call inside `if (!isE2EMode)` block | ✅ |
-| 1.3 | Seeder tests green | `pnpm test tests/unit/gateway-plugin-config-seed.test.ts` → 8/8 | ✅ |
-| 1.4 | Recovery protocol documented | `/tmp/gateway-recovery-protocol.md` exists | ✅ |
+| 1.3 | Seeder tests green | `pnpm test tests/unit/gateway-plugin-config-seed.test.ts` → 9/9 | ✅ |
+| 1.4 | Recovery protocol documented | `.claude/agents/gateway-recovery.md` (in-repo; /tmp copy wiped — /tmp is not durable evidence) | ✅ |
 | 1.5 | `~/.openclaw/openclaw.json` valid | both `microsoft-graph` and `moe-principal-assistant` blocks schema-valid | ✅ |
 
 ## 2 · Skill bundle parity
 
 | # | Check | How to verify | State |
 |---|---|---|---|
-| 2.1 | `bundles.json` advertises 17 skills | `jq '.bundles[0].skills \| length' resources/skills/bundles.json` → 17 | ✅ |
+| 2.1 | `bundles.json` advertises 16 skills | `jq '.bundles[0].skills \| length' resources/skills/bundles.json` → 16 (parity 16/16, comm diff empty) | ✅ |
 | 2.2 | Manifest seeds all 17 (modulo platform gating) | `jq '.skills \| length' resources/skills/preinstalled-manifest.json` → 17 | ✅ |
 | 2.3 | Darwin-only skills tagged | `jq '.skills[] \| select(.platforms != null)' resources/skills/preinstalled-manifest.json` → imsg only (bluebubbles dropped 2026-05-20: not in openclaw/openclaw upstream) | ✅ |
 | 2.4 | `platforms` field honored at install time | `electron/utils/skill-config.ts` filters by `process.platform` before deploy | ✅ |
@@ -108,11 +108,11 @@ See `docs/WINDOWS_DEPLOY.md` for the full plan and `docs/FIRST_RUN_GUIDE.md` for
 
 | # | Check | Action owner | State |
 |---|---|---|---|
-| 10.1 | Entra app-registration packet sent to MoE IT | `/tmp/moe-entra-app-registration-request.md` | ⚠️ pending |
-| 10.2 | At least one cloud upstream key rotated | `/tmp/router-key-rotation.md` | ⚠️ pending |
+| 10.1 | Entra app-registration packet sent to MoE IT | `docs/MINISTRY_INFRA_HANDOFF_2026-08-18.md` + outbound ledger (reply SENT 2026-09-01); asks agenda `docs/MINISTRY_ASKS_2026-09-02.md` | ⚠️ awaiting Raj values |
+| 10.2 | At least one cloud upstream key rotated | CLWX-19 (`sk-clawx`) — owner sitting; commit a rotation runbook with it | ❌ owner |
 | 10.3 | Windows laptop available for smoke test | Windows RC harness produced installed-app evidence on 2026-06-05 | ✅ |
 | 10.4 | Ollama installable on target laptop | https://ollama.com/download/windows | ✅ available |
-| 10.5 | `hermes3:8b` reachable from target network | network policy | ⚠️ verify |
+| 10.5 | On-device model reachable (`qwen2.5:3b-instruct` — shipped default; hermes3 superseded) | ollama /api/tags on target | ✅ (VM turns 09-02) |
 
 ## 11 · Online model broker
 
@@ -140,3 +140,4 @@ After every audit, append a one-line verdict:
 - 2026-05-20 (PM) — VERDICT: **YELLOW** — channel-routes flake closed (full vitest 781/781), seeder hardened for first-run-from-zero (writes skeleton instead of skipping ENOENT), bluebubbles removed from manifest+bundles (not present upstream — was the Windows build blocker). Skill count down to 17. Logo, telemetry, Entra still pending. Pilot-deployable.
 - 2026-06-05 — VERDICT: **YELLOW** — Windows installed-app RC evidence is green for safe Outlook/Forms/Downloads procedures, and model-broker code/tests are present. Pilot production is still blocked on deployed broker configuration, rerun of the new teacher Daily Report guardrail scenario, clean installer smoke, logo, telemetry, and Entra/fleet items.
 - 2026-06-23 — VERDICT: **YELLOW** — email draft/reply regressions are locally green for compose, reply, reply-all, forward, and scoped test-draft cleanup; rebuilt installer `e35ee6...` is ready for prerelease upload, but current-asset installed Windows proof, Forms preview, Office installed-app chat matrix, ASR smoke, logo, telemetry, and Entra/fleet items remain open.
+- 2026-09-02 — VERDICT: **YELLOW — pilot-deployable; GA gated on the owner sitting + external tester.** Audit (prod-auditor + finish audit): stale outlook-inbox-windowing assertions fixed — full vitest **1235/1235** at HEAD; 11.4/11.5 effectively flipped (broker live, serving installed-app turns with KR1/KR2 evidence). GA scorecard: KR1/KR3/KR4/KR5 evidence GREEN; KR2 YELLOW (recording-or-acceptance decision owed); remaining REDs are owner (CLWX-18/19, trim, external tester, KR2 decision) or Ministry (KR6-fleet/KR7/KR8). Evidence index: `docs/GA_EVIDENCE_PACKET.md`; finish plan: the state-vector FINISH VECTOR. moe.15 GA-tag candidate signed `d10de580…18df`.
