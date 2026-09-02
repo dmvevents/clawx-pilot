@@ -43,6 +43,44 @@ function Add-ZipAssembly {
   Add-Type -AssemblyName System.IO.Compression.FileSystem
 }
 
+function New-ZipFromDirectory {
+  param(
+    [string] $SourceDir,
+    [string] $DestinationPath
+  )
+
+  # [ZipFile]::CreateFromDirectory on .NET Framework (PowerShell 5.1) writes
+  # entry names using the OS directory separator - backslash on Windows - which
+  # violates the OPC/ZIP spec (APPNOTE section 4.4.17 requires "/"). Word then
+  # cannot resolve _rels/.rels and fails with "Could not find main document
+  # part". Build the archive by hand so every entry name uses a forward slash
+  # regardless of the .NET version we run on.
+  Add-ZipAssembly
+  $prefix = [System.IO.Path]::GetFullPath($SourceDir)
+  if (-not $prefix.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+    $prefix += [System.IO.Path]::DirectorySeparatorChar
+  }
+  $zipStream = [System.IO.File]::Open($DestinationPath, [System.IO.FileMode]::Create)
+  $archive = $null
+  try {
+    $archive = New-Object System.IO.Compression.ZipArchive($zipStream, [System.IO.Compression.ZipArchiveMode]::Create)
+    foreach ($file in (Get-ChildItem -LiteralPath $SourceDir -Recurse -File)) {
+      $relative = $file.FullName.Substring($prefix.Length) -replace "\\", "/"
+      $entry = $archive.CreateEntry($relative, [System.IO.Compression.CompressionLevel]::Optimal)
+      $entryStream = $entry.Open()
+      try {
+        $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+        $entryStream.Write($bytes, 0, $bytes.Length)
+      } finally {
+        $entryStream.Dispose()
+      }
+    }
+  } finally {
+    if ($archive) { $archive.Dispose() }
+    $zipStream.Dispose()
+  }
+}
+
 function Assert-OpenXmlPackage {
   param(
     [string] $PackagePath,
@@ -53,18 +91,25 @@ function Assert-OpenXmlPackage {
   try {
     Add-ZipAssembly
     $zip = [System.IO.Compression.ZipFile]::OpenRead($PackagePath)
+    # OPC entry names MUST use "/" (APPNOTE 4.4.17). A backslash here is the
+    # exact defect that made Word fail with "Could not find main document part"
+    # while this check still passed because it used to normalize separators.
+    # Compare strictly and reject any backslash so a regression cannot hide.
+    foreach ($entry in $zip.Entries) {
+      if ($entry.FullName.Contains("\")) {
+        throw ("OpenXML entry uses backslash separator (violates ZIP spec): {0}" -f $entry.FullName)
+      }
+    }
     foreach ($requiredEntry in $RequiredEntries) {
-      $normalizedRequired = $requiredEntry -replace "\\", "/"
       $found = $false
       foreach ($entry in $zip.Entries) {
-        $normalizedEntry = $entry.FullName -replace "\\", "/"
-        if ($normalizedEntry -eq $normalizedRequired) {
+        if ($entry.FullName -eq $requiredEntry) {
           $found = $true
           break
         }
       }
       if (-not $found) {
-        throw ("missing OpenXML entry: {0}" -f $normalizedRequired)
+        throw ("missing OpenXML entry: {0}" -f $requiredEntry)
       }
     }
     return $true
@@ -91,8 +136,7 @@ function New-OpenXmlPackage {
   try {
     New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
     & $WriteFiles $tempDir
-    Add-ZipAssembly
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($tempDir, $tempPackage)
+    New-ZipFromDirectory -SourceDir $tempDir -DestinationPath $tempPackage
     if (-not (Assert-OpenXmlPackage -PackagePath $tempPackage -RequiredEntries $RequiredEntries)) {
       return $false
     }
