@@ -216,3 +216,28 @@ OPEN QUESTIONS: (1) root cause of the stale CDP attach in the app process —
 does outlookBrowserManager hold a dead Playwright browser handle after the
 CDP endpoint restarts or tabs churn, and should ensureBrowser re-verify with
 a live probe before reuse? (2) composer focus verification before keystroke.
+
+## CORRECTION — 2026-09-03 (evidence integrity)
+
+The `video.mp4` previously committed here was REMOVED. On this Mac the recorder
+uses a full-display capture cropped to the app-window rectangle (avfoundation
+cannot target a specific window on macOS). During the ~4-minute turn a
+concurrent terminal window (an unrelated agent's session) came to the front over
+the app rectangle, so the crop recorded that terminal, not the Ministry app.
+Two hands-off re-runs reproduced the occlusion. Shipping that file as "the app
+running the turn" would have been false, so it is deleted rather than kept.
+
+Mac proof of the in-app turn is therefore the STILL:
+`final-screenshot.png` — the real Ministry app with the prompt "Summarise my
+last 5 emails", the "2 tool calls" turn indicator, and the assistant reply
+rendered (the designed graceful degradation for the CLWX-54 Chrome-attach
+staleness), Online channel, gateway connected. No 400 banner — the
+GOOGLE-STORE-400 fix is confirmed live (the turn executed).
+
+The canonical recorded VIDEO of a real in-app turn is the WINDOWS artifact,
+`skills/laptop/evidence/2026-09-03-win-recorded-usecase/usecase.mp4` (gdigrab
+can target the app on Windows), which is clean and verified.
+
+Two product nits visible in final-screenshot.png, both already on the board:
+- composer shows the raw model id `gemini-2.5-flash` (CLWX-52 raw-model-id UI leak);
+- the email lane degraded rather than reading mail (CLWX-54 stale CDP attach).

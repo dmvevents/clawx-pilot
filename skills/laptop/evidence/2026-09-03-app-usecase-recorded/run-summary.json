@@ -3,7 +3,7 @@
   "attachMechanism": "macOS UI automation (osascript/System Events) + screencapture video (CDP-to-app-renderer unavailable; port 9223 closed)",
   "prompt": "Summarise my last 5 emails",
   "model": null,
-  "turnMs": 240524,
+  "turnMs": 240207,
   "outcome": "timeout",
   "replyChars": 0,
   "assertions": null,
@@ -13,5 +13,5 @@
     "detail": "cropped 2560x1600+448+190 -> 1280x800"
   },
   "trajectory": "/Users/antonalexander/.openclaw/agents/main/sessions/5092237b-bf53-40cf-96d8-043fa0bd7d60.trajectory.jsonl",
-  "totalMs": 290802
+  "totalMs": 293439
 }
