@@ -1,0 +1,433 @@
+{
+  "_comment": "Stakeholder-authored NSCC 2026 Q&A eval set (card CLWX-42). question / expected_answer / expected_page are VERBATIM from NSCC_2026__Test_QnA.docx (Raj, 2026-05-14, sha256 31b6eb72aaef1a3eb05dc95cddff0e19d4cca1eedb2b31975148e746104e3d2c) extracted via mammoth (the same dep behind document.read_docx). key_points are curated deterministic match groups: a row passes when EVERY group matches (ANY variant within a group; case-insensitive, word-boundary, whitespace/quote-normalized). Variants come from the stakeholder answer plus NSCC 2026 source phrasing. Runner: scripts/nscc-qna-eval.ts.",
+  "source_doc": "NSCC_2026__Test_QnA.docx (stakeholder-authored, 2026-05-14)",
+  "source_note": "Source note: All answers and page references are based only on the uploaded NSCC 2026 document. For model testing, the expected model behaviour is to cite the relevant page and avoid external assumptions.",
+  "knowledge_doc": "NSCC 2026 (National School Code of Conduct, revised edition 2026)",
+  "cases": [
+    {
+      "id": "NSCC-Q01",
+      "question": "Is the NSCC a law, or is it a guideline?",
+      "expected_answer": "It is a guideline. It does not create legal rights or obligations, does not establish criminal liability, and does not override law, regulations, or contractual obligations.",
+      "expected_page": "p. 11",
+      "key_points": [
+        [
+          "guideline",
+          "guidance"
+        ],
+        [
+          "legal rights",
+          "criminal liability",
+          "does not override",
+          "not a law",
+          "not law"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q02",
+      "question": "Can a school depart from the guidance in the NSCC?",
+      "expected_answer": "Yes. School authorities may depart from the guidance where circumstances justify it, provided decisions remain reasonable, fair, and consistent with law.",
+      "expected_page": "p. 11",
+      "key_points": [
+        [
+          "yes",
+          "may depart",
+          "can depart",
+          "permitted to depart"
+        ],
+        [
+          "reasonable",
+          "justify",
+          "justified",
+          "justifies"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q03",
+      "question": "What principles must apply when the NSCC refers to suspension, expulsion, police referral, or zero tolerance?",
+      "expected_answer": "Those measures must be subject to due process and procedural fairness, proportionate to the offence and the student’s age, developmental stage, and circumstances, consistent with the best interests of the child, and where applicable referred to and decided by the Minister of Education under the Education Act.",
+      "expected_page": "pp. 11–12",
+      "key_points": [
+        [
+          "due process",
+          "procedural fairness"
+        ],
+        [
+          "proportionate",
+          "proportionality"
+        ],
+        [
+          "best interests of the child",
+          "best interest of the child"
+        ],
+        [
+          "minister of education",
+          "education act"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q04",
+      "question": "What are the six core values in the NSCC?",
+      "expected_answer": "Respect, Responsibility, Rights, Integrity, Courtesy, and Productivity and Performance.",
+      "expected_page": "p. 17",
+      "key_points": [
+        [
+          "respect"
+        ],
+        [
+          "responsibility"
+        ],
+        [
+          "rights"
+        ],
+        [
+          "integrity"
+        ],
+        [
+          "courtesy"
+        ],
+        [
+          "productivity and performance",
+          "productivity"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q05",
+      "question": "Is corporal punishment allowed under the NSCC?",
+      "expected_answer": "No. Discipline must be administered respectfully, must avoid humiliation or degradation, and corporal punishment is strictly prohibited.",
+      "expected_page": "p. 17",
+      "key_points": [
+        [
+          "prohibited",
+          "not allowed",
+          "not permitted",
+          "no"
+        ],
+        [
+          "corporal punishment"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q06",
+      "question": "What disciplinary approach focuses on repairing harm and restoring relationships?",
+      "expected_answer": "Restorative Practices. It focuses on repairing harm, restoring relationships, and reintegrating students into the school community after wrongdoing.",
+      "expected_page": "p. 21",
+      "key_points": [
+        [
+          "restorative practices",
+          "restorative practice"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q07",
+      "question": "When should suspension or expulsion be applied?",
+      "expected_answer": "They should be applied for zero-tolerance offences such as weapons, violent assault, sexual misconduct, trafficking of illicit substances, clear danger to the school community, criminal acts, or repeated severe infractions despite prior restorative or supportive interventions.",
+      "expected_page": "p. 22",
+      "key_points": [
+        [
+          "zero-tolerance",
+          "zero tolerance"
+        ],
+        [
+          "weapons",
+          "weapon"
+        ],
+        [
+          "violent assault",
+          "sexual misconduct",
+          "trafficking",
+          "criminal",
+          "repeated severe infractions",
+          "danger"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q08",
+      "question": "What is the definition of irregular attendance?",
+      "expected_answer": "Irregular attendance means being absent for more than five days without reasonable excuse within a four-week period, or 20 school days, of the school term.",
+      "expected_page": "p. 28",
+      "key_points": [
+        [
+          "more than five days",
+          "more than five (5) days",
+          "more than 5 days"
+        ],
+        [
+          "four-week period",
+          "four week period",
+          "4-week period",
+          "20 days",
+          "20 school days",
+          "twenty days"
+        ],
+        [
+          "reasonable excuse"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q09",
+      "question": "Are locs, twists, plaits, afros, and cornrows allowed?",
+      "expected_answer": "Yes. These styles are allowed for all students, once they follow the specific hair rules of the school.",
+      "expected_page": "p. 29",
+      "key_points": [
+        [
+          "yes",
+          "allowed",
+          "permitted"
+        ],
+        [
+          "locs",
+          "cornrows",
+          "plaits",
+          "afros",
+          "twists"
+        ],
+        [
+          "rules",
+          "rule",
+          "policy",
+          "policies",
+          "guidelines"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q10",
+      "question": "Are wigs and dyed hair allowed?",
+      "expected_answer": "Generally, wigs and dyed or coloured hair are not allowed. In very special circumstances, the principal may grant approval.",
+      "expected_page": "p. 29",
+      "key_points": [
+        [
+          "not allowed",
+          "not permitted",
+          "prohibited",
+          "generally not"
+        ],
+        [
+          "principal"
+        ],
+        [
+          "wigs",
+          "dyed",
+          "coloured",
+          "colored"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q11",
+      "question": "If a student cheats in an internal exam, what sanction may apply?",
+      "expected_answer": "The student may have that examination paper cancelled, or marks deducted.",
+      "expected_page": "p. 29",
+      "key_points": [
+        [
+          "cancelled",
+          "canceled",
+          "cancellation"
+        ],
+        [
+          "marks deducted",
+          "deducted",
+          "deduction of marks",
+          "deduct"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q12",
+      "question": "Who adjudicates matters related to internal examinations?",
+      "expected_answer": "An Examination Committee must be established to adjudicate matters related to internal examinations.",
+      "expected_page": "p. 30",
+      "key_points": [
+        [
+          "examination committee",
+          "examinations committee"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q13",
+      "question": "What is bullying according to the NSCC?",
+      "expected_answer": "Bullying is repeated verbal, physical, social, or emotional behaviour intended to harm, intimidate, humiliate, or exert power and control over another person.",
+      "expected_page": "p. 31",
+      "key_points": [
+        [
+          "repeated"
+        ],
+        [
+          "harm",
+          "intimidate",
+          "humiliate",
+          "power and control"
+        ],
+        [
+          "verbal",
+          "physical",
+          "social",
+          "emotional"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q14",
+      "question": "What is cyberbullying?",
+      "expected_answer": "Cyberbullying is the use of electronic communication to threaten, harass, intimidate, exclude, embarrass, or harm others, including through messages, posts, or misuse of online tools.",
+      "expected_page": "p. 31",
+      "key_points": [
+        [
+          "electronic communication",
+          "electronic",
+          "online",
+          "digital"
+        ],
+        [
+          "threaten",
+          "harass",
+          "intimidate",
+          "embarrass",
+          "harm",
+          "exclude"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q15",
+      "question": "What does the NSCC say about assault on staff?",
+      "expected_answer": "Any form of assault on a staff member or other school personnel will lead to an automatic recommendation for suspension and potential expulsion.",
+      "expected_page": "p. 34",
+      "key_points": [
+        [
+          "automatic recommendation",
+          "automatic"
+        ],
+        [
+          "suspension"
+        ],
+        [
+          "expulsion"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q16",
+      "question": "Are dangerous objects or look-alike weapons allowed in school?",
+      "expected_answer": "No. Weapons, dangerous objects, firearms, and look-alike weapons such as cap guns, toy pistols, squirt guns, or comb knives are strictly prohibited.",
+      "expected_page": "p. 33",
+      "key_points": [
+        [
+          "prohibited",
+          "not allowed",
+          "not permitted",
+          "no"
+        ],
+        [
+          "look-alike",
+          "lookalike",
+          "look alike",
+          "cap guns",
+          "toy pistols",
+          "squirt guns",
+          "comb knives"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q17",
+      "question": "Are students bound by the school mobile phone policy when outside school but in uniform?",
+      "expected_answer": "Yes. Even off school grounds, if students are in school uniform, they are bound by the Mobile Phone policy of the school.",
+      "expected_page": "p. 43",
+      "key_points": [
+        [
+          "yes",
+          "bound",
+          "applies",
+          "apply",
+          "still applies"
+        ],
+        [
+          "uniform"
+        ],
+        [
+          "mobile phone",
+          "phone"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q18",
+      "question": "Can a school force a student to disclose a device password during a search?",
+      "expected_answer": "No. Any search or confiscation must be based on reasonable suspicion, authorised by the principal or designate, proportionate in scope, documented in writing, and shall not compel disclosure of passwords.",
+      "expected_page": "p. 43",
+      "key_points": [
+        [
+          "no",
+          "not",
+          "cannot",
+          "shall not"
+        ],
+        [
+          "password",
+          "passwords"
+        ],
+        [
+          "reasonable suspicion",
+          "principal",
+          "documented",
+          "proportionate"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q19",
+      "question": "Can students use AI for assignments without permission?",
+      "expected_answer": "No. Students may use AI for assignments or assessments only after discussion with, and permission from, the teacher, and must acknowledge such use. Unauthorised AI-generated work may constitute academic dishonesty.",
+      "expected_page": "p. 47",
+      "key_points": [
+        [
+          "no",
+          "not",
+          "only after",
+          "only with"
+        ],
+        [
+          "permission",
+          "teacher"
+        ],
+        [
+          "academic dishonesty",
+          "acknowledge",
+          "acknowledged"
+        ]
+      ]
+    },
+    {
+      "id": "NSCC-Q20",
+      "question": "What must principals do if child abuse or neglect is suspected?",
+      "expected_answer": "Principals are responsible for mandated reporting of suspected child abuse or neglect and must follow procedures for reporting to the police and the Children’s Authority.",
+      "expected_page": "p. 62",
+      "key_points": [
+        [
+          "mandated reporting",
+          "mandatory reporting",
+          "report",
+          "reporting"
+        ],
+        [
+          "police"
+        ],
+        [
+          "children's authority",
+          "childrens authority",
+          "children authority"
+        ]
+      ]
+    }
+  ]
+}
