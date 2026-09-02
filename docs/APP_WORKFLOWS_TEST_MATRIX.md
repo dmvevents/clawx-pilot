@@ -85,12 +85,12 @@ Status legend: ● proven · ◐ built, partial proof · ○ untested on that pl
 |---|---|---|---|
 | W1 | ● live smoke | ● 15/15 eval on VM | `pnpm exec tsx scripts/v2-chatbot-e2e.ts`; VM `pilot-managed-cdp-visual-smoke.ps1` |
 | W2 | ● 2-gate proven | ● 4-step send-gate proof on VM (new outlook.cloud domain) | `scripts/v2-send-test.ts` + `outlook-actions-safety.test.ts` (73/73) |
-| W3 | ◐ forms lane live (29/32+gate) | ● 29/32 fields, submit gate refuses w/o confirm | `scripts/forms-fill-suspensions.ts`; VM `pilot-forms-cdp-inspect.js` |
+| W3 | ● **29/32 + gate refusal proven on Mac 2026-09-03** (matches VM bar; no submit, no sign-in, CDP attach to user Chrome) | ● 29/32 fields, submit gate refuses w/o confirm | `scripts/forms-fill-suspensions.ts`; Mac evidence `skills/laptop/evidence/2026-09-03-w3-mac-forms/`; VM `pilot-forms-cdp-inspect.js` |
 | W4 | ● payload+preview | ● preview verified on VM | forms vitest; `/api/forms/preview-daily-report` |
 | W5 | ● cron fires | ○ no live cron-fire captured on Windows | `/api/cron/trigger` — **gap D** |
 | W6 | ● write+read round-trip (fn-level, `docx`+`mammoth`) | ● **write GREEN on VM** — packaged runtime wrote valid .docx (8582 B) + read back | VM `pilot-office-write-smoke.ps1` `STATE: OFFICE_WRITE_OK` 2026-09-02; Mac `/tmp/docwrite-roundtrip.mjs` 8/8. b2 (in-app turn) open |
 | W7 | ● write+read round-trip (fn-level, `xlsx`/SheetJS) | ● **read + write GREEN on VM** — wrote valid .xlsx (16077 B) + read back | same VM smoke `OFFICE_WRITE_OK`; read GREEN (KR1). b2 (in-app turn) open |
-| W8 | ◐ whisper skill | ○ `WinSpeechRecognize.exe` bundled, no ASR smoke | **gap C** — no `pilot-asr-smoke.ps1` yet |
+| W8 | ● **real transcript twice 2026-09-03** (say→16k WAV→whisper; "staff meeting"/"Thursday" asserted; duration non-zero) | ○ `WinSpeechRecognize.exe` bundled, no ASR smoke run | **gap C** — `pilot-asr-smoke.ps1` now AUTHORED (desk-checked), needs one VM/laptop run; Mac evidence `skills/laptop/evidence/2026-09-03-whisper-mac-smoke/` |
 | W9 | ● on-device + cloud | ● online (`moe-demo-pro`) + on-device (`qwen2.5:3b`) present on VM | live eval 15/15 |
 | W10 | ● degrade path | ○ untested on Windows | degradeChannel unit test |
 
@@ -163,7 +163,10 @@ Scripts present: `pilot-run-installed-gateway-smoke.ps1`,
 `pilot-managed-cdp-visual-smoke.ps1`, `pilot-forms-cdp-inspect.js`,
 `pilot-office-runtime-check.ps1` (dep-import only), **`pilot-office-write-smoke.ps1`
 (new 2026-09-02 — actually writes + reads back .docx/.xlsx in the packaged
-runtime)**. **Missing: `pilot-asr-smoke.ps1`.**
+runtime)**, **`pilot-asr-smoke.ps1` (new 2026-09-03 — synthesizes a WAV via
+System.Speech, mirrors the app's two-file ffmpeg transcode, runs
+WinSpeechRecognize, asserts the keyword; desk-checked only, first run owed on
+the pilot box)**.
 
 ---
 
@@ -180,10 +183,25 @@ consent (profile + inbox read + offline_access) on the existing Entra app (tenan
 `9590bb09-…ebfe`). `scripts/graph-signin-smoke.ts` ran the ladder's **L1–L3 PASS
 live** against the real tenant with sandbox `test.fac@fac.edu.tt`: token via pure
 PKCE (no client secret), stable `oid` (KR7 UserId key), `/me` + inbox read (5
-msgs). Evidence: `skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/`. The
-remaining Graph work is **ours, not the Ministry's**: wire the in-app
-`CLAWX_GRAPH_AUTH` flow + host `getAccessToken`/token persistence so the 6 parked
-tools become callable in-chat (`microsoft-graph.enabled` stays false until then —
-`register()` crashes boot without host wiring). Full ladder + rungs L4–L7 in
-`docs/GRAPH_TEST_PLAN.md`. Until the in-app path lands, the demo still runs the
-browser lane (works, just slower and Chrome-bound).
+msgs). Evidence: `skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/`.
+
+**UPDATE 2026-09-03 — the in-app wiring LANDED** (10-agent build + adversarial
+verify, full suite 161 files green). What shipped: (a) sign-in was already
+reachable (Settings tile + `msgraph:*` IPC + token persistence in
+`clawx-microsoft-graph.json`); default OAuth scopes corrected to the granted
+read-only baseline (`offline_access User.Read Mail.Read`) so in-app sign-in no
+longer requests unconsented scopes; (b) supported per-install transport switch:
+`graphOutlookRead`/`graphOutlookCompose` persisted config (Settings toggles)
+OR the `CLAWX_GRAPH_OUTLOOK_READ/COMPOSE=1` env override; (c) scope-aware
+compose gate — Graph draft/send refuse with a principal-readable structured
+reason when `Mail.Send` is not granted (URL-qualified grants recognised;
+explicit mock-mailbox exempt); (d) Graph 403 → structured refusal, not a raw
+500; (e) Graph read ids are `graph:`-prefixed and the 5 browser-only actions
+(reply/forward/mark-read/attachments) refuse them loudly instead of DOM-hunting;
+(f) attachment fidelity under Graph read (`hasAttachments` + metadata fetch);
+(g) the gateway-plugin stub is force-parked (`enabled=false` always, ungated
+`send_mail` registration removed) — the host-API adapter is the sole Graph lane.
+**L4 is staged**: `scripts/v2-eval-graph.ts` (Graph-transport eval with
+read-only-scope expectations + anti-mock guard) + `graph-signin-smoke.ts
+--persist` (writes the store the app reads). The one human step left: a ~2-min
+interactive test.fac sign-in to persist tokens, then L4 runs agent-side.

@@ -80,6 +80,28 @@ without host wiring). Next atomic item: the host token wiring that lights up the
 6 parked Graph tools in-chat. Evidence:
 `skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/RESULT.md`._
 
+_**Full-colour completion tick (2026-09-03, owner-directed "push everything to
+completion").** Two orchestrated workflows (5 mappers → 10 build/verify agents,
+disjoint file ownership, adversarial review) executed §2a P1–P7 in one pass:
+**P1 Graph lane LANDED** (read-only scope baseline, Settings transport toggles
++ env overrides, scope-aware compose refusal incl. URL-form grants, 403 →
+structured refusal, `graph:` id refusal on the 5 browser-only actions,
+attachment fidelity, stub force-parked); **P2 KR7 agent half DONE**
+(`UserId=oid` seeded + re-stamped live on sign-in/out with gateway reload
+threaded; broker forwards sanitized UserId upstream; seam unit-tested);
+**P3 L4 STAGED** (`v2-eval-graph.ts` + `--persist` harness; one ~2-min operator
+sign-in remains); **P4 CLWX-44 dispositioned** (EXEC-NOISE-LEAK closed-verified
+`c29ff4dd`; IDLE-TIMEOUT-RAW confirmed open then FIXED same tick — degrade
+classifier now catches the idle-timeout class; PLAUD-ZERO-MIN honest-closed,
+superseded by in-app ASR); **P5 `pilot-asr-smoke.ps1` authored**; **P6 W8 Mac
+● (real whisper transcript ×2)**; **P7 W3 Mac ● (29/32 + gate refusal, VM bar
+matched)**. The adversarial verify found 3 medium defects in the fresh build
+(graph-id refusal unshipped on routes, gateway reload not threaded, bare-form
+scope match) — all fixed + regression-tested same tick. Gates: typecheck 0,
+lint 0 errors (4 pre-existing errors also cleared), **full suite 161 files /
+1264 tests green**. Board colours: this tick's remaining P-work = P8 RAJ-2,
+P9 NSCC, L4-after-sign-in._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
@@ -94,11 +116,11 @@ can defensibly declare GA (bucket C is post-GA by design).
 | CLWX-41 stakeholder report | ✅ scope delivered (report + matrices + cards) → Ready | done |
 | CLWX-23 timeline | ✅ 09-02 evidence-day appended → Ready | done |
 | CLWX-45 closeout drafts | write the 7 draft-and-hold replies into outbound-drafts | 1 sitting |
-| CLWX-44 missed-defect verify | run the 3 criteria (exec-noise transcript assertion; idle-timeout degrade check; Plaud repro) | 1–2 lanes |
+| CLWX-44 missed-defect verify | run the 3 criteria (exec-noise transcript assertion; idle-timeout degrade check; Plaud repro) — **in flight 09-03** | 1–2 lanes |
 | CLWX-42 NSCC pack | re-download NSCC-2026.pdf via the bridge → knowledge pack → run the free Q&A eval | 1 lane |
 | CLWX-34 RAJ-2 | seeded structured email → LLM reply → fidelity assertion (Mac Outlook lane) | 1 lane |
 | CLWX-43 latency | laptop-lane 3-prompt repeat (budget sign-off is bucket B) | 1 lane |
-| CLWX-39 Graph dev twin | BFF-model flag-gated sign-in on a dev tenant | 1–2 sittings |
+| CLWX-39 Graph lane | twin UNNECESSARY (same tenant, L1–L3 PASS live 09-02); remaining = scope baseline + compose refusal + config enablement + Settings toggles — **in flight 09-03** (§2a P1) | 1 sitting |
 | moe.15 cut | build + hash + VM install/smoke (carries fee7294d, 97004aa6, a8322ad9) — the GA-tag candidate | 1 sitting |
 
 ### B. Owner sitting (~one hour, unblocks GA declaration)
@@ -255,6 +277,67 @@ named predecessor), **O** = owner-gated (needs a human decision/action).
   the day values arrive is a verification, not a build.
 - **Owner-gated (park + note, don't self-execute):** CLWX-18, CLWX-19, trim
   unhold, outbound sends. Agents prepare; a human pulls the trigger.
+
+---
+
+## 2a. Full-colour execution analysis (2026-09-03 — supersedes the §2 table)
+
+Every remaining non-green surface (register group-A rows, W1–W10 matrix cells,
+gap-checklist items A–F, non-terminal board cards), classified by what actually
+gates it. Extended taxonomy: **P** parallel-now on this Mac, **S** serial
+(named predecessor), **O** owner sitting, **M** Ministry, **V** Windows-VM/
+laptop lane. Probes behind the classes (2026-09-03): `gcloud` auth LIVE;
+VM `clawx-win-rc-20260609` TERMINATED (owner stopped billing); board API up;
+Chrome CDP/gateway state probed per-lane by the executing agents.
+
+### P — parallel-now (this Mac, no one to wait for)
+
+| # | Item | Retires | Status |
+|---|---|---|---|
+| P1 | CLWX-39 Graph lane completion: read-only scope baseline, scope-aware compose refusal, config-based transport enablement + Settings toggles, attachment fidelity, cross-transport ids, seed hygiene, stub parking | CLWX-39 → Ready path; unblocks CLWX-40 | **DONE 09-03** (adversarial findings fixed; suite green) |
+| P2 | CLWX-30 KR7 buildable half: `UserId=oid` header on the moe-cloud-gateway provider (seed + sign-in/out re-stamp) + broker forwards UserId upstream + seam tests | agent-side KR7; makes Ministry values a config swap | **DONE 09-03** (live-reload threading fixed post-review) |
+| P3 | CLWX-40 precursor: token-persist harness (`--persist`) + `v2-eval-graph.ts` L4 driver with read-only-scope expectations + anti-mock guard | stages L4 to a 2-min operator sign-in | **DONE 09-03** — L4 now waits ONLY on the sign-in |
+| P4 | CLWX-44: verify-or-refute EXEC-NOISE-LEAK / IDLE-TIMEOUT-RAW / PLAUD-ZERO-MIN | 3 group-B register rows | **DONE 09-03** (1 closed-verified, 1 fixed same tick, 1 honest-closed) |
+| P5 | `pilot-asr-smoke.ps1` authoring (gap-C precursor — script didn't exist) | arms gap C for the next VM window | **DONE 09-03** (desk-checked; first run owed on pilot box) |
+| P6 | W8 Mac whisper smoke (say → WAV → transcribe → assert) | W8 Mac ◐→● | **DONE 09-03** — real transcript ×2, duration non-zero |
+| P7 | W3 Mac forms fill to the 29/32+gate bar (submit-gate refusal is the assertion) | W3 Mac ◐→● | **DONE 09-03** — 29/32 + gate refusal, VM bar matched |
+| P8 | RAJ-2 fidelity scenario (CLWX-34, last of Raj's 4) — draft-only, never send | Ext-val A last leg + register row + card | next tick (serialize: same Chrome lane) |
+| P9 | CLWX-42 NSCC knowledge pack + Q&A eval | Raj's clearest feature ask | next tick (external download) |
+| P10 | KR4 kill-egress e2e residual | zero GA boxes (already checked) | do last |
+
+### S — serial chains (irreducible, with the exact predecessor)
+
+| Chain | Links | Collapses when |
+|---|---|---|
+| Identity | KR8 real values (M) → KR7 App-Insights verify (M) → KR6 fleet-verify | P2 makes the agent side complete: values arrive ⇒ config swap + verification only |
+| Graph ladder | P1/P3 land → **one 2-min operator sign-in** (test.fac, in-app or `--persist` harness) → L4 Graph eval run → L5 Chrome-less | operator sign-in is the ONLY human step left in L4 |
+| Release | this tick's code green → moe.16 cut (preflight gate) → VM install/smoke | next RC carries the Graph lane + UserId stamping |
+
+### O — one owner sitting (~1 hour, unchanged plus two new)
+
+CLWX-18 scrub, CLWX-19 rotation, trim unhold (`7add864b`), latency budget
+sign-off, KR2 acceptance decision, external-tester handoff, CLWX-45 per-item
+GO, close the 18 Ready cards. **New this tick:** (a) GO on the drafted Raj
+Graph-working update (`outbound-drafts/2026-09-02-raj-graph-signin-working-DRAFT.md`);
+(b) rotate the Entra client secret Ansari shared — PKCE means we never need it.
+
+### V — one VM window (owner starts it; agents drive; ~5 surfaces/session)
+
+Gap C ASR (script armed by P5), gap D cron fire, W10 Windows degrade, b2
+in-app write turn, KR2 recording staging, CLWX-43 laptop-lane latency.
+Unblock is literally: `gcloud compute instances start clawx-win-rc-20260609
+--zone us-central1-a` (auth verified live; billing = owner call).
+
+### M — Ministry (post-GA by design)
+
+KR8 session + values (ball with Raj since 09-02), KR7 production verify,
+CLWX-7 flow URLs, CLWX-8 production accounts.
+
+**Critical-path readout:** nothing in P/S blocks GA declaration — the GA gate
+is the O sitting. The longest lever (KR8→KR7→KR6) is Ministry-paced and
+post-GA-acceptable per the finish vector. Maximum parallelism this tick = P1–P7
+concurrently (disjoint files/lanes), then P8/P9 serialize on shared lanes, then
+one VM window batches all five V surfaces.
 
 ---
 

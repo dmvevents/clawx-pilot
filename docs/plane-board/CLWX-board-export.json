@@ -67,10 +67,15 @@
       "sequence_id": 44,
       "name": "Verify-or-fix the 3 missed-by-register defects (exec-noise, idle-timeout, Plaud)",
       "priority": "none",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "Missed-by-register defects from the stakeholder sweep, now registered OPEN: (a) EXEC-NOISE-LEAK — raw Exec:/python internals rendered in Raj's chat (05-08, trust-facing, never confirmed fixed); criterion: transcript assertion that no tool-frame markup appears in assistant bubbles; (b) IDLE-TIMEOUT-RAW — raw provider timeout surfaced to user; criterion: stalled provider yields a visible on-device degrade answer (bde78d94 adjacent, unverified for this path); (c) PLAUD-ZERO-MIN — recordings indexed 0.0 minutes, fix promised 05-19 and never confirmed (the notes workflow Raj personally tried 3x).\nScope: verify-or-fix each with its criterion on current builds; report per-item disposition. Source: docs/STAKEHOLDER_REPORT_2026-09-02.md + DEFECT_REGISTER rows.",
-      "comments": []
+      "comments": [
+        {
+          "text": "2026-09-03: all three dispositions complete with evidence (skills/laptop/evidence/2026-09-03-clwx44-verifies/). (1) EXEC-NOISE-LEAK: CLOSED — renderer structurally cannot leak tool frames since c29ff4dd + 4 layered filters; unit-tested 22/22; the 05-08 sighting predated the filters. (2) IDLE-TIMEOUT-RAW: CONFIRMED-STILL-OPEN by the verify, then FIXED same tick — the degrade classifier now treats the idle-timeout class as unreachable (cloud turn degrades to on-device instead of rendering the raw string); mutation rows added to the degrade tests. (3) PLAUD-ZERO-MIN: honest-close — no plaud code exists in this repo (external MCP server), and the in-app ASR path reports non-zero durations (2.28 s in the same-day whisper smoke). Card acceptance (per-item disposition on current builds with evidence) is met; moving to Ready for human close.",
+          "created": "2026-09-02T18:58:12.969734Z"
+        }
+      ]
     },
     {
       "id": "341e4a1f-07c5-49c3-859c-743a42229865",
@@ -122,6 +127,10 @@
       "description": "docs/MINISTRY_GRAPH_ACCESS_PLAN.md step C: on a clean install with NO Chrome session, sign in via Entra and run the 14-row Outlook eval against the GRAPH transport (same suite, different path — the routes are already dual-path). Proves the GA-durable Outlook lane end-to-end. Blocked by [Graph-B] + the four Raj decision items (scopes, PKCE public client, loopback redirect, no-app-server identity) on the CLWX-31 session agenda.",
       "comments": [
         {
+          "text": "2026-09-03: this card's predecessor (CLWX-39 wiring) landed and the L4 runner now exists: scripts/v2-eval-graph.ts drives the Graph transport in-process with read-only scope expectations (read rows assert real data; draft/send rows assert the graceful refusal; browser-only rows report N-A; anti-mock guard refuses signed-out/mock state; the suite is structurally incapable of dispatching mail). Blocked now ONLY on one ~2-min interactive sandbox sign-in to persist tokens (in-app Settings sign-in or graph-signin-smoke --persist). L5 (Chrome-less) follows on any machine without a Chrome session.",
+          "created": "2026-09-02T18:58:12.997765Z"
+        },
+        {
           "text": "Prerequisite unblocked and de-risked: L1-L3 of the Graph ladder PASS (CLWX-39). The Chrome-less transport eval (L4/L5) can now run once the in-app path is wired. Stays Todo.",
           "created": "2026-09-02T14:17:29.156654Z"
         },
@@ -140,6 +149,10 @@
       "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "Pull-forward from docs/MINISTRY_GRAPH_ACCESS_PLAN.md step B: wire the EXISTING microsoft-graph oauth flow (manager.ts + microsoft-graph-oauth.ts, already built) behind a flag (CLAWX_GRAPH_AUTH=1) against a dev Entra tenant with a loopback redirect. Acceptance: sign-in → token → one Graph read on a dev account. Makes the Ministry values a config swap and collapses most of KR7 (UserId from token oid claim). Agent-executable now (P class).",
       "comments": [
+        {
+          "text": "2026-09-03 completion tick: the in-app Graph lane LANDED. Read-only default scopes (match the granted consent), persisted transport toggles (Settings switches: read/compose via Microsoft cloud) + env overrides, scope-aware compose refusal (URL-form grants recognised; structured principal-readable reason, no raw 500), Graph-403 to structured refusal, graph-prefixed read ids refused loudly by the 5 browser-only actions, attachment fidelity under Graph read, gateway-plugin stub force-parked (host-API adapter is the sole lane). Adversarial review found 3 medium defects in the fresh build; all fixed + regression-tested same tick. Gates: typecheck 0, lint 0 errors, full suite 161 files green. L4 is STAGED (scripts/v2-eval-graph.ts + graph-signin-smoke --persist): the one human step left is a ~2-min interactive sandbox sign-in, then L4 runs agent-side. Held below Ready until the live in-app sign-in + L4 run.",
+          "created": "2026-09-02T18:58:12.913512Z"
+        },
         {
           "text": "Tick 2026-09-02: external gate CLEARED and L1-L3 PASS live against the REAL Ministry tenant. The Ministry delivered the real Application (client) ID and registered the dev redirect URI (http://localhost:53682/callback) with read-only admin consent (profile + inbox read + offline_access). Built scripts/graph-signin-smoke.ts (PKCE loopback, using the shipped extensions/microsoft-graph auth+client modules). Ran it with the sandbox account: L1 PASS - token acquired via PURE PKCE, no client secret in play (refresh token present from offline_access); L2 PASS - stable oid claim present (the KR7 UserId key), tid=9590bb09; L3 PASS - /me resolved + inbox read returned 5 messages. typecheck exit 0. Non-secret config in gitignored ~/openclaw-agent/secrets/graph.env; the client secret is stored NOWHERE. Held below Ready: the in-app flag wiring (CLAWX_GRAPH_AUTH) + host getAccessToken/token-persistence are still pending - openclaw.json keeps plugins.microsoft-graph.enabled=false because register() throws without that host wiring. Evidence: skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/.",
           "created": "2026-09-02T14:17:29.084736Z"
@@ -329,6 +342,10 @@
       "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "The app has no signed-in-user identity today, which blocks both the mandatory UserId header (Ministry §3.3) and per-user caps.\nFACTS: the only userPrincipalName in the tree is the stub 'principal@school.example' (microsoft-graph/manager.ts:257). The live Outlook path identifies the principal only implicitly, by riding whichever account is signed into their Chrome session over CDP — deliberate and the only thing Conditional Access permits, but the app never learns the identity in a header-able form.\nINFERENCE / design: backend-for-frontend — desktop does the interactive sign-in, the app server holds the client secret + tokens and stamps UserId from the authenticated session (never client-supplied). This also resolves the client-secret objection (a public/PKCE client is no longer needed once a confidential app server exists). Recommend oid over UPN (opaque, survives renames).\nOPEN QUESTIONS (Ministry-gated): redirect URI — becomes https://<app-server-host>/auth/callback, so it depends on the hostname decision Raj has been asking about since 2026-07-20. UserId = oid vs UPN. Refresh-token lifetimes (longer = fewer forced-online re-auths).\nAccept (KR7): a live interactive Entra sign-in produces a stable non-stub oid; an authenticated request to the app server carries a UserId stamped server-side, verified in App Insights.",
       "comments": [
+        {
+          "text": "2026-09-03 completion tick: KR7 agent-buildable half DONE. UserId=oid stamped on the cloud gateway provider at seed AND re-stamped live on Graph sign-in/out (gateway reload threading was missing — caught by adversarial review, fixed + regression-tested). Broker now forwards sanitized UserId upstream for APIM/App-Insights attribution; the full seam (provider headers to openclaw.json to outbound call) is unit-tested. Client-stamped header is trust-limited (pilot-acceptable, per SCALE_ANALYSIS). Remaining half is Ministry-gated: App-Insights per-user verification needs KR8 real values. When values arrive this is a config swap + verification, not a build.",
+          "created": "2026-09-02T18:58:12.941773Z"
+        },
         {
           "text": "Materially advanced by the same run: L2 of scripts/graph-signin-smoke.ts captured a stable oid claim for the sandbox account (tenant 9590bb09) - that is exactly the KR7 UserId key. L1-L3 PASS end to end. Todo->In Progress. Remaining for KR7: stamp UserId=oid on broker/gateway calls and surface it in per-user metering (L7). Evidence: skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/.",
           "created": "2026-09-02T14:17:29.123572Z"

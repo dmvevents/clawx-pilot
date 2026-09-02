@@ -83,12 +83,23 @@ needed. `scripts/graph-signin-smoke.ts` (PKCE loopback over the shipped
 - **L3 PASS** — `/me` resolved + inbox list returned 5 messages.
 
 Evidence: `skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/RESULT.md`.
-**Next:** L4 (transport eval) + L5 (Chrome-less) run once the in-app
-`CLAWX_GRAPH_AUTH` flow + host `getAccessToken`/token persistence are wired
-(that host wiring is what lets `microsoft-graph.enabled=true` without crashing
-gateway boot). L6 (Ministry tenant repeat) is largely satisfied already — L1–L3
-were against the real tenant, not a twin; only CA/CAE-under-load observation
-remains. L7 (UserId=`oid` on broker calls) is the KR7 tie-in.
+
+**Update 2026-09-03 — P5 (flag wiring) DONE and L4 STAGED.** The in-app lane
+landed: corrected read-only default scopes, persisted
+`graphOutlookRead`/`graphOutlookCompose` toggles (Settings) + env overrides,
+scope-aware compose refusal, Graph-403 → structured refusal, `graph:` id
+refusal on browser-only actions, stub force-parked (the host-API adapter is the
+sole Graph lane — `plugins.microsoft-graph.enabled` is now pinned false by the
+seeder). **L7 agent side is BUILT**: `UserId=<oid>` stamped on the cloud
+provider at seed and re-stamped live on sign-in/out; the broker forwards it
+upstream (Ministry App-Insights verification stays KR8-gated). L4 runner exists
+(`scripts/v2-eval-graph.ts`: read rows assert real data, compose rows assert
+the graceful refusal, browser-only rows report N-A, anti-mock guard refuses
+signed-out/mock state). **The single remaining human step for L4: one ~2-min
+interactive test.fac sign-in** (in-app via Settings, or
+`pnpm exec tsx scripts/graph-signin-smoke.ts --persist`), then the eval runs
+agent-side. L5 (Chrome-less) follows L4 on any machine without a Chrome
+session. L6 largely satisfied (L1–L3 were on the real tenant).
 
 ## Stakeholder RACI
 
