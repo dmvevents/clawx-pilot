@@ -21,6 +21,10 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 - Days idle: 76
 - Last updated: 2026-06-10
 
+**Comments (1):**
+
+- Triage 2026-09-02: partially superseded. The docx leg is proven live (KR1 PASS, CLWX-24). The Excel/PDF legs remain worth running as part of the moe.13 regression matrix on the persona VM (fixtures for xlsx/pptx already come from the fixed seeder). Fold into the CLWX-10 GA evidence packet run.
+
 ### CLWX-2 — dmvevents/clawx-pilot#1 — Measure and reduce Gateway cold-start time
 
 - **State:** Backlog  |  **Priority:** low
@@ -33,6 +37,10 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 - Unresolved review threads: 0
 - Days idle: 76
 - Last updated: 2026-06-10
+
+**Comments (1):**
+
+- Triage 2026-09-02: superseded by CLWX-25 (KR2). The dominant cold-start contributor was found and fixed there: a present-but-model-less agents.defaults block caused a ~4–5 min unbindable-channel window (fix 61be816e, ships in moe.13). Timed before/after first-boot measurement is part of the CLWX-25 recording. Recommend closing this card as duplicate once CLWX-25 lands.
 
 ### CLWX-4 — dmvevents/clawx-pilot#2 — Capture repeat clean-install tester evidence
 
@@ -47,6 +55,10 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 - Days idle: 76
 - Last updated: 2026-06-10
 
+**Comments (1):**
+
+- Triage 2026-09-02: superseded by CLWX-25 (KR2 clean-VM evidence) — same acceptance (repeatable clean-install evidence), now with a stronger base: the layered persona snapshot design in docs/VM_TEST_BASE.md makes repeat installs start from a blessed L1 image instead of hand-cleaned state. Recommend closing as duplicate of CLWX-25.
+
 ### CLWX-5 — dmvevents/clawx-pilot#5 — Run Outlook read/search/draft/send-safe bug bash
 
 - **State:** Backlog  |  **Priority:** low
@@ -59,6 +71,10 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 - Unresolved review threads: 0
 - Days idle: 76
 - Last updated: 2026-06-10
+
+**Comments (1):**
+
+- Triage 2026-09-02: absorbed into CLWX-34. The Outlook bug bash and Raj-defect triage share the same lane (user Chrome CDP + test.fac session on the persona VM) and the same evidence format. Run as one session when the VM lane returns. Recommend closing as duplicate of CLWX-34.
 
 ### CLWX-7 — dmvevents/clawx-pilot#9 — Define production Forms destination via SharePoint or Power Automate
 
@@ -73,6 +89,10 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 - Days idle: 76
 - Last updated: 2026-06-10
 
+**Comments (1):**
+
+- Triage 2026-09-02: Ministry-gated (KR8 family). Production Forms destination needs real tenant decisions from Raj (SharePoint list vs Power Automate flow URL). Tracked in the Lane-3 owner packet of docs/GA_SPRINT_PLAN_2026-09-02.md. Not blocking single-school GA (cloned form on test.fac covers the demo path).
+
 ### CLWX-8 — dmvevents/clawx-pilot#8 — Create production Outlook teacher login and support logging flow
 
 - **State:** Backlog  |  **Priority:** low
@@ -85,6 +105,10 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 - Unresolved review threads: 0
 - Days idle: 76
 - Last updated: 2026-06-10
+
+**Comments (1):**
+
+- Triage 2026-09-02: Ministry-gated (KR8 family). Production teacher login + support account creation sits with MoE IT. Grouped into the Lane-3 owner packet; unblocks CLWX-34-class triage against production accounts later. Not blocking single-school GA.
 
 ### CLWX-9 — dmvevents/clawx-pilot#6 — Run Forms preview/prefill/dry-run/submit-refusal bug bash
 
@@ -261,6 +285,10 @@ Accept: each defect reproduced-or-refuted against moe.11 with evidence (trace/lo
 - Days idle: 13
 - Last updated: 2026-08-12
 
+**Comments (1):**
+
+- Triage 2026-09-02: sweep complete (commit dc30f9db). Last three user-visible brand strings removed (gateway control window title, skill-detail hooks description, Dreams config note). Remaining grep hits are internal identifiers and code comments only, out of scope for the branding rule. Chat-facing surfaces already anonymised ("Online" / "On this device"). Moving to Ready.
+
 ### CLWX-6 — dmvevents/clawx-pilot#3 — Verify Outlook send requires explicit same-session confirmation
 
 - **State:** Ready  |  **Priority:** low
@@ -273,6 +301,10 @@ Accept: each defect reproduced-or-refuted against moe.11 with evidence (trace/lo
 - Unresolved review threads: 0
 - Days idle: 76
 - Last updated: 2026-06-10
+
+**Comments (1):**
+
+- Triage 2026-09-02: acceptance already met. The send path has TWO gates — confirm:true AND the open compose pane subject must match args.subject — proven by scripts/v2-send-test.ts (live send + gate proof) and covered by the submit/send-gate unit suites (85 tests green today). Moving to Ready for human close.
 
 ### CLWX-12 — dmvevents/clawx-pilot#12 — feat(principal-assistant): bundle native document.* tools (Lane A)
 
@@ -455,8 +487,9 @@ P5 read image"pytesseract and Pillow are required"document.read_image (base64 to
 Discovery"I couldn't find any files in that folder"breadth-first findWithinDir (c1b18125); OneDrive Desktop still unhandledeval lane; Windows OneDrive path UNVERIFIED
 Accept (GA): every KR above GREEN with cited evidence, and a human closes each workstream card. No card reaches Done by the agent.
 
-**Comments (6):**
+**Comments (7):**
 
+- Analyst-team synthesis integrated (2026-09-02, second addendum). - Authoritative GA bar located and aligned: docs/wiki/GA_READINESS.md §4, 13 boxes. Current: 2 CHECKED (KR3, KR4), 2 more at Ready with evidence (KR1 — with a "6/6 vs 1-live-prompt" nuance for the closer, noted on CLWX-24 — and KR5). Full mapping in docs/GA_SPRINT_PLAN_2026-09-02.md. - Defect register landed: docs/DEFECT_REGISTER_2026-09-02.md — 48 entries; post-delta: 11 open-blocking (4 Raj defects, 2 security-floor, KR2 recording, KR6 trim-hold, KR7/KR8 Ministry, external tester), 12 open non-blocking, 4 fixed-awaiting-shipped-regression, 22 closed. - CLWX-35 filed and fixed same-day: board exporter wrote titles-only mirrors; fix surfaced the test password sitting in CLWX-18 comments — redacted at source + mandatory redaction in the exporter. Ready. - CLWX-34 made self-contained (was an empty stub; the four defects lived only in the liaison log). - Highest-leverage next cycle: ONE Lane-2 VM session under moe.13 retires four register rows at once (KR2 recording, driver-settle regression proof, CLWX-20 voice smoke, Raj-defect triage staging). Sole gate: owner runs gcloud auth login. - Pull-forward available: build KR7 Entra sign-in behind a flag against the dev-loopback redirect now, so Raj's real values become a config swap instead of a build.
 - Sprint status 2026-09-02 — GA push, second pass. - Ready today: CLWX-24 (KR1, full in-app PASS), CLWX-28 (KR5, outbox wired + restart test), CLWX-3 (branding sweep), CLWX-6 (send double-gate, evidence), CLWX-12 (document tools live-proven), CLWX-20 (ffmpeg bundled) — joining CLWX-26/27/32/33. 10 cards at Ready. - moe.13 built + signed (sha256 a8494ec0…deb3ecf): boot slow-ready fix, outbox wiring, fixed seeder, driver fix. 1230/1230 unit tests. - Reproducible testing designed: docs/VM_TEST_BASE.md (persona L0/L1/L2 snapshot layers). Sprint plan: docs/GA_SPRINT_PLAN_2026-09-02.md. - Single hard blocker for all VM evidence: gcloud auth expired — owner runs gcloud auth login (~2 min), then Lane 2 executes: snapshot → moe.13 install + fresh-boot recording (CLWX-25) → Outlook lane → Raj defect triage (CLWX-34). - Owner packet: CLWX-18/19 security scrub+rotation (one sitting), trim unhold (KR6), Raj values (KR7/KR8), GA-scope decision on KR6–KR8 (fleet-scale vs single-school GA).
 - GA gate defined (docs/wiki/GA_READINESS.md, commit follows f99f2c1f): single GO/NO-GO document now exists — 15-row chronological gap/feedback ledger (G1-G15, each dated + sourced + mitigated), full test-evidence table, and a falsifiable checklist: 8 KR boxes (KR3+KR4 already checked), 2 external-validation boxes (Raj defect triage, tester download path), 2 security boxes (public-branch password scrub, key rotation), 2 hygiene boxes (green suite at tag, evidence packet). Critical path: (1) interactive gcloud auth login [gcloud SDK now INSTALLED — CLWX-9 install-half done], (2) IAP VM run flips KR1+KR2+defect triage, (3) build KR5 outbox, (4) owner: send Ministry reply + unhold trim, (5) KR6/KR7 behind flag, (6) evidence packet. Human declares GA; agent ceiling stays Ready.
 - Wiki + test audit (commit 59e1ba26): docs/wiki/TEST_PLAN.md (read-only test-lane-prober, HEAD bde78d94) records the runnable-now floor: typecheck 0 err, unit 1197/6skip/0fail, eval:ci 61 PASS/9 SKIP, doc-tooling harness 5/5. KR3/KR4 GREEN. KR1 in-app + KR2 assisted-screen are blocked ONLY by B2 (gcloud not installed) [new card]. KR5/6/7/8 are the owner/Ministry-gated Lane-C chain. Also added: DECISION_LOG (13 ADRs) + EXTRACTION_PLAYBOOK (JSONL->LLM prompt design).

@@ -340,6 +340,10 @@
       "description": "OBJECTIVE: Ship ClawX (Ministry of Education fork) to GA for T&T primary-school principals — an on-device-default desktop assistant that survived Raj's 2026-07-21 Ministry test (scored 0/5) and now provably passes it, installs unattended on Windows, works offline, and scales without a fleet-wide outage.\nSource of truth is this board, not any doc. Ceiling for the agent is Ready; only a human moves a card to Done.\nKEY RESULTS (each falsifiable):\n\n- KR1 — Doc-tooling passes Raj's suite in-app. All 5 Ministry prompts (P1 .docx read, P2 .docx write, P3 .pdf, P4 .xlsx, P5 image) + folder discovery pass in a live, LLM-driven, in-app run on Windows; the model selects document.* every time and reaches for a Python skill zero times. Evidence = in-app transcript + tool-call trace. Status: capability GREEN, in-app run RED (outstanding).\n- KR2 — Windows installer unattended on a clean VM. moe.11 installs on a clean Windows VM with a complete file tree; Gateway (18789) + host-API (13210) bind; 0 manual dependency steps. Evidence = install exit 0 + port probe + sha256. Status: GREEN on IAP lane (assisted/silent).\n- KR3 — On-device default works with the network cut. On-device model answers a question grounded in a local document offline; local document path makes zero non-loopback egress. Evidence = eval lane G. Status: GREEN.\n- KR4 — A cloud turn degrades instead of going silent. When a cloud turn cannot reach the provider, it fails over to on-device; the principal's Online/On-device toggle is not rewritten. Evidence = 25 unit tests + lane G G-degrade-classify. Status: GREEN (2026-08-21).\n- KR5 — Offline records are durable. A form submission / audit record created offline is queued locally and delivered exactly once when the link returns. Evidence = lane G outbox checks. Status: RED — not built.\n- KR6 — Cloud economics survive the fleet. Per-turn floor trimmed and per-user metering/caps in place so one heavy user cannot silently spend the fleet's month and trigger a fleet-wide 429. Evidence = trimmed floor measurement + broker accounting tests. Status: RED — trim on HOLD, caps not built.\n- KR7 — A signed-in identity exists. Interactive Entra sign-in yields a stable oid; the app server stamps UserId from the authenticated session. Evidence = live sign-in producing a non-stub identifier. Status: RED — only a stub identity today; blocked on Ministry redirect URI.\n- KR8 — The Ministry infra decisions are closed. Reply sent (owner gate) and a working session settles app-server hostname/reachability, the redirect URI, and prompt-caching. Evidence = sent reply + meeting notes. Status: DRAFT ready, owner-gated, UNSENT.\nFACTS (in git/docs): Raj scored 0/5 on 2026-07-21 (commit 794cce74). Native document.* tools landed 2026-07-25 (98e805d8), 4 days after his test — he tested a build predating the fix. Steering + discovery fix landed 2026-08-20 (c1b18125); a 6-lane tool-selection eval was added the same day (73514b4f). moe.11 installs clean over the GCP IAP lane (verdict.md, sha256 b01bb6c3). Offline + degradation are built and tested (lane G, bde78d94).\nINFERENCE (not yet proven end-to-end): Because the handler replay and the BM25 eval both bypass the live LLM, Raj's exact transcript could still reproduce in-app despite 7/7 handler pass. This is the one open GA risk on the doc-tooling line — a live in-app run is the only thing that closes it.\nOPEN QUESTIONS (Ministry-owned): app-server hostname/reachability (internet-TLS vs iGovTT-only) — blocks the redirect URI; prompt-caching availability behind APIM; UserId = oid vs UPN; migration credential mechanism.\nFailure → fix matrix (Raj 2026-07-21):\nPromptRaj 0/5 failure (verbatim)FixVerified where\nP1 read .docx\"tools to read Word documents are not available\"native document.read_docx + persona routing (c1b18125)handler 7/7; in-app RED\nP2 write .docx\"pandoc and python are not installed\"document.write_docx; Python skills autoEnable:false (c1b18125)handler 7/7; in-app RED\nP3 read .pdf\"pdfplumber / pdftotext not installed\"document.read_pdf, \"Prefer this over the pdf skill\"handler 7/7; in-app RED\nP4 read .xlsx\"pandas is not installed\"document.read_xlsx + write_xlsxhandler 7/7; in-app RED\nP5 read image\"pytesseract and Pillow are required\"document.read_image (base64 to VLM, no OCR binary)handler 7/7; in-app RED\nDiscovery\"I couldn't find any files in that folder\"breadth-first findWithinDir (c1b18125); OneDrive Desktop still unhandledeval lane; Windows OneDrive path UNVERIFIED\nAccept (GA): every KR above GREEN with cited evidence, and a human closes each workstream card. No card reaches Done by the agent.",
       "comments": [
         {
+          "text": "Analyst-team synthesis integrated (2026-09-02, second addendum).\n\n- Authoritative GA bar located and aligned: docs/wiki/GA_READINESS.md §4, 13 boxes. Current: 2 CHECKED (KR3, KR4), 2 more at Ready with evidence (KR1 — with a \"6/6 vs 1-live-prompt\" nuance for the closer, noted on CLWX-24 — and KR5). Full mapping in docs/GA_SPRINT_PLAN_2026-09-02.md.\n\n- Defect register landed: docs/DEFECT_REGISTER_2026-09-02.md — 48 entries; post-delta: 11 open-blocking (4 Raj defects, 2 security-floor, KR2 recording, KR6 trim-hold, KR7/KR8 Ministry, external tester), 12 open non-blocking, 4 fixed-awaiting-shipped-regression, 22 closed.\n\n- CLWX-35 filed and fixed same-day: board exporter wrote titles-only mirrors; fix surfaced the test password sitting in CLWX-18 comments — redacted at source + mandatory redaction in the exporter. Ready.\n\n- CLWX-34 made self-contained (was an empty stub; the four defects lived only in the liaison log).\n\n- Highest-leverage next cycle: ONE Lane-2 VM session under moe.13 retires four register rows at once (KR2 recording, driver-settle regression proof, CLWX-20 voice smoke, Raj-defect triage staging). Sole gate: owner runs gcloud auth login.\n\n- Pull-forward available: build KR7 Entra sign-in behind a flag against the dev-loopback redirect now, so Raj's real values become a config swap instead of a build.",
+          "created": "2026-09-02T03:30:28.531679Z"
+        },
+        {
           "text": "Sprint status 2026-09-02 — GA push, second pass.\n\n- Ready today: CLWX-24 (KR1, full in-app PASS), CLWX-28 (KR5, outbox wired + restart test), CLWX-3 (branding sweep), CLWX-6 (send double-gate, evidence), CLWX-12 (document tools live-proven), CLWX-20 (ffmpeg bundled) — joining CLWX-26/27/32/33. 10 cards at Ready.\n- moe.13 built + signed (sha256 a8494ec0…deb3ecf): boot slow-ready fix, outbox wiring, fixed seeder, driver fix. 1230/1230 unit tests.\n- Reproducible testing designed: docs/VM_TEST_BASE.md (persona L0/L1/L2 snapshot layers). Sprint plan: docs/GA_SPRINT_PLAN_2026-09-02.md.\n- Single hard blocker for all VM evidence: gcloud auth expired — owner runs gcloud auth login (~2 min), then Lane 2 executes: snapshot → moe.13 install + fresh-boot recording (CLWX-25) → Outlook lane → Raj defect triage (CLWX-34).\n- Owner packet: CLWX-18/19 security scrub+rotation (one sitting), trim unhold (KR6), Raj values (KR7/KR8), GA-scope decision on KR6–KR8 (fleet-scale vs single-school GA).",
           "created": "2026-09-02T03:13:35.016791Z"
         },
@@ -566,7 +570,12 @@
       "state": "Backlog",
       "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
       "description": "- Source: dmvevents/clawx-pilot#8\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
-      "comments": []
+      "comments": [
+        {
+          "text": "Triage 2026-09-02: Ministry-gated (KR8 family). Production teacher login + support account creation sits with MoE IT. Grouped into the Lane-3 owner packet; unblocks CLWX-34-class triage against production accounts later. Not blocking single-school GA.",
+          "created": "2026-09-02T03:13:09.817589Z"
+        }
+      ]
     },
     {
       "id": "2e2dae9c-f57d-4efe-93ee-d0728a00bcb7",
@@ -576,7 +585,12 @@
       "state": "Backlog",
       "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
       "description": "- Source: dmvevents/clawx-pilot#9\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
-      "comments": []
+      "comments": [
+        {
+          "text": "Triage 2026-09-02: Ministry-gated (KR8 family). Production Forms destination needs real tenant decisions from Raj (SharePoint list vs Power Automate flow URL). Tracked in the Lane-3 owner packet of docs/GA_SPRINT_PLAN_2026-09-02.md. Not blocking single-school GA (cloned form on test.fac covers the demo path).",
+          "created": "2026-09-02T03:13:09.739621Z"
+        }
+      ]
     },
     {
       "id": "0cc548bf-a9bb-43ca-83f4-6e6c380e13b8",
@@ -586,7 +600,12 @@
       "state": "Ready",
       "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "- Source: dmvevents/clawx-pilot#3\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
-      "comments": []
+      "comments": [
+        {
+          "text": "Triage 2026-09-02: acceptance already met. The send path has TWO gates — confirm:true AND the open compose pane subject must match args.subject — proven by scripts/v2-send-test.ts (live send + gate proof) and covered by the submit/send-gate unit suites (85 tests green today). Moving to Ready for human close.",
+          "created": "2026-09-02T03:11:59.883551Z"
+        }
+      ]
     },
     {
       "id": "79e11600-7bc2-4254-bf28-b5d4e319a9c7",
@@ -596,7 +615,12 @@
       "state": "Backlog",
       "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
       "description": "- Source: dmvevents/clawx-pilot#5\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
-      "comments": []
+      "comments": [
+        {
+          "text": "Triage 2026-09-02: absorbed into CLWX-34. The Outlook bug bash and Raj-defect triage share the same lane (user Chrome CDP + test.fac session on the persona VM) and the same evidence format. Run as one session when the VM lane returns. Recommend closing as duplicate of CLWX-34.",
+          "created": "2026-09-02T03:12:34.446634Z"
+        }
+      ]
     },
     {
       "id": "977d221b-0fd4-4611-a46d-923e888f1f73",
@@ -606,7 +630,12 @@
       "state": "Backlog",
       "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
       "description": "- Source: dmvevents/clawx-pilot#2\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
-      "comments": []
+      "comments": [
+        {
+          "text": "Triage 2026-09-02: superseded by CLWX-25 (KR2 clean-VM evidence) — same acceptance (repeatable clean-install evidence), now with a stronger base: the layered persona snapshot design in docs/VM_TEST_BASE.md makes repeat installs start from a blessed L1 image instead of hand-cleaned state. Recommend closing as duplicate of CLWX-25.",
+          "created": "2026-09-02T03:12:34.366000Z"
+        }
+      ]
     },
     {
       "id": "6e906e46-1dec-483e-8554-8e2b4642b725",
@@ -616,7 +645,12 @@
       "state": "Ready",
       "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "- Source: dmvevents/clawx-pilot#7\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 13\n- Last updated: 2026-08-12",
-      "comments": []
+      "comments": [
+        {
+          "text": "Triage 2026-09-02: sweep complete (commit dc30f9db). Last three user-visible brand strings removed (gateway control window title, skill-detail hooks description, Dreams config note). Remaining grep hits are internal identifiers and code comments only, out of scope for the branding rule. Chat-facing surfaces already anonymised (\"Online\" / \"On this device\"). Moving to Ready.",
+          "created": "2026-09-02T03:12:00.227280Z"
+        }
+      ]
     },
     {
       "id": "fafe686e-08cb-49e9-868c-c85913689a9c",
@@ -626,7 +660,12 @@
       "state": "Backlog",
       "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
       "description": "- Source: dmvevents/clawx-pilot#1\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
-      "comments": []
+      "comments": [
+        {
+          "text": "Triage 2026-09-02: superseded by CLWX-25 (KR2). The dominant cold-start contributor was found and fixed there: a present-but-model-less agents.defaults block caused a ~4–5 min unbindable-channel window (fix 61be816e, ships in moe.13). Timed before/after first-boot measurement is part of the CLWX-25 recording. Recommend closing this card as duplicate once CLWX-25 lands.",
+          "created": "2026-09-02T03:12:34.286451Z"
+        }
+      ]
     },
     {
       "id": "d56b28d7-f560-4283-af0c-967589eb4e34",
@@ -636,7 +675,12 @@
       "state": "Backlog",
       "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
       "description": "- Source: dmvevents/clawx-pilot#4\n- Type: Issue\n- State: OPEN\n- Author: dmvevents\n- We owe a response: no\n- Unresolved review threads: 0\n- Days idle: 76\n- Last updated: 2026-06-10",
-      "comments": []
+      "comments": [
+        {
+          "text": "Triage 2026-09-02: partially superseded. The docx leg is proven live (KR1 PASS, CLWX-24). The Excel/PDF legs remain worth running as part of the moe.13 regression matrix on the persona VM (fixtures for xlsx/pptx already come from the fixed seeder). Fold into the CLWX-10 GA evidence packet run.",
+          "created": "2026-09-02T03:12:34.605631Z"
+        }
+      ]
     }
   ]
 }

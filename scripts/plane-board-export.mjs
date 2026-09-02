@@ -27,10 +27,19 @@ mkdirSync(outDir, { recursive: true });
 
 const api = `${BASE}/api/v1/workspaces/${WS}/projects/${PROJ}`;
 const H = { 'X-API-Key': KEY, 'Content-Type': 'application/json' };
+// The Plane instance rate-limits (429) and this export makes ~2N+3 requests
+// for N issues; back off and retry instead of dying mid-snapshot.
 const get = async (url) => {
-  const r = await fetch(url, { headers: H });
-  if (!r.ok) throw new Error(`${r.status} ${url}`);
-  return r.json();
+  for (let attempt = 1; ; attempt++) {
+    const r = await fetch(url, { headers: H });
+    if (r.ok) return r.json();
+    if (r.status === 429 && attempt < 6) {
+      const retryAfter = Number(r.headers.get('retry-after')) || attempt * 15;
+      await new Promise((res) => setTimeout(res, retryAfter * 1000));
+      continue;
+    }
+    throw new Error(`${r.status} ${url}`);
+  }
 };
 // Paginate Plane's cursor list responses.
 const getAll = async (path) => {
