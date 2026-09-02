@@ -177,8 +177,25 @@ describe('cloud-gateway-provider-seed', () => {
     );
     expect(mocks.setDefaultProviderAccount).toHaveBeenCalledWith('moe-cloud-gateway');
     expect(mocks.syncDefaultProviderToRuntime).toHaveBeenCalledWith('moe-cloud-gateway', undefined);
-    expect(mocks.setSetting).toHaveBeenCalledWith('preferredChannel', 'online');
+    // The mocked settings store returns an EXISTING 'on-device' choice — the
+    // seed must respect it, not flip it back to online on every boot (that
+    // silently reverted a principal's channel selection; found live on the
+    // moe.13 KR2 run, 2026-09-02).
+    expect(mocks.setSetting).not.toHaveBeenCalledWith('preferredChannel', expect.anything());
     expect(mocks.setSetting).toHaveBeenCalledWith('setupComplete', true);
+  });
+
+  it('defaults preferredChannel to online only when no choice exists yet', async () => {
+    process.env.CLAWX_CLOUD_GATEWAY_BASE_URL = 'https://gateway.example.run.app';
+    process.env.CLAWX_CLOUD_GATEWAY_API_KEY = 'sk-clawx-client';
+    // Truly fresh install: preferredChannel has never been set.
+    mocks.getSetting.mockImplementation(async (key: string) => (
+      key === 'preferredChannel' ? undefined : false
+    ));
+
+    await seedCloudGatewayProvider();
+
+    expect(mocks.setSetting).toHaveBeenCalledWith('preferredChannel', 'online');
   });
 
   it('can seed without taking default when explicitly configured that way', async () => {

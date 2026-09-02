@@ -314,8 +314,12 @@ export async function seedCloudGatewayProvider(
   }
 
   if (seed.setPreferredChannel) {
+    // Default the channel to online ONLY when no choice exists yet. This seed
+    // runs on every boot; overwriting a non-online value here silently
+    // reverted a principal's "On this device" selection at next launch
+    // (found live on the moe.13 KR2 run, 2026-09-02).
     const current = await getSetting('preferredChannel').catch(() => undefined);
-    if (current !== 'online') {
+    if (current === undefined || current === null) {
       await setSetting('preferredChannel', 'online');
     }
   }

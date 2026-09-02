@@ -456,7 +456,26 @@ export async function writeOpenClawConfig(config: OpenClawConfig): Promise<void>
         const tempPath = `${CONFIG_FILE}.tmp.${process.pid}.${Date.now()}`;
         try {
             await writeFile(tempPath, serialized, 'utf-8');
-            await rename(tempPath, CONFIG_FILE);
+            // Windows: rename over an OPEN target throws EPERM/EBUSY (share
+            // violation — e.g. the gateway reading openclaw.json at that
+            // instant, or AV scanning it). Seen live on the moe.13 boot
+            // (2026-09-02): the local-provider sync lost this race and the
+            // on-device provider never reached the runtime config. Retry
+            // briefly; the window is milliseconds.
+            let lastErr: unknown;
+            for (let attempt = 0; attempt < 5; attempt++) {
+                try {
+                    await rename(tempPath, CONFIG_FILE);
+                    lastErr = undefined;
+                    break;
+                } catch (err) {
+                    const code = (err as NodeJS.ErrnoException).code;
+                    if (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES') throw err;
+                    lastErr = err;
+                    await new Promise((res) => setTimeout(res, 100 * (attempt + 1)));
+                }
+            }
+            if (lastErr) throw lastErr;
         } catch (writeErr) {
             // Best-effort cleanup of the temp file on failure.
             await unlink(tempPath).catch(() => undefined);
