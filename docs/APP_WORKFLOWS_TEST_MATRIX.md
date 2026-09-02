@@ -88,8 +88,8 @@ Status legend: ● proven · ◐ built, partial proof · ○ untested on that pl
 | W3 | ◐ forms lane live (29/32+gate) | ● 29/32 fields, submit gate refuses w/o confirm | `scripts/forms-fill-suspensions.ts`; VM `pilot-forms-cdp-inspect.js` |
 | W4 | ● payload+preview | ● preview verified on VM | forms vitest; `/api/forms/preview-daily-report` |
 | W5 | ● cron fires | ○ no live cron-fire captured on Windows | `/api/cron/trigger` — **gap D** |
-| W6 | ● write_docx | ◐ write helper validates artifact; **no in-app chat turn on Windows** | doc-tools tests — **gap B** |
-| W7 | ● read/write_xlsx | ◐ read GREEN (KR1); write needs in-app turn | `pilot-office-runtime-check.ps1` — **gap B** |
+| W6 | ● write+read round-trip proven (fn-level, `docx`+`mammoth`) | ◐ deps import (runtime-check); write-smoke ready, VM off | `/tmp/docwrite-roundtrip.mjs` 8/8 PASS 2026-09-02; VM: `pilot-office-write-smoke.ps1` — **gap B** |
+| W7 | ● write+read round-trip proven (fn-level, `xlsx`/SheetJS) | ● read GREEN (KR1); ◐ write-smoke ready, VM off | same round-trip harness (2 sheets, data row); VM: `pilot-office-write-smoke.ps1` — **gap B** |
 | W8 | ◐ whisper skill | ○ `WinSpeechRecognize.exe` bundled, no ASR smoke | **gap C** — no `pilot-asr-smoke.ps1` yet |
 | W9 | ● on-device + cloud | ● online (`moe-demo-pro`) + on-device (`qwen2.5:3b`) present on VM | live eval 15/15 |
 | W10 | ● degrade path | ○ untested on Windows | degradeChannel unit test |
@@ -109,9 +109,17 @@ via KR1 tool-select + KFM path resolution), Gateway/Host-API (ports 18789/13210,
 50–51s ready on moe.14), Chrome CDP attach to the signed-in profile.
 
 **YELLOW** (built, thin Windows proof): document **writing** (`write_docx`/
-`write_xlsx`/pptx — artifacts validate but no live in-app chat turn on Windows);
-ASR/voice (`WinSpeechRecognize.exe` bundled, no end-to-end smoke); taskflow/cron
-(no live fire captured on Windows).
+`write_xlsx`/pptx). Update 2026-09-02: the write path is now **proven at the
+function level on Mac** — `writeDocx`/`writeXlsx` (the exact functions the tools
+call) produce valid OpenXML and `readDocx`/`readXlsx` round-trip the content
+(8/8 PASS, `/tmp/docwrite-roundtrip.mjs`). Same native JS runs on Windows and
+the deps already `require.resolve` in the packaged Windows node
+(`pilot-office-runtime-check.ps1`), so the only unproven piece is the packaged
+runtime *executing* a write on Windows. `pilot-office-write-smoke.ps1` (new)
+closes that in one command; blocked only because the GCP VM
+`clawx-win-rc-20260609` is currently **TERMINATED** (start it to run). ASR/voice
+(`WinSpeechRecognize.exe` bundled, no end-to-end smoke); taskflow/cron (no live
+fire captured on Windows).
 
 **RED/untested on Windows:** moe.15 install+smoke; KR2 fresh-install recording;
 external-tester validation. Silent `/S` install is diagnostic-only (partial-tree
@@ -123,9 +131,12 @@ failures) — the supported path is the assisted GUI install.
   (`SHA256 d10de580…18df`), assisted GUI install, launch from shortcut, run
   `pilot-run-installed-gateway-smoke.ps1` + `pilot-managed-cdp-visual-smoke.ps1`.
   *(This is the highest-leverage item — it re-greens W1–W4/W9 on the GA build.)*
-- [ ] **B — Document WRITING in-app on Windows.** One chat turn ("rewrite X.docx →
-  Y.docx", "build a workbook from Z"); assert `document.write_docx`/`write_xlsx`
-  fired in the gateway log and the output is valid OpenXML. (W6, W7)
+- [ ] **B — Document WRITING on Windows.** Function-level round-trip already
+  GREEN on Mac (8/8, `/tmp/docwrite-roundtrip.mjs`). Windows leg: (b1) start the
+  VM, run `pilot-office-write-smoke.ps1` → expect `STATE: OFFICE_WRITE_OK`
+  (runtime executes the write + reads it back); (b2) one live in-app chat turn
+  ("rewrite X.docx → Y.docx", "build a workbook from Z") asserting
+  `document.write_docx`/`write_xlsx` fired in the gateway log. (W6, W7)
 - [ ] **C — ASR/voice smoke.** Confirm `WinSpeechRecognize.exe` present + Azure
   Speech seed (or documented fallback); mic→WAV→transcribe→JSON. **Create
   `pilot-asr-smoke.ps1`** (none exists). (W8)
@@ -137,7 +148,9 @@ failures) — the supported path is the assisted GUI install.
 
 Scripts present: `pilot-run-installed-gateway-smoke.ps1`,
 `pilot-managed-cdp-visual-smoke.ps1`, `pilot-forms-cdp-inspect.js`,
-`pilot-office-runtime-check.ps1` (read only). **Missing: `pilot-asr-smoke.ps1`.**
+`pilot-office-runtime-check.ps1` (dep-import only), **`pilot-office-write-smoke.ps1`
+(new 2026-09-02 — actually writes + reads back .docx/.xlsx in the packaged
+runtime)**. **Missing: `pilot-asr-smoke.ps1`.**
 
 ---
 
