@@ -8,33 +8,6 @@ Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This m
 
 ## Backlog
 
-### CLWX-46 — [bug/other] Outlook readEmail can return a stale reading-pane body (wrong email content)
-
-- **State:** Backlog  |  **Priority:** medium
-
-Area: other   Severity: medium (priority medium)
-
-Steps to reproduce
-TODO: exact steps
-
-Expected
-TODO: what should happen
-
-Actual
-TODO: what happens instead
-
-Evidence
-TODO: log path / screenshot / trace id
-
-Environment
-TODO: build / OS / model
-
-Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
-
-**Comments (1):**
-
-- 2026-09-03 resilience pack fold-in (docs/FLOW_STATE_DIAGRAMS.md flow 3): fix spec for this card is TB-1 + TB-2. TB-1 settle-on-expected-item guard: after clicking an inbox row, bounded poll until the reading pane's subject AND sender match the clicked row before any extraction; never retry through a confirm gate; detection owner ga-e2e-regression-verifier. TB-2: replace the readEmail subject heading selector (currently returns the UI heading 'Navigation pane') under the 3-fallback rotated-selector rule; detection owner dom-selector-regression-tester. Both in electron/services/outlook-browser-v2/outlook-actions.ts. Recommended pre-GA: an agent describing the WRONG email is the trust-killer class.
-
 ### CLWX-47 — Slow-turn watchdog: 'still working' notice at 30s + per-turn duration log (TB-3)
 
 - **State:** Backlog  |  **Priority:** none
@@ -633,6 +606,34 @@ The stakeholder sweep surfaced 7 dropped balls (unanswered asks, Raj's own remin
 - Item 01 of the closeout pack: SENT (owner-authorized; the delta variant 01b — the 09-01 reply had already carried the redirect URIs, so only the enumerated permissions list + URI-now ask went out; bridge 200, ledgered). Remaining drafts 02–07 still HOLD awaiting per-item GO.
 - All 7 drafts staged (draft-and-hold) at ~/openclaw-agent/outbound-drafts/closeout-pack-2026-09-02/. Each file carries a HOLD header; NOTHING sends without per-item owner GO, then the ledger flow applies. Order: 01 is THE OPENER (the 07-20 permissions + redirect deliverable — dev loopback registrable immediately, production URI tied to the hostname decision); 02 HuggingFace closure; 03 Turnitin/Discord (owner chooses deliver-vs-close variant); 04 Plaud status honest-close; 05 daily-form prompt answer; 06 NSCC in-progress answer (pairs with CLWX-42); 07 the June-23 demo-verdict ask (closes the G5 hole). Card scope (draft the pack) is met → Ready; the SENDING is the owner GO in the finish vector bucket B.
 
+### CLWX-46 — [bug/other] Outlook readEmail can return a stale reading-pane body (wrong email content)
+
+- **State:** Ready  |  **Priority:** medium
+
+Area: other   Severity: medium (priority medium)
+
+Steps to reproduce
+TODO: exact steps
+
+Expected
+TODO: what should happen
+
+Actual
+TODO: what happens instead
+
+Evidence
+TODO: log path / screenshot / trace id
+
+Environment
+TODO: build / OS / model
+
+Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
+
+**Comments (2):**
+
+- FIXED + VERIFIED LIVE (2026-09-03 finish-sprint item 1). TB-1 applied: openMessageById now bounded-polls (8s / 300ms) after the row click until the reading pane subject (and sender when both extractable) matches the clicked row fingerprint; a provable mismatch fails loudly (not_found) instead of ever returning another email. The guard sits inside openMessageById, so read/reply/forward/mark-read/attachments all inherit wrong-target protection. Never retries through a confirm gate. TB-2 applied + root cause CONFIRMED live: DOM probe showed the only [role="heading"][aria-level="2"] on the page is span.screenReaderOnly "Navigation pane" (exactly the reported symptom); the real pane subject is span[role="heading"][aria-level="3"] inside div[role="main"]. Extraction now scoped to reading-pane roots with a 5-step fallback chain (level-2, level-3, any heading, subject class, h1/h2), visible + non-chrome only - meets the rotated-selector hard rule. Evidence (persona bars): QA bar - new scripts/clwx46-stale-read-check.ts PASS 3/3 rows x 3 consecutive runs with the guard actively discriminating; full v2-eval 15/15 on the live test.fac lane; unit suite 162 files / 1280 tests green; typecheck 0. PM acceptance: matrix row "Email: read message" deficit cleared. Engineering conscience: dom-selector-rotation class, detection owner dom-selector-regression-tester. Moving to Ready for human close.
+- 2026-09-03 resilience pack fold-in (docs/FLOW_STATE_DIAGRAMS.md flow 3): fix spec for this card is TB-1 + TB-2. TB-1 settle-on-expected-item guard: after clicking an inbox row, bounded poll until the reading pane's subject AND sender match the clicked row before any extraction; never retry through a confirm gate; detection owner ga-e2e-regression-verifier. TB-2: replace the readEmail subject heading selector (currently returns the UI heading 'Navigation pane') under the 3-fallback rotated-selector rule; detection owner dom-selector-regression-tester. Both in electron/services/outlook-browser-v2/outlook-actions.ts. Recommended pre-GA: an agent describing the WRONG email is the trust-killer class.
+
 ### CLWX-59 — [bug/outlook] Live Outlook send broken: waitForComposePane times out on rotated Send button (2 matches, first hidden)
 
 - **State:** Ready  |  **Priority:** high
@@ -748,6 +749,10 @@ Acceptance
 
 Story
 S3/S4. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+**Comments (1):**
+
+- Leg 1 DONE (2026-09-03): meeting_minutes.md authored in extensions/moe-principal-assistant/templates/ (house style matched: mustache placeholders, action-items table, Student A/B minors rule). Product-doc template claims reconciled in the same session (all four templates now listed). Remaining for Ready: leg 2 classification e2e over 3 fixture docs.
 
 ### CLWX-67 — [reminders] Reminder pipeline e2e: cron -> agentTurn -> visible chat prompt (Mac leg; Windows = gap D)
 

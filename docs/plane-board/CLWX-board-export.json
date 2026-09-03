@@ -71,7 +71,12 @@
       "state": "Todo",
       "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "Why\nAudit contradiction: PRODUCT doc claims templates/ is empty but letter.md, memo.md, daily_report_brief.md exist; what is actually missing is meeting_minutes.md. Classification taxonomy (MoE_circular, parent_letter, staff_leave_application...) is encoded in the persona with no e2e and no card (audit: DOCUMENTS, 2026-09-03).\n\nAcceptance\n1. meeting_minutes.md template authored (agenda, attendees, actions, decisions) in extensions/moe-principal-assistant/templates/.\n2. Classification e2e over 3 fixture documents routes each to the right taxonomy class.\n3. PRODUCT doc drafting rows updated from stale claims to current reality (doc fix landed with the 2026-09-03 reconciliation commit).\n\nStory\nS3/S4. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
-      "comments": []
+      "comments": [
+        {
+          "text": "Leg 1 DONE (2026-09-03): meeting_minutes.md authored in extensions/moe-principal-assistant/templates/ (house style matched: mustache placeholders, action-items table, Student A/B minors rule). Product-doc template claims reconciled in the same session (all four templates now listed). Remaining for Ready: leg 2 classification e2e over 3 fixture docs.",
+          "created": "2026-09-03T02:40:50.762045Z"
+        }
+      ]
     },
     {
       "id": "71c664a7-8ebe-4c10-b2f0-404be9cecdf3",
@@ -288,10 +293,14 @@
       "sequence_id": 46,
       "name": "[bug/other] Outlook readEmail can return a stale reading-pane body (wrong email content)",
       "priority": "medium",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "Area: other   Severity: medium (priority medium)\n\nSteps to reproduce\nTODO: exact steps\n\nExpected\nTODO: what should happen\n\nActual\nTODO: what happens instead\n\nEvidence\nTODO: log path / screenshot / trace id\n\nEnvironment\nTODO: build / OS / model\n\nRegression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)",
       "comments": [
+        {
+          "text": "FIXED + VERIFIED LIVE (2026-09-03 finish-sprint item 1).\nTB-1 applied: openMessageById now bounded-polls (8s / 300ms) after the row click until the reading pane subject (and sender when both extractable) matches the clicked row fingerprint; a provable mismatch fails loudly (not_found) instead of ever returning another email. The guard sits inside openMessageById, so read/reply/forward/mark-read/attachments all inherit wrong-target protection. Never retries through a confirm gate.\nTB-2 applied + root cause CONFIRMED live: DOM probe showed the only [role=\"heading\"][aria-level=\"2\"] on the page is span.screenReaderOnly \"Navigation pane\" (exactly the reported symptom); the real pane subject is span[role=\"heading\"][aria-level=\"3\"] inside div[role=\"main\"]. Extraction now scoped to reading-pane roots with a 5-step fallback chain (level-2, level-3, any heading, subject class, h1/h2), visible + non-chrome only - meets the rotated-selector hard rule.\nEvidence (persona bars): QA bar - new scripts/clwx46-stale-read-check.ts PASS 3/3 rows x 3 consecutive runs with the guard actively discriminating; full v2-eval 15/15 on the live test.fac lane; unit suite 162 files / 1280 tests green; typecheck 0. PM acceptance: matrix row \"Email: read message\" deficit cleared. Engineering conscience: dom-selector-rotation class, detection owner dom-selector-regression-tester.\nMoving to Ready for human close.",
+          "created": "2026-09-03T02:40:50.627034Z"
+        },
         {
           "text": "2026-09-03 resilience pack fold-in (docs/FLOW_STATE_DIAGRAMS.md flow 3): fix spec for this card is TB-1 + TB-2. TB-1 settle-on-expected-item guard: after clicking an inbox row, bounded poll until the reading pane's subject AND sender match the clicked row before any extraction; never retry through a confirm gate; detection owner ga-e2e-regression-verifier. TB-2: replace the readEmail subject heading selector (currently returns the UI heading 'Navigation pane') under the 3-fallback rotated-selector rule; detection owner dom-selector-regression-tester. Both in electron/services/outlook-browser-v2/outlook-actions.ts. Recommended pre-GA: an agent describing the WRONG email is the trust-killer class.",
           "created": "2026-09-02T22:07:36.894600Z"

@@ -185,6 +185,26 @@ doc templates-empty claims corrected (3 templates exist; `meeting_minutes.md`
 is the real gap). Sprint DoD: finish-sprint items 1–10 to Ready with evidence;
 no ◐ matrix row without a card or explicit gate._
 
+_**Finish-sprint execution tick (2026-09-03, items 1 + 6-leg-1).** **CLWX-46
+FIXED + VERIFIED → Ready.** TB-1 settle-on-expected-item guard inside
+openMessageById (read/reply/forward/mark-read/attachments all inherit
+wrong-target protection; provable mismatch fails loudly, never returns another
+email's content, never retries through a confirm gate). TB-2 root cause
+CONFIRMED live by DOM probe: the only `[role="heading"][aria-level="2"]` on
+the page is `span.screenReaderOnly` "Navigation pane"; the real pane subject
+is `span[role="heading"][aria-level="3"]` inside `div[role="main"]` —
+extraction now pane-scoped with a 5-step fallback chain. Evidence: new
+`scripts/clwx46-stale-read-check.ts` PASS 3/3 rows × 3 consecutive runs;
+v2-eval 15/15 (final run D; run C's 12/15 was lane flake — open-draft
+obstruction + load, zero settle failures in its log); units 162/1280 green;
+typecheck 0. Commit `715e17b7`. Read latency IMPROVED (W3.1 57s→1.5s class).
+**CLWX-66 leg 1:** `meeting_minutes.md` template authored; product doc
+reconciled. **Loop surfaces:** cron `977942a5` verified live (6h tick);
+`docs/GA_LOOP_PROMPT.md` gives the owner the manual tick + run-to-exhaustion
+prompts; sprint-driver skill re-pointed at the finish sprint. Next tick's top
+P items: CLWX-62 Daily Report e2e, CLWX-63 extraction chain, CLWX-65 in-app
+write turn._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
