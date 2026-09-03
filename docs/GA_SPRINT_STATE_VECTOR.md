@@ -367,6 +367,23 @@ signed URL → Karunesh handoff (STAGED draft; owner send authorization on
 record). Loop tightened to 2h cron (cc2751ee). Board @ 90: Ready pile now
 26 cards awaiting owner close._
 
+_**Sprint-driver tick (2026-09-03 cron, minimal-time mode): CLWX-58 + CLWX-70
+BOTH → Ready.** SENSE: tree clean, mirror 91, tunnel UP (moe.16 VM verify
+in flight, owned), CDP 200, static pulse GREEN 5/0/1. ANALYZE: top unowned
+P item = CLWX-58/70 (the stalled agent's item). ACT (`9aabc8f6`):
+`recoverComposeState` state machine — OK/Cancel discard dialog (CLWX-69) +
+automation-owned composes only (shared `automation-subjects.ts` allowlist;
+blank composes owned; human drafts protected and NAMED); wired at all three
+block sites; exit-path invariant for reply/forward typing TIMEOUTS
+(discardOwnCompose — the 2026-09-03 cascade class) with safety-class throws
+preserved. **Proven live both ways:** clwx58-recovery-check PASS (stale
+automation draft auto-discarded, second draft succeeded) and
+clwx58-negative-check PASS (human draft protected, named, still open).
+v2-eval 15/15 (one run failed W7.1 BECAUSE the CLWX-46 guard refused a
+lagging pane — honest-by-design transient, rerun clean); 166-file unit
+suite green; typecheck 0. Ready pile now 31. Remaining agent runway:
+moe.16 VM verify (in flight) → Karunesh handoff (authorized, staged)._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three

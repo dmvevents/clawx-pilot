@@ -642,7 +642,7 @@ Regression class? unknown — check the *-auditor agents (config-coherence, depe
 
 ### CLWX-58 — [bug/outlook] Stale open Outlook compose blocks all send/reply/forward until manually cleared
 
-- **State:** Todo  |  **Priority:** high
+- **State:** Ready  |  **Priority:** high
 
 Area: outlook   Severity: medium (priority medium)
 
@@ -665,8 +665,9 @@ moe.15 / Mac dev / gemini+bedrock / CDP 18792 test.fac tab
 
 Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
 
-**Comments (3):**
+**Comments (4):**
 
+- IMPLEMENTED + PROVEN LIVE both ways (2026-09-03 tick, commit 9aabc8f6). recoverComposeState per this card's spec: handles the OK/Cancel discard-confirm dialog (CLWX-69) and automation-owned open composes (shared allowlist module automation-subjects.ts, mirrored with the sweeper; blank composes count as owned); DOM-side visible-only clicks; conservative fallback when the page cannot be probed; wired at all three block sites with recover-once-then-retry and the recovery note appended to refusals. Live proof (test.fac): POSITIVE - clwx58-recovery-check.ts PASS: seeded stale automation draft auto-discarded, second draft succeeded ("compose auto-recovery before draft: a stale assistant draft was discarded automatically"). NEGATIVE - clwx58-negative-check.ts PASS: a human-looking draft ("PTA meeting agenda notes") was protected, NAMED in the refusal, and still open afterwards. v2-eval 15/15; 166-file unit suite green incl. the new allowlist suite; typecheck 0. Deferred (noted): docked-chip handling rides the dialog+pane coverage. QA + principal-proxy + PM bars met. Ready for human close.
 - Honest status (2026-09-03): the auto-recovery implementation agent stalled on all retry attempts (600k tokens of reading, zero edits landed - tree verified clean of partials). The card acceptance (recoverComposeState state machine + exit-path invariant) remains OPEN and is the top P item for the next tick. The stale-draft class is currently mitigated operationally: the sweeper (f3653589) + the eval hygiene (bfeb2cf1) keep the shared mailbox clean, and CLWX-79 (refusal instead of backfill) reduces one draft-creating path.
 - Holistic acceptance defined (owner-directed 2026-09-03). The stale-draft class has now cost: the tester's send flow (CLWX-70 litter), three eval runs (CLWX-69 wedge), and the original block this card records. The essential fix is an auto-recovery state machine in the driver (server-side, so chat, host-API, and the future MCP adapter (CLWX-71) all inherit it): 1. Before any compose-opening action: detect {open compose pane, discard-confirm dialog (buttons are OK/Cancel - CLWX-69), docked draft chips}. 2. Recover: discard-with-OK the automation-owned state (subject allowlist exactly like scripts/outlook-drafts-sweeper.ts); NEVER touch a human-authored draft - if a non-automation draft is open, refuse with a principal-readable message naming it. 3. Retry the intended action ONCE after recovery; hard-fail loudly the second time. 4. Exit-path invariant (CLWX-70): every automation compose ends in send-or-discard on every code path incl. errors (try/finally). 5. Eval postcondition: zero new saved drafts after a run. Acceptance: a seeded stale-draft scenario (open draft + confirm dialog + docked chip) recovers automatically and the intended draft/reply then succeeds; 15/15 eval stays green; recovery events logged (counts only).
 - Recovery verified. scripts/outlook-cleanup-compose.ts discards a stale open compose and returns to the inbox; this session ran it immediately before the CLWX-59 verification and the subsequent draft+two-gate flow passed. The block itself is intended behaviour (draftEmail refuses to stack drafts to avoid duplicate saved drafts). Reframe as UX-hardening: auto-recover a stale draft before compose rather than returning a hard failure. Not a demo blocker.
@@ -849,7 +850,7 @@ dom-selector-rotation / dialog-label variance - detection owner dom-selector-reg
 
 ### CLWX-70 — [bug/outlook] Aborted flows exit uncleanly and SAVE drafts - [Draft] litter accumulates in conversations and the Drafts folder
 
-- **State:** Todo  |  **Priority:** high
+- **State:** Ready  |  **Priority:** high
 
 Area: outlook / lane hygiene   Severity: medium-high (owner-reported with screenshot, 2026-09-03 ~08:24 AST)
 
@@ -876,8 +877,9 @@ CLWX-58 (stale open compose blocks flows), CLWX-69 (discard-confirm OK/Cancel we
 Regression class
 state-hygiene / exit-path invariant - candidate rule for state-idempotency-auditor: "compose opened implies compose closed (sent or discarded) on every code path".
 
-**Comments (1):**
+**Comments (2):**
 
+- ACCEPTANCE COMPLETE (2026-09-03, commits f3653589 + bfeb2cf1 + 9aabc8f6). The three legs: (1) SWEEPER shipped and run live (14 automation drafts deleted, re-scan 0; strict subject allowlist now a shared module). (2) EVAL POSTCONDITION: v2-eval runs pre/mid/end compose hygiene and returns the lane as found. (3) EXIT-PATH INVARIANT: reply and forward typing timeouts now discard the pane the call opened (discardOwnCompose) instead of leaking it - the exact 2026-09-03 cascade class; draftEmail failure paths return structured results with draftLeftOpen honestly reported; safety-class throws preserved (contract suites pin them). Live evidence on CLWX-58. Ready for human close.
 - User-facing impact CONFIRMED (2026-09-03 deep-dive): the external tester's email-send test on moe.15 dead-ended with "there might be a previously saved draft without a recipient" and a hidden New-mail button - on the SHARED test.fac mailbox where our eval runs left 23 saved drafts + [Draft]-marked conversations. The litter is no longer cosmetic; it blocked Ext-val B email testing. Sweeper run for the automation drafts executed this tick (see state vector).
 
 ### CLWX-71 — [feature/mcp] Thin MCP adapter over host-API :13210 - gated forms/outlook tools for any MCP client
