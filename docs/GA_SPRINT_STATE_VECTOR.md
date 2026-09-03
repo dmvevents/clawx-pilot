@@ -310,6 +310,25 @@ cells: fresh-box attach, intermittence ≥3×, seeded-litter mailbox,
 no-creds box, degrade surface, karunesh-matrix fixture) and cross-referenced
 on CLWX-34. Board at 78._
 
+_**Full-project mining tick (2026-09-03, owner-directed "extract all the
+blockers and bugs from the sessions").** New skill
+`.claude/skills/session-log-miner` (the reusable JSON-log/feedback-mining
+prompt) driven by a 6-miner workflow over 181 ClawX-related Codex rollouts
+(incl. the 254 MB demo-day session), 11 app-session JSONLs, and every
+feedback doc. **144 findings, all quote-backed:** 20 NEW → consolidated into
+**CLWX-79..89** (headliner: CLWX-79 URGENT — suspension_payload silently
+backfills missing statutory-form fields with demo defaults; also: pdf
+allowlist rejects ~/Downloads, typecheck blind to electron/**, same-version
+different-bits releases ×2, plaintext creds in local liaison logs);
+14 FIXED-UNGUARDED → named missing tests folded into CLWX-77 (comment);
+44 TRACKED-OPEN → provenance enriched (draft litter first sighted 06-23,
+VLM-creds 05-27 — weeks before filing); 46 FIXED-GUARDED with guards that
+ran green TODAY. Master doc:
+`docs/BLOCKER_BUG_COLLECTION_2026-09-03.md` (144-row table + coverage
+verdict + miner not-covered statements). Workflow note: the synthesis agent
+stalled; miners' results recovered from the journal and synthesized by the
+conductor. Board at 89._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three

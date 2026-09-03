@@ -218,6 +218,32 @@ Design first: persistent store decision (local SQLite vs Ministry SharePoint Lis
 Story
 S9 post-GA. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
 
+### CLWX-88 — [forms] Disposition the dead Bearer-API fill tier (401 since May)
+
+- **State:** Backlog  |  **Priority:** low
+
+Finding
+The Forms Bearer-API tier returns 401 Required user login since 2026-05-27 and survives only as a documented do-not-touch trap ("DO NOT trigger the Bearer-API path on stage").
+
+Acceptance
+Remove the tier or fence it behind a hard-disabled flag with the trap note moved into code; MSFORMS_AUTOMATION.md updated; no script can reach it accidentally.
+
+Source
+Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+### CLWX-89 — [selftest] Canary alert fatigue: separate expected degrade from real regressions
+
+- **State:** Backlog  |  **Priority:** low
+
+Finding
+The on-device selftest canary intermittently failed with Ollama up and cloud reachable, including two full 0/3 wipeouts (05-17 -> 08-24 window) - alerts fire without a triage path, so they get ignored.
+
+Acceptance
+Canary classifies failure cause (model load vs timeout vs real regression), suppresses expected-degrade windows, and files a register row automatically on 2 consecutive real failures.
+
+Source
+Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
 ## Unstarted
 
 ### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy
@@ -464,8 +490,9 @@ Archive baseline established 2026-09-01: 109 files, SHA256SUMS.txt, copy-only sn
 - Cross-referenced with docs/project-history/TIMELINE.md and docs/MINISTRY_REPLY_DRAFT_2026-08-20.md.
 Reference artifact — no further action unless new liaison comms require re-establishing custody. Prevents conflation of the two Ministry projects in status/scope conversations.
 
-**Comments (1):**
+**Comments (2):**
 
+- Custody-table correction (mining pass 2026-09-03): the chain-of-custody artifact attributes testing-checklist.md to the ClawX project; provenance in the archive shows it belongs to the video project thread. Correct the attribution when this card is next touched. Master table row in docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
 - Wiki evidence (commit 59e1ba26): docs/wiki/LIAISON_LOG.md §A/E consumes the SHA256-verified liaison-archive/2026-09-01/ (381 WhatsApp msgs, 109 files). Confirms Raj Ramdass = single person, two workstreams (ClawX + video); Karunesh = video only. Log keeps them strictly separated per the two-project rule.
 
 ### CLWX-33 — [CLWX-9] Install gcloud SDK to unblock the Windows IAP lane (B2)
@@ -952,9 +979,150 @@ Acceptance
 Source
 Owner directive 2026-09-03 + CLWX-72 lesson: test the artifact, not the workspace.
 
-**Comments (1):**
+**Comments (2):**
 
+- 14 FIXED-UNGUARDED findings folded into this matrix (mining pass 2026-09-03; full list docs/BLOCKER_BUG_COLLECTION_2026-09-03.md sec.3): NSIS upgrade-path smoke; SUBMIT_CONFIRMATION_RE unit row; empty-Azure-transcript fallback; packaged forms URL/schema presence; Bedrock transitive deps in verify-openclaw-bundle HOST_LOADABLE; waitForSendCompletion false-sent spec; release hash-chain gate (CLWX-85); persona never advises manual Chrome debugging; PS token-fragment redaction assertion; account-portable harness prompts; branding string-scan as repeatable check; no skipIf(win32) on release-platform coverage; K5 regression matrix per RC; claimed-evidence-exists release gate.
 - Normative input added (owner-directed 2026-09-03): docs/KARUNESH_ERROR_LEDGER.md - every error the external tester ever reported (full WhatsApp history 2026-05-01 onward, 14 ClawX rows K1-K14), each with its derived test criterion. The matrix MUST cover: K1/K2 fresh-box CDP-attach onboarding; K8 INTERMITTENCE rule (each doc read/write repeated >=3x per run, every load context); K10 drag-PDF on a fresh install incl. scanned/protected/large variants; K11 seeded-litter mailbox + no-AWS-creds box for the email flow; K13 Windows degrade with the OpenAI-SDK "Connection error." surface; K14 his exact 5 prompts as a named fixture (karunesh-matrix) beside Raj's 5-prompt suite (K9). Video-generator rows are tagged SEPARATE per the liaison rule and stay out of this matrix.
+
+### CLWX-79 — [bug/forms/trust] suspension_payload silently backfills missing statutory-form fields with demo defaults
+
+- **State:** Todo  |  **Priority:** urgent
+
+Finding (2026-05-27 session, verbatim)
+The normalizer then fills missing fields with demo defaults, so the payload always passes.
+
+Why urgent
+Silent data fabrication on a statutory Ministry form: a principal who omits a field gets a submission carrying invented values instead of a prompt. Trust + data-integrity class - worse than a failure.
+
+Acceptance
+1. Missing required fields produce a principal-readable ask-back, never a default.
+2. Unit rows: payload with N missing fields -> refusal listing them.
+3. Demo defaults survive ONLY behind an explicit DEMO flag, logged.
+
+Source
+Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+### CLWX-80 — [bug/doc-tools] Document ingestion path gaps: pdf allowlist rejects ~/Downloads; read tool returns raw OOXML bytes
+
+- **State:** Todo  |  **Priority:** high
+
+Findings (2026-05-25, verbatim)
+"Local media path is not under an allowed directory" for a Downloads PDF; and the generic read tool returned raw PK/ZIP bytes for .pptx/.xlsx into the model context instead of steering to document.* tools.
+
+Why
+"Summarise the PDF in my Downloads" is the core principal flow; and raw OOXML bytes burn tokens + confuse the model (the <think> leak incident rode this).
+
+Acceptance
+1. Allowlist covers Downloads/Documents/Desktop + OneDrive KFM equivalents (mirror doc-tools RELATIVE_SEARCH_DIRS).
+2. read tool detects OOXML/binary magic and refuses with a pointer to document.*.
+3. CLWX-77 matrix cells for both.
+
+Source
+Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+### CLWX-81 — [bug/outlook] Driver hardening batch: non-Inbox reply dead-end; sign-in false positives; <8-char contamination exemption
+
+- **State:** Todo  |  **Priority:** high
+
+Three findings from the 06-23 review lane (fix specs already drafted then, never carded)
+1. reply/forward force Inbox before opening the id: a message that was archived/moved/searched dead-ends not_found (HIGH in the era review).
+2. ensureInboxFolderOrSignin converts Inbox-confirm failures into needs_signin when sign-in-ish words appear in visible mail - wrong-folder false positive.
+3. The RAJ-4 body-in-recipient contamination check exempts normalized bodies under 8 chars - the class can silently return for short replies.
+
+Acceptance
+Each: targeted unit rows + one live eval row (reply-from-archive via search; wrong-folder sign-in probe; 3-char reply contamination check). 15/15 eval stays green.
+
+Source
+Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+### CLWX-82 — [ci] pnpm typecheck is blind to electron/** - build the project references
+
+- **State:** Todo  |  **Priority:** high
+
+Finding (2026-06-23, verbatim)
+The standard pnpm run typecheck only covers src directly; the Electron services tree compiles via a project reference that plain tsc --noEmit never builds.
+
+Why high
+Every outlook/forms driver bug this project shipped lived in electron/** - the type-unchecked tree. This is a class-enabler.
+
+Acceptance
+typecheck script builds all references (tsc -b --noEmit or per-project passes); CI red on an electron/** type error; preflight updated; document the runtime cost.
+
+Source
+Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+### CLWX-83 — [test-infra] Batch: vitest heap exhaustion on combined Outlook suites; no pwsh lint for windows-pilot; stale .codex model pins
+
+- **State:** Todo  |  **Priority:** medium
+
+Findings
+1. Combined targeted vitest run of Outlook suites hit FATAL heap exhaustion (Node 26).
+2. No pwsh/PSScriptAnalyzer on the Mac - PS 5.1-class bugs only surface live on the pilot (quoting/BOM classes have burned us 5+ times).
+3. .codex/agents/*.toml pinned a nonexistent model - subagent lanes silently errored for a month (20+ occurrences).
+
+Acceptance
+1. vitest worker memory bounded or suites sharded; combined run green.
+2. brew pwsh + PSScriptAnalyzer in the dev setup; a lint target over windows-pilot/*.ps1.
+3. .codex agent pins audited to existing models; a doctor check.
+
+Source
+Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+### CLWX-84 — [security] Hygiene sweep: plaintext sandbox credentials in local liaison logs/archive; probe args leak recipient/body
+
+- **State:** Todo  |  **Priority:** high
+
+Findings
+1. The sandbox account credential pair persists unredacted in local liaison monitor logs and the SHA-pinned 2026-09-01 archive (5+ locations) - local-only but violates the no-secrets floor and compounds CLWX-18/19.
+2. pilot-run-electron-cdp-probe.ps1 -DraftEmail passes recipient/body as process arguments - visible to any local process listing.
+
+Acceptance
+1. Redaction pass over liaison logs + archive (preserve hashes via sidecar note - chain-of-custody rule); monitor writes redacted going forward.
+2. Probe reads payload from a temp file, not argv.
+3. A grep gate over ~/openclaw-agent for credential shapes added to the security sitting checklist.
+
+Source
+Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+### CLWX-85 — [release] Version-bits integrity: same version string shipped different bits twice - hash-manifest gate
+
+- **State:** Todo  |  **Priority:** high
+
+Findings
+1. moe.10-era: release/win-unpacked and the NSIS installer carried the SAME version with different code (installer embedded a day-older app.asar).
+2. Identical installer filename across the 06-08 and 06-10 RC tags with different sha256. 3. One night (06-23) drifted across three installer hashes with docs citing a fourth.
+
+Acceptance
+Release workflow gate: version string must be unique per artifact set; a hash manifest (exe+asar+bundle) generated at build, published with the release, and diffed by install-verify. Any mismatch is a hard stop. CLAUDE.md bump-moe.N convention becomes enforced, not advisory.
+
+Source
+Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+### CLWX-86 — [bug/runtime] Tool<->host-API version skew: agent advertises routes the installed app lacks
+
+- **State:** Todo  |  **Priority:** medium
+
+Finding (2026-09-02, verbatim)
+browser host-API /diagnose: No route for POST /api/browser/diagnose - the agent tool catalog advertised a capability the installed moe.15 host-API does not serve.
+
+Acceptance
+Capability handshake at plugin registration: tools requiring host-API routes probe them once and self-park with a readable reason when absent; skew logged; unit row per gated tool.
+
+Source
+Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+### CLWX-87 — [asr] Windows ASR quality: WER benchmark + engine decision (System.Speech complaints x4)
+
+- **State:** Todo  |  **Priority:** medium
+
+Finding
+Owner feedback 4+ times across a month: "So have we updated the ASR model? This one is not that good." - System.Speech quality, previously masked by the ffmpeg/packaging failures (CLWX-20/K4). The pipeline is now proven (ASR_SMOKE_OK); the QUALITY question is unanswered.
+
+Acceptance
+WER measured on a fixed known-speech fixture set (Trinidadian-accent samples included) for System.Speech vs whisper.cpp vs Azure; decision recorded; if whisper wins, the Windows bundling cost is estimated. Ties to the minutes story S4.
+
+Source
+Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
 
 ## Started
 

@@ -44,6 +44,116 @@
   ],
   "issues": [
     {
+      "id": "b6c4df2c-c5a3-43c0-90ff-90def5e146dd",
+      "sequence_id": 89,
+      "name": "[selftest] Canary alert fatigue: separate expected degrade from real regressions",
+      "priority": "low",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Finding\nThe on-device selftest canary intermittently failed with Ollama up and cloud reachable, including two full 0/3 wipeouts (05-17 -> 08-24 window) - alerts fire without a triage path, so they get ignored.\n\nAcceptance\nCanary classifies failure cause (model load vs timeout vs real regression), suppresses expected-degrade windows, and files a register row automatically on 2 consecutive real failures.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "478c7212-9a6c-4741-bfc0-8061466073a7",
+      "sequence_id": 88,
+      "name": "[forms] Disposition the dead Bearer-API fill tier (401 since May)",
+      "priority": "low",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Finding\nThe Forms Bearer-API tier returns 401 Required user login since 2026-05-27 and survives only as a documented do-not-touch trap (\"DO NOT trigger the Bearer-API path on stage\").\n\nAcceptance\nRemove the tier or fence it behind a hard-disabled flag with the trap note moved into code; MSFORMS_AUTOMATION.md updated; no script can reach it accidentally.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "c9a52af7-b744-4fc7-8879-130702638cc6",
+      "sequence_id": 87,
+      "name": "[asr] Windows ASR quality: WER benchmark + engine decision (System.Speech complaints x4)",
+      "priority": "medium",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Finding\nOwner feedback 4+ times across a month: \"So have we updated the ASR model? This one is not that good.\" - System.Speech quality, previously masked by the ffmpeg/packaging failures (CLWX-20/K4). The pipeline is now proven (ASR_SMOKE_OK); the QUALITY question is unanswered.\n\nAcceptance\nWER measured on a fixed known-speech fixture set (Trinidadian-accent samples included) for System.Speech vs whisper.cpp vs Azure; decision recorded; if whisper wins, the Windows bundling cost is estimated. Ties to the minutes story S4.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "599ce5df-df8a-4178-888b-710c613dc349",
+      "sequence_id": 86,
+      "name": "[bug/runtime] Tool<->host-API version skew: agent advertises routes the installed app lacks",
+      "priority": "medium",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Finding (2026-09-02, verbatim)\nbrowser host-API /diagnose: No route for POST /api/browser/diagnose - the agent tool catalog advertised a capability the installed moe.15 host-API does not serve.\n\nAcceptance\nCapability handshake at plugin registration: tools requiring host-API routes probe them once and self-park with a readable reason when absent; skew logged; unit row per gated tool.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "26b9e5ea-5a47-4dd8-b6ff-78117b8391d3",
+      "sequence_id": 85,
+      "name": "[release] Version-bits integrity: same version string shipped different bits twice - hash-manifest gate",
+      "priority": "high",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Findings\n1. moe.10-era: release/win-unpacked and the NSIS installer carried the SAME version with different code (installer embedded a day-older app.asar).\n2. Identical installer filename across the 06-08 and 06-10 RC tags with different sha256. 3. One night (06-23) drifted across three installer hashes with docs citing a fourth.\n\nAcceptance\nRelease workflow gate: version string must be unique per artifact set; a hash manifest (exe+asar+bundle) generated at build, published with the release, and diffed by install-verify. Any mismatch is a hard stop. CLAUDE.md bump-moe.N convention becomes enforced, not advisory.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "d2b5b16f-590b-4387-825c-39d5773b3ec3",
+      "sequence_id": 84,
+      "name": "[security] Hygiene sweep: plaintext sandbox credentials in local liaison logs/archive; probe args leak recipient/body",
+      "priority": "high",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Findings\n1. The sandbox account credential pair persists unredacted in local liaison monitor logs and the SHA-pinned 2026-09-01 archive (5+ locations) - local-only but violates the no-secrets floor and compounds CLWX-18/19.\n2. pilot-run-electron-cdp-probe.ps1 -DraftEmail passes recipient/body as process arguments - visible to any local process listing.\n\nAcceptance\n1. Redaction pass over liaison logs + archive (preserve hashes via sidecar note - chain-of-custody rule); monitor writes redacted going forward.\n2. Probe reads payload from a temp file, not argv.\n3. A grep gate over ~/openclaw-agent for credential shapes added to the security sitting checklist.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "8119e566-b82c-43bb-8c9e-54e1bd847db4",
+      "sequence_id": 83,
+      "name": "[test-infra] Batch: vitest heap exhaustion on combined Outlook suites; no pwsh lint for windows-pilot; stale .codex model pins",
+      "priority": "medium",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Findings\n1. Combined targeted vitest run of Outlook suites hit FATAL heap exhaustion (Node 26).\n2. No pwsh/PSScriptAnalyzer on the Mac - PS 5.1-class bugs only surface live on the pilot (quoting/BOM classes have burned us 5+ times).\n3. .codex/agents/*.toml pinned a nonexistent model - subagent lanes silently errored for a month (20+ occurrences).\n\nAcceptance\n1. vitest worker memory bounded or suites sharded; combined run green.\n2. brew pwsh + PSScriptAnalyzer in the dev setup; a lint target over windows-pilot/*.ps1.\n3. .codex agent pins audited to existing models; a doctor check.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "cd97e90d-d53a-40bf-8296-eebbeef05a28",
+      "sequence_id": 82,
+      "name": "[ci] pnpm typecheck is blind to electron/** - build the project references",
+      "priority": "high",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Finding (2026-06-23, verbatim)\nThe standard pnpm run typecheck only covers src directly; the Electron services tree compiles via a project reference that plain tsc --noEmit never builds.\n\nWhy high\nEvery outlook/forms driver bug this project shipped lived in electron/** - the type-unchecked tree. This is a class-enabler.\n\nAcceptance\ntypecheck script builds all references (tsc -b --noEmit or per-project passes); CI red on an electron/** type error; preflight updated; document the runtime cost.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "a8282c93-e6ec-4ac1-81a8-8e16891d22af",
+      "sequence_id": 81,
+      "name": "[bug/outlook] Driver hardening batch: non-Inbox reply dead-end; sign-in false positives; <8-char contamination exemption",
+      "priority": "high",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Three findings from the 06-23 review lane (fix specs already drafted then, never carded)\n1. reply/forward force Inbox before opening the id: a message that was archived/moved/searched dead-ends not_found (HIGH in the era review).\n2. ensureInboxFolderOrSignin converts Inbox-confirm failures into needs_signin when sign-in-ish words appear in visible mail - wrong-folder false positive.\n3. The RAJ-4 body-in-recipient contamination check exempts normalized bodies under 8 chars - the class can silently return for short replies.\n\nAcceptance\nEach: targeted unit rows + one live eval row (reply-from-archive via search; wrong-folder sign-in probe; 3-char reply contamination check). 15/15 eval stays green.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "afeb72ed-9f70-46b5-9266-48f806b3161e",
+      "sequence_id": 80,
+      "name": "[bug/doc-tools] Document ingestion path gaps: pdf allowlist rejects ~/Downloads; read tool returns raw OOXML bytes",
+      "priority": "high",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Findings (2026-05-25, verbatim)\n\"Local media path is not under an allowed directory\" for a Downloads PDF; and the generic read tool returned raw PK/ZIP bytes for .pptx/.xlsx into the model context instead of steering to document.* tools.\n\nWhy\n\"Summarise the PDF in my Downloads\" is the core principal flow; and raw OOXML bytes burn tokens + confuse the model (the <think> leak incident rode this).\n\nAcceptance\n1. Allowlist covers Downloads/Documents/Desktop + OneDrive KFM equivalents (mirror doc-tools RELATIVE_SEARCH_DIRS).\n2. read tool detects OOXML/binary magic and refuses with a pointer to document.*.\n3. CLWX-77 matrix cells for both.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "f8ae2519-2189-454b-a91d-f9700d9cc41b",
+      "sequence_id": 79,
+      "name": "[bug/forms/trust] suspension_payload silently backfills missing statutory-form fields with demo defaults",
+      "priority": "urgent",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Finding (2026-05-27 session, verbatim)\nThe normalizer then fills missing fields with demo defaults, so the payload always passes.\n\nWhy urgent\nSilent data fabrication on a statutory Ministry form: a principal who omits a field gets a submission carrying invented values instead of a prompt. Trust + data-integrity class - worse than a failure.\n\nAcceptance\n1. Missing required fields produce a principal-readable ask-back, never a default.\n2. Unit rows: payload with N missing fields -> refusal listing them.\n3. Demo defaults survive ONLY behind an explicit DEMO flag, logged.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
+      "comments": []
+    },
+    {
       "id": "2063efa1-566d-4a3d-b928-b10cf04fa5ca",
       "sequence_id": 78,
       "name": "[bug/degrade] \"Connection error.\" unmatched by the degrade classifier - cloud failure shows a red banner instead of failing over to a warm on-device model",
@@ -62,6 +172,10 @@
       "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "Why (owner ask: \"look around the corner\")\nEvery packaging-class defect so far (playwright-core moe.9, canvas binding moe.15) shipped because our tests run from the repo workspace, which resolves repo node_modules and masks packaged-runtime gaps. The systemic fix is a suite that exercises the ARTIFACT: the bundled gateway + packaged node, per doc type and per command.\n\nScope - doc types to cover\npdf (text + SCANNED/image-only + large >10MB + password-protected -> readable refusal), docx (+ legacy .doc -> readable refusal), xlsx (+ csv), pptx (status ambiguity noted in the audit - support or refuse cleanly), images (png/jpg via VLM path), odt/rtf -> refusal wording. Each: read, summarise-turn, and where applicable write.\n\nScope - commands\ndocument.read_* / write_* via a real gateway process from build/openclaw (not repo imports); outlook + forms tool registration smoke; skill-load smoke for the principal bundle. Optionally driven through the CLWX-71 MCP adapter once it exists - an MCP client against the packaged app is exactly the artifact-grade transport.\n\nAcceptance\n1. New harness target (pnpm harness:artifact) spawning the bundled runtime; one row per doc-type x command with PASS/REFUSED-READABLY/FAIL.\n2. Wired into preflight for package:win/mac (can be a fast subset) + full matrix in CI/nightly.\n3. Unknown/unsupported types produce principal-readable refusals, never raw stack traces (principal-proxy bar).\n4. First full run documented with gaps filed as cards.\n\nSource\nOwner directive 2026-09-03 + CLWX-72 lesson: test the artifact, not the workspace.",
       "comments": [
+        {
+          "text": "14 FIXED-UNGUARDED findings folded into this matrix (mining pass 2026-09-03; full list docs/BLOCKER_BUG_COLLECTION_2026-09-03.md sec.3): NSIS upgrade-path smoke; SUBMIT_CONFIRMATION_RE unit row; empty-Azure-transcript fallback; packaged forms URL/schema presence; Bedrock transitive deps in verify-openclaw-bundle HOST_LOADABLE; waitForSendCompletion false-sent spec; release hash-chain gate (CLWX-85); persona never advises manual Chrome debugging; PS token-fragment redaction assertion; account-portable harness prompts; branding string-scan as repeatable check; no skipIf(win32) on release-platform coverage; K5 regression matrix per RC; claimed-evidence-exists release gate.",
+          "created": "2026-09-03T05:35:40.776438Z"
+        },
         {
           "text": "Normative input added (owner-directed 2026-09-03): docs/KARUNESH_ERROR_LEDGER.md - every error the external tester ever reported (full WhatsApp history 2026-05-01 onward, 14 ClawX rows K1-K14), each with its derived test criterion. The matrix MUST cover: K1/K2 fresh-box CDP-attach onboarding; K8 INTERMITTENCE rule (each doc read/write repeated >=3x per run, every load context); K10 drag-PDF on a fresh install incl. scanned/protected/large variants; K11 seeded-litter mailbox + no-AWS-creds box for the email flow; K13 Windows degrade with the OpenAI-SDK \"Connection error.\" surface; K14 his exact 5 prompts as a named fixture (karunesh-matrix) beside Raj's 5-prompt suite (K9). Video-generator rows are tagged SEPARATE per the liaison rule and stay out of this matrix.",
           "created": "2026-09-03T04:21:08.021519Z"
@@ -695,6 +809,10 @@
       "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "Archive baseline established 2026-09-01: 109 files, SHA256SUMS.txt, copy-only snapshot at ~/openclaw-agent/liaison-archive/2026-09-01/.\n\n- 71 artifacts catalogued with sender, date, channel, project attribution (CHAIN_OF_CUSTODY.md).\n- Raj Ramdass identity confirmed: single person, two projects (ClawX infra + curriculum video).\n- 2 artifacts undetermined (SSMD agenda, Sattaur packet); 7 open provenance questions documented.\n- Cross-referenced with docs/project-history/TIMELINE.md and docs/MINISTRY_REPLY_DRAFT_2026-08-20.md.\nReference artifact — no further action unless new liaison comms require re-establishing custody. Prevents conflation of the two Ministry projects in status/scope conversations.",
       "comments": [
+        {
+          "text": "Custody-table correction (mining pass 2026-09-03): the chain-of-custody artifact attributes testing-checklist.md to the ClawX project; provenance in the archive shows it belongs to the video project thread. Correct the attribution when this card is next touched. Master table row in docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
+          "created": "2026-09-03T05:35:40.750457Z"
+        },
         {
           "text": "Wiki evidence (commit 59e1ba26): docs/wiki/LIAISON_LOG.md §A/E consumes the SHA256-verified liaison-archive/2026-09-01/ (381 WhatsApp msgs, 109 files). Confirms Raj Ramdass = single person, two workstreams (ClawX + video); Karunesh = video only. Log keeps them strictly separated per the two-project rule.",
           "created": "2026-09-01T10:10:00.159070Z"
