@@ -238,6 +238,30 @@ last acceptance leg before Ready is the RECORDED run (adapt
 forms-submit-recorded.ts: hard-pinned URL, responses-count increment,
 video+trace). S2 matrix row "Daily Report e2e" ◐→● for fill/gate/submit._
 
+_**Karunesh deep-dive + V-batch launch tick (2026-09-03, owner-directed "check
+his messages / drive everything").** Read his full WhatsApp thread + pulled
+his app log and screenshots via the bridge. **His moe.15 matrix: 4/5 Worked;
+PDF summarise FAILED; email send FAILED.** Root causes, all log-evidenced:
+**CLWX-72 (URGENT)** packaged Windows runtime missing `pdf-parse`
+(document.read_pdf dead; config was correct since June — bundler/loader
+defect; pdf-parse was never on the install-verify checklist so it shipped
+unverified); **CLWX-73 (high)** chrome-cdp repair falls back to a MANAGED
+Chromium profile on port_bind_timeout — a profile=user hard-rule violation
+path in shipped code; **CLWX-74 (high)** VLM grounding hard-requires local
+AWS creds (testers/principals have none) and the New-mail locator missed —
+plausibly because OUR eval draft litter on the shared test.fac mailbox hides
+New mail (CLWX-70 impact CONFIRMED user-facing); **CLWX-75 (medium)** header
+"Disconnected" badge contradicts the gateway-connected footer mid-turn.
+Positive: his matrix item d = the FIRST external in-app write-turn proof
+(noted on CLWX-65). **Acted:** `scripts/outlook-drafts-sweeper.ts` authored
+(strict automation-subject allowlist, hover-delete, dry-run default) and run
+— **14 automation drafts deleted, re-scan 0** — his send path is unblocked.
+Reply drafted-and-held (`outbound-drafts/2026-09-03-karunesh-test-findings-
+DRAFT.md`, owner GO to send). **V-batch running** as background workflow
+(wf_d05d351a): VM RUNNING, stage 1 captures the installed-tree ground truth
+for CLWX-72, then ASR/cron/degrade/b2 surfaces. Owner authorization on
+record this tick: gcloud + V-batch + all tasks agent-driven._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three

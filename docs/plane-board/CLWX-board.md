@@ -516,8 +516,9 @@ Accept: gcloud installed + authed; a tunnel to clawx-win-rc-20260609 established
 Liaison log surfaced 4 reproducible defects Raj reported the day before the Principals demo (source: docs/wiki/LIAISON_LOG.md §C, WhatsApp archive): (1) send fails with "draft subject has been changed before it can be sent"; (2) reply misinterprets content (meal prefs read as shirt sizes); (3) reply archives the original email; (4) draft landed in the To: field (one-off). Plus 2 vague: PDF read inconsistency, document-search inconsistency. No post-demo verdict was ever captured. Note: (1) may already be fixed by the moe.10 hard-confirm gate.
 Accept: each defect reproduced-or-refuted against moe.11 with evidence (trace/log path); confirmed-live ones filed as individual bug cards via scripts/report-bug.mjs; the send-gate one verified against the moe.10 gate. Ladders to KR1 (live-LLM correctness) on the OKR anchor.
 
-**Comments (5):**
+**Comments (6):**
 
+- New external-tester matrix (moe.15, 2026-09-02 evening): a. capabilities answer WORKED; b. letter draft WORKED; c. PDF summarise FAILED (new urgent packaging card - pdf-parse missing at runtime); d. Word doc create-to-Desktop WORKED (first external in-app write-turn proof - relevant to CLWX-65); e. email summarise WORKED. Email SEND failed (new cards: managed-profile fallback, VLM-creds, plus CLWX-70 litter). KAR-PDF from the register is now REPRODUCED with a named root cause.
 - 2026-09-03 sprint tick: RAJ-2 dispositioned — MODEL LAYER NOT REPRODUCED. Live-lane scenario scripts/raj2-reply-fidelity-check.ts: CDP attach to the signed-in user Chrome, top-10 inbox survey with per-candidate full-body scoring, richest real email chosen (101 distinct content words), live cloud summarise+draft-reply turn, dual deterministic assertion PASSED: coverage 4/8 of frequency-ranked distinctive source words (50 percent floor met) and ZERO invented entities (proper nouns / date words / numbers all sourced). No compose pane opened, nothing dispatched, confirm never set; typecheck green. Exit-code contract for re-runs: 0 PASS / 1 FAIL / 2 lane / 3 seeding / 4 infra. Evidence: skills/laptop/evidence/2026-09-03-raj2-fidelity/RESULT.md. Scorecard now 4/4: RAJ-1 FIXED-verified (a8322ad9), RAJ-2 refuted at the model layer (this run), RAJ-3 refuted (92015c75), RAJ-4 FIXED-verified (a8322ad9). Card acceptance met; moving to Ready for human close. IMPORTANT by-catch: the run surfaced a NEW tool-layer defect — readEmail can return a STALE reading-pane body (wrong email content for the clicked row), a plausible root cause for the original 06-21 report. Filed as CLWX-46 via the report-bug front door; recommend the settle-on-expected-item guard before GA.
 - RAJ-3 dispositioned: NOT REPRODUCED (targeted scenario, commit 92015c75). scripts/raj3-reply-archive-check.ts: read inbox → open reply on newest message → discard without dispatching → re-read inbox → original still present. Reply flow does not archive the original on current code + outlook.cloud.microsoft. Scorecard: 3 of 4 defects dispositioned. RAJ-1 FIXED (gate false-negative + accidental-refusal error text), RAJ-4 FIXED (verifier misclassified list rows), RAJ-3 REFUTED (not reproducible). Remaining: RAJ-2 (content misread) — tool-layer read fidelity is verified (W3.1/W7.1); the misread was model-layer summarization, so the scenario needs a full LLM turn against a seeded structured email (design: seed meal-preferences email → agent turn "summarize what this asks" → assert fidelity). Next lane session or the sprint-driver tick can run it.
 - MAJOR triage progress — live stress session on the Mac test.fac lane (owner-directed, 2026-09-02, the day the outlook.cloud.microsoft migration reached our tenant). Per-defect dispositions: - RAJ-1 (subject-gate error, HIGH): ROOT-CAUSED + FIXED (a8322ad9). Two-sided: (a) the "changed after review" branch was a gate FALSE NEGATIVE — a subject-drifted draft actually went out during testing once the pipeline worked end-to-end (self-addressed sandbox message; contained). Historically the path refused by ACCIDENT because post-dispatch verification kept failing — producing exactly the "draft subject has been changed" error Raj saw. (b) Verification now works on the new domain (origin-derived URLs + SPA sidebar navigation). Subject drift now refuses at the hard gate; only body drift (principal edits after review) is allowed. Live 4-step gate proof PASS + 73/73 contract units. - RAJ-4 (text in To: field, LOW): ROOT-CAUSED + FIXED (a8322ad9). The verifier classified inbox message-list ROWS as recipient fields via loose aria-label substring selectors — any list row echoing the draft text (e.g. a reply quoting visible text) failed a correct draft. Recipient wells now require editable fields. Reproduced live, fix verified by the 15/15 eval on the new domain. - RAJ-2 (content misread, MED): PARTIALLY COVERED. Read-fidelity rows (W3.1, W7.1) pass; the specific meal-preferences email no longer exists to replay. Needs a content-fidelity fixture scenario — remaining item. - RAJ-3 (reply archives original, MED): NOT YET REPRODUCED. W5.1 reply-pane row passes; a targeted reply→check-folder scenario is the remaining item. Also: full lane revalidation on outlook.cloud.microsoft (15/15 eval, 3-turn LLM smoke, 4-step gate proof) — the migration itself was the trigger for this defect class, and the lane now survives it. Debug protocol codified in .claude/skills/outlook-lane-debug/SKILL.md. Remaining for Ready: RAJ-2 fixture scenario + RAJ-3 targeted scenario.
@@ -722,6 +723,10 @@ Acceptance (QA bar)
 Story
 S3 Documents. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
 
+**Comments (1):**
+
+- External evidence for the Windows leg: the tester's prompt "Create a Word document listing five things... save it to my Desktop" WORKED on moe.15 (his matrix item d) - a real in-app write turn on a real Windows box. Capture-grade evidence still owed (this card's acceptance), but gap b2 now has a live external datapoint.
+
 ### CLWX-66 — [documents] Meeting-minutes template + classify/extract/route e2e + product-doc reconciliation
 
 - **State:** Todo  |  **Priority:** medium
@@ -812,6 +817,10 @@ CLWX-58 (stale open compose blocks flows), CLWX-69 (discard-confirm OK/Cancel we
 Regression class
 state-hygiene / exit-path invariant - candidate rule for state-idempotency-auditor: "compose opened implies compose closed (sent or discarded) on every code path".
 
+**Comments (1):**
+
+- User-facing impact CONFIRMED (2026-09-03 deep-dive): the external tester's email-send test on moe.15 dead-ended with "there might be a previously saved draft without a recipient" and a hidden New-mail button - on the SHARED test.fac mailbox where our eval runs left 23 saved drafts + [Draft]-marked conversations. The litter is no longer cosmetic; it blocked Ext-val B email testing. Sweeper run for the automation drafts executed this tick (see state vector).
+
 ### CLWX-71 — [feature/mcp] Thin MCP adapter over host-API :13210 - gated forms/outlook tools for any MCP client
 
 - **State:** Todo  |  **Priority:** medium
@@ -837,6 +846,88 @@ No Graph MCP for forms (no API to wrap). Logic Apps-as-MCP-server (preview) revi
 
 Sources
 microsoft/mcp catalog; microsoft/playwright-mcp; ChromeDevTools/chrome-devtools-mcp; softeria/ms-365-mcp-server; learn.microsoft.com Forms connector + Logic Apps MCP preview + Enterprise Graph MCP; modelcontextprotocol/typescript-sdk. Full report in docs/MCP_INTEGRATION_RESEARCH_2026-09-03.md.
+
+### CLWX-72 — [bug/packaging] moe.15 Windows runtime missing pdf-parse - document.read_pdf dead on tester install (KAR-PDF root cause)
+
+- **State:** Todo  |  **Priority:** urgent
+
+Area: packaging / doc-tooling   Severity: urgent (external-tester-blocking; Ext-val B leg; KR1-adjacent)
+
+Symptom
+Tester drags NSCC-2026.pdf into chat, asks for a summary; app replies "trouble reading PDF documents". Log (twice): "[tools] document.read_pdf failed: pdf-parse module not found - the packaged Windows runtime is missing this dep."
+
+Analysis so far
+pdf-parse is in package.json dependencies (since 2026-06-09) AND in EXTRA_BUNDLED_PACKAGES (scripts/openclaw-bundle-config.mjs, since 2026-06-09) - so the config was correct when moe.15 was built. Either bundle-openclaw.mjs silently fails to copy pdf-parse (v2 package layout / pnpm store shape?) or the runtime loader (doc-tools.mjs loadDep + augmentModulePathsForPackagedApp) cannot see it on a real install. NOTE: the moe.15 VM install verification checked docx/xlsx/mammoth/playwright-core - pdf-parse was never on the checklist, so this shipped unverified. V-batch stage 1 (running now) is capturing ground truth from the installed VM tree.
+
+Acceptance
+1. Ground-truth listing of resources/openclaw/node_modules on an installed moe.15 (V-batch evidence).
+2. Root cause named (bundler copy failure vs loader path).
+3. Fix + the presence check ADDED to the install-verify script and the preflight (dependency-class-auditor rule: every EXTRA_BUNDLED_PACKAGES entry must exist in the packaged tree).
+4. Re-verified on a fresh install: drag-PDF summarise works.
+5. Regression class: dependency-class (moe.9 playwright-core sibling).
+
+Source
+Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.
+
+### CLWX-73 — [bug/hard-rule] chrome-cdp repair falls back to a MANAGED Chromium profile - violates the profile=user rule on tenant flows
+
+- **State:** Todo  |  **Priority:** high
+
+Area: outlook / chrome-cdp   Severity: high (hard-rule violation path shipping in production code)
+
+Symptom (tester log)
+"default Chrome profile launch ended with port_bind_timeout; trying managed profile fallback; launching managed profile for CDP at ...\Ministry of Education\Chrome CDP Profile". The tester then had to sign in inside the managed profile (read-inbox needs_signin -> ok after manual sign-in).
+
+Why this is a bug
+The hard rule exists because Conditional Access blocks managed sessions on moe.gov.tt (AADSTS53003). It happened to work on fac.edu.tt, but on a real principal laptop this fallback will hard-fail against the Ministry tenant AND trains testers to sign in inside an automation-owned profile. port_bind_timeout usually means the user's real Chrome is already running WITHOUT the debug port - the correct remediation is the documented relaunch-with-port flow, not a managed profile.
+
+Acceptance
+1. Managed-profile fallback removed or gated to non-Microsoft flows only.
+2. port_bind_timeout path surfaces a principal-readable instruction (relaunch Chrome with the debug port / one-click helper) instead of silently switching trust models.
+3. dom/flow tests cover the port-conflict path.
+
+Source
+Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.
+
+### CLWX-74 — [bug/resilience] VLM grounding hard-fails without AWS creds - locator fallback chain dies on tester/principal boxes
+
+- **State:** Todo  |  **Priority:** high
+
+Area: outlook / grounding   Severity: high (email draft dead-ends for any box without Bedrock credentials)
+
+Symptom (tester log)
+"VlmGrounder.ground failed ... Could not load credentials from any providers" then "/api/outlook/draft failed: Could not find target (semantic locator missed and VLM grounding failed)" - three times. The agent told the tester to check drafts/try later.
+
+Analysis
+Two stacked defects: (a) the semantic locator for "New mail" missed - plausibly because the shared test.fac mailbox carried automation draft litter and Outlook hides New mail when the reading pane has a draft (see CLWX-70, outlook-actions.ts:1697 comment); (b) the VLM fallback assumes Bedrock credentials exist - principals and testers will NEVER have local AWS creds, so the fallback tier is dead weight off the dev Mac. Cloud VLM must route via the app's managed provider (Gateway/APIM), or the locator tier must be robust enough to not need it.
+
+Acceptance
+1. New-mail locator survives a mailbox with draft litter (fallbacks incl. the compose keyboard shortcut N / toolbar aria).
+2. VLM grounding uses the app's provider chain (not local AWS creds), or degrades with a principal-readable message.
+3. e2e: draft flow passes on a box with NO aws credentials.
+
+Source
+Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.
+
+### CLWX-75 — [bug/ui-trust] Header shows "Disconnected" while footer shows "gateway connected" during working turns
+
+- **State:** Todo  |  **Priority:** medium
+
+Area: renderer / trust   Severity: medium (anonymise/trust family with CLWX-52/53)
+
+Symptom (tester screenshots, both)
+Top-right badge: red "Disconnected" next to "Talking to Main Agent". Footer, same instant: "gateway connected | port: 18789 | pid: 14332" - while turns are visibly executing (tool calls run, replies stream).
+
+Why it matters
+A principal seeing "Disconnected" mid-task loses trust in everything that follows (the 3:30pm dropped-link scenario is the product's defining failure mode). Either the badge tracks a different, stale channel (e.g. a WS heartbeat) or its state machine never recovers after a transient.
+
+Acceptance
+1. Identify what the header badge actually tracks; reconcile with the footer gateway indicator.
+2. Badge reflects true turn-capability state; a transient recovers it.
+3. principal-proxy persona review passes on the fixed build.
+
+Source
+Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.
 
 ## Started
 
