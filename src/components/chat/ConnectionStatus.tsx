@@ -5,15 +5,15 @@
  * account. Vendor / model names are intentionally hidden — only "Online",
  * "On this device", "Reconnecting" or "Disconnected" are shown.
  *
- * Probe strategy:
- *   • Gateway state and health come from useGatewayStore.
- *   • For an online active provider we issue a short HEAD against the
- *     account's baseUrl, cached for 30s in module scope. If no baseUrl is
- *     known (or for on-device providers) we skip the probe and classify
- *     by vendorId only — the Gateway health acts as the local liveness
- *     signal in that case.
+ * Source of truth: the Gateway status stream (state + gatewayReady) — the
+ * same signal the composer footer renders — plus the host-API health check.
+ * The badge deliberately does NOT probe the provider host from the renderer:
+ * model calls run from the gateway process, whose network path (CSP, proxy,
+ * headers) differs from the renderer's, so a renderer-side probe can fail
+ * while turns execute fine. Provider unreachability is handled at send time
+ * by the channel-degrade path instead.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useGatewayStore } from '@/stores/gateway';
 import { useProviderStore } from '@/stores/providers';
@@ -30,47 +30,6 @@ import { splitModelRef, resolveRuntimeProviderKey } from '@/lib/model-options';
 import type { ProviderAccount } from '@/lib/providers';
 
 type DisplayState = 'online' | 'on-device' | 'reconnecting' | 'disconnected';
-
-interface ProbeEntry {
-  ok: boolean;
-  expiresAt: number;
-}
-
-const PROBE_TTL_MS = 30_000;
-const PROBE_TIMEOUT_MS = 4_000;
-const probeCache = new Map<string, ProbeEntry>();
-const inflightProbes = new Map<string, Promise<boolean>>();
-
-function probeOnlineHost(baseUrl: string): Promise<boolean> {
-  const now = Date.now();
-  const cached = probeCache.get(baseUrl);
-  if (cached && cached.expiresAt > now) {
-    return Promise.resolve(cached.ok);
-  }
-  const inflight = inflightProbes.get(baseUrl);
-  if (inflight) return inflight;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-  const probe = fetch(baseUrl, {
-    method: 'HEAD',
-    mode: 'no-cors',
-    signal: controller.signal,
-    cache: 'no-store',
-  })
-    .then(() => true)
-    .catch(() => false)
-    .finally(() => {
-      clearTimeout(timeout);
-      inflightProbes.delete(baseUrl);
-    })
-    .then((ok) => {
-      probeCache.set(baseUrl, { ok, expiresAt: Date.now() + PROBE_TTL_MS });
-      return ok;
-    });
-  inflightProbes.set(baseUrl, probe);
-  return probe;
-}
 
 function pickActiveAccount(
   accounts: ProviderAccount[],
@@ -94,6 +53,7 @@ function pickActiveAccount(
 
 export function ConnectionStatus() {
   const gatewayStatusState = useGatewayStore((s) => s.status.state);
+  const gatewayReady = useGatewayStore((s) => s.status.gatewayReady);
   const gatewayHealth = useGatewayStore((s) => s.health);
   const accounts = useProviderStore((s) => s.accounts);
   const defaultAccountId = useProviderStore((s) => s.defaultAccountId);
@@ -116,32 +76,17 @@ export function ConnectionStatus() {
     [activeAccount],
   );
 
-  // We only reach into setState inside the async resolution branch — when no
-  // probe is needed (on-device, or no baseUrl) we leave the value as `true`.
-  // Resetting to `true` on every change is handled by re-running the effect,
-  // which short-circuits without touching state when there's nothing to probe.
-  const [providerReachable, setProviderReachable] = useState<boolean>(true);
-
-  useEffect(() => {
-    if (providerClass !== 'online' || !activeAccount?.baseUrl) return;
-    let cancelled = false;
-    void probeOnlineHost(activeAccount.baseUrl).then((ok) => {
-      if (!cancelled) setProviderReachable(ok);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [providerClass, activeAccount?.baseUrl]);
-
   const display: DisplayState = useMemo(() => {
     if (gatewayStatusState === 'starting' || gatewayStatusState === 'reconnecting') {
       return 'reconnecting';
     }
     if (gatewayStatusState !== 'running') return 'disconnected';
+    // Running but subsystems not yet ready: the footer calls this "starting";
+    // treat it as a transient, not a dead connection.
+    if (gatewayReady === false) return 'reconnecting';
     if (gatewayHealth && gatewayHealth.ok === false) return 'disconnected';
-    if (providerClass === 'online' && !providerReachable) return 'disconnected';
     return providerClass;
-  }, [gatewayStatusState, gatewayHealth, providerClass, providerReachable]);
+  }, [gatewayStatusState, gatewayReady, gatewayHealth, providerClass]);
 
   const label = useMemo(() => {
     switch (display) {

@@ -287,7 +287,11 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
           }));
           unsubscribers.push(subscribeHostEvent('gateway:presence', (payload) => {
             const current = get().health;
-            set({ health: { ...(current ?? { ok: true }), presence: payload } });
+            // A presence event proves the gateway is alive and talking, so it
+            // also clears a stale ok:false left by a failed checkHealth().
+            // Spreading the previous health without resetting `ok` used to
+            // latch the header badge on "Disconnected" until app restart.
+            set({ health: { ...(current ?? {}), ok: true, presence: payload } });
           }));
           unsubscribers.push(subscribeHostEvent('gateway:chat-message', (payload) => {
             handleGatewayChatMessage(payload);
@@ -336,6 +340,13 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
                     `[gateway-store] reconciled stale state: ${current.state} → ${latest.state}`,
                   );
                   set({ status: latest });
+                }
+                // A failed checkHealth() leaves health.ok === false with no
+                // event guaranteed to reset it. Re-verify on the same cadence
+                // so a transient host-API hiccup recovers instead of latching
+                // the UI on "Disconnected".
+                if (latest.state === 'running' && get().health?.ok === false) {
+                  void get().checkHealth();
                 }
               })
               .catch(() => { /* ignore */ });

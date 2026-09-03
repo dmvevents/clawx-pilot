@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { useStickToBottomInstant } from '@/hooks/use-stick-to-bottom-instant';
 import { useMinLoading } from '@/hooks/use-min-loading';
 import { extractGeneratedFiles, generatedFileHasDiffPayload, type GeneratedFile } from '@/lib/generated-files';
+import { principalErrorDisplay, type ErrorDisplayKind } from '@/lib/error-display';
 import { GeneratedFilesPanel } from '@/components/file-preview/GeneratedFilesPanel';
 import type { FilePreviewTarget } from '@/components/file-preview/types';
 import { buildPreviewTarget } from '@/components/file-preview/build-preview-target';
@@ -40,6 +41,13 @@ const ArtifactPanelLazy = lazy(() =>
 const PanelResizeDividerLazy = lazy(() =>
   import('@/components/file-preview/PanelResizeDivider').then((m) => ({ default: m.PanelResizeDivider })),
 );
+
+const ERROR_DISPLAY_KEY: Record<ErrorDisplayKind, string> = {
+  unreachable: 'errorDisplay.unreachable',
+  'rate-limited': 'errorDisplay.rateLimited',
+  'auth-config': 'errorDisplay.authConfig',
+  generic: 'errorDisplay.generic',
+};
 
 type GraphStepCacheEntry = {
   steps: ReturnType<typeof deriveTaskSteps>;
@@ -133,6 +141,11 @@ export function Chat() {
   const clearError = useChatStore((s) => s.clearError);
   const degradeNotice = useChatStore((s) => s.degradeNotice);
   const clearDegradeNotice = useChatStore((s) => s.clearDegradeNotice);
+  // Principal-facing wording for the two error surfaces. The raw string moves
+  // into a collapsed details expander; the classes that must stay visible
+  // (auth/config) still surface, just in plain language.
+  const errorDisplay = useMemo(() => principalErrorDisplay(error), [error]);
+  const runErrorDisplay = useMemo(() => principalErrorDisplay(runError), [runError]);
   const fetchAgents = useAgentsStore((s) => s.fetchAgents);
   const agents = useAgentsStore((s) => s.agents);
 
@@ -885,32 +898,54 @@ export function Chat() {
         </div>
       )}
 
-      {/* Run error callout */}
+      {/* Run error callout. Plain-language primary line; the raw provider
+          string stays available behind a collapsed technical-details
+          expander instead of being the headline. */}
       {runError && (
         <div className="px-4 pt-2" data-testid="chat-run-error">
           <div className="max-w-4xl mx-auto rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3">
             <p className="text-sm font-medium text-destructive flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
-              {t('runError.title')}
+              {t(ERROR_DISPLAY_KEY[runErrorDisplay.kind])}
             </p>
-            <p className="mt-1 text-sm text-destructive/90 break-words">
-              {runError}
-            </p>
+            {runErrorDisplay.detail && (
+              <details className="mt-1">
+                <summary className="cursor-pointer text-xs text-destructive/60 hover:text-destructive/80">
+                  {t('errorDisplay.detailsLabel')}
+                </summary>
+                <p className="mt-1 text-xs text-destructive/80 break-words">
+                  {runErrorDisplay.detail}
+                </p>
+              </details>
+            )}
           </div>
         </div>
       )}
 
-      {/* Error bar */}
+      {/* Error bar. Same principal-facing wording rules as the run error
+          callout above: plain message first, raw string collapsed. */}
       {error && (
         <div className="px-4 py-2 bg-destructive/10 border-t border-destructive/20">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <p className="text-sm text-destructive flex items-center gap-2">
-              <AlertCircle className="h-4 w-4" />
-              {error}
-            </p>
+          <div className="max-w-4xl mx-auto flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm text-destructive flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {t(ERROR_DISPLAY_KEY[errorDisplay.kind])}
+              </p>
+              {errorDisplay.detail && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-xs text-destructive/60 hover:text-destructive/80">
+                    {t('errorDisplay.detailsLabel')}
+                  </summary>
+                  <p className="mt-1 text-xs text-destructive/80 break-words">
+                    {errorDisplay.detail}
+                  </p>
+                </details>
+              )}
+            </div>
             <button
               onClick={clearError}
-              className="text-xs text-destructive/60 hover:text-destructive underline"
+              className="shrink-0 text-xs text-destructive/60 hover:text-destructive underline"
             >
               {t('common:actions.dismiss')}
             </button>

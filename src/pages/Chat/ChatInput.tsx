@@ -25,7 +25,7 @@ import { useChatStore } from '@/stores/chat';
 import { useArtifactPanel } from '@/stores/artifact-panel';
 import { buildPreviewTarget } from '@/components/file-preview/build-preview-target';
 import { useProviderStore } from '@/stores/providers';
-import { buildConfiguredModelOptions, formatModelRefLabel } from '@/lib/model-options';
+import { buildConfiguredModelOptions, channelLabelForModelRef, formatModelRefLabel } from '@/lib/model-options';
 import type { AgentSummary } from '@/types/agent';
 import type { QuickAccessSkill } from '@/types/skill';
 import { useTranslation } from 'react-i18next';
@@ -257,7 +257,12 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
     [providerAccounts, providerDefaultAccountId, providerStatuses],
   );
   const effectiveModelRef = optimisticModelRef || currentAgent?.modelRef || defaultModelRef || modelOptions[0]?.modelRef || null;
-  const currentModelLabel = formatModelRefLabel(effectiveModelRef);
+  // Hard rule: chat-facing surfaces never show a raw model id. Principals see
+  // the channel label; the raw ref stays behind the dev-mode unlock.
+  const devModeUnlocked = useSettingsStore((s) => s.devModeUnlocked);
+  const currentModelLabel = devModeUnlocked
+    ? formatModelRefLabel(effectiveModelRef)
+    : channelLabelForModelRef(effectiveModelRef, providerAccounts);
 
   // Channel routing — derive what's actually possible from the configured
   // accounts, then resolve the effective channel for this session.
@@ -300,7 +305,10 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
     );
   }, [quickSkills, skillQuery]);
   const showAgentPicker = mentionableAgents.length > 0;
-  const showModelPicker = modelOptions.length > 1;
+  // The dropdown lists raw model ids, so it is a diagnostic surface: dev-mode
+  // only. Principals switch via the ChannelToggle ("Online" / "On this
+  // device") instead.
+  const showModelPicker = modelOptions.length > 1 && devModeUnlocked;
   const chatComposerStatusComponents = rendererExtensionRegistry.getChatComposerStatusComponents();
   const isGatewayUsable = gatewayStatus.state === 'running' && gatewayStatus.gatewayReady !== false;
   const inputDisabled = disabled || !isGatewayUsable;
@@ -1041,6 +1049,9 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
                         <AgentPickerItem
                           key={agent.id}
                           agent={agent}
+                          modelLabel={devModeUnlocked
+                            ? agent.modelDisplay
+                            : channelLabelForModelRef(agent.modelRef || defaultModelRef, providerAccounts)}
                           selected={agent.id === targetAgentId}
                           onSelect={() => {
                             setTargetAgentId(agent.id);
@@ -1315,10 +1326,12 @@ function AttachmentPreview({
 
 function AgentPickerItem({
   agent,
+  modelLabel,
   selected,
   onSelect,
 }: {
   agent: AgentSummary;
+  modelLabel: string;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -1333,7 +1346,7 @@ function AgentPickerItem({
     >
       <span className="text-sm font-medium text-foreground">{agent.name}</span>
       <span className="text-tiny text-muted-foreground">
-        {agent.modelDisplay}
+        {modelLabel}
       </span>
     </button>
   );
