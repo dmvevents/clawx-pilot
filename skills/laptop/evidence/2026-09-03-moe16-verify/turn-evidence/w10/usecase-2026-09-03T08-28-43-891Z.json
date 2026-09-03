@@ -1,0 +1,35 @@
+{
+  "prompt": "What are three things you can help a school principal with?",
+  "startedAt": "2026-09-03T08:28:43.892Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.16 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 177,
+  "channelBefore": "online",
+  "channelAfter": "online",
+  "channelSwitched": false,
+  "messagesBefore": 20,
+  "messagesAfter": 24,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": true,
+  "runErrorText": "The online assistant could not be reached. Your work is safe — try again, or switch to \"On this device\". Technical details",
+  "answerText": "What are three things you can help a school principal with? just now",
+  "settled": false,
+  "abortedOnError": true,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 2373,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 18775,
+      "classification": "ERROR-BANNER",
+      "shot": "state-02-ERROR-BANNER.png"
+    }
+  ],
+  "verdict": "ABORTED_ERROR_BANNER",
+  "finishedAt": "2026-09-03T08:29:02.926Z"
+}

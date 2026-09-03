@@ -908,6 +908,33 @@ No Graph MCP for forms (no API to wrap). Logic Apps-as-MCP-server (preview) revi
 Sources
 microsoft/mcp catalog; microsoft/playwright-mcp; ChromeDevTools/chrome-devtools-mcp; softeria/ms-365-mcp-server; learn.microsoft.com Forms connector + Logic Apps MCP preview + Enterprise Graph MCP; modelcontextprotocol/typescript-sdk. Full report in docs/MCP_INTEGRATION_RESEARCH_2026-09-03.md.
 
+### CLWX-72 — [bug/packaging] moe.15 Windows runtime missing pdf-parse - document.read_pdf dead on tester install (KAR-PDF root cause)
+
+- **State:** Ready  |  **Priority:** urgent
+
+Area: packaging / doc-tooling   Severity: urgent (external-tester-blocking; Ext-val B leg; KR1-adjacent)
+
+Symptom
+Tester drags NSCC-2026.pdf into chat, asks for a summary; app replies "trouble reading PDF documents". Log (twice): "[tools] document.read_pdf failed: pdf-parse module not found - the packaged Windows runtime is missing this dep."
+
+Analysis so far
+pdf-parse is in package.json dependencies (since 2026-06-09) AND in EXTRA_BUNDLED_PACKAGES (scripts/openclaw-bundle-config.mjs, since 2026-06-09) - so the config was correct when moe.15 was built. Either bundle-openclaw.mjs silently fails to copy pdf-parse (v2 package layout / pnpm store shape?) or the runtime loader (doc-tools.mjs loadDep + augmentModulePathsForPackagedApp) cannot see it on a real install. NOTE: the moe.15 VM install verification checked docx/xlsx/mammoth/playwright-core - pdf-parse was never on the checklist, so this shipped unverified. V-batch stage 1 (running now) is capturing ground truth from the installed VM tree.
+
+Acceptance
+1. Ground-truth listing of resources/openclaw/node_modules on an installed moe.15 (V-batch evidence).
+2. Root cause named (bundler copy failure vs loader path).
+3. Fix + the presence check ADDED to the install-verify script and the preflight (dependency-class-auditor rule: every EXTRA_BUNDLED_PACKAGES entry must exist in the packaged tree).
+4. Re-verified on a fresh install: drag-PDF summarise works.
+5. Regression class: dependency-class (moe.9 playwright-core sibling).
+
+Source
+Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.
+
+**Comments (2):**
+
+- CLOSED-VERIFIED ON THE SHIPPED ARTIFACT (moe.16 VM verify, 2026-09-03). moe.16 installed over moe.15 (upgrade path clean: state preserved, four stores coherent). @napi-rs/canvas-win32-x64-msvc now ships its 27.3 MB skia .node binary in the gateway bundle; the SHIPPED doc-tools packaged-node repro on the VM: CLWX72_SHIPPED_VERIFY=PASS pages=1 chars=835. All four fix layers held. NOTE: a SECOND, distinct in-app PDF defect surfaced (pdfjs GlobalWorkerOptions.workerSrc in the Electron UtilityProcess) - filed separately; it is NOT this card's class (differential repro: plain packaged-node PASS, faked utility-process env FAIL). Evidence: skills/laptop/evidence/2026-09-03-moe16-verify/. Ready for human close.
+- RCA CORRECTED + FIXED-IN-TREE + ARTIFACT-VERIFIED (2026-09-03). The V-batch probe on the installed moe.15 VM OVERTURNED the original hypothesis: pdf-parse 2.4.5 IS on disk in the gateway bundle. The real chain: pdf-parse -> pdfjs-dist -> @napi-rs/canvas, whose platform-native binding @napi-rs/canvas-win32-x64-msvc (an optionalDependency) never installs on the Mac build host (pnpm supportedArchitectures os=["current"]), so no bundle could ever ship it; module evaluation throws "DOMMatrix is not defined"; and loadDep()'s catch-all MASKED the load error as "module not found" (wrong error class - the message that mis-led triage). Fix layers (all landed): (1) pnpm supportedArchitectures = [darwin, win32] - all four canvas bindings now materialize and ship in the bundle; (2) doc-tools.mjs: pure-JS DOMMatrix polyfill (text extraction needs no native canvas) + loadDepDetailed() so surfaced errors distinguish not-found from failed-to-load; (3) bundle-openclaw.mjs HARD-FAILS on any missing EXTRA_BUNDLED_PACKAGES entry (was warn-and-skip); (4) new scripts/verify-openclaw-bundle.mjs gate (presence + ship-target native bindings + host loadability) wired into the package chain. Evidence: bundle verify PASS (19 pkgs, 3 binding sets, 4 parsers loadable); typecheck 0; doc-tools units green; and the decisive one - the patched doc-tools ran on the STILL-BROKEN moe.15 VM runtime with the packaged node.exe: CLWX72_VERIFY=PASS pages=1 chars=835 parsing a real Ministry circular, binding still absent (defense-in-depth proven). Evidence dir: skills/laptop/evidence/2026-09-03-vbatch/. Remaining before Ready: cut moe.16 with these layers + fresh-install drag-PDF re-verify (tester or VM). Register row: CANVAS-BINDING.
+
 ### CLWX-73 — [bug/hard-rule] chrome-cdp repair falls back to a MANAGED Chromium profile - violates the profile=user rule on tenant flows
 
 - **State:** Todo  |  **Priority:** high
@@ -1208,6 +1235,24 @@ Acceptance
 Source
 ga:gate follow-through, e2e run /tmp/e2e-ui.log + worktree baseline; error contexts in test-results/.
 
+### CLWX-92 — [bug/doc-tools] In-app PDF read dies in the Electron UtilityProcess: pdfjs "No GlobalWorkerOptions.workerSrc specified"
+
+- **State:** Todo  |  **Priority:** urgent
+
+Area: doc-tools / gateway runtime   Severity: urgent (K10 criterion; the external tester's #1 issue is still user-broken in-app despite CLWX-72 closing)
+
+Found by
+moe.16 VM verify (2026-09-03): agent calls document.read_pdf; in the gateway's Electron UtilityProcess pdfjs throws "No GlobalWorkerOptions.workerSrc specified"; principal sees "I encountered a technical error while trying to read the PDF file."
+
+Differential repro (environment pinned)
+Same shipped readPdf + fixture: plain packaged-node = PASS (CLWX72_SHIPPED_VERIFY pages=1 chars=835); faked process.type="utility" + versions.electron = SAME workerSrc FAIL. pdfjs's isNodeJS detection treats a UtilityProcess as browser-like (process.versions.electron && process.type !== "browser"), so it demands a worker script instead of running workerless.
+
+Fix direction
+In doc-tools readPdf (extensions/moe-principal-assistant/doc-tools.mjs), before parsing: resolve the bundled pdfjs worker file (pdfjs-dist/legacy/build/pdf.worker.mjs next to the copy pdf-parse uses in the flat gateway bundle) and set GlobalWorkerOptions.workerSrc to its file URL (or force workerless mode). Must work in BOTH plain node and UtilityProcess. Regression: extend the packaged-node repro to ALSO run under the faked utility env; add the in-app drag-PDF turn to the VM verify checklist permanently (K10).
+
+Evidence
+skills/laptop/evidence/2026-09-03-moe16-verify/ (RESULT.md, turn-evidence, differential logs).
+
 ## Started
 
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA
@@ -1363,32 +1408,6 @@ Scope: define a user-facing budget (proposal: p50 ≤15s / p90 ≤30s wall-clock
 
 - First-cut measurement DONE (sprint-driver tick, evidence: docs/evidence/LATENCY_BASELINE_2026-09-02.md). All 15 driver JSONs on the persona VM mined: successful tool-using cloud turns 79.6s / 103.4s / 182.2s; no-tool answer 107.9s; median ≈103s — ~7× over the proposed p50 ≤15s budget. Raj's complaint is quantified and current. Caveats: e2 VM ≠ persona laptop; ~9s driver settle tail; small sample. Movers already on the agenda: prompt caching (ask #7), trim unhold (owner), routing. Remaining for Ready: laptop-lane repeat of the 3 demo prompts + owner budget sign-off + GA-packet row.
 
-### CLWX-72 — [bug/packaging] moe.15 Windows runtime missing pdf-parse - document.read_pdf dead on tester install (KAR-PDF root cause)
-
-- **State:** In Progress  |  **Priority:** urgent
-
-Area: packaging / doc-tooling   Severity: urgent (external-tester-blocking; Ext-val B leg; KR1-adjacent)
-
-Symptom
-Tester drags NSCC-2026.pdf into chat, asks for a summary; app replies "trouble reading PDF documents". Log (twice): "[tools] document.read_pdf failed: pdf-parse module not found - the packaged Windows runtime is missing this dep."
-
-Analysis so far
-pdf-parse is in package.json dependencies (since 2026-06-09) AND in EXTRA_BUNDLED_PACKAGES (scripts/openclaw-bundle-config.mjs, since 2026-06-09) - so the config was correct when moe.15 was built. Either bundle-openclaw.mjs silently fails to copy pdf-parse (v2 package layout / pnpm store shape?) or the runtime loader (doc-tools.mjs loadDep + augmentModulePathsForPackagedApp) cannot see it on a real install. NOTE: the moe.15 VM install verification checked docx/xlsx/mammoth/playwright-core - pdf-parse was never on the checklist, so this shipped unverified. V-batch stage 1 (running now) is capturing ground truth from the installed VM tree.
-
-Acceptance
-1. Ground-truth listing of resources/openclaw/node_modules on an installed moe.15 (V-batch evidence).
-2. Root cause named (bundler copy failure vs loader path).
-3. Fix + the presence check ADDED to the install-verify script and the preflight (dependency-class-auditor rule: every EXTRA_BUNDLED_PACKAGES entry must exist in the packaged tree).
-4. Re-verified on a fresh install: drag-PDF summarise works.
-5. Regression class: dependency-class (moe.9 playwright-core sibling).
-
-Source
-Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.
-
-**Comments (1):**
-
-- RCA CORRECTED + FIXED-IN-TREE + ARTIFACT-VERIFIED (2026-09-03). The V-batch probe on the installed moe.15 VM OVERTURNED the original hypothesis: pdf-parse 2.4.5 IS on disk in the gateway bundle. The real chain: pdf-parse -> pdfjs-dist -> @napi-rs/canvas, whose platform-native binding @napi-rs/canvas-win32-x64-msvc (an optionalDependency) never installs on the Mac build host (pnpm supportedArchitectures os=["current"]), so no bundle could ever ship it; module evaluation throws "DOMMatrix is not defined"; and loadDep()'s catch-all MASKED the load error as "module not found" (wrong error class - the message that mis-led triage). Fix layers (all landed): (1) pnpm supportedArchitectures = [darwin, win32] - all four canvas bindings now materialize and ship in the bundle; (2) doc-tools.mjs: pure-JS DOMMatrix polyfill (text extraction needs no native canvas) + loadDepDetailed() so surfaced errors distinguish not-found from failed-to-load; (3) bundle-openclaw.mjs HARD-FAILS on any missing EXTRA_BUNDLED_PACKAGES entry (was warn-and-skip); (4) new scripts/verify-openclaw-bundle.mjs gate (presence + ship-target native bindings + host loadability) wired into the package chain. Evidence: bundle verify PASS (19 pkgs, 3 binding sets, 4 parsers loadable); typecheck 0; doc-tools units green; and the decisive one - the patched doc-tools ran on the STILL-BROKEN moe.15 VM runtime with the packaged node.exe: CLWX72_VERIFY=PASS pages=1 chars=835 parsing a real Ministry circular, binding still absent (defense-in-depth proven). Evidence dir: skills/laptop/evidence/2026-09-03-vbatch/. Remaining before Ready: cut moe.16 with these layers + fresh-install drag-PDF re-verify (tester or VM). Register row: CANVAS-BINDING.
-
 ### CLWX-78 — [bug/degrade] "Connection error." unmatched by the degrade classifier - cloud failure shows a red banner instead of failing over to a warm on-device model
 
 - **State:** In Progress  |  **Priority:** high
@@ -1409,6 +1428,10 @@ Live re-verify: repeat the hosts-block turn on a build carrying this fix (next V
 
 Related
 KR4/CLWX-27 (degrade evidence was Mac-proven; this was the Windows gap), IDLE-TIMEOUT-RAW (same class, fixed 09-03), CLWX-74 (tester impact).
+
+**Comments (1):**
+
+- moe.16 live re-verify: PARTIAL (2026-09-03). The raw-banner half is FIXED live: the red "Model call failed Connection error." is gone, replaced by the calm plain-language banner (CLWX-53/75 fixes proven on Windows). But the AUTO-DEGRADE half did NOT fire: no degrade notice, channel stayed Online, no on-device attempt, no degradeChannel transaction (reproduced twice). The classifier fix IS in moe.16 and the pure policy would degrade for the confirmed state - the gap is plumbing: maybeDegradeChannel did not fire on this surface. RCA in flight (read-only, VM live). This card stays In Progress for the auto-degrade leg.
 
 ## Cancelled
 

@@ -1,0 +1,71 @@
+{
+  "prompt": "What are three things you can help a school principal with?",
+  "startedAt": "2026-09-03T08:19:11.919Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.16 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 171,
+  "channelBefore": "online",
+  "channelAfter": "online",
+  "channelSwitched": false,
+  "messagesBefore": 6,
+  "messagesAfter": 8,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": "Of course. As a desktop assistant for primary school principals in Trinidad & Tobago, I can help with a variety of administrative tasks. Here are three key things I can do for you: Automate Daily Reports: I can help you compile and fill out the mandatory Primary School Daily Report. This includes tracking teacher and student attendance, school meal distribution, and any other required daily statistics for the Ministry of Education. Manage Student Discipline Documentation: I can assist in documenting student disciplinary actions by helping you create and file the official Student Suspension Form, ensuring all necessary details about the incident and follow-up actions are correctly recorded. Draft Official Correspondence: I can help you quickly draft internal memos to your staff, or formal l…",
+  "settled": true,
+  "abortedOnError": false,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 2372,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 18652,
+      "classification": "still-thinking",
+      "shot": "state-02-still-thinking.png"
+    },
+    {
+      "seq": 3,
+      "elapsedMs": 34907,
+      "classification": "still-thinking",
+      "shot": "state-03-still-thinking.png"
+    },
+    {
+      "seq": 4,
+      "elapsedMs": 51160,
+      "classification": "still-thinking",
+      "shot": "state-04-still-thinking.png"
+    },
+    {
+      "seq": 5,
+      "elapsedMs": 67413,
+      "classification": "still-thinking",
+      "shot": "state-05-still-thinking.png"
+    },
+    {
+      "seq": 6,
+      "elapsedMs": 83654,
+      "classification": "still-thinking",
+      "shot": "state-06-still-thinking.png"
+    },
+    {
+      "seq": 7,
+      "elapsedMs": 99946,
+      "classification": "reply-rendered",
+      "shot": "state-07-reply-rendered.png"
+    },
+    {
+      "seq": 8,
+      "elapsedMs": 116189,
+      "classification": "reply-rendered",
+      "shot": "state-08-reply-rendered.png"
+    }
+  ],
+  "verdict": "ANSWERED",
+  "finishedAt": "2026-09-03T08:21:10.400Z"
+}

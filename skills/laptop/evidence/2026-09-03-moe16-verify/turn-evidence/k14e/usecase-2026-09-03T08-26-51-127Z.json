@@ -1,0 +1,53 @@
+{
+  "prompt": "Summarise my last 5 emails.",
+  "startedAt": "2026-09-03T08:26:51.128Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.16 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 157,
+  "channelBefore": "online",
+  "channelAfter": "online",
+  "channelSwitched": false,
+  "messagesBefore": 17,
+  "messagesAfter": 20,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": "I am unable to access your emails because I am not currently signed into your Outlook account. Please sign in to your Outlook account in the Chrome web browser, and then I will be able to summarize your last 5 emails for you. just now",
+  "settled": true,
+  "abortedOnError": false,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 2322,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 18639,
+      "classification": "still-thinking",
+      "shot": "state-02-still-thinking.png"
+    },
+    {
+      "seq": 3,
+      "elapsedMs": 34935,
+      "classification": "still-thinking",
+      "shot": "state-03-still-thinking.png"
+    },
+    {
+      "seq": 4,
+      "elapsedMs": 51521,
+      "classification": "still-thinking",
+      "shot": "state-04-still-thinking.png"
+    },
+    {
+      "seq": 5,
+      "elapsedMs": 67798,
+      "classification": "reply-rendered",
+      "shot": "state-05-reply-rendered.png"
+    }
+  ],
+  "verdict": "ANSWERED",
+  "finishedAt": "2026-09-03T08:28:09.281Z"
+}

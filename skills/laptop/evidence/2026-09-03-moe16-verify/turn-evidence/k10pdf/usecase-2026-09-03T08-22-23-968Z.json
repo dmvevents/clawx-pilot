@@ -1,0 +1,41 @@
+{
+  "prompt": "Please summarise the PDF file at C:\\Users\\clawxtest\\Downloads\\fixture.pdf",
+  "startedAt": "2026-09-03T08:22:23.970Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.16 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 137,
+  "channelBefore": "online",
+  "channelAfter": "online",
+  "channelSwitched": false,
+  "messagesBefore": 11,
+  "messagesAfter": 14,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": "I'm sorry, but I encountered a technical error while trying to read the PDF file at that location and I'm unable to access its content. Could you please copy and paste the text from the document? I would be happy to summarize it for you then. fixture.pdf 1.5 KB just now",
+  "settled": true,
+  "abortedOnError": false,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 2298,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 18575,
+      "classification": "reply-rendered",
+      "shot": "state-02-reply-rendered.png"
+    },
+    {
+      "seq": 3,
+      "elapsedMs": 34831,
+      "classification": "reply-rendered",
+      "shot": "state-03-reply-rendered.png"
+    }
+  ],
+  "verdict": "ANSWERED",
+  "finishedAt": "2026-09-03T08:22:59.047Z"
+}

@@ -1,0 +1,41 @@
+{
+  "prompt": "Draft a short letter to parents about a school open day next Friday.",
+  "startedAt": "2026-09-03T08:21:29.464Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.16 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 160,
+  "channelBefore": "online",
+  "channelAfter": "online",
+  "channelSwitched": false,
+  "messagesBefore": 8,
+  "messagesAfter": 11,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": "Of course. Here is a draft of the letter for you to review. Just let me know the school's name, the specific date and time for the Open Day, and your name, and I can finalize it. Subject: Invitation to School Open Day Dear Parents, We are delighted to invite you to our School Open Day, which will be held next Friday, [Date of Open Day], from [Start Time] to [End Time]. This open day is a wonderful opportunity for you to visit the school, meet your child's teachers, and see the fantastic work and projects our students have been busy with this term. We will have student projects and classwork on display for you to enjoy. We strongly encourage all parents to attend. Your participation is a great source of encouragement for your children and provides a valuable link between home and school. We…",
+  "settled": true,
+  "abortedOnError": false,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 2321,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 18613,
+      "classification": "still-thinking",
+      "shot": "state-02-still-thinking.png"
+    },
+    {
+      "seq": 3,
+      "elapsedMs": 34876,
+      "classification": "reply-rendered",
+      "shot": "state-03-reply-rendered.png"
+    }
+  ],
+  "verdict": "ANSWERED",
+  "finishedAt": "2026-09-03T08:22:08.618Z"
+}

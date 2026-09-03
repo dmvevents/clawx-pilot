@@ -1,0 +1,35 @@
+{
+  "prompt": "Create a Word document listing five things a principal should check every morning, and save it to my Desktop.",
+  "startedAt": "2026-09-03T08:25:48.514Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.16 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 154,
+  "channelBefore": "online",
+  "channelAfter": "online",
+  "channelSwitched": false,
+  "messagesBefore": 14,
+  "messagesAfter": 17,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": "I have created a Word document named \"Principal Morning Checklist.docx\" on your Desktop. It contains a list of five key things for a principal to check each morning to ensure the school day runs smoothly. just now",
+  "settled": true,
+  "abortedOnError": false,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 2338,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 18623,
+      "classification": "reply-rendered",
+      "shot": "state-02-reply-rendered.png"
+    }
+  ],
+  "verdict": "ANSWERED",
+  "finishedAt": "2026-09-03T08:26:19.536Z"
+}
