@@ -825,6 +825,32 @@ CLWX-58 (stale open compose blocks flows), CLWX-69 (discard-confirm OK/Cancel we
 Regression class
 state-hygiene / exit-path invariant - candidate rule for state-idempotency-auditor: "compose opened implies compose closed (sent or discarded) on every code path".
 
+### CLWX-71 — [feature/mcp] Thin MCP adapter over host-API :13210 - gated forms/outlook tools for any MCP client
+
+- **State:** Todo  |  **Priority:** medium
+
+Area: integration   Priority: medium (post-GA enhancement; owner-requested research 2026-09-03)
+
+Research verdict (docs/MCP_INTEGRATION_RESEARCH_2026-09-03.md, web-verified 2026-09-02/03)
+NO MCP server anywhere can submit Microsoft Forms responses - no public Graph/REST API exists; the Power Automate connector remains read-only (doc upd. 2025-10-06). Browser MCPs (Playwright MCP --cdp-endpoint, chrome-devtools-mcp --browserUrl) CAN attach to the user Chrome at :18792 (Conditional Access constraint satisfied) but are UNGATED click/type surfaces - dev/debug only, never principal-facing.
+
+Build
+A ~200-line stdio MCP server (@modelcontextprotocol/sdk v2) that proxies the existing host-API endpoints as MCP tools: forms list/preview-daily-report/submit-daily-report/preview-suspension/submit-suspension + outlook open/read-inbox/draft/send (~9 registerTool blocks). The hard-confirm gates (confirm:true + title/subject fingerprint) stay server-side in FormsBrowserManager/outlook manager, so EVERY MCP client (Claude Code, Claude Desktop, future agents) inherits them and cannot bypass them. This is how MCP re-enhances the app: its capabilities become tools other agents can drive - same gates, same logs, zero new attack surface, no CDP contention.
+
+Acceptance (QA + security bar)
+1. Adapter connects from Claude Code; tools list correctly.
+2. Read-only proof: forms preview + outlook read-inbox through MCP.
+3. GATE PROOF through MCP: submit/send WITHOUT confirm is refused end-to-end; with confirm:true + matching fingerprint it completes on the test.fac sandbox only.
+4. :13210 auth token via env var (never argv/logs); adapter logs counts only, never payload bodies.
+5. MCP SDK in dependencies, not devDependencies (dependency-class-auditor rule).
+6. README note: raw browser MCPs are dev/debug only.
+
+Non-goals
+No Graph MCP for forms (no API to wrap). Logic Apps-as-MCP-server (preview) revisits when Ministry IT stands up the Power Automate path - the sanctioned long-term fix is writing the form's backing store directly, exposed as a gated server-side tool.
+
+Sources
+microsoft/mcp catalog; microsoft/playwright-mcp; ChromeDevTools/chrome-devtools-mcp; softeria/ms-365-mcp-server; learn.microsoft.com Forms connector + Logic Apps MCP preview + Enterprise Graph MCP; modelcontextprotocol/typescript-sdk. Full report in docs/MCP_INTEGRATION_RESEARCH_2026-09-03.md.
+
 ## Started
 
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA
