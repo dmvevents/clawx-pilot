@@ -404,10 +404,19 @@ export async function seedCloudGatewayProvider(
   }
 
   if (seed.setPreferredChannel) {
-    // Default the channel to online ONLY when no choice exists yet. This seed
-    // runs on every boot; overwriting a non-online value here silently
-    // reverted a principal's "On this device" selection at next launch
-    // (found live on the moe.13 KR2 run, 2026-09-02).
+    // Make Online the launch default, but ONLY when no choice exists yet. This
+    // seed runs on every boot; overwriting a non-online value here silently
+    // reverted a principal's "On this device" selection at next launch (found
+    // live on the moe.13 KR2 run, 2026-09-02), so an EXPLICIT value is
+    // authoritative and left untouched.
+    //
+    // "No choice yet" is `getSetting('preferredChannel') === undefined`. That
+    // relies on the settings store NOT defaulting preferredChannel — a default
+    // is returned by electron-store `.get()` even for never-written keys, which
+    // made this guard dead (current was always 'on-device') and shipped the
+    // pilot on the on-device model. See createDefaultSettings in utils/store.ts
+    // and tests/unit/settings-store-defaults.test.ts. Only an explicit user
+    // toggle (settings PUT -> setSetting) writes a concrete value.
     const current = await getSetting('preferredChannel').catch(() => undefined);
     if (current === undefined || current === null) {
       await setSetting('preferredChannel', 'online');
