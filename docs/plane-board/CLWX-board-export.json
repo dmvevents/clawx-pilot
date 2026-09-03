@@ -349,10 +349,15 @@
       "sequence_id": 69,
       "name": "[bug/outlook-lane] Discard-confirm dialog uses OK/Cancel labels; automation waiting for \"Discard\" wedges the tab behind the dialog backdrop",
       "priority": "high",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "Area: outlook-lane / eval harness   Severity: high (owner-reported live, screenshot evidence)\n\nSymptom (owner report 2026-09-03 ~08:20 AST)\nScreen \"always gets stuck here\": the Outlook tab shows the \"Discard message\" confirm dialog and nothing progresses. Screenshot also shows two DOCKED draft chips (eval 02:49:17, MoE smoke 06:31:23) and Drafts [23] - accumulated eval litter.\n\nRoot cause (two layers, both proven this session)\n1. The compose discard CONFIRM dialog is titled \"Discard message\" but its buttons are OK / Cancel - any automation waiting for a button named \"Discard\" waits forever; the fui-DialogSurface backdrop then intercepts ALL message-list clicks (row locator.click timeouts).\n2. Playwright locator.first() on button[aria-label*=\"Discard\"] can latch a HIDDEN Discard earlier in DOM order and burn its full timeout - same vendor-rotated class as CLWX-59.\n\nImpact\nEval runs C/E/F/G degraded to 10-13/15 with zero product defects (click-timeout rows only); the live lane wedges for a human too until the dialog is dismissed. Trust-adjacent: a principal seeing a stuck compose dialog blames the assistant.\n\nFix (harness, APPLIED this session)\nscripts/v2-eval.ts discardOpenDrafts(): DOM-side click of the first VISIBLE discard control; inside any visible dialog whose text mentions \"discard\", click OK/Discard/Yes. Runs pre-eval AND post-W4.4 so refusal-proof drafts are discarded, not Escape-saved.\n\nFollow-ups\n1. Port the same OK/Cancel handling into scripts/outlook-cleanup-compose.ts (it already tries OK - verify).\n2. Drafts-folder litter cleanup (23 saved drafts on test.fac).\n3. Product-level: CLWX-58 auto-recovery should treat the confirm dialog + docked draft chips as part of the stale-compose state machine.\n\nRegression class\ndom-selector-rotation / dialog-label variance - detection owner dom-selector-regression-tester. Related: CLWX-58 (stale compose blocks), CLWX-59 (hidden SplitButton wrapper).",
-      "comments": []
+      "comments": [
+        {
+          "text": "Resolved-dependent of CLWX-58/70 (commit 9aabc8f6). The wedge — automation waiting for a button labelled \"Discard\" while Outlook shows an OK/Cancel confirm dialog — is fixed by the two-step recovery: clickVisibleDiscard clicks the toolbar Discard control (which opens the confirm dialog), then clickDiscardConfirmOk (electron/services/outlook-browser-v2/outlook-actions.ts:2419) clicks the confirm button, matching /^(ok|discard|yes)$/i inside any visible dialog mentioning \"discard\". No code path now blocks on a \"Discard\"-labelled confirm button.\nExercised by: scripts/clwx58-recovery-check.ts (live auto-recovery acceptance, PASS on the CLWX-58/70 cut) and scripts/outlook-lane-probe.mts (references CLWX-69 in the lane probe). The recovery entry point recoverComposeState -> discardOwnCompose -> clickDiscardConfirmOk is the path both drive.\nMoving Todo -> Ready (agent ceiling). A human closes Done after seeing the live discard-confirm click in the moe.17 outlook lane; the mechanism is proven in code + the CLWX-58/70 acceptance run.",
+          "created": "2026-09-03T09:59:17.423971Z"
+        }
+      ]
     },
     {
       "id": "ffd0cb4d-cd75-4618-99d5-c81201cc24ba",

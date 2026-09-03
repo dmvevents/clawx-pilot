@@ -407,6 +407,23 @@ collapsing the two runError paths — noted on CLWX-93 as non-blocking cleanup.
 GATE HELD: Karunesh handoff (staged, updated to moe.17 + new sha) fires only
 on VM verify PASS per owner's "after we've tested it" condition._
 
+_**Sprint-driver tick (2026-09-03, minimal-time mode): CLWX-69 promoted as a
+resolved-dependent; GA static gate GREEN; moe.17 VM verify in flight.**
+SENSE: tree clean on `fix/doc-tooling-steering`; IAP tunnel up; board HTTP 200
+(93 issues, mirror in sync); `pnpm ga:gate GA_GATE_STATIC=1` GREEN (5 pass / 0
+fail / 1 skip — typecheck, lint, unit, bundle-verify, doc-tooling harness; live
++ VM lanes deferred to V-batch). ANALYZE: the moe.17 verify owns the VM +
+degrade/PDF paths (serial — untouched); among parallel-now items **CLWX-69**
+(discard-confirm OK/Cancel wedge) is a resolved-dependent of CLWX-58/70 —
+`clickDiscardConfirmOk` (outlook-actions.ts:2419, commit `9aabc8f6`) clicks the
+`/^(ok|discard|yes)$/i` confirm button, and no path now blocks on a
+"Discard"-labelled confirm; exercised by `scripts/clwx58-recovery-check.ts`
+(live PASS) + `scripts/outlook-lane-probe.mts`. ACT: posted the evidence and
+moved **CLWX-69 Todo → Ready** (a human closes Done after the live click in the
+moe.17 outlook lane). moe.17 verify status: RESULT.md live, PRE-STATE captured
+(pre-install FileVersion moe.16, state preserved), six checks PENDING — send
+gate to Karunesh NOT met, HELD._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three

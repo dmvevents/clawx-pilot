@@ -823,7 +823,7 @@ S5 Reminders. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026
 
 ### CLWX-69 — [bug/outlook-lane] Discard-confirm dialog uses OK/Cancel labels; automation waiting for "Discard" wedges the tab behind the dialog backdrop
 
-- **State:** Todo  |  **Priority:** high
+- **State:** Ready  |  **Priority:** high
 
 Area: outlook-lane / eval harness   Severity: high (owner-reported live, screenshot evidence)
 
@@ -847,6 +847,10 @@ Follow-ups
 
 Regression class
 dom-selector-rotation / dialog-label variance - detection owner dom-selector-regression-tester. Related: CLWX-58 (stale compose blocks), CLWX-59 (hidden SplitButton wrapper).
+
+**Comments (1):**
+
+- Resolved-dependent of CLWX-58/70 (commit 9aabc8f6). The wedge — automation waiting for a button labelled "Discard" while Outlook shows an OK/Cancel confirm dialog — is fixed by the two-step recovery: clickVisibleDiscard clicks the toolbar Discard control (which opens the confirm dialog), then clickDiscardConfirmOk (electron/services/outlook-browser-v2/outlook-actions.ts:2419) clicks the confirm button, matching /^(ok|discard|yes)$/i inside any visible dialog mentioning "discard". No code path now blocks on a "Discard"-labelled confirm button. Exercised by: scripts/clwx58-recovery-check.ts (live auto-recovery acceptance, PASS on the CLWX-58/70 cut) and scripts/outlook-lane-probe.mts (references CLWX-69 in the lane probe). The recovery entry point recoverComposeState -> discardOwnCompose -> clickDiscardConfirmOk is the path both drive. Moving Todo -> Ready (agent ceiling). A human closes Done after seeing the live discard-confirm click in the moe.17 outlook lane; the mechanism is proven in code + the CLWX-58/70 acceptance run.
 
 ### CLWX-70 — [bug/outlook] Aborted flows exit uncleanly and SAVE drafts - [Draft] litter accumulates in conversations and the Drafts folder
 
