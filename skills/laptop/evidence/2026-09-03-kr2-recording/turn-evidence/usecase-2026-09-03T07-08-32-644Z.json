@@ -1,0 +1,137 @@
+{
+  "prompt": "What are three things you can help a school principal with?",
+  "startedAt": "2026-09-03T07:08:32.645Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.15 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 10222,
+  "channelBefore": "on-device",
+  "channelAfter": "on-device",
+  "channelSwitched": false,
+  "messagesBefore": 0,
+  "messagesAfter": 3,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": null,
+  "settled": false,
+  "abortedOnError": false,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 12433,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 28790,
+      "classification": "still-thinking",
+      "shot": "state-02-still-thinking.png"
+    },
+    {
+      "seq": 3,
+      "elapsedMs": 45161,
+      "classification": "still-thinking",
+      "shot": "state-03-still-thinking.png"
+    },
+    {
+      "seq": 4,
+      "elapsedMs": 61492,
+      "classification": "still-thinking",
+      "shot": "state-04-still-thinking.png"
+    },
+    {
+      "seq": 5,
+      "elapsedMs": 77845,
+      "classification": "still-thinking",
+      "shot": "state-05-still-thinking.png"
+    },
+    {
+      "seq": 6,
+      "elapsedMs": 94188,
+      "classification": "still-thinking",
+      "shot": "state-06-still-thinking.png"
+    },
+    {
+      "seq": 7,
+      "elapsedMs": 109898,
+      "classification": "still-thinking",
+      "shot": "state-07-still-thinking.png"
+    },
+    {
+      "seq": 8,
+      "elapsedMs": 125488,
+      "classification": "still-thinking",
+      "shot": "state-08-still-thinking.png"
+    },
+    {
+      "seq": 9,
+      "elapsedMs": 141970,
+      "classification": "still-thinking",
+      "shot": "state-09-still-thinking.png"
+    },
+    {
+      "seq": 10,
+      "elapsedMs": 158574,
+      "classification": "still-thinking",
+      "shot": "state-10-still-thinking.png"
+    },
+    {
+      "seq": 11,
+      "elapsedMs": 173729,
+      "classification": "still-thinking",
+      "shot": "state-11-still-thinking.png"
+    },
+    {
+      "seq": 12,
+      "elapsedMs": 190179,
+      "classification": "still-thinking",
+      "shot": "state-12-still-thinking.png"
+    },
+    {
+      "seq": 13,
+      "elapsedMs": 206634,
+      "classification": "still-thinking",
+      "shot": "state-13-still-thinking.png"
+    },
+    {
+      "seq": 14,
+      "elapsedMs": 223005,
+      "classification": "still-thinking",
+      "shot": "state-14-still-thinking.png"
+    },
+    {
+      "seq": 15,
+      "elapsedMs": 239725,
+      "classification": "still-thinking",
+      "shot": "state-15-still-thinking.png"
+    },
+    {
+      "seq": 16,
+      "elapsedMs": 255455,
+      "classification": "still-thinking",
+      "shot": "state-16-still-thinking.png"
+    },
+    {
+      "seq": 17,
+      "elapsedMs": 271924,
+      "classification": "still-thinking",
+      "shot": "state-17-still-thinking.png"
+    },
+    {
+      "seq": 18,
+      "elapsedMs": 287563,
+      "classification": "still-thinking",
+      "shot": "state-18-still-thinking.png"
+    },
+    {
+      "seq": 19,
+      "elapsedMs": 303904,
+      "classification": "still-thinking",
+      "shot": "state-19-still-thinking.png"
+    }
+  ],
+  "verdict": "TIMED_OUT_MID_TURN",
+  "finishedAt": "2026-09-03T07:13:46.034Z"
+}
