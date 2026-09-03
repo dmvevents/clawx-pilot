@@ -384,6 +384,29 @@ lagging pane — honest-by-design transient, rerun clean); 166-file unit
 suite green; typecheck 0. Ready pile now 31. Remaining agent runway:
 moe.16 VM verify (in flight) → Karunesh handoff (authorized, staged)._
 
+_**moe.17 cut + CLWX-92/78 close + CLWX-93 fast-follow tick (2026-09-03, cron,
+minimal-time mode).** moe.16 VM verify surfaced two live gaps behind the
+Karunesh #1 PDF test and the auto-degrade: **CLWX-92** (pdfjs demands a
+worker under the Electron UtilityProcess env; a fresh pdfjs import is a
+different module instance under pnpm symlinks — fixed via `PDFParse.setWorker`
++ pdf-parse's vendored worker; regression check wired INSIDE
+`verify-openclaw-bundle`) and **CLWX-78** (a cloud turn can die with NO
+terminal stream event; only the history poll surfaces it, and that path had no
+failover wiring — fixed by calling `maybeDegradeChannel` from
+`applyLoadedMessages`). **moe.17 built + signed** (sha256
+`182d92d6…0024`), uploaded to `gs://clawx-rc-artifacts-622687731621/moe17/`;
+final VM verify dispatched (in-app drag-PDF + hosts-block degrade + letter
+spot-check). kr2-recording's independent read-only RCA confirmed the CLWX-78
+diagnosis and flagged that the history-path gate should key off
+`lastSentPayload` (this client's own send) not `sending` (contaminated by
+console run-adoption) — landed as **CLWX-93** (commit `cf9a5cd0`,
+chat-channel-degrade 12/12; targets moe.18; the built moe.17 keeps 5020c39c
+and is correct for the primary single-user case the verify exercises). Also
+carried: the un-reset `sending` on the loadHistory terminal-error branch and
+collapsing the two runError paths — noted on CLWX-93 as non-blocking cleanup.
+GATE HELD: Karunesh handoff (staged, updated to moe.17 + new sha) fires only
+on VM verify PASS per owner's "after we've tested it" condition._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three

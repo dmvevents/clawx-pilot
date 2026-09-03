@@ -1235,6 +1235,16 @@ Acceptance
 Source
 ga:gate follow-through, e2e run /tmp/e2e-ui.log + worktree baseline; error contexts in test-results/.
 
+### CLWX-93 — fix(chat): gate history-path failover on lastSentPayload, not sending
+
+- **State:** Ready  |  **Priority:** none
+
+Fast-follow to CLWX-78. The moe.17 loadHistory failover gated on get().sending. In that path sending is contaminated by run-adoption (flipped true for a turn started on the gateway console, chat.ts:2829/2839), so an adopted run's terminal error surfaced by the 4s history poll could fail over and replay a payload the principal never typed in this window.
+Fix (commit cf9a5cd0): gate on lastSentPayload?.text?.trim() instead - only ever set by this client's own sendMessage, matching the streaming path's pre-adoption hadLocalSendInFlight guard. Also compute toolsRan from post-boundary history messages rather than transient streamingTools (the history path may have cleared them).
+Evidence: chat-channel-degrade 12/12 (three degrade rows: adopted-console run does NOT degrade; session re-open with nothing sent does NOT degrade; silent-death own-turn degrades once); typecheck green. Confirmed by kr2-recording independent read-only RCA at skills/laptop/evidence/2026-09-03-moe16-verify/degrade-rca/RCA.md.
+Also captured for later (not in this fix): loadHistory does not reset sending on a terminal error, so the composer can sit in a sending state next to the banner; and the two runError-setting paths (handleChatEvent error case + applyLoadedMessages) are worth collapsing. Deeper cleanup, non-blocking.
+Provenance: the built moe.17 artifact (sha 182d92d6...) predates this commit and carries the CLWX-78 fix (5020c39c); this refinement targets moe.18. moe.17 is correct for the primary silent-death case (what the VM verify exercises); the adopted-console edge does not arise in a single-user demo.
+
 ## Started
 
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA

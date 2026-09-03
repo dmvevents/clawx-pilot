@@ -44,6 +44,16 @@
   ],
   "issues": [
     {
+      "id": "954b9896-3cf5-44e9-8707-ece86c4d4a95",
+      "sequence_id": 93,
+      "name": "fix(chat): gate history-path failover on lastSentPayload, not sending",
+      "priority": "none",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
+      "description": "Fast-follow to CLWX-78. The moe.17 loadHistory failover gated on get().sending. In that path sending is contaminated by run-adoption (flipped true for a turn started on the gateway console, chat.ts:2829/2839), so an adopted run's terminal error surfaced by the 4s history poll could fail over and replay a payload the principal never typed in this window.\nFix (commit cf9a5cd0): gate on lastSentPayload?.text?.trim() instead - only ever set by this client's own sendMessage, matching the streaming path's pre-adoption hadLocalSendInFlight guard. Also compute toolsRan from post-boundary history messages rather than transient streamingTools (the history path may have cleared them).\nEvidence: chat-channel-degrade 12/12 (three degrade rows: adopted-console run does NOT degrade; session re-open with nothing sent does NOT degrade; silent-death own-turn degrades once); typecheck green. Confirmed by kr2-recording independent read-only RCA at skills/laptop/evidence/2026-09-03-moe16-verify/degrade-rca/RCA.md.\nAlso captured for later (not in this fix): loadHistory does not reset sending on a terminal error, so the composer can sit in a sending state next to the banner; and the two runError-setting paths (handleChatEvent error case + applyLoadedMessages) are worth collapsing. Deeper cleanup, non-blocking.\nProvenance: the built moe.17 artifact (sha 182d92d6...) predates this commit and carries the CLWX-78 fix (5020c39c); this refinement targets moe.18. moe.17 is correct for the primary silent-death case (what the VM verify exercises); the adopted-console edge does not arise in a single-user demo.",
+      "comments": []
+    },
+    {
       "id": "e406b225-3bf3-4e91-8dfb-7ca848b41cba",
       "sequence_id": 92,
       "name": "[bug/doc-tools] In-app PDF read dies in the Electron UtilityProcess: pdfjs \"No GlobalWorkerOptions.workerSrc specified\"",
