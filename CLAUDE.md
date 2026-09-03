@@ -13,6 +13,8 @@ This block supersedes the 2026-05-29 and 2026-06-09 packets below (kept for hist
 3. `docs/GA_SPRINT_STATE_VECTOR.md` — per-card truth table + pre/in/post-flight checks
 4. `docs/plane-board/CLWX-board.md` — board mirror (68 cards; agent ceiling is **Ready**, a human closes Done)
 5. `.claude/skills/ga-sprint-driver/SKILL.md` — the tick loop (sense → analyze → act → sync → report)
+6. **`pnpm ga:gate`** — THE acceptance test (CLWX-90): every criterion, one command, scorecard mapped to the GO/NO-GO boxes; report lands in `docs/evidence/`
+7. Problem history: `docs/BLOCKER_BUG_COLLECTION_2026-09-03.md` (144 mined findings, all sources) · `docs/KARUNESH_ERROR_LEDGER.md` (external tester K1–K14) · `docs/DEFECT_REGISTER_2026-09-02.md` (register + deltas) — mine new sources with `.claude/skills/session-log-miner`
 
 **Definition of done for the core use cases (the epic's objectives):**
 

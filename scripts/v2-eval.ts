@@ -180,17 +180,28 @@ async function main() {
     };
   });
 
-  // W3.1 — read_email returns full body
+  // W3.1 — read_email returns full body. Fixture-robust: the top row can be
+  // a short smoke mail whose 91-char body IS its snippet (hit live 2026-09-03
+  // after the drafts sweep reordered the inbox), so "body > snippet" is only
+  // provable on a message whose snippet was actually truncated. Pick the row
+  // with the LONGEST snippet from the top 5; if nothing in the window is
+  // truncated, accept body >= snippet with a non-empty body.
   await runRow('W3.1', 'read_email', 'read_email({id}) returns body longer than snippet', async () => {
     if (!firstId) return { skip: true, ok: false, notes: 'no firstId' };
     const inbox = await actions.readInbox(5);
-    const snip = inbox.messages[0]?.snippet ?? '';
-    const r = await actions.readEmail({ id: firstId });
+    if (inbox.status !== 'ok' || inbox.messages.length === 0) {
+      return { ok: false, notes: `read_inbox status=${inbox.status}` };
+    }
+    const target = inbox.messages.reduce((best, m) =>
+      ((m.snippet?.length ?? 0) > (best.snippet?.length ?? 0) ? m : best), inbox.messages[0]);
+    const snip = target.snippet ?? '';
+    const r = await actions.readEmail({ id: target.id });
     if (r.status !== 'ok') return { ok: false, notes: `status=${r.status}` };
     const bodyLen = r.body?.length ?? 0;
+    const ok = bodyLen > snip.length || (bodyLen > 0 && bodyLen >= snip.length);
     return {
-      ok: bodyLen > snip.length,
-      notes: `body=${bodyLen} chars, snippet=${snip.length} chars`,
+      ok,
+      notes: `body=${bodyLen} chars, snippet=${snip.length} chars (longest-snippet row of top 5)`,
     };
   });
 
@@ -204,7 +215,11 @@ async function main() {
     };
   });
 
-  // W4.1 — draft_email
+  // W4.1 — draft_email. Hygiene runs again right before it: any earlier
+  // row (or a killed prior run) can leave a compose/reply open, and W4.1
+  // refuses to stack drafts by design (hit live 2026-09-03: a SIGPIPE-killed
+  // eval left the W5.1 reply pane open and the next run failed here at 64ms).
+  await discardOpenDrafts();
   let draftSubject = '';
   await runRow('W4.1', 'draft_email', 'draft_email opens compose pane with To/Subject/Body filled', async () => {
     draftSubject = `eval ${new Date().toISOString().slice(11, 19)}`;

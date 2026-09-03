@@ -37,6 +37,7 @@ its mitigation and current status. Nothing here is unsourced.
 | G13 | 2026-09-01 | **CLWX-19**: `sk-clawx` key shared over WhatsApp, un-rotated (not leaked in repo) | Rotate | 🔴 OPEN — owner action |
 | G14 | 2026-09-01 | KR1's real gap: every eval lane is a BM25 proxy; lane F (live LLM tool-pick) always SKIPs (TEST_PLAN §2) | In-app run on Windows via IAP VM | 🟡 IN MOTION — gcloud installed; needs `gcloud auth login` then the VM run |
 | G15 | 2026-09-01 | Outbound-message ledger gap: we can't always prove what we told Raj (LIAISON_LOG §F) | `~/openclaw-agent/outbound-sent/` ledger created; **first entry 2026-09-01** (the condensed infra reply, verbatim, with proof refs) | ✅ CLOSED — every send now ledgered |
+| G16 | 2026-09-03 | **Full-project problem history consolidated**: 144 quote-backed findings mined from 181 Codex sessions, 11 app sessions, and all feedback docs (session-log-miner skill). 20 were NEW (incl. statutory-form demo-default backfill; typecheck blind to electron/**); 14 fixed bugs had NO guarding test. | Master doc `docs/BLOCKER_BUG_COLLECTION_2026-09-03.md`; external-tester slice `docs/KARUNESH_ERROR_LEDGER.md` (K1–K14); NEW → CLWX-79..89; unguarded → CLWX-77 acceptance; **THE acceptance gate `pnpm ga:gate` (CLWX-90)** now runs every criterion as one command | 🟡 IN MOTION — gate live; moe.16 re-verify + CLWX-79/82 are the pre-GA fixes |
 
 ## 3. Tests run and reports back (the evidence base)
 
@@ -55,6 +56,16 @@ its mitigation and current status. Nothing here is unsourced.
 
 GA is declared when every box is checked. Each is falsifiable; "checked" requires
 the named evidence, not an assertion.
+
+**Mechanism (2026-09-03, CLWX-90):** `pnpm ga:gate` is THE acceptance test —
+it runs every machine-checkable criterion in one command (T0 static: typecheck
+/lint/units/bundle-verify/harness; T1 live lane: 15-row Outlook eval,
+stale-read guard, both forms fill+gate dry-runs; opt-in: live send proof,
+NSCC eval; T2: VM-lane pointer) and writes the scorecard to `docs/evidence/`.
+**A GA tag requires a full GREEN run ≤24h old.** First GREEN:
+`docs/evidence/GA_GATE_2026-09-03.md` (9 pass / 0 fail / 2 opt-in skips).
+Owner/Ministry boxes below remain human calls — the gate reports them as
+named asks.
 
 **Product KRs**
 - [ ] **KR1** — In the shipped app on Windows, a live-LLM turn picks doc-tooling for P1–P6 and `resolveReadablePath` resolves a file on `%USERPROFILE%\OneDrive\Desktop`. _Evidence: in-app trace showing `document.*` tool-calls 6/6._ (Harness/eval green already — necessary, not sufficient.)

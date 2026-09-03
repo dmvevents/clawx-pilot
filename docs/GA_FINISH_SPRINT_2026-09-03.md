@@ -112,7 +112,33 @@ taxonomy (P parallel-now / S serial / O owner / V VM-window / M Ministry).
 no ◐ row without either a Ready card or an explicit owner/Ministry gate; the O
 and V batches are packaged single-sitting asks; board == docs == git.
 
-## 6. Operating rules (inherited, unchanged)
+## 6. GA runway — the exact remaining distance (counted 2026-09-03, board @ 89)
+
+**THE acceptance test now exists: `pnpm ga:gate` (CLWX-90, urgent).** Every
+criterion — static suites, bundle verify, live email/forms evals, ledger
+guards — one command, one scorecard mapped to the GO/NO-GO boxes. A GA tag
+requires a full GREEN run ≤24h old. Owner/Ministry boxes are reported as
+named asks (the gate cannot green a human decision).
+
+**Board arithmetic (89 cards):** 12 Cancelled · 22 **Ready — awaiting only
+your close** · 11 In Progress · 29 Todo · 15 Backlog (post-GA by design).
+
+**Scorecard arithmetic (14 GO/NO-GO boxes):** 2 checked (KR3, KR4) ·
+4 evidence-complete pending your acceptance (KR1, KR5, ExtVal-A/CLWX-34,
+release-hygiene — the gate is now that box's mechanism) · 8 need work split
+three ways below.
+
+| Lane | Items | What closes them |
+|---|---|---|
+| **Agent (me, next ticks)** | 1. ga:gate first GREEN run (in flight). 2. **moe.16 cut** (carries CLWX-46/59/72/78 fixes) + fresh-install re-verify: drag-PDF, degrade failover, K14 matrix → closes CLWX-72/78, refreshes KR1/KR2 evidence, gives the tester the ExtVal-B build. 3. CLWX-79 urgent (demo-default backfill). 4. CLWX-82 (typecheck electron/**, then fix what it reveals). 5. CLWX-62 recorded leg. 6. CLWX-58+70 (auto-recovery + exit-path invariant). 7. GA evidence packet refresh (CLWX-10). | ~3–4 driver ticks |
+| **Owner (one sitting, ~1–2 h)** | Close the 22 Ready cards · CLWX-18 scrub · CLWX-19 rotate · trim unhold (7add864b) · latency budget number · KR2 assisted recording (RDP ≥1920×1080; everything staged) · CLWX-45 per-item GO · then check the boxes | one sitting |
+| **Ministry (post-GA-acceptable per the finish vector)** | KR7 App-Insights verify · KR8 session + real values · CLWX-7/8/40 | Raj-paced |
+
+**Definition of done for GA (unchanged, now mechanized):** bucket-agent
+empty + owner sitting done ⇒ every box checked or explicitly owner-accepted
+with the known-limitations sheet; `pnpm ga:gate` GREEN at the tag.
+
+## 7. Operating rules (inherited, unchanged)
 
 Two-gate sends only from the test.fac sandbox; draft-and-hold for stakeholder
 comms; no secrets/bodies in logs or board; every Ready transition carries an

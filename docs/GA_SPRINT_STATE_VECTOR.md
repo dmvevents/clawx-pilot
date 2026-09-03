@@ -329,6 +329,23 @@ verdict + miner not-covered statements). Workflow note: the synthesis agent
 stalled; miners' results recovered from the journal and synthesized by the
 conductor. Board at 89._
 
+_**Acceptance-gate tick (2026-09-03, owner-directed "formulate a test that
+checks every single thing").** **`pnpm ga:gate` shipped (CLWX-90 → Ready):**
+one command, every machine-checkable criterion, scorecard mapped to the
+GO/NO-GO boxes, report to docs/evidence/, full per-check logs. **Run 1 RED
+(7/2/2) — the gate immediately caught 4 pre-existing lint errors + 2
+eval-harness brittleness defects (W3.1 inbox-order dependence, W4.1
+stray-compose vulnerability); all fixed same tick. Run 2 GREEN: 9/0/2**
+(`docs/evidence/GA_GATE_2026-09-03.md`; eval now 69s). Wiring: preflight +=
+lint:check; GA_READINESS §4 carries the mechanism + GREEN-≤24h tag rule;
+persona doc carries the "acceptance must name its gate check" rule.
+**GA runway counted (finish-sprint §6):** board 89→90; 22+1 Ready await
+owner close; scorecard 2 checked + 4 evidence-complete pending owner
+acceptance; remaining split = agent (moe.16 cut+re-verify, CLWX-79, CLWX-82,
+CLWX-62 recorded leg, CLWX-58/70 recovery, packet refresh) / owner (one
+~1-2h sitting) / Ministry (KR7/KR8, post-GA-acceptable). Problem history
+cross-linked everywhere (G16, CLAUDE.md packet items 6-7)._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three

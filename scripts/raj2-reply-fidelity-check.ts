@@ -163,7 +163,7 @@ function properNounCandidates(text: string): string[] {
   const re = /[A-Z][a-z'’-]+|[A-Z]{2,}/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
-    const before = text.slice(0, m.index).replace(/["'“”‘’(\[]+$/, '');
+    const before = text.slice(0, m.index).replace(/["'“”‘’([]+$/, '');
     const sentenceInitial = /(^|[.!?:;\n]\s*|^\s*[-*]\s*)$/.test(before);
     if (!sentenceInitial) out.push(m[0]);
   }

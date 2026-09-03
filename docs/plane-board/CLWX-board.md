@@ -1124,6 +1124,32 @@ WER measured on a fixed known-speech fixture set (Trinidadian-accent samples inc
 Source
 Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
 
+### CLWX-90 — [ga] Master acceptance gate: pnpm ga:gate runs EVERY criterion and is THE acceptance test
+
+- **State:** Ready  |  **Priority:** urgent
+
+Owner directive (2026-09-03): "formulate a test that checks every single thing... this test gets run as the acceptance criteria."
+
+What shipped
+scripts/ga-gate.mjs + pnpm ga:gate. Three tiers, every check mapped to its GA scorecard box (GA_READINESS section 4), Karunesh-ledger criterion (K1-K14), or fixed-bug guard (BLOCKER_BUG_COLLECTION section 3):
+T0 static (always): typecheck, lint, 1280-test unit suite, gateway-bundle rebuild + verify-openclaw-bundle (presence + ship-target native bindings + parser loadability), doc-tooling harness.
+T1 live Mac lane: 15-row Outlook eval, CLWX-46 stale-read check, Suspensions + Daily Report fill+gate dry-runs; GA_GATE_SEND=1 adds the real 2-gate send proof (sandbox only); GA_GATE_FULL=1 adds the NSCC 20-question eval.
+T2 VM lane: probe + pointer to the V-batch surfaces (install verify, ASR, cron, degrade, b2).
+SKIPs are loud and name their unlock; report written to docs/evidence/GA_GATE_<date>.md; non-zero exit on any non-skipped failure.
+
+Acceptance (this card -> Ready)
+1. One full T0+T1 run GREEN with the report committed.
+2. Wired into the release path: package:mac/win preflight references the static tier; the GA tag requires a full GREEN run <=24h old.
+3. GA_READINESS section 4 updated so each box names its ga:gate check id as the evidence mechanism.
+4. Coverage growth rule: every new card acceptance that is testable must add or name its ga:gate check (persona rule appended).
+
+What it does NOT replace
+Owner-only boxes (CLWX-18/19 security sitting, KR2 assisted recording, external unaided tester) and Ministry-gated boxes (KR7 verify, KR8 values) - the gate reports these as the named owner/Ministry asks, it cannot green them.
+
+**Comments (1):**
+
+- ACCEPTANCE MET (2026-09-03) - first full run and hardening loop closed. Run 1 was RED (7/2/2) and that was the gate WORKING: it caught 4 pre-existing lint errors (fixed: literal NBSP in a regex, useless escape, useless assignment, unused var) and two eval-harness brittleness defects (W3.1 fixture-dependence on inbox order after the drafts sweep; W4.1 vulnerable to strays from killed runs - hygiene now also runs immediately before W4.1, and W3.1 picks the longest-snippet row of the top 5). Gate improved same tick: full per-check logs to /tmp/ga-gate-logs/ so a RED run never needs re-running to diagnose. Run 2 GREEN: 9 pass / 0 fail / 2 opt-in skips (send-proof and NSCC are explicit flags). Report committed: docs/evidence/GA_GATE_2026-09-03.md. Eval now completes in 69s on the live lane. Wiring: preflight now carries lint:check (T0 parity; bundle-verify already in the package chain); GA_READINESS section 4 names the gate as the mechanism + the GREEN-within-24h tag rule; persona doc carries the "acceptance must name its gate check" rule. QA bar + release-manager bar met; PM acceptance: the owner directive "a test that checks every single thing, run as the acceptance criteria" is shipped and demonstrated red-to-green. Moving to Ready.
+
 ## Started
 
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA

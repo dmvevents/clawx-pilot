@@ -96,3 +96,7 @@ carries dispositions back out (draft-and-hold; owner opens the send gate).
 Every Ready transition names the persona whose bar it met in the evidence
 comment (e.g. "QA bar: 15/15 live eval; PM acceptance: matrix row Email/send
 → ●"). A card that can't name its persona isn't ready to be Ready.
+
+**Gate rule (CLWX-90):** every new card whose acceptance is machine-testable
+must add or name its `pnpm ga:gate` check id — acceptance criteria that the
+gate can't see don't exist at release time.

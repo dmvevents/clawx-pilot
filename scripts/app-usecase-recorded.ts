@@ -252,7 +252,7 @@ function activeTrajectoryPath(): string | null {
 
 function readModelCompletions(path: string): ModelCompleted[] {
   const out: ModelCompleted[] = [];
-  let raw = '';
+  let raw: string;
   try { raw = readFileSync(path, 'utf-8'); } catch { return out; }
   for (const line of raw.split('\n')) {
     if (!line.trim()) continue;
@@ -373,7 +373,7 @@ async function main(): Promise<void> {
 
   await preflight();
 
-  const geom = surfaceWindow();
+  surfaceWindow();
   ensureChatRoute();
   const g2 = surfaceWindow(); // re-front after menu click (focus can shift)
 
