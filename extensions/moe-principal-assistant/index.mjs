@@ -243,11 +243,6 @@ function yesNo(value, fallback = 'No') {
   return /^y(es)?$/i.test(v) || /^true$/i.test(v) ? 'Yes' : 'No';
 }
 
-function digitsOrDefault(value, fallback) {
-  const digits = String(coalesce(value, '')).replace(/\D/g, '');
-  return digits ? Number(digits) : fallback;
-}
-
 function optionalDigits(value) {
   const digits = String(coalesce(value, '')).replace(/\D/g, '');
   return digits ? Number(digits) : undefined;
@@ -260,39 +255,39 @@ function optionalArray(value) {
 }
 
 function normalizeSuspensionClass(value) {
-  const v = stringOr(value, 'Standard 4').trim();
+  const v = String(value).trim();
   return SUSPENSION_CLASS_ALIASES[v] ?? v;
 }
 
 function normalizeSuspensionLength(value) {
-  const n = Number(String(coalesce(value, 2)).match(/\d+/)?.[0] ?? 2);
-  if (!Number.isFinite(n)) return '2';
-  return String(Math.min(7, Math.max(1, Math.round(n))));
+  const digits = String(value).match(/\d+/)?.[0];
+  if (digits === undefined) return undefined; // unparseable == missing; never invent a length
+  return String(Math.min(7, Math.max(1, Math.round(Number(digits)))));
 }
 
 function normalizeSuspensionSchoolName(value) {
-  const raw = stringOr(value, 'Aranguez GPS').trim();
+  const raw = String(value).trim();
   return SUSPENSION_DEMO_SCHOOL_ALIASES.get(raw.toLowerCase()) ?? raw;
 }
 
 function normalizeSuspensionWhen(value) {
-  const raw = stringOr(value, '').trim();
+  const raw = String(value).trim();
   for (const [pattern, canonical] of SUSPENSION_INFRACTION_WHEN_ALIASES) {
     if (pattern.test(raw)) return canonical;
   }
-  return raw || 'During class time (member of staff present)';
+  return raw;
 }
 
 function normalizeSuspensionPrimaryInfraction(value) {
-  const raw = stringOr(value, '').trim();
+  const raw = String(value).trim();
   for (const [pattern, canonical] of SUSPENSION_PRIMARY_INFRACTION_ALIASES) {
     if (pattern.test(raw)) return canonical;
   }
-  return raw || 'Other';
+  return raw;
 }
 
 function normalizeSuspensionLevel(value, lengthDays) {
-  const raw = stringOr(value, '').trim();
+  const raw = String(value).trim();
   for (const [pattern, canonical] of SUSPENSION_LEVEL_ALIASES) {
     if (pattern.test(raw)) return canonical;
   }
@@ -300,13 +295,28 @@ function normalizeSuspensionLevel(value, lengthDays) {
   return Number.isFinite(n) && n >= 5 ? 'Major' : 'Minor';
 }
 
-function normalizeSuspensionPreviewPayload(rawPayload, cfg) {
+/**
+ * CLWX-79: this normalizer used to silently backfill every missing statutory
+ * field with a test.fac demo default, so a near-empty payload always produced
+ * a fully "valid" Suspensions form. That is a trust violation on a statutory
+ * document — a written_reports_collected: "Yes" the principal never asserted.
+ *
+ * Contract now:
+ *   - Provided values are canonicalized exactly as before (aliases, clamps).
+ *   - Missing REQUIRED fields => { ok: false, missingFields } and the caller
+ *     must refuse; no value is ever invented.
+ *   - Demo defaults survive ONLY when the caller passes { demo: true }
+ *     (process.env.DEMO === '1' or an explicit demo arg). Every defaulted
+ *     field id is reported in demoDefaultsApplied so the result is marked.
+ *   - Conditionally-required fields (additional_infractions when
+ *     additional_infractions_present is "Yes", victim_type when
+ *     victim_present is "Yes") refuse even in demo mode — demo defaults never
+ *     assert an incident detail the principal did not state.
+ */
+function normalizeSuspensionPreviewPayload(rawPayload, cfg, { demo = false } = {}) {
   const root = isObject(rawPayload?.payload) ? rawPayload.payload : rawPayload;
-  if (!isObject(root)) return rawPayload;
+  if (!isObject(root)) return { ok: true, payload: rawPayload, demoDefaultsApplied: [] };
 
-  // The legacy principal.suspension_payload helper captures only the details a
-  // principal commonly gives verbally. Fill remaining required fields with
-  // deterministic test.fac demo defaults so preview works; submit remains gated.
   const school = isObject(root.school) ? root.school : {};
   const student = isObject(root.student) ? root.student : {};
   const incident = isObject(root.incident) ? root.incident : {};
@@ -332,50 +342,140 @@ function normalizeSuspensionPreviewPayload(rawPayload, cfg) {
   const additionalInfractions = optionalArray(coalesce(root.additional_infractions, incident.additionalInfractions));
   const parentPhone2 = optionalDigits(coalesce(root.parent_phone_2, parent.phone2, parent.secondaryPhone));
 
+  const missingFields = [];
+  const demoDefaultsApplied = [];
+  // Resolve one required form field. `provided` has already been coalesced
+  // across the flat + nested aliases; `normalizeProvided` may return undefined
+  // to signal "present but unusable" (e.g. a length with no digits), which is
+  // treated the same as missing.
+  const resolve = (fieldId, provided, normalizeProvided, demoDefault) => {
+    if (provided !== undefined) {
+      const normalized = normalizeProvided ? normalizeProvided(provided) : provided;
+      if (normalized !== undefined) return normalized;
+    }
+    if (demo) {
+      demoDefaultsApplied.push(fieldId);
+      return typeof demoDefault === 'function' ? demoDefault() : demoDefault;
+    }
+    missingFields.push(fieldId);
+    return undefined;
+  };
+
   const normalized = {
     ...flatBase,
-    education_district: stringOr(
+    education_district: resolve(
+      'education_district',
       coalesce(root.education_district, school.educationDistrict, cfg.educationDistrict),
+      String,
       'North Eastern',
     ),
-    school_type: stringOr(coalesce(root.school_type, school.schoolType, cfg.schoolType), 'Government'),
-    school_name: normalizeSuspensionSchoolName(coalesce(root.school_name, school.name, cfg.schoolName)),
-    perpetrator_name: stringOr(
+    school_type: resolve('school_type', coalesce(root.school_type, school.schoolType, cfg.schoolType), String, 'Government'),
+    school_name: resolve(
+      'school_name',
+      coalesce(root.school_name, school.name, cfg.schoolName),
+      normalizeSuspensionSchoolName,
+      'Aranguez GPS',
+    ),
+    perpetrator_name: resolve(
+      'perpetrator_name',
       coalesce(root.perpetrator_name, student.name, student.fullName, root.student_name),
+      String,
       `${studentInitial}. Test`,
     ),
-    perpetrator_sex: stringOr(coalesce(root.perpetrator_sex, root.gender, student.gender), 'Male'),
-    perpetrator_dob: stringOr(coalesce(root.perpetrator_dob, root.date_of_birth, student.dateOfBirth, student.dob), '2016-01-15'),
-    perpetrator_age: String(coalesce(root.perpetrator_age, root.age, student.age, '10')),
-    student_birth_certificate_pin: stringOr(
+    perpetrator_sex: resolve('perpetrator_sex', coalesce(root.perpetrator_sex, root.gender, student.gender), String, 'Male'),
+    perpetrator_dob: resolve(
+      'perpetrator_dob',
+      coalesce(root.perpetrator_dob, root.date_of_birth, student.dateOfBirth, student.dob),
+      String,
+      '2016-01-15',
+    ),
+    perpetrator_age: resolve('perpetrator_age', coalesce(root.perpetrator_age, root.age, student.age), String, '10'),
+    student_birth_certificate_pin: resolve(
+      'student_birth_certificate_pin',
       coalesce(root.student_birth_certificate_pin, student.birthCertificatePin, student.pin),
+      String,
       'TEST-PIN-0001',
     ),
-    class: normalizeSuspensionClass(coalesce(root.class, root.standard, student.standard)),
-    date_of_infraction: stringOr(coalesce(root.date_of_infraction, root.date_of_incident, incident.dateOfIncident), todayISO()),
-    date_of_issue_of_suspension: stringOr(
-      coalesce(root.date_of_issue_of_suspension, root.date_of_suspension, suspension.dateOfSuspension),
-      todayISO(),
+    class: resolve('class', coalesce(root.class, root.standard, student.standard), normalizeSuspensionClass, 'Standard 4'),
+    date_of_infraction: resolve(
+      'date_of_infraction',
+      coalesce(root.date_of_infraction, root.date_of_incident, incident.dateOfIncident),
+      String,
+      todayISO,
     ),
-    term_suspension_count: Number(coalesce(root.term_suspension_count, suspension.termSuspensionCount, 1)),
-    infraction_when: normalizeSuspensionWhen(coalesce(root.infraction_when, incident.when)),
-    primary_infraction: normalizeSuspensionPrimaryInfraction(reason),
-    additional_infractions_present: yesNo(root.additional_infractions_present, 'No'),
-    victim_present: yesNo(root.victim_present, 'No'),
+    date_of_issue_of_suspension: resolve(
+      'date_of_issue_of_suspension',
+      coalesce(root.date_of_issue_of_suspension, root.date_of_suspension, suspension.dateOfSuspension),
+      String,
+      todayISO,
+    ),
+    term_suspension_count: resolve(
+      'term_suspension_count',
+      coalesce(root.term_suspension_count, suspension.termSuspensionCount),
+      Number,
+      1,
+    ),
+    infraction_when: resolve(
+      'infraction_when',
+      coalesce(root.infraction_when, incident.when),
+      normalizeSuspensionWhen,
+      'During class time (member of staff present)',
+    ),
+    primary_infraction: resolve('primary_infraction', reason, normalizeSuspensionPrimaryInfraction, 'Other'),
+    additional_infractions_present: resolve(
+      'additional_infractions_present',
+      coalesce(root.additional_infractions_present),
+      yesNo,
+      'No',
+    ),
+    victim_present: resolve('victim_present', coalesce(root.victim_present), yesNo, 'No'),
     victim_type: stringOr(coalesce(root.victim_type, victim.type), ''),
-    written_reports_collected: yesNo(root.written_reports_collected, 'Yes'),
-    length_of_suspension: normalizeSuspensionLength(lengthDays),
-    extended_suspension_application: yesNo(root.extended_suspension_application, 'No'),
-    sssd_referral: yesNo(root.sssd_referral, 'No'),
-    parent_present_at_issue: yesNo(coalesce(root.parent_present_at_issue, suspension.parentContacted), 'Yes'),
-    parent_signed_notice: yesNo(root.parent_signed_notice, 'Yes'),
-    discipline_matrix_followed: yesNo(root.discipline_matrix_followed, 'Yes'),
-    level_of_offence: normalizeSuspensionLevel(root.level_of_offence, lengthDays),
-    parent_name: stringOr(coalesce(root.parent_name, parent.name, parent.guardianName), 'Test Parent'),
-    parent_phone_1: digitsOrDefault(coalesce(root.parent_phone_1, parent.phone1, parent.phone), 8681234567),
-    address_house: stringOr(coalesce(root.address_house, address.house), '12'),
-    address_street: stringOr(coalesce(root.address_street, address.street), 'Test Street'),
-    address_city: stringOr(coalesce(root.address_city, address.city), 'Aranguez'),
+    written_reports_collected: resolve(
+      'written_reports_collected',
+      coalesce(root.written_reports_collected),
+      yesNo,
+      'Yes',
+    ),
+    length_of_suspension: resolve('length_of_suspension', lengthDays, normalizeSuspensionLength, '2'),
+    extended_suspension_application: resolve(
+      'extended_suspension_application',
+      coalesce(root.extended_suspension_application),
+      yesNo,
+      'No',
+    ),
+    sssd_referral: resolve('sssd_referral', coalesce(root.sssd_referral), yesNo, 'No'),
+    parent_present_at_issue: resolve(
+      'parent_present_at_issue',
+      coalesce(root.parent_present_at_issue, suspension.parentContacted),
+      yesNo,
+      'Yes',
+    ),
+    parent_signed_notice: resolve('parent_signed_notice', coalesce(root.parent_signed_notice), yesNo, 'Yes'),
+    discipline_matrix_followed: resolve(
+      'discipline_matrix_followed',
+      coalesce(root.discipline_matrix_followed),
+      yesNo,
+      'Yes',
+    ),
+    level_of_offence: resolve(
+      'level_of_offence',
+      coalesce(root.level_of_offence),
+      (v) => normalizeSuspensionLevel(v, lengthDays),
+      () => {
+        const n = Number(lengthDays);
+        return Number.isFinite(n) && n >= 5 ? 'Major' : 'Minor';
+      },
+    ),
+    parent_name: resolve('parent_name', coalesce(root.parent_name, parent.name, parent.guardianName), String, 'Test Parent'),
+    parent_phone_1: resolve(
+      'parent_phone_1',
+      coalesce(root.parent_phone_1, parent.phone1, parent.phone),
+      optionalDigits,
+      8681234567,
+    ),
+    address_house: resolve('address_house', coalesce(root.address_house, address.house), String, '12'),
+    address_street: resolve('address_street', coalesce(root.address_street, address.street), String, 'Test Street'),
+    address_city: resolve('address_city', coalesce(root.address_city, address.city), String, 'Aranguez'),
   };
   if (additionalInfractions && additionalInfractions.length > 0) {
     normalized.additional_infractions = additionalInfractions;
@@ -383,7 +483,29 @@ function normalizeSuspensionPreviewPayload(rawPayload, cfg) {
   if (parentPhone2 !== undefined) {
     normalized.parent_phone_2 = parentPhone2;
   }
-  return normalized;
+  // Conditionally-required incident details: never demo-defaulted.
+  if (normalized.additional_infractions_present === 'Yes' && (!additionalInfractions || additionalInfractions.length === 0)) {
+    missingFields.push('additional_infractions');
+  }
+  if (normalized.victim_present === 'Yes' && coalesce(root.victim_type, victim.type) === undefined) {
+    missingFields.push('victim_type');
+  }
+  if (missingFields.length > 0) {
+    return { ok: false, missingFields };
+  }
+  return { ok: true, payload: normalized, demoDefaultsApplied };
+}
+
+function suspensionMissingFieldsRefusal(missingFields) {
+  return {
+    status: 'refused',
+    reason: 'missing_required_fields',
+    missingFields,
+    message:
+      `Cannot fill the Suspensions form: ${missingFields.length} required field(s) are missing: ` +
+      `${missingFields.join(', ')}. Ask the principal for exactly these values — this is a statutory ` +
+      'form, so values are never invented or defaulted.',
+  };
 }
 
 /**
@@ -789,7 +911,7 @@ export function register(api) {
   registerTool({
     name: 'principal.daily_report_form_payload',
     description:
-      'Build the exact Microsoft Forms field payload for the Primary School Daily Report. Use this before forms.preview_daily_report. "Nothing to report" means no discipline, transport, meal illness, or whole-term absentee issues; do not invent attendance, teacher, meal, PTSC, or branch-specific counts. Required: date, teacher counts including MOH quarantine/other leave, and year_groups enrolled/present counts. Returns { form, payload }.',
+      'Build the exact Microsoft Forms field payload for the Primary School Daily Report. Use this before forms.preview_daily_report. "Nothing to report" means no discipline, transport, meal illness, or whole-term absentee issues; do not invent attendance, teacher, meal, PTSC, or branch-specific counts. Required: date, teacher counts including MOH quarantine/other leave, year_groups enrolled/present counts, and the yes/no + status questions (did_you_have_school_today, principal_status, vice_principal_status, school_receives_nsdsl_meals, students_suspended_today, school_serviced_by_ptsc_maxi_taxi, last_day_of_week). If any of those are missing it returns { status: "refused", missingFields } — ask the principal for exactly those fields; NEVER guess. Returns { form, payload }.',
     parameters: toolParameters(
       {
         date: stringSchema,
@@ -848,6 +970,7 @@ export function register(api) {
         last_day_of_week: yesNoSchema,
         students_absent_entire_term: yesNoSchema,
         absent_entire_term_counts: dailyReportAbsentTermSchema,
+        demo: booleanSchema,
       },
       [
         'date',
@@ -866,13 +989,33 @@ export function register(api) {
       requireNumber('number_of_teachers_present', args.number_of_teachers_present);
       requireNumber('number_of_teachers_absent', args.number_of_teachers_absent);
 
+      // CLWX-79: the status/yes-no questions are statutory attestations
+      // ("principal physically present", "written reports collected"-class
+      // answers). They used to silently default; now a missing value is a
+      // refusal listing the field ids, and the old defaults survive only in
+      // demo mode (explicit demo:true arg or DEMO=1), marked in the result.
+      const demo = args.demo === true || process.env.DEMO === '1';
+      const missingFields = [];
+      const demoDefaultsApplied = [];
+      const resolveChoice = (name, value, allowed, demoDefault) => {
+        if (value === undefined || value === null || value === '') {
+          if (demo) {
+            demoDefaultsApplied.push(name);
+            return demoDefault;
+          }
+          missingFields.push(name);
+          return undefined;
+        }
+        return choice(name, value, allowed);
+      };
+
       const payload = {
         date_being_reported_on: date,
         education_district: cfg.educationDistrict,
         school_type: cfg.schoolType,
         name_of_school: cfg.schoolName,
-        did_you_have_school_today: choice('did_you_have_school_today', args.did_you_have_school_today, YES_NO, 'Yes'),
-        principal_status: choice(
+        did_you_have_school_today: resolveChoice('did_you_have_school_today', args.did_you_have_school_today, YES_NO, 'Yes'),
+        principal_status: resolveChoice(
           'principal_status',
           args.principal_status,
           [
@@ -883,7 +1026,7 @@ export function register(api) {
           ],
           'Physically present at school',
         ),
-        vice_principal_status: choice(
+        vice_principal_status: resolveChoice(
           'vice_principal_status',
           args.vice_principal_status,
           [
@@ -906,16 +1049,28 @@ export function register(api) {
           'number_of_teachers_other_leave',
           args.number_of_teachers_other_leave,
         ),
-        school_receives_nsdsl_meals: choice('school_receives_nsdsl_meals', args.school_receives_nsdsl_meals, YES_NO, 'No'),
-        students_suspended_today: choice('students_suspended_today', args.students_suspended_today, YES_NO, 'No'),
-        school_serviced_by_ptsc_maxi_taxi: choice(
+        school_receives_nsdsl_meals: resolveChoice('school_receives_nsdsl_meals', args.school_receives_nsdsl_meals, YES_NO, 'No'),
+        students_suspended_today: resolveChoice('students_suspended_today', args.students_suspended_today, YES_NO, 'No'),
+        school_serviced_by_ptsc_maxi_taxi: resolveChoice(
           'school_serviced_by_ptsc_maxi_taxi',
           args.school_serviced_by_ptsc_maxi_taxi,
           YES_NO,
           'No',
         ),
-        last_day_of_week: choice('last_day_of_week', args.last_day_of_week, YES_NO, 'No'),
+        last_day_of_week: resolveChoice('last_day_of_week', args.last_day_of_week, YES_NO, 'No'),
       };
+
+      if (missingFields.length > 0) {
+        return {
+          status: 'refused',
+          reason: 'missing_required_fields',
+          missingFields,
+          message:
+            `Cannot build the Daily Report payload: ${missingFields.length} required field(s) are missing: ` +
+            `${missingFields.join(', ')}. Ask the principal for exactly these values — answers are never ` +
+            'assumed on a statutory report.',
+        };
+      }
 
       if (payload.did_you_have_school_today === 'No') {
         requireString('reason_no_school', args.reason_no_school);
@@ -1027,11 +1182,18 @@ export function register(api) {
         }
       }
 
-      return {
+      const result = {
         form: 'primary_school_daily_report',
         term: 'Term 3 2025/26',
         payload,
       };
+      if (demoDefaultsApplied.length > 0) {
+        log.info?.(
+          `principal.daily_report_form_payload: DEMO defaults applied to ${demoDefaultsApplied.length} field(s)`,
+        );
+        result.demoDefaultsApplied = demoDefaultsApplied;
+      }
+      return result;
     },
   });
 
@@ -1532,10 +1694,11 @@ export function register(api) {
     registerTool({
       name: 'forms.preview_suspension',
       description:
-        'Open the Suspensions form in the principal\'s browser and fill every field from a typed payload. Accepts either the exact flat Forms field schema or the nested principal.suspension_payload result and normalizes it before filling. Does NOT submit. Returns { status: "previewed", url, filledCount, skippedCount, errors[] }. If a Chrome/CDP attach error occurs, call browser.diagnose then browser.repair_chrome_cdp before asking the principal to do anything manually. Use this AFTER the user has reviewed the extracted fields and asked you to fill the form. Always call this before forms.submit_suspension.',
+        'Open the Suspensions form in the principal\'s browser and fill every field from a typed payload. Accepts either the exact flat Forms field schema or the nested principal.suspension_payload result and normalizes it before filling. Does NOT submit. Returns { status: "previewed", url, filledCount, skippedCount, errors[] }. If required statutory fields are missing it returns { status: "refused", missingFields } instead — ask the principal for exactly those fields; NEVER guess or invent values. If a Chrome/CDP attach error occurs, call browser.diagnose then browser.repair_chrome_cdp before asking the principal to do anything manually. Use this AFTER the user has reviewed the extracted fields and asked you to fill the form. Always call this before forms.submit_suspension.',
       parameters: toolParameters(
         {
           payload: looseObjectSchema,
+          demo: booleanSchema,
         },
         ['payload'],
       ),
@@ -1543,7 +1706,21 @@ export function register(api) {
         if (!args.payload || typeof args.payload !== 'object') {
           throw new Error('payload object required (32 fields, see suspensions-schema.json).');
         }
-        return forms.previewSuspension({ payload: normalizeSuspensionPreviewPayload(args.payload, cfg) });
+        // CLWX-79: demo defaults only on explicit opt-in; otherwise refuse
+        // with the exact missing field ids instead of inventing values.
+        const demo = args.demo === true || process.env.DEMO === '1';
+        const normalized = normalizeSuspensionPreviewPayload(args.payload, cfg, { demo });
+        if (!normalized.ok) {
+          return suspensionMissingFieldsRefusal(normalized.missingFields);
+        }
+        const result = await forms.previewSuspension({ payload: normalized.payload });
+        if (normalized.demoDefaultsApplied.length > 0) {
+          log.info?.(
+            `forms.preview_suspension: DEMO defaults applied to ${normalized.demoDefaultsApplied.length} field(s)`,
+          );
+          return { ...result, demoDefaultsApplied: normalized.demoDefaultsApplied };
+        }
+        return result;
       },
     });
 

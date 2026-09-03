@@ -367,6 +367,13 @@ describe('moe-principal-assistant plugin registration', () => {
     const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
     const result = await byName['principal.daily_report_form_payload'].execute('call-daily-payload', {
       date: '2026-05-26',
+      did_you_have_school_today: 'Yes',
+      principal_status: 'Physically present at school',
+      vice_principal_status: 'Physically present at school',
+      school_receives_nsdsl_meals: 'No',
+      students_suspended_today: 'No',
+      school_serviced_by_ptsc_maxi_taxi: 'No',
+      last_day_of_week: 'No',
       number_of_teachers_on_staff: 12,
       number_of_teachers_present: 11,
       number_of_teachers_absent: 1,
@@ -398,6 +405,117 @@ describe('moe-principal-assistant plugin registration', () => {
     });
     expect(result.payload.number_of_students_suspended).toBeUndefined();
     expect(result.payload.ptsc_morning_trips_count).toBeUndefined();
+    expect(result.demoDefaultsApplied).toBeUndefined();
+  });
+
+  it('refuses the daily-report payload when statutory choice fields are missing (CLWX-79)', async () => {
+    const { register } = await loadPlugin();
+    const tools: RegisteredTool[] = [];
+
+    register({
+      pluginConfig,
+      registerTool: (tool: RegisteredTool) => tools.push(tool),
+      log: { info() {}, warn() {} },
+    });
+
+    const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+    const result = (await byName['principal.daily_report_form_payload'].execute('call-daily-refusal', {
+      date: '2026-05-26',
+      number_of_teachers_on_staff: 12,
+      number_of_teachers_present: 11,
+      number_of_teachers_absent: 1,
+      number_of_teachers_on_moh_quarantine: 0,
+      number_of_teachers_other_leave: 0,
+      year_groups: {
+        first_year: { enrolled: 20, present: 19 },
+        second_year: { enrolled: 18, present: 18 },
+        standard_1: { enrolled: 22, present: 20 },
+        standard_2: { enrolled: 21, present: 21 },
+        standard_3: { enrolled: 20, present: 20 },
+        standard_4: { enrolled: 19, present: 19 },
+        standard_5: { enrolled: 17, present: 16 },
+      },
+    })) as { status?: string; missingFields?: string[]; message?: string; payload?: unknown };
+
+    expect(result.status).toBe('refused');
+    expect(result.missingFields).toEqual([
+      'did_you_have_school_today',
+      'principal_status',
+      'vice_principal_status',
+      'school_receives_nsdsl_meals',
+      'students_suspended_today',
+      'school_serviced_by_ptsc_maxi_taxi',
+      'last_day_of_week',
+    ]);
+    for (const fieldId of result.missingFields!) {
+      expect(result.message).toContain(fieldId);
+    }
+    expect(result.payload).toBeUndefined();
+  });
+
+  it('applies daily-report demo defaults only under DEMO=1 and marks them (CLWX-79)', async () => {
+    const previousDemo = process.env.DEMO;
+    process.env.DEMO = '1';
+    const logged: string[] = [];
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info: (message: string) => logged.push(message), warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      const result = (await byName['principal.daily_report_form_payload'].execute('call-daily-demo', {
+        date: '2026-05-26',
+        number_of_teachers_on_staff: 12,
+        number_of_teachers_present: 11,
+        number_of_teachers_absent: 1,
+        number_of_teachers_on_moh_quarantine: 0,
+        number_of_teachers_other_leave: 0,
+        year_groups: {
+          first_year: { enrolled: 20, present: 19 },
+          second_year: { enrolled: 18, present: 18 },
+          standard_1: { enrolled: 22, present: 20 },
+          standard_2: { enrolled: 21, present: 21 },
+          standard_3: { enrolled: 20, present: 20 },
+          standard_4: { enrolled: 19, present: 19 },
+          standard_5: { enrolled: 17, present: 16 },
+        },
+      })) as {
+        status?: string;
+        payload: Record<string, unknown>;
+        demoDefaultsApplied?: string[];
+      };
+
+      expect(result.status).toBeUndefined();
+      expect(result.payload).toMatchObject({
+        did_you_have_school_today: 'Yes',
+        principal_status: 'Physically present at school',
+        students_suspended_today: 'No',
+        last_day_of_week: 'No',
+      });
+      expect(result.demoDefaultsApplied).toEqual([
+        'did_you_have_school_today',
+        'principal_status',
+        'vice_principal_status',
+        'school_receives_nsdsl_meals',
+        'students_suspended_today',
+        'school_serviced_by_ptsc_maxi_taxi',
+        'last_day_of_week',
+      ]);
+      const demoLogs = logged.filter((line) => line.includes('DEMO defaults applied'));
+      expect(demoLogs).toHaveLength(1);
+      expect(demoLogs[0]).toContain('7 field(s)');
+      // Count only — no field values in the log line.
+      expect(demoLogs[0]).not.toContain('Physically present');
+    } finally {
+      if (previousDemo === undefined) delete process.env.DEMO;
+      else process.env.DEMO = previousDemo;
+    }
   });
 
   it('normalizes nested suspension payloads before previewing the browser form', async () => {
@@ -521,7 +639,9 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+      const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+        // Partial payload: demo defaults are only allowed with the explicit flag.
+        demo: true,
         payload: {
           education_district: 'Victoria',
           school_type: 'Government',
@@ -541,7 +661,7 @@ describe('moe-principal-assistant plugin registration', () => {
           level_of_offence: 'Level 1',
           parent_phone_1: '555-0123',
         },
-      });
+      })) as { status?: string; demoDefaultsApplied?: string[] };
 
       const previewPayload = (calls[0].body as { payload: Record<string, unknown> }).payload;
       expect(previewPayload).toMatchObject({
@@ -553,6 +673,144 @@ describe('moe-principal-assistant plugin registration', () => {
         level_of_offence: 'Minor',
         parent_phone_1: 5550123,
       });
+      // The demo marker rides on the tool result, never inside the form payload.
+      expect(previewPayload.demoDefaultsApplied).toBeUndefined();
+      expect(result.status).toBe('previewed');
+      expect(result.demoDefaultsApplied).toEqual([
+        'additional_infractions_present',
+        'victim_present',
+        'written_reports_collected',
+        'extended_suspension_application',
+        'sssd_referral',
+        'parent_present_at_issue',
+        'parent_signed_notice',
+        'discipline_matrix_followed',
+        'parent_name',
+        'address_house',
+        'address_street',
+        'address_city',
+      ]);
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
+      else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
+      else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+    }
+  });
+
+  it('refuses to preview a suspension payload with missing statutory fields outside demo mode (CLWX-79)', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    const previousDemo = process.env.DEMO;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+    delete process.env.DEMO;
+
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ success: true, data: { status: 'previewed', filledCount: 29, skippedCount: 1, errors: [] } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+        payload: {
+          education_district: 'Victoria',
+          school_type: 'Government',
+          school_name: 'Demo Primary',
+          perpetrator_name: 'T. Test',
+          perpetrator_sex: 'Male',
+          perpetrator_dob: '2016-01-15',
+          perpetrator_age: 10,
+          student_birth_certificate_pin: 'TEST-PIN-123',
+          class: 'Infant 1',
+          date_of_infraction: '2026-05-26',
+          date_of_issue_of_suspension: '2026-05-27',
+          term_suspension_count: 1,
+          infraction_when: 'During class',
+          primary_infraction: 'Disruptive Behaviour',
+          length_of_suspension: '1 Day',
+          level_of_offence: 'Level 1',
+          parent_phone_1: '555-0123',
+        },
+      })) as { status?: string; missingFields?: string[]; message?: string };
+
+      expect(result.status).toBe('refused');
+      expect(result.missingFields).toEqual([
+        'additional_infractions_present',
+        'victim_present',
+        'written_reports_collected',
+        'extended_suspension_application',
+        'sssd_referral',
+        'parent_present_at_issue',
+        'parent_signed_notice',
+        'discipline_matrix_followed',
+        'parent_name',
+        'address_house',
+        'address_street',
+        'address_city',
+      ]);
+      for (const fieldId of result.missingFields!) {
+        expect(result.message).toContain(fieldId);
+      }
+      // No browser preview is attempted for a refused payload.
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
+      else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
+      else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+      if (previousDemo === undefined) delete process.env.DEMO;
+      else process.env.DEMO = previousDemo;
+    }
+  });
+
+  it('refuses conditional incident details even in demo mode (CLWX-79)', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ success: true, data: { status: 'previewed', filledCount: 29, skippedCount: 1, errors: [] } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+        demo: true,
+        payload: {
+          perpetrator_name: 'T. Test',
+          // Asserts a victim exists but never says who — demo defaults must
+          // not invent the answer.
+          victim_present: 'Yes',
+          additional_infractions_present: 'Yes',
+        },
+      })) as { status?: string; missingFields?: string[] };
+
+      expect(result.status).toBe('refused');
+      expect(result.missingFields).toContain('victim_type');
+      expect(result.missingFields).toContain('additional_infractions');
+      expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
       else process.env.CLAWX_HOST_API_PORT = previousPort;
