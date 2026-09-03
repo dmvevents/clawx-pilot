@@ -74,6 +74,20 @@ first place: the launch default, not just a model outage. Regression pinned by
 `tests/unit/settings-store-defaults.test.ts`. Full gate green; under review
 (code-reviewer + config-coherence-auditor, 2026-09-03).
 
+*Packaging de-risk (does the fix survive into the installer?):* confirmed yes.
+`resources/cloud-gateway.json` (enabled, baseUrl → the Cloud Run LiteLLM proxy,
+`setPreferredChannel:true`) and its `cloud-gateway.key` (73 B) both exist and are
+bundled by electron-builder — `extraResources: resources/ → resources/`, filter
+`**/*` minus only icons-md/svg, bin, screenshot; neither is excluded. Packaged
+path `<resourcesPath>/resources/cloud-gateway.json` is the seed's candidate #3, and
+`apiKeyFile` resolves relative to it. So `resolveCloudGatewaySeedConfig()` returns
+non-null in the packaged app → the seed runs → the (now-live) guard sets
+`preferredChannel='online'` on a fresh box. Empirical proof it reaches the build:
+prior moe builds already seeded `moe-cloud-gateway` as the *default provider* in
+the field, which requires the same non-null resolve — only the preferredChannel
+line was dead. Both files are gitignored (CLWX-18 operator config, not in the
+public repo), so the installer must be cut on a box that has them present.
+
 ---
 
 ## 2. Parallelization — controlled multi-agent, disjoint code lanes
