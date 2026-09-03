@@ -1716,7 +1716,9 @@ async function maybeDegradeChannel(
     if (outage.promptSwitchToOnline) {
       const onlineReason: 'unreachable' | 'rate-limited' =
         outage.reason === 'rate-limited' ? 'rate-limited' : 'unreachable';
-      set({ degradeNotice: { reason: onlineReason, resent: false, to: 'online' } });
+      // Claim the per-turn flag so a second terminal error for the same run
+      // (K13 emitted six) does not re-raise the notice after a dismiss.
+      set({ degradedThisTurn: true, degradeNotice: { reason: onlineReason, resent: false, to: 'online' } });
     }
     // When no online account exists (or the error is not network-class), fall
     // through with no notice: the now-readable error stays on screen.
