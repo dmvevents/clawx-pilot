@@ -289,6 +289,27 @@ test-the-workspace blind spot. Register deltas appended (CANVAS-BINDING,
 DISCARD-OK-WEDGE, DRAFT-LITTER, MANAGED-PROFILE-FALLBACK, VLM-CREDS-DEADEND,
 DISCONNECTED-BADGE, W2-DAILY-REPORT-E2E, STALE-READ→FIXED)._
 
+_**V-batch results + error-ledger tick (2026-09-03).** The V-batch workflow
+completed all surfaces on the moe.15 VM: **gap C ASR PASS** (`ASR_SMOKE_OK`,
+verbatim transcript, first-ever run of pilot-asr-smoke.ps1 — W8 Windows ●);
+**gap D cron PASS** (`FIRED_OK` +21 ms, real agentTurn produced the 3:45pm
+reminder text, no send — W5 Windows ●, direct CLWX-67 Windows-leg evidence);
+**gap b2 write-turn PASS** (vbatch-b2.docx written + independently read back,
+3-layer proof — CLWX-65 Windows leg); **W10 degrade FAIL → CLWX-78 filed +
+FIXED-in-tree same tick** (`/connection error/i` missing from
+UNREACHABLE_PATTERNS; the OpenAI-SDK surface seen in BOTH the hosts-block
+test and the tester's ollama-down turns; classifier + 3 regression rows,
+suites green; live re-verify rides moe.16); **KR2 STAGED** (everything armed;
+one precondition: RDP at ≥1920×1080 before the assisted recording — owner
+leg). VM STOPPED after the batch (restart is one command). **Error ledger
+authored (owner-directed):** `docs/KARUNESH_ERROR_LEDGER.md` — all 14 ClawX
+errors the external tester ever reported (2026-05-01 →), each with status +
+derived test criterion; K8 (2026-06-30 intermittent PDF/office errors) turns
+out to be the earliest CLWX-72 signal. Criteria wired into CLWX-77 (matrix
+cells: fresh-box attach, intermittence ≥3×, seeded-litter mailbox,
+no-creds box, degrade surface, karunesh-matrix fixture) and cross-referenced
+on CLWX-34. Board at 78._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
