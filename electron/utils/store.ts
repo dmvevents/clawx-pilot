@@ -69,8 +69,21 @@ export interface AppSettings {
   // Optional on purpose: an ABSENT value means "the principal has not chosen a
   // channel yet", which the cloud-gateway seed keys on to make Online the launch
   // default. A concrete value is only ever written by an explicit user toggle
-  // (settings PUT) — never by a default — so a persisted value is authoritative.
+  // (settings PUT) — never by a default — so a persisted value is authoritative
+  // ONCE the one-time migration below has run (see channelDefaultMigrated).
   preferredChannel?: 'online' | 'on-device';
+
+  // One-time marker, set the first time the cloud-gateway seed applies the
+  // launch-channel default on this box. It gates a legacy-upgrade migration in
+  // cloud-gateway-provider-seed.ts: an OLDER build's store constructor persisted
+  // preferredChannel:'on-device' to disk (electron-store/conf writes the whole
+  // defaults object at construction), which on an in-place upgrade is
+  // indistinguishable from an explicit choice and would otherwise pin the box
+  // on-device forever. The migration flips such a legacy value to Online exactly
+  // once; after the marker is set, an explicit "On this device" toggle is
+  // respected (moe.13 no-clobber). Optional + never defaulted, same reasoning as
+  // preferredChannel.
+  channelDefaultMigrated?: boolean;
 }
 
 /**

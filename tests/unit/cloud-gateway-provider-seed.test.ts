@@ -113,9 +113,15 @@ describe('cloud-gateway-provider-seed', () => {
     mocks.syncSavedProviderToRuntime.mockResolvedValue(undefined);
     mocks.syncDefaultProviderToRuntime.mockResolvedValue(undefined);
     mocks.getOpenClawProviderKey.mockReturnValue('custom-moecloud');
-    mocks.getSetting.mockImplementation(async (key: string) => (
-      key === 'preferredChannel' ? 'on-device' : false
-    ));
+    // Default scenario: a post-migration box where the principal explicitly
+    // chose On this device. channelDefaultMigrated=true marks that the seed's
+    // one-time launch-default pass already ran, so the persisted value is an
+    // explicit toggle and must be respected (moe.13 no-clobber).
+    mocks.getSetting.mockImplementation(async (key: string) => {
+      if (key === 'preferredChannel') return 'on-device';
+      if (key === 'channelDefaultMigrated') return true;
+      return false;
+    });
     mocks.setSetting.mockResolvedValue(undefined);
   });
 
@@ -196,6 +202,40 @@ describe('cloud-gateway-provider-seed', () => {
     await seedCloudGatewayProvider();
 
     expect(mocks.setSetting).toHaveBeenCalledWith('preferredChannel', 'online');
+    // The one-time launch-default pass is recorded so later explicit toggles
+    // are never treated as a stale legacy default.
+    expect(mocks.setSetting).toHaveBeenCalledWith('channelDefaultMigrated', true);
+  });
+
+  it('migrates a legacy persisted on-device default to online exactly once', async () => {
+    process.env.CLAWX_CLOUD_GATEWAY_BASE_URL = 'https://gateway.example.run.app';
+    process.env.CLAWX_CLOUD_GATEWAY_API_KEY = 'sk-clawx-client';
+    // In-place upgrade over an old build: its store constructor persisted the
+    // then-default 'on-device' to disk (conf writes the whole defaults object),
+    // so the value is present WITHOUT any explicit user toggle. No migration
+    // marker yet -> treat it as the stale legacy default and flip to Online.
+    mocks.getSetting.mockImplementation(async (key: string) => {
+      if (key === 'preferredChannel') return 'on-device';
+      if (key === 'channelDefaultMigrated') return undefined;
+      return false;
+    });
+
+    await seedCloudGatewayProvider();
+
+    expect(mocks.setSetting).toHaveBeenCalledWith('preferredChannel', 'online');
+    expect(mocks.setSetting).toHaveBeenCalledWith('channelDefaultMigrated', true);
+  });
+
+  it('does not rewrite an explicit on-device choice after the migration marker is set', async () => {
+    process.env.CLAWX_CLOUD_GATEWAY_BASE_URL = 'https://gateway.example.run.app';
+    process.env.CLAWX_CLOUD_GATEWAY_API_KEY = 'sk-clawx-client';
+    // beforeEach scenario: marker=true + persisted 'on-device' = an explicit
+    // post-migration toggle (moe.13). The seed must leave it alone and must
+    // not re-write the already-set marker (idempotency invariant).
+    await seedCloudGatewayProvider();
+
+    expect(mocks.setSetting).not.toHaveBeenCalledWith('preferredChannel', expect.anything());
+    expect(mocks.setSetting).not.toHaveBeenCalledWith('channelDefaultMigrated', expect.anything());
   });
 
   it('can seed without taking default when explicitly configured that way', async () => {

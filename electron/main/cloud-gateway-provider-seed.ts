@@ -417,9 +417,30 @@ export async function seedCloudGatewayProvider(
     // pilot on the on-device model. See createDefaultSettings in utils/store.ts
     // and tests/unit/settings-store-defaults.test.ts. Only an explicit user
     // toggle (settings PUT -> setSetting) writes a concrete value.
+    //
+    // Legacy-upgrade migration (one-time, marker-gated): boxes that ever ran a
+    // build whose store DID default preferredChannel had 'on-device' persisted
+    // to disk at store construction (conf writes the whole defaults object), so
+    // on an in-place upgrade `current` is 'on-device' even though the principal
+    // never chose it — indistinguishable from an explicit choice, and it would
+    // pin the upgraded fleet on-device forever. channelDefaultMigrated marks
+    // that this seed has applied the launch default once on this box: before
+    // the marker, a persisted 'on-device' is treated as the stale legacy
+    // default and flipped to Online (per the owner's launch-channel directive);
+    // after the marker, any persisted value is an explicit toggle and is
+    // respected (moe.13 no-clobber). 'online' is never rewritten either way.
+    const migrated = (await getSetting('channelDefaultMigrated').catch(() => undefined)) === true;
     const current = await getSetting('preferredChannel').catch(() => undefined);
     if (current === undefined || current === null) {
       await setSetting('preferredChannel', 'online');
+    } else if (!migrated && current === 'on-device') {
+      logger.info(
+        '[cloud-gateway-seed] Migrating legacy persisted on-device launch default to online (one-time)',
+      );
+      await setSetting('preferredChannel', 'online');
+    }
+    if (!migrated) {
+      await setSetting('channelDefaultMigrated', true);
     }
   }
 

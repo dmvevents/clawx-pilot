@@ -4,11 +4,22 @@
 *patches all the previous tests we failed at, all green* — email send + read,
 document reader, and the rest. Not a partial send.
 
-**Decision this session:** moe.17's VM verify agent **died mid-run** (all six
-checks left PENDING, no evidence writes for 20+ min, task no longer exists), so
-its PDF/degrade fixes were never VM-proven. moe.17 is therefore **obsolete as a
-candidate**. Target is **moe.18**, built with every open Karunesh-matrix gap
-closed, then verified in ONE full-matrix VM pass. The VM is free.
+**Decision this session (corrected 2026-09-03):** an earlier draft of this doc
+said moe.17's VM verify "died mid-run" — **that was wrong**. It COMPLETED
+all-PASS on its four gate checks (install + state-preserved, K10 PDF two ways,
+K13 cloud->on-device degrade notice+switch+attempt, K14b letter+recovery);
+evidence `skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md`. The bogus
+"died" line came from reading the pre-seeded PENDING skeleton ~10s before the
+RESULT.md landed. BUT moe.17 was built at `bc1a361e`, **before** the
+launch-channel fix (715eab73), Lane A+B (8fac374f: K11/K1/K12/trust) and Lane A2
+(0925528e: on-device->Online prompt). So moe.17 does **not** satisfy the owner's
+"use the cloud gateway" steer (a fresh install still boots on-device) and does
+**not** close the remaining Karunesh gaps. Target remains **moe.18** (all four
+fixes are ancestors of HEAD). Because moe.17 proved K10 (CLWX-92) and the K13
+cloud-degrade *notice* on a real Windows build, moe.18's K10 + K13-cloud legs are
+**regression checks against a proven baseline**, not first proofs. One tension
+carried forward from the moe.17 addendum — see the degrade-resilience block
+below. The VM is free (RUNNING, moe.17 installed, hosts clean).
 
 ---
 
@@ -67,12 +78,27 @@ production never reached). Fix (commit 715eab73): stop defaulting
 `preferredChannel` (optional field). An ABSENT value now means "no choice yet" →
 the seed sets Online on a fresh gateway build; an explicit toggle still persists a
 concrete value (moe.13 overwrite regression stays fixed); non-gateway builds keep
-on-device via the preflight's `?? 'on-device'` fallback. Existing pilot boxes
-where the principal never explicitly toggled **self-heal to Online** on next
-launch — which is also why Karunesh's box was on-device (dead-model K13) in the
-first place: the launch default, not just a model outage. Regression pinned by
-`tests/unit/settings-store-defaults.test.ts`. Full gate green; under review
-(code-reviewer + config-coherence-auditor, 2026-09-03).
+on-device via the preflight's `?? 'on-device'` fallback. Regression pinned by
+`tests/unit/settings-store-defaults.test.ts`.
+
+*Review outcome (code-reviewer, 2026-09-03): CONDITIONAL GO, one HIGH —
+"existing boxes self-heal" was FALSE for in-place upgrades.* Empirically proven
+against the installed `conf@15.1.0`: the store constructor persists the whole
+defaults object at first launch, so every box that ever ran an old build has
+`preferredChannel:'on-device'` on disk — indistinguishable from an explicit
+choice, so the seed guard (correctly) skipped it and an upgraded box stayed
+on-device. That is exactly the moe.18→Karunesh shape (installed `/S` over
+moe.16, state preserved). Closed by a marker-gated one-time migration
+(`channelDefaultMigrated`): before the marker, a persisted `'on-device'` is
+treated as the stale legacy default and flipped to Online once (the owner's
+launch-channel directive resolves the ambiguity); after the marker, any
+persisted value is an explicit toggle and is respected — moe.13 stays a
+no-clobber, as a single flip, not the every-boot re-clobber moe.13 was.
+`'online'` is never rewritten. Three new seed tests pin fresh/legacy/post-marker
+paths. Reviewer MEDIUMs (offline-first-launch turn now depends on the degrade
+path; renderer/host divergence if `init()` fails at boot) are pre-existing or
+product-intent — the first is explicitly exercised by the VM verify's K13 legs.
+Config-coherence audit: GREEN (4 stores cohere in seed and non-seed paths).
 
 *Packaging de-risk (does the fix survive into the installer?):* confirmed yes.
 `resources/cloud-gateway.json` (enabled, baseUrl → the Cloud Run LiteLLM proxy,
