@@ -31,6 +31,25 @@
 import { createHash } from 'crypto';
 import { logger } from '../../utils/logger';
 
+/**
+ * Reason string set on GroundResult.reasoning when grounding is skipped
+ * because the managed model provider cannot be reached on this device.
+ */
+const PROVIDER_UNAVAILABLE_REASON =
+  'Visual grounding unavailable on this device (no cloud model credentials)';
+
+/**
+ * True when a VLM caller error indicates the managed model provider is
+ * unavailable on this device rather than a transient failure — e.g. no local
+ * AWS credentials (Bedrock), an expired/denied token, or no configured VLM
+ * provider. An external tester riding their own Chrome with NO cloud creds
+ * hits exactly this path; we degrade READABLY instead of dead-ending.
+ */
+function isProviderUnavailableError(message: string): boolean {
+  return /could not load credentials|credential|access ?denied|unrecognizedclient|expired ?token|security token|invalid.*api key|missing.*api key|no .*(provider|model).*(configured|available)|unauthoriz|not authoriz|forbidden/i
+    .test(message);
+}
+
 /** Pixel-space bounding box returned by the VLM. */
 export interface BoundingBox {
   x: number;
@@ -47,6 +66,14 @@ export interface GroundResult {
   confidence: number;
   /** Short rationale, useful in logs but not exposed to renderer. */
   reasoning: string;
+  /**
+   * True when grounding could not run because the managed model provider is
+   * unavailable on this device (missing/expired cloud credentials, no
+   * configured VLM provider). Distinct from a genuine "found: false" miss:
+   * callers use this to degrade READABLY ("visual assistant unavailable")
+   * instead of dead-ending the email flow.
+   */
+  unavailable?: boolean;
   /** Echoed for debugging. */
   question: string;
 }
@@ -319,10 +346,14 @@ export class VlmGrounder {
           logger.warn(
             `[outlook-v2] VLM fallback ALSO failed for "${query.question}": primary=${primaryMsg} fallback=${fbMsg}`,
           );
+          const unavailable = isProviderUnavailableError(primaryMsg) && isProviderUnavailableError(fbMsg);
           parsed = {
             found: false,
             confidence: 0,
-            reasoning: 'VLM call failed (both primary and fallback)',
+            unavailable,
+            reasoning: unavailable
+              ? PROVIDER_UNAVAILABLE_REASON
+              : 'VLM call failed (both primary and fallback)',
             question: query.question,
           };
         }
@@ -330,10 +361,12 @@ export class VlmGrounder {
         logger.warn(
           `[outlook-v2] VlmGrounder.ground failed for "${query.question}": ${primaryMsg}`,
         );
+        const unavailable = isProviderUnavailableError(primaryMsg);
         parsed = {
           found: false,
           confidence: 0,
-          reasoning: 'VLM call failed',
+          unavailable,
+          reasoning: unavailable ? PROVIDER_UNAVAILABLE_REASON : 'VLM call failed',
           question: query.question,
         };
       }

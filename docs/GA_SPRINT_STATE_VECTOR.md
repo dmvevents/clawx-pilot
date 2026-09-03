@@ -424,6 +424,32 @@ moe.17 outlook lane). moe.17 verify status: RESULT.md live, PRE-STATE captured
 (pre-install FileVersion moe.16, state preserved), six checks PENDING — send
 gate to Karunesh NOT met, HELD._
 
+_**moe.18 gap-closure — parallel two-lane fix landed + a new K13 gap found
+(2026-09-03).** The moe.17 VM verify agent DIED mid-run (six checks left PENDING,
+no writes 20+ min); moe.17 is obsolete as a candidate. Target is **moe.18** built
+with every open Karunesh gap closed. Ran `close-karunesh-gaps-parallel` (4 agents,
+disjoint code lanes): **Lane A/email+chrome** deleted the managed-Chromium CDP
+fallback (**CLWX-73** — `launchManagedProfileForCdp` gone; profile=user now
+absolute; every failure degrades to a readable instruction) and killed the VLM
+credential dead-end (**CLWX-74** — `ground()` returns `unavailable` with a fixed
+reason that does not leak the SDK error, `clickByRoleOrVlm` refuses readably
+instead of clicking a guessed coord, `draftEmail` returns structured
+`status:'failed'`+preview, littered-mailbox DOM guard); **Lane B/trust-UI** removed
+the badge false-red (**CLWX-75** — header now mirrors the footer's real predicate)
+and confirmed **CLWX-52** (model-id anonymised) + **CLWX-53** (plain-language
+error) already fixed. Both lanes reviewed **approve-with-nits, zero blocking**;
+two-gate send confirmed untouched; 99/99 + 23/23 unit, typecheck+eslint clean.
+**New finding from the retest audit:** Karunesh's K13 was *on-device* dying (6×
+"Connection error.", no failover) but the only degrade path is cloud→on-device
+(`maybeDegradeChannel` hardcodes `channel:'on-device'`); his real direction is
+UNBUILT → **Lane A2** (add preference-aware on-device→online failover in
+`channel-degrade.ts`+`chat.ts`; the degradeChannel route already accepts
+`'online'`). Also sharpened: PDF (**CLWX-92**) and cloud→on-device degrade
+(**CLWX-78**) FAILED live on moe.16 — fix-pending-verify, not proven. Full
+truth + release path in `docs/RELEASE_GAP_CLOSURE_STATE_VECTOR_2026-09-03.md`.
+Integration gate running; Lane A2 next; then moe.18 build + ONE full-matrix VM
+verify (both degrade directions). Karunesh handoff still HELD — nothing sent._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three

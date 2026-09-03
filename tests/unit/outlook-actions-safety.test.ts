@@ -811,6 +811,122 @@ describe('OutlookActions safety gates', () => {
     expect(actions.clickNewMail).toHaveBeenCalledTimes(1);
   });
 
+  it('degrades readably (does not throw) when opening the compose pane fails — VLM unavailable (CLWX-74)', async () => {
+    const { actions, driver } = createActions();
+    const page = {
+      evaluate: vi.fn(async () => false),
+    } as unknown as FakePage;
+    driver.ensureOutlookTab.mockResolvedValue(page);
+    // Simulate clickNewMail bubbling the principal-readable "visual assistant
+    // unavailable" error that clickByRoleOrVlm throws on a no-creds box.
+    actions.clickNewMail = vi.fn(async () => {
+      throw new Error(
+        'ClawX could not find this control on screen, and its visual assistant is '
+        + 'unavailable on this computer (no cloud model sign-in). Open the item in '
+        + 'Outlook manually, or sign in to the online model, then retry.',
+      );
+    });
+    actions.fillField = vi.fn(async () => undefined);
+    actions.fillBody = vi.fn(async () => undefined);
+
+    const result = await actions.draftEmail({
+      to: 'recipient@example.invalid',
+      subject: 'Demo subject',
+      body: 'Body is not logged by this test.',
+    });
+
+    expect(result).toMatchObject({ status: 'failed', draftLeftOpen: false });
+    expect(result.message).toMatch(/could not open a new email/i);
+    expect(result.message).toMatch(/visual assistant is unavailable/i);
+    // Never proceeds to fill on an unopened compose pane.
+    expect(actions.fillField).not.toHaveBeenCalled();
+    expect(actions.fillBody).not.toHaveBeenCalled();
+  });
+
+  it('degrades readably (does not throw) when filling the compose fields fails — VLM unavailable (CLWX-74)', async () => {
+    const { actions, driver } = createActions();
+    const page = {
+      evaluate: vi.fn(async () => false),
+    } as unknown as FakePage;
+    driver.ensureOutlookTab.mockResolvedValue(page);
+    actions.clickNewMail = vi.fn(async () => undefined);
+    actions.waitForComposePane = vi.fn(async () => undefined);
+    // Field semantic locators miss and the visual assistant is unavailable.
+    actions.fillField = vi.fn(async () => {
+      throw new Error('Could not locate field "To" via semantic locator or VLM');
+    });
+
+    const result = await actions.draftEmail({
+      to: 'recipient@example.invalid',
+      subject: 'Demo subject',
+      body: 'Body is not logged by this test.',
+    });
+
+    expect(result).toMatchObject({ status: 'failed', draftLeftOpen: true });
+    expect(result.message).toMatch(/could not fill the new email/i);
+    // The compose pane was opened, so we never claim it as a ready draft.
+    expect(result.status).not.toBe('drafted');
+  });
+
+  it('degrades readably (does not throw) when Chrome/CDP cannot be reached (CLWX-73)', async () => {
+    const { actions, driver } = createActions();
+    driver.ensureOutlookTab.mockRejectedValue(
+      new Error(
+        '[port_bind_timeout] ClawX opened Google Chrome but could not connect to it for '
+        + 'automation. Open Google Chrome and sign in to Outlook, then retry from ClawX.',
+      ),
+    );
+    actions.clickNewMail = vi.fn(async () => undefined);
+    actions.fillField = vi.fn(async () => undefined);
+
+    const result = await actions.draftEmail({
+      to: 'recipient@example.invalid',
+      subject: 'Demo subject',
+      body: 'Body is not logged by this test.',
+    });
+
+    expect(result).toMatchObject({ status: 'failed', draftLeftOpen: false });
+    expect(result.message).toMatch(/could not open outlook/i);
+    expect(result.message).toMatch(/sign in to outlook, then retry/i);
+    // We refused before touching the compose surface.
+    expect(actions.clickNewMail).not.toHaveBeenCalled();
+    expect(actions.fillField).not.toHaveBeenCalled();
+  });
+
+  it('clickByRoleOrVlm throws a principal-readable message when grounding is unavailable (CLWX-74)', async () => {
+    const driver = {
+      screenshotViewport: vi.fn(async () => ({ png: Buffer.alloc(0), width: 1, height: 1 })),
+      clickAt: vi.fn(),
+    };
+    const grounder = {
+      ground: vi.fn(async () => ({
+        found: false,
+        confidence: 0,
+        unavailable: true,
+        reasoning: 'Visual grounding unavailable on this device (no cloud model credentials)',
+        question: 'New mail button',
+      })),
+    };
+    const actions = new OutlookActions(driver as never, grounder as never) as unknown as {
+      clickByRoleOrVlm: (page: unknown, opts: unknown) => Promise<void>;
+    };
+    // Semantic + DOM locators both miss (littered mailbox), so we reach VLM.
+    const page = {
+      getByRole: () => ({ first: () => ({ count: async () => 0, click: async () => undefined }) }),
+      evaluate: vi.fn(async () => -1),
+    };
+
+    await expect(
+      actions.clickByRoleOrVlm(page, {
+        role: 'button',
+        nameRegex: /\bnew\s+(mail|message)\b/i,
+        vlmQuestion: 'The New mail button.',
+      }),
+    ).rejects.toThrow(/visual assistant is unavailable/i);
+    // Must not click a guessed coordinate when grounding is unavailable.
+    expect(driver.clickAt).not.toHaveBeenCalled();
+  });
+
   it('refuses a new email draft when To does not contain an email address', async () => {
     const { actions } = createActions();
     actions.clickNewMail = vi.fn(async () => undefined);

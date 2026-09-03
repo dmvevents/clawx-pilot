@@ -123,14 +123,39 @@ describe('ConnectionStatus header badge (CLWX-75)', () => {
     expect(screen.getByTestId('chat-connection-status')).toHaveAttribute('data-state', 'disconnected');
   });
 
-  it('recovers from a failed health check instead of latching Disconnected', () => {
-    gatewayState.health = { ok: false, error: 'transient' };
-    const { rerender } = render(<ConnectionStatus />);
-    expect(screen.getByTestId('chat-connection-status')).toHaveAttribute('data-state', 'disconnected');
+  it('does not go Disconnected on a failed host-API health check while running and ready', () => {
+    // CLWX-75 core: the composer footer's `isGatewayUsable` is
+    // `state === 'running' && gatewayReady !== false` — it never consults
+    // `health.ok`. A failed renderer-side /api/gateway/health poll must NOT
+    // drive the header badge red while the footer reads "connected" and turns
+    // still execute over the gateway WS. The badge tracks the same signal as
+    // the footer, so it stays on the provider class.
+    gatewayState.status = { state: 'running', port: 18789, gatewayReady: true };
+    gatewayState.health = { ok: false, error: 'transient host-api hiccup' };
+    render(<ConnectionStatus />);
+    const badge = screen.getByTestId('chat-connection-status');
+    expect(badge).toHaveAttribute('data-state', 'online');
+    expect(badge).toHaveTextContent('Online');
+    expect(badge).not.toHaveTextContent('Disconnected');
+  });
 
-    gatewayState.health = { ok: true };
-    rerender(<ConnectionStatus />);
-    expect(screen.getByTestId('chat-connection-status')).toHaveAttribute('data-state', 'online');
+  it('header/footer single source of truth: agree across a running turn regardless of health', () => {
+    // Mirror the footer predicate exactly and assert the header never claims a
+    // hard "Disconnected" while the footer would show "connected".
+    const footerUsable = (status: Record<string, unknown>) =>
+      status.state === 'running' && status.gatewayReady !== false;
+
+    for (const health of [null, { ok: true }, { ok: false, error: 'x' }] as Array<Record<string, unknown> | null>) {
+      gatewayState.status = { state: 'running', port: 18789, gatewayReady: true };
+      gatewayState.health = health;
+      const { unmount } = render(<ConnectionStatus />);
+      const badge = screen.getByTestId('chat-connection-status');
+      // Footer would be green/"connected" here…
+      expect(footerUsable(gatewayState.status)).toBe(true);
+      // …so the header must never be the hard-red "disconnected".
+      expect(badge).not.toHaveAttribute('data-state', 'disconnected');
+      unmount();
+    }
   });
 
   it('keeps raw model ids out of the badge unless dev mode is unlocked', () => {

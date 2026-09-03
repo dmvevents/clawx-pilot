@@ -16,8 +16,9 @@ closed, then verified in ONE full-matrix VM pass. The VM is free.
 
 | His test (K#) | Defect | Fixed in tree? | VM-proven? | Lane |
 |---|---|---|---|---|
-| K10 PDF read | CLWX-92 (pdfjs workerSrc under Electron UtilityProcess) | ✅ yes | ❌ not yet | Verify |
-| K13 on-device dead / no failover | CLWX-78 (silent-death degrade from history poll) | ✅ yes | ❌ not yet | Verify |
+| K10 PDF read | CLWX-92 (pdfjs workerSrc under Electron UtilityProcess) | ✅ yes | ❌ **FAILED live moe.16**; re-verify | Verify |
+| K13 cloud turn silently dies | CLWX-78 (silent-death degrade from history poll → on-device) | ✅ yes | ❌ **FAILED live ×2 on moe.16**; re-verify | Verify |
+| K13 **on-device dead / no failover** (the real report) | **NONE** — `maybeDegradeChannel` only does cloud→on-device; no on-device→cloud path exists | ❌ **OPEN (new)** | — | **A2 (follow-on)** |
 | K11 **email send** chain | CLWX-74 (VLM-creds dead-end) | ❌ **OPEN** | — | **A** |
 | K11 email litter / recovery | CLWX-70 (litter sweep) + CLWX-58 (compose recovery) | ✅ yes | partial | Verify |
 | K1 chrome attach on fresh box | CLWX-73 (managed-profile fallback = profile=user violation) | ❌ **OPEN** | — | **A** |
@@ -26,9 +27,26 @@ closed, then verified in ONE full-matrix VM pass. The VM is free.
 | trust: raw HTTP 400 wording | CLWX-53 (plain-language error) | ❌ **OPEN** | — | **B** |
 | K14 5-prompt matrix (c = PDF) | covered by CLWX-92 | ✅ via K10 | ❌ not yet | Verify |
 
-**The critical finding:** moe.17 greens only K10 + K13. Sending it as-is means
-Karunesh re-hits **email send (K11 / CLWX-74)** and the **badge (K12 / CLWX-75)** —
-tests he already reported. That fails the objective. Hence moe.18.
+**The critical finding:** moe.17 greens only K10 + K13-cloud-path, and even those
+**failed live on moe.16** (PDF drag failed; degrade stayed Online, no on-device
+attempt, ×2) — so they are fix-pending-verification, not proven. Sending moe.17
+as-is means Karunesh re-hits **email send (K11 / CLWX-74)**, the **badge (K12 /
+CLWX-75)**, and the trust-UI defects — tests he already reported. Hence moe.18.
+
+**Newly confirmed by the retest audit (this is the sharp one):** Karunesh's K13
+report was *on-device* (ollama) dying with 6× raw "Connection error." and **no
+failover**. But the only degrade path in code is cloud→on-device
+(`maybeDegradeChannel`, `src/stores/chat.ts:1720` hardcodes `channel:
+'on-device'`; `shouldDegradeToOnDevice` cannot fire when already on-device). So
+**his actual failure has no recovery path in tree** — moe.17/moe.18 do not fix it.
+The reverse direction (on-device→cloud) was never built and never tested. It is
+privacy-sensitive: on-device→cloud sends device data off-box, so it must NOT be a
+silent send. The trust-preserving rule (Lane A2 below): if `preferredChannel ===
+'online'` but the runtime is on-device via boot preflight → auto-degrade to Online
++ replay (restores their real preference, safe); if `preferredChannel ===
+'on-device'` (explicit choice) → do NOT silently send to cloud, show an actionable
+notice ("On-device model isn't responding — Switch to Online, or start the local
+model"). Either way K13 stops looking broken and stops leaking a raw error.
 
 ---
 
@@ -48,6 +66,14 @@ disjoint file trees so parallel edits cannot collide:
   - CLWX-52 — anonymise model id → "Online" / "On this device".
   - CLWX-53 — plain-language error banner (keep WHEN it shows; fix wording).
   - CLWX-75 — header badge state agrees with real gateway/turn state.
+- **Lane A2 — on-device→cloud failover (`src/lib/channel-degrade.ts` +
+  `src/stores/chat.ts` + `electron/api/routes/settings.ts`), sequenced AFTER
+  A+B land** to avoid a third concurrent editor of `chat.ts`:
+  - K13-real — generalise the degrade policy to a target channel + auto-resend
+    gate keyed on `preferredChannel` (preference-restore auto-degrade when the
+    principal really wanted Online; actionable non-silent notice when they chose
+    On-device). Pure policy stays unit-tested; plumbing mirrors the existing
+    cloud→on-device path. `/api/settings/degradeChannel` must accept `'online'`.
 
 Review gate per lane before anything is built (no self-approval).
 
@@ -61,8 +87,11 @@ Review gate per lane before anything is built (no self-approval).
 3. Bump version to `0.4.3-moe.18`; `pnpm build:win` (NSIS x64); sha256 + upload
    to `gs://clawx-rc-artifacts-.../moe18/`.
 4. **ONE full-matrix VM verify** on `clawx-win-rc-20260609` (CDP 9223): the
-   Karunesh matrix K1 / K10 / K11 (send, on a no-creds + littered box) / K12 /
-   K13 (Windows "Connection error." surface) / K14 five prompts. Every leg PASS.
+   Karunesh matrix K1 / K10 (PDF drag — failed live on moe.16, must now PASS) /
+   K11 (send, on a no-creds + littered box) / K12 / **K13 both degrade
+   directions** — cloud→on-device (CLWX-78, failed ×2 on moe.16) AND
+   on-device→cloud (Lane A2, the direction he actually hit) — / K14 five prompts.
+   Every leg PASS. No raw "Connection error." survives on any leg.
 5. On all-green: fire the Karunesh handoff (staged, owner-authorized **contingent
    on tested-and-green** — "after we've tested it, let's kick all this off").
    Honest note; nothing sent before green.
@@ -86,5 +115,8 @@ DO gate a formal GA declaration (owner/Ministry actions a verify can't green):
 
 ---
 
-*Live: workflows `close-karunesh-gaps-parallel` (fixes) + `failing-acceptance-retest-audit`
-(coverage) running. moe.17 verify agent dead. Nothing sent to Karunesh.*
+*Live: workflow `close-karunesh-gaps-parallel` (Lane A email/chrome + Lane B
+trust-UI) still running. `failing-acceptance-retest-audit` DONE — verdict: not all
+failing tests re-proven; PDF (CLWX-92) and cloud→on-device degrade (CLWX-78) FAILED
+live on moe.16 and are fix-pending-verify; K13's real on-device→cloud direction is
+unbuilt (Lane A2). moe.17 verify agent dead. Nothing sent to Karunesh.*

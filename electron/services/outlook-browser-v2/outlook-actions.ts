@@ -422,7 +422,20 @@ export class OutlookActions {
       };
     }
 
-    const page = await this.driver.ensureOutlookTab();
+    let page: Page;
+    try {
+      page = await this.driver.ensureOutlookTab();
+    } catch (error) {
+      // Chrome/CDP could not be reached (e.g. port_bind_timeout after ClawX
+      // launched Chrome). Never dead-end: surface the principal-readable
+      // instruction the chrome-cdp layer produced.
+      return {
+        status: 'failed',
+        draftLeftOpen: false,
+        preview: { to, cc, bcc, subject, body },
+        message: `ClawX could not open Outlook. ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
     if (await this.looksLikeSignin(page)) {
       return {
         status: 'needs_signin',
@@ -453,29 +466,54 @@ export class OutlookActions {
       logger.info(`[outlook-v2] compose auto-recovery before draft: ${recovery.note} (CLWX-58)`);
     }
 
-    // 1. Click New mail.
-    await this.clickNewMail(page);
-
-    // 2. Wait for a compose pane to appear before filling.
-    await this.waitForComposePane(page);
+    // 1. Click New mail. 2. Wait for a compose pane to appear before filling.
+    // If ClawX cannot open the compose pane (New-mail button not found and the
+    // visual assistant is unavailable, or the pane never renders), degrade
+    // READABLY instead of throwing an unhandled error out of the tool.
+    try {
+      await this.clickNewMail(page);
+      await this.waitForComposePane(page);
+    } catch (error) {
+      return {
+        status: 'failed',
+        draftLeftOpen: false,
+        preview: { to, cc, bcc, subject, body },
+        message: `ClawX could not open a new email in Outlook. ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
 
     // 3. Fill recipient/subject/body. Outlook's compose pane uses standard
-    // contenteditable + inputs; semantic locators are stable here.
-    await this.fillField(page, 'To', to.join('; '));
-    await this.commitRecipientField(page, 'To', to);
-    if (cc.length > 0) {
-      // Reveal Cc if it's hidden.
-      await this.revealCcBcc(page, 'Cc');
-      await this.fillField(page, 'Cc', cc.join('; '));
-      await this.commitRecipientField(page, 'Cc', cc);
+    // contenteditable + inputs; semantic locators are stable here. If a field
+    // locator misses AND the visual-grounding fallback is unavailable (no cloud
+    // creds), fillField throws — degrade READABLY rather than dead-ending.
+    try {
+      await this.fillField(page, 'To', to.join('; '));
+      await this.commitRecipientField(page, 'To', to);
+      if (cc.length > 0) {
+        // Reveal Cc if it's hidden.
+        await this.revealCcBcc(page, 'Cc');
+        await this.fillField(page, 'Cc', cc.join('; '));
+        await this.commitRecipientField(page, 'Cc', cc);
+      }
+      if (bcc.length > 0) {
+        await this.revealCcBcc(page, 'Bcc');
+        await this.fillField(page, 'Bcc', bcc.join('; '));
+        await this.commitRecipientField(page, 'Bcc', bcc);
+      }
+      await this.fillField(page, 'Subject', subject);
+      await this.fillBody(page, body);
+    } catch (error) {
+      return {
+        status: 'failed',
+        draftLeftOpen: true,
+        preview: { to, cc, bcc, subject, body },
+        message: `ClawX could not fill the new email in Outlook. ${
+          error instanceof Error ? error.message : String(error)
+        } Review or close any partial draft in Outlook before retrying.`,
+      };
     }
-    if (bcc.length > 0) {
-      await this.revealCcBcc(page, 'Bcc');
-      await this.fillField(page, 'Bcc', bcc.join('; '));
-      await this.commitRecipientField(page, 'Bcc', bcc);
-    }
-    await this.fillField(page, 'Subject', subject);
-    await this.fillBody(page, body);
 
     const draftProbe = await this.readOpenDraftProbe(page);
     const mismatch = draftProbe.snapshot
@@ -1835,6 +1873,16 @@ export class OutlookActions {
       imageHeight: shot.height,
       question: opts.vlmQuestion,
     });
+    if (result.unavailable) {
+      // The managed model provider is unreachable on this device (e.g. a
+      // tester with no cloud credentials). Do NOT dead-end with an SDK stack
+      // trace: refuse readably so the principal knows what to do.
+      throw new Error(
+        'ClawX could not find this control on screen, and its visual assistant is '
+        + 'unavailable on this computer (no cloud model sign-in). Open the item in '
+        + 'Outlook manually, or sign in to the online model, then retry.',
+      );
+    }
     if (!result.found || !result.bbox || result.confidence < 0.5) {
       throw new Error(
         `Could not find target (semantic locator missed and VLM grounding ${
@@ -1979,10 +2027,19 @@ export class OutlookActions {
             && style.visibility !== 'hidden'
             && style.display !== 'none';
         };
+        // Littered-mailbox guard: never treat a message-list row as a toolbar
+        // command. A busy inbox can contain a row whose accessible name / text
+        // matches "new message" (e.g. an email titled "You have a new
+        // message"); command controls (New mail, Reply, Forward) never live
+        // inside the listbox/grid, so exclude those subtrees.
+        const inMessageList = (el: Element) => el.closest(
+          '[role="listbox"],[role="grid"],[role="row"],[role="option"],[role="gridcell"],[aria-label*="Message list" i]',
+        ) !== null;
         const elements = Array.from(document.querySelectorAll(selectorText));
         for (let i = 0; i < elements.length; i += 1) {
           const el = elements[i];
           if (!isVisible(el)) continue;
+          if (inMessageList(el)) continue;
           const label = [
             el.getAttribute('aria-label'),
             el.getAttribute('title'),

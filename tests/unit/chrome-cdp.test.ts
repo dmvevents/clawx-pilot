@@ -62,7 +62,7 @@ describe('chrome-cdp diagnostics', () => {
     expect(listChromeProcesses).not.toHaveBeenCalled();
   });
 
-  it('falls back to a managed Chrome profile when the default profile is locked', async () => {
+  it('never launches a managed Chrome profile when the default profile is locked (CLWX-73)', async () => {
     const spawnDetached = vi.fn();
     const runtime = baseRuntime({
       spawnDetached,
@@ -76,58 +76,31 @@ describe('chrome-cdp diagnostics', () => {
           commandLine: `"${chromeExecutable}" --type=renderer`,
         },
       ]),
-      fetchJson: vi
-        .fn()
-        .mockRejectedValueOnce(new Error('ECONNREFUSED'))
-        .mockRejectedValueOnce(new Error('ECONNREFUSED'))
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          json: { Browser: 'Chrome/126.0.0.0' },
-        }),
-    });
-
-    const result = await ensureChromeCdpReady({ userDataDir, chromeExecutable }, runtime);
-
-    expect(result.state).toBe('cdp_ready');
-    expect(spawnDetached).toHaveBeenCalledWith(chromeExecutable, expect.arrayContaining([
-      '--remote-debugging-port=18792',
-      '--user-data-dir=C:\\Users\\Teacher\\AppData\\Roaming\\Ministry of Education\\Chrome CDP Profile',
-      '--restore-last-session',
-    ]));
-  });
-
-  it('can preserve the legacy close-Chrome instruction when managed fallback is disabled', async () => {
-    const spawnDetached = vi.fn();
-    const runtime = baseRuntime({
-      spawnDetached,
-      listChromeProcesses: vi.fn(async () => [
-        {
-          pid: 42,
-          commandLine: `"${chromeExecutable}" --profile-directory=Default`,
-        },
-        {
-          pid: 43,
-          commandLine: `"${chromeExecutable}" --type=renderer`,
-        },
-      ]),
+      // Managed fallback is gone, so even if a caller opts in it must NOT
+      // spawn a throwaway profile. Keep the endpoint unreachable throughout.
       fetchJson: vi.fn(async () => {
         throw new Error('ECONNREFUSED');
       }),
     });
 
     const result = await ensureChromeCdpReady(
-      { userDataDir, chromeExecutable, allowManagedProfileFallback: false },
+      { userDataDir, chromeExecutable, allowManagedProfileFallback: true },
       runtime,
     );
 
+    // Degrade READABLY to the close-Chrome instruction; never a managed profile.
     expect(result).toMatchObject({
       state: 'profile_locked_close_chrome',
       action: 'close_chrome_then_retry',
       chromeProcessCount: 2,
       targetProfileProcessCount: 1,
     });
+    expect(result.message).toMatch(/close all chrome windows/i);
     expect(spawnDetached).not.toHaveBeenCalled();
+    // The ClawX-managed CDP profile path must never appear.
+    for (const call of spawnDetached.mock.calls) {
+      expect(JSON.stringify(call)).not.toContain('Chrome CDP Profile');
+    }
   });
 
   it('launches system Chrome with CDP when the target profile is closed', async () => {
@@ -156,20 +129,14 @@ describe('chrome-cdp diagnostics', () => {
     ]));
   });
 
-  it('falls back to a managed Chrome profile when the default profile launch never binds CDP', async () => {
+  it('never launches a managed profile when the default profile launch never binds CDP; refuses readably (CLWX-73)', async () => {
     let now = 0;
     const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now);
     const spawnDetached = vi.fn();
-    const fetchJson = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('ECONNREFUSED initial'))
-      .mockRejectedValueOnce(new Error('ECONNREFUSED default profile launch'))
-      .mockRejectedValueOnce(new Error('ECONNREFUSED managed profile diagnose'))
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: { Browser: 'Chrome/149.0.0.0' },
-      });
+    // Endpoint never becomes reachable — the user-profile launch times out.
+    const fetchJson = vi.fn(async () => {
+      throw new Error('ECONNREFUSED');
+    });
     const runtime = baseRuntime({
       spawnDetached,
       fetchJson,
@@ -180,16 +147,24 @@ describe('chrome-cdp diagnostics', () => {
     });
 
     try {
-      const result = await ensureChromeCdpReady({ userDataDir, chromeExecutable, waitMs: 1 }, runtime);
+      const result = await ensureChromeCdpReady(
+        { userDataDir, chromeExecutable, waitMs: 1, allowManagedProfileFallback: true },
+        runtime,
+      );
 
-      expect(result.state).toBe('cdp_ready');
-      expect(result.message).toContain('ClawX-managed browser profile');
-      expect(spawnDetached).toHaveBeenNthCalledWith(1, chromeExecutable, expect.arrayContaining([
+      // Timeout must surface as a principal-readable port_bind_timeout, NOT a
+      // silent managed-profile launch.
+      expect(result.state).toBe('port_bind_timeout');
+      expect(result.message).toMatch(/open google chrome and sign in to outlook/i);
+      // Exactly one launch, and it used the user's OWN profile.
+      expect(spawnDetached).toHaveBeenCalledTimes(1);
+      expect(spawnDetached).toHaveBeenCalledWith(chromeExecutable, expect.arrayContaining([
         `--user-data-dir=${userDataDir}`,
       ]));
-      expect(spawnDetached).toHaveBeenNthCalledWith(2, chromeExecutable, expect.arrayContaining([
-        '--user-data-dir=C:\\Users\\Teacher\\AppData\\Roaming\\Ministry of Education\\Chrome CDP Profile',
-      ]));
+      // The ClawX-managed CDP profile must never be launched.
+      for (const call of spawnDetached.mock.calls) {
+        expect(JSON.stringify(call)).not.toContain('Chrome CDP Profile');
+      }
     } finally {
       dateNow.mockRestore();
     }

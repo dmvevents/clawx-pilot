@@ -382,9 +382,14 @@ async function launchChromeForCdp(
     logger.info(`[chrome-cdp] launching Chrome for CDP at ${cfg.cdpEndpoint}`);
     (runtime.spawnDetached ?? defaultSpawnDetached)(cfg.chromeExecutable, args);
   } catch (error) {
-    return buildStatus(cfg, 'launch_failed', [], 'Chrome launch failed.', 'retry', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    return buildStatus(
+      cfg,
+      'launch_failed',
+      [],
+      'ClawX could not start Google Chrome for automation. Open Google Chrome and sign in to Outlook, then retry from ClawX.',
+      'retry',
+      { error: error instanceof Error ? error.message : String(error) },
+    );
   }
 
   const sleep = runtime.sleep ?? defaultSleep;
@@ -407,50 +412,10 @@ async function launchChromeForCdp(
     cfg,
     'port_bind_timeout',
     processes,
-    `Chrome was launched but ${cfg.cdpEndpoint} did not become reachable before timeout.`,
+    'ClawX opened Google Chrome but could not connect to it for automation. Open Google Chrome and sign in to Outlook, then retry from ClawX.',
     'retry',
     { error: lastError },
   );
-}
-
-async function launchManagedProfileForCdp(
-  opts: ChromeCdpOptions,
-  cfg: ChromeCdpConfig,
-  runtime: ChromeCdpRuntime,
-): Promise<ChromeCdpStatus> {
-  const fallbackOpts: ChromeCdpOptions = {
-    ...opts,
-    userDataDir: cfg.fallbackUserDataDir,
-    fallbackUserDataDir: cfg.fallbackUserDataDir,
-    allowManagedProfileFallback: false,
-  };
-  const fallbackCfg = resolveConfig(fallbackOpts, runtime);
-  const fallback = await diagnoseChromeCdp(fallbackOpts, runtime);
-
-  if (fallback.state === 'cdp_ready') {
-    return {
-      ...fallback,
-      message:
-        'Chrome browser automation is reachable on the ClawX-managed browser profile.',
-    };
-  }
-
-  if (fallback.state === 'cdp_down_chrome_closed') {
-    logger.info(
-      `[chrome-cdp] launching managed profile for CDP at ${fallbackCfg.userDataDir}`,
-    );
-    const launched = await launchChromeForCdp(fallbackCfg, runtime, fallback.error);
-    if (launched.state === 'cdp_ready') {
-      return {
-        ...launched,
-        message:
-          'Chrome browser automation is reachable on a ClawX-managed browser profile. Sign in to Microsoft there once if Outlook or Forms asks.',
-      };
-    }
-    return launched;
-  }
-
-  return fallback;
 }
 
 export async function ensureChromeCdpReady(
@@ -461,20 +426,15 @@ export async function ensureChromeCdpReady(
   const initial = await diagnoseChromeCdp(opts, runtime);
   if (initial.state === 'cdp_ready') return initial;
 
-  if (initial.state === 'profile_locked_close_chrome' && cfg.allowManagedProfileFallback) {
-    logger.info('[chrome-cdp] default Chrome profile is locked; trying managed profile fallback');
-    return launchManagedProfileForCdp(opts, cfg, runtime);
-  }
-
+  // Tenant hard rule (CLWX-73): NEVER launch a managed Chromium profile for
+  // @moe.gov.tt / @fac.edu.tt flows. Microsoft Conditional Access blocks
+  // managed sessions (AADSTS53003), and a managed profile trains testers to
+  // sign into a throwaway automation profile instead of their own signed-in
+  // Chrome. We only ever launch SYSTEM Chrome with the user's OWN profile, and
+  // only when that profile is not currently locked. Every other state degrades
+  // to a principal-readable instruction (see buildStatus messages) that the
+  // caller surfaces verbatim.
   if (initial.state !== 'cdp_down_chrome_closed') return initial;
 
-  const launched = await launchChromeForCdp(cfg, runtime, initial.error);
-  if (
-    cfg.allowManagedProfileFallback
-    && (launched.state === 'port_bind_timeout' || launched.state === 'launch_failed')
-  ) {
-    logger.info(`[chrome-cdp] default Chrome profile launch ended with ${launched.state}; trying managed profile fallback`);
-    return launchManagedProfileForCdp(opts, cfg, runtime);
-  }
-  return launched;
+  return launchChromeForCdp(cfg, runtime, initial.error);
 }

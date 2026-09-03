@@ -5,13 +5,19 @@
  * account. Vendor / model names are intentionally hidden — only "Online",
  * "On this device", "Reconnecting" or "Disconnected" are shown.
  *
- * Source of truth: the Gateway status stream (state + gatewayReady) — the
- * same signal the composer footer renders — plus the host-API health check.
- * The badge deliberately does NOT probe the provider host from the renderer:
- * model calls run from the gateway process, whose network path (CSP, proxy,
- * headers) differs from the renderer's, so a renderer-side probe can fail
- * while turns execute fine. Provider unreachability is handled at send time
- * by the channel-degrade path instead.
+ * Single source of truth: the Gateway status stream (state + gatewayReady) —
+ * the exact same signal the composer footer's `isGatewayUsable` renders, so the
+ * header badge and the footer can never disagree through a turn.
+ *
+ * The badge deliberately does NOT probe the provider host from the renderer,
+ * and it deliberately does NOT gate on the host-API health check (`health.ok`).
+ * Model turns run from the gateway process over its own WS/IPC path; a failed
+ * renderer-side `/api/gateway/health` poll can leave `health.ok === false`
+ * while turns keep executing fine — which is exactly what latched the badge on
+ * a red "Disconnected" while the footer read "connected" (CLWX-75). A genuinely
+ * dead gateway surfaces through `status.state` (moved off `running` by the IPC
+ * status stream and the 30s reconcile), which drives both surfaces together.
+ * Provider unreachability is handled at send time by the channel-degrade path.
  */
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
@@ -54,7 +60,6 @@ function pickActiveAccount(
 export function ConnectionStatus() {
   const gatewayStatusState = useGatewayStore((s) => s.status.state);
   const gatewayReady = useGatewayStore((s) => s.status.gatewayReady);
-  const gatewayHealth = useGatewayStore((s) => s.health);
   const accounts = useProviderStore((s) => s.accounts);
   const defaultAccountId = useProviderStore((s) => s.defaultAccountId);
   const currentAgentId = useChatStore((s) => s.currentAgentId);
@@ -84,9 +89,10 @@ export function ConnectionStatus() {
     // Running but subsystems not yet ready: the footer calls this "starting";
     // treat it as a transient, not a dead connection.
     if (gatewayReady === false) return 'reconnecting';
-    if (gatewayHealth && gatewayHealth.ok === false) return 'disconnected';
+    // NB: intentionally no `health.ok` gate here — see the file header. That
+    // signal diverged from the footer and produced the CLWX-75 false red.
     return providerClass;
-  }, [gatewayStatusState, gatewayReady, gatewayHealth, providerClass]);
+  }, [gatewayStatusState, gatewayReady, providerClass]);
 
   const label = useMemo(() => {
     switch (display) {
