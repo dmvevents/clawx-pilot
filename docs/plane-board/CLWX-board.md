@@ -1411,8 +1411,9 @@ Live re-verify: repeat the hosts-block turn on a build carrying this fix (next V
 Related
 KR4/CLWX-27 (degrade evidence was Mac-proven; this was the Windows gap), IDLE-TIMEOUT-RAW (same class, fixed 09-03), CLWX-74 (tester impact).
 
-**Comments (1):**
+**Comments (2):**
 
+- PLUMBING GAP ROOT-CAUSED + FIXED (2026-09-03, commit 5020c39c). The VM re-verify's failure mode was a THIRD error surface: the run died with NO terminal stream event - the gateway ended the embedded run and only the chat.history poll carried the error-stopped assistant message. That loadHistory path set the banner and stopped; maybeDegradeChannel only hung off the error/final event paths (the final-with-error path already re-dispatches into the error case - detectors agree - so the silent-death path was the one true hole). Fix: loadHistory now invokes the same failover with the same discipline (only when THIS client's own send is in flight, read before the state set; classifier/policy/fail-closed/never-write-preferredChannel unchanged). Two regression rows pin it: silent-death degrades exactly once; a historical error on session re-open never degrades. chat-channel-degrade 11/11; full suite green. Remaining for Ready: live hosts-block re-verify on the moe.17 install (expect: degrade notice + channel switch + on-device attempt).
 - moe.16 live re-verify: PARTIAL (2026-09-03). The raw-banner half is FIXED live: the red "Model call failed Connection error." is gone, replaced by the calm plain-language banner (CLWX-53/75 fixes proven on Windows). But the AUTO-DEGRADE half did NOT fire: no degrade notice, channel stayed Online, no on-device attempt, no degradeChannel transaction (reproduced twice). The classifier fix IS in moe.16 and the pure policy would degrade for the confirmed state - the gap is plumbing: maybeDegradeChannel did not fire on this surface. RCA in flight (read-only, VM live). This card stays In Progress for the auto-degrade leg.
 
 ### CLWX-92 — [bug/doc-tools] In-app PDF read dies in the Electron UtilityProcess: pdfjs "No GlobalWorkerOptions.workerSrc specified"
