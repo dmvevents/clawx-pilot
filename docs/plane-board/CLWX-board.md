@@ -769,6 +769,62 @@ Acceptance (QA bar)
 Story
 S5 Reminders. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
 
+### CLWX-69 — [bug/outlook-lane] Discard-confirm dialog uses OK/Cancel labels; automation waiting for "Discard" wedges the tab behind the dialog backdrop
+
+- **State:** Todo  |  **Priority:** high
+
+Area: outlook-lane / eval harness   Severity: high (owner-reported live, screenshot evidence)
+
+Symptom (owner report 2026-09-03 ~08:20 AST)
+Screen "always gets stuck here": the Outlook tab shows the "Discard message" confirm dialog and nothing progresses. Screenshot also shows two DOCKED draft chips (eval 02:49:17, MoE smoke 06:31:23) and Drafts [23] - accumulated eval litter.
+
+Root cause (two layers, both proven this session)
+1. The compose discard CONFIRM dialog is titled "Discard message" but its buttons are OK / Cancel - any automation waiting for a button named "Discard" waits forever; the fui-DialogSurface backdrop then intercepts ALL message-list clicks (row locator.click timeouts).
+2. Playwright locator.first() on button[aria-label*="Discard"] can latch a HIDDEN Discard earlier in DOM order and burn its full timeout - same vendor-rotated class as CLWX-59.
+
+Impact
+Eval runs C/E/F/G degraded to 10-13/15 with zero product defects (click-timeout rows only); the live lane wedges for a human too until the dialog is dismissed. Trust-adjacent: a principal seeing a stuck compose dialog blames the assistant.
+
+Fix (harness, APPLIED this session)
+scripts/v2-eval.ts discardOpenDrafts(): DOM-side click of the first VISIBLE discard control; inside any visible dialog whose text mentions "discard", click OK/Discard/Yes. Runs pre-eval AND post-W4.4 so refusal-proof drafts are discarded, not Escape-saved.
+
+Follow-ups
+1. Port the same OK/Cancel handling into scripts/outlook-cleanup-compose.ts (it already tries OK - verify).
+2. Drafts-folder litter cleanup (23 saved drafts on test.fac).
+3. Product-level: CLWX-58 auto-recovery should treat the confirm dialog + docked draft chips as part of the stale-compose state machine.
+
+Regression class
+dom-selector-rotation / dialog-label variance - detection owner dom-selector-regression-tester. Related: CLWX-58 (stale compose blocks), CLWX-59 (hidden SplitButton wrapper).
+
+### CLWX-70 — [bug/outlook] Aborted flows exit uncleanly and SAVE drafts - [Draft] litter accumulates in conversations and the Drafts folder
+
+- **State:** Todo  |  **Priority:** high
+
+Area: outlook / lane hygiene   Severity: medium-high (owner-reported with screenshot, 2026-09-03 ~08:24 AST)
+
+Symptom
+When an automation (or a person) starts a compose/reply and does not exit through an explicit send-or-discard, Outlook auto-saves the draft. Evidence in the screenshot: [Draft] markers on inbox conversations (test fac "MoE smoke 01:51:08", Corporate Communications thread) and Drafts folder at [23] accumulated items.
+
+Why it matters
+1. A conversation carrying an embedded draft trips hasAnyVisibleOpenDraft and can block draft/reply on that thread (CLWX-58 class).
+2. Docked draft chips + confirm dialogs wedge the lane (CLWX-69).
+3. Principal-facing trust: a principal seeing [Draft] replies they never wrote, addressed to parents or the Ministry, will not trust the assistant. Draft litter is user-visible state pollution.
+
+Root cause
+No exit-path invariant: compose-opening flows (draftEmail, reply, forward, eval refusal proofs, crashed runs) have no finally-style cleanup, and Escape SAVES a draft rather than discarding. Every abnormal exit therefore leaks one saved draft.
+
+Fix directions (acceptance)
+1. Invariant: every automation path that opens a compose ends in exactly one of {explicit send, explicit discard} including error paths (try/finally in outlook-actions).
+2. Lane sweeper: a drafts-folder cleanup script that deletes automation-authored drafts (subject prefix match: "eval ", "MoE smoke") - run pre-eval and available as a recovery tool; NEVER touches human drafts.
+3. Eval postcondition: after a run, assert zero new saved drafts (drafts count unchanged) - fail the run loudly if litter leaked.
+4. Current 23-item litter cleaned once by the sweeper (test.fac sandbox only).
+
+Related
+CLWX-58 (stale open compose blocks flows), CLWX-69 (discard-confirm OK/Cancel wedge). This card is the third leg: prevention of the litter both feed on.
+
+Regression class
+state-hygiene / exit-path invariant - candidate rule for state-idempotency-auditor: "compose opened implies compose closed (sent or discarded) on every code path".
+
 ## Started
 
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA

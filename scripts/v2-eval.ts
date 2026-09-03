@@ -63,25 +63,60 @@ async function main() {
 
   console.log('=== outlook-browser-v2 eval ===\n');
 
-  // Inter-run cleanup: dismiss any open compose/dialog and navigate the
-  // Outlook tab back to the inbox. Without this, the W4.1 'click New
-  // mail' step fails when a previous eval's draft is still open. Best-
-  // effort — failures here aren't fatal.
-  try {
-    await driver.ensureBrowser();
-    const page = await driver.ensureOutlookTab();
-    await driver.pressKey('Escape').catch(() => null);
-    await driver.sleep(300);
-    await driver.pressKey('Escape').catch(() => null);
-    await driver.sleep(300);
-    const inboxLink = page.getByRole('treeitem', { name: /^inbox/i }).first();
-    if ((await inboxLink.count().catch(() => 0)) > 0) {
-      await inboxLink.click({ timeout: 3_000 }).catch(() => null);
-      await driver.sleep(500);
+  // Compose hygiene, used pre-run AND after the W4.x rows: DISCARD any open
+  // draft (Escape alone keeps it — Outlook saves to Drafts or leaves the pane
+  // up), then settle back on the inbox. An open compose obscures inbox rows
+  // and blocks draft/reply; stale drafts cost three eval runs on 2026-09-03
+  // (12-13/15 lane flake, zero product defects). Best-effort, never fatal.
+  const discardOpenDrafts = async () => {
+    try {
+      await driver.ensureBrowser();
+      const page = await driver.ensureOutlookTab();
+      for (let i = 0; i < 5; i += 1) {
+        // DOM-side click on the first VISIBLE Discard button. A Playwright
+        // locator.first() can latch a hidden Discard earlier in DOM order and
+        // wait out its whole timeout (same class as the CLWX-59 SplitButton
+        // wrapper), leaving the compose dialog + backdrop obstructing every
+        // row click. The confirm dialog's own Discard is caught next pass.
+        const clicked = await page.evaluate(`(() => {
+          const vis = function(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+          // The confirm dialog is titled "Discard message" but its buttons are
+          // OK / Cancel (screenshot evidence 2026-09-03) — waiting for a
+          // button named "Discard" wedges the tab behind the dialog backdrop.
+          const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"]')).filter(vis);
+          for (const d of dialogs) {
+            if ((d.textContent || '').toLowerCase().indexOf('discard') !== -1) {
+              const ok = Array.from(d.querySelectorAll('button')).filter(vis).find(function(b) {
+                return /^(ok|discard|yes)$/i.test((b.textContent || '').trim());
+              });
+              if (ok) { ok.click(); return true; }
+            }
+          }
+          const btns = Array.from(document.querySelectorAll('button')).filter(vis);
+          const target = btns.find(function(b) {
+            const label = ((b.getAttribute('aria-label') || '') + ' ' + (b.textContent || '')).toLowerCase();
+            return label.indexOf('discard') !== -1;
+          });
+          if (target) { target.click(); return true; }
+          return false;
+        })()`) as boolean;
+        if (!clicked) break;
+        await driver.sleep(1_200);
+      }
+      await driver.pressKey('Escape').catch(() => null);
+      await driver.sleep(300);
+      await driver.pressKey('Escape').catch(() => null);
+      await driver.sleep(300);
+      const inboxLink = page.getByRole('treeitem', { name: /^inbox/i }).first();
+      if ((await inboxLink.count().catch(() => 0)) > 0) {
+        await inboxLink.click({ timeout: 3_000 }).catch(() => null);
+        await driver.sleep(500);
+      }
+    } catch (err) {
+      console.log(`(compose hygiene non-fatal: ${err instanceof Error ? err.message : String(err)})`);
     }
-  } catch (err) {
-    console.log(`(cleanup warmup non-fatal: ${err instanceof Error ? err.message : String(err)})`);
-  }
+  };
+  await discardOpenDrafts();
 
   // W1 — open
   await runRow('W1', 'open', 'open() returns opened with mail URL', async () => {
@@ -212,6 +247,10 @@ async function main() {
       notes: `status=${r.status} reason=${(r.reason ?? '').slice(0, 80)}`,
     };
   });
+
+  // Post-W4.x hygiene: W4.2/W4.4 intentionally leave the probe draft open
+  // (both refusal proofs need it). Discard it before the message-open rows.
+  await discardOpenDrafts();
 
   // W6.1 — mark_read
   await runRow('W6.1', 'mark_read', 'mark_read({read:true}) returns ok', async () => {
