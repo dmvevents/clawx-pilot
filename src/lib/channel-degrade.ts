@@ -88,6 +88,14 @@ const UNREACHABLE_PATTERNS: readonly RegExp[] = [
   /failed to fetch/i,
   /network (?:error|request failed|is offline)/i,
   /(?:socket|connection) (?:hang up|closed|timeout)/i,
+  // The OpenAI-SDK client wraps every transport-level refusal as the bare
+  // string "Connection error." — the gateway surfaces it verbatim. Found
+  // live twice on 2026-09-03: the V-batch W10 degrade test (hosts-blocked
+  // provider -> red "Model call failed Connection error." banner, NO
+  // failover despite a warm on-device model) and the external tester's
+  // ollama-down turns. Without this row the class lands in 'other' and
+  // maybeDegradeChannel fails closed.
+  /connection error/i,
   /getaddrinfo/i,
   /dns lookup failed/i,
   /(?:provider|gateway|upstream|endpoint|host) unreachable/i,

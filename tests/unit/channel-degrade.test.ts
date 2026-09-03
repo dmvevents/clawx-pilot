@@ -32,6 +32,13 @@ describe('classifyFailure', () => {
       'LLM idle timeout (60s): no response from model',
       'llm idle timeout',
       'no response from model',
+      // The OpenAI-SDK client's transport wrapper (DEGRADE-PATTERN-GAP, seen
+      // live twice 2026-09-03: V-batch W10 hosts-block test + the external
+      // tester's ollama-down turns): the bare string must degrade, not
+      // render as "Model call failed Connection error."
+      'Connection error.',
+      'LLM request failed: network connection error. rawError=Connection error.',
+      'Model call failed Connection error.',
     ];
     for (const c of cases) {
       expect(classifyFailure(c), c).toBe('unreachable');
