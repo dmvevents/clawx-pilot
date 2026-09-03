@@ -2,12 +2,21 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyFailure,
   shouldDegradeToOnDevice,
+  shouldPromptSwitchToOnline,
   type DegradeContext,
+  type OnDeviceOutageContext,
 } from '../../src/lib/channel-degrade';
 
 const online: DegradeContext = {
   activeChannel: 'online',
   onDeviceAvailable: true,
+  alreadyDegraded: false,
+};
+
+// A dead on-device turn with Online configured to switch to: the K13 case.
+const onDeviceOutage: OnDeviceOutageContext = {
+  activeChannel: 'on-device',
+  onlineAvailable: true,
   alreadyDegraded: false,
 };
 
@@ -197,5 +206,61 @@ describe('shouldDegradeToOnDevice', () => {
       activeChannel: 'on-device',
     });
     expect(d.reason).toBe('unreachable');
+  });
+});
+
+describe('shouldPromptSwitchToOnline', () => {
+  it('prompts a switch to Online when the on-device model dies', () => {
+    // The external tester's real failure (K13): a dead local model surfaced six
+    // raw "Connection error." lines with no way forward. Now it offers a switch.
+    const d = shouldPromptSwitchToOnline('Connection error.', onDeviceOutage);
+    expect(d.promptSwitchToOnline).toBe(true);
+    expect(d.reason).toBe('unreachable');
+  });
+
+  it('never auto-sends off-box: the switch stays the principal\'s choice', () => {
+    // The privacy line. Unlike cloud -> on-device (which keeps data local), this
+    // direction would move the turn to the cloud, so it is only ever a prompt —
+    // the decision shape carries no "degrade" or "resend", by design.
+    const d = shouldPromptSwitchToOnline('Connection error.', onDeviceOutage);
+    expect(d).toEqual({ promptSwitchToOnline: true, reason: 'unreachable' });
+    expect(d).not.toHaveProperty('degrade');
+    expect(d).not.toHaveProperty('resend');
+  });
+
+  it('never fires when the failed turn was already on Online', () => {
+    const d = shouldPromptSwitchToOnline('fetch failed', {
+      ...onDeviceOutage,
+      activeChannel: 'online',
+    });
+    expect(d.promptSwitchToOnline).toBe(false);
+  });
+
+  it('surfaces the real error when there is no Online account to reach', () => {
+    // Can't promise a switch we cannot make; the now-readable error stays up.
+    const d = shouldPromptSwitchToOnline('fetch failed', {
+      ...onDeviceOutage,
+      onlineAvailable: false,
+    });
+    expect(d.promptSwitchToOnline).toBe(false);
+    expect(d.reason).toBe('unreachable');
+  });
+
+  it('prompts on a fleet 429 as well, and reports it as rate-limited', () => {
+    const d = shouldPromptSwitchToOnline('HTTP 429 Too Many Requests', onDeviceOutage);
+    expect(d.promptSwitchToOnline).toBe(true);
+    expect(d.reason).toBe('rate-limited');
+  });
+
+  it('never prompts for a real error (auth / content filter): it must surface', () => {
+    for (const err of ['HTTP 401 unauthorized', 'content filter triggered', 'MODEL_NOT_ALLOWED']) {
+      const d = shouldPromptSwitchToOnline(err, onDeviceOutage);
+      expect(d.promptSwitchToOnline, err).toBe(false);
+    }
+  });
+
+  it('does not prompt twice in one turn', () => {
+    const d = shouldPromptSwitchToOnline('fetch failed', { ...onDeviceOutage, alreadyDegraded: true });
+    expect(d.promptSwitchToOnline).toBe(false);
   });
 });

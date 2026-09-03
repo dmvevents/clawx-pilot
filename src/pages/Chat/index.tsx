@@ -5,7 +5,7 @@
  * are in the toolbar; messages render with markdown + streaming.
  */
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Laptop, Loader2, Sparkles } from 'lucide-react';
+import { AlertCircle, Cloud, Laptop, Loader2, Sparkles } from 'lucide-react';
 import { useChatStore, type RawMessage } from '@/stores/chat';
 import { buildBaselineRunKey, getBaseline } from '@/stores/baseline-cache';
 import { useGatewayStore } from '@/stores/gateway';
@@ -874,18 +874,31 @@ export function Chat() {
       {/* Channel-degrade notice. Informational, not an error: the turn either
           already completed on this device or is ready to be resent there.
           Deliberately anonymised — channel vocabulary only, never a model id. */}
-      {degradeNotice && (
+      {degradeNotice && (() => {
+        // Two directions share this notice. `to === 'on-device'` is the
+        // cloud-outage failover (laptop icon): the turn already moved to this
+        // device, `resent` says whether it was replayed. `to === 'online'` is a
+        // dead on-device turn (cloud icon): nothing moved — sending on-device
+        // data to the cloud stays the principal's choice — so the copy is an
+        // actionable prompt to switch to Online.
+        const toOnline = degradeNotice.to === 'online';
+        const titleKey = toOnline
+          ? 'degradeNotice.onlineSwitchNeeded'
+          : (degradeNotice.resent
+              ? (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.resentRateLimited' : 'degradeNotice.resentUnreachable')
+              : (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.switchedRateLimited' : 'degradeNotice.switchedUnreachable'));
+        const hintKey = toOnline ? 'degradeNotice.onlineSwitchHint' : 'degradeNotice.restoreHint';
+        const Icon = toOnline ? Cloud : Laptop;
+        return (
         <div className="px-4 pt-2" data-testid="chat-degrade-notice">
           <div className="max-w-4xl mx-auto rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 flex items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                <Laptop className="h-4 w-4" />
-                {t(degradeNotice.resent
-                  ? (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.resentRateLimited' : 'degradeNotice.resentUnreachable')
-                  : (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.switchedRateLimited' : 'degradeNotice.switchedUnreachable'))}
+                <Icon className="h-4 w-4" />
+                {t(titleKey)}
               </p>
               <p className="mt-1 text-xs text-amber-600/80 dark:text-amber-400/80">
-                {t('degradeNotice.restoreHint')}
+                {t(hintKey)}
               </p>
             </div>
             <button
@@ -896,7 +909,8 @@ export function Chat() {
             </button>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Run error callout. Plain-language primary line; the raw provider
           string stays available behind a collapsed technical-details

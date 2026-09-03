@@ -197,7 +197,7 @@ describe('chat store: send-time channel degradation', () => {
 
     // Resent, so the principal's message ran on-device rather than being lost.
     expect(calledPaths()).toContain('/api/settings/degradeChannel');
-    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: true });
+    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: true, to: 'on-device' });
     expect(store.getState().degradedThisTurn).toBe(true);
   });
 
@@ -245,7 +245,7 @@ describe('chat store: send-time channel degradation', () => {
     await settle();
 
     expect(degradeCalls()).toHaveLength(1);
-    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: false });
+    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: false, to: 'on-device' });
   });
 
   it('leaves the original error visible when the failover itself fails', async () => {
@@ -287,5 +287,55 @@ describe('chat store: send-time channel degradation', () => {
     expect(degradeCalls()).toEqual([]);
     // Adoption itself still happened; we only declined to act on it.
     expect(store.getState().degradeNotice).toBeNull();
+  });
+
+  // ── On-device outage direction (K13). A dead local model prompts a switch to
+  //    Online; it must NEVER auto-move the channel or send on-device data to the
+  //    cloud, so no degradeChannel POST and no preference write may occur. ──
+  it('prompts a switch to Online when the on-device model dies, without moving the channel', async () => {
+    const store = await loadStore();
+    settingsState.preferredChannel = 'on-device'; // running on-device by choice
+    emitError(store, 'LLM request failed: network connection error. rawError=Connection error.');
+    await settle();
+
+    // The load-bearing privacy invariant: nothing was sent off-box.
+    expect(degradeCalls()).toEqual([]);
+    expect(preferenceWrites()).toEqual([]);
+    expect(settingsState.setPreferredChannel).not.toHaveBeenCalled();
+    // The principal gets an actionable, anonymised prompt instead of raw errors.
+    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: false, to: 'online' });
+  });
+
+  it('classifies a fleet 429 on-device outage as rate-limited in the switch prompt', async () => {
+    const store = await loadStore();
+    settingsState.preferredChannel = 'on-device';
+    emitError(store, 'Request failed with status code 429');
+    await settle();
+
+    expect(degradeCalls()).toEqual([]);
+    expect(store.getState().degradeNotice).toEqual({ reason: 'rate-limited', resent: false, to: 'online' });
+  });
+
+  it('surfaces the real error (no switch prompt) when on-device dies and there is no Online account', async () => {
+    providerState.accounts = [BOTH_CHANNELS[1]]; // ollama only — nowhere to switch to
+    const store = await loadStore();
+    settingsState.preferredChannel = 'on-device';
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(degradeCalls()).toEqual([]);
+    expect(store.getState().degradeNotice).toBeNull();
+    expect(store.getState().error).toBeTruthy();
+  });
+
+  it('does not prompt a switch for a real on-device error — the error stays on screen', async () => {
+    const store = await loadStore();
+    settingsState.preferredChannel = 'on-device';
+    emitError(store, 'HTTP 401 Unauthorized');
+    await settle();
+
+    expect(degradeCalls()).toEqual([]);
+    expect(store.getState().degradeNotice).toBeNull();
+    expect(store.getState().error).toContain('401');
   });
 });

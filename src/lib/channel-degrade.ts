@@ -226,3 +226,64 @@ export function shouldDegradeToOnDevice(
     reason,
   };
 }
+
+export interface OnDeviceOutageContext {
+  /** The channel the failed turn ran on. */
+  activeChannel: 'online' | 'on-device';
+  /** Whether an online account exists to fail over *to*. */
+  onlineAvailable: boolean;
+  /** Whether this turn has already been acted on once (prevents repeat prompts). */
+  alreadyDegraded: boolean;
+}
+
+export interface OnDeviceOutageDecision {
+  /**
+   * Surface an actionable "the model on this device isn't responding — switch
+   * to Online" notice. NOT an automatic switch: unlike the cloud -> on-device
+   * direction (which keeps data local and is always safe), sending an on-device
+   * turn to the cloud moves data off the box, so it stays the principal's
+   * explicit choice. We never silently cross that boundary — the same trust
+   * line the anonymised-model-identity rule protects. When this is false the
+   * caller surfaces the real (now readable) error unchanged.
+   */
+  promptSwitchToOnline: boolean;
+  /** Why, for logging and for the user-facing notice. */
+  reason: FailureClass;
+}
+
+/**
+ * Decide whether a dead on-device turn should prompt the principal to switch to
+ * Online. This is the recovery path for the external tester's K13 failure: a
+ * local model that stops answering used to render six raw "Connection error."
+ * lines with no way forward.
+ *
+ * Deliberately NOT the mirror of `shouldDegradeToOnDevice`. That direction
+ * degrades and resends automatically because the turn never leaves the device.
+ * This direction would send the turn to the cloud, so it never acts silently —
+ * it returns an actionable prompt and leaves the switch to the principal.
+ *
+ * Pure function of (error, context): unit-testable without a gateway.
+ */
+export function shouldPromptSwitchToOnline(
+  error: string | null | undefined,
+  ctx: OnDeviceOutageContext,
+): OnDeviceOutageDecision {
+  const reason = classifyFailure(error);
+  const no = { promptSwitchToOnline: false, reason };
+
+  // Only an on-device outage prompts a switch to online.
+  if (ctx.activeChannel !== 'on-device') return no;
+
+  // No online account: nowhere to switch to. Surface the real error rather than
+  // promising a switch we cannot make.
+  if (!ctx.onlineAvailable) return no;
+
+  // Prompt at most once per turn.
+  if (ctx.alreadyDegraded) return no;
+
+  // Only network-class failures offer a switch; a real error must surface
+  // unchanged so a misconfiguration is never hidden behind a channel prompt.
+  if (reason !== 'unreachable' && reason !== 'rate-limited') return no;
+
+  return { promptSwitchToOnline: true, reason };
+}

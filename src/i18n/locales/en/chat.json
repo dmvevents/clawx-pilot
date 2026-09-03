@@ -200,6 +200,8 @@
         "resentRateLimited": "The online service is busy right now — this answer came from the model on this device.",
         "switchedUnreachable": "No internet connection. Switched to the model on this device — send your message again to continue.",
         "switchedRateLimited": "The online service is busy right now. Switched to the model on this device — send your message again to continue.",
-        "restoreHint": "Online will be used again automatically once it's available."
+        "restoreHint": "Online will be used again automatically once it's available.",
+        "onlineSwitchNeeded": "The model on this device isn't responding.",
+        "onlineSwitchHint": "Switch to Online to continue, or wait for the model on this device to come back."
     }
 }

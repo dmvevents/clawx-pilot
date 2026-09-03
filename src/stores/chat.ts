@@ -9,7 +9,7 @@ import { useGatewayStore } from './gateway';
 import { useAgentsStore } from './agents';
 import { useSettingsStore } from './settings';
 import { useProviderStore } from './providers';
-import { classifyFailure, shouldDegradeToOnDevice } from '@/lib/channel-degrade';
+import { classifyFailure, shouldDegradeToOnDevice, shouldPromptSwitchToOnline } from '@/lib/channel-degrade';
 import { pickAccountForChannel, type ProviderClass } from '@/lib/provider-display';
 import { buildBaselineRunKey, captureBaseline, clearBaselines } from './baseline-cache';
 import { buildCronSessionHistoryPath, isCronSessionKey } from './chat/cron-session-utils';
@@ -1699,6 +1699,30 @@ async function maybeDegradeChannel(
     ? 'online'
     : (onDevice ? 'on-device' : 'online');
 
+  // A dead on-device turn does NOT auto-fail-over. This is what the external
+  // tester actually hit (K13): a local model that stopped answering surfaced
+  // six raw "Connection error." lines with no way forward. Unlike the cloud ->
+  // on-device direction below (which keeps data on the box and is always safe),
+  // an on-device -> online move would send the turn to the cloud, so it stays
+  // the principal's explicit choice. We surface an actionable "switch to
+  // Online" notice and let them make the call — never a silent cross of that
+  // trust line.
+  if (activeChannel === 'on-device') {
+    const outage = shouldPromptSwitchToOnline(errorMsg, {
+      activeChannel,
+      onlineAvailable: online !== null && !!online.model,
+      alreadyDegraded: state.degradedThisTurn,
+    });
+    if (outage.promptSwitchToOnline) {
+      const onlineReason: 'unreachable' | 'rate-limited' =
+        outage.reason === 'rate-limited' ? 'rate-limited' : 'unreachable';
+      set({ degradeNotice: { reason: onlineReason, resent: false, to: 'online' } });
+    }
+    // When no online account exists (or the error is not network-class), fall
+    // through with no notice: the now-readable error stays on screen.
+    return;
+  }
+
   const decision = shouldDegradeToOnDevice(errorMsg, {
     activeChannel,
     onDeviceAvailable: onDevice !== null && !!onDevice.model,
@@ -1734,19 +1758,19 @@ async function maybeDegradeChannel(
   if (!decision.resend || !payload?.text?.trim()) {
     // Channel moved but we are not replaying. The principal's own retry will
     // now run on-device.
-    set({ degradeNotice: { reason, resent: false } });
+    set({ degradeNotice: { reason, resent: false, to: 'on-device' } });
     return;
   }
 
-  set({ degradeNotice: { reason, resent: true }, runError: null, error: null });
+  set({ degradeNotice: { reason, resent: true, to: 'on-device' }, runError: null, error: null });
   try {
     await get().sendMessage(payload.text, payload.attachments, payload.targetAgentId);
     // sendMessage resets degradedThisTurn for the new turn; re-assert it so a
     // second failure (now on-device) surfaces instead of looping.
-    set({ degradedThisTurn: true, degradeNotice: { reason, resent: true } });
+    set({ degradedThisTurn: true, degradeNotice: { reason, resent: true, to: 'on-device' } });
   } catch (error) {
     console.warn('[chat] on-device resend failed:', error);
-    set({ degradeNotice: { reason, resent: false } });
+    set({ degradeNotice: { reason, resent: false, to: 'on-device' } });
   }
 }
 

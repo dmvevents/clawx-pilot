@@ -132,10 +132,24 @@ export interface ChatState {
    */
   degradedThisTurn: boolean;
   /**
-   * User-facing notice that the turn moved to the on-device model, or null.
-   * Anonymised per the hard rules: channel vocabulary only, never a model id.
+   * User-facing notice that the turn moved channels, or null. Anonymised per
+   * the hard rules: channel vocabulary only, never a model id.
+   *
+   * `to` is which direction the notice concerns:
+   *  - 'on-device': the runtime auto-degraded a failed cloud turn onto the
+   *    on-device channel (data stays local — always safe). `resent` says
+   *    whether the turn was replayed.
+   *  - 'online': a dead on-device turn. Nothing moved — sending on-device data
+   *    to the cloud stays the principal's explicit choice — so the notice is an
+   *    actionable prompt to switch to Online. `resent` is always false here.
    */
-  degradeNotice: { reason: 'unreachable' | 'rate-limited'; resent: boolean } | null;
+  degradeNotice:
+    | {
+        reason: 'unreachable' | 'rate-limited';
+        resent: boolean;
+        to: 'online' | 'on-device';
+      }
+    | null;
 
   // Sessions
   sessions: ChatSession[];
