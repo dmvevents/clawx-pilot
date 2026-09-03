@@ -1235,24 +1235,6 @@ Acceptance
 Source
 ga:gate follow-through, e2e run /tmp/e2e-ui.log + worktree baseline; error contexts in test-results/.
 
-### CLWX-92 — [bug/doc-tools] In-app PDF read dies in the Electron UtilityProcess: pdfjs "No GlobalWorkerOptions.workerSrc specified"
-
-- **State:** Todo  |  **Priority:** urgent
-
-Area: doc-tools / gateway runtime   Severity: urgent (K10 criterion; the external tester's #1 issue is still user-broken in-app despite CLWX-72 closing)
-
-Found by
-moe.16 VM verify (2026-09-03): agent calls document.read_pdf; in the gateway's Electron UtilityProcess pdfjs throws "No GlobalWorkerOptions.workerSrc specified"; principal sees "I encountered a technical error while trying to read the PDF file."
-
-Differential repro (environment pinned)
-Same shipped readPdf + fixture: plain packaged-node = PASS (CLWX72_SHIPPED_VERIFY pages=1 chars=835); faked process.type="utility" + versions.electron = SAME workerSrc FAIL. pdfjs's isNodeJS detection treats a UtilityProcess as browser-like (process.versions.electron && process.type !== "browser"), so it demands a worker script instead of running workerless.
-
-Fix direction
-In doc-tools readPdf (extensions/moe-principal-assistant/doc-tools.mjs), before parsing: resolve the bundled pdfjs worker file (pdfjs-dist/legacy/build/pdf.worker.mjs next to the copy pdf-parse uses in the flat gateway bundle) and set GlobalWorkerOptions.workerSrc to its file URL (or force workerless mode). Must work in BOTH plain node and UtilityProcess. Regression: extend the packaged-node repro to ALSO run under the faked utility env; add the in-app drag-PDF turn to the VM verify checklist permanently (K10).
-
-Evidence
-skills/laptop/evidence/2026-09-03-moe16-verify/ (RESULT.md, turn-evidence, differential logs).
-
 ## Started
 
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA
@@ -1432,6 +1414,28 @@ KR4/CLWX-27 (degrade evidence was Mac-proven; this was the Windows gap), IDLE-TI
 **Comments (1):**
 
 - moe.16 live re-verify: PARTIAL (2026-09-03). The raw-banner half is FIXED live: the red "Model call failed Connection error." is gone, replaced by the calm plain-language banner (CLWX-53/75 fixes proven on Windows). But the AUTO-DEGRADE half did NOT fire: no degrade notice, channel stayed Online, no on-device attempt, no degradeChannel transaction (reproduced twice). The classifier fix IS in moe.16 and the pure policy would degrade for the confirmed state - the gap is plumbing: maybeDegradeChannel did not fire on this surface. RCA in flight (read-only, VM live). This card stays In Progress for the auto-degrade leg.
+
+### CLWX-92 — [bug/doc-tools] In-app PDF read dies in the Electron UtilityProcess: pdfjs "No GlobalWorkerOptions.workerSrc specified"
+
+- **State:** In Progress  |  **Priority:** urgent
+
+Area: doc-tools / gateway runtime   Severity: urgent (K10 criterion; the external tester's #1 issue is still user-broken in-app despite CLWX-72 closing)
+
+Found by
+moe.16 VM verify (2026-09-03): agent calls document.read_pdf; in the gateway's Electron UtilityProcess pdfjs throws "No GlobalWorkerOptions.workerSrc specified"; principal sees "I encountered a technical error while trying to read the PDF file."
+
+Differential repro (environment pinned)
+Same shipped readPdf + fixture: plain packaged-node = PASS (CLWX72_SHIPPED_VERIFY pages=1 chars=835); faked process.type="utility" + versions.electron = SAME workerSrc FAIL. pdfjs's isNodeJS detection treats a UtilityProcess as browser-like (process.versions.electron && process.type !== "browser"), so it demands a worker script instead of running workerless.
+
+Fix direction
+In doc-tools readPdf (extensions/moe-principal-assistant/doc-tools.mjs), before parsing: resolve the bundled pdfjs worker file (pdfjs-dist/legacy/build/pdf.worker.mjs next to the copy pdf-parse uses in the flat gateway bundle) and set GlobalWorkerOptions.workerSrc to its file URL (or force workerless mode). Must work in BOTH plain node and UtilityProcess. Regression: extend the packaged-node repro to ALSO run under the faked utility env; add the in-app drag-PDF turn to the VM verify checklist permanently (K10).
+
+Evidence
+skills/laptop/evidence/2026-09-03-moe16-verify/ (RESULT.md, turn-evidence, differential logs).
+
+**Comments (1):**
+
+- FIXED-IN-TREE + double-verified locally (2026-09-03, commit 9619a920). readPdf now configures the worker via pdf-parse's own PDFParse.setWorker() - the LIVE instance (a fresh pdfjs import can be a DIFFERENT module instance under pnpm symlinks; the first fix attempt proved that silently misses). Worker source: pdf-parse's vendored dist/worker/pdf.worker.mjs first (version-matched; the flat gateway bundle ships NO pdfjs legacy/ build - a second latent trap found on the way), pdfjs-dist fallbacks after. Evidence: clwx92-workerenv-check.mjs PASS in repo mode AND bundle mode (script relocates doc-tools outside the repo + resolves via CLAWX_APP_RESOURCES exactly like the shipped gateway); the check is now wired INSIDE verify-openclaw-bundle so no package build ships this class again. Full unit suite + typecheck green. Remaining for Ready: the in-app drag-PDF turn on the next installed build (moe.17 VM verify - K10 criterion).
 
 ## Cancelled
 

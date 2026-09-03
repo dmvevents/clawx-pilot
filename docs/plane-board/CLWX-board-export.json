@@ -48,10 +48,15 @@
       "sequence_id": 92,
       "name": "[bug/doc-tools] In-app PDF read dies in the Electron UtilityProcess: pdfjs \"No GlobalWorkerOptions.workerSrc specified\"",
       "priority": "urgent",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "Area: doc-tools / gateway runtime   Severity: urgent (K10 criterion; the external tester's #1 issue is still user-broken in-app despite CLWX-72 closing)\n\nFound by\nmoe.16 VM verify (2026-09-03): agent calls document.read_pdf; in the gateway's Electron UtilityProcess pdfjs throws \"No GlobalWorkerOptions.workerSrc specified\"; principal sees \"I encountered a technical error while trying to read the PDF file.\"\n\nDifferential repro (environment pinned)\nSame shipped readPdf + fixture: plain packaged-node = PASS (CLWX72_SHIPPED_VERIFY pages=1 chars=835); faked process.type=\"utility\" + versions.electron = SAME workerSrc FAIL. pdfjs's isNodeJS detection treats a UtilityProcess as browser-like (process.versions.electron && process.type !== \"browser\"), so it demands a worker script instead of running workerless.\n\nFix direction\nIn doc-tools readPdf (extensions/moe-principal-assistant/doc-tools.mjs), before parsing: resolve the bundled pdfjs worker file (pdfjs-dist/legacy/build/pdf.worker.mjs next to the copy pdf-parse uses in the flat gateway bundle) and set GlobalWorkerOptions.workerSrc to its file URL (or force workerless mode). Must work in BOTH plain node and UtilityProcess. Regression: extend the packaged-node repro to ALSO run under the faked utility env; add the in-app drag-PDF turn to the VM verify checklist permanently (K10).\n\nEvidence\nskills/laptop/evidence/2026-09-03-moe16-verify/ (RESULT.md, turn-evidence, differential logs).",
-      "comments": []
+      "comments": [
+        {
+          "text": "FIXED-IN-TREE + double-verified locally (2026-09-03, commit 9619a920). readPdf now configures the worker via pdf-parse's own PDFParse.setWorker() - the LIVE instance (a fresh pdfjs import can be a DIFFERENT module instance under pnpm symlinks; the first fix attempt proved that silently misses). Worker source: pdf-parse's vendored dist/worker/pdf.worker.mjs first (version-matched; the flat gateway bundle ships NO pdfjs legacy/ build - a second latent trap found on the way), pdfjs-dist fallbacks after.\nEvidence: clwx92-workerenv-check.mjs PASS in repo mode AND bundle mode (script relocates doc-tools outside the repo + resolves via CLAWX_APP_RESOURCES exactly like the shipped gateway); the check is now wired INSIDE verify-openclaw-bundle so no package build ships this class again. Full unit suite + typecheck green.\nRemaining for Ready: the in-app drag-PDF turn on the next installed build (moe.17 VM verify - K10 criterion).",
+          "created": "2026-09-03T09:00:00.335215Z"
+        }
+      ]
     },
     {
       "id": "d7b39f76-0b07-47b3-978d-155bcd1992d0",
