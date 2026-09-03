@@ -36,6 +36,7 @@ import { createRequire } from 'node:module';
 import Module from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 /**
  * Sandbox roots the plugin will read from and write to. The user's home
@@ -488,12 +489,64 @@ export async function resolveWritablePath(input) {
 
 // ── PDF ──────────────────────────────────────────────────────────────────
 
+/**
+ * CLWX-92: pdfjs's environment detection treats an Electron UtilityProcess
+ * (process.versions.electron present with process.type !== 'browser') as
+ * browser-like and demands GlobalWorkerOptions.workerSrc instead of running
+ * workerless as it does under plain Node. The gateway runs doc-tools in
+ * exactly that environment, so in-app PDF reads died with "No
+ * GlobalWorkerOptions.workerSrc specified" while the identical code passed
+ * under packaged node (moe.16 VM differential repro). Point workerSrc at the
+ * bundled worker file of the SAME pdfjs instance pdf-parse links against
+ * (pdf-parse imports 'pdfjs-dist/legacy/build/pdf.mjs' — dynamic import here
+ * hits the module cache, so we configure the live instance). Idempotent;
+ * best-effort — on failure the parse surfaces its own truthful error.
+ */
+function ensurePdfjsWorkerConfigured(mod) {
+  const PDFParse = mod?.PDFParse ?? mod?.default?.PDFParse ?? null;
+  if (!PDFParse || typeof PDFParse.setWorker !== 'function') return;
+  try {
+    const current = PDFParse.setWorker(undefined);
+    if (current) return; // already configured (idempotent)
+    // Resolve the worker inside pdf-parse's OWN pdfjs copy: with pnpm's
+    // symlinked layout the workspace-level pdfjs-dist can be a DIFFERENT
+    // module instance than the one pdf-parse imported, so configuring via a
+    // fresh import silently misses (proved locally). setWorker writes to the
+    // live instance; the paths option makes the file come from the same copy.
+    const entryPath = require_.resolve('pdf-parse');
+    const pdfParseDir = path.dirname(entryPath);
+    let workerPath = null;
+    // Prefer pdf-parse's own vendored worker (version-matched to the pdfjs it
+    // embeds; the flat gateway bundle's pdfjs-dist ships no legacy/ build).
+    const distIdx = entryPath.lastIndexOf(`${path.sep}dist${path.sep}`);
+    if (distIdx > 0) {
+      const vendored = path.join(entryPath.slice(0, distIdx), 'dist', 'worker', 'pdf.worker.mjs');
+      if (existsSync(vendored)) workerPath = vendored;
+    }
+    if (!workerPath) {
+      for (const spec of ['pdfjs-dist/legacy/build/pdf.worker.mjs', 'pdfjs-dist/build/pdf.worker.mjs']) {
+        try {
+          workerPath = require_.resolve(spec, { paths: [pdfParseDir] });
+          break;
+        } catch {
+          // try the next candidate
+        }
+      }
+    }
+    if (!workerPath) return;
+    PDFParse.setWorker(pathToFileURL(workerPath).href);
+  } catch {
+    // Leave unset: plain-Node environments run workerless without it.
+  }
+}
+
 export async function readPdf({ path: inputPath, maxChars = 200_000 } = {}) {
   const filePath = resolveReadablePath(inputPath);
   // Must precede the pdf-parse load: pdfjs-dist references DOMMatrix at
   // module scope when @napi-rs/canvas has no platform binding (CLWX-72).
   ensureDomMatrixPolyfill();
   const { mod, notFound, loadError } = loadDepDetailed('pdf-parse');
+  ensurePdfjsWorkerConfigured(mod);
   if (!mod) {
     if (notFound) {
       throw new Error(

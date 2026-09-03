@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -77,6 +78,29 @@ for (const name of HOST_LOADABLE) {
     bundleRequire(name);
   } catch (err) {
     failures.push(`LOAD(${name}): ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`);
+  }
+}
+
+// 4. CLWX-92: PDF parsing must survive the Electron UtilityProcess
+// environment shape (process.versions.electron + process.type='utility'
+// makes pdfjs demand GlobalWorkerOptions.workerSrc). Run the shipped
+// doc-tools against the BUNDLE's pdf-parse in a child process with the
+// faked env — this is the exact failure that reached the external tester
+// on moe.16 despite every presence check passing.
+{
+  const fixture = path.join(ROOT, 'skills/laptop/evidence/2026-08-20-raj-prompt-replay/fixtures/01_Ministry_Circular_ICT_Equipment_Audit.pdf');
+  if (fs.existsSync(fixture)) {
+    const child = spawnSync(process.execPath, ['scripts/clwx92-workerenv-check.mjs'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      timeout: 120_000,
+      env: { ...process.env, CLWX92_BUNDLE_NM: BUNDLE_NM },
+    });
+    if (child.status !== 0) {
+      failures.push(`UTILITY-ENV(pdf): ${String(child.stdout + child.stderr).split('\n').filter(Boolean).pop() ?? 'check failed'}`);
+    }
+  } else {
+    console.warn('  (utility-env pdf check skipped: fixture missing)');
   }
 }
 
