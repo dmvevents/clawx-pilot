@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { ChatInput } from '@/pages/Chat/ChatInput';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { hostApiFetch } from '@/lib/host-api';
+import { useSettingsStore } from '@/stores/settings';
 
 const { agentsState, chatState, gatewayState, providersState, artifactPanelMocks } = vi.hoisted(() => ({
   agentsState: {
@@ -128,6 +129,7 @@ describe('ChatInput agent targeting', () => {
     providersState.refreshProviderSnapshot.mockReset();
     vi.mocked(hostApiFetch).mockReset();
     artifactPanelMocks.openPreview.mockReset();
+    useSettingsStore.setState({ devModeUnlocked: false });
   });
 
   it('hides the @agent picker when only one agent is configured', () => {
@@ -216,6 +218,9 @@ describe('ChatInput agent targeting', () => {
   });
 
   it('disables the input while gateway is running but not yet ready', () => {
+    // Dev mode so the raw-id model picker renders and its disabled state can
+    // be asserted alongside the other composer controls.
+    useSettingsStore.setState({ devModeUnlocked: true });
     gatewayState.status = { state: 'running', port: 18789, gatewayReady: false };
     agentsState.agents = [
       {
@@ -269,6 +274,136 @@ describe('ChatInput agent targeting', () => {
     expect(screen.getByTestId('chat-composer-input')).toBeDisabled();
     expect(screen.getByTestId('chat-composer-skill')).toBeDisabled();
     expect(screen.getByTestId('chat-model-picker-button')).toBeDisabled();
+  });
+
+  it('hides the raw-id model picker and any model id when dev mode is locked (CLWX-52)', () => {
+    gatewayState.status = { state: 'running', port: 18789, gatewayReady: true };
+    agentsState.agents = [
+      {
+        id: 'main',
+        name: 'Main',
+        isDefault: true,
+        modelDisplay: 'gpt-a',
+        modelRef: 'custom-aaaaaaaa/gpt-a',
+        inheritedModel: true,
+        workspace: '~/.openclaw/workspace',
+        agentDir: '~/.openclaw/agents/main/agent',
+        mainSessionKey: 'agent:main:main',
+        channelTypes: [],
+      },
+      {
+        id: 'research',
+        name: 'Research',
+        isDefault: false,
+        modelDisplay: 'gpt-b',
+        modelRef: 'custom-bbbbbbbb/gpt-b',
+        inheritedModel: false,
+        workspace: '~/.openclaw/workspace-research',
+        agentDir: '~/.openclaw/agents/research/agent',
+        mainSessionKey: 'agent:research:desk',
+        channelTypes: [],
+      },
+    ];
+    agentsState.defaultModelRef = 'custom-aaaaaaaa/gpt-a';
+    const now = '2025-01-01T00:00:00.000Z';
+    providersState.accounts = [
+      {
+        id: 'aaaaaaaa',
+        vendorId: 'custom',
+        label: 'Alpha',
+        authMode: 'api_key',
+        baseUrl: 'http://127.0.0.1:1/v1',
+        model: 'custom-aaaaaaaa/gpt-a',
+        enabled: true,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'bbbbbbbb',
+        vendorId: 'custom',
+        label: 'Beta',
+        authMode: 'api_key',
+        baseUrl: 'http://127.0.0.1:2/v1',
+        model: 'custom-bbbbbbbb/gpt-b',
+        enabled: true,
+        isDefault: false,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+    providersState.statuses = [
+      { id: 'aaaaaaaa', name: 'Alpha', type: 'custom', hasKey: true, keyMasked: 'sk-***', enabled: true, createdAt: now, updatedAt: now },
+      { id: 'bbbbbbbb', name: 'Beta', type: 'custom', hasKey: true, keyMasked: 'sk-***', enabled: true, createdAt: now, updatedAt: now },
+    ];
+    providersState.defaultAccountId = 'aaaaaaaa';
+
+    renderChatInput();
+
+    expect(screen.queryByTestId('chat-model-picker-button')).not.toBeInTheDocument();
+    expect(screen.queryByText(/gpt-a/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/gpt-b/)).not.toBeInTheDocument();
+
+    // The @-agent picker anonymises each agent's model line the same way.
+    fireEvent.click(screen.getByTitle('Choose agent'));
+    expect(screen.queryByText(/gpt-b/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('On this device').length).toBeGreaterThan(0);
+  });
+
+  it('shows the raw model id in the picker when dev mode is unlocked', () => {
+    useSettingsStore.setState({ devModeUnlocked: true });
+    gatewayState.status = { state: 'running', port: 18789, gatewayReady: true };
+    agentsState.agents = [
+      {
+        id: 'main',
+        name: 'Main',
+        isDefault: true,
+        modelDisplay: 'gpt-a',
+        modelRef: 'custom-aaaaaaaa/gpt-a',
+        inheritedModel: true,
+        workspace: '~/.openclaw/workspace',
+        agentDir: '~/.openclaw/agents/main/agent',
+        mainSessionKey: 'agent:main:main',
+        channelTypes: [],
+      },
+    ];
+    agentsState.defaultModelRef = 'custom-aaaaaaaa/gpt-a';
+    const now = '2025-01-01T00:00:00.000Z';
+    providersState.accounts = [
+      {
+        id: 'aaaaaaaa',
+        vendorId: 'custom',
+        label: 'Alpha',
+        authMode: 'api_key',
+        baseUrl: 'http://127.0.0.1:1/v1',
+        model: 'custom-aaaaaaaa/gpt-a',
+        enabled: true,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'bbbbbbbb',
+        vendorId: 'custom',
+        label: 'Beta',
+        authMode: 'api_key',
+        baseUrl: 'http://127.0.0.1:2/v1',
+        model: 'custom-bbbbbbbb/gpt-b',
+        enabled: true,
+        isDefault: false,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+    providersState.statuses = [
+      { id: 'aaaaaaaa', name: 'Alpha', type: 'custom', hasKey: true, keyMasked: 'sk-***', enabled: true, createdAt: now, updatedAt: now },
+      { id: 'bbbbbbbb', name: 'Beta', type: 'custom', hasKey: true, keyMasked: 'sk-***', enabled: true, createdAt: now, updatedAt: now },
+    ];
+    providersState.defaultAccountId = 'aaaaaaaa';
+
+    renderChatInput();
+
+    expect(screen.getByTestId('chat-model-picker-button')).toHaveTextContent('gpt-a');
   });
 
   it('shows starting status while gateway is running but not yet ready', () => {

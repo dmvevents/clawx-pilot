@@ -415,9 +415,11 @@ test.describe('ClawX chat execution graph', () => {
       }
 
       await expect(page.getByTestId('main-layout')).toBeVisible();
-      await expect(page.getByText('404 Resource not found')).toBeVisible({ timeout: 30_000 });
       const runErrorCallout = page.getByTestId('chat-run-error');
       await expect(runErrorCallout).toBeVisible({ timeout: 30_000 });
+      // CLWX-53: the raw provider string sits behind a collapsed
+      // "Technical details" expander; open it before asserting the raw text.
+      await runErrorCallout.locator('summary').first().click();
       await expect(runErrorCallout).toContainText('404 Resource not found');
       await expect(page.getByTestId('chat-execution-graph')).toHaveCount(0);
       await expect(page.getByTestId('chat-execution-step-thinking-trailing')).toHaveCount(0);

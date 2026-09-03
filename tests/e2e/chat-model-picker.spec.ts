@@ -125,6 +125,15 @@ test.describe('ClawX chat model picker', () => {
       }, { alphaModelRef, betaModelRef });
 
       const page = await getStableWindow(app);
+      // CLWX-52: the raw-id model picker is a dev-mode-only surface; chat-facing
+      // UI shows only "Online" / "On this device". Unlock dev mode so this spec
+      // can keep exercising the picker mechanics.
+      await page.evaluate(() => {
+        const existing = window.localStorage.getItem('clawx-settings');
+        const parsed = existing ? JSON.parse(existing) : { state: {}, version: 0 };
+        parsed.state = { ...(parsed.state ?? {}), devModeUnlocked: true };
+        window.localStorage.setItem('clawx-settings', JSON.stringify(parsed));
+      });
       await page.reload();
       await expect(page.getByTestId('main-layout')).toBeVisible();
       await app.evaluate(({ BrowserWindow }) => {
