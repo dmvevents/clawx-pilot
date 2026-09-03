@@ -1,0 +1,33 @@
+{
+  "prompt": "In one short sentence, what should a principal include in the daily report?",
+  "startedAt": "2026-09-03T04:00:31.108Z",
+  "channelBefore": "online",
+  "channelFinal": "online",
+  "messagesBefore": 65,
+  "messagesAfter": 68,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "degradeNoticeFirstSeenMs": null,
+  "runErrorSeen": true,
+  "runErrorText": "Model call failed Connection error.",
+  "answerText": "In one short sentence, what should a principal include in the daily report? just now",
+  "settled": true,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 2413,
+      "classification": "still-thinking",
+      "degradeSeen": false,
+      "shot": "degrade-state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 18700,
+      "classification": "reply-rendered",
+      "degradeSeen": false,
+      "shot": "degrade-state-02-reply-rendered.png"
+    }
+  ],
+  "verdict": "ANSWERED_NO_DEGRADE",
+  "finishedAt": "2026-09-03T04:00:56.039Z"
+}

@@ -262,6 +262,33 @@ DRAFT.md`, owner GO to send). **V-batch running** as background workflow
 for CLWX-72, then ASR/cron/degrade/b2 surfaces. Owner authorization on
 record this tick: gcloud + V-batch + all tasks agent-driven._
 
+_**CLWX-72 holistic RCA + fix tick (2026-09-03, owner-directed "fix must be
+holistic — five whys").** The V-batch probe OVERTURNED the working hypothesis
+on the installed moe.15 VM: pdf-parse IS on disk; the real chain is
+pdf-parse → pdfjs-dist → `@napi-rs/canvas` whose **win32 native binding (an
+optionalDependency) never installs on the Mac build host**
+(`supportedArchitectures os=["current"]`) → module eval throws "DOMMatrix is
+not defined" → **loadDep()'s catch-all masked it as "module not found"** (the
+lie that mis-directed triage). Karunesh reply SENT (owner GO, ledgered).
+**Fix layers landed:** (1) `supportedArchitectures=[darwin,win32]` — all four
+canvas bindings now materialize + ship in the bundle; (2) doc-tools.mjs
+pure-JS DOMMatrix polyfill + `loadDepDetailed` truthful errors; (3) bundler
+HARD-FAILS on missing EXTRA_BUNDLED_PACKAGES (was warn-and-skip); (4) new
+`scripts/verify-openclaw-bundle.mjs` (presence + ship-target bindings + host
+loadability) wired into the package chain. **Artifact-grade proof:** patched
+doc-tools ran on the STILL-BROKEN moe.15 VM runtime with the packaged
+node.exe — `CLWX72_VERIFY=PASS pages=1 chars=835` on a real Ministry
+circular, binding still absent. Gates: bundle verify PASS, typecheck 0, full
+suite green. Board: CLWX-72 → In Progress (remaining: moe.16 cut +
+fresh-install re-verify); CLWX-58 → Todo(high) with the holistic
+auto-recovery acceptance (driver-side state machine, MCP/CLWX-71 inherits);
+CLWX-76 filed (truthful-load residual + auditor rules); **CLWX-77 filed
+(owner "look around the corner"): artifact-grade doc-type × command matrix
+against the PACKAGED runtime** — the systemic close for the
+test-the-workspace blind spot. Register deltas appended (CANVAS-BINDING,
+DISCARD-OK-WEDGE, DRAFT-LITTER, MANAGED-PROFILE-FALLBACK, VLM-CREDS-DEADEND,
+DISCONNECTED-BADGE, W2-DAILY-REPORT-E2E, STALE-READ→FIXED)._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three

@@ -169,35 +169,6 @@ Finding (frame-by-frame breakdown, 2026-09-03): skills/laptop/evidence/2026-09-0
 - composer right edge clipped (window larger than the 640x480 capture).
 The earlier "verified good" came from driver JSON (settled=true), not the pixels. Coverage doc REC claim for Windows is downgraded. Superseded by Recorder v2 + the demo-reel card.
 
-### CLWX-58 — [bug/outlook] Stale open Outlook compose blocks all send/reply/forward until manually cleared
-
-- **State:** Backlog  |  **Priority:** medium
-
-Area: outlook   Severity: medium (priority medium)
-
-Steps to reproduce
-1. leave a compose/draft open in the Outlook tab (any prior turn)
-2. ask the agent to draft/send/reply/forward a new email
-3. observe
-
-Expected
-agent detects the stale draft and recovers (offer to reuse/close it), or the action proceeds
-
-Actual
-draftEmail/sendEmail/reply/forward all refuse with 'Outlook already has an open draft'; only scripts/outlook-cleanup-compose.ts clears it; live smoke (v2-chatbot-e2e Step 3) and send test (v2-send-test Step 2) both blocked until cleanup ran
-
-Evidence
-task outputs baqcaxxy9 (draft failed) + bgshhf5vh (send aborted) + outlook-cleanup-compose recovered; 2026-09-03 live Mac run
-
-Environment
-moe.15 / Mac dev / gemini+bedrock / CDP 18792 test.fac tab
-
-Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
-
-**Comments (1):**
-
-- Recovery verified. scripts/outlook-cleanup-compose.ts discards a stale open compose and returns to the inbox; this session ran it immediately before the CLWX-59 verification and the subsequent draft+two-gate flow passed. The block itself is intended behaviour (draftEmail refuses to stack drafts to avoid duplicate saved drafts). Reframe as UX-hardening: auto-recover a stale draft before compose rather than returning a hard failure. Not a demo blocker.
-
 ### CLWX-60 — [bug/outlook] Compose pane never resolves: waitForComposePane latches hidden Fluent SplitButton wrapper
 
 - **State:** Backlog  |  **Priority:** high
@@ -635,6 +606,36 @@ Regression class? unknown — check the *-auditor agents (config-coherence, depe
 - FIXED + VERIFIED LIVE (2026-09-03 finish-sprint item 1). TB-1 applied: openMessageById now bounded-polls (8s / 300ms) after the row click until the reading pane subject (and sender when both extractable) matches the clicked row fingerprint; a provable mismatch fails loudly (not_found) instead of ever returning another email. The guard sits inside openMessageById, so read/reply/forward/mark-read/attachments all inherit wrong-target protection. Never retries through a confirm gate. TB-2 applied + root cause CONFIRMED live: DOM probe showed the only [role="heading"][aria-level="2"] on the page is span.screenReaderOnly "Navigation pane" (exactly the reported symptom); the real pane subject is span[role="heading"][aria-level="3"] inside div[role="main"]. Extraction now scoped to reading-pane roots with a 5-step fallback chain (level-2, level-3, any heading, subject class, h1/h2), visible + non-chrome only - meets the rotated-selector hard rule. Evidence (persona bars): QA bar - new scripts/clwx46-stale-read-check.ts PASS 3/3 rows x 3 consecutive runs with the guard actively discriminating; full v2-eval 15/15 on the live test.fac lane; unit suite 162 files / 1280 tests green; typecheck 0. PM acceptance: matrix row "Email: read message" deficit cleared. Engineering conscience: dom-selector-rotation class, detection owner dom-selector-regression-tester. Moving to Ready for human close.
 - 2026-09-03 resilience pack fold-in (docs/FLOW_STATE_DIAGRAMS.md flow 3): fix spec for this card is TB-1 + TB-2. TB-1 settle-on-expected-item guard: after clicking an inbox row, bounded poll until the reading pane's subject AND sender match the clicked row before any extraction; never retry through a confirm gate; detection owner ga-e2e-regression-verifier. TB-2: replace the readEmail subject heading selector (currently returns the UI heading 'Navigation pane') under the 3-fallback rotated-selector rule; detection owner dom-selector-regression-tester. Both in electron/services/outlook-browser-v2/outlook-actions.ts. Recommended pre-GA: an agent describing the WRONG email is the trust-killer class.
 
+### CLWX-58 — [bug/outlook] Stale open Outlook compose blocks all send/reply/forward until manually cleared
+
+- **State:** Todo  |  **Priority:** high
+
+Area: outlook   Severity: medium (priority medium)
+
+Steps to reproduce
+1. leave a compose/draft open in the Outlook tab (any prior turn)
+2. ask the agent to draft/send/reply/forward a new email
+3. observe
+
+Expected
+agent detects the stale draft and recovers (offer to reuse/close it), or the action proceeds
+
+Actual
+draftEmail/sendEmail/reply/forward all refuse with 'Outlook already has an open draft'; only scripts/outlook-cleanup-compose.ts clears it; live smoke (v2-chatbot-e2e Step 3) and send test (v2-send-test Step 2) both blocked until cleanup ran
+
+Evidence
+task outputs baqcaxxy9 (draft failed) + bgshhf5vh (send aborted) + outlook-cleanup-compose recovered; 2026-09-03 live Mac run
+
+Environment
+moe.15 / Mac dev / gemini+bedrock / CDP 18792 test.fac tab
+
+Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
+
+**Comments (2):**
+
+- Holistic acceptance defined (owner-directed 2026-09-03). The stale-draft class has now cost: the tester's send flow (CLWX-70 litter), three eval runs (CLWX-69 wedge), and the original block this card records. The essential fix is an auto-recovery state machine in the driver (server-side, so chat, host-API, and the future MCP adapter (CLWX-71) all inherit it): 1. Before any compose-opening action: detect {open compose pane, discard-confirm dialog (buttons are OK/Cancel - CLWX-69), docked draft chips}. 2. Recover: discard-with-OK the automation-owned state (subject allowlist exactly like scripts/outlook-drafts-sweeper.ts); NEVER touch a human-authored draft - if a non-automation draft is open, refuse with a principal-readable message naming it. 3. Retry the intended action ONCE after recovery; hard-fail loudly the second time. 4. Exit-path invariant (CLWX-70): every automation compose ends in send-or-discard on every code path incl. errors (try/finally). 5. Eval postcondition: zero new saved drafts after a run. Acceptance: a seeded stale-draft scenario (open draft + confirm dialog + docked chip) recovers automatically and the intended draft/reply then succeeds; 15/15 eval stays green; recovery events logged (counts only).
+- Recovery verified. scripts/outlook-cleanup-compose.ts discards a stale open compose and returns to the inbox; this session ran it immediately before the CLWX-59 verification and the subsequent draft+two-gate flow passed. The block itself is intended behaviour (draftEmail refuses to stack drafts to avoid duplicate saved drafts). Reframe as UX-hardening: auto-recover a stale draft before compose rather than returning a hard failure. Not a demo blocker.
+
 ### CLWX-59 — [bug/outlook] Live Outlook send broken: waitForComposePane times out on rotated Send button (2 matches, first hidden)
 
 - **State:** Ready  |  **Priority:** high
@@ -847,28 +848,6 @@ No Graph MCP for forms (no API to wrap). Logic Apps-as-MCP-server (preview) revi
 Sources
 microsoft/mcp catalog; microsoft/playwright-mcp; ChromeDevTools/chrome-devtools-mcp; softeria/ms-365-mcp-server; learn.microsoft.com Forms connector + Logic Apps MCP preview + Enterprise Graph MCP; modelcontextprotocol/typescript-sdk. Full report in docs/MCP_INTEGRATION_RESEARCH_2026-09-03.md.
 
-### CLWX-72 — [bug/packaging] moe.15 Windows runtime missing pdf-parse - document.read_pdf dead on tester install (KAR-PDF root cause)
-
-- **State:** Todo  |  **Priority:** urgent
-
-Area: packaging / doc-tooling   Severity: urgent (external-tester-blocking; Ext-val B leg; KR1-adjacent)
-
-Symptom
-Tester drags NSCC-2026.pdf into chat, asks for a summary; app replies "trouble reading PDF documents". Log (twice): "[tools] document.read_pdf failed: pdf-parse module not found - the packaged Windows runtime is missing this dep."
-
-Analysis so far
-pdf-parse is in package.json dependencies (since 2026-06-09) AND in EXTRA_BUNDLED_PACKAGES (scripts/openclaw-bundle-config.mjs, since 2026-06-09) - so the config was correct when moe.15 was built. Either bundle-openclaw.mjs silently fails to copy pdf-parse (v2 package layout / pnpm store shape?) or the runtime loader (doc-tools.mjs loadDep + augmentModulePathsForPackagedApp) cannot see it on a real install. NOTE: the moe.15 VM install verification checked docx/xlsx/mammoth/playwright-core - pdf-parse was never on the checklist, so this shipped unverified. V-batch stage 1 (running now) is capturing ground truth from the installed VM tree.
-
-Acceptance
-1. Ground-truth listing of resources/openclaw/node_modules on an installed moe.15 (V-batch evidence).
-2. Root cause named (bundler copy failure vs loader path).
-3. Fix + the presence check ADDED to the install-verify script and the preflight (dependency-class-auditor rule: every EXTRA_BUNDLED_PACKAGES entry must exist in the packaged tree).
-4. Re-verified on a fresh install: drag-PDF summarise works.
-5. Regression class: dependency-class (moe.9 playwright-core sibling).
-
-Source
-Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.
-
 ### CLWX-73 — [bug/hard-rule] chrome-cdp repair falls back to a MANAGED Chromium profile - violates the profile=user rule on tenant flows
 
 - **State:** Todo  |  **Priority:** high
@@ -928,6 +907,43 @@ Acceptance
 
 Source
 Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.
+
+### CLWX-76 — [hardening] Truthful load errors for ALL bundled parsers + auditor rule for platform-native optional deps
+
+- **State:** Todo  |  **Priority:** medium
+
+Why
+CLWX-72 exposed a class: loadDep()-style catch-alls turn "present but failed to evaluate" into "module not found", mis-directing triage; and platform-native optionalDependencies of bundled packages are invisible to the existing dependency-class audit. readPdf is fixed; mammoth/docx/xlsx call sites still use the masking path, and other native-binding deps may lurk (sharp, whisper, silk-wasm, opusscript...).
+
+Acceptance
+1. All doc-tools loadDep call sites surface loadError vs notFound truthfully.
+2. dependency-class-auditor gains two rules: (a) every EXTRA_BUNDLED_PACKAGES entry must pass scripts/verify-openclaw-bundle.mjs; (b) any bundled package with platform-native optionalDependencies must have all SHIP_TARGET bindings in the bundle.
+3. Install-verify checklist (VM/laptop scripts) extended from presence to LOADABILITY (packaged-node require of each parser).
+
+Source
+CLWX-72 five-whys, 2026-09-03. Register: CANVAS-BINDING.
+
+### CLWX-77 — [testing] Artifact-grade corner-gap matrix: every doc type x every command against the PACKAGED runtime
+
+- **State:** Todo  |  **Priority:** high
+
+Why (owner ask: "look around the corner")
+Every packaging-class defect so far (playwright-core moe.9, canvas binding moe.15) shipped because our tests run from the repo workspace, which resolves repo node_modules and masks packaged-runtime gaps. The systemic fix is a suite that exercises the ARTIFACT: the bundled gateway + packaged node, per doc type and per command.
+
+Scope - doc types to cover
+pdf (text + SCANNED/image-only + large >10MB + password-protected -> readable refusal), docx (+ legacy .doc -> readable refusal), xlsx (+ csv), pptx (status ambiguity noted in the audit - support or refuse cleanly), images (png/jpg via VLM path), odt/rtf -> refusal wording. Each: read, summarise-turn, and where applicable write.
+
+Scope - commands
+document.read_* / write_* via a real gateway process from build/openclaw (not repo imports); outlook + forms tool registration smoke; skill-load smoke for the principal bundle. Optionally driven through the CLWX-71 MCP adapter once it exists - an MCP client against the packaged app is exactly the artifact-grade transport.
+
+Acceptance
+1. New harness target (pnpm harness:artifact) spawning the bundled runtime; one row per doc-type x command with PASS/REFUSED-READABLY/FAIL.
+2. Wired into preflight for package:win/mac (can be a fast subset) + full matrix in CI/nightly.
+3. Unknown/unsupported types produce principal-readable refusals, never raw stack traces (principal-proxy bar).
+4. First full run documented with gaps filed as cards.
+
+Source
+Owner directive 2026-09-03 + CLWX-72 lesson: test the artifact, not the workspace.
 
 ## Started
 
@@ -1098,6 +1114,32 @@ S2 Forms - highest-leverage new card. Filed by the 2026-09-03 reconciliation (do
 **Comments (1):**
 
 - LIVE E2E PROVEN (sprint-driver tick 2026-09-03). New script scripts/forms-fill-daily-report.ts (mirrors the Suspensions pattern) ran against the test.fac clone over the user-Chrome CDP session: 1. open: status=opened, title "Primary School Daily Report: Term 3 2025/26". 2. fill: 55/57 filled, 0 errors (96%, above the 90% acceptance floor; max-visibility payload - school open, both NSDSL meals, suspension, PTSC, last-day absentee summary; internally consistent counts; reason_no_school hidden by design). 3. gate: submit WITHOUT confirm REFUSED ("confirm:true required... after the principal has reviewed"). 4. DEMO=1 confirmed submit: status=submitted, "Form submitted via Microsoft Forms" - SEND PASS. typecheck 0. QA bar met for fill+gate+submit; PM matrix row "Forms: Daily Report e2e" moves from untested to live-proven. Resumable trail (last acceptance leg before Ready): the RECORDED run - adapt forms-submit-recorded.ts to the Daily Report URL (hard-pinned), assert responses count increments and capture video+trace. Then move to Ready.
+
+### CLWX-72 — [bug/packaging] moe.15 Windows runtime missing pdf-parse - document.read_pdf dead on tester install (KAR-PDF root cause)
+
+- **State:** In Progress  |  **Priority:** urgent
+
+Area: packaging / doc-tooling   Severity: urgent (external-tester-blocking; Ext-val B leg; KR1-adjacent)
+
+Symptom
+Tester drags NSCC-2026.pdf into chat, asks for a summary; app replies "trouble reading PDF documents". Log (twice): "[tools] document.read_pdf failed: pdf-parse module not found - the packaged Windows runtime is missing this dep."
+
+Analysis so far
+pdf-parse is in package.json dependencies (since 2026-06-09) AND in EXTRA_BUNDLED_PACKAGES (scripts/openclaw-bundle-config.mjs, since 2026-06-09) - so the config was correct when moe.15 was built. Either bundle-openclaw.mjs silently fails to copy pdf-parse (v2 package layout / pnpm store shape?) or the runtime loader (doc-tools.mjs loadDep + augmentModulePathsForPackagedApp) cannot see it on a real install. NOTE: the moe.15 VM install verification checked docx/xlsx/mammoth/playwright-core - pdf-parse was never on the checklist, so this shipped unverified. V-batch stage 1 (running now) is capturing ground truth from the installed VM tree.
+
+Acceptance
+1. Ground-truth listing of resources/openclaw/node_modules on an installed moe.15 (V-batch evidence).
+2. Root cause named (bundler copy failure vs loader path).
+3. Fix + the presence check ADDED to the install-verify script and the preflight (dependency-class-auditor rule: every EXTRA_BUNDLED_PACKAGES entry must exist in the packaged tree).
+4. Re-verified on a fresh install: drag-PDF summarise works.
+5. Regression class: dependency-class (moe.9 playwright-core sibling).
+
+Source
+Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.
+
+**Comments (1):**
+
+- RCA CORRECTED + FIXED-IN-TREE + ARTIFACT-VERIFIED (2026-09-03). The V-batch probe on the installed moe.15 VM OVERTURNED the original hypothesis: pdf-parse 2.4.5 IS on disk in the gateway bundle. The real chain: pdf-parse -> pdfjs-dist -> @napi-rs/canvas, whose platform-native binding @napi-rs/canvas-win32-x64-msvc (an optionalDependency) never installs on the Mac build host (pnpm supportedArchitectures os=["current"]), so no bundle could ever ship it; module evaluation throws "DOMMatrix is not defined"; and loadDep()'s catch-all MASKED the load error as "module not found" (wrong error class - the message that mis-led triage). Fix layers (all landed): (1) pnpm supportedArchitectures = [darwin, win32] - all four canvas bindings now materialize and ship in the bundle; (2) doc-tools.mjs: pure-JS DOMMatrix polyfill (text extraction needs no native canvas) + loadDepDetailed() so surfaced errors distinguish not-found from failed-to-load; (3) bundle-openclaw.mjs HARD-FAILS on any missing EXTRA_BUNDLED_PACKAGES entry (was warn-and-skip); (4) new scripts/verify-openclaw-bundle.mjs gate (presence + ship-target native bindings + host loadability) wired into the package chain. Evidence: bundle verify PASS (19 pkgs, 3 binding sets, 4 parsers loadable); typecheck 0; doc-tools units green; and the decisive one - the patched doc-tools ran on the STILL-BROKEN moe.15 VM runtime with the packaged node.exe: CLWX72_VERIFY=PASS pages=1 chars=835 parsing a real Ministry circular, binding still absent (defense-in-depth proven). Evidence dir: skills/laptop/evidence/2026-09-03-vbatch/. Remaining before Ready: cut moe.16 with these layers + fresh-install drag-PDF re-verify (tester or VM). Register row: CANVAS-BINDING.
 
 ## Cancelled
 

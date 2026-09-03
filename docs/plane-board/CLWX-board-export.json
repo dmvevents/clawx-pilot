@@ -44,6 +44,26 @@
   ],
   "issues": [
     {
+      "id": "31919216-815b-46e0-955c-7abb02490396",
+      "sequence_id": 77,
+      "name": "[testing] Artifact-grade corner-gap matrix: every doc type x every command against the PACKAGED runtime",
+      "priority": "high",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Why (owner ask: \"look around the corner\")\nEvery packaging-class defect so far (playwright-core moe.9, canvas binding moe.15) shipped because our tests run from the repo workspace, which resolves repo node_modules and masks packaged-runtime gaps. The systemic fix is a suite that exercises the ARTIFACT: the bundled gateway + packaged node, per doc type and per command.\n\nScope - doc types to cover\npdf (text + SCANNED/image-only + large >10MB + password-protected -> readable refusal), docx (+ legacy .doc -> readable refusal), xlsx (+ csv), pptx (status ambiguity noted in the audit - support or refuse cleanly), images (png/jpg via VLM path), odt/rtf -> refusal wording. Each: read, summarise-turn, and where applicable write.\n\nScope - commands\ndocument.read_* / write_* via a real gateway process from build/openclaw (not repo imports); outlook + forms tool registration smoke; skill-load smoke for the principal bundle. Optionally driven through the CLWX-71 MCP adapter once it exists - an MCP client against the packaged app is exactly the artifact-grade transport.\n\nAcceptance\n1. New harness target (pnpm harness:artifact) spawning the bundled runtime; one row per doc-type x command with PASS/REFUSED-READABLY/FAIL.\n2. Wired into preflight for package:win/mac (can be a fast subset) + full matrix in CI/nightly.\n3. Unknown/unsupported types produce principal-readable refusals, never raw stack traces (principal-proxy bar).\n4. First full run documented with gaps filed as cards.\n\nSource\nOwner directive 2026-09-03 + CLWX-72 lesson: test the artifact, not the workspace.",
+      "comments": []
+    },
+    {
+      "id": "23171f41-0f73-4cad-87f2-bc2fe7072229",
+      "sequence_id": 76,
+      "name": "[hardening] Truthful load errors for ALL bundled parsers + auditor rule for platform-native optional deps",
+      "priority": "medium",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Why\nCLWX-72 exposed a class: loadDep()-style catch-alls turn \"present but failed to evaluate\" into \"module not found\", mis-directing triage; and platform-native optionalDependencies of bundled packages are invisible to the existing dependency-class audit. readPdf is fixed; mammoth/docx/xlsx call sites still use the masking path, and other native-binding deps may lurk (sharp, whisper, silk-wasm, opusscript...).\n\nAcceptance\n1. All doc-tools loadDep call sites surface loadError vs notFound truthfully.\n2. dependency-class-auditor gains two rules: (a) every EXTRA_BUNDLED_PACKAGES entry must pass scripts/verify-openclaw-bundle.mjs; (b) any bundled package with platform-native optionalDependencies must have all SHIP_TARGET bindings in the bundle.\n3. Install-verify checklist (VM/laptop scripts) extended from presence to LOADABILITY (packaged-node require of each parser).\n\nSource\nCLWX-72 five-whys, 2026-09-03. Register: CANVAS-BINDING.",
+      "comments": []
+    },
+    {
       "id": "1a80a99e-5825-4788-8006-faa662bf29c5",
       "sequence_id": 75,
       "name": "[bug/ui-trust] Header shows \"Disconnected\" while footer shows \"gateway connected\" during working turns",
@@ -78,10 +98,15 @@
       "sequence_id": 72,
       "name": "[bug/packaging] moe.15 Windows runtime missing pdf-parse - document.read_pdf dead on tester install (KAR-PDF root cause)",
       "priority": "urgent",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "Area: packaging / doc-tooling   Severity: urgent (external-tester-blocking; Ext-val B leg; KR1-adjacent)\n\nSymptom\nTester drags NSCC-2026.pdf into chat, asks for a summary; app replies \"trouble reading PDF documents\". Log (twice): \"[tools] document.read_pdf failed: pdf-parse module not found - the packaged Windows runtime is missing this dep.\"\n\nAnalysis so far\npdf-parse is in package.json dependencies (since 2026-06-09) AND in EXTRA_BUNDLED_PACKAGES (scripts/openclaw-bundle-config.mjs, since 2026-06-09) - so the config was correct when moe.15 was built. Either bundle-openclaw.mjs silently fails to copy pdf-parse (v2 package layout / pnpm store shape?) or the runtime loader (doc-tools.mjs loadDep + augmentModulePathsForPackagedApp) cannot see it on a real install. NOTE: the moe.15 VM install verification checked docx/xlsx/mammoth/playwright-core - pdf-parse was never on the checklist, so this shipped unverified. V-batch stage 1 (running now) is capturing ground truth from the installed VM tree.\n\nAcceptance\n1. Ground-truth listing of resources/openclaw/node_modules on an installed moe.15 (V-batch evidence).\n2. Root cause named (bundler copy failure vs loader path).\n3. Fix + the presence check ADDED to the install-verify script and the preflight (dependency-class-auditor rule: every EXTRA_BUNDLED_PACKAGES entry must exist in the packaged tree).\n4. Re-verified on a fresh install: drag-PDF summarise works.\n5. Regression class: dependency-class (moe.9 playwright-core sibling).\n\nSource\nSource: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.",
-      "comments": []
+      "comments": [
+        {
+          "text": "RCA CORRECTED + FIXED-IN-TREE + ARTIFACT-VERIFIED (2026-09-03). The V-batch probe on the installed moe.15 VM OVERTURNED the original hypothesis: pdf-parse 2.4.5 IS on disk in the gateway bundle. The real chain: pdf-parse -> pdfjs-dist -> @napi-rs/canvas, whose platform-native binding @napi-rs/canvas-win32-x64-msvc (an optionalDependency) never installs on the Mac build host (pnpm supportedArchitectures os=[\"current\"]), so no bundle could ever ship it; module evaluation throws \"DOMMatrix is not defined\"; and loadDep()'s catch-all MASKED the load error as \"module not found\" (wrong error class - the message that mis-led triage).\nFix layers (all landed): (1) pnpm supportedArchitectures = [darwin, win32] - all four canvas bindings now materialize and ship in the bundle; (2) doc-tools.mjs: pure-JS DOMMatrix polyfill (text extraction needs no native canvas) + loadDepDetailed() so surfaced errors distinguish not-found from failed-to-load; (3) bundle-openclaw.mjs HARD-FAILS on any missing EXTRA_BUNDLED_PACKAGES entry (was warn-and-skip); (4) new scripts/verify-openclaw-bundle.mjs gate (presence + ship-target native bindings + host loadability) wired into the package chain.\nEvidence: bundle verify PASS (19 pkgs, 3 binding sets, 4 parsers loadable); typecheck 0; doc-tools units green; and the decisive one - the patched doc-tools ran on the STILL-BROKEN moe.15 VM runtime with the packaged node.exe: CLWX72_VERIFY=PASS pages=1 chars=835 parsing a real Ministry circular, binding still absent (defense-in-depth proven). Evidence dir: skills/laptop/evidence/2026-09-03-vbatch/.\nRemaining before Ready: cut moe.16 with these layers + fresh-install drag-PDF re-verify (tester or VM). Register row: CANVAS-BINDING.",
+          "created": "2026-09-03T04:03:54.442051Z"
+        }
+      ]
     },
     {
       "id": "49aa1e09-701f-44f3-a7e0-f2ac6e8fc17a",
@@ -247,11 +272,15 @@
       "id": "0f93f312-91eb-4896-93c9-8ceba589964b",
       "sequence_id": 58,
       "name": "[bug/outlook] Stale open Outlook compose blocks all send/reply/forward until manually cleared",
-      "priority": "medium",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "priority": "high",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "Area: outlook   Severity: medium (priority medium)\n\nSteps to reproduce\n1. leave a compose/draft open in the Outlook tab (any prior turn)\n2. ask the agent to draft/send/reply/forward a new email\n3. observe\n\nExpected\nagent detects the stale draft and recovers (offer to reuse/close it), or the action proceeds\n\nActual\ndraftEmail/sendEmail/reply/forward all refuse with 'Outlook already has an open draft'; only scripts/outlook-cleanup-compose.ts clears it; live smoke (v2-chatbot-e2e Step 3) and send test (v2-send-test Step 2) both blocked until cleanup ran\n\nEvidence\ntask outputs baqcaxxy9 (draft failed) + bgshhf5vh (send aborted) + outlook-cleanup-compose recovered; 2026-09-03 live Mac run\n\nEnvironment\nmoe.15 / Mac dev / gemini+bedrock / CDP 18792 test.fac tab\n\nRegression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)",
       "comments": [
+        {
+          "text": "Holistic acceptance defined (owner-directed 2026-09-03). The stale-draft class has now cost: the tester's send flow (CLWX-70 litter), three eval runs (CLWX-69 wedge), and the original block this card records. The essential fix is an auto-recovery state machine in the driver (server-side, so chat, host-API, and the future MCP adapter (CLWX-71) all inherit it):\n1. Before any compose-opening action: detect {open compose pane, discard-confirm dialog (buttons are OK/Cancel - CLWX-69), docked draft chips}.\n2. Recover: discard-with-OK the automation-owned state (subject allowlist exactly like scripts/outlook-drafts-sweeper.ts); NEVER touch a human-authored draft - if a non-automation draft is open, refuse with a principal-readable message naming it.\n3. Retry the intended action ONCE after recovery; hard-fail loudly the second time.\n4. Exit-path invariant (CLWX-70): every automation compose ends in send-or-discard on every code path incl. errors (try/finally).\n5. Eval postcondition: zero new saved drafts after a run.\nAcceptance: a seeded stale-draft scenario (open draft + confirm dialog + docked chip) recovers automatically and the intended draft/reply then succeeds; 15/15 eval stays green; recovery events logged (counts only).",
+          "created": "2026-09-03T04:03:54.533542Z"
+        },
         {
           "text": "Recovery verified. scripts/outlook-cleanup-compose.ts discards a stale open compose and returns to the inbox; this session ran it immediately before the CLWX-59 verification and the subsequent draft+two-gate flow passed. The block itself is intended behaviour (draftEmail refuses to stack drafts to avoid duplicate saved drafts). Reframe as UX-hardening: auto-recover a stale draft before compose rather than returning a hard failure. Not a demo blocker.",
           "created": "2026-09-03T01:55:30.611588Z"
