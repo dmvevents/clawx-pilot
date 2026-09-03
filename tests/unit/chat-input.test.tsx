@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { ChatInput } from '@/pages/Chat/ChatInput';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { hostApiFetch } from '@/lib/host-api';
@@ -129,7 +129,7 @@ describe('ChatInput agent targeting', () => {
     providersState.refreshProviderSnapshot.mockReset();
     vi.mocked(hostApiFetch).mockReset();
     artifactPanelMocks.openPreview.mockReset();
-    useSettingsStore.setState({ devModeUnlocked: false });
+    useSettingsStore.setState({ devModeUnlocked: false, preferredChannel: 'on-device' });
   });
 
   it('hides the @agent picker when only one agent is configured', () => {
@@ -348,6 +348,77 @@ describe('ChatInput agent targeting', () => {
     fireEvent.click(screen.getByTitle('Choose agent'));
     expect(screen.queryByText(/gpt-b/)).not.toBeInTheDocument();
     expect(screen.getAllByText('On this device').length).toBeGreaterThan(0);
+  });
+
+  it('channel pill tracks live preferredChannel even when the agent modelRef is a stale cloud ref (KR2 by-catch)', () => {
+    // KR2 recording (2026-09-03): fresh install routed on-device, but the
+    // composer chip still showed the cached cloud provider name. The chip is
+    // dev-gated now; the pill must derive from the live settings store, not
+    // any modelRef cached on the agent.
+    gatewayState.status = { state: 'running', port: 18789, gatewayReady: true };
+    agentsState.agents = [
+      {
+        id: 'main',
+        name: 'Main',
+        isDefault: true,
+        modelDisplay: 'moe-demo-pro',
+        modelRef: 'custom-demopro1/moe-demo-pro',
+        inheritedModel: true,
+        workspace: '~/.openclaw/workspace',
+        agentDir: '~/.openclaw/agents/main/agent',
+        mainSessionKey: 'agent:main:main',
+        channelTypes: [],
+      },
+    ];
+    agentsState.defaultModelRef = 'custom-demopro1/moe-demo-pro';
+    const now = '2025-01-01T00:00:00.000Z';
+    providersState.accounts = [
+      {
+        id: 'demopro1',
+        vendorId: 'custom',
+        label: 'MoE Demo Pro',
+        authMode: 'api_key',
+        baseUrl: 'https://demo.example.com/v1',
+        model: 'custom-demopro1/moe-demo-pro',
+        enabled: true,
+        isDefault: false,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'ollama01',
+        vendorId: 'ollama',
+        label: 'Local',
+        authMode: 'none',
+        baseUrl: 'http://127.0.0.1:11434',
+        model: 'ollama-ollama01/qwen2.5:3b-instruct',
+        enabled: true,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+    providersState.statuses = [
+      { id: 'demopro1', name: 'MoE Demo Pro', type: 'custom', hasKey: true, keyMasked: 'sk-***', enabled: true, createdAt: now, updatedAt: now },
+      { id: 'ollama01', name: 'Local', type: 'ollama', hasKey: false, keyMasked: '', enabled: true, createdAt: now, updatedAt: now },
+    ];
+    providersState.defaultAccountId = 'ollama01';
+
+    renderChatInput();
+
+    // The stale cloud provider name never renders anywhere.
+    expect(screen.queryByText(/moe-demo-pro/)).not.toBeInTheDocument();
+    const channelPill = screen.getByTestId('chat-composer-channel');
+    expect(channelPill).toHaveTextContent('On this device');
+    expect(channelPill).toHaveAttribute('data-channel', 'on-device');
+
+    // Live subscription: flipping the settings store re-renders the pill.
+    act(() => {
+      useSettingsStore.setState({ preferredChannel: 'online' });
+    });
+    expect(screen.getByTestId('chat-composer-channel')).toHaveTextContent('Online');
+    expect(screen.getByTestId('chat-composer-channel')).toHaveAttribute('data-channel', 'online');
+    expect(screen.queryByText(/moe-demo-pro/)).not.toBeInTheDocument();
   });
 
   it('shows the raw model id in the picker when dev mode is unlocked', () => {

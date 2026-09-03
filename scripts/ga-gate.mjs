@@ -67,11 +67,15 @@ if (STATIC_ONLY) {
 } else if (!probe("curl -s -o /dev/null --max-time 3 http://127.0.0.1:18792/json/version")) {
   skip('live-lane', 'T1', 'email+forms', 'Chrome CDP :18792 not reachable — start the lane and rerun');
 } else {
-  run('outlook-eval 15-row (K6/K14 guards)', 'T1', 'ExtValA', 'pnpm exec tsx scripts/v2-eval.ts');
+  // Lane hygiene between live checks: any timed-out row can leave a compose
+  // open and cascade into the NEXT check (seen live 2026-09-03). Cheap and
+  // idempotent, so run it before each lane consumer that drafts.
+  const CLEAN = 'pnpm exec tsx scripts/outlook-cleanup-compose.ts >/dev/null 2>&1;';
+  run('outlook-eval 15-row (K6/K14 guards)', 'T1', 'ExtValA', `${CLEAN} pnpm exec tsx scripts/v2-eval.ts`);
   run('stale-read check (CLWX-46 guard)', 'T1', 'ExtValA', 'pnpm exec tsx scripts/clwx46-stale-read-check.ts');
   run('forms Suspensions fill+gate (dry)', 'T1', 'forms', 'pnpm exec tsx scripts/forms-fill-suspensions.ts');
   run('forms Daily Report fill+gate (dry, CLWX-62)', 'T1', 'forms', 'pnpm exec tsx scripts/forms-fill-daily-report.ts');
-  if (SEND) run('2-gate SEND proof (sandbox)', 'T1', 'email', 'pnpm exec tsx scripts/v2-send-test.ts');
+  if (SEND) run('2-gate SEND proof (sandbox)', 'T1', 'email', `${CLEAN} pnpm exec tsx scripts/v2-send-test.ts`);
   else skip('2-gate SEND proof', 'T1', 'email', 'GA_GATE_SEND!=1 (refusal rows covered by the eval; real dispatch opt-in)');
   if (FULL) run('NSCC Q&A eval (CLWX-42)', 'T1', 'routine-query', 'pnpm exec tsx scripts/nscc-qna-eval.ts');
   else skip('NSCC Q&A eval', 'T1', 'routine-query', 'GA_GATE_FULL!=1');

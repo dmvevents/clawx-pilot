@@ -317,6 +317,12 @@ async function main() {
     return { ok: allOk, notes: `iterated ${inbox.messages.length} messages` };
   });
 
+  // End-of-run hygiene: a timed-out row (e.g. a slow reply) can leave its
+  // compose open and poison whatever runs on the lane NEXT (the ga:gate
+  // send-proof failed exactly this way on 2026-09-03 - leftOpen cascade).
+  // The eval must return the lane in the state it found it.
+  await discardOpenDrafts();
+
   // ── summary
   console.log('\n=== summary ===');
   const passed = results.filter((r) => r.status === 'pass').length;
