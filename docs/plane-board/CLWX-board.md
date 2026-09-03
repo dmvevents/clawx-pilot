@@ -55,56 +55,6 @@ TODO: build / OS / model
 
 Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
 
-### CLWX-52 — [bug/other] Composer surfaces raw model id in chat UI (hard-rule violation: anonymise model identity)
-
-- **State:** Backlog  |  **Priority:** medium
-
-Area: other   Severity: medium (priority medium)
-
-Steps to reproduce
-TODO: exact steps
-
-Expected
-TODO: what should happen
-
-Actual
-TODO: what happens instead
-
-Evidence
-TODO: log path / screenshot / trace id
-
-Environment
-TODO: build / OS / model
-
-Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
-
-**Comments (1):**
-
-- Fold-in from 2026-09-03 recorded use case (Windows moe.15). The raw-model-id leak is not Mac-only. In the in-app cloud turn recorded on the Windows VM (evidence/2026-09-03-win-recorded-usecase/usecase.mp4), the composer / persona surface exposes the raw broker alias custom-moecloud/moe-demo-pro rather than the anonymised "Online". Same class as the Mac composer showing gemini-2.5-flash. The anonymise-model-identity hard rule (CLAUDE.md) is therefore violated on both platforms; the fix must cover the persona/broker alias, not only the underlying provider id.
-
-### CLWX-53 — [bug/other] Error banner shows raw HTTP status to the principal ('Model call failed / 400 status code (no body)')
-
-- **State:** Backlog  |  **Priority:** medium
-
-Area: other   Severity: medium (priority medium)
-
-Steps to reproduce
-TODO: exact steps
-
-Expected
-TODO: what should happen
-
-Actual
-TODO: what happens instead
-
-Evidence
-TODO: log path / screenshot / trace id
-
-Environment
-TODO: build / OS / model
-
-Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
-
 ### CLWX-54 — [bug/other] Outlook browser attach fails with stale Playwright handle despite live CDP + Outlook tab
 
 - **State:** Backlog  |  **Priority:** medium
@@ -635,6 +585,61 @@ Regression class? unknown — check the *-auditor agents (config-coherence, depe
 - FIXED + VERIFIED LIVE (2026-09-03 finish-sprint item 1). TB-1 applied: openMessageById now bounded-polls (8s / 300ms) after the row click until the reading pane subject (and sender when both extractable) matches the clicked row fingerprint; a provable mismatch fails loudly (not_found) instead of ever returning another email. The guard sits inside openMessageById, so read/reply/forward/mark-read/attachments all inherit wrong-target protection. Never retries through a confirm gate. TB-2 applied + root cause CONFIRMED live: DOM probe showed the only [role="heading"][aria-level="2"] on the page is span.screenReaderOnly "Navigation pane" (exactly the reported symptom); the real pane subject is span[role="heading"][aria-level="3"] inside div[role="main"]. Extraction now scoped to reading-pane roots with a 5-step fallback chain (level-2, level-3, any heading, subject class, h1/h2), visible + non-chrome only - meets the rotated-selector hard rule. Evidence (persona bars): QA bar - new scripts/clwx46-stale-read-check.ts PASS 3/3 rows x 3 consecutive runs with the guard actively discriminating; full v2-eval 15/15 on the live test.fac lane; unit suite 162 files / 1280 tests green; typecheck 0. PM acceptance: matrix row "Email: read message" deficit cleared. Engineering conscience: dom-selector-rotation class, detection owner dom-selector-regression-tester. Moving to Ready for human close.
 - 2026-09-03 resilience pack fold-in (docs/FLOW_STATE_DIAGRAMS.md flow 3): fix spec for this card is TB-1 + TB-2. TB-1 settle-on-expected-item guard: after clicking an inbox row, bounded poll until the reading pane's subject AND sender match the clicked row before any extraction; never retry through a confirm gate; detection owner ga-e2e-regression-verifier. TB-2: replace the readEmail subject heading selector (currently returns the UI heading 'Navigation pane') under the 3-fallback rotated-selector rule; detection owner dom-selector-regression-tester. Both in electron/services/outlook-browser-v2/outlook-actions.ts. Recommended pre-GA: an agent describing the WRONG email is the trust-killer class.
 
+### CLWX-52 — [bug/other] Composer surfaces raw model id in chat UI (hard-rule violation: anonymise model identity)
+
+- **State:** Ready  |  **Priority:** medium
+
+Area: other   Severity: medium (priority medium)
+
+Steps to reproduce
+TODO: exact steps
+
+Expected
+TODO: what should happen
+
+Actual
+TODO: what happens instead
+
+Evidence
+TODO: log path / screenshot / trace id
+
+Environment
+TODO: build / OS / model
+
+Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
+
+**Comments (2):**
+
+- FIXED (2ce37055) + unit-specced. Composer chip maps the resolved account to "Online"/"On this device" via channelLabelForModelRef bound to LIVE channel state - kills both the raw-id leak and the stale "moe-demo-pro" label the KR2 recording caught while on-device. Raw model ids remain in dev-unlocked surfaces only (anonymise hard rule restored). model-options + chat-input specs green; gate 11/11. Ships in moe.16. Ready for human close.
+- Fold-in from 2026-09-03 recorded use case (Windows moe.15). The raw-model-id leak is not Mac-only. In the in-app cloud turn recorded on the Windows VM (evidence/2026-09-03-win-recorded-usecase/usecase.mp4), the composer / persona surface exposes the raw broker alias custom-moecloud/moe-demo-pro rather than the anonymised "Online". Same class as the Mac composer showing gemini-2.5-flash. The anonymise-model-identity hard rule (CLAUDE.md) is therefore violated on both platforms; the fix must cover the persona/broker alias, not only the underlying provider id.
+
+### CLWX-53 — [bug/other] Error banner shows raw HTTP status to the principal ('Model call failed / 400 status code (no body)')
+
+- **State:** Ready  |  **Priority:** medium
+
+Area: other   Severity: medium (priority medium)
+
+Steps to reproduce
+TODO: exact steps
+
+Expected
+TODO: what should happen
+
+Actual
+TODO: what happens instead
+
+Evidence
+TODO: log path / screenshot / trace id
+
+Environment
+TODO: build / OS / model
+
+Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
+
+**Comments (1):**
+
+- FIXED (2ce37055) + unit-specced. New src/lib/error-display.ts maps raw failure strings to principal-readable messages with the raw detail in a collapsed expander; display-layer only - config/auth failures still surface visibly (never silently degrade). error-display spec green; gate 11/11. Ships in moe.16. Ready for human close.
+
 ### CLWX-58 — [bug/outlook] Stale open Outlook compose blocks all send/reply/forward until manually cleared
 
 - **State:** Todo  |  **Priority:** high
@@ -943,7 +948,7 @@ Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 A
 
 ### CLWX-75 — [bug/ui-trust] Header shows "Disconnected" while footer shows "gateway connected" during working turns
 
-- **State:** Todo  |  **Priority:** medium
+- **State:** Ready  |  **Priority:** medium
 
 Area: renderer / trust   Severity: medium (anonymise/trust family with CLWX-52/53)
 
@@ -960,6 +965,10 @@ Acceptance
 
 Source
 Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.
+
+**Comments (1):**
+
+- FIXED (2ce37055) + unit-specced (b24a1a6c). Root cause: the header badge issued a renderer-side HEAD probe against the provider host - the renderer network path (CSP/proxy) differs from the gateway process that actually runs turns, so the badge lied "Disconnected" while turns executed (both tester screenshots + the KR2 recording frame). The badge now derives from the SAME gateway status stream the footer renders and recovers with it. gateway-store-health + connection-status unit specs green; full gate 11/11 GREEN. Ships in moe.16. Ready for human close.
 
 ### CLWX-76 — [hardening] Truthful load errors for ALL bundled parsers + auditor rule for platform-native optional deps
 
