@@ -205,6 +205,25 @@ prompts; sprint-driver skill re-pointed at the finish sprint. Next tick's top
 P items: CLWX-62 Daily Report e2e, CLWX-63 extraction chain, CLWX-65 in-app
 write turn._
 
+_**Lane-wedge tick (2026-09-03 morning, owner-in-the-loop with screenshots).**
+Three eval runs degraded to 10–13/15 with ZERO product defects; owner
+screenshots pinned both causes live. **CLWX-69 filed (high):** the compose
+discard CONFIRM dialog is titled "Discard message" but its buttons are
+**OK/Cancel** — automation waiting for a "Discard" button waits forever and
+the fui-DialogSurface backdrop then blocks every row click; second layer:
+`locator.first()` latches a HIDDEN Discard in DOM order (CLWX-59 class).
+**CLWX-70 filed (high):** flows that exit without explicit send-or-discard
+SAVE drafts — litter accumulates ([Draft] conversation markers, Drafts [23])
+and feeds CLWX-58; acceptance = exit-path invariant (compose opened ⇒ sent or
+discarded on every path), an automation-drafts sweeper, and an eval zero-new-
+drafts postcondition. **Harness fixed (`bfeb2cf1`):** v2-eval discardOpenDrafts
+is DOM-side visible-only + OK-aware, runs pre-eval and post-W4.x; new
+read-only `scripts/outlook-lane-probe.mts` (dialogs/backdrops/row-cover via
+elementFromPoint) — it root-caused both bugs. Verified: **run H 15/15 exit 0
+starting from a wedged lane** (self-healing proven). MCP research
+(forms-via-MCP + app enhancement) in flight — lands as a doc + board card
+next tick._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
