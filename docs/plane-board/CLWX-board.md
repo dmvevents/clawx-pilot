@@ -155,6 +155,47 @@ TODO: build / OS / model
 
 Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
 
+### CLWX-55 — Use-case demo reel (UC1-UC10): record + frame-verify the agent doing every key function
+
+- **State:** Backlog  |  **Priority:** high
+
+Objective (OKR): a trustworthy demo reel proving the Ministry agent performs every key principal function, captured as a real user experience, each clip frame-verified. Design: docs/VIDEO_CAPTURE_OKR_2026-09-03.md.
+Each clip must (acceptance, all 7): show only the app window (unclipped, ≥1280px, legible); Connected not Disconnected; a realistic principal message clicked-in, typed, and SENT; visible agent work; a completed correct artifact + acceptance; continuous/contextual take. Proof only after frame-by-frame verification.
+UC checklist (KR1 = 10/10):
+
+- UC1 summarise last 5 emails (needs Outlook tab)
+- UC2 draft reply + 2-gate send (needs tab)
+- UC3 document -> suspensions form -> submit (test.fac)
+- UC4 daily report form (test.fac)
+- UC5 draft parent letter -> .docx saved (offline) - record first
+- UC6 build/read spreadsheet (offline) - record first
+- UC7 routine query, Online + On-device (offline) - record first
+- UC8 transcribe meeting audio -> minutes
+- UC9 cron reminder fires + principal reply
+- UC10 cloud->on-device failover mid-turn
+Follow the record->verify->accept state machine in the design doc; nothing counts until it passes the 7 criteria.
+
+### CLWX-56 — Recorder v2: capture app window by title at full resolution + in-harness frame-verification gate
+
+- **State:** Backlog  |  **Priority:** high
+
+Why: the 2026-09-03 Windows clip failed because it recorded a fixed 640x480 region (clipped the app) and opened on the ffmpeg console (wrong window), and was declared good from driver JSON instead of pixels.
+Fix: ffmpeg -f gdigrab -framerate 15 -i title="Ministry of Education" -c:v libx264 -crf 20 - captures exactly that window at true size, any z-order, no clipping. Set VM display ≥1920x1080 and maximize the app first. Never -WindowStyle Hidden.
+Mandatory gate (in the harness): after stop, auto-extract ≥8 frames + first + last and FAIL the run unless AC1-AC7 (see design doc) are demonstrably met. Only a passing run writes RESULT.md (prompt, resolved model/channel, duration, frames, SHA-256) and registers the clip as proof.
+Spec: docs/VIDEO_CAPTURE_OKR_2026-09-03.md sect 8.
+
+### CLWX-57 — INVALID: 2026-09-03 Windows use-case video is not valid proof (wrong window, clipped, no completion)
+
+- **State:** Backlog  |  **Priority:** medium
+
+Finding (frame-by-frame breakdown, 2026-09-03): skills/laptop/evidence/2026-09-03-win-recorded-usecase/usecase.mp4 is 640x480 @ 5fps and does not prove a completed use case.
+
+- 1s: the ffmpeg recorder console, not the app (wrong window at start).
+- 13-26s: app visible but the only reply on screen is a stale prior-turn message about a form PNG filename; top-right reads Disconnected.
+- 51s: the parent-letter prompt is only being typed - never sent, never answered.
+- composer right edge clipped (window larger than the 640x480 capture).
+The earlier "verified good" came from driver JSON (settled=true), not the pixels. Coverage doc REC claim for Windows is downgraded. Superseded by Recorder v2 + the demo-reel card.
+
 ## Unstarted
 
 ### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy

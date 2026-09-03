@@ -21,7 +21,7 @@ Mac and Windows diverge, both columns are shown.
 
 | Artifact | Type | Proves |
 |---|---|---|
-| `evidence/2026-09-03-win-recorded-usecase/usecase.mp4` (52s) | **REC (Windows)** | Real in-app chat turn on the installed moe.15 app: "Draft a short letter to parents about the Term 1 parent-teacher meeting on Friday" → cloud persona (`custom-moecloud/moe-demo-pro`) engaged the drafting task and asked for the missing detail; `ANSWERED`, `settled=true`, no degrade, no error banner, ~66s wall. **Canonical recorded use case.** |
+| `evidence/2026-09-03-win-recorded-usecase/usecase.mp4` (52s) | **REJECTED (frame-verified 2026-09-03)** | 640×480@5fps. Frame breakdown: 1s = the ffmpeg recorder console (wrong window at start); 13–26s = stale prior-turn reply on screen, top-right "Disconnected"; 51s = the parent-letter prompt only being *typed*, never sent or answered; composer clipped. The prior "ANSWERED/settled=true" came from driver JSON, not the pixels. **Not valid proof** — see CLWX-57, superseded by Recorder v2 (CLWX-56) + the demo reel (CLWX-55) per `VIDEO_CAPTURE_OKR_2026-09-03.md`. |
 | `evidence/2026-09-03-forms-submit-recorded/video.mp4` (16s) + `trace.zip` + before/after PNGs | **REC (browser)** | W3 document→form: the cloned Suspensions form on test.fac (all 7 T&T districts, Caroni selected, School Type) filled, refusal-without-confirm proved first, then ONE confirmed submit that VERIFIED it landed (responses 5→6, success marker, 2xx POST). |
 | `evidence/2026-09-03-app-usecase-recorded/final-screenshot.png` | **LIVE (Mac, still)** | Real in-app turn on Mac: "Summarise my last 5 emails" → 2 tool calls ran → assistant reply rendered (the designed CLWX-54 graceful degradation), Online channel, gateway connected. Confirms the GOOGLE-STORE-400 fix live (turn executed, no 400 banner). The Mac screen-crop *video* was removed — it caught an occluding terminal; the still is the honest Mac proof (see that dir's RESULT.md correction). |
 | `evidence/2026-09-03-nscc-qna-eval/` (`scripts/nscc-qna-eval.ts`) | **LIVE/TEST** | Routine-query lane (W9): 18/20 against a stakeholder-derived Q&A set. |
@@ -42,15 +42,20 @@ Mac and Windows diverge, both columns are shown.
 | W3 | Document → form prefill → submit | LIVE full cycle | LIVE 29/32 fill + gate | **REC (video+trace)** | Strongest-proven composite. Driver hard-pinned to the test.fac clone URL. |
 | W4 | Daily report form | LIVE payload+preview | LIVE preview on VM | — | Submit path shares W3's gate. |
 | W5 | Daily-report cron reminder | LIVE cron fires | **GAP** — no live cron-fire captured on Windows | — | gap D. |
-| W6 | Draft letter / memo → .docx | LIVE round-trip | LIVE write GREEN on VM | Windows (in the usecase turn) | In-app turn drafting is what `usecase.mp4` shows. |
+| W6 | Draft letter / memo → .docx | LIVE round-trip | LIVE write GREEN on VM | **no valid clip yet** | The Windows video that claimed this is REJECTED (never answered on screen). UC5 in the demo-reel program (CLWX-55). |
 | W7 | Read / build spreadsheet | LIVE round-trip | LIVE read+write GREEN on VM | — | SheetJS; same native JS both platforms. |
 | W8 | Transcribe voice/meeting | LIVE real transcript ×2 | **GAP** — ASR smoke not run on Windows | — | gap C; `pilot-asr-smoke.ps1` authored, needs one run. |
-| W9 | Routine query (chat & email) | LIVE on-device+cloud | LIVE online+on-device on VM | Windows (usecase turn) + Mac still | 18/20 NSCC; 15/15 eval. |
+| W9 | Routine query (chat & email) | LIVE on-device+cloud | LIVE online+on-device on VM | Mac still only | 18/20 NSCC; 15/15 eval. Windows video REJECTED; UC7 in the reel (CLWX-55). |
 | W10 | Cloud→on-device failover | LIVE degrade path | **GAP** — untested on Windows | — | `degradeChannel` unit-tested; no live Windows failover capture. |
 
-**Covered end-to-end with recorded proof:** W3 (video), W6/W9 (Windows in-app
-turn video). **Covered live/test but not on video:** W1, W2, W4, W7, W8(Mac).
-**Named gaps:** W5 cron-on-Windows, W8 ASR-on-Windows, W10 failover-on-Windows.
+**Covered end-to-end with recorded proof:** W3 (browser form fill+submit) — and
+even that shows the browser surface, not the agent app UX. **No use case yet has
+a clean video of the full principal experience** (type → send → agent works →
+completion → acceptance); the Windows attempt was frame-verified and REJECTED.
+That gap is the video-capture program: OKR + state machine in
+`VIDEO_CAPTURE_OKR_2026-09-03.md`, tracked on CLWX-55 (reel), CLWX-56 (recorder
+v2), CLWX-57 (invalid-clip finding). **Live/test but not on video:** W1, W2, W4,
+W6, W7, W9, W8(Mac). **Named gaps:** W5, W8-Windows, W10.
 
 ---
 

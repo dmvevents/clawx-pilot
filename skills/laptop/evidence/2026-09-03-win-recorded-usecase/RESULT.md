@@ -165,3 +165,29 @@ ssh -p 12222 clawxtest@localhost 'powershell -NoProfile -ExecutionPolicy Bypass 
 #    Helper scripts: clawx-run-interactive.ps1, clawx-foreground-app.ps1,
 #    clawx-recorded-usecase-driver.js, clawx-run-driver.ps1  (all in /tmp this session; also on the guest under C:\Users\clawxtest\).
 ```
+
+---
+
+## REJECTED — 2026-09-03 (frame-by-frame verification)
+
+This `usecase.mp4` was frame-verified after the owner asked whether the video had
+actually been analyzed frame by frame. It had NOT been — the earlier "good"
+verdict came from the driver's JSON (`settled=true`), not the pixels. The frames
+show it is **not valid proof of a completed use case**:
+
+- **1s:** the ffmpeg recorder's own console window (x264 encode log writing
+  `capture.mkv`) — the capture opened on the wrong window.
+- **13s / 26s:** the app is visible, but the only assistant reply on screen is a
+  stale prior-turn message ("…`Student_Support_Referral_Form.png`. Please verify
+  the filename and location"); top-right reads **Disconnected**.
+- **51s (near end):** the prompt "Draft a short letter to parents about the Term 1
+  parent-teacher meeting on Friday" is only being **typed** — never sent, never
+  answered on screen.
+- **640×480 @ 5fps**, composer right edge clipped (the app window is larger than
+  the capture region).
+
+Root causes and the fix are in `docs/VIDEO_CAPTURE_OKR_2026-09-03.md` (§6–§8).
+Superseded by Recorder v2 (capture-by-window-title at full res + in-harness frame
+gate, CLWX-56) and the use-case demo-reel program (CLWX-55). Finding: CLWX-57.
+
+Do not cite this clip as evidence.
