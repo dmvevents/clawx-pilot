@@ -187,17 +187,22 @@ DO gate a formal GA declaration (owner/Ministry actions a verify can't green):
 
 ---
 
-*Live: all moe.18-candidate code is in the tree. Lane A+B (8fac374f) integrated
-for K11/CLWX-73/74/75/52/53; Lane A2 (0925528e) K13 on-device-outage prompt;
-chat per-turn-flag polish (1a684217); and the **launch-channel fix** (715eab73)
-that makes the build default to the cloud gateway instead of on-device — the
-owner's explicit steer this session. Full gate GREEN: typecheck, lint (0 errors),
-1334 unit pass, plus the new store-default regression guard. Launch-channel fix
-under review (code-reviewer + config-coherence-auditor). Owner reconfirmed the
-gated handoff ("once we close all the gaps, send a download to our counterpart to
-test") — still contingent on the all-green VM verify. Remaining before that:
-clear any reviewer changes-required, bump moe.18, `build:win`, then ONE
-full-matrix VM pass on clawx-win-rc-20260609. `failing-acceptance-retest-audit`
-DONE — PDF (CLWX-92) and cloud→on-device degrade (CLWX-78) FAILED live on moe.16,
-fix-pending-verify (highest-risk VM legs, alongside K11 email-send on a no-creds
-box). moe.17 verify agent dead. Nothing sent to Karunesh.*
+*Live: moe.18 is CUT AND BUILDING. All candidate code in tree: Lane A+B
+(8fac374f) for K11/CLWX-73/74/75/52/53; Lane A2 (0925528e) K13 on-device-outage
+prompt; per-turn-flag polish (1a684217); launch-channel fix (715eab73) plus the
+review-mandated legacy-upgrade migration (f5a9d4d7, closes the reviewer HIGH);
+bump 298658e9. Full gate GREEN: typecheck, lint (0 errors), 1336 unit pass.
+Review verdicts in: code-reviewer CONDITIONAL GO → HIGH closed by f5a9d4d7;
+config-coherence-auditor GREEN. Owner (pre-flight, 2026-09-03) reconfirmed:
+package now, handoff fires automatically on all-green — nothing sends on any
+FAIL. Build running with `SKIP_WIN_ASR_HELPER=1` (moe.11 precedent; prebuilt
+WinSpeechRecognize.exe from the moe.17 cycle is bundled, ASR payload identical
+to the verified baseline). Upload lane probed green (gcloud authed, bucket
+listable, IAP tunnel OPEN). VM verify packet staged at
+/tmp/moe18-vm-verify-packet.md — includes the legacy-'on-device' pre-step so the
+migration is proven on Karunesh's real upgrade shape, both K13 directions, K11
+no-creds readable-degrade, K12, K14, and a trust sweep; moe.17's addendum
+findings (orphaned degrade turn, post-restore wedge, phantom replay) are
+recorded-not-gating observations for hardening cards. moe.17 verify COMPLETED
+all-PASS (correction above); K10/K13-cloud are regression legs against that
+baseline. Nothing sent to Karunesh.*
