@@ -18,7 +18,7 @@ closed, then verified in ONE full-matrix VM pass. The VM is free.
 |---|---|---|---|---|
 | K10 PDF read | CLWX-92 (pdfjs workerSrc under Electron UtilityProcess) | ✅ yes | ❌ **FAILED live moe.16**; re-verify | Verify |
 | K13 cloud turn silently dies | CLWX-78 (silent-death degrade from history poll → on-device) | ✅ yes | ❌ **FAILED live ×2 on moe.16**; re-verify | Verify |
-| K13 **on-device dead / no failover** (the real report) | **NONE** — `maybeDegradeChannel` only does cloud→on-device; no on-device→cloud path exists | ❌ **OPEN (new)** | — | **A2 (follow-on)** |
+| K13 **on-device dead / no failover** (the real report) | prompt-to-switch: dead local model surfaces an actionable "switch to Online" notice instead of raw errors (`shouldPromptSwitchToOnline`) | ✅ **yes** (0925528e) | ❌ pending | **A2 ✅ landed** |
 | K11 **email send** chain | CLWX-74 (VLM-creds dead-end) | ❌ **OPEN** | — | **A** |
 | K11 email litter / recovery | CLWX-70 (litter sweep) + CLWX-58 (compose recovery) | ✅ yes | partial | Verify |
 | K1 chrome attach on fresh box | CLWX-73 (managed-profile fallback = profile=user violation) | ❌ **OPEN** | — | **A** |
@@ -33,20 +33,46 @@ attempt, ×2) — so they are fix-pending-verification, not proven. Sending moe.
 as-is means Karunesh re-hits **email send (K11 / CLWX-74)**, the **badge (K12 /
 CLWX-75)**, and the trust-UI defects — tests he already reported. Hence moe.18.
 
-**Newly confirmed by the retest audit (this is the sharp one):** Karunesh's K13
-report was *on-device* (ollama) dying with 6× raw "Connection error." and **no
-failover**. But the only degrade path in code is cloud→on-device
-(`maybeDegradeChannel`, `src/stores/chat.ts:1720` hardcodes `channel:
-'on-device'`; `shouldDegradeToOnDevice` cannot fire when already on-device). So
-**his actual failure has no recovery path in tree** — moe.17/moe.18 do not fix it.
-The reverse direction (on-device→cloud) was never built and never tested. It is
-privacy-sensitive: on-device→cloud sends device data off-box, so it must NOT be a
-silent send. The trust-preserving rule (Lane A2 below): if `preferredChannel ===
-'online'` but the runtime is on-device via boot preflight → auto-degrade to Online
-+ replay (restores their real preference, safe); if `preferredChannel ===
-'on-device'` (explicit choice) → do NOT silently send to cloud, show an actionable
-notice ("On-device model isn't responding — Switch to Online, or start the local
-model"). Either way K13 stops looking broken and stops leaking a raw error.
+**Newly confirmed by the retest audit, then closed (this is the sharp one):**
+Karunesh's K13 report was *on-device* (ollama) dying with 6× raw "Connection
+error." and **no failover**. The only degrade path in code was cloud→on-device
+(`maybeDegradeChannel`; `shouldDegradeToOnDevice` cannot fire when already
+on-device), so his actual failure had **no recovery path in tree**. Lane A2
+(commit 0925528e) closes it — but *not* as a mirror of the cloud path. An
+on-device→cloud move sends device data off-box, so it must never be a silent
+send. Design decision made during the fix: the `activeChannel` derivation only
+resolves to `on-device` when `preferredChannel === 'on-device'`, which made the
+originally-sketched "auto-degrade when Online was preferred" branch **unreachable
+from the store** — and auto-crossing the boundary would violate the trust line
+regardless. So A2 ships the single reachable, privacy-correct behavior:
+`shouldPromptSwitchToOnline` (pure, unit-tested) — a dead local model on a
+network-class failure surfaces an actionable, anonymised notice ("The model on
+this device isn't responding. Switch to Online to continue…"). It **never** POSTs
+`degradeChannel`, **never** resends off-box, and **never** rewrites
+`preferredChannel` in this direction (store-wiring test asserts all three). A real
+error (auth / content-filter) still surfaces unchanged. K13 stops looking broken
+and stops leaking a raw error, with the switch left to the principal.
+
+**Launch-channel fix — the release must default to the CLOUD GATEWAY, not the
+on-device model (owner directive, 2026-09-03):** the shipped pilot build launched
+on ollama even though it seeds a working cloud gateway and makes it the default
+*provider*. Root cause was a **dead guard, not a missing feature**:
+`cloud-gateway-provider-seed.ts` already had "set `preferredChannel='online'` when
+no choice exists yet", keyed on `getSetting('preferredChannel') === undefined` —
+but `createDefaultSettings()` defaulted the key to `'on-device'`, and
+electron-store returns its `defaults` from `.get()` even for never-written keys,
+so `getSetting` was *always* `'on-device'` and the guard never fired. The existing
+seed unit test masked it (mocked `getSetting` to return `undefined`, a value
+production never reached). Fix (commit 715eab73): stop defaulting
+`preferredChannel` (optional field). An ABSENT value now means "no choice yet" →
+the seed sets Online on a fresh gateway build; an explicit toggle still persists a
+concrete value (moe.13 overwrite regression stays fixed); non-gateway builds keep
+on-device via the preflight's `?? 'on-device'` fallback. Existing pilot boxes
+where the principal never explicitly toggled **self-heal to Online** on next
+launch — which is also why Karunesh's box was on-device (dead-model K13) in the
+first place: the launch default, not just a model outage. Regression pinned by
+`tests/unit/settings-store-defaults.test.ts`. Full gate green; under review
+(code-reviewer + config-coherence-auditor, 2026-09-03).
 
 ---
 
@@ -66,16 +92,21 @@ disjoint file trees so parallel edits cannot collide:
   - CLWX-52 — anonymise model id → "Online" / "On this device".
   - CLWX-53 — plain-language error banner (keep WHEN it shows; fix wording).
   - CLWX-75 — header badge state agrees with real gateway/turn state.
-- **Lane A2 — on-device→cloud failover (`src/lib/channel-degrade.ts` +
-  `src/stores/chat.ts` + `electron/api/routes/settings.ts`), sequenced AFTER
-  A+B land** to avoid a third concurrent editor of `chat.ts`:
-  - K13-real — generalise the degrade policy to a target channel + auto-resend
-    gate keyed on `preferredChannel` (preference-restore auto-degrade when the
-    principal really wanted Online; actionable non-silent notice when they chose
-    On-device). Pure policy stays unit-tested; plumbing mirrors the existing
-    cloud→on-device path. `/api/settings/degradeChannel` must accept `'online'`.
+- **Lane A2 — on-device outage prompt (`src/lib/channel-degrade.ts` +
+  `src/stores/chat.ts` + `src/stores/chat/types.ts` + `src/pages/Chat/index.tsx`
+  + `chat.json`), landed AFTER A+B** (commit 0925528e) to avoid a third
+  concurrent editor of `chat.ts`:
+  - K13-real — `shouldPromptSwitchToOnline`: a dead on-device model on a
+    network-class failure surfaces an actionable, anonymised "switch to Online"
+    notice. Deliberately NOT a mirror of the cloud path — no auto-send off-box,
+    no `degradeChannel` POST, no `preferredChannel` write in this direction (the
+    principal chooses). Pure policy unit-tested; store-wiring test asserts the
+    three no-ops. No `electron/` change needed (`/api/settings/degradeChannel`
+    already accepts `'online'` via `isProviderChannel`, but this direction never
+    calls it).
 
-Review gate per lane before anything is built (no self-approval).
+Review gate per lane before anything is built (no self-approval). Lane A2 is
+under review (code-reviewer, 2026-09-03).
 
 ---
 
@@ -88,10 +119,11 @@ Review gate per lane before anything is built (no self-approval).
    to `gs://clawx-rc-artifacts-.../moe18/`.
 4. **ONE full-matrix VM verify** on `clawx-win-rc-20260609` (CDP 9223): the
    Karunesh matrix K1 / K10 (PDF drag — failed live on moe.16, must now PASS) /
-   K11 (send, on a no-creds + littered box) / K12 / **K13 both degrade
-   directions** — cloud→on-device (CLWX-78, failed ×2 on moe.16) AND
-   on-device→cloud (Lane A2, the direction he actually hit) — / K14 five prompts.
-   Every leg PASS. No raw "Connection error." survives on any leg.
+   K11 (send, on a no-creds + littered box) / K12 / **K13 both directions** —
+   cloud→on-device auto-degrade (CLWX-78, failed ×2 on moe.16) AND the
+   on-device-outage "switch to Online" prompt (Lane A2, the direction he actually
+   hit: kill ollama, confirm the anonymised notice appears, NOT a raw error) —
+   / K14 five prompts. Every leg PASS. No raw "Connection error." survives.
 5. On all-green: fire the Karunesh handoff (staged, owner-authorized **contingent
    on tested-and-green** — "after we've tested it, let's kick all this off").
    Honest note; nothing sent before green.
@@ -115,8 +147,17 @@ DO gate a formal GA declaration (owner/Ministry actions a verify can't green):
 
 ---
 
-*Live: workflow `close-karunesh-gaps-parallel` (Lane A email/chrome + Lane B
-trust-UI) still running. `failing-acceptance-retest-audit` DONE — verdict: not all
-failing tests re-proven; PDF (CLWX-92) and cloud→on-device degrade (CLWX-78) FAILED
-live on moe.16 and are fix-pending-verify; K13's real on-device→cloud direction is
-unbuilt (Lane A2). moe.17 verify agent dead. Nothing sent to Karunesh.*
+*Live: all moe.18-candidate code is in the tree. Lane A+B (8fac374f) integrated
+for K11/CLWX-73/74/75/52/53; Lane A2 (0925528e) K13 on-device-outage prompt;
+chat per-turn-flag polish (1a684217); and the **launch-channel fix** (715eab73)
+that makes the build default to the cloud gateway instead of on-device — the
+owner's explicit steer this session. Full gate GREEN: typecheck, lint (0 errors),
+1334 unit pass, plus the new store-default regression guard. Launch-channel fix
+under review (code-reviewer + config-coherence-auditor). Owner reconfirmed the
+gated handoff ("once we close all the gaps, send a download to our counterpart to
+test") — still contingent on the all-green VM verify. Remaining before that:
+clear any reviewer changes-required, bump moe.18, `build:win`, then ONE
+full-matrix VM pass on clawx-win-rc-20260609. `failing-acceptance-retest-audit`
+DONE — PDF (CLWX-92) and cloud→on-device degrade (CLWX-78) FAILED live on moe.16,
+fix-pending-verify (highest-risk VM legs, alongside K11 email-send on a no-creds
+box). moe.17 verify agent dead. Nothing sent to Karunesh.*
