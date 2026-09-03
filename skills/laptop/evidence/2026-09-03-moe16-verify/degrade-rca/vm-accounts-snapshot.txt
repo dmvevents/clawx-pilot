@@ -1,0 +1,51 @@
+BRIDGE=window.electron.ipcRenderer
+ERRORS=[]
+PREFERRED_CHANNEL={"ok":true,"data":{"status":200,"ok":true,"json":{"value":"online"}}}
+SNAPSHOT_JSON_BEGIN
+{
+ "ok": true,
+ "data": {
+  "status": 200,
+  "ok": true,
+  "json": [
+   {
+    "id": "moe-cloud-gateway",
+    "vendorId": "custom",
+    "label": "MOE Cloud Gateway",
+    "authMode": "api_key",
+    "baseUrl": "https://clawx-litellm-gateway-eoydffbcrq-uc.a.run.app/v1",
+    "apiProtocol": "openai-completions",
+    "model": "moe-demo-pro",
+    "fallbackModels": [
+     "moe-demo"
+    ],
+    "enabled": true,
+    "isDefault": true,
+    "metadata": {
+     "customModels": [
+      "moe-demo-pro",
+      "moe-demo"
+     ]
+    },
+    "createdAt": "2026-09-03T07:05:25.078Z",
+    "updatedAt": "2026-09-03T08:14:21.824Z"
+   },
+   {
+    "id": "ollama-local-qwen2.5-3b-instruct",
+    "vendorId": "ollama",
+    "label": "On this device (Qwen 2.5 3B Instruct)",
+    "authMode": "local",
+    "baseUrl": "http://127.0.0.1:11434/v1",
+    "apiProtocol": "openai-completions",
+    "model": "qwen2.5:3b-instruct",
+    "enabled": true,
+    "isDefault": false,
+    "createdAt": "2026-09-03T07:05:25.458Z",
+    "updatedAt": "2026-09-03T07:05:25.458Z"
+   }
+  ]
+ }
+}
+SNAPSHOT_JSON_END
+RCA_ACCOUNTS_DONE
+EXIT=0

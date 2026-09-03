@@ -2293,10 +2293,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // only the history poll discovers the error-stopped assistant message.
       // The 'error'/'final' event paths call maybeDegradeChannel; this path
       // set the banner and stopped, so send-time failover never ran despite
-      // a warm on-device model. Same discipline as the event path: only when
-      // THIS client still has its own send in flight. Read BEFORE the set()
-      // below.
-      const sendWasInFlightForThisError = latestTerminalAssistantErrorMessage !== null && get().sending;
+      // a warm on-device model. Give this path the same failover chance.
+      //
+      // Gate on lastSentPayload, NOT `sending` (CLWX-93): in this path `sending`
+      // is contaminated by run-adoption — it is flipped true for a turn started
+      // on the gateway console, so gating on it would resend a message the
+      // principal never typed in this window. `lastSentPayload` is only ever
+      // set by this client's own sendMessage, matching the "don't replay a
+      // console-typed turn" discipline the streaming path enforces via its
+      // pre-adoption `hadLocalSendInFlight` read. maybeDegradeChannel claims
+      // `degradedThisTurn` synchronously before any await, so the 4s poll
+      // cannot double-fire. Computed BEFORE the set() below.
+      const ownTurnSurfacedError = latestTerminalAssistantErrorMessage !== null
+        && !!get().lastSentPayload?.text?.trim();
 
       set({
         messages: finalMessages,
@@ -2306,8 +2315,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       cacheSessionHistory(currentSessionKey, finalMessages, thinkingLevel);
 
-      if (sendWasInFlightForThisError && latestTerminalAssistantErrorMessage) {
-        const toolsRan = get().streamingTools.length > 0 || get().pendingToolImages.length > 0;
+      if (ownTurnSurfacedError && latestTerminalAssistantErrorMessage) {
+        const toolsRan = postBoundaryMessages.some((msg) => Array.isArray(msg.content)
+          && (msg.content as Array<{ type?: string }>).some((block) => block.type === 'toolCall' || block.type === 'tool_use'));
         void maybeDegradeChannel(set, get, latestTerminalAssistantErrorMessage, toolsRan);
       }
 

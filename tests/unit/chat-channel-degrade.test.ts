@@ -122,11 +122,39 @@ describe('chat store: send-time channel degradation', () => {
     expect(preferenceWrites().length).toBe(0);
   });
 
-  it('does NOT degrade from a history-discovered error when no local send is in flight', async () => {
+  it('does NOT degrade from a history-discovered error on session re-open (nothing sent this window)', async () => {
     // Re-opening a session whose LAST turn failed yesterday must not fail
-    // over: the error is historical, not ours to act on.
+    // over: the error is historical, not ours to act on. On a real re-open
+    // this client has sent nothing, so lastSentPayload is null — that is the
+    // signal we gate on (CLWX-93), not `sending`.
     const store = await loadStore();
-    store.setState({ sending: false, activeRunId: null });
+    store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+    gatewayRpcMock.mockResolvedValue({
+      messages: [
+        {
+          role: 'assistant',
+          id: 'a1',
+          stopReason: 'error',
+          errorMessage: 'LLM request failed: network connection error. rawError=Connection error.',
+          content: [],
+        },
+      ],
+    });
+
+    await store.getState().loadHistory(true);
+    await settle();
+
+    expect(degradeCalls().length).toBe(0);
+  });
+
+  it('does NOT degrade a history-discovered error for a run adopted from the console (CLWX-93)', async () => {
+    // The store flips `sending` true for a turn started on the gateway console
+    // (adoption). If the loadHistory path gated on `sending`, it would resend a
+    // message the principal never typed in this window. It gates on
+    // lastSentPayload instead, which adoption never sets — so an adopted run's
+    // terminal error surfaced by the poll must NOT fail over here.
+    const store = await loadStore();
+    store.setState({ sending: true, activeRunId: 'run-console', lastSentPayload: null });
     gatewayRpcMock.mockResolvedValue({
       messages: [
         {
