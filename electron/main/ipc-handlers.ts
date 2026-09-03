@@ -2773,6 +2773,7 @@ function registerSessionHandlers(): void {
         'sessions.json',
       );
 
+      const fsP = await import('fs/promises');
       const raw = await fsP.readFile(sessionsJsonPath, 'utf8');
       const json = JSON.parse(raw) as Record<string, unknown>;
 

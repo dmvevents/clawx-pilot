@@ -737,7 +737,7 @@ function migrateLegacyChannelConfigToAccounts(
     const legacyPayload = getLegacyChannelPayload(channelSection);
     const legacyKeys = Object.keys(legacyPayload);
     const existingAccounts = getChannelAccountsMap(channelSection);
-    const hasAccounts = Boolean(existingAccounts) && Object.keys(existingAccounts).length > 0;
+    const hasAccounts = existingAccounts != null && Object.keys(existingAccounts).length > 0;
 
     if (legacyKeys.length === 0) {
         if (hasAccounts && typeof channelSection.defaultAccount !== 'string') {
@@ -1341,11 +1341,12 @@ export async function setChannelEnabled(channelType: string, enabled: boolean): 
         if (PLUGIN_CHANNELS.includes(resolvedChannelType)) {
             if (enabled) {
                 ensurePluginRegistration(currentConfig, resolvedChannelType);
-            } else {
-                if (!currentConfig.plugins) currentConfig.plugins = {};
-                if (!currentConfig.plugins.entries) currentConfig.plugins.entries = {};
-                if (!currentConfig.plugins.entries[resolvedChannelType]) currentConfig.plugins.entries[resolvedChannelType] = {};
             }
+            // No-ops after ensurePluginRegistration; needed on the disable
+            // path and they let the compiler see the chain is populated.
+            if (!currentConfig.plugins) currentConfig.plugins = {};
+            if (!currentConfig.plugins.entries) currentConfig.plugins.entries = {};
+            if (!currentConfig.plugins.entries[resolvedChannelType]) currentConfig.plugins.entries[resolvedChannelType] = {};
             currentConfig.plugins.entries[resolvedChannelType].enabled = enabled;
             syncBuiltinChannelsWithPluginAllowlist(currentConfig);
             await writeOpenClawConfig(currentConfig);

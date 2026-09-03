@@ -88,7 +88,10 @@ app.disableHardwareAcceleration();
 // on X11 it supplements the StartupWMClass matching.
 // Must be called before app.whenReady() / before any window is created.
 if (process.platform === 'linux') {
-  app.setDesktopName('ministry-of-education.desktop');
+  // app.setDesktopName exists at runtime (verified on Electron 40.8.4) but is
+  // missing from electron.d.ts, so call it through a narrow structural type.
+  (app as unknown as { setDesktopName(name: string): void })
+    .setDesktopName('ministry-of-education.desktop');
 }
 
 // Prevent multiple instances of the app from running simultaneously.

@@ -54,6 +54,8 @@ export interface ReadInboxResult {
     returnedCount: number;
     /** Number of list-scroll passes used to gather the bounded browser window. */
     scrollPasses?: number;
+    /** Rows skipped because they were list artifacts, not message candidates. */
+    artifactSkippedCount?: number;
     exhaustive: boolean;
     note?: string;
   };

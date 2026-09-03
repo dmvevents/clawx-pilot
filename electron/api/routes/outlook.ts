@@ -57,6 +57,17 @@ import { parseJsonBody, sendJson } from '../route-utils';
 // plugin path available for regression comparison.
 const outlookBrowserManager = OUTLOOK_BROWSER_V2 ? outlookBrowserManagerV2 : outlookBrowserManagerV1;
 
+// The extended surface (search/read-email/reply/forward/mark-read/attachments)
+// only exists on the v2 driver. On the legacy v1 path these endpoints have
+// always failed (method missing -> caught -> 500); keep that behavior but make
+// the failure explicit instead of a TypeError.
+function requireV2Manager(op: string): typeof outlookBrowserManagerV2 {
+  if (!OUTLOOK_BROWSER_V2) {
+    throw new Error(`outlook ${op} requires the v2 browser driver (CLAWX_OUTLOOK_V2=0 active)`);
+  }
+  return outlookBrowserManagerV2;
+}
+
 function asArray(v: string | string[] | undefined): string[] {
   if (!v) return [];
   return Array.isArray(v) ? v.filter(Boolean) : [v].filter(Boolean);
@@ -294,7 +305,7 @@ export async function handleOutlookRoutes(
       const graphAvailable = await shouldUseGraphOutlookRead();
       const result = graphAvailable
         ? await searchInboxWithGraph(body)
-        : await outlookBrowserManager.searchInbox(body);
+        : await requireV2Manager('search-inbox').searchInbox(body);
       logger.info(
         `[host-api outlook/search-inbox] transport=${graphAvailable ? 'graph' : 'browser'} status=${result.status} count=${result.messages?.length ?? 0} capped=${!!result.capped}`,
       );
@@ -307,7 +318,7 @@ export async function handleOutlookRoutes(
       const graphAvailable = await shouldUseGraphOutlookRead();
       const result = graphAvailable
         ? await readEmailWithGraph(body)
-        : await outlookBrowserManager.readEmail(body);
+        : await requireV2Manager('read-email').readEmail(body);
       logger.info(
         `[host-api outlook/read-email] transport=${graphAvailable ? 'graph' : 'browser'} status=${result.status} bodyLen=${result.body?.length ?? 0} attachments=${result.attachments?.length ?? 0}`,
       );
@@ -323,7 +334,7 @@ export async function handleOutlookRoutes(
         sendJson(res, 200, { success: true, data: graphIdRefusal });
         return true;
       }
-      const result = await outlookBrowserManager.reply(body);
+      const result = await requireV2Manager('reply').reply(body);
       logger.info(`[host-api outlook/reply] result=${result.status}`);
       sendJson(res, 200, { success: true, data: result });
       return true;
@@ -337,7 +348,7 @@ export async function handleOutlookRoutes(
         sendJson(res, 200, { success: true, data: graphIdRefusal });
         return true;
       }
-      const result = await outlookBrowserManager.forward(body);
+      const result = await requireV2Manager('forward').forward(body);
       logger.info(`[host-api outlook/forward] result=${result.status}`);
       sendJson(res, 200, { success: true, data: result });
       return true;
@@ -350,7 +361,7 @@ export async function handleOutlookRoutes(
         sendJson(res, 200, { success: true, data: graphIdRefusal });
         return true;
       }
-      const result = await outlookBrowserManager.markRead(body);
+      const result = await requireV2Manager('mark-read').markRead(body);
       logger.info(`[host-api outlook/mark-read] id=${body.id} read=${body.read} status=${result.status}`);
       sendJson(res, 200, { success: true, data: result });
       return true;
@@ -363,7 +374,7 @@ export async function handleOutlookRoutes(
         sendJson(res, 200, { success: true, data: graphIdRefusal });
         return true;
       }
-      const result = await outlookBrowserManager.listAttachments(body);
+      const result = await requireV2Manager('list-attachments').listAttachments(body);
       logger.info(
         `[host-api outlook/list-attachments] id=${body.id} status=${result.status} count=${result.attachments.length}`,
       );
@@ -381,7 +392,7 @@ export async function handleOutlookRoutes(
         sendJson(res, 200, { success: true, data: graphIdRefusal });
         return true;
       }
-      const result = await outlookBrowserManager.downloadAttachment(body);
+      const result = await requireV2Manager('download-attachment').downloadAttachment(body);
       logger.info(
         `[host-api outlook/download-attachment] result=${result.status} savedPath=${result.savedPath ? '[set]' : '[unset]'}`,
       );

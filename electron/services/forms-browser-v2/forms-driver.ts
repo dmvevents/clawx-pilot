@@ -218,8 +218,11 @@ export class FormsDriver {
       this.browser = null;
       this.page = null;
       await this.ensureBrowser();
-      if (!this.browser) throw new Error('CDP attach failed');
-      contexts = this.browser.contexts();
+      // ensureBrowser() reassigns this.browser as a side effect, which the
+      // compiler's narrowing (null after the assignment above) cannot see.
+      const reattached = this.browser as Browser | null;
+      if (!reattached) throw new Error('CDP attach failed');
+      contexts = reattached.contexts();
     }
     const allPages = contexts.flatMap((c) => c.pages());
     let page = allPages.find((p) => responsePageMatchesFormUrl(p.url(), formUrl));

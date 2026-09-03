@@ -210,7 +210,9 @@ class MoeFormFillerManager extends EventEmitter {
     const fields = extractFormFields(snap?.tree);
     const { plan, unmatched } = mapPayloadToFields(
       this.active.kind,
-      this.active.payload,
+      // Field hints index the typed payload by dynamic key (double cast:
+      // the payload types have no index signature).
+      this.active.payload as unknown as Record<string, unknown>,
       fields,
     );
     this.active.fieldPlan = plan;

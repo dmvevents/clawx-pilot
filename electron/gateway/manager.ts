@@ -359,7 +359,9 @@ export class GatewayManager extends EventEmitter {
     try {
       await runGatewayStartupSequence({
         port: this.status.port,
-        ownedPid: this.process?.pid,
+        // ownedPid was removed from StartupHooks (typed `never`): the pid is
+        // read dynamically in findExistingGateway to avoid the stale-snapshot
+        // bug, so passing a snapshot here is intentionally rejected.
         shouldWaitForPortFree: process.platform === 'win32',
         hasOwnedProcess: () => this.process?.pid != null && this.ownsProcess,
         resetStartupStderrLines: () => {

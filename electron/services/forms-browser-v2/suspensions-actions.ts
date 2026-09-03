@@ -92,6 +92,9 @@ export class SuspensionsActions {
   async fill(payload: SuspensionsPayload): Promise<FillResult> {
     const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf-8')) as { sections: Array<{ fields: SchemaField[] }> };
     const fields = schema.sections.flatMap((s) => s.fields);
+    // Schema field ids are dynamic strings, so index the typed payload via a
+    // record view (double cast: SuspensionsPayload has no index signature).
+    const payloadRecord = payload as unknown as Record<string, unknown>;
     const errors: Array<{ fieldId: string; reason: string }> = [];
     let filledCount = 0;
     let skippedCount = 0;
@@ -101,16 +104,16 @@ export class SuspensionsActions {
         skippedCount++;
         continue;
       }
-      const value = (payload as Record<string, unknown>)[field.id];
+      const value = payloadRecord[field.id];
       // Skip fields that aren't applicable (showWhen) or not provided + not required
       if (field.showWhen) {
         const [k, v] = Object.entries(field.showWhen)[0];
-        if ((payload as Record<string, unknown>)[k] !== v) {
+        if (payloadRecord[k] !== v) {
           const liveField = await this.driver.inspectField(field.label);
           if (field.required && liveField.visible && liveField.required && !liveField.hasValue) {
             errors.push({
               fieldId: field.id,
-              reason: `required field is visible on the live Microsoft Form even though ${k}=${String((payload as Record<string, unknown>)[k] ?? '')}; provide an explicit value or fix the form branching`,
+              reason: `required field is visible on the live Microsoft Form even though ${k}=${String(payloadRecord[k] ?? '')}; provide an explicit value or fix the form branching`,
             });
           }
           skippedCount++;

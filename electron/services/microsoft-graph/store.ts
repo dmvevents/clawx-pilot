@@ -65,12 +65,14 @@ interface MicrosoftGraphStoreShape {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let storeInstance: any = null;
 
-type RawMicrosoftGraphConfig = Partial<MicrosoftGraphConfig & {
-  enabled: boolean | string;
-  scopes: string[] | string;
-  graphOutlookRead: boolean | string;
-  graphOutlookCompose: boolean | string;
-}>;
+type RawMicrosoftGraphConfig = Partial<
+  Omit<MicrosoftGraphConfig, 'enabled' | 'scopes' | 'graphOutlookRead' | 'graphOutlookCompose'> & {
+    enabled: boolean | string;
+    scopes: string[] | string;
+    graphOutlookRead: boolean | string;
+    graphOutlookCompose: boolean | string;
+  }
+>;
 
 const CONFIG_FILE_NAME = 'microsoft-graph.json';
 

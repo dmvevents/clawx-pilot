@@ -9,7 +9,7 @@
  * Responding" hangs.
  */
 import { access, mkdir, readFile, readdir, writeFile } from 'fs/promises';
-import { constants, readdirSync, readFileSync, existsSync } from 'fs';
+import { constants, readdirSync, readFileSync, existsSync, type Dirent } from 'fs';
 import { dirname, isAbsolute, join } from 'path';
 import { homedir } from 'os';
 import { listConfiguredAgentIds } from './agent-config';
@@ -721,7 +721,7 @@ async function discoverInstalledExtensionPluginIds(): Promise<Set<string>> {
   const ids = new Set<string>();
   const extensionRoot = join(homedir(), '.openclaw', 'extensions');
 
-  let entries: Awaited<ReturnType<typeof readdir>>;
+  let entries: Dirent[];
   try {
     entries = await readdir(extensionRoot, { withFileTypes: true });
   } catch {
@@ -1322,7 +1322,7 @@ function removeLegacyMoonshotKimiSearchConfig(config: Record<string, unknown>): 
   const tools = isPlainRecord(config.tools) ? config.tools : null;
   const web = tools && isPlainRecord(tools.web) ? tools.web : null;
   const search = web && isPlainRecord(web.search) ? web.search : null;
-  if (!search || !('kimi' in search)) return false;
+  if (!tools || !web || !search || !('kimi' in search)) return false;
 
   delete search.kimi;
   if (Object.keys(search).length === 0) {
@@ -2466,7 +2466,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
 
       const installs = isPlainRecord(pluginsObj.installs) ? pluginsObj.installs as Record<string, unknown> : null;
       const acpxInstall = installs && isPlainRecord(installs.acpx) ? installs.acpx as Record<string, unknown> : null;
-      if (acpxInstall) {
+      if (installs && acpxInstall) {
         const currentBundledAcpxDir = join(getOpenClawResolvedDir(), 'dist', 'extensions', 'acpx').replace(/\\/g, '/');
         const sourcePath = typeof acpxInstall.sourcePath === 'string' ? acpxInstall.sourcePath : '';
         const installPath = typeof acpxInstall.installPath === 'string' ? acpxInstall.installPath : '';

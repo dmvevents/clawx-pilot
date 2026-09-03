@@ -176,8 +176,12 @@ export async function launchGatewayProcess(options: {
       reject(error);
     };
 
-    child.on('error', (error) => {
-      logger.error('Gateway process spawn error:', error);
+    // Electron's UtilityProcess 'error' event delivers (type, location,
+    // report) strings, not an Error object; wrap them so downstream
+    // handlers that expect Error get a real one.
+    child.on('error', (type, location) => {
+      logger.error('Gateway process spawn error:', type, location);
+      const error = new Error(`Gateway utility process error: ${type} at ${location}`);
       options.onError(error);
       rejectOnce(error);
     });

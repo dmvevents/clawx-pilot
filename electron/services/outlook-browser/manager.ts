@@ -220,7 +220,8 @@ export class OutlookBrowserManager {
       };
     }
 
-    if (!args.to || !String(args.subject ?? '').trim() || typeof args.body !== 'string') {
+    const subject = args.subject;
+    if (!args.to || typeof subject !== 'string' || !subject.trim() || typeof args.body !== 'string') {
       return {
         status: 'refused',
         reason:
@@ -231,7 +232,7 @@ export class OutlookBrowserManager {
     // Ensure the draft exists (idempotent — fills again if needed).
     const drafted = await this.draftEmail({
       to: args.to,
-      subject: args.subject,
+      subject,
       body: args.body,
       cc: args.cc,
       bcc: args.bcc,

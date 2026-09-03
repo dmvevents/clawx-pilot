@@ -2302,8 +2302,10 @@ export class OutlookActions {
   }
 
   private async hasVisibleOpenDraft(page: Page): Promise<boolean> {
+    // Concrete (non-generic) capture: generic type params do not survive
+    // Function.prototype.call, which would erase the result to unknown.
     const evaluate = (page as unknown as {
-      evaluate?: <TResult>(fn: () => TResult) => Promise<TResult>;
+      evaluate?: (fn: () => boolean) => Promise<boolean>;
     }).evaluate;
     if (typeof evaluate !== 'function') return false;
     await this.prepareFunctionEvaluate(page);
@@ -2484,7 +2486,7 @@ export class OutlookActions {
 
   private async fillSubjectFieldDom(page: Page, value: string): Promise<boolean> {
     const evaluate = (page as unknown as {
-      evaluate?: <TArg, TResult>(fn: (arg: TArg) => TResult, arg: TArg) => Promise<TResult>;
+      evaluate?: (fn: (arg: string) => boolean, arg: string) => Promise<boolean>;
     }).evaluate;
     if (typeof evaluate !== 'function') return false;
     await this.prepareFunctionEvaluate(page);
@@ -2586,8 +2588,13 @@ export class OutlookActions {
   private async commitRecipientField(page: Page, label: 'To' | 'Cc' | 'Bcc', values: string[]): Promise<void> {
     const expected = recipientEmails(values);
     if (expected.length === 0) return;
+    type RecipientCommitArg = { fieldLabel: string; expectedEmails: string[] };
+    type RecipientCommitState = { hasExpected: boolean; hasOpenPicker: boolean };
     const evaluate = (page as unknown as {
-      evaluate?: <TArg, TResult>(fn: (arg: TArg) => TResult, arg: TArg) => Promise<TResult>;
+      evaluate?: (
+        fn: (arg: RecipientCommitArg) => RecipientCommitState,
+        arg: RecipientCommitArg,
+      ) => Promise<RecipientCommitState>;
     }).evaluate;
 
     const readState = async () => {
@@ -3100,18 +3107,18 @@ export class OutlookActions {
   private async verifyBodyFill(page: Page, expectedBody: string): Promise<void> {
     const expected = normalizeSearchText(expectedBody);
     if (!expected) return;
-    const evaluate = (page as unknown as {
-      evaluate?: <TArg, TResult>(fn: (arg: TArg) => TResult, arg: TArg) => Promise<TResult>;
-    }).evaluate;
-    if (typeof evaluate !== 'function') return;
-    await this.prepareFunctionEvaluate(page);
-
     type BodyFillProbe = {
       bodyHasExpected: boolean;
       recipientHasExpected: boolean;
       bodyEditorCount: number;
       recipientFieldCount: number;
     };
+
+    const evaluate = (page as unknown as {
+      evaluate?: (fn: (arg: string) => BodyFillProbe, arg: string) => Promise<BodyFillProbe>;
+    }).evaluate;
+    if (typeof evaluate !== 'function') return;
+    await this.prepareFunctionEvaluate(page);
 
     let lastProbe: BodyFillProbe | null = null;
     for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -3349,11 +3356,6 @@ export class OutlookActions {
       return 'Reply draft opened, but ClawX could not verify the message text in the compose body. Review the open draft in Outlook before sending.';
     }
     return null;
-  }
-
-  private async readOpenDraftSnapshot(page: Page): Promise<OpenDraftSnapshot | null> {
-    const probe = await this.evaluateOpenDraftDom(page, null);
-    return probe.snapshot;
   }
 
   private async readOpenDraftProbe(page: Page): Promise<OpenDraftDomProbe> {
@@ -3728,7 +3730,7 @@ export class OutlookActions {
       )).filter((el) => isVisible(el) && isEditableBodyElement(el) && !isRecipientOrSubjectField(el) && nearestComposeRootForBody(el));
       const roots = Array.from(new Set(bodyNodes
         .map(nearestComposeRootForBody)
-        .filter((root): root is Element => Boolean(root)
+        .filter((root): root is Element => root !== null
           && root !== document.body
           && root !== document.documentElement
           && hasSendButton(root))));
@@ -3755,7 +3757,10 @@ export class OutlookActions {
           sendableRoots.push({ root, snapshot, button });
         }
         if (!expectedDraft) continue;
-        if ('mode' in expectedDraft && expectedDraft.mode === 'current-reviewed') {
+        // 'mode' only exists on CurrentReviewedDraftForSend (always
+        // 'current-reviewed'), so the bare `in` check is equivalent and lets
+        // the type narrow to ExpectedDraftForSend below.
+        if ('mode' in expectedDraft) {
           continue;
         }
         if (normalize(subject) !== normalize(expectedDraft.subject)) continue;

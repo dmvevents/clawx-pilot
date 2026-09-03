@@ -163,7 +163,7 @@ export class ClawHubService {
             const isWin = process.platform === 'win32';
             const useShell = isWin && !this.useNodeRunner;
             const { NODE_OPTIONS: _nodeOptions, ...baseEnv } = process.env;
-            const env = {
+            const env: NodeJS.ProcessEnv = {
                 ...baseEnv,
                 CI: 'true',
                 FORCE_COLOR: '0',
@@ -380,7 +380,7 @@ export class ClawHubService {
             }
 
             const lines = output.split('\n').filter(l => l.trim());
-            return lines.map(line => {
+            return lines.map((line): ClawHubInstalledSkillResult | null => {
                 const cleanLine = this.stripAnsi(line);
                 const match = cleanLine.match(/^(\S+)\s+v?(\d+\.\S+)/);
                 if (match) {
