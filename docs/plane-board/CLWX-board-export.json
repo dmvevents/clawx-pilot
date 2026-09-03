@@ -44,6 +44,16 @@
   ],
   "issues": [
     {
+      "id": "2063efa1-566d-4a3d-b928-b10cf04fa5ca",
+      "sequence_id": 78,
+      "name": "[bug/degrade] \"Connection error.\" unmatched by the degrade classifier - cloud failure shows a red banner instead of failing over to a warm on-device model",
+      "priority": "high",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
+      "description": "Area: channel-degrade / KR4   Severity: high (defeats the degrade promise on a real failure surface)   Status: FIXED-in-tree, live re-verify owed\n\nFound by\nV-batch W10 test on the moe.15 VM (2026-09-03): ollama installed+warmed, provider hosts-blocked, one UI turn -> red \"Model call failed Connection error.\" at ~15s, NO degrade notice, NO channel switch, NO on-device answer. Same string in the external tester's ollama-down turns (\"rawError=Connection error.\").\n\nRoot cause (verified against production regexes)\nThe OpenAI-SDK client wraps every transport refusal as the bare string \"Connection error.\"; src/lib/channel-degrade.ts UNREACHABLE_PATTERNS had no matching row -> classifyFailure='other' -> maybeDegradeChannel fails closed by design.\n\nFix (landed this tick)\n/connection error/i added to UNREACHABLE_PATTERNS with the incident comment; three real-surface strings added to the classifier unit rows (\"Connection error.\", the gateway rawError composite, the banner text). Degrade suites green.\n\nRemaining for Ready\nLive re-verify: repeat the hosts-block turn on a build carrying this fix (next VM window or moe.16 smoke) -> expect visible degrade notice + on-device answer. Evidence: skills/laptop/evidence/2026-09-03-vbatch/RESULT-degrade.md (+ screenshots).\n\nRelated\nKR4/CLWX-27 (degrade evidence was Mac-proven; this was the Windows gap), IDLE-TIMEOUT-RAW (same class, fixed 09-03), CLWX-74 (tester impact).",
+      "comments": []
+    },
+    {
       "id": "31919216-815b-46e0-955c-7abb02490396",
       "sequence_id": 77,
       "name": "[testing] Artifact-grade corner-gap matrix: every doc type x every command against the PACKAGED runtime",
@@ -161,7 +171,12 @@
       "state": "Todo",
       "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "Why\nDemo flow #3 and the 3:45pm safety net: the agentTurn cron path is built but has never been proven end-to-end on either platform; it exists only as demo-reel UC9 and matrix gap D (audit: COHERENCE, 2026-09-03).\n\nAcceptance (QA bar)\n1. Mac: a scheduled cron entry fires an agentTurn that renders a visible chat prompt (\"3:45pm - submit today's daily report\"); the defer answer path is exercised.\n2. Evidence: screenshot/frame + trace of the fired turn.\n3. Windows live-fire joins the V-batch (gap D).\n\nStory\nS5 Reminders. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
-      "comments": []
+      "comments": [
+        {
+          "text": "Windows leg (gap D) PASS - V-batch 2026-09-03. Cron job armed via the app's own renderer IPC bridge (delivery mode none - no send): fired at +21ms of schedule, the agentTurn ran a real cloud turn producing exactly the product moment - \"Just a reminder to please submit today's daily report before 3:45pm.\" - run log status=ok, chat-visible messages confirmed via the session-history API, job deleted after. Evidence: skills/laptop/evidence/2026-09-03-vbatch/RESULT-cron.md. Remaining for Ready: the Mac leg (visible chat prompt + defer path).",
+          "created": "2026-09-03T04:17:22.272651Z"
+        }
+      ]
     },
     {
       "id": "499a09f0-9e82-4eb0-a322-7f733bb4c6a5",
@@ -187,6 +202,10 @@
       "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "Why\ndocument.write_docx/write_xlsx are proven at runtime level (Windows OFFICE_WRITE_OK; Mac fn round-trip 8/8) but no LIVE MODEL TURN has ever produced a document in-app - the named matrix gap b2. CLWX-24 KR1 acceptance covered reading only; demo-office-analysis-e2e.mjs has zero write assertions (audit: DOCUMENTS, 2026-09-03).\n\nAcceptance (QA bar)\n1. Mac leg: a live chat turn (\"draft a letter to parents about sports day, save as docx\") produces a valid .docx that parses back with expected content.\n2. demo-office-analysis-e2e.mjs gains write_docx + write_xlsx assertions.\n3. Windows leg joins the next VM window batch (b2).\n\nStory\nS3 Documents. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
       "comments": [
+        {
+          "text": "Windows leg (gap b2) PASS - V-batch 2026-09-03. One live in-app chat turn on the moe.15 VM called document.write_docx then document.read_docx: vbatch-b2.docx (8,620 B) written to media/outbound, independent mammoth read-back matched exactly, and the session transcript carries both toolCall records with args + result {bytes:8620, paragraphs:2}. Three-layer proof in skills/laptop/evidence/2026-09-03-vbatch/RESULT-b2.md. Combined with the external tester's matrix item d, the Windows write-turn is now proven twice. Remaining for Ready: Mac leg + write assertions in demo-office-analysis-e2e.",
+          "created": "2026-09-03T04:17:22.234293Z"
+        },
         {
           "text": "External evidence for the Windows leg: the tester's prompt \"Create a Word document listing five things... save it to my Desktop\" WORKED on moe.15 (his matrix item d) - a real in-app write turn on a real Windows box. Capture-grade evidence still owed (this card's acceptance), but gap b2 now has a live external datapoint.",
           "created": "2026-09-03T03:33:40.929962Z"
@@ -811,6 +830,10 @@
       "description": "A principal toggled to \"Online\" on a dead link must get a degraded answer on-device, not a silent dead composer.\nFACTS (built + tested 2026-08-21, bde78d94): send-time failover shipped — pure classifier src/lib/channel-degrade.ts, a runtime-only POST /api/settings/degradeChannel that runs the four-store transaction but skips the preferredChannel write, wiring in src/stores/chat.ts (maybeDegradeChannel), and an amber channel-vocabulary notice (never a model ID). 25 unit tests across channel-degrade + chat-channel-degrade, plus lane G G-degrade-classify feeding real Node ECONNREFUSED / ENOTFOUND failures.\nDesign invariants not to re-derive: preferredChannel is never rewritten (app returns to Online by itself when the link returns); fail-closed on unrecognised errors (a 401/403 = wrong APIM key, must not be masked as \"always on-device\"); resend is a strict subset of degrade (a turn that already ran tools is not replayed).\nINFERENCE: §3.1 keeps the assistant answering; it does not make the turn's output durable — a form/email that failed mid-flight is still lost. That is CLWX-5's job.\nAccept (KR4): GREEN — met. Awaiting human close.",
       "comments": [
         {
+          "text": "Windows degrade gap found + fixed-in-tree (V-batch 2026-09-03). The KR4 evidence on this card was Mac-proven; the W10 hosts-block test on the moe.15 VM found the OpenAI-SDK \"Connection error.\" surface unmatched by UNREACHABLE_PATTERNS -> no failover despite a warm on-device model (red banner instead - visible error, not silence, so the anti-silence half held). Classifier fixed + regression rows added; tracked as its own card (degrade-pattern-gap, In Progress) with live re-verify owed. Human call: whether this re-opens the KR4 box or rides the new card. Also proven this batch: gap C ASR (ASR_SMOKE_OK, verbatim transcript, first-ever run) and gap D cron (FIRED_OK) - see the register deltas.",
+          "created": "2026-09-03T04:17:22.352007Z"
+        },
+        {
           "text": "Live acceptance opportunity found (2026-09-01): the guest config resolves to custom-moecloud/moe-demo-pro whose Cloud Run LiteLLM gateway is DEAD (curl timeout from Mac; unreachable). moe.12 (building now) includes the degrade feat bde78d94 + the chat-degrade-notice testid. Plan: send the KR1 doc prompt with the broker dead → cloud turn cannot reach provider → assert chat-degrade-notice appears AND the on-device qwen answer lands. One turn = KR1 steering + KR4 degrade evidence on real Windows.",
           "created": "2026-09-01T10:52:50.693345Z"
         },
@@ -844,6 +867,10 @@
       "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "Prove the current tree installs on a clean Windows VM through the supported assisted-installer flow, not only silent /S.\nFACTS: moe.11 installer exists (sha256 b01bb6c3, 390,097,611 bytes, build exit 0), closing the version gap where release/ topped out at moe.10. Over the GCP IAP lane: artifact integrity Mac→GCS→guest identical; install over moe.10 exit 0; complete file tree (131,404 files / 1588 MB — Ministry of Education.exe, app.asar, openclaw.mjs, playwright-core in 3 locations, ffmpeg.exe, WinSpeechRecognize.exe all present); Gateway 18789 + host-API 13210 LISTENING, control 9999 CLOSED. BUG-012 fixed (fc435c6b) — AGENTS_COUNT=0 is the designed state, not a regression.\nINFERENCE: install-time RED was payload re-extraction under Defender (131k files, 460s first / 344s reinstall), NOT dependency reinstallation — installer.nsh has no package-install step. Optimising deps would target the wrong layer.\nOPEN QUESTIONS: the assisted-screen end-user flow (not silent /S, not hidden-WinRM) has not been run on a clean VM; Defender real-time scanning still walks the payload (INSTDIR exclusion present, DISABLE_REALTIME=False).\nAccept (KR2): clean Windows VM, assisted installer screens, 0 manual dependency steps, complete tree, both ports bind, gateway healthy — screen recording + exit code 0.",
       "comments": [
+        {
+          "text": "KR2 recording STAGED - V-batch 2026-09-03. All driver scripts on the guest (clawx-recorded-usecase-driver.js + 5 helpers + set-res), ffmpeg gdigrab supported, console session Active (autologon armed), moe.15 installer in Downloads, L2 snapshot clawx-l2-moe12-kr1pass-20260902 READY. ONE precondition: display is 1024x768 vs Recorder v2 >=1920x1080 - RDP in at full resolution (lane forwards RDP->:13389) before recording. The assisted recording itself is the owner leg. Evidence: RESULT-kr2-staging.md.",
+          "created": "2026-09-03T04:17:22.315803Z"
+        },
         {
           "text": "moe.14 re-verify complete (05:05–05:35 UTC). Both boot fixes PROVEN live: on-device provider synced at first boot (EPERM retry), and preferredChannel=on-device survived two restarts (clobber fix). Gateway ready 50 s. Fresh-install default channel is now on-device — the clobber had been masking the stated product design; if the demo should default online, that is now an explicit owner decision.\n\nOn-device TURNS do not complete on this e2 VM (4 vCPU, no GPU): (1) NEW OPEN defect ONDEVICE-RETRY-LOOP — the 3B model retried an identical failing principal.summarise_circular call for 13+ min, no per-turn cap; (2) CPU starvation — even a greeting prompt ended incomplete. On-device turn evidence stays anchored to the moe.11 laptop lane; this VM covers install/boot/cloud-turn evidence. Full detail: docs/evidence/KR2_FRESH_INSTALL_RUN_2026-09-02.md.\n\nRemaining for Ready: assisted-GUI recording (human-at-screen) and/or owner acceptance of the captured silent+timed evidence; on-device turn re-run on laptop if the box is read strictly.",
           "created": "2026-09-02T05:38:53.721827Z"
