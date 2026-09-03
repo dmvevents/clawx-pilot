@@ -346,6 +346,27 @@ CLWX-62 recorded leg, CLWX-58/70 recovery, packet refresh) / owner (one
 ~1-2h sitting) / Ministry (KR7/KR8, post-GA-acceptable). Problem history
 cross-linked everywhere (G16, CLAUDE.md packet items 6-7)._
 
+_**Finish-drive mega-tick (2026-09-03, owner-directed "get everything done and
+tested; minimal time").** Parallel fleet (7 lanes): **CLWX-79 FIXED**
+(statutory refusals instead of demo-default backfill, 16/16 tests,
+`2eec256f`) → Ready; **CLWX-62 FULL ACCEPTANCE** (recorded submit, responses
+count 7→8 strict, video+trace, `8430a777`) → Ready; **CLWX-82 DONE**
+(typecheck covers electron/**, 448→0, FOUR genuine runtime bugs caught,
+`4d183268`) → Ready; **UI trust batch CLWX-75/52/53 FIXED** (badge was a
+renderer-side HEAD probe lying about the gateway; chip anonymised via live
+channel state; plain-language errors with collapsed raw detail, `2ce37055`);
+evidence packet refreshed (`003999d2`); **KR2 RECORDING frame-verified
+VALID** agent-side (display-device 1920×1080, zero-manual-step assisted
+install, composer 10.2s; turn leg BLOCKED(vm-cpu) honestly — retry-breaker
+CLWX-38 proven live; owner acceptance options on CLWX-25, `edc554dc`).
+**Honest miss:** CLWX-58/70 recovery agent stalled ×6, zero edits landed —
+stays top P item. Version bumped **moe.16** (`f8707c86`) carrying
+46/59/72/78/79/82/UI/store-400; **build:win in flight**; then full gate
+(SEND+NSCC flags) → VM install re-verify (drag-PDF, degrade, K14) → GCS
+signed URL → Karunesh handoff (STAGED draft; owner send authorization on
+record). Loop tightened to 2h cron (cc2751ee). Board @ 90: Ready pile now
+26 cards awaiting owner close._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
