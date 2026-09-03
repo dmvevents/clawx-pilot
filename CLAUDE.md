@@ -4,7 +4,26 @@
 
 ---
 
-## Current resume packet - 2026-05-29
+## Current finish-sprint packet - 2026-09-03 (START HERE)
+
+This block supersedes the 2026-05-29 and 2026-06-09 packets below (kept for history). For any GA, sprint, board, or capability work, start with:
+
+1. `docs/GA_FINISH_SPRINT_2026-09-03.md` — epic purpose, story map, objectives × coverage × deficit matrix, sequenced finish backlog
+2. `docs/PERSONA_STATE_VECTOR_2026-09-03.md` — persona thought map + stakeholder feedback ledger (Raj, Karunesh, owner)
+3. `docs/GA_SPRINT_STATE_VECTOR.md` — per-card truth table + pre/in/post-flight checks
+4. `docs/plane-board/CLWX-board.md` — board mirror (68 cards; agent ceiling is **Ready**, a human closes Done)
+5. `.claude/skills/ga-sprint-driver/SKILL.md` — the tick loop (sense → analyze → act → sync → report)
+
+**Definition of done for the core use cases (the epic's objectives):**
+
+- **Email** — read/draft/reply/send ● proven live with the two-gate send (15/15 eval, 4-step gate proof); forward + attachment eval rows = CLWX-61; stale-read guard = CLWX-46.
+- **Forms** — fill + gate + submit + verify-landed ● proven and RECORDED on the Suspensions test.fac clone; Daily Report e2e = CLWX-62; document→form extraction chain = CLWX-63; drift detector = CLWX-64.
+- **Documents** — read ● (KR1 in-app PASS); live in-app write turn = CLWX-65; classify/route + minutes template = CLWX-66.
+- **Reminders** — cron → visible chat prompt e2e = CLWX-67.
+
+Review personas: `moe-product-manager` (acceptance/scope) and `principal-proxy` (trust lens) in `.claude/agents/`; the full persona map is in the persona doc.
+
+## Current resume packet - 2026-05-29 (HISTORICAL)
 
 This section supersedes older "as of 2026-05-25/26" status below. Keep this block short so Claude Code starts with current direction, then load details from skills/docs on demand.
 
@@ -123,24 +142,24 @@ These rules close systemic bug patterns we hit repeatedly during moe.4 → moe.1
 
 ---
 
-## Capabilities map (status as of moe.10)
+## Capabilities map (status as of moe.15, refreshed 2026-09-03)
 
 | # | Feature | Status |
 |---|---|---|
-| 1 | Email — read/draft/send via Outlook | **● Live**, e2e tested 2026-05-25 |
-| 2 | Daily MoE forms — Suspensions + Daily Report | **◐ Form-clone in progress for demo**; Power Automate path ready when IT issues flow URL |
-| 3 | Letters & reports — drafting | **◐ Built**, templates dir empty (next sprint) |
-| 4 | Leave & attendance support | **◐ Built** (read), **○ Planned** (registers) |
-| 5 | Routine-query response | **● Live in chat**, **● Live over email** |
-| 6 | Meeting minutes & memos | **● Live transcription**, **◐ Built drafting** |
-| 7 | Inventory & follow-up | **◐ Built** (taskflow + agentTurn cron) |
-| 8 | Document processing | **● Live** (read), **◐ Built** (classify/extract/route/draft) |
+| 1 | Email — read/draft/reply/send via Outlook | **● Live** — re-proven on `outlook.cloud.microsoft` (15/15 eval, 4-step two-gate send proof, 73/73 contract units); forward/attachment eval rows open (CLWX-61); stale-read guard pending (CLWX-46); Graph read-only transport landed behind flag (CLWX-39) |
+| 2 | Daily MoE forms — Suspensions + Daily Report | **● Live-proven + RECORDED** on the test.fac Suspensions clone (29/32 fill, gate refusal, ONE confirmed submit verified landed, video+trace); Daily Report e2e open (CLWX-62); extraction chain (CLWX-63); production destination Ministry-gated (CLWX-7) |
+| 3 | Letters & reports — drafting | **◐ Built** — letter/memo/daily-report templates authored; runtime write proven (Windows `OFFICE_WRITE_OK`, Mac fn 8/8); live in-app write turn open (CLWX-65) |
+| 4 | Leave & attendance support | **◐ Built** (read), **○ Planned** (registers — post-GA, CLWX-68) |
+| 5 | Routine-query response | **● Live in chat** (NSCC eval 18/20 on Raj's own questions), **● Live over email** |
+| 6 | Meeting minutes & memos | **● Live transcription (Mac, real whisper ×2)**; Windows ASR = gap C (V-batch); drafting untemplated (CLWX-66) |
+| 7 | Inventory & follow-up | **◐ Built** (taskflow + agentTurn cron); reminder e2e open (CLWX-67); Windows cron live-fire = gap D |
+| 8 | Document processing | **● Live** (read — KR1 in-app PASS on moe.12 incl. OneDrive-KFM resolve), **◐ Built** (classify/extract/route/draft — CLWX-63/65/66) |
 
-Full detail: [`docs/PRODUCT_PRINCIPAL_ASSISTANT.md`](./docs/PRODUCT_PRINCIPAL_ASSISTANT.md).
+Full detail: [`docs/PRODUCT_PRINCIPAL_ASSISTANT.md`](./docs/PRODUCT_PRINCIPAL_ASSISTANT.md); current coverage matrix: `docs/GA_FINISH_SPRINT_2026-09-03.md` §3.
 
 ---
 
-## What works right now (2026-05-25, moe.10)
+## What works right now (HISTORICAL — 2026-05-25, moe.10; current truth is `docs/GA_FINISH_SPRINT_2026-09-03.md` §3)
 
 - Mac install: `/Applications/Ministry of Education.app` v0.4.3-moe.10, ad-hoc signed
 - Gateway WS `127.0.0.1:18789`, host-API `127.0.0.1:13210`, both green
@@ -149,7 +168,7 @@ Full detail: [`docs/PRODUCT_PRINCIPAL_ASSISTANT.md`](./docs/PRODUCT_PRINCIPAL_AS
 - `gemini-2.5-pro` configured as default agent model in `~/.openclaw/openclaw.json` (was hitting 400s on Flash)
 - `playwright-core` shipped as runtime dep (the moe.9 → moe.10 fix)
 
-## What doesn't work yet
+## What doesn't work yet (HISTORICAL — both demo blockers below were resolved; see the finish-sprint packet at the top)
 
 - **Demo blocker:** sample Suspensions form on test.fac doesn't exist yet. **Building today.**
 - **Demo blocker:** form-fill driver and e2e test for form submission. **Building today.**
@@ -290,4 +309,4 @@ E2E tests require a built renderer; both `test:e2e` scripts run `build:vite` fir
 
 ---
 
-*Last updated: 2026-05-25 by Claude Code session fca48444. Update this file when capabilities change, when a new hard rule is learned, or when the architecture shifts.*
+*Last updated: 2026-09-03 (finish-sprint reconciliation — capabilities map refreshed to moe.15, finish-sprint packet added, historical sections marked). Update this file when capabilities change, when a new hard rule is learned, or when the architecture shifts.*
