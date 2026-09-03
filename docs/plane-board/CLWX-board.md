@@ -196,6 +196,71 @@ Finding (frame-by-frame breakdown, 2026-09-03): skills/laptop/evidence/2026-09-0
 - composer right edge clipped (window larger than the 640x480 capture).
 The earlier "verified good" came from driver JSON (settled=true), not the pixels. Coverage doc REC claim for Windows is downgraded. Superseded by Recorder v2 + the demo-reel card.
 
+### CLWX-58 — [bug/outlook] Stale open Outlook compose blocks all send/reply/forward until manually cleared
+
+- **State:** Backlog  |  **Priority:** medium
+
+Area: outlook   Severity: medium (priority medium)
+
+Steps to reproduce
+1. leave a compose/draft open in the Outlook tab (any prior turn)
+2. ask the agent to draft/send/reply/forward a new email
+3. observe
+
+Expected
+agent detects the stale draft and recovers (offer to reuse/close it), or the action proceeds
+
+Actual
+draftEmail/sendEmail/reply/forward all refuse with 'Outlook already has an open draft'; only scripts/outlook-cleanup-compose.ts clears it; live smoke (v2-chatbot-e2e Step 3) and send test (v2-send-test Step 2) both blocked until cleanup ran
+
+Evidence
+task outputs baqcaxxy9 (draft failed) + bgshhf5vh (send aborted) + outlook-cleanup-compose recovered; 2026-09-03 live Mac run
+
+Environment
+moe.15 / Mac dev / gemini+bedrock / CDP 18792 test.fac tab
+
+Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
+
+**Comments (1):**
+
+- Recovery verified. scripts/outlook-cleanup-compose.ts discards a stale open compose and returns to the inbox; this session ran it immediately before the CLWX-59 verification and the subsequent draft+two-gate flow passed. The block itself is intended behaviour (draftEmail refuses to stack drafts to avoid duplicate saved drafts). Reframe as UX-hardening: auto-recover a stale draft before compose rather than returning a hard failure. Not a demo blocker.
+
+### CLWX-60 — [bug/outlook] Compose pane never resolves: waitForComposePane latches hidden Fluent SplitButton wrapper
+
+- **State:** Backlog  |  **Priority:** high
+
+Area: outlook   Severity: high (priority high)
+
+Steps to reproduce
+1. Open the live Outlook tab over CDP (test.fac sandbox).
+2. Trigger a compose via draftEmail (e.g. scripts/v2-send-test.ts Step 2).
+3. Observe waitForComposePane after clickNewMail.
+
+Expected
+Compose pane detected; draft proceeds; the two-gate flow can complete a real send.
+
+Actual
+page.waitForSelector times out after 15s at outlook-actions.ts:2273 (waitForComposePane -> draftEmail:455). The comma-joined selector list resolved to 2 elements and proceeded with the first: a <div data-testid="ComposeSendButton" class="fui-SplitButton ..."> wrapper that is never visible, so the wait never unblocks. This broke all live draft/reply/forward/send.
+
+Root cause
+Outlook rotated the compose primary action to a Fluent UI SplitButton. Its OUTER wrapper div carries data-testid="ComposeSendButton" but is not visible; only the inner <button> is. The selector [data-testid*="Send" i] matched the wrapper first in DOM order. Evaluated by the dom-selector-regression-tester sub-agent: the data-testid + aria-substring branches are vendor-rotated; the role+aria branches are vendor-stable.
+
+Resolution (APPLIED + VERIFIED this session)
+electron/services/outlook-browser-v2/outlook-actions.ts waitForComposePane rewritten: every branch is guarded with :visible so waitForSelector can only latch a visible match; the vendor-stable role+aria selectors are tried first; the rotated title/data-testid selectors survive as last-resort fallbacks, and the data-testid branch targets the inner button, not the wrapper. Satisfies the DOM-selector hard rule (3+ fallback strategies for rotated UIs). pnpm typecheck: 0 errors. Live re-run of scripts/v2-send-test.ts: PASS end-to-end — draft ok, subject-mismatch REFUSED (gate 1), matching subject + confirm:true SENT via Outlook Web (gate 2). Both hard-confirm gates intact.
+
+Evidence
+Live 2-gate re-run PASS (subject "MoE smoke 01:51:08"); typecheck 0 errors.
+
+Environment
+moe.15 / macOS dev / Bedrock sonnet-4-5 tool-pick / CDP Chrome :18792 / test.fac sandbox
+
+Regression class
+dom-selector-rotation — caught by dom-selector-regression-tester. Sibling at-risk selectors flagged in the same file (sign-in data-testid 1611-1612; attachment-chip user-input selector 1040; nav substring 323/1194) — follow-up hardening candidates.
+
+**Comments (1):**
+
+- Duplicate of CLWX-59. Filed in error while paging the board through the wrong project (PLANE_PROJECT token default != the CLWX project 81a2ea23). The root cause, fix, and live verification are tracked on CLWX-59. This card is redundant — a human can cancel it.
+
 ## Unstarted
 
 ### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy
@@ -554,6 +619,35 @@ The stakeholder sweep surfaced 7 dropped balls (unanswered asks, Raj's own remin
 
 - Item 01 of the closeout pack: SENT (owner-authorized; the delta variant 01b — the 09-01 reply had already carried the redirect URIs, so only the enumerated permissions list + URI-now ask went out; bridge 200, ledgered). Remaining drafts 02–07 still HOLD awaiting per-item GO.
 - All 7 drafts staged (draft-and-hold) at ~/openclaw-agent/outbound-drafts/closeout-pack-2026-09-02/. Each file carries a HOLD header; NOTHING sends without per-item owner GO, then the ledger flow applies. Order: 01 is THE OPENER (the 07-20 permissions + redirect deliverable — dev loopback registrable immediately, production URI tied to the hostname decision); 02 HuggingFace closure; 03 Turnitin/Discord (owner chooses deliver-vs-close variant); 04 Plaud status honest-close; 05 daily-form prompt answer; 06 NSCC in-progress answer (pairs with CLWX-42); 07 the June-23 demo-verdict ask (closes the G5 hole). Card scope (draft the pack) is met → Ready; the SENDING is the owner GO in the finish vector bucket B.
+
+### CLWX-59 — [bug/outlook] Live Outlook send broken: waitForComposePane times out on rotated Send button (2 matches, first hidden)
+
+- **State:** Ready  |  **Priority:** high
+
+Area: outlook   Severity: high (priority high)
+
+Steps to reproduce
+1. clear any stale draft (outlook-cleanup-compose)
+2. run scripts/v2-send-test.ts against live test.fac tab
+3. Step 2 draft -> waitForComposePane
+
+Expected
+compose pane detected; draft proceeds to the 2-gate send
+
+Actual
+page.waitForSelector Timeout 15000ms at outlook-actions.ts:2273 waitForComposePane; Send locator resolves to 2 elements, proceeds with first <div data-testid=ComposeSendButton class=fui-SplitButton...> which is not visible
+
+Evidence
+task output boppk9ql9 2026-09-03 live Mac run; unit gate tests (outlook-actions-safety 73/73) still pass — this is the DOM layer, not the gate
+
+Environment
+moe.15 / Mac dev / CDP 18792 test.fac / Outlook compose rotated to Fluent SplitButton
+
+Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
+
+**Comments (1):**
+
+- EVALUATED + FIXED + VERIFIED (2026-09-03 session). Root cause (dom-selector-regression-tester sub-agent): Outlook rotated the compose primary action to a Fluent UI SplitButton whose OUTER wrapper div carries data-testid="ComposeSendButton" but is not visible; only the inner button is. The old comma-joined waitForSelector matched the wrapper first in DOM order and waited forever for it to become visible (outlook-actions.ts:2273). Fix applied: waitForComposePane rewritten so every branch is guarded with :visible (waitForSelector can only latch a visible match); vendor-stable role+aria selectors first; rotated title/data-testid branches survive only as fallbacks, with the data-testid branch targeting the inner button not the wrapper. Meets the DOM-selector hard rule (3+ fallbacks for rotated UIs). Verification: pnpm typecheck 0 errors. Live re-run of scripts/v2-send-test.ts PASS end-to-end against the test.fac sandbox — draft ok, subject-mismatch REFUSED (gate 1), matching subject + confirm:true delivered via Outlook Web (gate 2). Both hard-confirm gates intact. Ready for a human to close. Sibling rotated selectors flagged for follow-up: sign-in data-testid (1611-1612), attachment-chip user-input selector (1040), nav substrings (323/1194).
 
 ## Started
 

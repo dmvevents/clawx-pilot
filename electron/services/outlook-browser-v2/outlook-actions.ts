@@ -2270,16 +2270,27 @@ export class OutlookActions {
   private async waitForComposePane(page: Page, timeoutMs = 15_000): Promise<void> {
     // Do not unblock on the open-message reading pane. It also exposes
     // "Message body"; a compose surface must have send/compose evidence.
+    //
+    // Outlook rotated the compose Send control to a Fluent UI SplitButton
+    // whose OUTER `<div data-testid="ComposeSendButton">` is not visible —
+    // only the inner `<button>` is. A plain comma-joined waitForSelector
+    // resolves the wrapper first (DOM order) and waits forever for it to
+    // become visible (CLWX-59). Every branch below is guarded with
+    // `:visible` so waitForSelector can only latch a visible match, the
+    // vendor-stable role+aria selectors are tried first, and the rotated
+    // title/data-testid selectors survive only as last-resort fallbacks
+    // (the data-testid branch targets the inner button, not the wrapper).
     await page.waitForSelector(
       [
-        'button[aria-label="Send"]',
-        '[role="button"][aria-label="Send"]',
-        '[title="Send"]',
-        '[data-testid*="Send" i]',
-        '[aria-label*="Compose" i]',
-        'div[role="dialog"] [aria-label="Message body"]',
+        'button[aria-label="Send"]:visible',
+        '[role="button"][aria-label="Send"]:visible',
+        'div[role="dialog"] [aria-label="Message body"]:visible',
+        '[aria-label*="Compose" i] [aria-label="Message body" i]:visible',
+        '[title="Send"]:visible',
+        '[data-testid*="Send" i] button:visible',
+        '[data-testid*="Send" i]:visible',
       ].join(', '),
-      { timeout: timeoutMs },
+      { timeout: timeoutMs, state: 'visible' },
     );
   }
 

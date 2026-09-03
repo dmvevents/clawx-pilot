@@ -44,6 +44,51 @@
   ],
   "issues": [
     {
+      "id": "99271ad8-b00d-400e-8ddd-8bf9b17fee6b",
+      "sequence_id": 60,
+      "name": "[bug/outlook] Compose pane never resolves: waitForComposePane latches hidden Fluent SplitButton wrapper",
+      "priority": "high",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Area: outlook   Severity: high (priority high)\n\nSteps to reproduce\n1. Open the live Outlook tab over CDP (test.fac sandbox).\n2. Trigger a compose via draftEmail (e.g. scripts/v2-send-test.ts Step 2).\n3. Observe waitForComposePane after clickNewMail.\n\nExpected\nCompose pane detected; draft proceeds; the two-gate flow can complete a real send.\n\nActual\npage.waitForSelector times out after 15s at outlook-actions.ts:2273 (waitForComposePane -> draftEmail:455). The comma-joined selector list resolved to 2 elements and proceeded with the first: a <div data-testid=\"ComposeSendButton\" class=\"fui-SplitButton ...\"> wrapper that is never visible, so the wait never unblocks. This broke all live draft/reply/forward/send.\n\nRoot cause\nOutlook rotated the compose primary action to a Fluent UI SplitButton. Its OUTER wrapper div carries data-testid=\"ComposeSendButton\" but is not visible; only the inner <button> is. The selector [data-testid*=\"Send\" i] matched the wrapper first in DOM order. Evaluated by the dom-selector-regression-tester sub-agent: the data-testid + aria-substring branches are vendor-rotated; the role+aria branches are vendor-stable.\n\nResolution (APPLIED + VERIFIED this session)\nelectron/services/outlook-browser-v2/outlook-actions.ts waitForComposePane rewritten: every branch is guarded with :visible so waitForSelector can only latch a visible match; the vendor-stable role+aria selectors are tried first; the rotated title/data-testid selectors survive as last-resort fallbacks, and the data-testid branch targets the inner button, not the wrapper. Satisfies the DOM-selector hard rule (3+ fallback strategies for rotated UIs). pnpm typecheck: 0 errors. Live re-run of scripts/v2-send-test.ts: PASS end-to-end — draft ok, subject-mismatch REFUSED (gate 1), matching subject + confirm:true SENT via Outlook Web (gate 2). Both hard-confirm gates intact.\n\nEvidence\nLive 2-gate re-run PASS (subject \"MoE smoke 01:51:08\"); typecheck 0 errors.\n\nEnvironment\nmoe.15 / macOS dev / Bedrock sonnet-4-5 tool-pick / CDP Chrome :18792 / test.fac sandbox\n\nRegression class\ndom-selector-rotation — caught by dom-selector-regression-tester. Sibling at-risk selectors flagged in the same file (sign-in data-testid 1611-1612; attachment-chip user-input selector 1040; nav substring 323/1194) — follow-up hardening candidates.",
+      "comments": [
+        {
+          "text": "Duplicate of CLWX-59. Filed in error while paging the board through the wrong project (PLANE_PROJECT token default != the CLWX project 81a2ea23). The root cause, fix, and live verification are tracked on CLWX-59. This card is redundant — a human can cancel it.",
+          "created": "2026-09-03T01:55:30.578143Z"
+        }
+      ]
+    },
+    {
+      "id": "fafa4705-6c34-4ca0-9977-29956f4cfec2",
+      "sequence_id": 59,
+      "name": "[bug/outlook] Live Outlook send broken: waitForComposePane times out on rotated Send button (2 matches, first hidden)",
+      "priority": "high",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
+      "description": "Area: outlook   Severity: high (priority high)\n\nSteps to reproduce\n1. clear any stale draft (outlook-cleanup-compose)\n2. run scripts/v2-send-test.ts against live test.fac tab\n3. Step 2 draft -> waitForComposePane\n\nExpected\ncompose pane detected; draft proceeds to the 2-gate send\n\nActual\npage.waitForSelector Timeout 15000ms at outlook-actions.ts:2273 waitForComposePane; Send locator resolves to 2 elements, proceeds with first <div data-testid=ComposeSendButton class=fui-SplitButton...> which is not visible\n\nEvidence\ntask output boppk9ql9 2026-09-03 live Mac run; unit gate tests (outlook-actions-safety 73/73) still pass — this is the DOM layer, not the gate\n\nEnvironment\nmoe.15 / Mac dev / CDP 18792 test.fac / Outlook compose rotated to Fluent SplitButton\n\nRegression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)",
+      "comments": [
+        {
+          "text": "EVALUATED + FIXED + VERIFIED (2026-09-03 session).\nRoot cause (dom-selector-regression-tester sub-agent): Outlook rotated the compose primary action to a Fluent UI SplitButton whose OUTER wrapper div carries data-testid=\"ComposeSendButton\" but is not visible; only the inner button is. The old comma-joined waitForSelector matched the wrapper first in DOM order and waited forever for it to become visible (outlook-actions.ts:2273).\nFix applied: waitForComposePane rewritten so every branch is guarded with :visible (waitForSelector can only latch a visible match); vendor-stable role+aria selectors first; rotated title/data-testid branches survive only as fallbacks, with the data-testid branch targeting the inner button not the wrapper. Meets the DOM-selector hard rule (3+ fallbacks for rotated UIs).\nVerification: pnpm typecheck 0 errors. Live re-run of scripts/v2-send-test.ts PASS end-to-end against the test.fac sandbox — draft ok, subject-mismatch REFUSED (gate 1), matching subject + confirm:true delivered via Outlook Web (gate 2). Both hard-confirm gates intact.\nReady for a human to close. Sibling rotated selectors flagged for follow-up: sign-in data-testid (1611-1612), attachment-chip user-input selector (1040), nav substrings (323/1194).",
+          "created": "2026-09-03T01:55:30.539474Z"
+        }
+      ]
+    },
+    {
+      "id": "0f93f312-91eb-4896-93c9-8ceba589964b",
+      "sequence_id": 58,
+      "name": "[bug/outlook] Stale open Outlook compose blocks all send/reply/forward until manually cleared",
+      "priority": "medium",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Area: outlook   Severity: medium (priority medium)\n\nSteps to reproduce\n1. leave a compose/draft open in the Outlook tab (any prior turn)\n2. ask the agent to draft/send/reply/forward a new email\n3. observe\n\nExpected\nagent detects the stale draft and recovers (offer to reuse/close it), or the action proceeds\n\nActual\ndraftEmail/sendEmail/reply/forward all refuse with 'Outlook already has an open draft'; only scripts/outlook-cleanup-compose.ts clears it; live smoke (v2-chatbot-e2e Step 3) and send test (v2-send-test Step 2) both blocked until cleanup ran\n\nEvidence\ntask outputs baqcaxxy9 (draft failed) + bgshhf5vh (send aborted) + outlook-cleanup-compose recovered; 2026-09-03 live Mac run\n\nEnvironment\nmoe.15 / Mac dev / gemini+bedrock / CDP 18792 test.fac tab\n\nRegression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)",
+      "comments": [
+        {
+          "text": "Recovery verified. scripts/outlook-cleanup-compose.ts discards a stale open compose and returns to the inbox; this session ran it immediately before the CLWX-59 verification and the subsequent draft+two-gate flow passed. The block itself is intended behaviour (draftEmail refuses to stack drafts to avoid duplicate saved drafts). Reframe as UX-hardening: auto-recover a stale draft before compose rather than returning a hard failure. Not a demo blocker.",
+          "created": "2026-09-03T01:55:30.611588Z"
+        }
+      ]
+    },
+    {
       "id": "97dd3ce1-0a2a-4f8e-9942-3f20698b7126",
       "sequence_id": 57,
       "name": "INVALID: 2026-09-03 Windows use-case video is not valid proof (wrong window, clipped, no completion)",
