@@ -143,10 +143,15 @@
       "sequence_id": 62,
       "name": "[forms] Daily Report form e2e: fill + gate + recorded submit on the test.fac clone",
       "priority": "high",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "Why\nThe Daily Report IS the 3:45pm statutory form, yet only Suspensions has a live-proven e2e. The 57-field schema (daily-report-schema.vlm.json), driver (daily-report-actions.ts) and clone script all exist - the chain has simply never been run (audit: FORMS, 2026-09-03).\n\nAcceptance (QA bar)\nMirror the Suspensions proof: forms-fill-daily-report.ts fills >=90% of 57 fields with 0 errors; submit refused without confirm:true; ONE confirmed submit verified landed (responses count increment + success marker); recorded video+trace like forms-submit-recorded.ts.\n\nStory\nS2 Forms - highest-leverage new card. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
-      "comments": []
+      "comments": [
+        {
+          "text": "LIVE E2E PROVEN (sprint-driver tick 2026-09-03). New script scripts/forms-fill-daily-report.ts (mirrors the Suspensions pattern) ran against the test.fac clone over the user-Chrome CDP session:\n1. open: status=opened, title \"Primary School Daily Report: Term 3 2025/26\".\n2. fill: 55/57 filled, 0 errors (96%, above the 90% acceptance floor; max-visibility payload - school open, both NSDSL meals, suspension, PTSC, last-day absentee summary; internally consistent counts; reason_no_school hidden by design).\n3. gate: submit WITHOUT confirm REFUSED (\"confirm:true required... after the principal has reviewed\").\n4. DEMO=1 confirmed submit: status=submitted, \"Form submitted via Microsoft Forms\" - SEND PASS.\ntypecheck 0. QA bar met for fill+gate+submit; PM matrix row \"Forms: Daily Report e2e\" moves from untested to live-proven.\nResumable trail (last acceptance leg before Ready): the RECORDED run - adapt forms-submit-recorded.ts to the Daily Report URL (hard-pinned), assert responses count increments and capture video+trace. Then move to Ready.",
+          "created": "2026-09-03T03:05:14.934234Z"
+        }
+      ]
     },
     {
       "id": "a9524dc6-f431-4448-bf4e-99ef5c174623",

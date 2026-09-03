@@ -679,19 +679,6 @@ Acceptance (QA bar)
 Story
 S1 Email. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
 
-### CLWX-62 — [forms] Daily Report form e2e: fill + gate + recorded submit on the test.fac clone
-
-- **State:** Todo  |  **Priority:** high
-
-Why
-The Daily Report IS the 3:45pm statutory form, yet only Suspensions has a live-proven e2e. The 57-field schema (daily-report-schema.vlm.json), driver (daily-report-actions.ts) and clone script all exist - the chain has simply never been run (audit: FORMS, 2026-09-03).
-
-Acceptance (QA bar)
-Mirror the Suspensions proof: forms-fill-daily-report.ts fills >=90% of 57 fields with 0 errors; submit refused without confirm:true; ONE confirmed submit verified landed (responses count increment + success marker); recorded video+trace like forms-submit-recorded.ts.
-
-Story
-S2 Forms - highest-leverage new card. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
-
 ### CLWX-63 — [forms] Document-to-form extraction chain e2e: suspension letter -> extracted fields -> prefilled form
 
 - **State:** Todo  |  **Priority:** high
@@ -1003,6 +990,23 @@ Scope: define a user-facing budget (proposal: p50 ≤15s / p90 ≤30s wall-clock
 **Comments (1):**
 
 - First-cut measurement DONE (sprint-driver tick, evidence: docs/evidence/LATENCY_BASELINE_2026-09-02.md). All 15 driver JSONs on the persona VM mined: successful tool-using cloud turns 79.6s / 103.4s / 182.2s; no-tool answer 107.9s; median ≈103s — ~7× over the proposed p50 ≤15s budget. Raj's complaint is quantified and current. Caveats: e2 VM ≠ persona laptop; ~9s driver settle tail; small sample. Movers already on the agenda: prompt caching (ask #7), trim unhold (owner), routing. Remaining for Ready: laptop-lane repeat of the 3 demo prompts + owner budget sign-off + GA-packet row.
+
+### CLWX-62 — [forms] Daily Report form e2e: fill + gate + recorded submit on the test.fac clone
+
+- **State:** In Progress  |  **Priority:** high
+
+Why
+The Daily Report IS the 3:45pm statutory form, yet only Suspensions has a live-proven e2e. The 57-field schema (daily-report-schema.vlm.json), driver (daily-report-actions.ts) and clone script all exist - the chain has simply never been run (audit: FORMS, 2026-09-03).
+
+Acceptance (QA bar)
+Mirror the Suspensions proof: forms-fill-daily-report.ts fills >=90% of 57 fields with 0 errors; submit refused without confirm:true; ONE confirmed submit verified landed (responses count increment + success marker); recorded video+trace like forms-submit-recorded.ts.
+
+Story
+S2 Forms - highest-leverage new card. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+**Comments (1):**
+
+- LIVE E2E PROVEN (sprint-driver tick 2026-09-03). New script scripts/forms-fill-daily-report.ts (mirrors the Suspensions pattern) ran against the test.fac clone over the user-Chrome CDP session: 1. open: status=opened, title "Primary School Daily Report: Term 3 2025/26". 2. fill: 55/57 filled, 0 errors (96%, above the 90% acceptance floor; max-visibility payload - school open, both NSDSL meals, suspension, PTSC, last-day absentee summary; internally consistent counts; reason_no_school hidden by design). 3. gate: submit WITHOUT confirm REFUSED ("confirm:true required... after the principal has reviewed"). 4. DEMO=1 confirmed submit: status=submitted, "Form submitted via Microsoft Forms" - SEND PASS. typecheck 0. QA bar met for fill+gate+submit; PM matrix row "Forms: Daily Report e2e" moves from untested to live-proven. Resumable trail (last acceptance leg before Ready): the RECORDED run - adapt forms-submit-recorded.ts to the Daily Report URL (hard-pinned), assert responses count increments and capture video+trace. Then move to Ready.
 
 ## Cancelled
 
