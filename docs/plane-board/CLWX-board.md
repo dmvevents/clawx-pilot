@@ -1186,6 +1186,26 @@ Owner-only boxes (CLWX-18/19 security sitting, KR2 assisted recording, external 
 
 - ACCEPTANCE MET (2026-09-03) - first full run and hardening loop closed. Run 1 was RED (7/2/2) and that was the gate WORKING: it caught 4 pre-existing lint errors (fixed: literal NBSP in a regex, useless escape, useless assignment, unused var) and two eval-harness brittleness defects (W3.1 fixture-dependence on inbox order after the drafts sweep; W4.1 vulnerable to strays from killed runs - hygiene now also runs immediately before W4.1, and W3.1 picks the longest-snippet row of the top 5). Gate improved same tick: full per-check logs to /tmp/ga-gate-logs/ so a RED run never needs re-running to diagnose. Run 2 GREEN: 9 pass / 0 fail / 2 opt-in skips (send-proof and NSCC are explicit flags). Report committed: docs/evidence/GA_GATE_2026-09-03.md. Eval now completes in 69s on the live lane. Wiring: preflight now carries lint:check (T0 parity; bundle-verify already in the package chain); GA_READINESS section 4 names the gate as the mechanism + the GREEN-within-24h tag rule; persona doc carries the "acceptance must name its gate check" rule. QA bar + release-manager bar met; PM acceptance: the owner directive "a test that checks every single thing, run as the acceptance criteria" is shipped and demonstrated red-to-green. Moving to Ready.
 
+### CLWX-91 — [test-infra] chat-task-visualizer e2e: 3 mocked-IPC specs fail at baseline (main-layout never renders)
+
+- **State:** Todo  |  **Priority:** medium
+
+Area: e2e / renderer harness   Severity: medium (e2e coverage hole; production checklist row 6.4 assumes green)
+
+Finding (2026-09-03)
+Three chat-task-visualizer specs fail with getByTestId("main-layout") never visible under installIpcMocks: "renders internal yield status...", "preserves long execution history...", "surfaces terminal model errors...". The sibling chat-model-picker spec boots the app fine in the same run.
+
+Bisect evidence
+Reproduced IDENTICALLY at pre-UI-batch commit edc554dc in a clean worktree with a valid vite build - NOT a moe.16 regression (the CLWX-75/52/53 renderer changes are exonerated). Likely broken earlier (candidate era: the chat artifact-preview overhaul / localized-error upstream merges that touched Chat/index rendering).
+
+Acceptance
+1. Root-cause why main-layout does not render under the mocked-IPC boot path (error boundary? missing mocked channel at boot?).
+2. Three specs green.
+3. test:e2e added to the ga:gate as an opt-in tier once green (currently absent - which is why this debt was invisible).
+
+Source
+ga:gate follow-through, e2e run /tmp/e2e-ui.log + worktree baseline; error contexts in test-results/.
+
 ## Started
 
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA
