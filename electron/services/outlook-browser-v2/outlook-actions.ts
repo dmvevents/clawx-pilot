@@ -704,8 +704,30 @@ export class OutlookActions {
     const detail = await page.evaluate(`
       (() => {
         const out = { subject: '', sender: '', receivedAt: '', body: '', recipients: { to: [], cc: [] }, attachments: [] };
-        const subjEl = document.querySelector('[role="heading"][aria-level="2"], [class*="subject"][role="heading"], h2, h1');
-        if (subjEl) out.subject = (subjEl.textContent || '').trim().slice(0, 300);
+        // TB-2 (CLWX-46): scope the subject to reading-pane roots and exclude
+        // app-chrome headings — the old document-wide [aria-level="2"] query
+        // latched span.screenReaderOnly "Navigation pane" (probed live
+        // 2026-09-03; the real subject is a span[role="heading"][aria-level="3"]
+        // inside div[role="main"]). Fallback chain: level-2 -> level-3 -> any
+        // heading -> subject class -> h1/h2, visible + non-chrome only.
+        const chromeHeading = /^(navigation pane|message list|reading pane|search)$/i;
+        const headingVisible = function(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+        const paneRoots = Array.from(document.querySelectorAll('[role="region"][aria-label*="reading" i], [aria-label*="reading pane" i], div[role="main"]'));
+        const scopes = paneRoots.length > 0 ? paneRoots : [document];
+        for (const root of scopes) {
+          const candidates = [].concat(
+            Array.from(root.querySelectorAll('[role="heading"][aria-level="2"]')),
+            Array.from(root.querySelectorAll('[role="heading"][aria-level="3"]')),
+            Array.from(root.querySelectorAll('[role="heading"]')),
+            Array.from(root.querySelectorAll('[class*="subject" i]')),
+            Array.from(root.querySelectorAll('h1, h2')),
+          );
+          for (const el of candidates) {
+            const t = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+            if (t && !chromeHeading.test(t) && headingVisible(el)) { out.subject = t.slice(0, 300); break; }
+          }
+          if (out.subject) break;
+        }
         const senderEl = document.querySelector('[role="button"][aria-label*="@"], [aria-label*="From "]');
         if (senderEl) {
           const al = senderEl.getAttribute('aria-label') || senderEl.textContent || '';
@@ -1514,7 +1536,7 @@ export class OutlookActions {
           );
           return false;
         }
-        return true;
+        return await this.waitForReadingPaneSettle(page, id);
       }
 
       const visibleFingerprint = await this.visibleInboxFingerprint(page);
@@ -1528,6 +1550,101 @@ export class OutlookActions {
       if (!moved) return false;
       await this.driver.sleep(250);
     }
+    return false;
+  }
+
+  /**
+   * TB-1 (CLWX-46): after a row click, Outlook can keep the PREVIOUS message
+   * in the reading pane long enough for extraction to scrape the wrong email.
+   * Bounded-poll until the pane's subject (and sender, when both sides are
+   * extractable) matches the clicked row's id fingerprint
+   * (sender|subject|received). Returns false when the pane provably stayed on
+   * a different message — callers surface an honest failure instead of wrong
+   * content. Returns true when it matched, or when no pane subject was
+   * extractable at all during the window (no discrimination signal; the empty
+   * subject then flows through extraction honestly). Never retries through
+   * any confirm gate.
+   */
+  private async waitForReadingPaneSettle(page: Page, id: string, timeoutMs = 8_000): Promise<boolean> {
+    const parts = id.split('|');
+    const wantSender = (parts[0] || '').trim();
+    const wantSubject = (parts[1] || '').trim();
+    if (!wantSubject && !wantSender) return true;
+
+    const normalize = (s: string) =>
+      s.toLowerCase().replace(/^(?:re|fw|fwd)\s*:\s*/i, '').replace(/\s+/g, ' ').trim();
+    const overlaps = (a: string, b: string) => {
+      const na = normalize(a);
+      const nb = normalize(b);
+      if (!na || !nb) return false;
+      const short = na.length <= nb.length ? na : nb;
+      const long = na.length <= nb.length ? nb : na;
+      if (short.length < 4) return long.startsWith(short);
+      return long.includes(short);
+    };
+
+    const deadline = Date.now() + timeoutMs;
+    let sawPaneSubject = false;
+    while (Date.now() < deadline) {
+      const pane = await page.evaluate(`
+        (() => {
+          const isVisible = function(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+          const chromeHeading = /^(navigation pane|message list|reading pane|search)$/i;
+          const roots = Array.from(document.querySelectorAll([
+            '[role="region"][aria-label*="reading" i]',
+            '[aria-label*="reading pane" i]',
+            'div[role="main"]',
+          ].join(','))).filter(isVisible);
+          const scopes = roots.length > 0 ? roots : [document];
+          const out = { subject: '', sender: '' };
+          for (const root of scopes) {
+            if (!out.subject) {
+              // TB-2 fallback chain: role+aria (stable; live tenant uses
+              // aria-level 3 for the pane subject, probed 2026-09-03) ->
+              // subject class (rotated) -> generic heading; app-chrome
+              // headings excluded. First visible non-chrome heading in the
+              // pane is the conversation subject.
+              const candidates = [].concat(
+                Array.from(root.querySelectorAll('[role="heading"][aria-level="2"]')),
+                Array.from(root.querySelectorAll('[role="heading"][aria-level="3"]')),
+                Array.from(root.querySelectorAll('[role="heading"]')),
+                Array.from(root.querySelectorAll('[class*="subject" i]')),
+                Array.from(root.querySelectorAll('h1, h2')),
+              );
+              for (const el of candidates) {
+                const t = (el.textContent || '').replace(/\\s+/g, ' ').trim();
+                if (t && !chromeHeading.test(t) && isVisible(el)) { out.subject = t.slice(0, 300); break; }
+              }
+            }
+            if (!out.sender) {
+              const senderEl = root.querySelector('[role="button"][aria-label*="@"], [aria-label^="From" i]');
+              if (senderEl) {
+                const al = senderEl.getAttribute('aria-label') || senderEl.textContent || '';
+                out.sender = al.replace(/^From\\s*/i, '').trim().slice(0, 200);
+              }
+            }
+            if (out.subject && out.sender) break;
+          }
+          return out;
+        })()
+      `) as { subject: string; sender: string };
+      if (pane.subject) {
+        sawPaneSubject = true;
+        const subjectOk = wantSubject ? overlaps(pane.subject, wantSubject) : true;
+        const senderOk = wantSender && pane.sender ? overlaps(pane.sender, wantSender) : true;
+        if (subjectOk && senderOk) return true;
+      }
+      await this.driver.sleep(300);
+    }
+    if (!sawPaneSubject) {
+      logger.warn?.(
+        `[outlook-v2] reading-pane settle: no pane subject extractable within ${timeoutMs}ms — proceeding without discrimination signal`,
+      );
+      return true;
+    }
+    logger.warn?.(
+      '[outlook-v2] reading-pane settle FAILED: pane stayed on a different message (stale-read guard, CLWX-46)',
+    );
     return false;
   }
 

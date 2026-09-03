@@ -99,7 +99,7 @@ The principal reviews and edits before anything leaves the machine. No content i
 
 **Verified today:** the chat composer can read `~/Downloads/improving-gemini-for-education_v7.pdf` via the bundled `pdf` skill (subject to the path-allowlist gate). Excel + email compound queries through the `xlsx` skill route to Gemini 2.5 Pro (the default).
 
-**Status (corrected 2026-09-03):** the `templates/` directory now contains `letter.md`, `memo.md`, and `daily_report_brief.md`. The remaining gap is a `meeting_minutes.md` template plus a live in-app drafting proof — tracked as CLWX-66 and CLWX-65.
+**Status (corrected 2026-09-03):** the `templates/` directory now contains `letter.md`, `memo.md`, `daily_report_brief.md`, and `meeting_minutes.md`. The remaining gap is a live in-app drafting proof plus the classification e2e — tracked as CLWX-65 and CLWX-66.
 
 ---
 
@@ -139,7 +139,7 @@ The persona is shaped by `extensions/moe-principal-assistant/PERSONA.md` — Tri
 
 **Drafting path is built but un-templated:**
 - The agent can take a transcript + meeting metadata (date, attendees, agenda) and produce minutes/memo output.
-- Templates live in `extensions/moe-principal-assistant/templates/` (`letter.md`, `memo.md`, `daily_report_brief.md` authored; `meeting_minutes.md` still missing — CLWX-66).
+- Templates live in `extensions/moe-principal-assistant/templates/` (`letter.md`, `memo.md`, `daily_report_brief.md`, `meeting_minutes.md` all authored; classification e2e still owed — CLWX-66).
 
 **Recommendation:** in the first principal-feedback session, capture three real meeting examples (PTA, staff, Board) so we author templates that match how Trinidad principals actually structure minutes — generic templates won't earn trust.
 

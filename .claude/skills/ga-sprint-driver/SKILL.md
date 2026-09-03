@@ -17,7 +17,7 @@ them (a cron, a fresh session, a human).
 | Board API | `http://localhost:8090`, workspace `issues-agent`, project `81a2ea23-e060-49b4-a344-1ab0339f46d5`, token via `set -a; . ~/issues-agent-runtime/plane/.agent-token; set +a` (never print) |
 | Board mirror | `docs/plane-board/` via `node scripts/plane-board-export.mjs` |
 | State vector | `docs/GA_SPRINT_STATE_VECTOR.md` |
-| Sprint plan | `docs/GA_SPRINT_PLAN_2026-09-02.md` (GA bar = `docs/wiki/GA_READINESS.md` §4) |
+| Sprint plan | `docs/GA_FINISH_SPRINT_2026-09-03.md` (supersedes GA_SPRINT_PLAN_2026-09-02; GA bar = `docs/wiki/GA_READINESS.md` §4; persona bars = `docs/PERSONA_STATE_VECTOR_2026-09-03.md`) |
 | Defect register | `docs/DEFECT_REGISTER_2026-09-02.md` |
 | Ceiling | Cards move at most to **Ready**; only a human closes Done. Cancelled/scope changes need explicit owner authorization in the transcript. |
 
