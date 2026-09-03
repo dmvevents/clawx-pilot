@@ -1,5 +1,5 @@
 {
-  "exported_at_date": "2026-09-02",
+  "exported_at_date": "2026-09-03",
   "source": {
     "base": "http://localhost:8090",
     "workspace": "issues-agent",
@@ -71,7 +71,12 @@
       "state": "Backlog",
       "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
       "description": "Area: other   Severity: medium (priority medium)\n\nSteps to reproduce\nTODO: exact steps\n\nExpected\nTODO: what should happen\n\nActual\nTODO: what happens instead\n\nEvidence\nTODO: log path / screenshot / trace id\n\nEnvironment\nTODO: build / OS / model\n\nRegression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)",
-      "comments": []
+      "comments": [
+        {
+          "text": "Fold-in from 2026-09-03 recorded use case (Windows moe.15).\nThe raw-model-id leak is not Mac-only. In the in-app cloud turn recorded on the Windows VM (evidence/2026-09-03-win-recorded-usecase/usecase.mp4), the composer / persona surface exposes the raw broker alias custom-moecloud/moe-demo-pro rather than the anonymised \"Online\". Same class as the Mac composer showing gemini-2.5-flash. The anonymise-model-identity hard rule (CLAUDE.md) is therefore violated on both platforms; the fix must cover the persona/broker alias, not only the underlying provider id.",
+          "created": "2026-09-03T00:13:57.799407Z"
+        }
+      ]
     },
     {
       "id": "32009c0e-597e-46dd-8565-9f7baedf0ae2",

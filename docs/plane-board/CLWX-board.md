@@ -1,6 +1,6 @@
 # CLWX Plane board — snapshot
 
-Exported 2026-09-02 from `http://localhost:8090` (workspace `issues-agent`, project `ClawX — Windows installer + agent`).
+Exported 2026-09-03 from `http://localhost:8090` (workspace `issues-agent`, project `ClawX — Windows installer + agent`).
 Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This markdown is the human-readable mirror; the JSON is authoritative.
 
 > The live board is source of truth for *what to work on*. This file is a
@@ -104,6 +104,10 @@ Environment
 TODO: build / OS / model
 
 Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
+
+**Comments (1):**
+
+- Fold-in from 2026-09-03 recorded use case (Windows moe.15). The raw-model-id leak is not Mac-only. In the in-app cloud turn recorded on the Windows VM (evidence/2026-09-03-win-recorded-usecase/usecase.mp4), the composer / persona surface exposes the raw broker alias custom-moecloud/moe-demo-pro rather than the anonymised "Online". Same class as the Mac composer showing gemini-2.5-flash. The anonymise-model-identity hard rule (CLAUDE.md) is therefore violated on both platforms; the fix must cover the persona/broker alias, not only the underlying provider id.
 
 ### CLWX-53 — [bug/other] Error banner shows raw HTTP status to the principal ('Model call failed / 400 status code (no body)')
 

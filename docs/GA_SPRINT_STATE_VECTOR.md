@@ -145,6 +145,25 @@ distribution = GCS signed URL (interim path per REPO_AND_RELEASE_MAP) —
 **blocked on `gcloud auth login`** (storage token verified expired), which now
 gates BOTH the VM lane and the tester link._
 
+_**Store-400 fix + recordings + Karunesh handoff SENT (2026-09-03 late).**
+(1) **GOOGLE-STORE-400 closed durably** (`73c9e88c`): the live 400 the owner
+screenshotted was the bundled gateway sending `store:false` to Google's
+OpenAI-compat endpoint; stamp `supportsStore=false` now applied at the two real
+choke points in `openclaw-auth.ts` (registry fix would've been a no-op), 7/7
+regression test, full suite 162/1280 green. (2) **Two clean recorded use cases:**
+Windows `usecase.mp4` (real in-app cloud turn, PASS) and the W3 forms-submit
+`video.mp4`+trace (MS Forms clone fill→confirmed submit). Mac in-app turn proven
+by `final-screenshot.png`; the Mac screen-crop video was REMOVED (`af25c723`) —
+avfoundation can't target a window so it caught an occluding terminal, honest
+correction in that dir's RESULT.md. (3) **Karunesh tester handoff SENT** over
+WhatsApp (owner-authorized, ~8pm AST his window): 11h impersonated signed URL
+(HTTP 206 + PE magic + byte-exact 390,104,940 verified), guide inline, both
+messages `success:true` to his @lid; ledgered, URL redacted from the local
+record. `gcloud auth` is live (`anton@sagebrushglobal.com`) so the tester-link
+gate is CLEARED. (4) **Deep use-case coverage report**:
+`docs/USE_CASE_COVERAGE_2026-09-03.md` — W1–W10 × Mac/Windows × proof-type,
+Karunesh-task→workflow map, named Windows gaps (W5 cron, W8 ASR, W10 failover)._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three
