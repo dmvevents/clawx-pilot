@@ -116,16 +116,119 @@ function augmentModulePathsForPackagedApp() {
 }
 
 function loadDep(name) {
-  try {
-    return require_(name);
-  } catch {
-    augmentModulePathsForPackagedApp();
+  return loadDepDetailed(name).mod;
+}
+
+/**
+ * Like loadDep, but keeps the distinction between "the module is not on
+ * disk" (MODULE_NOT_FOUND for the requested name) and "the module is present
+ * but failed to evaluate" (e.g. a missing platform-native transitive binding
+ * throwing at module scope). The moe.15 tester incident (CLWX-72) shipped a
+ * misleading "pdf-parse module not found" for what was actually
+ * "DOMMatrix is not defined" from pdfjs-dist's @napi-rs/canvas binding being
+ * absent — masked by a catch-all here. Callers that report errors to users
+ * must use this and surface loadError verbatim.
+ */
+function loadDepDetailed(name) {
+  const attempt = () => {
     try {
-      return require_(name);
-    } catch {
-      return null;
+      return { mod: require_(name), notFound: false, loadError: null };
+    } catch (err) {
+      const notFound = err?.code === 'MODULE_NOT_FOUND'
+        && typeof err?.message === 'string'
+        && err.message.includes(`'${name}'`);
+      return { mod: null, notFound, loadError: notFound ? null : err };
+    }
+  };
+  const first = attempt();
+  if (first.mod) return first;
+  augmentModulePathsForPackagedApp();
+  const second = attempt();
+  if (second.mod) return second;
+  // Prefer the more informative outcome: a load error beats not-found.
+  return second.loadError ? second : (first.loadError ? first : second);
+}
+
+/**
+ * Minimal 2D-affine DOMMatrix polyfill for the plain-Node gateway process.
+ *
+ * pdfjs-dist (pulled by pdf-parse v2) expects a DOMMatrix global and, when
+ * missing, tries to take one from @napi-rs/canvas — whose platform-native
+ * binding is an optionalDependency that pnpm only installs for the build
+ * host's platform, so packaged Windows builds shipped without it and PDF
+ * reads died with "DOMMatrix is not defined" (CLWX-72). Text extraction only
+ * needs the affine ops below; rendering is never invoked by read_pdf.
+ * Installed only when the global is absent.
+ */
+function ensureDomMatrixPolyfill() {
+  if (typeof globalThis.DOMMatrix !== 'undefined') return;
+  class DOMMatrixPolyfill {
+    constructor(init) {
+      // Identity; accepts [a,b,c,d,e,f] or a 16-element column-major array.
+      this.a = 1; this.b = 0; this.c = 0; this.d = 1; this.e = 0; this.f = 0;
+      if (Array.isArray(init)) {
+        if (init.length === 6) {
+          [this.a, this.b, this.c, this.d, this.e, this.f] = init.map(Number);
+        } else if (init.length === 16) {
+          this.a = Number(init[0]); this.b = Number(init[1]);
+          this.c = Number(init[4]); this.d = Number(init[5]);
+          this.e = Number(init[12]); this.f = Number(init[13]);
+        }
+      } else if (init && typeof init === 'object') {
+        this.a = Number(init.a ?? 1); this.b = Number(init.b ?? 0);
+        this.c = Number(init.c ?? 0); this.d = Number(init.d ?? 1);
+        this.e = Number(init.e ?? 0); this.f = Number(init.f ?? 0);
+      }
+    }
+    get is2D() { return true; }
+    get isIdentity() {
+      return this.a === 1 && this.b === 0 && this.c === 0
+        && this.d === 1 && this.e === 0 && this.f === 0;
+    }
+    // 4x4 aliases pdfjs occasionally reads.
+    get m11() { return this.a; } get m12() { return this.b; }
+    get m21() { return this.c; } get m22() { return this.d; }
+    get m41() { return this.e; } get m42() { return this.f; }
+    multiplySelf(o) {
+      const { a, b, c, d, e, f } = this;
+      this.a = o.a * a + o.b * c; this.b = o.a * b + o.b * d;
+      this.c = o.c * a + o.d * c; this.d = o.c * b + o.d * d;
+      this.e = o.e * a + o.f * c + e; this.f = o.e * b + o.f * d + f;
+      return this;
+    }
+    multiply(o) { return new DOMMatrixPolyfill([this.a, this.b, this.c, this.d, this.e, this.f]).multiplySelf(o); }
+    translateSelf(tx = 0, ty = 0) { return this.multiplySelf({ a: 1, b: 0, c: 0, d: 1, e: tx, f: ty }); }
+    translate(tx = 0, ty = 0) { return this.multiply({ a: 1, b: 0, c: 0, d: 1, e: tx, f: ty }); }
+    scaleSelf(sx = 1, sy = sx) { return this.multiplySelf({ a: sx, b: 0, c: 0, d: sy, e: 0, f: 0 }); }
+    scale(sx = 1, sy = sx) { return this.multiply({ a: sx, b: 0, c: 0, d: sy, e: 0, f: 0 }); }
+    invertSelf() {
+      const { a, b, c, d, e, f } = this;
+      const det = a * d - b * c;
+      if (!det) { this.a = NaN; this.b = NaN; this.c = NaN; this.d = NaN; this.e = NaN; this.f = NaN; return this; }
+      this.a = d / det; this.b = -b / det;
+      this.c = -c / det; this.d = a / det;
+      this.e = (c * f - d * e) / det; this.f = (b * e - a * f) / det;
+      return this;
+    }
+    inverse() { return new DOMMatrixPolyfill([this.a, this.b, this.c, this.d, this.e, this.f]).invertSelf(); }
+    transformPoint(p = { x: 0, y: 0 }) {
+      return {
+        x: this.a * p.x + this.c * p.y + this.e,
+        y: this.b * p.x + this.d * p.y + this.f,
+        z: p.z ?? 0,
+        w: p.w ?? 1,
+      };
+    }
+    toFloat32Array() {
+      return new Float32Array([
+        this.a, this.b, 0, 0,
+        this.c, this.d, 0, 0,
+        0, 0, 1, 0,
+        this.e, this.f, 0, 1,
+      ]);
     }
   }
+  globalThis.DOMMatrix = DOMMatrixPolyfill;
 }
 
 /**
@@ -387,10 +490,18 @@ export async function resolveWritablePath(input) {
 
 export async function readPdf({ path: inputPath, maxChars = 200_000 } = {}) {
   const filePath = resolveReadablePath(inputPath);
-  const mod = loadDep('pdf-parse');
+  // Must precede the pdf-parse load: pdfjs-dist references DOMMatrix at
+  // module scope when @napi-rs/canvas has no platform binding (CLWX-72).
+  ensureDomMatrixPolyfill();
+  const { mod, notFound, loadError } = loadDepDetailed('pdf-parse');
   if (!mod) {
+    if (notFound) {
+      throw new Error(
+        "pdf-parse module not found — the packaged runtime is missing this dep. Rebuild with EXTRA_BUNDLED_PACKAGES including 'pdf-parse' and reinstall.",
+      );
+    }
     throw new Error(
-      "pdf-parse module not found — the packaged Windows runtime is missing this dep. Rebuild with EXTRA_BUNDLED_PACKAGES including 'pdf-parse' and reinstall.",
+      `pdf-parse is present but failed to load: ${loadError instanceof Error ? loadError.message : String(loadError)} — likely a missing platform-native transitive dep (e.g. @napi-rs/canvas binding). See CLWX-72.`,
     );
   }
   const PDFParse = mod.PDFParse ?? mod.default?.PDFParse ?? null;
