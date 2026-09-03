@@ -44,6 +44,86 @@
   ],
   "issues": [
     {
+      "id": "ffd0cb4d-cd75-4618-99d5-c81201cc24ba",
+      "sequence_id": 68,
+      "name": "[post-GA] Leave/attendance registers + school inventory schema (product capabilities #4/#7)",
+      "priority": "low",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Why\nregister_update/register_query and the school_inventory schema are named product capabilities (PRODUCT doc, \"O Planned\") with zero board presence - objectives invisible to the plan until now (audit: COHERENCE, 2026-09-03). PM scope call: post-GA feature work, carded for visibility, parked by design.\n\nAcceptance (when picked up)\nDesign first: persistent store decision (local SQLite vs Ministry SharePoint List - ask Raj per PRODUCT section 4), then schema + tools + e2e. Not a GA blocker; do not pull into the finish sprint.\n\nStory\nS9 post-GA. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "14aa9408-2a60-40f1-99ad-07c8f729958e",
+      "sequence_id": 67,
+      "name": "[reminders] Reminder pipeline e2e: cron -> agentTurn -> visible chat prompt (Mac leg; Windows = gap D)",
+      "priority": "high",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Why\nDemo flow #3 and the 3:45pm safety net: the agentTurn cron path is built but has never been proven end-to-end on either platform; it exists only as demo-reel UC9 and matrix gap D (audit: COHERENCE, 2026-09-03).\n\nAcceptance (QA bar)\n1. Mac: a scheduled cron entry fires an agentTurn that renders a visible chat prompt (\"3:45pm - submit today's daily report\"); the defer answer path is exercised.\n2. Evidence: screenshot/frame + trace of the fired turn.\n3. Windows live-fire joins the V-batch (gap D).\n\nStory\nS5 Reminders. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "499a09f0-9e82-4eb0-a322-7f733bb4c6a5",
+      "sequence_id": 66,
+      "name": "[documents] Meeting-minutes template + classify/extract/route e2e + product-doc reconciliation",
+      "priority": "medium",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Why\nAudit contradiction: PRODUCT doc claims templates/ is empty but letter.md, memo.md, daily_report_brief.md exist; what is actually missing is meeting_minutes.md. Classification taxonomy (MoE_circular, parent_letter, staff_leave_application...) is encoded in the persona with no e2e and no card (audit: DOCUMENTS, 2026-09-03).\n\nAcceptance\n1. meeting_minutes.md template authored (agenda, attendees, actions, decisions) in extensions/moe-principal-assistant/templates/.\n2. Classification e2e over 3 fixture documents routes each to the right taxonomy class.\n3. PRODUCT doc drafting rows updated from stale claims to current reality (doc fix landed with the 2026-09-03 reconciliation commit).\n\nStory\nS3/S4. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "71c664a7-8ebe-4c10-b2f0-404be9cecdf3",
+      "sequence_id": 65,
+      "name": "[documents] Live in-app write turn (matrix gap b2) + write assertions in the office e2e",
+      "priority": "high",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Why\ndocument.write_docx/write_xlsx are proven at runtime level (Windows OFFICE_WRITE_OK; Mac fn round-trip 8/8) but no LIVE MODEL TURN has ever produced a document in-app - the named matrix gap b2. CLWX-24 KR1 acceptance covered reading only; demo-office-analysis-e2e.mjs has zero write assertions (audit: DOCUMENTS, 2026-09-03).\n\nAcceptance (QA bar)\n1. Mac leg: a live chat turn (\"draft a letter to parents about sports day, save as docx\") produces a valid .docx that parses back with expected content.\n2. demo-office-analysis-e2e.mjs gains write_docx + write_xlsx assertions.\n3. Windows leg joins the next VM window batch (b2).\n\nStory\nS3 Documents. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "7fc69bfb-8c8d-4189-b638-84a3d6b4104c",
+      "sequence_id": 64,
+      "name": "[forms/hardening] Forms schema-drift detector + forms selector audit coverage",
+      "priority": "medium",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Why\nMSFORMS_AUTOMATION.md warns Microsoft rotates Forms selectors monthly and we lived it once (editor pivot); if MoE edits a form question the fill driver breaks silently. dom-selector-regression-tester covers Outlook but nothing audits forms-browser-v2, and no fingerprint guards the captured 32+57 field schemas (audit: FORMS, 2026-09-03).\n\nAcceptance\n1. Fingerprint (question count + ordered titles hash) stored per form schema; fill drivers verify it and fail LOUDLY on mismatch.\n2. Forms selectors classified stable/rotated with 3+ fallbacks for rotated ones, enforced by the auditor set.\n3. Unit tests for the fingerprint mismatch path.\n\nStory\nS2 Forms / engineering-conscience persona. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "c5690838-283d-4016-91da-35b0c5845531",
+      "sequence_id": 63,
+      "name": "[forms] Document-to-form extraction chain e2e: suspension letter -> extracted fields -> prefilled form",
+      "priority": "high",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Why\nDemo flow #2 and the product's core promise: extraction is built, fill is proven, but the full chain (drop a suspension report -> agent extracts 32 fields -> prefills the form) has no end-to-end test (audit: FORMS, 2026-09-03).\n\nAcceptance (QA bar)\nFixture suspension letter (docx or pdf) -> live agent extraction -> prefill on the test.fac Suspensions clone; diff of filled values vs expected JSON shows <=3 misses; hard-confirm gate holds (no submit without confirm). Re-runnable script committed.\n\nStory\nS2/S3 boundary. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "c2cf60f1-d58b-48de-97c9-81cd37c654e2",
+      "sequence_id": 62,
+      "name": "[forms] Daily Report form e2e: fill + gate + recorded submit on the test.fac clone",
+      "priority": "high",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Why\nThe Daily Report IS the 3:45pm statutory form, yet only Suspensions has a live-proven e2e. The 57-field schema (daily-report-schema.vlm.json), driver (daily-report-actions.ts) and clone script all exist - the chain has simply never been run (audit: FORMS, 2026-09-03).\n\nAcceptance (QA bar)\nMirror the Suspensions proof: forms-fill-daily-report.ts fills >=90% of 57 fields with 0 errors; submit refused without confirm:true; ONE confirmed submit verified landed (responses count increment + success marker); recorded video+trace like forms-submit-recorded.ts.\n\nStory\nS2 Forms - highest-leverage new card. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
+      "comments": []
+    },
+    {
+      "id": "a9524dc6-f431-4448-bf4e-99ef5c174623",
+      "sequence_id": 61,
+      "name": "[email/eval] Close Outlook eval gaps: forward e2e + live download_attachment + attachment metadata assertion",
+      "priority": "medium",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Why\nForward and download_attachment are implemented and hard-confirm gated, but no v2-eval row exercises either live; W3.2 asserts only that an attachments array exists, not that it carries filename/size/type. Built-untested is not proven (audit: EMAIL, 2026-09-03).\n\nAcceptance (QA bar)\n1. v2-eval gains a forward row: open message, forward, fill recipient, verify pane, discard - PASS live on test.fac.\n2. A download_attachment(confirm:true) row runs live against a seeded email with attachment; refusal without confirm proved first.\n3. W3.2 asserts attachment metadata fields (name, size, contentType).\n4. Eval suite still fully green.\n\nStory\nS1 Email. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
+      "comments": []
+    },
+    {
       "id": "99271ad8-b00d-400e-8ddd-8bf9b17fee6b",
       "sequence_id": 60,
       "name": "[bug/outlook] Compose pane never resolves: waitForComposePane latches hidden Fluent SplitButton wrapper",
@@ -730,6 +810,10 @@
       "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "OBJECTIVE: Ship ClawX (Ministry of Education fork) to GA for T&T primary-school principals — an on-device-default desktop assistant that survived Raj's 2026-07-21 Ministry test (scored 0/5) and now provably passes it, installs unattended on Windows, works offline, and scales without a fleet-wide outage.\nSource of truth is this board, not any doc. Ceiling for the agent is Ready; only a human moves a card to Done.\nKEY RESULTS (each falsifiable):\n\n- KR1 — Doc-tooling passes Raj's suite in-app. All 5 Ministry prompts (P1 .docx read, P2 .docx write, P3 .pdf, P4 .xlsx, P5 image) + folder discovery pass in a live, LLM-driven, in-app run on Windows; the model selects document.* every time and reaches for a Python skill zero times. Evidence = in-app transcript + tool-call trace. Status: capability GREEN, in-app run RED (outstanding).\n- KR2 — Windows installer unattended on a clean VM. moe.11 installs on a clean Windows VM with a complete file tree; Gateway (18789) + host-API (13210) bind; 0 manual dependency steps. Evidence = install exit 0 + port probe + sha256. Status: GREEN on IAP lane (assisted/silent).\n- KR3 — On-device default works with the network cut. On-device model answers a question grounded in a local document offline; local document path makes zero non-loopback egress. Evidence = eval lane G. Status: GREEN.\n- KR4 — A cloud turn degrades instead of going silent. When a cloud turn cannot reach the provider, it fails over to on-device; the principal's Online/On-device toggle is not rewritten. Evidence = 25 unit tests + lane G G-degrade-classify. Status: GREEN (2026-08-21).\n- KR5 — Offline records are durable. A form submission / audit record created offline is queued locally and delivered exactly once when the link returns. Evidence = lane G outbox checks. Status: RED — not built.\n- KR6 — Cloud economics survive the fleet. Per-turn floor trimmed and per-user metering/caps in place so one heavy user cannot silently spend the fleet's month and trigger a fleet-wide 429. Evidence = trimmed floor measurement + broker accounting tests. Status: RED — trim on HOLD, caps not built.\n- KR7 — A signed-in identity exists. Interactive Entra sign-in yields a stable oid; the app server stamps UserId from the authenticated session. Evidence = live sign-in producing a non-stub identifier. Status: RED — only a stub identity today; blocked on Ministry redirect URI.\n- KR8 — The Ministry infra decisions are closed. Reply sent (owner gate) and a working session settles app-server hostname/reachability, the redirect URI, and prompt-caching. Evidence = sent reply + meeting notes. Status: DRAFT ready, owner-gated, UNSENT.\nFACTS (in git/docs): Raj scored 0/5 on 2026-07-21 (commit 794cce74). Native document.* tools landed 2026-07-25 (98e805d8), 4 days after his test — he tested a build predating the fix. Steering + discovery fix landed 2026-08-20 (c1b18125); a 6-lane tool-selection eval was added the same day (73514b4f). moe.11 installs clean over the GCP IAP lane (verdict.md, sha256 b01bb6c3). Offline + degradation are built and tested (lane G, bde78d94).\nINFERENCE (not yet proven end-to-end): Because the handler replay and the BM25 eval both bypass the live LLM, Raj's exact transcript could still reproduce in-app despite 7/7 handler pass. This is the one open GA risk on the doc-tooling line — a live in-app run is the only thing that closes it.\nOPEN QUESTIONS (Ministry-owned): app-server hostname/reachability (internet-TLS vs iGovTT-only) — blocks the redirect URI; prompt-caching availability behind APIM; UserId = oid vs UPN; migration credential mechanism.\nFailure → fix matrix (Raj 2026-07-21):\nPromptRaj 0/5 failure (verbatim)FixVerified where\nP1 read .docx\"tools to read Word documents are not available\"native document.read_docx + persona routing (c1b18125)handler 7/7; in-app RED\nP2 write .docx\"pandoc and python are not installed\"document.write_docx; Python skills autoEnable:false (c1b18125)handler 7/7; in-app RED\nP3 read .pdf\"pdfplumber / pdftotext not installed\"document.read_pdf, \"Prefer this over the pdf skill\"handler 7/7; in-app RED\nP4 read .xlsx\"pandas is not installed\"document.read_xlsx + write_xlsxhandler 7/7; in-app RED\nP5 read image\"pytesseract and Pillow are required\"document.read_image (base64 to VLM, no OCR binary)handler 7/7; in-app RED\nDiscovery\"I couldn't find any files in that folder\"breadth-first findWithinDir (c1b18125); OneDrive Desktop still unhandledeval lane; Windows OneDrive path UNVERIFIED\nAccept (GA): every KR above GREEN with cited evidence, and a human closes each workstream card. No card reaches Done by the agent.",
       "comments": [
+        {
+          "text": "2026-09-03 reconciliation. Four parallel capability audits (email / forms / documents / plan-coherence) synthesized into docs/GA_FINISH_SPRINT_2026-09-03.md - epic purpose, story map, objectives x coverage x deficit matrix, and the sequenced finish backlog. Persona review model in docs/PERSONA_STATE_VECTOR_2026-09-03.md (new agents: moe-product-manager, principal-proxy).\nNew cards from untracked deficits: Outlook eval gaps (forward/attachment), Daily Report e2e, extraction-chain e2e, forms drift detector, in-app write turn (gap b2), minutes template + classify e2e, reminder pipeline e2e, post-GA registers/inventory.\nPM scope call: Outlook folder operations (list/navigate folders) are NOT in GA scope - documented as a known limitation (GA_EVIDENCE_PACKET section 5). All current operations are inbox-scoped by design.\nDoc de-drift landed: CLAUDE.md capabilities map refreshed to moe.15 reality (forms row was materially stale - fill+submit is now the strongest-proven recorded workflow); PRODUCT doc templates-empty claims corrected (letter.md/memo.md/daily_report_brief.md exist; meeting_minutes.md is the real gap).",
+          "created": "2026-09-03T02:10:12.610870Z"
+        },
         {
           "text": "Production audit complete + acted on (prod-auditor walk, 09-02). Verdict: YELLOW — pilot-deployable; GA gated on the owner sitting + external tester.\n\n- Audit caught a real regression: 4 unit assertions stale after the same-origin navigation fix — fixed same hour; full vitest 1235/1235 at HEAD, flipping the tests-green-at-tag box. Typecheck + harness + eval all green in the auditor's own runs.\n\n- Audit also caught our register lagging this session's own dispositions — RAJ-1/RAJ-4 now recorded FIXED-verified, RAJ-3 REFUTED.\n\n- Checklist refreshed: 7 stale rows corrected (counts, /tmp→durable pointers, hermes3→qwen, broker rows flipped by KR1/KR2 evidence); 09-02 verdict line appended.\n\n- Scorecard state: KR1/KR3/KR4/KR5 evidence GREEN (boxes await the human's check); KR2 YELLOW (accept evidence or schedule the recording); all remaining REDs are the owner sitting (18/19/trim/tester/KR2-decision) or Ministry (KR6-fleet/KR7/KR8).\n\n- Auditor flag for the human: latency has NO agreed budget — measured ~103s median vs proposed 15s p50; decide whether it is a GA criterion.",
           "created": "2026-09-02T09:02:08.155120Z"

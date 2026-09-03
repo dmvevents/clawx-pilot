@@ -164,6 +164,27 @@ gate is CLEARED. (4) **Deep use-case coverage report**:
 `docs/USE_CASE_COVERAGE_2026-09-03.md` — W1–W10 × Mac/Windows × proof-type,
 Karunesh-task→workflow map, named Windows gaps (W5 cron, W8 ASR, W10 failover)._
 
+_**Reconcile-and-finish tick (2026-09-03, owner-directed "work backwards from
+the goal → plan → execute").** Four parallel capability audits (email / forms /
+documents / plan-coherence) synthesized into
+**`docs/GA_FINISH_SPRINT_2026-09-03.md`** — now the sequencing authority
+(supersedes GA_SPRINT_PLAN_2026-09-02) — with the epic purpose grounded in
+CLWX-22 and the trust framing, a story map S1–S9, and the objectives ×
+coverage × deficit matrix. **Persona review model shipped:**
+`docs/PERSONA_STATE_VECTOR_2026-09-03.md` (thought map + Raj/Karunesh/owner
+feedback ledger) + two new agents (`moe-product-manager`, `principal-proxy`);
+existing agents mapped to QA/release/liaison/conscience seats. **Board
+reconciled:** 8 untracked deficits filed as CLWX-61..68 (Outlook eval gaps;
+Daily Report e2e — the 3:45pm form itself had no e2e; extraction-chain e2e;
+forms drift detector; in-app write turn gap b2; minutes template + classify
+e2e; reminder pipeline e2e; post-GA registers/inventory), anchor comment on
+CLWX-22 incl. the PM scope call (folder ops = known-limitation). **Doc
+de-drift:** CLAUDE.md capabilities map moe.10→moe.15 (forms row was materially
+wrong), finish-sprint packet added at top, historical sections marked; PRODUCT
+doc templates-empty claims corrected (3 templates exist; `meeting_minutes.md`
+is the real gap). Sprint DoD: finish-sprint items 1–10 to Ready with evidence;
+no ◐ matrix row without a card or explicit gate._
+
 ## THE FINISH VECTOR (2026-09-02 audit — the path to GA declaration)
 
 Every non-terminal card, its closing action, and who closes it. Three

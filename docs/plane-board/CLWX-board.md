@@ -261,6 +261,19 @@ dom-selector-rotation — caught by dom-selector-regression-tester. Sibling at-r
 
 - Duplicate of CLWX-59. Filed in error while paging the board through the wrong project (PLANE_PROJECT token default != the CLWX project 81a2ea23). The root cause, fix, and live verification are tracked on CLWX-59. This card is redundant — a human can cancel it.
 
+### CLWX-68 — [post-GA] Leave/attendance registers + school inventory schema (product capabilities #4/#7)
+
+- **State:** Backlog  |  **Priority:** low
+
+Why
+register_update/register_query and the school_inventory schema are named product capabilities (PRODUCT doc, "O Planned") with zero board presence - objectives invisible to the plan until now (audit: COHERENCE, 2026-09-03). PM scope call: post-GA feature work, carded for visibility, parked by design.
+
+Acceptance (when picked up)
+Design first: persistent store decision (local SQLite vs Ministry SharePoint List - ask Raj per PRODUCT section 4), then schema + tools + e2e. Not a GA blocker; do not pull into the finish sprint.
+
+Story
+S9 post-GA. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
 ## Unstarted
 
 ### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy
@@ -649,6 +662,108 @@ Regression class? unknown — check the *-auditor agents (config-coherence, depe
 
 - EVALUATED + FIXED + VERIFIED (2026-09-03 session). Root cause (dom-selector-regression-tester sub-agent): Outlook rotated the compose primary action to a Fluent UI SplitButton whose OUTER wrapper div carries data-testid="ComposeSendButton" but is not visible; only the inner button is. The old comma-joined waitForSelector matched the wrapper first in DOM order and waited forever for it to become visible (outlook-actions.ts:2273). Fix applied: waitForComposePane rewritten so every branch is guarded with :visible (waitForSelector can only latch a visible match); vendor-stable role+aria selectors first; rotated title/data-testid branches survive only as fallbacks, with the data-testid branch targeting the inner button not the wrapper. Meets the DOM-selector hard rule (3+ fallbacks for rotated UIs). Verification: pnpm typecheck 0 errors. Live re-run of scripts/v2-send-test.ts PASS end-to-end against the test.fac sandbox — draft ok, subject-mismatch REFUSED (gate 1), matching subject + confirm:true delivered via Outlook Web (gate 2). Both hard-confirm gates intact. Ready for a human to close. Sibling rotated selectors flagged for follow-up: sign-in data-testid (1611-1612), attachment-chip user-input selector (1040), nav substrings (323/1194).
 
+### CLWX-61 — [email/eval] Close Outlook eval gaps: forward e2e + live download_attachment + attachment metadata assertion
+
+- **State:** Todo  |  **Priority:** medium
+
+Why
+Forward and download_attachment are implemented and hard-confirm gated, but no v2-eval row exercises either live; W3.2 asserts only that an attachments array exists, not that it carries filename/size/type. Built-untested is not proven (audit: EMAIL, 2026-09-03).
+
+Acceptance (QA bar)
+1. v2-eval gains a forward row: open message, forward, fill recipient, verify pane, discard - PASS live on test.fac.
+2. A download_attachment(confirm:true) row runs live against a seeded email with attachment; refusal without confirm proved first.
+3. W3.2 asserts attachment metadata fields (name, size, contentType).
+4. Eval suite still fully green.
+
+Story
+S1 Email. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+### CLWX-62 — [forms] Daily Report form e2e: fill + gate + recorded submit on the test.fac clone
+
+- **State:** Todo  |  **Priority:** high
+
+Why
+The Daily Report IS the 3:45pm statutory form, yet only Suspensions has a live-proven e2e. The 57-field schema (daily-report-schema.vlm.json), driver (daily-report-actions.ts) and clone script all exist - the chain has simply never been run (audit: FORMS, 2026-09-03).
+
+Acceptance (QA bar)
+Mirror the Suspensions proof: forms-fill-daily-report.ts fills >=90% of 57 fields with 0 errors; submit refused without confirm:true; ONE confirmed submit verified landed (responses count increment + success marker); recorded video+trace like forms-submit-recorded.ts.
+
+Story
+S2 Forms - highest-leverage new card. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+### CLWX-63 — [forms] Document-to-form extraction chain e2e: suspension letter -> extracted fields -> prefilled form
+
+- **State:** Todo  |  **Priority:** high
+
+Why
+Demo flow #2 and the product's core promise: extraction is built, fill is proven, but the full chain (drop a suspension report -> agent extracts 32 fields -> prefills the form) has no end-to-end test (audit: FORMS, 2026-09-03).
+
+Acceptance (QA bar)
+Fixture suspension letter (docx or pdf) -> live agent extraction -> prefill on the test.fac Suspensions clone; diff of filled values vs expected JSON shows <=3 misses; hard-confirm gate holds (no submit without confirm). Re-runnable script committed.
+
+Story
+S2/S3 boundary. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+### CLWX-64 — [forms/hardening] Forms schema-drift detector + forms selector audit coverage
+
+- **State:** Todo  |  **Priority:** medium
+
+Why
+MSFORMS_AUTOMATION.md warns Microsoft rotates Forms selectors monthly and we lived it once (editor pivot); if MoE edits a form question the fill driver breaks silently. dom-selector-regression-tester covers Outlook but nothing audits forms-browser-v2, and no fingerprint guards the captured 32+57 field schemas (audit: FORMS, 2026-09-03).
+
+Acceptance
+1. Fingerprint (question count + ordered titles hash) stored per form schema; fill drivers verify it and fail LOUDLY on mismatch.
+2. Forms selectors classified stable/rotated with 3+ fallbacks for rotated ones, enforced by the auditor set.
+3. Unit tests for the fingerprint mismatch path.
+
+Story
+S2 Forms / engineering-conscience persona. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+### CLWX-65 — [documents] Live in-app write turn (matrix gap b2) + write assertions in the office e2e
+
+- **State:** Todo  |  **Priority:** high
+
+Why
+document.write_docx/write_xlsx are proven at runtime level (Windows OFFICE_WRITE_OK; Mac fn round-trip 8/8) but no LIVE MODEL TURN has ever produced a document in-app - the named matrix gap b2. CLWX-24 KR1 acceptance covered reading only; demo-office-analysis-e2e.mjs has zero write assertions (audit: DOCUMENTS, 2026-09-03).
+
+Acceptance (QA bar)
+1. Mac leg: a live chat turn ("draft a letter to parents about sports day, save as docx") produces a valid .docx that parses back with expected content.
+2. demo-office-analysis-e2e.mjs gains write_docx + write_xlsx assertions.
+3. Windows leg joins the next VM window batch (b2).
+
+Story
+S3 Documents. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+### CLWX-66 — [documents] Meeting-minutes template + classify/extract/route e2e + product-doc reconciliation
+
+- **State:** Todo  |  **Priority:** medium
+
+Why
+Audit contradiction: PRODUCT doc claims templates/ is empty but letter.md, memo.md, daily_report_brief.md exist; what is actually missing is meeting_minutes.md. Classification taxonomy (MoE_circular, parent_letter, staff_leave_application...) is encoded in the persona with no e2e and no card (audit: DOCUMENTS, 2026-09-03).
+
+Acceptance
+1. meeting_minutes.md template authored (agenda, attendees, actions, decisions) in extensions/moe-principal-assistant/templates/.
+2. Classification e2e over 3 fixture documents routes each to the right taxonomy class.
+3. PRODUCT doc drafting rows updated from stale claims to current reality (doc fix landed with the 2026-09-03 reconciliation commit).
+
+Story
+S3/S4. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+### CLWX-67 — [reminders] Reminder pipeline e2e: cron -> agentTurn -> visible chat prompt (Mac leg; Windows = gap D)
+
+- **State:** Todo  |  **Priority:** high
+
+Why
+Demo flow #3 and the 3:45pm safety net: the agentTurn cron path is built but has never been proven end-to-end on either platform; it exists only as demo-reel UC9 and matrix gap D (audit: COHERENCE, 2026-09-03).
+
+Acceptance (QA bar)
+1. Mac: a scheduled cron entry fires an agentTurn that renders a visible chat prompt ("3:45pm - submit today's daily report"); the defer answer path is exercised.
+2. Evidence: screenshot/frame + trace of the fired turn.
+3. Windows live-fire joins the V-batch (gap D).
+
+Story
+S5 Reminders. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
 ## Started
 
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA
@@ -680,8 +795,9 @@ P5 read image"pytesseract and Pillow are required"document.read_image (base64 to
 Discovery"I couldn't find any files in that folder"breadth-first findWithinDir (c1b18125); OneDrive Desktop still unhandledeval lane; Windows OneDrive path UNVERIFIED
 Accept (GA): every KR above GREEN with cited evidence, and a human closes each workstream card. No card reaches Done by the agent.
 
-**Comments (9):**
+**Comments (10):**
 
+- 2026-09-03 reconciliation. Four parallel capability audits (email / forms / documents / plan-coherence) synthesized into docs/GA_FINISH_SPRINT_2026-09-03.md - epic purpose, story map, objectives x coverage x deficit matrix, and the sequenced finish backlog. Persona review model in docs/PERSONA_STATE_VECTOR_2026-09-03.md (new agents: moe-product-manager, principal-proxy). New cards from untracked deficits: Outlook eval gaps (forward/attachment), Daily Report e2e, extraction-chain e2e, forms drift detector, in-app write turn (gap b2), minutes template + classify e2e, reminder pipeline e2e, post-GA registers/inventory. PM scope call: Outlook folder operations (list/navigate folders) are NOT in GA scope - documented as a known limitation (GA_EVIDENCE_PACKET section 5). All current operations are inbox-scoped by design. Doc de-drift landed: CLAUDE.md capabilities map refreshed to moe.15 reality (forms row was materially stale - fill+submit is now the strongest-proven recorded workflow); PRODUCT doc templates-empty claims corrected (letter.md/memo.md/daily_report_brief.md exist; meeting_minutes.md is the real gap).
 - Production audit complete + acted on (prod-auditor walk, 09-02). Verdict: YELLOW — pilot-deployable; GA gated on the owner sitting + external tester. - Audit caught a real regression: 4 unit assertions stale after the same-origin navigation fix — fixed same hour; full vitest 1235/1235 at HEAD, flipping the tests-green-at-tag box. Typecheck + harness + eval all green in the auditor's own runs. - Audit also caught our register lagging this session's own dispositions — RAJ-1/RAJ-4 now recorded FIXED-verified, RAJ-3 REFUTED. - Checklist refreshed: 7 stale rows corrected (counts, /tmp→durable pointers, hermes3→qwen, broker rows flipped by KR1/KR2 evidence); 09-02 verdict line appended. - Scorecard state: KR1/KR3/KR4/KR5 evidence GREEN (boxes await the human's check); KR2 YELLOW (accept evidence or schedule the recording); all remaining REDs are the owner sitting (18/19/trim/tester/KR2-decision) or Ministry (KR6-fleet/KR7/KR8). - Auditor flag for the human: latency has NO agreed budget — measured ~103s median vs proposed 15s p50; decide whether it is a GA criterion.
 - FINISH VECTOR published (audit 2026-09-02) — docs/GA_SPRINT_STATE_VECTOR.md top section + docs/GA_EVIDENCE_PACKET.md. Three buckets: - A — agent-executable (no waiting): 3 done this audit (GA packet, stakeholder report, timeline — all Ready); remaining: closeout drafts (45), missed-defect verifies (44), NSCC pack (42), RAJ-2 scenario (34), laptop latency (43), Graph dev twin (39), and the moe.15 cut — the GA-tag candidate carrying the retry-breaker + KFM + Outlook-gate fixes. - B — ONE owner sitting (~an hour) unblocks GA: CLWX-18 scrub + CLWX-19 rotation, trim unhold (now tied to the quantified 103s latency miss), latency budget sign-off, KR2 acceptance-or-recording decision, hand moe.15 to one external tester, GO on the closeout drafts, and closing the 17 Ready cards as you verify them. - C — Ministry-gated = post-GA by design (session agenda v4 ready; late-September earliest connectivity). GA per this vector: bucket A finished + bucket B sitting done ⇒ all 13 scorecard boxes checked or explicitly owner-accepted against the known-limitations sheet.
 - Analyst-team synthesis integrated (2026-09-02, second addendum). - Authoritative GA bar located and aligned: docs/wiki/GA_READINESS.md §4, 13 boxes. Current: 2 CHECKED (KR3, KR4), 2 more at Ready with evidence (KR1 — with a "6/6 vs 1-live-prompt" nuance for the closer, noted on CLWX-24 — and KR5). Full mapping in docs/GA_SPRINT_PLAN_2026-09-02.md. - Defect register landed: docs/DEFECT_REGISTER_2026-09-02.md — 48 entries; post-delta: 11 open-blocking (4 Raj defects, 2 security-floor, KR2 recording, KR6 trim-hold, KR7/KR8 Ministry, external tester), 12 open non-blocking, 4 fixed-awaiting-shipped-regression, 22 closed. - CLWX-35 filed and fixed same-day: board exporter wrote titles-only mirrors; fix surfaced the test password sitting in CLWX-18 comments — redacted at source + mandatory redaction in the exporter. Ready. - CLWX-34 made self-contained (was an empty stub; the four defects lived only in the liaison log). - Highest-leverage next cycle: ONE Lane-2 VM session under moe.13 retires four register rows at once (KR2 recording, driver-settle regression proof, CLWX-20 voice smoke, Raj-defect triage staging). Sole gate: owner runs gcloud auth login. - Pull-forward available: build KR7 Entra sign-in behind a flag against the dev-loopback redirect now, so Raj's real values become a config swap instead of a build.
