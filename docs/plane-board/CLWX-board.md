@@ -660,8 +660,9 @@ moe.15 / Mac dev / gemini+bedrock / CDP 18792 test.fac tab
 
 Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
 
-**Comments (2):**
+**Comments (3):**
 
+- Honest status (2026-09-03): the auto-recovery implementation agent stalled on all retry attempts (600k tokens of reading, zero edits landed - tree verified clean of partials). The card acceptance (recoverComposeState state machine + exit-path invariant) remains OPEN and is the top P item for the next tick. The stale-draft class is currently mitigated operationally: the sweeper (f3653589) + the eval hygiene (bfeb2cf1) keep the shared mailbox clean, and CLWX-79 (refusal instead of backfill) reduces one draft-creating path.
 - Holistic acceptance defined (owner-directed 2026-09-03). The stale-draft class has now cost: the tester's send flow (CLWX-70 litter), three eval runs (CLWX-69 wedge), and the original block this card records. The essential fix is an auto-recovery state machine in the driver (server-side, so chat, host-API, and the future MCP adapter (CLWX-71) all inherit it): 1. Before any compose-opening action: detect {open compose pane, discard-confirm dialog (buttons are OK/Cancel - CLWX-69), docked draft chips}. 2. Recover: discard-with-OK the automation-owned state (subject allowlist exactly like scripts/outlook-drafts-sweeper.ts); NEVER touch a human-authored draft - if a non-automation draft is open, refuse with a principal-readable message naming it. 3. Retry the intended action ONCE after recovery; hard-fail loudly the second time. 4. Exit-path invariant (CLWX-70): every automation compose ends in send-or-discard on every code path incl. errors (try/finally). 5. Eval postcondition: zero new saved drafts after a run. Acceptance: a seeded stale-draft scenario (open draft + confirm dialog + docked chip) recovers automatically and the intended draft/reply then succeeds; 15/15 eval stays green; recovery events logged (counts only).
 - Recovery verified. scripts/outlook-cleanup-compose.ts discards a stale open compose and returns to the inbox; this session ran it immediately before the CLWX-59 verification and the subsequent draft+two-gate flow passed. The block itself is intended behaviour (draftEmail refuses to stack drafts to avoid duplicate saved drafts). Reframe as UX-hardening: auto-recover a stale draft before compose rather than returning a hard failure. Not a demo blocker.
 
@@ -709,6 +710,24 @@ Acceptance (QA bar)
 
 Story
 S1 Email. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+### CLWX-62 — [forms] Daily Report form e2e: fill + gate + recorded submit on the test.fac clone
+
+- **State:** Ready  |  **Priority:** high
+
+Why
+The Daily Report IS the 3:45pm statutory form, yet only Suspensions has a live-proven e2e. The 57-field schema (daily-report-schema.vlm.json), driver (daily-report-actions.ts) and clone script all exist - the chain has simply never been run (audit: FORMS, 2026-09-03).
+
+Acceptance (QA bar)
+Mirror the Suspensions proof: forms-fill-daily-report.ts fills >=90% of 57 fields with 0 errors; submit refused without confirm:true; ONE confirmed submit verified landed (responses count increment + success marker); recorded video+trace like forms-submit-recorded.ts.
+
+Story
+S2 Forms - highest-leverage new card. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+**Comments (2):**
+
+- RECORDED LEG DONE - full acceptance met (2026-09-03, commit 8430a777). scripts/forms-submit-recorded-daily.ts (URL hard-pinned, form-id re-asserted, single-submission latch): fill 55/57 / 0 errors, refusal proved BEFORE the one confirmed submit, submitted, responses count verified 7 -> 8 via the owner analysis page, video+trace+screenshots in skills/laptop/evidence/2026-09-03-daily-report-recorded/. Combined with the e2e proof (66790d22), the statutory 3:45pm form is fill+gate+submit+verify+RECORDED. Ready for human close.
+- LIVE E2E PROVEN (sprint-driver tick 2026-09-03). New script scripts/forms-fill-daily-report.ts (mirrors the Suspensions pattern) ran against the test.fac clone over the user-Chrome CDP session: 1. open: status=opened, title "Primary School Daily Report: Term 3 2025/26". 2. fill: 55/57 filled, 0 errors (96%, above the 90% acceptance floor; max-visibility payload - school open, both NSDSL meals, suspension, PTSC, last-day absentee summary; internally consistent counts; reason_no_school hidden by design). 3. gate: submit WITHOUT confirm REFUSED ("confirm:true required... after the principal has reviewed"). 4. DEMO=1 confirmed submit: status=submitted, "Form submitted via Microsoft Forms" - SEND PASS. typecheck 0. QA bar met for fill+gate+submit; PM matrix row "Forms: Daily Report e2e" moves from untested to live-proven. Resumable trail (last acceptance leg before Ready): the RECORDED run - adapt forms-submit-recorded.ts to the Daily Report URL (hard-pinned), assert responses count increments and capture video+trace. Then move to Ready.
 
 ### CLWX-63 — [forms] Document-to-form extraction chain e2e: suspension letter -> extracted fields -> prefilled form
 
@@ -986,7 +1005,7 @@ Owner directive 2026-09-03 + CLWX-72 lesson: test the artifact, not the workspac
 
 ### CLWX-79 — [bug/forms/trust] suspension_payload silently backfills missing statutory-form fields with demo defaults
 
-- **State:** Todo  |  **Priority:** urgent
+- **State:** Ready  |  **Priority:** urgent
 
 Finding (2026-05-27 session, verbatim)
 The normalizer then fills missing fields with demo defaults, so the payload always passes.
@@ -1001,6 +1020,10 @@ Acceptance
 
 Source
 Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+**Comments (1):**
+
+- FIXED + TESTED (2026-09-03, commit 2eec256f). normalizeSuspensionPreviewPayload refuses missing/unparseable required fields with a principal-readable list of exactly the missing ids; demo defaults ONLY behind demo:true/DEMO=1 with a demoDefaultsApplied marker on the tool result (never in the form payload) + one count-only log line. Same fix for the seven silently-defaulted daily-report choice fields (incl. the "Physically present at school" attestation). 16/16 plugin tests; adjacent suites green; typecheck clean. Demo note: partial payloads now refuse unless DEMO=1 - intended. QA bar + principal-proxy trust bar met. Ready for human close.
 
 ### CLWX-80 — [bug/doc-tools] Document ingestion path gaps: pdf allowlist rejects ~/Downloads; read tool returns raw OOXML bytes
 
@@ -1037,7 +1060,7 @@ Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex ro
 
 ### CLWX-82 — [ci] pnpm typecheck is blind to electron/** - build the project references
 
-- **State:** Todo  |  **Priority:** high
+- **State:** Ready  |  **Priority:** high
 
 Finding (2026-06-23, verbatim)
 The standard pnpm run typecheck only covers src directly; the Electron services tree compiles via a project reference that plain tsc --noEmit never builds.
@@ -1050,6 +1073,10 @@ typecheck script builds all references (tsc -b --noEmit or per-project passes); 
 
 Source
 Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+**Comments (1):**
+
+- DONE (2026-09-03, commit 4d183268). typecheck now runs a second pass over the electron tree (tsconfig.electron-typecheck.json; composite traps sidestepped). 448 -> 0 errors; the sweep caught FOUR genuine runtime bugs (fsP ReferenceError in session:rename; UtilityProcess error-payload mishandling x2; stale ownedPid; missing moonshot-global provider type) plus a drifted duplicated ProviderConfig. Zero ts-ignore; 3 commented casts. Suite 162 files / 1284 tests green. Flag for review: requireV2Manager changes the 500-error TEXT (not status) on the legacy V1 path for 7 extended endpoints. Ready for human close.
 
 ### CLWX-83 — [test-infra] Batch: vitest heap exhaustion on combined Outlook suites; no pwsh lint for windows-pilot; stale .codex model pins
 
@@ -1303,23 +1330,6 @@ Scope: define a user-facing budget (proposal: p50 ≤15s / p90 ≤30s wall-clock
 **Comments (1):**
 
 - First-cut measurement DONE (sprint-driver tick, evidence: docs/evidence/LATENCY_BASELINE_2026-09-02.md). All 15 driver JSONs on the persona VM mined: successful tool-using cloud turns 79.6s / 103.4s / 182.2s; no-tool answer 107.9s; median ≈103s — ~7× over the proposed p50 ≤15s budget. Raj's complaint is quantified and current. Caveats: e2 VM ≠ persona laptop; ~9s driver settle tail; small sample. Movers already on the agenda: prompt caching (ask #7), trim unhold (owner), routing. Remaining for Ready: laptop-lane repeat of the 3 demo prompts + owner budget sign-off + GA-packet row.
-
-### CLWX-62 — [forms] Daily Report form e2e: fill + gate + recorded submit on the test.fac clone
-
-- **State:** In Progress  |  **Priority:** high
-
-Why
-The Daily Report IS the 3:45pm statutory form, yet only Suspensions has a live-proven e2e. The 57-field schema (daily-report-schema.vlm.json), driver (daily-report-actions.ts) and clone script all exist - the chain has simply never been run (audit: FORMS, 2026-09-03).
-
-Acceptance (QA bar)
-Mirror the Suspensions proof: forms-fill-daily-report.ts fills >=90% of 57 fields with 0 errors; submit refused without confirm:true; ONE confirmed submit verified landed (responses count increment + success marker); recorded video+trace like forms-submit-recorded.ts.
-
-Story
-S2 Forms - highest-leverage new card. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
-
-**Comments (1):**
-
-- LIVE E2E PROVEN (sprint-driver tick 2026-09-03). New script scripts/forms-fill-daily-report.ts (mirrors the Suspensions pattern) ran against the test.fac clone over the user-Chrome CDP session: 1. open: status=opened, title "Primary School Daily Report: Term 3 2025/26". 2. fill: 55/57 filled, 0 errors (96%, above the 90% acceptance floor; max-visibility payload - school open, both NSDSL meals, suspension, PTSC, last-day absentee summary; internally consistent counts; reason_no_school hidden by design). 3. gate: submit WITHOUT confirm REFUSED ("confirm:true required... after the principal has reviewed"). 4. DEMO=1 confirmed submit: status=submitted, "Form submitted via Microsoft Forms" - SEND PASS. typecheck 0. QA bar met for fill+gate+submit; PM matrix row "Forms: Daily Report e2e" moves from untested to live-proven. Resumable trail (last acceptance leg before Ready): the RECORDED run - adapt forms-submit-recorded.ts to the Daily Report URL (hard-pinned), assert responses count increments and capture video+trace. Then move to Ready.
 
 ### CLWX-72 — [bug/packaging] moe.15 Windows runtime missing pdf-parse - document.read_pdf dead on tester install (KAR-PDF root cause)
 
