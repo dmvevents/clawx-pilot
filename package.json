@@ -1,7 +1,7 @@
 {
     "name": "clawx",
     "productName": "Ministry of Education",
-    "version": "0.4.3-moe.15",
+    "version": "0.4.3-moe.16",
     "pnpm": {
         "onlyBuiltDependencies": [
             "@discordjs/opus",
