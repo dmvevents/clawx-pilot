@@ -23,6 +23,7 @@ import { logger } from '../../utils/logger';
 import { PlaywrightDriver } from './playwright-driver';
 import { VlmGrounder, bboxCentre } from './vlm-grounder';
 import { matchesSearchArgsForTests } from './search-helpers';
+import { isAutomationSubject } from './automation-subjects';
 import { readOutlookDomState } from './dom-heuristics';
 import type {
   OutlookOpenResult,
@@ -439,13 +440,17 @@ export class OutlookActions {
     await this.dismissBlockingDialog(page);
 
     if (await this.hasAnyVisibleOpenDraft(page)) {
-      return {
-        status: 'failed',
-        draftLeftOpen: true,
-        preview: { to, cc, bcc, subject, body },
-        message:
-          'Outlook already has an open draft. Review, send, or close that draft before starting another email so ClawX does not create duplicate saved drafts.',
-      };
+      const recovery = await this.recoverComposeState(page);
+      if (!recovery.cleared || (await this.hasAnyVisibleOpenDraft(page))) {
+        return {
+          status: 'failed',
+          draftLeftOpen: true,
+          preview: { to, cc, bcc, subject, body },
+          message:
+            `Outlook already has an open draft. Review, send, or close that draft before starting another email so ClawX does not create duplicate saved drafts. (Auto-recovery: ${recovery.note}.)`,
+        };
+      }
+      logger.info(`[outlook-v2] compose auto-recovery before draft: ${recovery.note} (CLWX-58)`);
     }
 
     // 1. Click New mail.
@@ -816,12 +821,16 @@ export class OutlookActions {
       };
     }
     if (await this.hasAnyVisibleOpenDraft(page)) {
-      return {
-        status: 'not_found',
-        draftLeftOpen: true,
-        message:
-          'Outlook already has an open draft. Review, send, or close it before replying so ClawX does not type the reply into the wrong draft.',
-      };
+      const recovery = await this.recoverComposeState(page);
+      if (!recovery.cleared || (await this.hasAnyVisibleOpenDraft(page))) {
+        return {
+          status: 'not_found',
+          draftLeftOpen: true,
+          message:
+            `Outlook already has an open draft. Review, send, or close it before replying so ClawX does not type the reply into the wrong draft. (Auto-recovery: ${recovery.note}.)`,
+        };
+      }
+      logger.info(`[outlook-v2] compose auto-recovery before reply: ${recovery.note} (CLWX-58)`);
     }
 
     // Open Reply / Reply All on the open message. Prefer Outlook's
@@ -845,7 +854,25 @@ export class OutlookActions {
       };
     }
     if (clickedReply) await this.waitForComposeBodyReady(page);
-    await this.fillBody(page, args.body);
+    try {
+      await this.fillBody(page, args.body);
+    } catch (err) {
+      // CLWX-70 exit-path invariant, TIMEOUT class only: this call opened the
+      // reply pane, so a typing timeout must not leak it (the 2026-09-03
+      // typeText timeout left a pane open that poisoned the next lane
+      // consumer). Safety-class failures (body-in-recipient contamination,
+      // verification errors) keep their throwing contract untouched — the
+      // caller and the RAJ-4 suites depend on the rejection.
+      if (err instanceof Error && /timed out/i.test(err.message)) {
+        await this.discardOwnCompose(page);
+        return {
+          status: 'not_found',
+          draftLeftOpen: false,
+          message: `Reply body could not be typed (${err.message.split('\n')[0]}). The partial reply draft was discarded automatically; retry the reply.`,
+        };
+      }
+      throw err;
+    }
 
     const draftProbe = await this.readOpenDraftProbe(page);
     const draftBodyProblem = this.describeReplyDraftBodyProblem(draftProbe.snapshot, args.body);
@@ -905,12 +932,16 @@ export class OutlookActions {
       };
     }
     if (await this.hasAnyVisibleOpenDraft(page)) {
-      return {
-        status: 'not_found',
-        draftLeftOpen: true,
-        message:
-          'Outlook already has an open draft. Review, send, or close it before forwarding so ClawX does not type into the wrong draft.',
-      };
+      const recovery = await this.recoverComposeState(page);
+      if (!recovery.cleared || (await this.hasAnyVisibleOpenDraft(page))) {
+        return {
+          status: 'not_found',
+          draftLeftOpen: true,
+          message:
+            `Outlook already has an open draft. Review, send, or close it before forwarding so ClawX does not type into the wrong draft. (Auto-recovery: ${recovery.note}.)`,
+        };
+      }
+      logger.info(`[outlook-v2] compose auto-recovery before forward: ${recovery.note} (CLWX-58)`);
     }
 
     await this.dismissBlockingDialog(page);
@@ -927,9 +958,24 @@ export class OutlookActions {
     }
     if (clickedForward) await this.waitForComposeBodyReady(page);
 
-    await this.fillField(page, 'To', toList.join('; '));
-    await this.commitRecipientField(page, 'To', toList);
-    if (args.body) await this.fillBody(page, args.body);
+    try {
+      await this.fillField(page, 'To', toList.join('; '));
+      await this.commitRecipientField(page, 'To', toList);
+      if (args.body) await this.fillBody(page, args.body);
+    } catch (err) {
+      // CLWX-70 exit-path invariant, TIMEOUT class only (mirrors reply):
+      // this call opened the forward pane; a typing timeout must not leak it.
+      // Safety-class failures keep their throwing contract.
+      if (err instanceof Error && /timed out/i.test(err.message)) {
+        await this.discardOwnCompose(page);
+        return {
+          status: 'not_found',
+          draftLeftOpen: false,
+          message: `Forward could not be prepared (${err.message.split('\n')[0]}). The partial forward draft was discarded automatically; retry the forward.`,
+        };
+      }
+      throw err;
+    }
 
     return {
       status: 'drafted',
@@ -2288,6 +2334,138 @@ export class OutlookActions {
       );
       return false;
     });
+  }
+
+  /**
+   * CLWX-58/70 auto-recovery: clear blocking compose state the automation
+   * OWNS, never a principal's work. States handled per the card spec:
+   * the discard-confirm dialog (whose buttons are OK/Cancel, not "Discard" —
+   * CLWX-69), and an open compose whose subject matches the automation
+   * allowlist (or which is entirely blank). A compose with human-looking
+   * content is left untouched and named in the refusal. All clicks are
+   * DOM-side visible-only (locator.first() latches hidden controls —
+   * CLWX-59 class). Never touches a confirm gate.
+   */
+  private async recoverComposeState(page: Page): Promise<{ cleared: boolean; note: string }> {
+    let acted = false;
+    for (let pass = 0; pass < 5; pass += 1) {
+      let probe: { dialog: boolean; hasCompose: boolean; subject: string; bodyEmpty: boolean; hasDiscard: boolean };
+      try {
+        probe = await this.evaluateComposeStateProbe(page);
+      } catch (err) {
+        // Conservative: if the page cannot run the probe (driver variant,
+        // detached page), keep the original blocking behavior untouched.
+        logger.debug?.(
+          `[outlook-v2] compose recovery probe unavailable: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return { cleared: false, note: 'recovery probe unavailable on this page' };
+      }
+
+      if (probe.dialog) {
+        await this.clickDiscardConfirmOk(page);
+        acted = true;
+        await this.driver.sleep(900);
+        continue;
+      }
+      if (probe.hasCompose) {
+        const subject = probe.subject.trim();
+        const owned = isAutomationSubject(subject) || (subject === '' && probe.bodyEmpty);
+        if (!owned) {
+          const label = subject ? `"${subject.slice(0, 80)}"` : 'with content the assistant did not write';
+          return {
+            cleared: false,
+            note: `an open draft ${label} was not written by the assistant, so it was left untouched`,
+          };
+        }
+        if (!probe.hasDiscard) {
+          return { cleared: false, note: 'a stale assistant draft is open but no Discard control is visible' };
+        }
+        await this.clickVisibleDiscard(page);
+        acted = true;
+        await this.driver.sleep(900);
+        continue;
+      }
+      return {
+        cleared: true,
+        note: acted ? 'a stale assistant draft was discarded automatically' : 'no blocking compose state found',
+      };
+    }
+    return { cleared: false, note: 'compose state kept reappearing after 5 recovery passes' };
+  }
+
+  /** Read-only DOM probe for the recovery loop: dialog / compose subject / body emptiness / discard availability. */
+  private async evaluateComposeStateProbe(page: Page): Promise<{ dialog: boolean; hasCompose: boolean; subject: string; bodyEmpty: boolean; hasDiscard: boolean }> {
+    return await page.evaluate(`(() => {
+      const vis = function(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+      const out = { dialog: false, hasCompose: false, subject: '', bodyEmpty: true, hasDiscard: false };
+      const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"]')).filter(vis);
+      for (const d of dialogs) {
+        if ((d.textContent || '').toLowerCase().indexOf('discard') !== -1) { out.dialog = true; break; }
+      }
+      const subjEl = Array.from(document.querySelectorAll('input[aria-label*="subject" i], input[placeholder*="subject" i]')).filter(vis)[0] || null;
+      if (subjEl) { out.hasCompose = true; out.subject = String(subjEl.value || ''); }
+      const bodyEl = Array.from(document.querySelectorAll('[aria-label="Message body" i][contenteditable="true"], [contenteditable="true"][role="textbox"]')).filter(vis)[0] || null;
+      if (bodyEl) { out.hasCompose = true; out.bodyEmpty = ((bodyEl.textContent || '').replace(/\\s+/g, '') === ''); }
+      const discard = Array.from(document.querySelectorAll('button')).filter(vis).find(function(b) {
+        const label = ((b.getAttribute('aria-label') || '') + ' ' + (b.textContent || '')).toLowerCase();
+        return label.indexOf('discard') !== -1;
+      });
+      out.hasDiscard = Boolean(discard);
+      return out;
+    })()`) as { dialog: boolean; hasCompose: boolean; subject: string; bodyEmpty: boolean; hasDiscard: boolean };
+  }
+
+  /** Click OK/Discard/Yes inside a visible dialog that mentions "discard" (CLWX-69: the confirm buttons are OK/Cancel). */
+  private async clickDiscardConfirmOk(page: Page): Promise<boolean> {
+    return await page.evaluate(`(() => {
+      const vis = function(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+      const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [role="alertdialog"]')).filter(vis);
+      for (const d of dialogs) {
+        if ((d.textContent || '').toLowerCase().indexOf('discard') !== -1) {
+          const ok = Array.from(d.querySelectorAll('button')).filter(vis).find(function(b) {
+            return /^(ok|discard|yes)$/i.test((b.textContent || '').trim());
+          });
+          if (ok) { ok.click(); return true; }
+        }
+      }
+      return false;
+    })()`) as boolean;
+  }
+
+  /** DOM-side click of the first VISIBLE discard control (never locator.first(), which latches hidden ones). */
+  private async clickVisibleDiscard(page: Page): Promise<boolean> {
+    return await page.evaluate(`(() => {
+      const vis = function(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+      const target = Array.from(document.querySelectorAll('button')).filter(vis).find(function(b) {
+        const label = ((b.getAttribute('aria-label') || '') + ' ' + (b.textContent || '')).toLowerCase();
+        return label.indexOf('discard') !== -1;
+      });
+      if (target) { target.click(); return true; }
+      return false;
+    })()`) as boolean;
+  }
+
+  /**
+   * CLWX-70 exit-path invariant: a compose THIS call opened is ours to
+   * discard on failure, regardless of subject (reply/forward panes carry the
+   * original message's subject, which never matches the allowlist). Best
+   * effort — recovery must never mask the original failure.
+   */
+  private async discardOwnCompose(page: Page): Promise<void> {
+    try {
+      for (let pass = 0; pass < 3; pass += 1) {
+        const clickedDiscard = await this.clickVisibleDiscard(page);
+        await this.driver.sleep(900);
+        const clickedOk = await this.clickDiscardConfirmOk(page);
+        if (clickedOk) await this.driver.sleep(900);
+        if (!clickedDiscard && !clickedOk) break;
+        if (!(await this.hasAnyVisibleOpenDraft(page))) break;
+      }
+    } catch (err) {
+      logger.warn?.(
+        `[outlook-v2] discardOwnCompose best-effort failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   private async hasAnyVisibleOpenDraft(page: Page): Promise<boolean> {
