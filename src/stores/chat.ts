@@ -2288,6 +2288,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ? getMessageErrorMessage(lastAssistantAfterBoundary)
         : null;
 
+      // CLWX-78 plumbing gap (moe.16 VM verify): a cloud run can die with NO
+      // terminal stream event at all — the gateway ends the embedded run and
+      // only the history poll discovers the error-stopped assistant message.
+      // The 'error'/'final' event paths call maybeDegradeChannel; this path
+      // set the banner and stopped, so send-time failover never ran despite
+      // a warm on-device model. Same discipline as the event path: only when
+      // THIS client still has its own send in flight. Read BEFORE the set()
+      // below.
+      const sendWasInFlightForThisError = latestTerminalAssistantErrorMessage !== null && get().sending;
+
       set({
         messages: finalMessages,
         thinkingLevel,
@@ -2295,6 +2305,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         runError: latestTerminalAssistantErrorMessage,
       });
       cacheSessionHistory(currentSessionKey, finalMessages, thinkingLevel);
+
+      if (sendWasInFlightForThisError && latestTerminalAssistantErrorMessage) {
+        const toolsRan = get().streamingTools.length > 0 || get().pendingToolImages.length > 0;
+        void maybeDegradeChannel(set, get, latestTerminalAssistantErrorMessage, toolsRan);
+      }
 
       // Seed a missing label from immutable history only. Once a label exists
       // for a session, do not rewrite it during later history refreshes; users

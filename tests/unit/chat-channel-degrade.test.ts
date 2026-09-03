@@ -95,6 +95,56 @@ describe('chat store: send-time channel degradation', () => {
     providerState.accounts = [...BOTH_CHANNELS];
   });
 
+  it('degrades when the run dies with NO terminal event and the history poll finds the error (moe.16 gap)', async () => {
+    // The hosts-blocked cloud run on the moe.16 VM ended with no 'error' or
+    // 'final' stream event at all: only chat.history carried the
+    // error-stopped assistant message. The loadHistory path set the banner
+    // and never called maybeDegradeChannel — banner shown, channel stayed
+    // Online, warm on-device model unused. This pins the catch-all wiring.
+    const store = await loadStore();
+    gatewayRpcMock.mockResolvedValue({
+      messages: [
+        { role: 'user', id: 'u1', content: [{ type: 'text', text: 'summarise my last 5 emails' }] },
+        {
+          role: 'assistant',
+          id: 'a1',
+          stopReason: 'error',
+          errorMessage: 'LLM request failed: network connection error. rawError=Connection error.',
+          content: [],
+        },
+      ],
+    });
+
+    await store.getState().loadHistory(true);
+    await settle();
+
+    expect(degradeCalls().length).toBe(1);
+    expect(preferenceWrites().length).toBe(0);
+  });
+
+  it('does NOT degrade from a history-discovered error when no local send is in flight', async () => {
+    // Re-opening a session whose LAST turn failed yesterday must not fail
+    // over: the error is historical, not ours to act on.
+    const store = await loadStore();
+    store.setState({ sending: false, activeRunId: null });
+    gatewayRpcMock.mockResolvedValue({
+      messages: [
+        {
+          role: 'assistant',
+          id: 'a1',
+          stopReason: 'error',
+          errorMessage: 'LLM request failed: network connection error. rawError=Connection error.',
+          content: [],
+        },
+      ],
+    });
+
+    await store.getState().loadHistory(true);
+    await settle();
+
+    expect(degradeCalls().length).toBe(0);
+  });
+
   it('NEVER writes preferredChannel when degrading', async () => {
     // The load-bearing assertion of this file.
     const store = await loadStore();
