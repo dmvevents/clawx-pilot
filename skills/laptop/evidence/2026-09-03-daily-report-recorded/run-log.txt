@@ -1,0 +1,36 @@
+[t+0.0s] preflight: checking CDP 127.0.0.1:18792
+(node:77454) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[t+0.0s] preflight: CDP up (user Chrome, profile=user)
+  pinned clone form id: CbuQlSzO4kCB... host: forms.cloud.microsoft
+[t+0.0s] open: attaching to clone form tab
+[2026-09-03T06:18:21.332Z] [INFO ] [forms-v2] Connecting via CDP at http://127.0.0.1:18792
+[t+6.7s] open: OK (visible title "Primary School Daily Report: Term 3 2025/26Primary School Daily Report: Term 3 2025/26")
+[t+6.7s] verify: reading responses count BEFORE
+[t+25.5s] verify: BEFORE count=7 via analysis page scrape (view responses\s+(\d[\d,]*)\b)
+[t+25.6s] record: starting tracing + screencast
+  recorder: playwright tracing ON
+  recorder: CDP screencast ON
+[t+25.7s] record: re-opening clone form on camera
+[t+28.4s] fill: driving 57-field payload through DailyReportActions
+[2026-09-03T06:18:51.559Z] [INFO ] [forms-v2/daily-report] fill done: filled=55 skipped=2 errors=0
+[t+30.2s] fill: status=filled filled=55 skipped=2 errors=0
+[t+30.5s] evidence: before-submit.png captured
+[t+30.5s] gate: submitting WITHOUT confirm (must refuse)
+[t+30.5s] gate: refused as required ("Submit blocked: confirm:true required. Re-call with confirm:true after the princ...")
+[t+30.5s] submit: confirm:true (exactly one submission this run)
+[t+30.6s] submit: status=submitted Form submitted via Microsoft Forms.
+[t+30.6s] verify: independent success-marker check
+[t+31.8s] verify: success marker FOUND via body text "response was submitted"
+[t+32.0s] evidence: after-submit.png captured
+[t+32.0s] record: stopping recorders
+  recorder: trace saved -> /Users/antonalexander/Github/moe-tt/ClawX/skills/laptop/evidence/2026-09-03-daily-report-recorded/trace.zip
+[t+32.2s] record: stopped (14 frames)
+[t+32.2s] verify: reading responses count AFTER
+[t+40.8s] verify: AFTER count=8 via analysis page scrape (view responses\s+(\d[\d,]*)\b)
+[t+40.8s] record: assembling MP4
+[t+40.9s] record: mp4 OK — /opt/homebrew/bin/ffmpeg assembled 14 frames
+[t+40.9s] record: raw frames removed (mp4 retained)
+
+=== PASS (responses count incremented by exactly 1) ===
+evidence: /Users/antonalexander/Github/moe-tt/ClawX/skills/laptop/evidence/2026-09-03-daily-report-recorded
