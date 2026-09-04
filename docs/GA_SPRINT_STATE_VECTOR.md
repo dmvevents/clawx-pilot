@@ -599,6 +599,19 @@ the production-integration milestone, not a GA blocker.
   invalidate the release verify; queued for after the verdict. Static ga:gate
   GREEN again (5/5). gcloud reauth O-gate re-probed: still blocked (owner ask
   unchanged).
+- **Karunesh moe.18 FIELD REPORT (2026-09-03 evening, WhatsApp; owner
+  directive: OBSERVE ONLY, no action).** Documents/file interactions:
+  "working fine now" — K10/CLWX-92 externally confirmed on the shipped
+  moe.18. Email: blocked at chrome-attach on his real box (K1/CLWX-73 class)
+  — agent opened Chrome, could not CDP-attach, gave the PLAIN-LANGUAGE
+  close-Chrome-and-retry instruction (trust-UI messaging held; no raw
+  errors), retry still failed; email otherwise untested. He sent an
+  image + document with details (in the WA bridge store, unretrieved).
+  No channel/model complaints (consistent with Online launch). Owner is
+  handling the thread directly (stress test plan, chrome-mcp suggestion,
+  source + agent access offer). Deadline signal: **Raj wants a demo version
+  for Monday.** No cards moved on this — awaiting owner release from
+  observe-hold.
 
 ---
 
