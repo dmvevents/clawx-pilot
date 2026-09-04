@@ -90,3 +90,60 @@ describe('document.* native tools (Lane A — Windows-safe)', () => {
     expect(wb.SheetNames).toEqual(['S']);
   });
 });
+
+describe('parser dep loading is truthful: notFound vs loadError (CLWX-76)', () => {
+  // The regression this closes: every doc-tool used to funnel a failed
+  // require through a masking wrapper that returned null on ANY failure, then
+  // threw a hardcoded "<dep> module not found — rebuild the runtime". So a
+  // dep that WAS bundled but failed to evaluate (a broken platform-native
+  // transitive binding — the CLWX-72 pdf-parse/DOMMatrix class) misdirected
+  // triage into a pointless rebuild. All four fatal call sites now delegate to
+  // requireDocDep, which must keep the two cases distinct.
+
+  it('reports a genuinely absent module as "module not found", never as a load failure', async () => {
+    const { requireDocDep } = await loadDocTools();
+    let msg = '';
+    try {
+      requireDocDep('parser-dep-that-truly-does-not-exist-zzz');
+    } catch (e) {
+      msg = String((e as Error).message);
+    }
+    expect(msg).toMatch(/module not found/);
+    expect(msg).not.toMatch(/failed to load/);
+  });
+
+  it('reports a present-but-broken module as a load failure with the real cause, never as "not found"', async () => {
+    const { requireDocDep } = await loadDocTools();
+    // A module that IS on disk but throws at module scope — stands in for a
+    // parser whose native binding is missing on the target platform.
+    const brokenPath = path.join(workDir, 'broken-native-dep.cjs');
+    writeFileSync(brokenPath, "throw new Error('libvips binding missing');\n");
+    let msg = '';
+    try {
+      requireDocDep(brokenPath, '@napi-rs/canvas binding');
+    } catch (e) {
+      msg = String((e as Error).message);
+    }
+    expect(msg).toMatch(/present but failed to load/);
+    expect(msg).toMatch(/libvips binding missing/); // surfaces the ACTUAL error
+    expect(msg).toMatch(/@napi-rs\/canvas binding/); // and the native hint
+    expect(msg).not.toMatch(/module not found/);
+  });
+
+  it('loadDepDetailed splits the two outcomes at the source', async () => {
+    const { loadDepDetailed } = await loadDocTools();
+
+    const absent = loadDepDetailed('parser-dep-that-truly-does-not-exist-zzz');
+    expect(absent.mod).toBeNull();
+    expect(absent.notFound).toBe(true);
+    expect(absent.loadError).toBeNull();
+
+    const brokenPath = path.join(workDir, 'broken-native-dep-2.cjs');
+    writeFileSync(brokenPath, "throw new Error('binding boom');\n");
+    const broken = loadDepDetailed(brokenPath);
+    expect(broken.mod).toBeNull();
+    expect(broken.notFound).toBe(false);
+    expect(broken.loadError).toBeInstanceOf(Error);
+    expect(String(broken.loadError.message)).toMatch(/binding boom/);
+  });
+});

@@ -116,8 +116,29 @@ function augmentModulePathsForPackagedApp() {
   Module._initPaths();
 }
 
-function loadDep(name) {
-  return loadDepDetailed(name).mod;
+/**
+ * Load a required parser dependency, throwing a TRUTHFUL error that keeps the
+ * distinction loadDepDetailed exposes: "not bundled" (notFound) vs "present
+ * but failed to evaluate" (loadError). The old masking wrapper (loadDep, now
+ * removed) collapsed both into null, which is what shipped the misleading
+ * "mammoth module not found" / "xlsx module not found" text for what were
+ * actually broken platform-native transitive bindings — the same class as the
+ * CLWX-72 pdf-parse/DOMMatrix incident. `nativeHint` names the likely native
+ * binding so a loadError points triage at the real cause instead of a false
+ * rebuild. Mirrors the readPdf pattern (see below). CLWX-76.
+ */
+export function requireDocDep(name, nativeHint) {
+  const { mod, notFound, loadError } = loadDepDetailed(name);
+  if (mod) return mod;
+  if (notFound) {
+    throw new Error(
+      `${name} module not found — the packaged runtime is missing this dep. Rebuild with EXTRA_BUNDLED_PACKAGES including '${name}' and reinstall.`,
+    );
+  }
+  const detail = loadError instanceof Error ? loadError.message : String(loadError);
+  throw new Error(
+    `${name} is present but failed to load: ${detail} — likely a missing platform-native transitive dep${nativeHint ? ` (${nativeHint})` : ''}. See CLWX-76/CLWX-72.`,
+  );
 }
 
 /**
@@ -130,7 +151,7 @@ function loadDep(name) {
  * absent — masked by a catch-all here. Callers that report errors to users
  * must use this and surface loadError verbatim.
  */
-function loadDepDetailed(name) {
+export function loadDepDetailed(name) {
   const attempt = () => {
     try {
       return { mod: require_(name), notFound: false, loadError: null };
@@ -598,12 +619,7 @@ export async function readPdf({ path: inputPath, maxChars = 200_000 } = {}) {
 
 export async function readDocx({ path: inputPath, format = 'markdown' } = {}) {
   const filePath = resolveReadablePath(inputPath);
-  const mammoth = loadDep('mammoth');
-  if (!mammoth) {
-    throw new Error(
-      "mammoth module not found — the packaged Windows runtime is missing this dep. Rebuild with EXTRA_BUNDLED_PACKAGES including 'mammoth' and reinstall.",
-    );
-  }
+  const mammoth = requireDocDep('mammoth');
   const buf = await readFile(filePath);
   const options = { buffer: buf };
   let result;
@@ -650,12 +666,7 @@ export async function writeDocx({ path: outputPath, title, paragraphs = [] } = {
   if (!Array.isArray(paragraphs) || !paragraphs.length) {
     throw new Error('paragraphs array required (at least one non-empty string).');
   }
-  const docxMod = loadDep('docx');
-  if (!docxMod) {
-    throw new Error(
-      "docx module not found — the packaged Windows runtime is missing this dep. Rebuild with EXTRA_BUNDLED_PACKAGES including 'docx' and reinstall.",
-    );
-  }
+  const docxMod = requireDocDep('docx');
   const { Document, Packer, Paragraph, HeadingLevel } = docxMod;
   const children = [];
   if (title) {
@@ -677,12 +688,7 @@ export async function writeDocx({ path: outputPath, title, paragraphs = [] } = {
 
 export async function readXlsx({ path: inputPath, sheet, maxRows = 500 } = {}) {
   const filePath = resolveReadablePath(inputPath);
-  const xlsx = loadDep('xlsx');
-  if (!xlsx) {
-    throw new Error(
-      "xlsx module not found — the packaged Windows runtime is missing this dep. Rebuild with EXTRA_BUNDLED_PACKAGES including 'xlsx' and reinstall.",
-    );
-  }
+  const xlsx = requireDocDep('xlsx');
   const buf = await readFile(filePath);
   const wb = xlsx.read(buf, { type: 'buffer', cellDates: true });
   const sheetNames = Array.isArray(wb?.SheetNames) ? wb.SheetNames : [];
@@ -716,12 +722,7 @@ export async function readXlsx({ path: inputPath, sheet, maxRows = 500 } = {}) {
 }
 
 export async function writeXlsx({ path: outputPath, sheets } = {}) {
-  const xlsx = loadDep('xlsx');
-  if (!xlsx) {
-    throw new Error(
-      "xlsx module not found — the packaged Windows runtime is missing this dep. Rebuild with EXTRA_BUNDLED_PACKAGES including 'xlsx' and reinstall.",
-    );
-  }
+  const xlsx = requireDocDep('xlsx');
   const list = Array.isArray(sheets) ? sheets : sheets ? [sheets] : [];
   if (!list.length) {
     throw new Error('sheets required — array of { name, rows: 2D array } objects.');
@@ -752,7 +753,12 @@ export async function readImage({ path: inputPath, maxDim = 768 } = {}) {
     );
   }
   const buf = await readFile(filePath);
-  const sharp = loadDep('sharp');
+  // sharp is an OPTIONAL enhancer here: absent, we still return the raw bytes
+  // and let the VLM read them. But keep loadDepDetailed's distinction so a
+  // present-but-broken native binding is surfaced (non-fatal) rather than
+  // masked as "not installed" — the CLWX-76 truthfulness rule, applied to a
+  // soft dep. sharpUnavailable is only set on a genuine load *error*.
+  const { mod: sharp, loadError: sharpLoadError } = loadDepDetailed('sharp');
   let width;
   let height;
   let format;
@@ -792,6 +798,14 @@ export async function readImage({ path: inputPath, maxDim = 768 } = {}) {
     mimeType,
     dataUrl: `data:${mimeType};base64,${dataUrlBuffer.toString('base64')}`,
     resized: dataUrlBuffer !== buf,
+    ...(sharpLoadError
+      ? {
+          sharpUnavailable:
+            sharpLoadError instanceof Error
+              ? sharpLoadError.message
+              : String(sharpLoadError),
+        }
+      : {}),
   };
 }
 

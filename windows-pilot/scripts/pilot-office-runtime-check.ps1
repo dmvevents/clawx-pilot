@@ -183,16 +183,35 @@ const paths = $pathsJson;
 const mods = $modsJson;
 process.env.NODE_PATH = paths.join(";");
 Module._initPaths();
-let missing = 0;
+// Mirror the runtime's minimal DOMMatrix polyfill (doc-tools.mjs) so pdf-parse
+// -> pdfjs-dist evaluates under the SAME conditions the gateway runs under;
+// otherwise a bare require would false-fail on a correctly-patched runtime.
+if (typeof globalThis.DOMMatrix === "undefined") {
+  globalThis.DOMMatrix = class { constructor() { this.a = 1; this.b = 0; this.c = 0; this.d = 1; this.e = 0; this.f = 0; } };
+}
+let failed = 0;
 for (const name of mods) {
   try {
+    // require() EXECUTES the module (LOADABILITY), not just resolves it.
+    // require.resolve alone passed on moe.15 while the module threw at
+    // evaluation from a missing native binding (CLWX-72). Presence != loadable.
+    require(name);
     console.log(name + "=OK " + require.resolve(name));
   } catch (err) {
-    missing += 1;
-    console.log(name + "=MISSING " + err.code);
+    failed += 1;
+    const notFound = err && err.code === "MODULE_NOT_FOUND"
+      && typeof err.message === "string" && err.message.indexOf("'" + name + "'") !== -1;
+    if (notFound) {
+      console.log(name + "=MISSING " + err.code);
+    } else {
+      // present but failed to evaluate — the CLWX-72/CLWX-76 class. Surface
+      // the real cause instead of masking it as "missing".
+      const detail = err && err.message ? String(err.message).split("\n")[0] : String(err);
+      console.log(name + "=FAILED-LOAD " + detail);
+    }
   }
 }
-process.exitCode = missing === 0 ? 0 : 10;
+process.exitCode = failed === 0 ? 0 : 10;
 "@
 
 try {

@@ -33,6 +33,32 @@ secondary non-default Chrome profile is accepted (CLWX-73); (2) live probe for
 the restart-vs-per-run degrade refresh (CLWX-95/96); (3) the CLWX-18/19 rotation
 + repo-visibility sequence._
 
+_**Tick 2026-09-04 (ga-sprint-driver, one tick).** Highest-leverage P item:
+CLWX-76 (truthful load errors for ALL bundled parsers + auditor rule for
+platform-native optional deps). All three acceptance legs landed in-tree:
+(1) `doc-tools.mjs` — the four remaining masking call sites (`readDocx`/mammoth,
+`writeDocx`/docx, `readXlsx`+`writeXlsx`/xlsx) now route through a new
+`requireDocDep` helper that surfaces `loadError` vs `notFound` truthfully
+(mirrors `readPdf`); the masking `loadDep()` wrapper is removed; `readImage`
+surfaces a non-fatal `sharpUnavailable` on a sharp load error while keeping the
+raw-bytes fallback; `requireDocDep`/`loadDepDetailed` exported and covered by 3
+new falsifiable unit tests (absent→"module not found", present-but-broken→
+"present but failed to load" with the real cause, never crossed — 8/8 pass).
+(2) `dependency-class-auditor.md` — two bundled-parser rules added: (a) every
+`EXTRA_BUNDLED_PACKAGES` entry must pass `scripts/verify-openclaw-bundle.mjs`
+(exit 0); (b) any bundled package with platform-native `optionalDependencies`
+must ship all `SHIP_TARGETS` bindings, loadability (not resolution) being the
+bar. (3) `windows-pilot/scripts/pilot-office-runtime-check.ps1` — the on-target
+probe upgraded from `require.resolve` (presence) to `require` (LOADABILITY) with
+a DOMMatrix-polyfill mirror and a MISSING-vs-FAILED-LOAD split; the 0/10 exit
+contract (STATE line) is preserved. Static GA gate GREEN (5/5 T0; report
+`docs/evidence/GA_GATE_2026-09-04.md`). CLWX-76 → Ready with a needsLiveProbe
+note: leg-3's live re-run on a packaged install is the only remainder and
+overlaps CLWX-92/moe.16. Also commented CLWX-80 (both findings localise to the
+OpenClaw-core read tool, not our fork — our `resolveReadablePath` already allows
+home/tmp incl. `~/Downloads` + OneDrive KFM; clean path is persona steering or a
+scoped upstream cherry-pick, not a mid-pilot core rebase). No new owner asks._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
