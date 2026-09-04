@@ -59,6 +59,33 @@ OpenClaw-core read tool, not our fork — our `resolveReadablePath` already allo
 home/tmp incl. `~/Downloads` + OneDrive KFM; clean path is persona steering or a
 scoped upstream cherry-pick, not a mid-pilot core rebase). No new owner asks._
 
+_**Tick 2026-09-04 (ga-sprint-driver — "be green on the fixed cards").** Highest-
+leverage P item: run the T1 live Mac lane the static gate had skipped, to turn
+the fixed Outlook/forms cards from Ready-with-`needsLiveProbe` into Ready-with-
+live-GREEN evidence. Two live checks were flaking with a WANDERING failing row;
+both root-caused to the SAME self-inflicted issues on the shared live test.fac
+mailbox (a stale-id race + a test-contract error that scored the CLWX-46 guard's
+SAFE `not_found` refusal as a failure) — NOT a tool defect; the guard never
+returned wrong content. Fixed in commit `e2f084d5` (`scripts/v2-eval.ts` +
+`scripts/clwx46-stale-read-check.ts`): each row fetches a fresh top-of-inbox id
+immediately before acting and retries once on a safe `not_found`; W7.1 and the
+standalone check now fail ONLY on an actual leak (an ok read whose subject
+belongs to a DIFFERENT message) and require ≥1 demonstrably-correct read. **No
+production code changed.** Result: full `pnpm ga:gate` **GREEN — 9 pass / 0 fail
+/ 2 opt-in skip** (T0 static + T1 live: 15-row eval, CLWX-46 stale-read check,
+Suspensions + Daily Report fill+gate dry). Report `docs/evidence/GA_GATE_2026-09-04.md`.
+Board (all already at Ready — caveats removed, not moves): CLWX-46/81/70/79
+commented live-GREEN; CLWX-62 commented fill+gate-dry-PASS with the recorded
+live submit noted as the honest owner-gated remainder; CLWX-73 commented with
+the live lane running on Chrome 152/user-profile as SUPPORTING (not full) proof;
+CLWX-90 (master gate) commented with the authoritative scorecard. Kept honestly
+not-green: CLWX-74 (Todo, non-VLM locator fallback), CLWX-95/96 (Backlog, seam),
+CLWX-18/19 (owner-gated). VM/packaged legs (CLWX-97, CLWX-76 leg3, CLWX-78 full
+degrade) stay VM-pending — the Mac lane does not advance them. Owner asks
+unchanged from the fix-sprint delta above; the 2-gate real SEND and a recorded
+Daily-Report submit remain the only demo-critical actions still gated on
+explicit owner go (`GA_GATE_SEND=1` / `DEMO=1`, not run autonomously)._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
