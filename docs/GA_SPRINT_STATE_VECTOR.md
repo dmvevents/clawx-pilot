@@ -612,6 +612,27 @@ the production-integration milestone, not a GA blocker.
   source + agent access offer). Deadline signal: **Raj wants a demo version
   for Monday.** No cards moved on this — awaiting owner release from
   observe-hold.
+- **GA sprint driver tick (2026-09-04, minimal-time): the gcloud-auth O-gate
+  that has blocked the VM lane for multiple ticks has CLEARED.** Probed live:
+  active account restored (`gcloud auth list` ACTIVE), `gcloud compute
+  instances list` returns, IAP tunnel :12222 open — the reauth half of the
+  standing owner ask is DONE. **But the lane is only HALF-recovered:** the RC
+  VM `clawx-win-rc-20260609` is **TERMINATED** (must be started before the
+  verify runs), and the SA self-heal key on disk is **still 0 bytes**
+  (Aug-12 create never completed) so the auth-expiry class WILL recur. The
+  target SA (`claude-ssh-sa@gen-lang-client-0649986230…`) is confirmed live
+  (describe returns, not disabled), so the owner create-key command works
+  as written. Static `ga:gate` re-run **GREEN 5/5** (typecheck incl. the
+  electron leg, lint 0-err, 1284 unit, bundle-verify, doc-tooling) ~2h after
+  the 05:56 record — T0 stable; report unchanged (cosmetic re-run reverted).
+  **CLWX-82 confirmed already Ready** (electron typecheck covers 173
+  electron/**/*.ts and passes in-gate; runway §6's agent-lane listing was a
+  day stale — board is ahead). No release surfaces mutated (freeze respected;
+  CLWX-58/70 still queued post-verdict). **Net: the moe.18 full-matrix verify
+  — the #1 GA gate — is promoted O→ready-to-run;** remaining is owner-only
+  (start the VM + the 10-sec SA-key command) then the delegated verifier
+  session runs `/tmp/moe18-vm-verify-packet.md`. No cards moved (the one
+  agent-lane item that was evidence-complete, CLWX-82, is already Ready).
 
 ---
 
