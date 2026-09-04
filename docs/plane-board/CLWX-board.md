@@ -1042,7 +1042,7 @@ Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 A
 
 ### CLWX-76 — [hardening] Truthful load errors for ALL bundled parsers + auditor rule for platform-native optional deps
 
-- **State:** Todo  |  **Priority:** medium
+- **State:** Ready  |  **Priority:** medium
 
 Why
 CLWX-72 exposed a class: loadDep()-style catch-alls turn "present but failed to evaluate" into "module not found", mis-directing triage; and platform-native optionalDependencies of bundled packages are invisible to the existing dependency-class audit. readPdf is fixed; mammoth/docx/xlsx call sites still use the masking path, and other native-binding deps may lurk (sharp, whisper, silk-wasm, opusscript...).
@@ -1054,6 +1054,10 @@ Acceptance
 
 Source
 CLWX-72 five-whys, 2026-09-03. Register: CANVAS-BINDING.
+
+**Comments (1):**
+
+- All three acceptance legs landed in e2cd8369. Leg 1 (doc-tools.mjs): the four remaining masking call sites &mdash; readDocx/mammoth, writeDocx/docx, readXlsx+writeXlsx/xlsx &mdash; now route through a new requireDocDep() helper that keeps loadDepDetailed's notFound (rebuild) vs loadError (present-but-failed, surfaces the real cause + native hint) distinction, mirroring readPdf. The masking loadDep() wrapper is removed so it can't be reintroduced. readImage keeps its intentional raw-bytes fallback but now surfaces a non-fatal sharpUnavailable field on a sharp load error instead of masking it. requireDocDep/loadDepDetailed exported; 3 new falsifiable unit tests prove the split (absent &rarr; "module not found"; present-but-broken &rarr; "present but failed to load" with the real message + native hint; never crossed). 8/8 in tests/unit/moe-principal-assistant-doc-tools.test.ts. Leg 2 (dependency-class-auditor.md): two bundled-parser rules added &mdash; (a) every EXTRA_BUNDLED_PACKAGES entry must pass scripts/verify-openclaw-bundle.mjs (exit 0); (b) any bundled package with platform-native optionalDependencies must ship all SHIP_TARGETS bindings, loadability (not require.resolve) being the bar. Leg 3 (pilot-office-runtime-check.ps1): the on-target packaged-node probe upgraded from require.resolve (presence) to require (LOADABILITY) with a DOMMatrix-polyfill mirror and a MISSING-vs-FAILED-LOAD split. The 0/10 exit contract (STATE line) is preserved. Static GA gate GREEN on this build (GA_GATE_STATIC=1 pnpm ga:gate): typecheck, lint, unit-suite, bundle-verify (CLWX-72), doc-tooling all PASS. Report docs/evidence/GA_GATE_2026-09-04.md. needsLiveProbe: leg-3's live re-run of the extended probe on a packaged install is the only remainder and overlaps CLWX-92/moe.16. Moving to Ready (a human closes Done).
 
 ### CLWX-77 — [testing] Artifact-grade corner-gap matrix: every doc type x every command against the PACKAGED runtime
 
@@ -1149,6 +1153,10 @@ Acceptance
 
 Source
 Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+**Comments (1):**
+
+- Diagnostic (no code change here; scoped to CLWX-76's own fork surface). Both CLWX-80 findings localise to the OpenClaw-core read tool, not our editable fork: our resolveReadablePath in doc-tools.mjs already allows the user home + tmp (so ~/Downloads and OneDrive-KFM roots resolve), and CLWX-80's refusal string is not the one our resolver emits. The clean path is persona steering (route doc reads through the plugin's document.* tools) or a scoped upstream cherry-pick &mdash; NOT a mid-pilot rebase of bundled core (consistent with the audit-then-cherry-pick discipline). Left in Todo pending that decision.
 
 ### CLWX-81 — [bug/outlook] Driver hardening batch: non-Inbox reply dead-end; sign-in false positives; <8-char contamination exemption
 
