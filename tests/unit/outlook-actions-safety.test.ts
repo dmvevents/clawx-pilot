@@ -29,6 +29,7 @@ type TestActions = OutlookActions & {
   hasAnyVisibleOpenDraft: (page: FakePage) => Promise<boolean>;
   hasVisibleOpenDraft: (page: FakePage) => Promise<boolean>;
   clickNewMail: (page: FakePage) => Promise<void>;
+  discardOwnCompose: (page: unknown) => Promise<void>;
   fillField: (page: FakeFillPage, label: 'To' | 'Cc' | 'Bcc' | 'Subject', value: string) => Promise<void>;
   fillBody: (page: FakeFillPage, body: string) => Promise<void>;
   evaluateOpenDraftDom: (page: FakePage, expected: DraftSendProbeInput) => Promise<OpenDraftDomProbe>;
@@ -855,6 +856,47 @@ describe('OutlookActions safety gates', () => {
     actions.fillField = vi.fn(async () => {
       throw new Error('Could not locate field "To" via semantic locator or VLM');
     });
+    // CLWX-70: the blank automation compose is discarded on fill failure.
+    const discardSpy = vi.fn(async () => undefined);
+    actions.discardOwnCompose = discardSpy;
+    actions.hasAnyVisibleOpenDraft = vi.fn(async () => false);
+
+    const result = await actions.draftEmail({
+      to: 'recipient@example.invalid',
+      subject: 'Demo subject',
+      body: 'Body is not logged by this test.',
+    });
+
+    // CLWX-70: fill failure discards the born-empty draft, so nothing is left
+    // open once the discard clears the mailbox.
+    expect(discardSpy).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ status: 'failed', draftLeftOpen: false });
+    expect(result.message).toMatch(/could not fill the new email/i);
+    expect(result.message).toMatch(/discarded automatically/i);
+    // The compose pane was opened, so we never claim it as a ready draft.
+    expect(result.status).not.toBe('drafted');
+  });
+
+  it('reports the partial draft as left open when auto-discard cannot clear it (CLWX-70)', async () => {
+    const { actions, driver } = createActions();
+    const page = {
+      evaluate: vi.fn(async () => false),
+    } as unknown as FakePage;
+    driver.ensureOutlookTab.mockResolvedValue(page);
+    actions.clickNewMail = vi.fn(async () => undefined);
+    actions.waitForComposePane = vi.fn(async () => undefined);
+    actions.fillField = vi.fn(async () => {
+      throw new Error('Could not locate field "To" via semantic locator or VLM');
+    });
+    actions.discardOwnCompose = vi.fn(async () => undefined);
+    // Preflight sees no pre-existing draft (so draftEmail proceeds and creates
+    // the compose), but after the fill failure the discard could not clear the
+    // surface (e.g. the confirm dialog never surfaced), so the principal must be
+    // told a draft may still be open.
+    actions.hasAnyVisibleOpenDraft = vi
+      .fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true);
 
     const result = await actions.draftEmail({
       to: 'recipient@example.invalid',
@@ -863,9 +905,7 @@ describe('OutlookActions safety gates', () => {
     });
 
     expect(result).toMatchObject({ status: 'failed', draftLeftOpen: true });
-    expect(result.message).toMatch(/could not fill the new email/i);
-    // The compose pane was opened, so we never claim it as a ready draft.
-    expect(result.status).not.toBe('drafted');
+    expect(result.message).toMatch(/review or close any partial draft/i);
   });
 
   it('degrades readably (does not throw) when Chrome/CDP cannot be reached (CLWX-73)', async () => {
@@ -925,6 +965,98 @@ describe('OutlookActions safety gates', () => {
     ).rejects.toThrow(/visual assistant is unavailable/i);
     // Must not click a guessed coordinate when grounding is unavailable.
     expect(driver.clickAt).not.toHaveBeenCalled();
+  });
+
+  it('fillField surfaces a readable error when the visual assistant is unavailable (CLWX-74)', async () => {
+    const { actions, grounder, driver } = createActions();
+    grounder.ground = vi.fn(async () => ({
+      found: false,
+      confidence: 0,
+      unavailable: true,
+      reasoning: 'Visual grounding unavailable on this device (no cloud model credentials)',
+      question: 'To field',
+    }));
+    const emptyLocator: FakeLocator = {
+      count: vi.fn(async () => 0),
+      first: () => emptyLocator,
+      click: vi.fn(async () => undefined),
+      fill: vi.fn(async () => undefined),
+    };
+    const page: FakeFillPage = {
+      getByLabel: vi.fn(() => emptyLocator),
+      locator: vi.fn(() => emptyLocator),
+    };
+
+    await expect(actions.fillField(page, 'To', 'recipient@example.invalid'))
+      .rejects.toThrow(/visual assistant is unavailable/i);
+    // Never guesses a coordinate or types when grounding is unavailable.
+    expect(driver.clickAt).not.toHaveBeenCalled();
+    expect(driver.typeText).not.toHaveBeenCalled();
+  });
+
+  it('fillBody surfaces a readable error when the visual assistant is unavailable (CLWX-74)', async () => {
+    const { actions, grounder, driver } = createActions();
+    grounder.ground = vi.fn(async () => ({
+      found: false,
+      confidence: 0,
+      unavailable: true,
+      reasoning: 'Visual grounding unavailable on this device (no cloud model credentials)',
+      question: 'body editor',
+    }));
+    const { page } = createFillPage({ bodyCandidateCount: 0, toCandidateCount: 0 });
+
+    await expect(actions.fillBody(page, 'Body is not logged by this test.'))
+      .rejects.toThrow(/visual assistant is unavailable/i);
+    expect(driver.clickAt).not.toHaveBeenCalled();
+    expect(driver.typeText).not.toHaveBeenCalled();
+  });
+
+  it('opens a blank compose via the Outlook keyboard shortcut fallback (CLWX-74)', async () => {
+    const { actions, driver } = createBareActions();
+    const page = {
+      evaluate: vi.fn(async (fnOrScript: unknown) => {
+        if (typeof fnOrScript === 'function') (fnOrScript as () => void)();
+        return undefined;
+      }),
+    } as unknown as FakePage;
+    const keyed = actions as unknown as {
+      waitForComposePane: (p: unknown, t?: number) => Promise<void>;
+      openComposeViaKeyboard: (p: unknown) => Promise<boolean>;
+    };
+    // The first shortcut ('n') surfaces a compose pane.
+    keyed.waitForComposePane = vi.fn(async () => undefined);
+
+    const opened = await keyed.openComposeViaKeyboard(page);
+
+    expect(opened).toBe(true);
+    expect(driver.pressKey).toHaveBeenCalledWith('n');
+    // Compose opened on the first shortcut, so 'c' is never pressed.
+    expect(driver.pressKey).not.toHaveBeenCalledWith('c');
+  });
+
+  it('returns false from the keyboard compose fallback when no compose pane opens (CLWX-74)', async () => {
+    const { actions, driver } = createBareActions();
+    const page = {
+      evaluate: vi.fn(async (fnOrScript: unknown) => {
+        if (typeof fnOrScript === 'function') (fnOrScript as () => void)();
+        return undefined;
+      }),
+    } as unknown as FakePage;
+    const keyed = actions as unknown as {
+      waitForComposePane: (p: unknown, t?: number) => Promise<void>;
+      openComposeViaKeyboard: (p: unknown) => Promise<boolean>;
+    };
+    keyed.waitForComposePane = vi.fn(async () => {
+      throw new Error('no compose pane');
+    });
+
+    const opened = await keyed.openComposeViaKeyboard(page);
+
+    expect(opened).toBe(false);
+    // Both tenant shortcuts are attempted before giving up (so clickNewMail can
+    // still fall through to the VLM path).
+    expect(driver.pressKey).toHaveBeenCalledWith('n');
+    expect(driver.pressKey).toHaveBeenCalledWith('c');
   });
 
   it('refuses a new email draft when To does not contain an email address', async () => {
@@ -1160,7 +1292,7 @@ describe('OutlookActions safety gates', () => {
     expect(actions.fillBody).not.toHaveBeenCalled();
   });
 
-  it('reply resets to Inbox before opening the requested message id', async () => {
+  it('reply opens the requested message id from the current view without forcing Inbox first (CLWX-81)', async () => {
     const { actions } = createActions();
     const order: string[] = [];
     actions.ensureInboxFolder = vi.fn(async () => { order.push('inbox'); });
@@ -1183,10 +1315,12 @@ describe('OutlookActions safety gates', () => {
     const result = await actions.reply({ id: 'message-1', body: 'Testing the reply feature' });
 
     expect(result).toMatchObject({ status: 'drafted', draftLeftOpen: true });
-    expect(order).toEqual(['inbox', 'open']);
+    // Found in the current view -> no Inbox reset. Previously this forced Inbox
+    // first, which dead-ended replies to Archive/Sent/search-result messages.
+    expect(order).toEqual(['open']);
   });
 
-  it('mark read resets to Inbox before opening a message id', async () => {
+  it('mark read opens a message id from the current view without forcing Inbox first (CLWX-81)', async () => {
     const { actions } = createActions();
     const order: string[] = [];
     actions.ensureInboxFolder = vi.fn(async () => { order.push('inbox'); });
@@ -1195,10 +1329,29 @@ describe('OutlookActions safety gates', () => {
     const result = await actions.markRead({ id: 'message-1', read: true });
 
     expect(result).toMatchObject({ status: 'ok' });
-    expect(order).toEqual(['inbox', 'open']);
+    expect(order).toEqual(['open']);
   });
 
-  it('confirmed attachment download resets to Inbox before opening a message id', async () => {
+  it('id-scoped actions fall back to an Inbox reset only when the id is not in a non-Inbox view (CLWX-81)', async () => {
+    const { actions, driver } = createActions();
+    // Principal is viewing Archive, not the Inbox.
+    driver.ensureOutlookTab.mockResolvedValue({ url: () => 'https://outlook.office.com/mail/archive' });
+    const order: string[] = [];
+    actions.ensureInboxFolder = vi.fn(async () => { order.push('inbox'); });
+    let opens = 0;
+    actions.openMessageById = vi.fn(async () => {
+      opens += 1;
+      order.push(`open-${opens}`);
+      return opens > 1; // miss in the Archive view, hit after the Inbox reset
+    });
+
+    const result = await actions.markRead({ id: 'message-1', read: true });
+
+    expect(result).toMatchObject({ status: 'ok' });
+    expect(order).toEqual(['open-1', 'inbox', 'open-2']);
+  });
+
+  it('confirmed attachment download reports not_found without a redundant Inbox reset when already on Inbox (CLWX-81)', async () => {
     const { actions } = createActions();
     const order: string[] = [];
     actions.ensureInboxFolder = vi.fn(async () => { order.push('inbox'); });
@@ -1211,7 +1364,9 @@ describe('OutlookActions safety gates', () => {
     });
 
     expect(result).toMatchObject({ status: 'not_found', filename: 'report.pdf' });
-    expect(order).toEqual(['inbox', 'open']);
+    // Already on Inbox and the id is not in view -> honest not_found, no second
+    // navigation. The hard confirm gate above is untouched by CLWX-81.
+    expect(order).toEqual(['open']);
   });
 
   it('does not classify signed-in Outlook content that merely mentions sign in as auth', async () => {

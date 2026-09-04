@@ -505,13 +505,27 @@ export class OutlookActions {
       await this.fillField(page, 'Subject', subject);
       await this.fillBody(page, body);
     } catch (error) {
+      // CLWX-70: the compose surface this call opened (clickNewMail above) is
+      // an automation-created BLANK draft — never the principal's own work. A
+      // fill failure otherwise leaves a born-empty "[Draft]" in the mailbox
+      // that clutters Drafts and poisons the next compose-state check. Discard
+      // it on ANY fill failure (the original card under-scoped this to typing
+      // timeouts; a blank automation compose is safe to discard
+      // unconditionally, unlike a reply/forward pane which may carry context).
+      // Best-effort: recovery must never mask the original fill failure.
+      await this.discardOwnCompose(page);
+      const draftStillOpen = await this.hasAnyVisibleOpenDraft(page);
       return {
         status: 'failed',
-        draftLeftOpen: true,
+        draftLeftOpen: draftStillOpen,
         preview: { to, cc, bcc, subject, body },
         message: `ClawX could not fill the new email in Outlook. ${
           error instanceof Error ? error.message : String(error)
-        } Review or close any partial draft in Outlook before retrying.`,
+        } ${
+          draftStillOpen
+            ? 'Review or close any partial draft in Outlook before retrying.'
+            : 'The partial draft was discarded automatically; retry when ready.'
+        }`,
       };
     }
 
@@ -717,16 +731,17 @@ export class OutlookActions {
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    if (!(await this.ensureInboxFolderOrSignin(page))) {
+    // CLWX-81: try the message in the current view first; only fall back to an
+    // Inbox reset when it is not in view and we are not already on the Inbox.
+    const located = await this.openMessageByIdInCurrentViewOrInbox(page, args.id);
+    if (located === 'needs_signin') {
       return {
         status: 'needs_signin',
         id: args.id,
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-
-    const opened = await this.openMessageById(page, args.id);
-    if (!opened) {
+    if (located === 'not_found') {
       return {
         status: 'not_found',
         id: args.id,
@@ -840,22 +855,22 @@ export class OutlookActions {
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    if (!(await this.ensureInboxFolderOrSignin(page))) {
+    await this.dismissBlockingDialog(page);
+    // CLWX-81: try the current view first, then fall back to the Inbox reset.
+    const located = await this.openMessageByIdInCurrentViewOrInbox(page, args.id);
+    if (located === 'needs_signin') {
       return {
         status: 'needs_signin',
         draftLeftOpen: false,
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-
-    await this.dismissBlockingDialog(page);
-    const opened = await this.openMessageById(page, args.id);
-    if (!opened) {
+    if (located === 'not_found') {
       return {
         status: 'not_found',
         draftLeftOpen: false,
         message:
-          `Could not locate message with id "${args.id}" in the current Inbox window. No reply was drafted; the message may have moved to Archive, Sent, Drafts, or another folder. Open or search the intended message and retry.`,
+          `Could not locate message with id "${args.id}" in the current view or Inbox. No reply was drafted; the message may have moved to Archive, Sent, Drafts, or another folder. Open or search the intended message and retry.`,
       };
     }
     if (await this.hasAnyVisibleOpenDraft(page)) {
@@ -952,21 +967,22 @@ export class OutlookActions {
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    if (!(await this.ensureInboxFolderOrSignin(page))) {
+    await this.dismissBlockingDialog(page);
+    // CLWX-81: try the current view first, then fall back to the Inbox reset.
+    const located = await this.openMessageByIdInCurrentViewOrInbox(page, args.id);
+    if (located === 'needs_signin') {
       return {
         status: 'needs_signin',
         draftLeftOpen: false,
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    await this.dismissBlockingDialog(page);
-    const opened = await this.openMessageById(page, args.id);
-    if (!opened) {
+    if (located === 'not_found') {
       return {
         status: 'not_found',
         draftLeftOpen: false,
         message:
-          `Could not locate message with id "${args.id}" in the current Inbox window. No forward was drafted; the message may have moved to Archive, Sent, Drafts, or another folder. Open or search the intended message and retry.`,
+          `Could not locate message with id "${args.id}" in the current view or Inbox. No forward was drafted; the message may have moved to Archive, Sent, Drafts, or another folder. Open or search the intended message and retry.`,
       };
     }
     if (await this.hasAnyVisibleOpenDraft(page)) {
@@ -1029,11 +1045,12 @@ export class OutlookActions {
     if (await this.looksLikeSignin(page)) {
       return { status: 'needs_signin', message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.' };
     }
-    if (!(await this.ensureInboxFolderOrSignin(page))) {
+    // CLWX-81: try the current view first, then fall back to the Inbox reset.
+    const located = await this.openMessageByIdInCurrentViewOrInbox(page, args.id);
+    if (located === 'needs_signin') {
       return { status: 'needs_signin', message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.' };
     }
-    const opened = await this.openMessageById(page, args.id);
-    if (!opened) return { status: 'not_found', message: `Could not locate message with id "${args.id}".` };
+    if (located === 'not_found') return { status: 'not_found', message: `Could not locate message with id "${args.id}".` };
 
     // Right-click on the row would be more reliable but harder to drive
     // cross-theme. Use Outlook's keyboard shortcut: Q = mark read, U = mark unread.
@@ -1097,15 +1114,18 @@ export class OutlookActions {
       };
     }
 
-    if (!(await this.ensureInboxFolderOrSignin(page))) {
+    // CLWX-81: try the current view first, then fall back to the Inbox reset.
+    // The hard confirm gate above is unchanged; this only affects locating the
+    // already-confirmed message.
+    const located = await this.openMessageByIdInCurrentViewOrInbox(page, args.id);
+    if (located === 'needs_signin') {
       return {
         status: 'needs_signin',
         filename: args.filename,
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    const opened = await this.openMessageById(page, args.id);
-    if (!opened) {
+    if (located === 'not_found') {
       return {
         status: 'not_found',
         filename: args.filename,
@@ -1561,6 +1581,28 @@ export class OutlookActions {
     `).catch(() => '') as Promise<string>;
   }
 
+  /**
+   * CLWX-81: id-scoped actions (read / reply / forward / markRead /
+   * downloadAttachment) historically force-navigated to Inbox BEFORE trying to
+   * open the message. That dead-ends with not_found whenever the target lives
+   * in Archive / Sent / a search result / another folder the principal is
+   * already viewing. Try the CURRENT view first; only fall back to the Inbox
+   * reset when the id is not in view AND we are not already on the Inbox.
+   * Returns a tri-state so callers keep their existing needs_signin /
+   * not_found surfaces. This touches NO send/download gate.
+   */
+  private async openMessageByIdInCurrentViewOrInbox(
+    page: Page,
+    id: string,
+  ): Promise<'opened' | 'needs_signin' | 'not_found'> {
+    if (await this.openMessageById(page, id)) return 'opened';
+    // Not in the current view. If we are already on the Inbox there is no
+    // other folder to reset to — report honestly instead of re-navigating.
+    if (isOutlookInboxUrl(page.url())) return 'not_found';
+    if (!(await this.ensureInboxFolderOrSignin(page))) return 'needs_signin';
+    return (await this.openMessageById(page, id)) ? 'opened' : 'not_found';
+  }
+
   private async openMessageById(page: Page, id: string): Promise<boolean> {
     await this.resetInboxListScroll(page);
     const maxPasses = 40;
@@ -1921,7 +1963,57 @@ export class OutlookActions {
       }
     }
 
+    // CLWX-74: keyboard fallback before the paid/slow VLM path. Outlook Web's
+    // default shortcut for a new message is "N" (and "C" under some tenant
+    // keyboard-shortcut modes). It is scoped to the mail surface and cannot
+    // mis-click an adjacent destructive control. Only reached when every
+    // semantic/DOM/ribbon/reset path above missed.
+    if (await this.openComposeViaKeyboard(page)) {
+      return;
+    }
+
     await this.clickByRoleOrVlm(page, opts);
+  }
+
+  /**
+   * CLWX-74: keyboard fallback for opening a blank compose pane. Outlook Web
+   * maps "N" (New message) and, under some keyboard-shortcut modes, "C"
+   * (Compose). Blur any focused editable and focus the message list first so
+   * the key is delivered to the mail surface (never typed into a field), then
+   * verify a compose pane actually opened before claiming success. Best-effort:
+   * returns false (never throws) so clickNewMail can still fall through to VLM.
+   */
+  private async openComposeViaKeyboard(page: Page): Promise<boolean> {
+    try {
+      await this.prepareFunctionEvaluate(page);
+      await page.evaluate(() => {
+        const active = document.activeElement as HTMLElement | null;
+        if (active && typeof active.blur === 'function') active.blur();
+        const list = document.querySelector<HTMLElement>(
+          '[role="listbox"], [role="region"][aria-label*="Message list" i], [aria-label*="Message list" i]',
+        );
+        if (list) {
+          if (!list.hasAttribute('tabindex')) list.setAttribute('tabindex', '-1');
+          list.focus?.();
+        }
+      }).catch(() => undefined);
+      for (const key of ['n', 'c']) {
+        await this.driver.pressKey(key);
+        try {
+          await this.waitForComposePane(page, 5_000);
+          logger.info(`[outlook-v2] Opened compose pane with Outlook keyboard shortcut fallback (${key})`);
+          return true;
+        } catch {
+          // Try the next shortcut; tenant keyboard-shortcut mode may differ.
+        }
+      }
+      return false;
+    } catch (err) {
+      logger.debug?.(
+        `[outlook-v2] compose keyboard fallback missed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return false;
+    }
   }
 
   private async resetComposeSurfaceToInbox(page: Page): Promise<boolean> {
@@ -1935,10 +2027,47 @@ export class OutlookActions {
     }
 
     logger.info('[outlook-v2] New mail hidden behind compose surface; resetting Outlook tab to inbox');
-    await page.goto(this.outlookMailUrl(page, 'inbox'), {
-      timeout: 30_000,
-      waitUntil: 'domcontentloaded',
-    });
+    // CLWX-74: SPA-native first. This path is ONLY reached while a compose
+    // surface is open, and a hard page.goto is aborted by the SPA whenever a
+    // compose dialog is in flight (net::ERR_ABORTED, seen live 2026-09-02 in
+    // ensureMailFolder). The bare goto here had no .catch(), so that abort was
+    // thrown straight out of clickNewMail and dead-ended the whole draft. Click
+    // the Inbox folder in the sidebar like a principal would (never a full
+    // navigation), and only fall back to a GUARDED goto if the sidebar link is
+    // absent. Selector is rotated-surface class so it carries 3+ fallbacks per
+    // the DOM-selector rule (mirrors ensureMailFolder).
+    const inboxLink = page.locator([
+      '[role="treeitem"][aria-label*="Inbox" i]',
+      '[title="Inbox"]',
+      'a:has-text("Inbox")',
+      'div[role="treeitem"]:has-text("Inbox")',
+    ].join(','));
+    let clicked = false;
+    try {
+      if ((await inboxLink.count()) > 0) {
+        await inboxLink.first().click({ timeout: 5_000 });
+        clicked = true;
+        await this.driver.sleep(1_000);
+      }
+    } catch (err) {
+      logger.debug?.(
+        `[outlook-v2] Inbox sidebar click failed, falling back to goto: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+    if (!clicked) {
+      await page.goto(this.outlookMailUrl(page, 'inbox'), {
+        timeout: 30_000,
+        waitUntil: 'domcontentloaded',
+      }).catch((err) => {
+        logger.debug?.(
+          `[outlook-v2] Inbox reset navigation failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      });
+    }
     await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
     await page.waitForSelector(
       [
@@ -2711,6 +2840,16 @@ export class OutlookActions {
       imageHeight: shot.height,
       question: `The "${label}" input field in the open Outlook compose pane.`,
     });
+    if (r.unavailable) {
+      // CLWX-74: the managed VLM provider is unreachable on this device (e.g. a
+      // tester with no cloud sign-in). Do not dead-end with an opaque locator
+      // error — tell the principal what to do.
+      throw new Error(
+        `ClawX could not fill the "${label}" field: its visual assistant is unavailable on `
+        + 'this computer (no cloud model sign-in). Open the email in Outlook and complete it '
+        + 'manually, or sign in to the online model, then retry.',
+      );
+    }
     if (!r.found || !r.bbox || r.confidence < 0.5) {
       throw new Error(`Could not locate field "${label}" via semantic locator or VLM`);
     }
@@ -2951,6 +3090,15 @@ export class OutlookActions {
       imageHeight: shot.height,
       question: 'The large message body editor in the open Outlook compose pane (where the email content goes).',
     });
+    if (r.unavailable) {
+      // CLWX-74: managed VLM provider unreachable — surface a readable
+      // instruction instead of an opaque "could not locate" error.
+      throw new Error(
+        'ClawX could not fill the message body: its visual assistant is unavailable on '
+        + 'this computer (no cloud model sign-in). Open the email in Outlook and complete it '
+        + 'manually, or sign in to the online model, then retry.',
+      );
+    }
     if (!r.found || !r.bbox) {
       throw new Error('Could not locate the message body editor');
     }
