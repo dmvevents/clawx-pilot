@@ -64,7 +64,7 @@ describe('prepareGatewayLaunchContext', () => {
     }
   });
 
-  async function loadPrepareGatewayLaunchContext() {
+  async function loadPrepareGatewayLaunchContext(options: { isPackaged?: boolean } = {}) {
     const tempRoot = mkdtempSync(join(tmpdir(), 'clawx-config-sync-'));
     const openclawDir = join(tempRoot, 'openclaw');
     const configDir = join(tempRoot, 'config');
@@ -75,7 +75,7 @@ describe('prepareGatewayLaunchContext', () => {
 
     vi.doMock('electron', () => ({
       app: {
-        isPackaged: false,
+        isPackaged: options.isPackaged ?? false,
         getVersion: () => '0.4.3-test',
         getAppPath: () => '/repo',
       },
@@ -166,5 +166,33 @@ describe('prepareGatewayLaunchContext', () => {
     expect(context.forkEnv.CLAWX_HOST_API_PORT).toBe('13210');
     expect(context.forkEnv.CLAWX_HOST_API_TOKEN).toMatch(/^[a-f0-9]{64}$/);
     expect(context.forkEnv.OPENCLAW_GATEWAY_TOKEN).toBe('gateway-token');
+  });
+
+  it('does not set CLAWX_APP_RESOURCES in dev mode', async () => {
+    const { prepareGatewayLaunchContext } = await loadPrepareGatewayLaunchContext();
+
+    const context = await prepareGatewayLaunchContext(18789);
+
+    expect(context.forkEnv.CLAWX_APP_RESOURCES).toBeUndefined();
+  });
+
+  it('sets CLAWX_APP_RESOURCES to process.resourcesPath when packaged so bundled doc parsers resolve', async () => {
+    const originalResourcesPath = process.resourcesPath;
+    Object.defineProperty(process, 'resourcesPath', {
+      value: '/packaged/app/resources',
+      configurable: true,
+    });
+    try {
+      const { prepareGatewayLaunchContext } = await loadPrepareGatewayLaunchContext({ isPackaged: true });
+
+      const context = await prepareGatewayLaunchContext(18789);
+
+      expect(context.forkEnv.CLAWX_APP_RESOURCES).toBe('/packaged/app/resources');
+    } finally {
+      Object.defineProperty(process, 'resourcesPath', {
+        value: originalResourcesPath,
+        configurable: true,
+      });
+    }
   });
 });
