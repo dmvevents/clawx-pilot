@@ -39,13 +39,30 @@ export interface ChromeCdpStatus {
   error?: string;
 }
 
+/** Handle to a Chrome process WE spawned, so we can kill it on attach timeout. */
+export interface SpawnedChrome {
+  pid?: number;
+  kill: () => void;
+}
+
 export interface ChromeCdpOptions {
   cdpEndpoint?: string;
   debugPort?: number;
   userDataDir?: string;
   fallbackUserDataDir?: string;
+  /**
+   * The dedicated, non-default profile directory we launch Chrome with for CDP.
+   * Chrome M136+ refuses `--remote-debugging-port` on the OS-default dir, so the
+   * self-launch always uses this sibling profile instead (CLWX-73 / K1 / K2).
+   */
+  cdpProfileDir?: string;
   chromeExecutable?: string;
   waitMs?: number;
+  /**
+   * @deprecated Inert. A managed/throwaway Chromium profile is NEVER launched
+   * (it trips Conditional Access — AADSTS53003). Kept only so existing callers
+   * that still pass it type-check; remove once the callers stop passing it.
+   */
   allowManagedProfileFallback?: boolean;
 }
 
@@ -56,7 +73,8 @@ export interface ChromeCdpRuntime {
   existsSync?: (path: string) => boolean;
   fetchJson?: (url: string, timeoutMs: number) => Promise<{ ok: boolean; status: number; json?: unknown; text?: string }>;
   listChromeProcesses?: () => Promise<ChromeProcessInfo[]>;
-  spawnDetached?: (file: string, args: string[]) => void;
+  spawnDetached?: (file: string, args: string[]) => SpawnedChrome | void;
+  chromeProductVersion?: (chromeExecutable: string, platform: NodeJS.Platform) => Promise<string | undefined>;
   sleep?: (ms: number) => Promise<void>;
 }
 
@@ -113,6 +131,40 @@ export function defaultManagedChromeUserDataDir(
   }
 }
 
+/**
+ * A user-owned but NON-default Chrome profile directory, used only to launch the
+ * Chrome instance we drive over CDP.
+ *
+ * Chrome M136+ silently refuses `--remote-debugging-port` when Chrome is
+ * launched against the OS-default user-data-dir, so the port never binds and we
+ * time out (CLWX-73 / K1 / K2). Pointing the self-launch at a dedicated sibling
+ * profile restores a working DevTools endpoint. This is an ORDINARY unmanaged
+ * user profile under the user's own space — it is NOT managed Chromium and sets
+ * no enterprise policy, so it does not trip Conditional Access the way a managed
+ * profile would (AADSTS53003). It does start without SSO cookies, so the
+ * principal signs into that window once.
+ *
+ * Mirrors windows-pilot/scripts/pilot-attach-chrome-cdp-demo.ps1.
+ */
+export function defaultChromeCdpProfileDir(
+  platform: NodeJS.Platform = osPlatform(),
+  env: NodeJS.ProcessEnv = process.env,
+  home = homedir(),
+): string {
+  switch (platform) {
+    case 'darwin':
+      return joinForPlatform(platform, home, 'Library', 'Application Support', 'Google', 'Chrome ClawX CDP');
+    case 'win32': {
+      const localAppData = env.LOCALAPPDATA ?? win32.join(home, 'AppData', 'Local');
+      return win32.join(localAppData, 'Google', 'Chrome', 'ClawX CDP Profile');
+    }
+    case 'linux':
+      return joinForPlatform(platform, home, '.config', 'google-chrome-clawx-cdp');
+    default:
+      return join(home, '.clawx', 'chrome-cdp-profile');
+  }
+}
+
 export function defaultChromeExecutables(
   platform: NodeJS.Platform = osPlatform(),
   env: NodeJS.ProcessEnv = process.env,
@@ -163,6 +215,9 @@ function resolveConfig(opts: ChromeCdpOptions = {}, runtime: ChromeCdpRuntime = 
     fallbackUserDataDir: opts.fallbackUserDataDir
       ?? env.CLAWX_CHROME_FALLBACK_USER_DATA_DIR
       ?? defaultManagedChromeUserDataDir(platform, env, home),
+    cdpProfileDir: opts.cdpProfileDir
+      ?? env.CLAWX_CHROME_CDP_PROFILE_DIR
+      ?? defaultChromeCdpProfileDir(platform, env, home),
     chromeExecutable: opts.chromeExecutable ?? env.CLAWX_CHROME_EXECUTABLE ?? resolveChromeExecutable(platform, env, existsSync),
     waitMs: opts.waitMs ?? (Number.isFinite(envWaitMs) ? envWaitMs : 12_000),
     allowManagedProfileFallback: opts.allowManagedProfileFallback
@@ -257,20 +312,50 @@ async function listChromeProcesses(runtime: ChromeCdpRuntime, platform: NodeJS.P
   }
 }
 
+/**
+ * Best-effort Chrome ProductVersion for diagnosis (no secrets — a version
+ * string only). Chrome M136+ is the boundary where remote debugging on the
+ * default dir stopped working, so logging the version makes a fresh-box attach
+ * failure (K1 / K2) diagnosable from a pasted log.
+ */
+async function defaultChromeProductVersion(
+  chromeExecutable: string,
+  platform: NodeJS.Platform,
+): Promise<string | undefined> {
+  if (!chromeExecutable) return undefined;
+  try {
+    if (platform === 'win32') {
+      const command = `(Get-Item -LiteralPath '${chromeExecutable.replace(/'/g, "''")}').VersionInfo.ProductVersion`;
+      const { stdout } = await execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+        timeout: 5_000,
+        windowsHide: true,
+      });
+      return stdout.trim() || undefined;
+    }
+    const { stdout } = await execFile(chromeExecutable, ['--version'], { timeout: 5_000 });
+    return stdout.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function normalizedPathForCompare(pathValue: string, platform: NodeJS.Platform): string {
   const normalized = pathValue.replace(/\//g, '\\').toLowerCase();
   return platform === 'win32' ? normalized : pathValue;
 }
 
-function commandUsesTargetProfile(commandLine: string, cfg: ChromeCdpConfig): boolean {
+/**
+ * True when a Chrome process is running against OUR dedicated CDP profile dir.
+ * A Chrome on the user's DEFAULT profile (no explicit `--user-data-dir`) is NOT
+ * counted: we launch our dedicated profile alongside it rather than fighting it
+ * (CLWX-73).
+ */
+function commandUsesCdpProfile(commandLine: string, cfg: ChromeCdpConfig): boolean {
   const lower = commandLine.toLowerCase();
   if (lower.includes('--type=')) return false;
-  if (lower.includes('user-data-dir')) {
-    return normalizedPathForCompare(commandLine, cfg.platform).includes(normalizedPathForCompare(cfg.userDataDir, cfg.platform));
-  }
-  return normalizedPathForCompare(cfg.userDataDir, cfg.platform) === normalizedPathForCompare(
-    defaultChromeUserDataDir(cfg.platform, cfg.env, cfg.homedir),
-    cfg.platform,
+  if (!lower.includes('user-data-dir')) return false;
+  return normalizedPathForCompare(commandLine, cfg.platform).includes(
+    normalizedPathForCompare(cfg.cdpProfileDir, cfg.platform),
   );
 }
 
@@ -287,13 +372,13 @@ function buildStatus(
   action: ChromeCdpStatus['action'],
   extras: Partial<ChromeCdpStatus> = {},
 ): ChromeCdpStatus {
-  const targetProfileProcessCount = processes.filter((proc) => commandUsesTargetProfile(proc.commandLine, cfg)).length;
+  const targetProfileProcessCount = processes.filter((proc) => commandUsesCdpProfile(proc.commandLine, cfg)).length;
   const remoteDebugProcessCount = processes.filter((proc) => commandUsesRemoteDebugPort(proc.commandLine, cfg.debugPort)).length;
   return {
     state,
     cdpEndpoint: cfg.cdpEndpoint,
     debugPort: cfg.debugPort,
-    userDataDir: cfg.userDataDir,
+    userDataDir: cfg.cdpProfileDir,
     chromeExecutable: cfg.chromeExecutable,
     chromeProcessCount: processes.length,
     targetProfileProcessCount,
@@ -330,13 +415,18 @@ export async function diagnoseChromeCdp(
   }
 
   const processes = await listChromeProcesses(runtime, cfg.platform);
-  const targetProfileProcessCount = processes.filter((proc) => commandUsesTargetProfile(proc.commandLine, cfg)).length;
-  if (targetProfileProcessCount > 0) {
+  // A running DEFAULT-profile Chrome is NOT a blocker: we launch our dedicated,
+  // non-default CDP profile alongside it (CLWX-73). Only OUR automation profile
+  // already being open, or a Chrome already holding our debug port, should stop
+  // us from launching a duplicate we cannot attach to.
+  const cdpProfileProcessCount = processes.filter((proc) => commandUsesCdpProfile(proc.commandLine, cfg)).length;
+  const remoteDebugProcessCount = processes.filter((proc) => commandUsesRemoteDebugPort(proc.commandLine, cfg.debugPort)).length;
+  if (cdpProfileProcessCount > 0 || remoteDebugProcessCount > 0) {
     return buildStatus(
       cfg,
       'profile_locked_close_chrome',
       processes,
-      'Chrome is already open with the target profile, but ClawX cannot attach to it yet. Close all Chrome windows, then retry from ClawX so it can reopen Chrome in automation mode.',
+      'ClawX already has a Chrome automation window open but cannot attach to it yet. Close that Chrome window, then retry from ClawX so it can reopen Chrome in automation mode.',
       'close_chrome_then_retry',
       { error: ready.error },
     );
@@ -346,19 +436,31 @@ export async function diagnoseChromeCdp(
     cfg,
     'cdp_down_chrome_closed',
     processes,
-    'Chrome browser automation is not ready and the target Chrome profile is not currently locked. ClawX can safely launch system Chrome in automation mode.',
+    'Chrome browser automation is not ready and the ClawX automation profile is not currently locked. ClawX can safely launch system Chrome in automation mode.',
     'launch_chrome',
     { error: ready.error },
   );
 }
 
-function defaultSpawnDetached(file: string, args: string[]): void {
+function defaultSpawnDetached(file: string, args: string[]): SpawnedChrome {
   const child = spawnProcess(file, args, {
     detached: true,
     stdio: 'ignore',
     windowsHide: false,
   });
+  // Detach so Chrome outlives a transient call, but keep the handle so we can
+  // kill THIS process if the debug port never binds (CLWX-73 no-orphan rule).
   child.unref();
+  return {
+    pid: child.pid,
+    kill: () => {
+      try {
+        child.kill();
+      } catch {
+        /* already exited */
+      }
+    },
+  };
 }
 
 async function defaultSleep(ms: number): Promise<void> {
@@ -370,17 +472,31 @@ async function launchChromeForCdp(
   runtime: ChromeCdpRuntime,
   initialError?: string,
 ): Promise<ChromeCdpStatus> {
+  // Launch the user's SYSTEM Chrome against a dedicated, NON-default profile
+  // dir. Chrome M136+ refuses remote debugging on the OS-default dir, so using
+  // the default profile would never bind :debugPort (CLWX-73 / K1 / K2). This
+  // is still an ordinary unmanaged user profile — never managed Chromium.
   const args = [
     `--remote-debugging-port=${cfg.debugPort}`,
-    `--user-data-dir=${cfg.userDataDir}`,
+    `--user-data-dir=${cfg.cdpProfileDir}`,
     '--no-first-run',
     '--no-default-browser-check',
     '--restore-last-session',
   ];
 
+  // Log the Chrome ProductVersion (a version string only, no secrets) so a
+  // fresh-box attach failure is diagnosable from a pasted log.
   try {
-    logger.info(`[chrome-cdp] launching Chrome for CDP at ${cfg.cdpEndpoint}`);
-    (runtime.spawnDetached ?? defaultSpawnDetached)(cfg.chromeExecutable, args);
+    const version = await (runtime.chromeProductVersion ?? defaultChromeProductVersion)(cfg.chromeExecutable, cfg.platform);
+    if (version) logger.info(`[chrome-cdp] Chrome ProductVersion: ${version}`);
+  } catch {
+    /* diagnostics only — never block the launch */
+  }
+
+  let spawned: SpawnedChrome | void;
+  try {
+    logger.info(`[chrome-cdp] launching Chrome for CDP at ${cfg.cdpEndpoint} (dedicated automation profile)`);
+    spawned = (runtime.spawnDetached ?? defaultSpawnDetached)(cfg.chromeExecutable, args);
   } catch (error) {
     return buildStatus(
       cfg,
@@ -407,6 +523,18 @@ async function launchChromeForCdp(
     await sleep(500);
   }
 
+  // Timed out. Kill the Chrome WE spawned so a later diagnose does not misread
+  // our own failed launch as a user profile lock and ping-pong the repair loop
+  // (CLWX-73). Never orphan it.
+  if (spawned && typeof spawned.kill === 'function') {
+    try {
+      spawned.kill();
+      logger.warn(`[chrome-cdp] killed the Chrome we spawned (pid ${spawned.pid ?? 'unknown'}) after port-bind timeout`);
+    } catch (error) {
+      logger.warn(`[chrome-cdp] could not kill our spawned Chrome after timeout: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   const processes = await listChromeProcesses(runtime, cfg.platform);
   return buildStatus(
     cfg,
@@ -426,14 +554,14 @@ export async function ensureChromeCdpReady(
   const initial = await diagnoseChromeCdp(opts, runtime);
   if (initial.state === 'cdp_ready') return initial;
 
-  // Tenant hard rule (CLWX-73): NEVER launch a managed Chromium profile for
-  // @moe.gov.tt / @fac.edu.tt flows. Microsoft Conditional Access blocks
-  // managed sessions (AADSTS53003), and a managed profile trains testers to
-  // sign into a throwaway automation profile instead of their own signed-in
-  // Chrome. We only ever launch SYSTEM Chrome with the user's OWN profile, and
-  // only when that profile is not currently locked. Every other state degrades
-  // to a principal-readable instruction (see buildStatus messages) that the
-  // caller surfaces verbatim.
+  // Tenant hard rule (CLWX-73): NEVER launch a MANAGED Chromium profile for
+  // @moe.gov.tt / @fac.edu.tt flows — Microsoft Conditional Access blocks
+  // managed sessions (AADSTS53003). We launch the user's SYSTEM Chrome against a
+  // dedicated, NON-default user-owned profile dir (cfg.cdpProfileDir): still an
+  // ordinary unmanaged profile, but not the OS-default dir that Chrome M136+
+  // refuses remote debugging on (K1 / K2). We only launch when that automation
+  // profile is not already locked; every other state degrades to a
+  // principal-readable instruction (see buildStatus messages) surfaced verbatim.
   if (initial.state !== 'cdp_down_chrome_closed') return initial;
 
   return launchChromeForCdp(cfg, runtime, initial.error);
