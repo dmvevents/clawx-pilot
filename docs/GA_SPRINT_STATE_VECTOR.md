@@ -579,9 +579,16 @@ the production-integration milestone, not a GA blocker.
   `/tmp/moe18-vm-verify-packet.md`; adds a moe.13 no-clobber leg); any RED ⇒
   draft-and-hold heads-up for owner GO. Open hardening candidates from the
   moe.17 addendum: orphaned degrade turn, post-restore wedge-until-relaunch,
-  phantom prompt replay under CDP churn. **Owner ask: `gcloud auth login`**
-  (unattended-reauth killed a background gsutil; tunnel is up but can't be
-  restarted without it).
+  phantom prompt replay under CDP churn. **Owner ask (two commands while
+  authed): `gcloud auth login`, then
+  `gcloud iam service-accounts keys create ~/.config/gcloud/claude-ssh-sa-key.json
+  --iam-account=claude-ssh-sa@gen-lang-client-0649986230.iam.gserviceaccount.com`**
+  — the periodic-reauth policy killed the whole VM lane (tunnel + gsutil + ADC
+  at once; verifier probed all fallbacks dead), and the intended SA self-heal
+  key on disk is 0 bytes (Aug-12 create never completed), which is why this
+  class recurs. Mac-hop hash of the shipped moe.18 exe: PASS (verifier);
+  guest hop pending auth. Verify resume is one staged script + a live
+  credential poll.
 
 ---
 
