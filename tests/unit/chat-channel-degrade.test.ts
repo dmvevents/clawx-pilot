@@ -338,4 +338,85 @@ describe('chat store: send-time channel degradation', () => {
     expect(store.getState().degradeNotice).toBeNull();
     expect(store.getState().error).toContain('401');
   });
+
+  // ── Active channel derives from the runtime default account, not the stored
+  //    preference (CLWX-94/96). A boot preflight or an earlier degrade can move
+  //    the runtime default onto on-device while `preferredChannel` still reads
+  //    "online". Deriving the active channel from the preference would then
+  //    mis-read an already-on-device turn as cloud and try to degrade it again
+  //    (a redundant channel write + a resend of a turn that already ran local).
+  it('treats an unreachable error as an on-device outage when the DEFAULT account is on-device, even if the preference still says online (CLWX-94)', async () => {
+    // Runtime truth: the on-device account is marked isDefault (what
+    // getActiveChannel reads). The preference lags at "online".
+    providerState.accounts = [
+      { id: 'google', type: 'google', vendorId: 'google', model: 'gemini-2.5-pro' },
+      { id: 'ollama', type: 'ollama', vendorId: 'ollama', baseUrl: 'http://127.0.0.1:11434', model: 'qwen2.5:3b-instruct', isDefault: true },
+    ];
+    settingsState.preferredChannel = 'online';
+    const store = await loadStore();
+    emitError(store, 'LLM request failed: network connection error. rawError=Connection error.');
+    await settle();
+
+    // Because the runtime is ACTUALLY on-device, this is the K13 direction: a
+    // prompt to switch to Online, never a silent cloud→on-device degrade. If the
+    // channel were derived from the (stale) preference it would POST a redundant
+    // degradeChannel instead.
+    expect(degradeCalls()).toEqual([]);
+    expect(preferenceWrites()).toEqual([]);
+    expect(settingsState.setPreferredChannel).not.toHaveBeenCalled();
+    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: false, to: 'online' });
+  });
+
+  // ── Run-ownership token (CLWX-94). The degrade path resends the failed turn,
+  //    creating a newer run. Until that resend's RPC returns, `activeRunId` still
+  //    names the old run, so a late terminal event for the old run passes the
+  //    active-run filter. It must not clear the newer send's replay payload. ──
+  it('does not let a superseded run\'s late final clear a newer send\'s replay payload (CLWX-94)', async () => {
+    const store = await loadStore();
+
+    // Turn one commits generation 1 and binds run-A to it.
+    gatewayRpcMock.mockResolvedValueOnce({ runId: 'run-A' });
+    await store.getState().sendMessage('first turn');
+    expect(store.getState().activeRunId).toBe('run-A');
+
+    // Turn two commits generation 2 (a fresh replay payload) but its RPC hangs,
+    // so activeRunId is still 'run-A' — the exact mid-resend window.
+    gatewayRpcMock.mockImplementationOnce(() => new Promise<{ runId: string }>(() => {}));
+    void store.getState().sendMessage('second turn');
+    await settle();
+    expect(store.getState().lastSentPayload?.text).toBe('second turn');
+
+    // A late clean final for the SUPERSEDED run-A arrives. It clears the
+    // active-run filter (activeRunId is still run-A) but belongs to generation 1,
+    // so it must NOT wipe the generation-2 payload the newer send may replay.
+    store.getState().handleChatEvent({
+      state: 'final',
+      runId: 'run-A',
+      sessionKey: 'agent:main:main',
+      message: { role: 'assistant', id: 'a-A', stopReason: 'stop', content: [{ type: 'text', text: 'stale answer' }] },
+    });
+    await settle();
+
+    expect(store.getState().lastSentPayload?.text).toBe('second turn');
+  });
+
+  it('clears the replay payload when the owning run finishes cleanly (CLWX-94)', async () => {
+    const store = await loadStore();
+
+    gatewayRpcMock.mockResolvedValueOnce({ runId: 'run-A' });
+    await store.getState().sendMessage('only turn');
+    expect(store.getState().lastSentPayload?.text).toBe('only turn');
+
+    // The run that still owns the payload produces a real answer → payload is no
+    // longer needed for replay and must be cleared.
+    store.getState().handleChatEvent({
+      state: 'final',
+      runId: 'run-A',
+      sessionKey: 'agent:main:main',
+      message: { role: 'assistant', id: 'a-A', stopReason: 'stop', content: [{ type: 'text', text: 'here is your answer' }] },
+    });
+    await settle();
+
+    expect(store.getState().lastSentPayload).toBeNull();
+  });
 });

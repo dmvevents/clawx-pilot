@@ -10,7 +10,7 @@ import { useAgentsStore } from './agents';
 import { useSettingsStore } from './settings';
 import { useProviderStore } from './providers';
 import { classifyFailure, shouldDegradeToOnDevice, shouldPromptSwitchToOnline } from '@/lib/channel-degrade';
-import { pickAccountForChannel, type ProviderClass } from '@/lib/provider-display';
+import { classifyProvider, pickAccountForChannel, type ProviderClass } from '@/lib/provider-display';
 import { buildBaselineRunKey, captureBaseline, clearBaselines } from './baseline-cache';
 import { buildCronSessionHistoryPath, isCronSessionKey } from './chat/cron-session-utils';
 import {
@@ -55,6 +55,24 @@ export type {
 // during tool-use conversations where streamingMessage is temporarily cleared
 // between tool-result finals and the next delta.
 let _lastChatEventAt = 0;
+
+// Whether ANY streaming event (delta/final/error/aborted) has arrived for the
+// in-flight send. Reset in `sendMessage`; set in `handleChatEvent` when a
+// useful event lands. The safety-timeout watchdog uses this as the CLWX-78
+// "no bytes / no stream event" unreachability signal: if 90s elapse with the
+// composer still spinning and NOTHING ever streamed, the provider was
+// unreachable (degrade), whereas a turn that streamed and then went quiet is
+// merely slow (surface the generic error, do not false-degrade mid-work).
+let _streamEventSeenThisSend = false;
+
+// Monotonic run-ownership token (CLWX-94). Each `sendMessage` bumps this and
+// stamps `lastSentPayload.generation` with it, so a terminal event from a run
+// that a degrade resend has already superseded cannot clear the newer send's
+// payload (which its own failover may still need to resend). `_runGenerationById`
+// maps a gateway runId back to the generation that issued it, so `final`/`error`
+// can tell whether they own the payload currently in the store.
+let _sendGeneration = 0;
+const _runGenerationById = new Map<string, number>();
 
 /** Normalize a timestamp to milliseconds. Handles both seconds and ms. */
 function toMs(ts: number): number {
@@ -1693,11 +1711,23 @@ async function maybeDegradeChannel(
   const onDevice = pickAccountForChannel(accounts, 'on-device');
   const online = pickAccountForChannel(accounts, 'online');
 
-  // What the runtime was actually on, not merely what was preferred: a boot
-  // preflight may already have put us on-device despite an Online preference.
-  const activeChannel: ProviderClass = online && settings.preferredChannel === 'online'
-    ? 'online'
-    : (onDevice ? 'on-device' : 'online');
+  // What the runtime is ACTUALLY on, not merely what was preferred. The single
+  // source of truth is the default provider account — exactly what the
+  // main-process getActiveChannel() reads (getDefaultProvider ->
+  // classifyAccount). `preferredChannel` is only a PREFERENCE: a boot preflight
+  // or an earlier degrade can move the runtime default onto on-device while the
+  // preference still reads "online", and deriving from the preference then
+  // mis-classifies an already-degraded turn as cloud and tries to degrade it
+  // again (CLWX-94/96). The renderer cannot import getActiveChannel (it lives in
+  // the electron main process), so we replicate its logic against the coherent
+  // provider-store snapshot: the account applyChannelChange marked `isDefault`.
+  // Fall back to the preference derivation only when no default is marked yet.
+  const defaultAccount = accounts.find((a) => a.isDefault === true);
+  const runtimeChannel: ProviderClass | null = defaultAccount ? classifyProvider(defaultAccount) : null;
+  const activeChannel: ProviderClass = runtimeChannel
+    ?? (online && settings.preferredChannel === 'online'
+      ? 'online'
+      : (onDevice ? 'on-device' : 'online'));
 
   // A dead on-device turn does NOT auto-fail-over. This is what the external
   // tester actually hit (K13): a local model that stopped answering surfaced
@@ -2641,6 +2671,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         filePath: a.stagedPath,
       })),
     };
+    // Claim a fresh run-ownership token for this turn (CLWX-94). Stamped onto
+    // lastSentPayload so a terminal event from a run a degrade resend has
+    // already superseded cannot clear the payload this newer send may still
+    // need to replay.
+    const sendGeneration = ++_sendGeneration;
     set((s) => ({
       messages: [...s.messages, userMsg],
       sending: true,
@@ -2653,9 +2688,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       lastUserMessageAt: nowMs,
       // Retain the payload so a network-class failure can be replayed on the
       // on-device channel (see `src/lib/channel-degrade.ts`). Cleared on
-      // `final`. `degradedThisTurn` resets here because this is a fresh turn —
-      // the degrade resend path re-sets it to true immediately after calling in.
-      lastSentPayload: { text, attachments, targetAgentId },
+      // `final` (guarded by the generation token). `degradedThisTurn` resets
+      // here because this is a fresh turn — the degrade resend path re-sets it
+      // to true immediately after calling in.
+      lastSentPayload: { text, attachments, targetAgentId, generation: sendGeneration },
       degradedThisTurn: false,
       degradeNotice: null,
     }));
@@ -2677,6 +2713,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // RPC await) because the gateway's chat.send RPC may block until the
     // entire agentic conversation finishes — the poll must run in parallel.
     _lastChatEventAt = Date.now();
+    // Fresh turn: no stream event has arrived yet. The watchdog reads this to
+    // tell an unreachable provider (nothing ever streamed) from a merely slow
+    // one (streamed, then went quiet) — CLWX-78.
+    _streamEventSeenThisSend = false;
     clearHistoryPoll();
     clearErrorRecoveryTimer();
 
@@ -2699,6 +2739,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     _historyPollTimer = setTimeout(pollHistory, POLL_START_DELAY);
 
     const SAFETY_TIMEOUT_MS = 90_000;
+    const NO_RESPONSE_ERROR = 'No response received from the model. The provider may be unavailable or the API key may have insufficient quota. Please check your provider settings.';
     const checkStuck = () => {
       const state = get();
       if (!state.sending) return;
@@ -2711,13 +2752,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
         setTimeout(checkStuck, 10_000);
         return;
       }
+      // Terminal watchdog (CLWX-95): 90s of silence with nothing streaming and
+      // no pending final — the composer can never be left spinning forever.
       clearHistoryPoll();
+
+      // CLWX-78 residual: route a stall through the same send-time failover as
+      // the `error`/`final` paths, but ONLY when it is genuine unreachability
+      // evidence — nothing ever streamed for this send (no bytes, no stream
+      // event). A turn that streamed and then went quiet is merely slow; degrading
+      // it mid-work would false-positive and abandon partial progress, so that
+      // case keeps the plain "no response" error. Set the error first so that if
+      // the failover itself cannot even reach the local host API the principal is
+      // left looking at an honest error rather than a dead spinner.
       set({
-        error: 'No response received from the model. The provider may be unavailable or the API key may have insufficient quota. Please check your provider settings.',
+        error: NO_RESPONSE_ERROR,
         sending: false,
         activeRunId: null,
         lastUserMessageAt: null,
       });
+      if (!_streamEventSeenThisSend) {
+        const toolsRan = get().streamingTools.length > 0 || get().pendingToolImages.length > 0;
+        // Synthetic error string chosen to classify as `unreachable` (matches
+        // UNREACHABLE_PATTERNS: "provider unreachable" / "no response from model").
+        void maybeDegradeChannel(set, get, 'provider unreachable: no response from model', toolsRan);
+      }
     };
     setTimeout(checkStuck, 30_000);
 
@@ -2791,6 +2849,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           set({ error: errorMsg, sending: false });
         }
       } else if (result.result?.runId) {
+        // Bind this run to the generation that issued it so a terminal event
+        // can tell whether it still owns lastSentPayload (CLWX-94).
+        _runGenerationById.set(result.result.runId, sendGeneration);
         set({ activeRunId: result.result.runId });
       }
     } catch (err) {
@@ -2874,6 +2935,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // whatever stale payload we happen to be holding.
     const hadLocalSendInFlight = get().sending;
     if (hasUsefulData) {
+      // A real stream event arrived, so the provider was reachable this send.
+      // The stall watchdog reads this to avoid false-degrading a merely-slow
+      // turn that streamed and then went quiet (CLWX-78).
+      _streamEventSeenThisSend = true;
       clearHistoryPoll();
       // Adopt run started from another client (e.g. console at 127.0.0.1:18789):
       // show loading/streaming in the app when this session has an active run.
@@ -2925,7 +2990,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // longer needed. `degradeNotice` is deliberately left alone — if this
         // final came from an on-device resend, the principal should still see
         // that their turn was answered on this device rather than online.
-        if (get().lastSentPayload) set({ lastSentPayload: null });
+        //
+        // CLWX-94: clear the payload ONLY when this `final` is a genuine answer
+        // AND belongs to the run that still owns the payload.
+        //   - A `final` that actually carries a terminal assistant error
+        //     re-dispatches to the `error` case below, whose degrade path must
+        //     still consume the payload to resend on-device — nulling it here
+        //     would defeat auto-resend (the exact trap flagged for this fix).
+        //   - Run-ownership token: a late `final` from a run that a degrade
+        //     resend has already superseded (older generation than the payload
+        //     now in the store) must not wipe the newer send's replayable payload.
+        //     An unknown runId falls back to clearing, which is safe — an adopted
+        //     run never set lastSentPayload in this client.
+        {
+          const finalMsgForClear = event.message as RawMessage | undefined;
+          const finalIsTerminalError = finalMsgForClear
+            ? isTerminalAssistantErrorMessage(normalizeStreamingMessage(finalMsgForClear) as RawMessage)
+            : false;
+          const ownedPayload = get().lastSentPayload;
+          if (!finalIsTerminalError && ownedPayload) {
+            const finalGen = runId ? _runGenerationById.get(runId) : undefined;
+            if (finalGen === undefined || finalGen >= (ownedPayload.generation ?? 0)) {
+              set({ lastSentPayload: null });
+              if (runId) _runGenerationById.delete(runId);
+            }
+          }
+        }
         // Message complete - add to history and clear streaming
         const finalMsg = event.message as RawMessage | undefined;
         if (finalMsg) {

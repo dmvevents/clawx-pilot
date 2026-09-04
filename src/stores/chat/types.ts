@@ -125,6 +125,13 @@ export interface ChatState {
       preview: string | null;
     }>;
     targetAgentId?: string | null;
+    /**
+     * Run-ownership token (CLWX-94). The monotonic send-generation that created
+     * this payload. A terminal event only clears the payload when it belongs to
+     * the generation that still owns it, so a superseded run cannot wipe a newer
+     * send's replayable payload.
+     */
+    generation?: number;
   } | null;
   /**
    * Set once we have already moved this turn onto the on-device channel.

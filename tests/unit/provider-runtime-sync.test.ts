@@ -186,6 +186,20 @@ describe('provider-runtime-sync refresh strategy', () => {
     expect(gateway.debouncedRestart).not.toHaveBeenCalled();
   });
 
+  it('writes the config but skips the gateway refresh when skipGatewayRefresh is set (per-run degrade, CLWX-95/96)', async () => {
+    // The send-time degrade path writes the on-device channel and then resends
+    // the failed turn immediately. Bouncing the gateway here would race that
+    // resend (on Windows debouncedReload falls through to a full restart),
+    // killing the turn with no terminal event. The four-store write must still
+    // land — only the reload/restart is suppressed.
+    const gateway = createGateway('running');
+    await syncDefaultProviderToRuntime('moonshot', gateway as GatewayManager, { skipGatewayRefresh: true });
+
+    expect(mocks.setOpenClawDefaultModel).toHaveBeenCalledTimes(1);
+    expect(gateway.debouncedReload).not.toHaveBeenCalled();
+    expect(gateway.debouncedRestart).not.toHaveBeenCalled();
+  });
+
   it('uses gpt-5.4 as the browser OAuth default model for OpenAI', async () => {
     mocks.getProvider.mockResolvedValue(
       createProvider({

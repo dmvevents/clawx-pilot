@@ -48,6 +48,11 @@ describe('classifyFailure', () => {
       'Connection error.',
       'LLM request failed: network connection error. rawError=Connection error.',
       'Model call failed Connection error.',
+      // The exact synthetic string the chat store's stall watchdog feeds into
+      // maybeDegradeChannel when a send goes 90s with no stream event at all
+      // (CLWX-78 residual, chat.ts checkStuck). It MUST classify as unreachable
+      // or the watchdog degrade becomes a no-op — pin the coupling here.
+      'provider unreachable: no response from model',
     ];
     for (const c of cases) {
       expect(classifyFailure(c), c).toBe('unreachable');
