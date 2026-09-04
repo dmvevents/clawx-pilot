@@ -86,6 +86,30 @@ unchanged from the fix-sprint delta above; the 2-gate real SEND and a recorded
 Daily-Report submit remain the only demo-critical actions still gated on
 explicit owner go (`GA_GATE_SEND=1` / `DEMO=1`, not run autonomously)._
 
+_**Tick 2026-09-04 (ga-sprint-driver, one tick — minimal-time mode).** SENSE:
+tree clean on `fix/doc-tooling-steering`, static gate GREEN (5/5 T0), board no
+drift, Windows RC VM `clawx-win-rc-20260609` TERMINATED (VM legs unrunnable).
+ANALYZE: CLWX-82 (electron typecheck non-vacuous) already landed `4d183268`;
+highest-leverage remaining P item = CLWX-58 (compose auto-recovery), which had
+NO live proof — the eval clears any open compose BEFORE drafting, so it never
+exercised the runtime `recoverComposeState` pre-flight. ACT (commit `3512f02f`):
+added `scripts/clwx58-compose-recovery-check.ts`, a durable draft-only live
+verifier proving BOTH halves — RECOVER (stale automation-OWNED compose →
+next draft SUCCEEDS = auto-recovered, not a wedge) and PROTECT (human-looking
+draft → automation draft REFUSES cleanly, names the untouched draft, never
+clobbers it) — and wired it as a permanent T1 lane row in `scripts/ga-gate.mjs`
+(exit 0/1/2, mirrors the CLWX-46 check). The check PASSED live standalone twice
+(both legs, exit 0) on the test.fac session; root + electron typecheck GREEN. The
+full `ga:gate` end-to-end re-green is PENDING a Chrome/CDP recovery: the shared
+Outlook renderer tab crashed mid-run (`Page crashed` → `connectOverCDP` timeout
+on the stale target), which fails ALL T1 live checks equally until the signed-in
+Chrome is restarted — a lane condition, not a product or wiring defect (T0 GREEN,
+new row parses/executes, CLWX-58 + CLWX-46 both passed standalone pre-crash).
+CLWX-58 stays at Ready (was already there); no card moved. NEW owner ask:
+restart the signed-in Chrome on `:18792` to clear the wedged CDP target so the
+full T1 live lane re-greens end-to-end (owner action — it closes the principal's
+unrelated open tabs). Prior owner asks unchanged._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
