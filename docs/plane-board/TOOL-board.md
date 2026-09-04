@@ -40,28 +40,6 @@ Acceptance: an evidence file in docs/evidence/ with the graph queries + Codex ve
 
 - Precondition carried from the codex smoke (see TOOL-2): the codex leg of this card MUST run on a build-free checkout — Codex crawls the full working tree ignoring .gitignore and will otherwise read build/openclaw/dist/ where the baked key lives. graphify leg: code paths only (electron/, src/), never docs/ or secret files; graphify-out/ stays gitignored.
 
-### TOOL-6 — [research] Deep-dive — isolate ALL open problems + root-cause + fix path
-
-- **State:** Todo  |  **Priority:** none
-
-Owner-explicit: "create a card for researching and diving deep and really isolating all the problems we have and how to fix it."
-
-Method (proven exemplar): the same root-cause discipline used for the Chrome-attach RCA — evidence-first, competing hypotheses, adversarial verify, no premature conclusions, "could it be our error?" as a first-class lens. Exemplar: docs/RCA_CHROME_ATTACH_2026-09-03.md.
-
-Scope (broaden beyond chrome-attach to the full defect surface):
-
-- docs/DEFECT_REGISTER_2026-09-02.md (register + deltas)
-
-- docs/KARUNESH_ERROR_LEDGER.md (external tester K1-K14)
-
-- docs/BLOCKER_BUG_COLLECTION_2026-09-03.md (144 mined findings)
-
-- Open CLWX cards: CLWX-73 (chrome attach / profile=user), CLWX-74 (VLM creds email send), CLWX-75 (badge), CLWX-52/53 (trust UI), plus the moe.17 hardening findings (CLWX-94/95/96).
-
-Accelerate with the new tooling: use the graphify code-graph to find blast radius + all callers of a suspect function; use Codex as a second-vendor opinion on each proposed root cause before it's trusted.
-
-Deliverable: a consolidated problem to root-cause to fix map (one row per open problem: symptom, evidence IDs, root cause, is-it-our-error, simplest fix, verification). NO code changes under this card — analysis only, mirrored to a docs artifact.
-
 ### TOOL-7 — [docs] Dev-tooling layer section in interop doc + keyless surface stubs
 
 - **State:** Todo  |  **Priority:** none
@@ -165,4 +143,30 @@ Installed (evidence, 2026-09-04): PyPI package graphifyy 0.9.53 via pipx pinned 
 Key correction vs first research: graphify is NOT a deterministic no-model tool. The graph BUILD runs via the /graphify skill inside a Claude Code session and uses THAT session's model to extract concepts (multimodal — Claude vision for docs/images). The CLI itself only does post-processing (path/explain/diagnose/merge). Upside: no separate API key and no egress beyond what CC already does. Constraint: since the model ingests whatever you point it at, the pilot runs it ONLY over code paths (electron/, src/) and NEVER over docs/ or any file that could contain a secret.
 
 Acceptance (keep/drop when): (1) egress check — confirm no outbound beyond the CC session; (2) build a code-only graph on electron/services + src/stores, then run 3 real nav queries ("every caller of writeOpenClawConfig", "what imports chrome-cdp.ts", "where is preferredChannel read") and compare against ripgrep+LSP; (3) verify graphify-out/ never gets committed. Keep if it beats grep+LSP on our tree; drop and say so if not.
+
+### TOOL-6 — [research] Deep-dive — isolate ALL open problems + root-cause + fix path
+
+- **State:** In Progress  |  **Priority:** none
+
+Owner-explicit: "create a card for researching and diving deep and really isolating all the problems we have and how to fix it."
+
+Method (proven exemplar): the same root-cause discipline used for the Chrome-attach RCA — evidence-first, competing hypotheses, adversarial verify, no premature conclusions, "could it be our error?" as a first-class lens. Exemplar: docs/RCA_CHROME_ATTACH_2026-09-03.md.
+
+Scope (broaden beyond chrome-attach to the full defect surface):
+
+- docs/DEFECT_REGISTER_2026-09-02.md (register + deltas)
+
+- docs/KARUNESH_ERROR_LEDGER.md (external tester K1-K14)
+
+- docs/BLOCKER_BUG_COLLECTION_2026-09-03.md (144 mined findings)
+
+- Open CLWX cards: CLWX-73 (chrome attach / profile=user), CLWX-74 (VLM creds email send), CLWX-75 (badge), CLWX-52/53 (trust UI), plus the moe.17 hardening findings (CLWX-94/95/96).
+
+Accelerate with the new tooling: use the graphify code-graph to find blast radius + all callers of a suspect function; use Codex as a second-vendor opinion on each proposed root cause before it's trusted.
+
+Deliverable: a consolidated problem to root-cause to fix map (one row per open problem: symptom, evidence IDs, root cause, is-it-our-error, simplest fix, verification). NO code changes under this card — analysis only, mirrored to a docs artifact.
+
+**Comments (1):**
+
+- Deliverable landed (2026-09-04): docs/PROBLEM_ROOT_CAUSE_FIX_MAP_2026-09-04.md (committed e5431ca7). Analysis only — no source changed, no build//dist/ read, Codex deliberately not used (secret-safety, see TOOL-2). Method: 5-phase RCA workflow — enumerate (parallel readers over the blocker collection, Karunesh ledger, defect register, Plane board) → cluster/dedup → root-cause per cluster → adversarial verify (Claude skeptics prompted to REFUTE) → synthesize. 9 clusters, 51 root-caused problem rows. Headline: the open fleet is overwhelmingly our own code, not the vendor or the environment — 36 ours / 11 mixed / 4 undetermined. Two cards refuted (CLWX-19 "code side clean" is false: we bake AND persist the key; CLWX-91), two attributions corrected (CLWX-79 mixed→ours; K9). Eight fixes judged NOT simple and flagged. Five sharpest findings: - Chrome ≥136 default-user-data-dir CDP refusal (CLWX-73 / K1 / K2) — live GA-blocker for email; Chrome silently refuses --remote-debugging-port on the default profile dir, which is what our launcher uses. Fix keeps profile=user via a user-owned NON-default dir; one open Conditional-Access probe for Raj/VM. - NEW — K8 packaged doc-parser load-path — latent GA-blocker (macOS/relocated Windows installs); doc reads resolve parsers relative to the wrong root. One-line fix: set CLAWX_APP_RESOURCES=process.resourcesPath in forkEnv when packaged. - CLWX-79 demo-mode statutory-field fabrication — data-integrity, live; the plugin reads args.demo and can auto-fill suspension-form fields. Corrected mixed→ours. - CLWX-95 / CLWX-94 / CLWX-96 degrade orphan/replay — resilience GA-blocker; naive null-in-error-handler defeats auto-resend; needs run-ownership token + clear lastSentPayload only after degrade consumes it. - CLWX-19 baked-key refutation — the sk-clawx key is a gitignored resource baked into the installer and persisted plaintext on first boot; rotation alone re-bakes an exposable key, and with auto-update OFF a server-side rotation is a fleet-wide outage requiring per-machine re-key. Ranked fix backlog (section 5) leads: CLWX-51 (2-line blank-New-Chat) → K8 (1-line) → CLWX-79 → Chrome CDP (demo-critical) → CLWX-81(1) → CLWX-70 → CLWX-74 → CLWX-78 residual → CLWX-94 → CLWX-95/96. Residual live-probe unknowns are section 6; excluded process/feature items named in section 7. Coverage caveat (recorded in-doc): the enumerate reader covering DEFECT_REGISTER + BLOCKER_BUG_COLLECTION stalled (6/6 attempts). Those two are covered transitively via the CLWX cards mined from them plus direct source reads during root-cause, but were not independently re-enumerated. A cheap completeness-critic pass (diff the 144 blocker-collection findings against the 51 rows) can close it if certainty is wanted. Status: card moved to In Progress (ceiling — deliverable produced, awaiting human close). Follow-through needing owner go: file the Chrome-CDP fix card + the moe-tenant CA question to Raj; file K8 as a new CLWX card; augment/reopen CLWX-79 with the residual demo-fabrication finding.
 
