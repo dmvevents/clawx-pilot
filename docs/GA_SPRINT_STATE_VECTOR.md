@@ -589,6 +589,16 @@ the production-integration milestone, not a GA blocker.
   class recurs. Mac-hop hash of the shipped moe.18 exe: PASS (verifier);
   guest hop pending auth. Verify resume is one staged script + a live
   credential poll.
+- **moe.17-addendum hardening findings now tracked (2026-09-04 tick):
+  CLWX-94/95/96 filed** — phantom prompt replay under CDP churn (94), degraded
+  turn orphans at prompt.submitted (95), post-degrade recovery wedge with
+  stale banner + silent sends (96). Evidence anchor: the moe.17 RESULT.md
+  addendum; the in-flight moe.18 verify re-records 95/96 by design. Board @
+  96 issues, mirror re-exported. Deliberately NOT acted on: CLWX-58+70
+  auto-recovery code — rewriting the email-flow surface mid-verify would
+  invalidate the release verify; queued for after the verdict. Static ga:gate
+  GREEN again (5/5). gcloud reauth O-gate re-probed: still blocked (owner ask
+  unchanged).
 
 ---
 

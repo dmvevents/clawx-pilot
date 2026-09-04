@@ -44,6 +44,36 @@
   ],
   "issues": [
     {
+      "id": "198f110f-71bc-40ec-aa45-4fb01323f981",
+      "sequence_id": 96,
+      "name": "[hardening/chat] Post-degrade recovery wedge: stale offline banner + silent sends until full app relaunch",
+      "priority": "none",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Observed on the moe.17 verify addendum (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md): after hosts-restore following a degrade, the post-restore Online turn returned NO_RESPONSE with messagesAfter=0 (silent send) while a stale \"offline\" degrade banner was still displayed; Online only worked again after a full app relaunch. Contradicts the intended \"Online resumes automatically once available\" behaviour.\nAcceptance: after connectivity returns, the next Online turn succeeds without an app restart; the degrade banner clears when the provider probe succeeds; a silent send (accepted composer input, no turn, no error) is treated as a defect class of its own with a watchdog. Trust lens: this is exactly the 3:30pm-dropped-connection scenario the principal-proxy vetoes on.",
+      "comments": []
+    },
+    {
+      "id": "5be5ae3a-0351-4ab1-ade6-e6da25e14385",
+      "sequence_id": 95,
+      "name": "[hardening/chat] Degraded turn orphans at prompt.submitted — on-device answer never lands after gateway-restart switch",
+      "priority": "none",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Observed on the moe.17 verify addendum (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md): the cloud→on-device channel switch is applied via a gateway RESTART; the interrupted turn's trajectory stops at prompt.submitted with no model response ever produced, and the renderer spins \"still-thinking\" for the full 420s (answerText=null). The degrade notice + switch + preference-preservation all work (CLWX-78 core PASS); the gap is that the degraded turn itself never completes.\nAcceptance: after a mid-turn channel degrade, the interrupted turn is either resumed on the new channel exactly once or terminated with a visible, anonymised outcome — never an indefinite spinner. Verdict-tension note: moe.17 PASSed under the \"switch + notice + attempt\" bar; this card is the stricter \"answer must land or fail visibly\" bar, explicitly owner-arbitrated.",
+      "comments": []
+    },
+    {
+      "id": "dc31d979-923a-45fa-b821-6f456cb4ba5d",
+      "sequence_id": 94,
+      "name": "[hardening/chat] Phantom prompt replay: orphaned-run resume re-submits an old prompt as fresh user turns",
+      "priority": "none",
+      "state": "Backlog",
+      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "description": "Observed live on the moe.17 VM verify (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md, \"Observation to flag\"): under CDP page-close mid-turn + repeated gateway reloads, the app spawned autonomous continuation turns replaying an earlier prompt (a 10:04 PDF prompt reappeared as fresh user turns at 10:09/10:26/10:30/10:33; one chained a write tool call). Confirmed no concurrent human. Suspected orphaned-run resume / degrade-resend interaction under reload churn.\nRisk: an unattended replay that chains a WRITE tool call is a trust and safety problem even if rare. Not normal principal use; did not affect moe.17 verdicts.\nAcceptance: reproduce under the same churn recipe; a run whose renderer/CDP context vanished is never re-submitted as a new user turn; add a regression test around the run-resume path. Raw sessions preserved on the VM under .openclaw/agents/main/sessions/.",
+      "comments": []
+    },
+    {
       "id": "954b9896-3cf5-44e9-8707-ece86c4d4a95",
       "sequence_id": 93,
       "name": "fix(chat): gate history-path failover on lastSentPayload, not sending",

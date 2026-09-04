@@ -194,6 +194,28 @@ Canary classifies failure cause (model load vs timeout vs real regression), supp
 Source
 Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
 
+### CLWX-94 — [hardening/chat] Phantom prompt replay: orphaned-run resume re-submits an old prompt as fresh user turns
+
+- **State:** Backlog  |  **Priority:** none
+
+Observed live on the moe.17 VM verify (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md, "Observation to flag"): under CDP page-close mid-turn + repeated gateway reloads, the app spawned autonomous continuation turns replaying an earlier prompt (a 10:04 PDF prompt reappeared as fresh user turns at 10:09/10:26/10:30/10:33; one chained a write tool call). Confirmed no concurrent human. Suspected orphaned-run resume / degrade-resend interaction under reload churn.
+Risk: an unattended replay that chains a WRITE tool call is a trust and safety problem even if rare. Not normal principal use; did not affect moe.17 verdicts.
+Acceptance: reproduce under the same churn recipe; a run whose renderer/CDP context vanished is never re-submitted as a new user turn; add a regression test around the run-resume path. Raw sessions preserved on the VM under .openclaw/agents/main/sessions/.
+
+### CLWX-95 — [hardening/chat] Degraded turn orphans at prompt.submitted — on-device answer never lands after gateway-restart switch
+
+- **State:** Backlog  |  **Priority:** none
+
+Observed on the moe.17 verify addendum (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md): the cloud→on-device channel switch is applied via a gateway RESTART; the interrupted turn's trajectory stops at prompt.submitted with no model response ever produced, and the renderer spins "still-thinking" for the full 420s (answerText=null). The degrade notice + switch + preference-preservation all work (CLWX-78 core PASS); the gap is that the degraded turn itself never completes.
+Acceptance: after a mid-turn channel degrade, the interrupted turn is either resumed on the new channel exactly once or terminated with a visible, anonymised outcome — never an indefinite spinner. Verdict-tension note: moe.17 PASSed under the "switch + notice + attempt" bar; this card is the stricter "answer must land or fail visibly" bar, explicitly owner-arbitrated.
+
+### CLWX-96 — [hardening/chat] Post-degrade recovery wedge: stale offline banner + silent sends until full app relaunch
+
+- **State:** Backlog  |  **Priority:** none
+
+Observed on the moe.17 verify addendum (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md): after hosts-restore following a degrade, the post-restore Online turn returned NO_RESPONSE with messagesAfter=0 (silent send) while a stale "offline" degrade banner was still displayed; Online only worked again after a full app relaunch. Contradicts the intended "Online resumes automatically once available" behaviour.
+Acceptance: after connectivity returns, the next Online turn succeeds without an app restart; the degrade banner clears when the provider probe succeeds; a silent send (accepted composer input, no turn, no error) is treated as a defect class of its own with a watchdog. Trust lens: this is exactly the 3:30pm-dropped-connection scenario the principal-proxy vetoes on.
+
 ## Unstarted
 
 ### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy
