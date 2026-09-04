@@ -305,9 +305,13 @@ function normalizeSuspensionLevel(value, lengthDays) {
  *   - Provided values are canonicalized exactly as before (aliases, clamps).
  *   - Missing REQUIRED fields => { ok: false, missingFields } and the caller
  *     must refuse; no value is ever invented.
- *   - Demo defaults survive ONLY when the caller passes { demo: true }
- *     (process.env.DEMO === '1' or an explicit demo arg). Every defaulted
- *     field id is reported in demoDefaultsApplied so the result is marked.
+ *   - A non-object payload (including an array) => { ok: false, invalidPayload }
+ *     and the caller must refuse; the raw value is never passed to the browser.
+ *   - Demo defaults survive ONLY when the operator sets the explicitly-named
+ *     env var MOE_DEMO_DEFAULTS === '1'. There is deliberately NO tool argument
+ *     for this: a model can never flip it, and it is decoupled from the
+ *     fill-scripts' generic DEMO=1. Every defaulted field id is reported in
+ *     demoDefaultsApplied so the result is marked.
  *   - Conditionally-required fields (additional_infractions when
  *     additional_infractions_present is "Yes", victim_type when
  *     victim_present is "Yes") refuse even in demo mode — demo defaults never
@@ -315,7 +319,11 @@ function normalizeSuspensionLevel(value, lengthDays) {
  */
 function normalizeSuspensionPreviewPayload(rawPayload, cfg, { demo = false } = {}) {
   const root = isObject(rawPayload?.payload) ? rawPayload.payload : rawPayload;
-  if (!isObject(root)) return { ok: true, payload: rawPayload, demoDefaultsApplied: [] };
+  // Reject arrays and any non-plain-object payload up front: `typeof [] ===
+  // 'object'` so an array would otherwise slip past the caller's guard and be
+  // forwarded verbatim to the browser fill. A statutory form is never filled
+  // from a shape we cannot validate field-by-field.
+  if (!isObject(root)) return { ok: false, invalidPayload: true };
 
   const school = isObject(root.school) ? root.school : {};
   const student = isObject(root.student) ? root.student : {};
@@ -351,7 +359,10 @@ function normalizeSuspensionPreviewPayload(rawPayload, cfg, { demo = false } = {
   const resolve = (fieldId, provided, normalizeProvided, demoDefault) => {
     if (provided !== undefined) {
       const normalized = normalizeProvided ? normalizeProvided(provided) : provided;
-      if (normalized !== undefined) return normalized;
+      // NaN (e.g. Number('many') for term_suspension_count) is "present but
+      // unusable" — coerce it away so a NaN never reaches the form payload.
+      const unusable = typeof normalized === 'number' && Number.isNaN(normalized);
+      if (normalized !== undefined && !unusable) return normalized;
     }
     if (demo) {
       demoDefaultsApplied.push(fieldId);
@@ -505,6 +516,17 @@ function suspensionMissingFieldsRefusal(missingFields) {
       `Cannot fill the Suspensions form: ${missingFields.length} required field(s) are missing: ` +
       `${missingFields.join(', ')}. Ask the principal for exactly these values — this is a statutory ` +
       'form, so values are never invented or defaulted.',
+  };
+}
+
+function suspensionInvalidPayloadRefusal() {
+  return {
+    status: 'refused',
+    reason: 'invalid_payload',
+    message:
+      'Cannot fill the Suspensions form: the payload must be a JSON object of named fields, ' +
+      'not an array or scalar. Provide the extracted fields as an object — this is a statutory ' +
+      'form, so an unstructured payload is never filled.',
   };
 }
 
@@ -970,7 +992,6 @@ export function register(api) {
         last_day_of_week: yesNoSchema,
         students_absent_entire_term: yesNoSchema,
         absent_entire_term_counts: dailyReportAbsentTermSchema,
-        demo: booleanSchema,
       },
       [
         'date',
@@ -992,9 +1013,11 @@ export function register(api) {
       // CLWX-79: the status/yes-no questions are statutory attestations
       // ("principal physically present", "written reports collected"-class
       // answers). They used to silently default; now a missing value is a
-      // refusal listing the field ids, and the old defaults survive only in
-      // demo mode (explicit demo:true arg or DEMO=1), marked in the result.
-      const demo = args.demo === true || process.env.DEMO === '1';
+      // refusal listing the field ids. Demo defaults survive ONLY behind the
+      // operator-set MOE_DEMO_DEFAULTS env var. We deliberately no longer read
+      // args.demo (a model must never be able to trigger fabrication) and no
+      // longer honour the generic DEMO=1 the fill-scripts use for "submit".
+      const demo = process.env.MOE_DEMO_DEFAULTS === '1';
       const missingFields = [];
       const demoDefaultsApplied = [];
       const resolveChoice = (name, value, allowed, demoDefault) => {
@@ -1698,7 +1721,6 @@ export function register(api) {
       parameters: toolParameters(
         {
           payload: looseObjectSchema,
-          demo: booleanSchema,
         },
         ['payload'],
       ),
@@ -1706,11 +1728,17 @@ export function register(api) {
         if (!args.payload || typeof args.payload !== 'object') {
           throw new Error('payload object required (32 fields, see suspensions-schema.json).');
         }
-        // CLWX-79: demo defaults only on explicit opt-in; otherwise refuse
-        // with the exact missing field ids instead of inventing values.
-        const demo = args.demo === true || process.env.DEMO === '1';
+        // CLWX-79: demo defaults survive ONLY behind the operator-set
+        // MOE_DEMO_DEFAULTS env var. We never read args.demo (a model must not
+        // be able to trigger statutory fabrication) and no longer honour the
+        // fill-scripts' generic DEMO=1. Otherwise a missing field refuses with
+        // the exact field ids instead of inventing values.
+        const demo = process.env.MOE_DEMO_DEFAULTS === '1';
         const normalized = normalizeSuspensionPreviewPayload(args.payload, cfg, { demo });
         if (!normalized.ok) {
+          if (normalized.invalidPayload) {
+            return suspensionInvalidPayloadRefusal();
+          }
           return suspensionMissingFieldsRefusal(normalized.missingFields);
         }
         const result = await forms.previewSuspension({ payload: normalized.payload });

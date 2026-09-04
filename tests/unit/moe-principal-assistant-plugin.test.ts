@@ -453,9 +453,9 @@ describe('moe-principal-assistant plugin registration', () => {
     expect(result.payload).toBeUndefined();
   });
 
-  it('applies daily-report demo defaults only under DEMO=1 and marks them (CLWX-79)', async () => {
-    const previousDemo = process.env.DEMO;
-    process.env.DEMO = '1';
+  it('applies daily-report demo defaults only under MOE_DEMO_DEFAULTS=1 and marks them (CLWX-79)', async () => {
+    const previousDemo = process.env.MOE_DEMO_DEFAULTS;
+    process.env.MOE_DEMO_DEFAULTS = '1';
     const logged: string[] = [];
 
     try {
@@ -513,8 +513,58 @@ describe('moe-principal-assistant plugin registration', () => {
       // Count only — no field values in the log line.
       expect(demoLogs[0]).not.toContain('Physically present');
     } finally {
+      if (previousDemo === undefined) delete process.env.MOE_DEMO_DEFAULTS;
+      else process.env.MOE_DEMO_DEFAULTS = previousDemo;
+    }
+  });
+
+  it('ignores a model-supplied demo arg and a generic DEMO=1 on the daily report (CLWX-79)', async () => {
+    const previousDemo = process.env.DEMO;
+    const previousMoeDemo = process.env.MOE_DEMO_DEFAULTS;
+    // The fill-scripts overload DEMO=1 with "actually submit". It must NEVER
+    // re-enable statutory fabrication, and neither may a model-set demo arg.
+    process.env.DEMO = '1';
+    delete process.env.MOE_DEMO_DEFAULTS;
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      const result = (await byName['principal.daily_report_form_payload'].execute('call-daily-no-demo', {
+        // demo:true is not a real parameter any more; passing it must not fabricate.
+        demo: true,
+        date: '2026-05-26',
+        number_of_teachers_on_staff: 12,
+        number_of_teachers_present: 11,
+        number_of_teachers_absent: 1,
+        number_of_teachers_on_moh_quarantine: 0,
+        number_of_teachers_other_leave: 0,
+        year_groups: {
+          first_year: { enrolled: 20, present: 19 },
+          second_year: { enrolled: 18, present: 18 },
+          standard_1: { enrolled: 22, present: 20 },
+          standard_2: { enrolled: 21, present: 21 },
+          standard_3: { enrolled: 20, present: 20 },
+          standard_4: { enrolled: 19, present: 19 },
+          standard_5: { enrolled: 17, present: 16 },
+        },
+      })) as { status?: string; missingFields?: string[] };
+
+      expect(result.status).toBe('refused');
+      expect(result.missingFields).toContain('did_you_have_school_today');
+      expect(result.missingFields).toContain('principal_status');
+    } finally {
       if (previousDemo === undefined) delete process.env.DEMO;
       else process.env.DEMO = previousDemo;
+      if (previousMoeDemo === undefined) delete process.env.MOE_DEMO_DEFAULTS;
+      else process.env.MOE_DEMO_DEFAULTS = previousMoeDemo;
     }
   });
 
@@ -618,8 +668,10 @@ describe('moe-principal-assistant plugin registration', () => {
   it('canonicalizes common suspension dropdown aliases before previewing', async () => {
     const previousPort = process.env.CLAWX_HOST_API_PORT;
     const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    const previousDemo = process.env.MOE_DEMO_DEFAULTS;
     process.env.CLAWX_HOST_API_PORT = '13210';
     process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+    process.env.MOE_DEMO_DEFAULTS = '1';
 
     const calls: Array<{ body: unknown }> = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit = {}) => {
@@ -640,8 +692,8 @@ describe('moe-principal-assistant plugin registration', () => {
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
       const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
-        // Partial payload: demo defaults are only allowed with the explicit flag.
-        demo: true,
+        // Partial payload: demo defaults are only allowed under the operator's
+        // MOE_DEMO_DEFAULTS env var (set above), never a tool argument.
         payload: {
           education_district: 'Victoria',
           school_type: 'Government',
@@ -695,16 +747,18 @@ describe('moe-principal-assistant plugin registration', () => {
       else process.env.CLAWX_HOST_API_PORT = previousPort;
       if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
       else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+      if (previousDemo === undefined) delete process.env.MOE_DEMO_DEFAULTS;
+      else process.env.MOE_DEMO_DEFAULTS = previousDemo;
     }
   });
 
   it('refuses to preview a suspension payload with missing statutory fields outside demo mode (CLWX-79)', async () => {
     const previousPort = process.env.CLAWX_HOST_API_PORT;
     const previousToken = process.env.CLAWX_HOST_API_TOKEN;
-    const previousDemo = process.env.DEMO;
+    const previousDemo = process.env.MOE_DEMO_DEFAULTS;
     process.env.CLAWX_HOST_API_PORT = '13210';
     process.env.CLAWX_HOST_API_TOKEN = 'test-token';
-    delete process.env.DEMO;
+    delete process.env.MOE_DEMO_DEFAULTS;
 
     const fetchMock = vi.fn(async () =>
       jsonResponse({ success: true, data: { status: 'previewed', filledCount: 29, skippedCount: 1, errors: [] } }),
@@ -769,16 +823,70 @@ describe('moe-principal-assistant plugin registration', () => {
       else process.env.CLAWX_HOST_API_PORT = previousPort;
       if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
       else process.env.CLAWX_HOST_API_TOKEN = previousToken;
-      if (previousDemo === undefined) delete process.env.DEMO;
-      else process.env.DEMO = previousDemo;
+      if (previousDemo === undefined) delete process.env.MOE_DEMO_DEFAULTS;
+      else process.env.MOE_DEMO_DEFAULTS = previousDemo;
     }
   });
 
   it('refuses conditional incident details even in demo mode (CLWX-79)', async () => {
     const previousPort = process.env.CLAWX_HOST_API_PORT;
     const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    const previousDemo = process.env.MOE_DEMO_DEFAULTS;
     process.env.CLAWX_HOST_API_PORT = '13210';
     process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+    // Demo defaults ARE enabled here — the point is that conditional incident
+    // details refuse even so; the env is the only way to turn defaults on.
+    process.env.MOE_DEMO_DEFAULTS = '1';
+
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ success: true, data: { status: 'previewed', filledCount: 29, skippedCount: 1, errors: [] } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+        payload: {
+          perpetrator_name: 'T. Test',
+          // Asserts a victim exists but never says who — demo defaults must
+          // not invent the answer.
+          victim_present: 'Yes',
+          additional_infractions_present: 'Yes',
+        },
+      })) as { status?: string; missingFields?: string[] };
+
+      expect(result.status).toBe('refused');
+      expect(result.missingFields).toContain('victim_type');
+      expect(result.missingFields).toContain('additional_infractions');
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
+      else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
+      else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+      if (previousDemo === undefined) delete process.env.MOE_DEMO_DEFAULTS;
+      else process.env.MOE_DEMO_DEFAULTS = previousDemo;
+    }
+  });
+
+  it('ignores a model-supplied demo arg and refuses to invent statutory fields (CLWX-79)', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    const previousDemo = process.env.MOE_DEMO_DEFAULTS;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+    // MOE_DEMO_DEFAULTS is OFF: a model passing demo:true must not re-enable
+    // fabrication now that the arg is no longer read.
+    delete process.env.MOE_DEMO_DEFAULTS;
 
     const fetchMock = vi.fn(async () =>
       jsonResponse({ success: true, data: { status: 'previewed', filledCount: 29, skippedCount: 1, errors: [] } }),
@@ -800,22 +908,110 @@ describe('moe-principal-assistant plugin registration', () => {
         demo: true,
         payload: {
           perpetrator_name: 'T. Test',
-          // Asserts a victim exists but never says who — demo defaults must
-          // not invent the answer.
-          victim_present: 'Yes',
-          additional_infractions_present: 'Yes',
         },
       })) as { status?: string; missingFields?: string[] };
 
       expect(result.status).toBe('refused');
-      expect(result.missingFields).toContain('victim_type');
-      expect(result.missingFields).toContain('additional_infractions');
+      // written_reports_collected is exactly the kind of attestation demo
+      // fabrication used to invent; it must be listed as missing instead.
+      expect(result.missingFields).toContain('written_reports_collected');
       expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
       else process.env.CLAWX_HOST_API_PORT = previousPort;
       if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
       else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+      if (previousDemo === undefined) delete process.env.MOE_DEMO_DEFAULTS;
+      else process.env.MOE_DEMO_DEFAULTS = previousDemo;
+    }
+  });
+
+  it('coerces a NaN numeric field to a refusal instead of emitting NaN (CLWX-79)', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    const previousDemo = process.env.MOE_DEMO_DEFAULTS;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+    delete process.env.MOE_DEMO_DEFAULTS;
+
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ success: true, data: { status: 'previewed', filledCount: 29, skippedCount: 1, errors: [] } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+        payload: {
+          // A non-numeric term count would become NaN under raw Number();
+          // it must be treated as unusable, not emitted into the payload.
+          term_suspension_count: 'many',
+        },
+      })) as { status?: string; missingFields?: string[] };
+
+      expect(result.status).toBe('refused');
+      expect(result.missingFields).toContain('term_suspension_count');
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
+      else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
+      else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+      if (previousDemo === undefined) delete process.env.MOE_DEMO_DEFAULTS;
+      else process.env.MOE_DEMO_DEFAULTS = previousDemo;
+    }
+  });
+
+  it('refuses an array or non-object suspension payload (CLWX-79)', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    const previousDemo = process.env.MOE_DEMO_DEFAULTS;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+    // Even with defaults on, an unstructured shape is never filled.
+    process.env.MOE_DEMO_DEFAULTS = '1';
+
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ success: true, data: { status: 'previewed', filledCount: 29, skippedCount: 1, errors: [] } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+        // typeof [] === 'object', so this slips past the caller's guard and
+        // reaches the normalizer, which must reject it.
+        payload: [{ perpetrator_name: 'T. Test' }],
+      })) as { status?: string; reason?: string };
+
+      expect(result.status).toBe('refused');
+      expect(result.reason).toBe('invalid_payload');
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
+      else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
+      else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+      if (previousDemo === undefined) delete process.env.MOE_DEMO_DEFAULTS;
+      else process.env.MOE_DEMO_DEFAULTS = previousDemo;
     }
   });
 });
