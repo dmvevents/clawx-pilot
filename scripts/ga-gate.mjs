@@ -73,6 +73,7 @@ if (STATIC_ONLY) {
   const CLEAN = 'pnpm exec tsx scripts/outlook-cleanup-compose.ts >/dev/null 2>&1;';
   run('outlook-eval 15-row (K6/K14 guards)', 'T1', 'ExtValA', `${CLEAN} pnpm exec tsx scripts/v2-eval.ts`);
   run('stale-read check (CLWX-46 guard)', 'T1', 'ExtValA', 'pnpm exec tsx scripts/clwx46-stale-read-check.ts');
+  run('compose auto-recovery (CLWX-58 guard)', 'T1', 'ExtValA', `${CLEAN} pnpm exec tsx scripts/clwx58-compose-recovery-check.ts`);
   run('forms Suspensions fill+gate (dry)', 'T1', 'forms', 'pnpm exec tsx scripts/forms-fill-suspensions.ts');
   run('forms Daily Report fill+gate (dry, CLWX-62)', 'T1', 'forms', 'pnpm exec tsx scripts/forms-fill-daily-report.ts');
   if (SEND) run('2-gate SEND proof (sandbox)', 'T1', 'email', `${CLEAN} pnpm exec tsx scripts/v2-send-test.ts`);
