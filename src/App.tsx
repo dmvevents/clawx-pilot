@@ -188,6 +188,9 @@ function App() {
           {/* Setup wizard (shown on first launch) */}
           <Route path="/setup/*" element={<Setup />} />
 
+          {/* Safety-net: legacy '/chat' target redirects to chat home at '/' */}
+          <Route path="/chat" element={<Navigate to="/" replace />} />
+
           {/* Main application routes */}
           <Route element={<MainLayout />}>
             <Route path="/" element={<Chat />} />

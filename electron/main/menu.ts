@@ -49,7 +49,8 @@ export function createMenu(): void {
           accelerator: 'CmdOrCtrl+N',
           click: () => {
             const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/chat');
+            // Chat lives at '/', not '/chat'; sending '/chat' left the window blank.
+            win?.webContents.send('navigate', '/');
           },
         },
         { type: 'separator' },
@@ -114,7 +115,8 @@ export function createMenu(): void {
           accelerator: 'CmdOrCtrl+2',
           click: () => {
             const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/chat');
+            // Chat lives at '/', not '/chat'; sending '/chat' left the window blank.
+            win?.webContents.send('navigate', '/');
           },
         },
         {
