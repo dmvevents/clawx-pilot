@@ -205,4 +205,21 @@ no-creds readable-degrade, K12, K14, and a trust sweep; moe.17's addendum
 findings (orphaned degrade turn, post-restore wedge, phantom replay) are
 recorded-not-gating observations for hardening cards. moe.17 verify COMPLETED
 all-PASS (correction above); K10/K13-cloud are regression legs against that
-baseline. Nothing sent to Karunesh.*
+baseline.*
+
+*SEND UPDATE (2026-09-03, supersedes "nothing sent"): the moe.18 handoff to
+Karunesh FIRED BEFORE the VM verify, on explicit owner direction given three
+times mid-flight (final wording: "if it fails, it fails, but send it") — an
+informed owner override of the all-green gate, not an agent decision. Chain:
+installer uploaded to gs://…/moe18/ (432,028,001 bytes, size-verified against
+the local build pre-send), 11h impersonated signed URL, WhatsApp bridge
+success:true to Karunesh's @lid, ledgered (whatsapp-send-ledger.log,
+`note=owner-directed-send-before-vm-verify`) + SENT record with URL redacted.
+The message body claims only evidenced fixes (PDF/degrade cite the moe.17
+baseline; email/trust legs framed as "please re-test"). VM verify is now
+post-hoc risk-retirement: delegated to the moe.17 verifier session with sha256
+5b0884ed…d4e7, the full matrix packet, a triage order (migration proof first),
+and an added moe.13 no-clobber leg; any RED ⇒ draft-and-hold heads-up to
+Karunesh for owner GO. Lane note: background gsutil can die on
+ReauthUnattendedError — gcloud auth currently needs an interactive owner
+reauth.*

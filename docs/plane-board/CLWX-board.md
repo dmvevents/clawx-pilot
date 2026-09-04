@@ -1,6 +1,6 @@
 # CLWX Plane board — snapshot
 
-Exported 2026-09-03 from `http://localhost:8090` (workspace `issues-agent`, project `ClawX — Windows installer + agent`).
+Exported 2026-09-04 from `http://localhost:8090` (workspace `issues-agent`, project `ClawX — Windows installer + agent`).
 Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This markdown is the human-readable mirror; the JSON is authoritative.
 
 > The live board is source of truth for *what to work on*. This file is a

@@ -562,6 +562,26 @@ the production-integration milestone, not a GA blocker.
   every 6 h (7-day auto-expiry; renew or re-arm via /ga-sprint-driver).
 - **Branding sweep done** (CLWX-3, commit `dc30f9db`): last user-visible
   ClawX/OpenClaw strings removed.
+- **moe.18 cut, SHIPPED to Karunesh (owner-directed pre-verify), verify
+  delegated (2026-09-03 tick).** moe.17 verify COMPLETED all-PASS (the "died
+  mid-run" line was a race against the evidence write — corrected in
+  RELEASE_GAP_CLOSURE_STATE_VECTOR). moe.18 adds Lane A+B (`8fac374f`), Lane
+  A2 (`0925528e`), and the launch-channel fix: `preferredChannel` no longer
+  store-defaulted (`715eab73`) + review-mandated marker-gated legacy migration
+  (`f5a9d4d7`, closes the code-reviewer HIGH: conf@15 persists defaults at
+  construction, so upgraded boxes carried a phantom 'on-device'). Full gate
+  GREEN (typecheck, lint 0, 1336 unit; static ga:gate 5/5 —
+  `docs/evidence/GA_GATE_2026-09-04.md`). Installer uploaded (432,028,001 B,
+  sha256 `5b0884ed…d4e7`), 11h signed URL sent via bridge success:true on
+  explicit owner instruction ×3 ("if it fails, it fails, but send it") —
+  informed owner override of the all-green gate, ledgered as such. Full-matrix
+  VM verify delegated to the moe.17 verifier session (packet:
+  `/tmp/moe18-vm-verify-packet.md`; adds a moe.13 no-clobber leg); any RED ⇒
+  draft-and-hold heads-up for owner GO. Open hardening candidates from the
+  moe.17 addendum: orphaned degrade turn, post-restore wedge-until-relaunch,
+  phantom prompt replay under CDP churn. **Owner ask: `gcloud auth login`**
+  (unattended-reauth killed a background gsutil; tunnel is up but can't be
+  restarted without it).
 
 ---
 
