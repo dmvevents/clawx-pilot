@@ -7,6 +7,32 @@ Pairs with `GA_SPRINT_PLAN_2026-09-02.md` (sequencing), `docs/wiki/GA_READINESS.
 (GO/NO-GO scorecard), `docs/VM_TEST_BASE.md` (persona test base) and the Plane
 board (live state). Ceiling for agents is **Ready**; a human declares GA._
 
+_**Fix-sprint delta (2026-09-04, owner-authorized "execute everything + sync the
+board").** The RCA map (`docs/PROBLEM_ROOT_CAUSE_FIX_MAP_2026-09-04.md`) ranked
+backlog was implemented and landed as six scoped commits:
+`a23a3a1d` CLWX-51 (blank New Chat → route to `/`), `68e02ee1` K8 (packaged
+doc-parser load-path → `CLAWX_APP_RESOURCES`), `12625635` CLWX-79 (drop
+`args.demo` statutory-field fabrication), `e85f0ef7` CLWX-73 (Chrome ≥136 CDP on
+a dedicated NON-default profile; managed dir resolved but never launched →
+profile=user hard rule intact), `c139ecc3` CLWX-81/70/74 (current-view-first
+reply, born-empty draft discard, readable VLM-unavailable error; **two-gate send
++ download hard-confirm preserved verbatim**), `2b21d2a8` CLWX-78/94/95
+(`connection error` classifier row + 90s watchdog failover + run-ownership token
+so no orphan/replay; CLWX-95 `skipGatewayRefresh` seam unwired). Static GA gate
+GREEN (5/5 T0: typecheck, lint, unit-suite, bundle-verify CLWX-72, doc-tooling;
+report `docs/evidence/GA_GATE_2026-09-04.md`). Board: CLWX-51/73/78/94/81 → Ready
+with evidence; CLWX-79/70 commented (already Ready); **K8 filed as CLWX-97
+(Ready)**; CLWX-74 commented PARTIAL (kept off Ready — non-VLM locator fallback
+still open); CLWX-95/96 commented seam-only (kept in Backlog — wiring + live
+probe pending); CLWX-18/19 commented OWNER-GATED (no autonomous action).
+**moe.18 email-surface FREEZE LIFTED for this sprint:** CLWX-73/81/70/74 and the
+CLWX-78/94 degrade path all touch email/degrade, so the moe.18 VM lane must
+re-run against a post-fix build before those Ready cards are trusted for GA.
+Owner asks outstanding: (1) Raj — `moe.gov.tt` Conditional-Access probe that a
+secondary non-default Chrome profile is accepted (CLWX-73); (2) live probe for
+the restart-vs-per-run degrade refresh (CLWX-95/96); (3) the CLWX-18/19 rotation
++ repo-visibility sequence._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed

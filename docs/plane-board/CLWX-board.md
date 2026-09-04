@@ -32,29 +32,6 @@ From flow 6: the Windows chat-turn driver can silently produce zero-frame eviden
 
 Doc-only: hidden-launch Gateway trap (IF-4), moe-principal-assistant path move to resources/extensions on Lane A, Windows Firewall silent-drop breaking nc -z (PF-3 control-leg). All three behaviors are codified as flight checks but the atlas entries were never written — they are the install/runtime debugging front door.
 
-### CLWX-51 — [bug/other] File > New Chat renders a blank window (navigates to /chat; route does not exist)
-
-- **State:** Backlog  |  **Priority:** medium
-
-Area: other   Severity: medium (priority medium)
-
-Steps to reproduce
-TODO: exact steps
-
-Expected
-TODO: what should happen
-
-Actual
-TODO: what happens instead
-
-Evidence
-TODO: log path / screenshot / trace id
-
-Environment
-TODO: build / OS / model
-
-Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
-
 ### CLWX-54 — [bug/other] Outlook browser attach fails with stale Playwright handle despite live CDP + Outlook tab
 
 - **State:** Backlog  |  **Priority:** medium
@@ -194,14 +171,6 @@ Canary classifies failure cause (model load vs timeout vs real regression), supp
 Source
 Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
 
-### CLWX-94 — [hardening/chat] Phantom prompt replay: orphaned-run resume re-submits an old prompt as fresh user turns
-
-- **State:** Backlog  |  **Priority:** none
-
-Observed live on the moe.17 VM verify (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md, "Observation to flag"): under CDP page-close mid-turn + repeated gateway reloads, the app spawned autonomous continuation turns replaying an earlier prompt (a 10:04 PDF prompt reappeared as fresh user turns at 10:09/10:26/10:30/10:33; one chained a write tool call). Confirmed no concurrent human. Suspected orphaned-run resume / degrade-resend interaction under reload churn.
-Risk: an unattended replay that chains a WRITE tool call is a trust and safety problem even if rare. Not normal principal use; did not affect moe.17 verdicts.
-Acceptance: reproduce under the same churn recipe; a run whose renderer/CDP context vanished is never re-submitted as a new user turn; add a regression test around the run-resume path. Raw sessions preserved on the VM under .openclaw/agents/main/sessions/.
-
 ### CLWX-95 — [hardening/chat] Degraded turn orphans at prompt.submitted — on-device answer never lands after gateway-restart switch
 
 - **State:** Backlog  |  **Priority:** none
@@ -209,12 +178,20 @@ Acceptance: reproduce under the same churn recipe; a run whose renderer/CDP cont
 Observed on the moe.17 verify addendum (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md): the cloud→on-device channel switch is applied via a gateway RESTART; the interrupted turn's trajectory stops at prompt.submitted with no model response ever produced, and the renderer spins "still-thinking" for the full 420s (answerText=null). The degrade notice + switch + preference-preservation all work (CLWX-78 core PASS); the gap is that the degraded turn itself never completes.
 Acceptance: after a mid-turn channel degrade, the interrupted turn is either resumed on the new channel exactly once or terminated with a visible, anonymised outcome — never an indefinite spinner. Verdict-tension note: moe.17 PASSed under the "switch + notice + attempt" bar; this card is the stricter "answer must land or fail visibly" bar, explicitly owner-arbitrated.
 
+**Comments (1):**
+
+- Seam only (2b21d2a8) - NOT moving. syncDefaultProviderToRuntime gains an opt-in skipGatewayRefresh param (default off, not yet wired) as the seam for the per-run-vs-restart refresh decision. Open: wiring it through settings.ts + channel-router.ts, plus the live probe to decide whether a degraded turn can land on-device without a gateway restart (restart-vs-per-run). Owner/live-probe input needed before this closes.
+
 ### CLWX-96 — [hardening/chat] Post-degrade recovery wedge: stale offline banner + silent sends until full app relaunch
 
 - **State:** Backlog  |  **Priority:** none
 
 Observed on the moe.17 verify addendum (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md): after hosts-restore following a degrade, the post-restore Online turn returned NO_RESPONSE with messagesAfter=0 (silent send) while a stale "offline" degrade banner was still displayed; Online only worked again after a full app relaunch. Contradicts the intended "Online resumes automatically once available" behaviour.
 Acceptance: after connectivity returns, the next Online turn succeeds without an app restart; the degrade banner clears when the provider probe succeeds; a silent send (accepted composer input, no turn, no error) is treated as a defect class of its own with a watchdog. Trust lens: this is exactly the 3:30pm-dropped-connection scenario the principal-proxy vetoes on.
+
+**Comments (1):**
+
+- Related to the CLWX-95 seam (2b21d2a8) - NOT moving. The run-ownership token and terminal-error lastSentPayload handling landed for CLWX-94 reduce the orphan/replay surface, but the post-degrade recovery wedge (stale offline banner + silent sends until full relaunch) depends on the same restart-vs-per-run refresh decision tracked in CLWX-95. Kept open pending that wiring + live probe.
 
 ## Unstarted
 
@@ -329,8 +306,9 @@ Acceptance: after connectivity returns, the next Online turn succeeds without an
 gh repo view confirms visibility PUBLIC (updated 2026-07-27). The estate hard rule is all repos private, BUT MoE pilot users download Windows RC installers from this repo's Releases pages — flipping it private breaks their access. Human decision required: make private + provide an alternate distribution channel, or grant an explicit exception. Command when decided: gh repo edit dmvevents/clawx-pilot --visibility private
 Source: gh repo view 2026-08-25. Tier: verified_at_commit.
 
-**Comments (3):**
+**Comments (4):**
 
+- OWNER-GATED - no autonomous action taken. Changing repo visibility is a security-sensitive owner action. Flagging only: dmvevents/clawx-pilot is PUBLIC with full source. No fix attempted here. Awaiting owner decision on visibility + the CLWX-19 key-rotation sequence (they are coupled - see the RCA map, docs/PROBLEM_ROOT_CAUSE_FIX_MAP_2026-09-04.md &sect;5).
 - Standing reminder (owner-gated, URGENT class): repo is still PUBLIC with full source + leaked test credential in 3 files. One-sitting fix plan: make repo private (or split source→private, releases→public), purge the credential from history (git filter-repo), rotate the credential (pairs with CLWX-19). Agent-side prep is done — needs the owner because it is destructive + affects external visibility.
 - Wiki evidence (commit 59e1ba26): docs/wiki/REPO_AND_RELEASE_MAP.md now documents every repo, the legitimate reason clawx-pilot is public (tester downloads the ~300MB installer from Releases, no GitHub account needed), and the recommended 3-decision split: (D1) rotate the leaked test password [see CLWX-19], (D2) keep releases public + move source to a private repo, (D3) hold the Lane-C reply. The public leak of [REDACTED — local operator context only] in 3 files is confirmed; the liaison phone number was redacted before any push and never leaked. All decisions owner-gated.
 - Investigated 2026-09-01 — the exposure is worse than "repo is public". - The public repo hosts full SOURCE, not releases. dmvevents/clawx-pilot (PUBLIC, 901 files, 13 branches) contains electron/, docs/, extensions/, CLAUDE.md — the entire tree. Its own description says "Source lives in private repo; this repo distributes signed releases only." Reality contradicts the description. The dev workflow in CLAUDE.md ("push to pilot/main") has been publishing source to a public repo. - A live credential is already public. The test-account password [REDACTED — local operator context only] appears in 3 public files: scripts/v2-signin.ts, scripts/forms-relogin-helper.ts, and CLAUDE.md. This violates the hard rule "never print or commit the plaintext password". Anyone can read it and sign into test.fac@fac.edu.tt. - Good news: the liaison phone number was redacted BEFORE any push — the two files carrying it are absent on public (verified). Local commits a1ff2cc7 + 2a0f55c8 keep the working tree clean of both the number and the plaintext password. - There is a private-repo intent. Private candidates exist (dmvevents/anton-claw, trinidad-moe-platform, openclaw-personal) — the intended dev home, per the repo description. Recommended (owner-gated): (1) rotate the test.fac password now — it is public; (2) make clawx-pilot private OR strip source and use it for release artifacts only; (3) scrub [REDACTED — local operator context only] from the 3 public files + history. Nothing here is pushed by this session; these are pre-existing public commits.
@@ -342,8 +320,9 @@ Source: gh repo view 2026-08-25. Tier: verified_at_commit.
 A gateway API key with the sk-clawx prefix was pasted in full into a WhatsApp chat on 2026-06-05 (key value deliberately NOT reproduced here). Chat history is exportable/syncable — treat as exposed. Rotate the key, audit usage since 2026-06-05, and move future credential handoffs to a secret channel.
 Source: local WhatsApp store 2026-06-05. Tier: verified_at_commit (store read 2026-08-25).
 
-**Comments (1):**
+**Comments (2):**
 
+- OWNER-GATED - no autonomous rotation performed. RCA correction (recorded in docs/PROBLEM_ROOT_CAUSE_FIX_MAP_2026-09-04.md): the "code side is clean" assumption is FALSE - the sk-clawx key is baked into the installer as a gitignored resource AND persisted plaintext on first boot. With auto-update OFF in PILOT_MODE, a server-side rotation is a fleet-wide outage requiring per-machine re-key. Rotation must therefore be sequenced by the owner (rotate key + re-bake installer + per-machine re-key), not done piecemeal. No action taken.
 - Standing reminder (owner-gated): rotate sk-clawx (shared in WhatsApp 2026-06-05, also exposed via CLWX-18). Best done in the same sitting as the CLWX-18 scrub so the leaked history becomes worthless.
 
 ### CLWX-20 — clawx-asr voice-note path fails with ffmpeg-not-found on user machines
@@ -606,6 +585,33 @@ Regression class? unknown — check the *-auditor agents (config-coherence, depe
 
 - FIXED + VERIFIED LIVE (2026-09-03 finish-sprint item 1). TB-1 applied: openMessageById now bounded-polls (8s / 300ms) after the row click until the reading pane subject (and sender when both extractable) matches the clicked row fingerprint; a provable mismatch fails loudly (not_found) instead of ever returning another email. The guard sits inside openMessageById, so read/reply/forward/mark-read/attachments all inherit wrong-target protection. Never retries through a confirm gate. TB-2 applied + root cause CONFIRMED live: DOM probe showed the only [role="heading"][aria-level="2"] on the page is span.screenReaderOnly "Navigation pane" (exactly the reported symptom); the real pane subject is span[role="heading"][aria-level="3"] inside div[role="main"]. Extraction now scoped to reading-pane roots with a 5-step fallback chain (level-2, level-3, any heading, subject class, h1/h2), visible + non-chrome only - meets the rotated-selector hard rule. Evidence (persona bars): QA bar - new scripts/clwx46-stale-read-check.ts PASS 3/3 rows x 3 consecutive runs with the guard actively discriminating; full v2-eval 15/15 on the live test.fac lane; unit suite 162 files / 1280 tests green; typecheck 0. PM acceptance: matrix row "Email: read message" deficit cleared. Engineering conscience: dom-selector-rotation class, detection owner dom-selector-regression-tester. Moving to Ready for human close.
 - 2026-09-03 resilience pack fold-in (docs/FLOW_STATE_DIAGRAMS.md flow 3): fix spec for this card is TB-1 + TB-2. TB-1 settle-on-expected-item guard: after clicking an inbox row, bounded poll until the reading pane's subject AND sender match the clicked row before any extraction; never retry through a confirm gate; detection owner ga-e2e-regression-verifier. TB-2: replace the readEmail subject heading selector (currently returns the UI heading 'Navigation pane') under the 3-fallback rotated-selector rule; detection owner dom-selector-regression-tester. Both in electron/services/outlook-browser-v2/outlook-actions.ts. Recommended pre-GA: an agent describing the WRONG email is the trust-killer class.
+
+### CLWX-51 — [bug/other] File > New Chat renders a blank window (navigates to /chat; route does not exist)
+
+- **State:** Ready  |  **Priority:** medium
+
+Area: other   Severity: medium (priority medium)
+
+Steps to reproduce
+TODO: exact steps
+
+Expected
+TODO: what should happen
+
+Actual
+TODO: what happens instead
+
+Evidence
+TODO: log path / screenshot / trace id
+
+Environment
+TODO: build / OS / model
+
+Regression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)
+
+**Comments (1):**
+
+- Fixed in a23a3a1d. Root cause: the "New Chat" (Cmd+N) and "Chat" (Cmd+2) menu items navigated to /chat, a route with no matching element, so the window rendered blank. Fix: both menu actions now target / (the chat surface); src/App.tsx also gains a safety-net Navigate redirect /chat&rarr;/ (mirrors the existing /dreams pattern). Covered by tests/unit/menu-navigation.test.ts. Static GA gate GREEN on this build: typecheck, lint, unit-suite, bundle-verify (CLWX-72), doc-tooling (KR1 proxy) all PASS (GA_GATE_STATIC=1 pnpm ga:gate, report docs/evidence/GA_GATE_2026-09-04.md). Moving to Ready (a human closes Done).
 
 ### CLWX-52 — [bug/other] Composer surfaces raw model id in chat UI (hard-rule violation: anonymise model identity)
 
@@ -903,8 +909,9 @@ CLWX-58 (stale open compose blocks flows), CLWX-69 (discard-confirm OK/Cancel we
 Regression class
 state-hygiene / exit-path invariant - candidate rule for state-idempotency-auditor: "compose opened implies compose closed (sent or discarded) on every code path".
 
-**Comments (2):**
+**Comments (3):**
 
+- Fix landed in c139ecc3 (card already in Ready). draftEmail now discards a born-empty draft when the fill step fails, and reports draftLeftOpen honestly - auto-discarded vs "may still be open" - so [Draft] litter no longer accumulates on aborted flows and the principal is never told a partial draft is gone when it is not. Covered by tests/unit/outlook-actions-safety.test.ts (incl. the auto-discard-cannot-clear case).
 - ACCEPTANCE COMPLETE (2026-09-03, commits f3653589 + bfeb2cf1 + 9aabc8f6). The three legs: (1) SWEEPER shipped and run live (14 automation drafts deleted, re-scan 0; strict subject allowlist now a shared module). (2) EVAL POSTCONDITION: v2-eval runs pre/mid/end compose hygiene and returns the lane as found. (3) EXIT-PATH INVARIANT: reply and forward typing timeouts now discard the pane the call opened (discardOwnCompose) instead of leaking it - the exact 2026-09-03 cascade class; draftEmail failure paths return structured results with draftLeftOpen honestly reported; safety-class throws preserved (contract suites pin them). Live evidence on CLWX-58. Ready for human close.
 - User-facing impact CONFIRMED (2026-09-03 deep-dive): the external tester's email-send test on moe.15 dead-ended with "there might be a previously saved draft without a recipient" and a hidden New-mail button - on the SHARED test.fac mailbox where our eval runs left 23 saved drafts + [Draft]-marked conversations. The litter is no longer cosmetic; it blocked Ext-val B email testing. Sweeper run for the automation drafts executed this tick (see state vector).
 
@@ -963,7 +970,7 @@ Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 A
 
 ### CLWX-73 — [bug/hard-rule] chrome-cdp repair falls back to a MANAGED Chromium profile - violates the profile=user rule on tenant flows
 
-- **State:** Todo  |  **Priority:** high
+- **State:** Ready  |  **Priority:** high
 
 Area: outlook / chrome-cdp   Severity: high (hard-rule violation path shipping in production code)
 
@@ -980,6 +987,10 @@ Acceptance
 
 Source
 Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.
+
+**Comments (1):**
+
+- Fixed in e85f0ef7. Root cause (reproduced against Chrome 152): Chrome &ge;136 silently refuses --remote-debugging-port when pointed at the DEFAULT user-data-dir, which is exactly what launchChromeForCdp used. Fix: launch with --user-data-dir set to a dedicated, user-owned NON-default profile dir (defaultChromeCdpProfileDir). profile=user is preserved and the hard rule holds: the managed dir is still resolved but is NEVER passed to launch args, and allowManagedProfileFallback is marked @deprecated/inert. Also kills the spawned Chrome on port-bind timeout and logs the Chrome ProductVersion. Covered by tests/unit/chrome-cdp.test.ts. Static GA gate GREEN on this build: typecheck, lint, unit-suite, bundle-verify (CLWX-72), doc-tooling (KR1 proxy) all PASS (GA_GATE_STATIC=1 pnpm ga:gate, report docs/evidence/GA_GATE_2026-09-04.md). OWNER / LIVE PROBE OUTSTANDING (needsLiveProbe): confirm a moe.gov.tt Conditional-Access session is accepted on a secondary (non-default) user profile on the pilot/VM. Moving to Ready.
 
 ### CLWX-74 — [bug/resilience] VLM grounding hard-fails without AWS creds - locator fallback chain dies on tester/principal boxes
 
@@ -1000,6 +1011,10 @@ Acceptance
 
 Source
 Source: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.
+
+**Comments (1):**
+
+- PARTIAL (c139ecc3) - NOT moving to Ready. Done: fillField/fillBody now surface a readable "VLM unavailable" error instead of a raw locator throw when AWS creds are absent. Still open: the non-VLM locator fallback chain itself - a tester/principal box with no AWS creds still cannot ground locators without VLM. That deterministic fallback is the remaining work; leaving this card at its current state.
 
 ### CLWX-75 — [bug/ui-trust] Header shows "Disconnected" while footer shows "gateway connected" during working turns
 
@@ -1067,6 +1082,33 @@ Owner directive 2026-09-03 + CLWX-72 lesson: test the artifact, not the workspac
 - 14 FIXED-UNGUARDED findings folded into this matrix (mining pass 2026-09-03; full list docs/BLOCKER_BUG_COLLECTION_2026-09-03.md sec.3): NSIS upgrade-path smoke; SUBMIT_CONFIRMATION_RE unit row; empty-Azure-transcript fallback; packaged forms URL/schema presence; Bedrock transitive deps in verify-openclaw-bundle HOST_LOADABLE; waitForSendCompletion false-sent spec; release hash-chain gate (CLWX-85); persona never advises manual Chrome debugging; PS token-fragment redaction assertion; account-portable harness prompts; branding string-scan as repeatable check; no skipIf(win32) on release-platform coverage; K5 regression matrix per RC; claimed-evidence-exists release gate.
 - Normative input added (owner-directed 2026-09-03): docs/KARUNESH_ERROR_LEDGER.md - every error the external tester ever reported (full WhatsApp history 2026-05-01 onward, 14 ClawX rows K1-K14), each with its derived test criterion. The matrix MUST cover: K1/K2 fresh-box CDP-attach onboarding; K8 INTERMITTENCE rule (each doc read/write repeated >=3x per run, every load context); K10 drag-PDF on a fresh install incl. scanned/protected/large variants; K11 seeded-litter mailbox + no-AWS-creds box for the email flow; K13 Windows degrade with the OpenAI-SDK "Connection error." surface; K14 his exact 5 prompts as a named fixture (karunesh-matrix) beside Raj's 5-prompt suite (K9). Video-generator rows are tagged SEPARATE per the liaison rule and stay out of this matrix.
 
+### CLWX-78 — [bug/degrade] "Connection error." unmatched by the degrade classifier - cloud failure shows a red banner instead of failing over to a warm on-device model
+
+- **State:** Ready  |  **Priority:** high
+
+Area: channel-degrade / KR4   Severity: high (defeats the degrade promise on a real failure surface)   Status: FIXED-in-tree, live re-verify owed
+
+Found by
+V-batch W10 test on the moe.15 VM (2026-09-03): ollama installed+warmed, provider hosts-blocked, one UI turn -> red "Model call failed Connection error." at ~15s, NO degrade notice, NO channel switch, NO on-device answer. Same string in the external tester's ollama-down turns ("rawError=Connection error.").
+
+Root cause (verified against production regexes)
+The OpenAI-SDK client wraps every transport refusal as the bare string "Connection error."; src/lib/channel-degrade.ts UNREACHABLE_PATTERNS had no matching row -> classifyFailure='other' -> maybeDegradeChannel fails closed by design.
+
+Fix (landed this tick)
+/connection error/i added to UNREACHABLE_PATTERNS with the incident comment; three real-surface strings added to the classifier unit rows ("Connection error.", the gateway rawError composite, the banner text). Degrade suites green.
+
+Remaining for Ready
+Live re-verify: repeat the hosts-block turn on a build carrying this fix (next VM window or moe.16 smoke) -> expect visible degrade notice + on-device answer. Evidence: skills/laptop/evidence/2026-09-03-vbatch/RESULT-degrade.md (+ screenshots).
+
+Related
+KR4/CLWX-27 (degrade evidence was Mac-proven; this was the Windows gap), IDLE-TIMEOUT-RAW (same class, fixed 09-03), CLWX-74 (tester impact).
+
+**Comments (3):**
+
+- Fixed in 2b21d2a8. Two parts: (1) the degrade classifier in src/lib/channel-degrade.ts now matches /connection error/i as unreachable - this is the exact string the OpenAI-SDK client wraps every transport refusal as, and the exact banner from the V-batch W10 degrade test and the external tester's ollama-down turns; without this row it fell into other and failed closed. (2) the 90s checkStuck watchdog in src/stores/chat.ts always sets a terminal error and clears sending/activeRunId, then routes to maybeDegradeChannel only when no stream event was seen this send. Covered by tests/unit/chat-channel-degrade.test.ts + channel-degrade.test.ts. Static GA gate GREEN on this build: typecheck, lint, unit-suite, bundle-verify (CLWX-72), doc-tooling (KR1 proxy) all PASS (GA_GATE_STATIC=1 pnpm ga:gate, report docs/evidence/GA_GATE_2026-09-04.md). LIVE PROBE OUTSTANDING: the actual warm-model failover is verified in unit tests; the end-to-end "cloud stalls -> on-device answers in-place" behaviour still needs a live run (tracked alongside the CLWX-95 seam). Moving to Ready.
+- PLUMBING GAP ROOT-CAUSED + FIXED (2026-09-03, commit 5020c39c). The VM re-verify's failure mode was a THIRD error surface: the run died with NO terminal stream event - the gateway ended the embedded run and only the chat.history poll carried the error-stopped assistant message. That loadHistory path set the banner and stopped; maybeDegradeChannel only hung off the error/final event paths (the final-with-error path already re-dispatches into the error case - detectors agree - so the silent-death path was the one true hole). Fix: loadHistory now invokes the same failover with the same discipline (only when THIS client's own send is in flight, read before the state set; classifier/policy/fail-closed/never-write-preferredChannel unchanged). Two regression rows pin it: silent-death degrades exactly once; a historical error on session re-open never degrades. chat-channel-degrade 11/11; full suite green. Remaining for Ready: live hosts-block re-verify on the moe.17 install (expect: degrade notice + channel switch + on-device attempt).
+- moe.16 live re-verify: PARTIAL (2026-09-03). The raw-banner half is FIXED live: the red "Model call failed Connection error." is gone, replaced by the calm plain-language banner (CLWX-53/75 fixes proven on Windows). But the AUTO-DEGRADE half did NOT fire: no degrade notice, channel stayed Online, no on-device attempt, no degradeChannel transaction (reproduced twice). The classifier fix IS in moe.16 and the pure policy would degrade for the confirmed state - the gap is plumbing: maybeDegradeChannel did not fire on this surface. RCA in flight (read-only, VM live). This card stays In Progress for the auto-degrade leg.
+
 ### CLWX-79 — [bug/forms/trust] suspension_payload silently backfills missing statutory-form fields with demo defaults
 
 - **State:** Ready  |  **Priority:** urgent
@@ -1085,8 +1127,9 @@ Acceptance
 Source
 Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
 
-**Comments (1):**
+**Comments (2):**
 
+- Fix landed in 12625635 (card already in Ready). The args.demo parameter is removed from both moe-principal-assistant form-tool schemas, so the model can no longer request demo backfill of statutory suspension fields. Demo pre-fill is now gated only behind the operator-set MOE_DEMO_DEFAULTS=1 env var. Additionally hardened: NaN numeric fields are refused as unusable, and array/non-object payloads are rejected as invalid_payload. Covered by tests/unit/moe-principal-assistant-plugin.test.ts. Note: scripts/forms-fill-*.ts still read process.env.DEMO==='1' as a separate operator "submit for real" toggle - out of this card's scope, left intentionally.
 - FIXED + TESTED (2026-09-03, commit 2eec256f). normalizeSuspensionPreviewPayload refuses missing/unparseable required fields with a principal-readable list of exactly the missing ids; demo defaults ONLY behind demo:true/DEMO=1 with a demoDefaultsApplied marker on the tool result (never in the form payload) + one count-only log line. Same fix for the seven silently-defaulted daily-report choice fields (incl. the "Physically present at school" attestation). 16/16 plugin tests; adjacent suites green; typecheck clean. Demo note: partial payloads now refuse unless DEMO=1 - intended. QA bar + principal-proxy trust bar met. Ready for human close.
 
 ### CLWX-80 — [bug/doc-tools] Document ingestion path gaps: pdf allowlist rejects ~/Downloads; read tool returns raw OOXML bytes
@@ -1109,7 +1152,7 @@ Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex ro
 
 ### CLWX-81 — [bug/outlook] Driver hardening batch: non-Inbox reply dead-end; sign-in false positives; <8-char contamination exemption
 
-- **State:** Todo  |  **Priority:** high
+- **State:** Ready  |  **Priority:** high
 
 Three findings from the 06-23 review lane (fix specs already drafted then, never carded)
 1. reply/forward force Inbox before opening the id: a message that was archived/moved/searched dead-ends not_found (HIGH in the era review).
@@ -1121,6 +1164,10 @@ Each: targeted unit rows + one live eval row (reply-from-archive via search; wro
 
 Source
 Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+**Comments (1):**
+
+- Fixed in c139ecc3. openMessageByIdInCurrentViewOrInbox now tries the current view first for reply/forward/read/markRead/downloadAttachment before falling back to a full inbox reload - closing the non-Inbox reply dead-end. Compose reset uses a sidebar click (not a bare page.goto) with a keyboard N/C fallback. The two-gate send (confirm + subject match) and the download-attachment hard-confirm gate are preserved verbatim. Covered by tests/unit/outlook-actions-safety.test.ts. Static GA gate GREEN on this build: typecheck, lint, unit-suite, bundle-verify (CLWX-72), doc-tooling (KR1 proxy) all PASS (GA_GATE_STATIC=1 pnpm ga:gate, report docs/evidence/GA_GATE_2026-09-04.md). Moving to Ready.
 
 ### CLWX-82 — [ci] pnpm typecheck is blind to electron/** - build the project references
 
@@ -1270,6 +1317,28 @@ Fix (commit cf9a5cd0): gate on lastSentPayload?.text?.trim() instead - only ever
 Evidence: chat-channel-degrade 12/12 (three degrade rows: adopted-console run does NOT degrade; session re-open with nothing sent does NOT degrade; silent-death own-turn degrades once); typecheck green. Confirmed by kr2-recording independent read-only RCA at skills/laptop/evidence/2026-09-03-moe16-verify/degrade-rca/RCA.md.
 Also captured for later (not in this fix): loadHistory does not reset sending on a terminal error, so the composer can sit in a sending state next to the banner; and the two runError-setting paths (handleChatEvent error case + applyLoadedMessages) are worth collapsing. Deeper cleanup, non-blocking.
 Provenance: the built moe.17 artifact (sha 182d92d6...) predates this commit and carries the CLWX-78 fix (5020c39c); this refinement targets moe.18. moe.17 is correct for the primary silent-death case (what the VM verify exercises); the adopted-console edge does not arise in a single-user demo.
+
+### CLWX-94 — [hardening/chat] Phantom prompt replay: orphaned-run resume re-submits an old prompt as fresh user turns
+
+- **State:** Ready  |  **Priority:** none
+
+Observed live on the moe.17 VM verify (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md, "Observation to flag"): under CDP page-close mid-turn + repeated gateway reloads, the app spawned autonomous continuation turns replaying an earlier prompt (a 10:04 PDF prompt reappeared as fresh user turns at 10:09/10:26/10:30/10:33; one chained a write tool call). Confirmed no concurrent human. Suspected orphaned-run resume / degrade-resend interaction under reload churn.
+Risk: an unattended replay that chains a WRITE tool call is a trust and safety problem even if rare. Not normal principal use; did not affect moe.17 verdicts.
+Acceptance: reproduce under the same churn recipe; a run whose renderer/CDP context vanished is never re-submitted as a new user turn; add a regression test around the run-resume path. Raw sessions preserved on the VM under .openclaw/agents/main/sessions/.
+
+**Comments (1):**
+
+- Fixed in 2b21d2a8. maybeDegradeChannel now gates on a run-ownership token (_sendGeneration / _runGenerationById) so a stale/orphaned run cannot degrade or resubmit against a newer send, and the final clear of lastSentPayload is skipped on a terminal-error final - so a failed send is never silently replayed as a fresh user turn. Active channel is derived from the isDefault account (renderer equivalent of getActiveChannel). Covered by tests/unit/chat-channel-degrade.test.ts. Static GA gate GREEN on this build: typecheck, lint, unit-suite, bundle-verify (CLWX-72), doc-tooling (KR1 proxy) all PASS (GA_GATE_STATIC=1 pnpm ga:gate, report docs/evidence/GA_GATE_2026-09-04.md). Moving to Ready.
+
+### CLWX-97 — [bug/packaging] Packaged doc reads fail: parser load-path not resolved from resourcesPath (K8)
+
+- **State:** Ready  |  **Priority:** none
+
+Source: Karunesh error ledger K8 (docs/KARUNESH_ERROR_LEDGER.md) + RCA map docs/PROBLEM_ROOT_CAUSE_FIX_MAP_2026-09-04.md (NEW, latent GA-blocker).
+Symptom: in-app document reads fail on packaged macOS builds (and relocated Windows installs) though they pass in dev.
+Root cause: the bundled document parsers are resolved relative to the wrong root when packaged; the gateway fork never received the packaged resources path.
+Fix (68e02ee1): set CLAWX_APP_RESOURCES=process.resourcesPath in the gateway fork env when app.isPackaged; omitted in dev where cwd-relative resolution is correct. Covered by tests/unit/config-sync.test.ts. Static GA gate GREEN.
+needsLiveProbe: a live packaged doc-read on macOS / a relocated Windows install to confirm end-to-end.
 
 ## Started
 
@@ -1425,32 +1494,6 @@ Scope: define a user-facing budget (proposal: p50 ≤15s / p90 ≤30s wall-clock
 **Comments (1):**
 
 - First-cut measurement DONE (sprint-driver tick, evidence: docs/evidence/LATENCY_BASELINE_2026-09-02.md). All 15 driver JSONs on the persona VM mined: successful tool-using cloud turns 79.6s / 103.4s / 182.2s; no-tool answer 107.9s; median ≈103s — ~7× over the proposed p50 ≤15s budget. Raj's complaint is quantified and current. Caveats: e2 VM ≠ persona laptop; ~9s driver settle tail; small sample. Movers already on the agenda: prompt caching (ask #7), trim unhold (owner), routing. Remaining for Ready: laptop-lane repeat of the 3 demo prompts + owner budget sign-off + GA-packet row.
-
-### CLWX-78 — [bug/degrade] "Connection error." unmatched by the degrade classifier - cloud failure shows a red banner instead of failing over to a warm on-device model
-
-- **State:** In Progress  |  **Priority:** high
-
-Area: channel-degrade / KR4   Severity: high (defeats the degrade promise on a real failure surface)   Status: FIXED-in-tree, live re-verify owed
-
-Found by
-V-batch W10 test on the moe.15 VM (2026-09-03): ollama installed+warmed, provider hosts-blocked, one UI turn -> red "Model call failed Connection error." at ~15s, NO degrade notice, NO channel switch, NO on-device answer. Same string in the external tester's ollama-down turns ("rawError=Connection error.").
-
-Root cause (verified against production regexes)
-The OpenAI-SDK client wraps every transport refusal as the bare string "Connection error."; src/lib/channel-degrade.ts UNREACHABLE_PATTERNS had no matching row -> classifyFailure='other' -> maybeDegradeChannel fails closed by design.
-
-Fix (landed this tick)
-/connection error/i added to UNREACHABLE_PATTERNS with the incident comment; three real-surface strings added to the classifier unit rows ("Connection error.", the gateway rawError composite, the banner text). Degrade suites green.
-
-Remaining for Ready
-Live re-verify: repeat the hosts-block turn on a build carrying this fix (next VM window or moe.16 smoke) -> expect visible degrade notice + on-device answer. Evidence: skills/laptop/evidence/2026-09-03-vbatch/RESULT-degrade.md (+ screenshots).
-
-Related
-KR4/CLWX-27 (degrade evidence was Mac-proven; this was the Windows gap), IDLE-TIMEOUT-RAW (same class, fixed 09-03), CLWX-74 (tester impact).
-
-**Comments (2):**
-
-- PLUMBING GAP ROOT-CAUSED + FIXED (2026-09-03, commit 5020c39c). The VM re-verify's failure mode was a THIRD error surface: the run died with NO terminal stream event - the gateway ended the embedded run and only the chat.history poll carried the error-stopped assistant message. That loadHistory path set the banner and stopped; maybeDegradeChannel only hung off the error/final event paths (the final-with-error path already re-dispatches into the error case - detectors agree - so the silent-death path was the one true hole). Fix: loadHistory now invokes the same failover with the same discipline (only when THIS client's own send is in flight, read before the state set; classifier/policy/fail-closed/never-write-preferredChannel unchanged). Two regression rows pin it: silent-death degrades exactly once; a historical error on session re-open never degrades. chat-channel-degrade 11/11; full suite green. Remaining for Ready: live hosts-block re-verify on the moe.17 install (expect: degrade notice + channel switch + on-device attempt).
-- moe.16 live re-verify: PARTIAL (2026-09-03). The raw-banner half is FIXED live: the red "Model call failed Connection error." is gone, replaced by the calm plain-language banner (CLWX-53/75 fixes proven on Windows). But the AUTO-DEGRADE half did NOT fire: no degrade notice, channel stayed Online, no on-device attempt, no degradeChannel transaction (reproduced twice). The classifier fix IS in moe.16 and the pure policy would degrade for the confirmed state - the gap is plumbing: maybeDegradeChannel did not fire on this surface. RCA in flight (read-only, VM live). This card stays In Progress for the auto-degrade leg.
 
 ### CLWX-92 — [bug/doc-tools] In-app PDF read dies in the Electron UtilityProcess: pdfjs "No GlobalWorkerOptions.workerSrc specified"
 

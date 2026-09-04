@@ -44,6 +44,16 @@
   ],
   "issues": [
     {
+      "id": "b7e862fe-9fc3-47fc-a97d-f4176fb899ad",
+      "sequence_id": 97,
+      "name": "[bug/packaging] Packaged doc reads fail: parser load-path not resolved from resourcesPath (K8)",
+      "priority": "none",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
+      "description": "Source: Karunesh error ledger K8 (docs/KARUNESH_ERROR_LEDGER.md) + RCA map docs/PROBLEM_ROOT_CAUSE_FIX_MAP_2026-09-04.md (NEW, latent GA-blocker).\nSymptom: in-app document reads fail on packaged macOS builds (and relocated Windows installs) though they pass in dev.\nRoot cause: the bundled document parsers are resolved relative to the wrong root when packaged; the gateway fork never received the packaged resources path.\nFix (68e02ee1): set CLAWX_APP_RESOURCES=process.resourcesPath in the gateway fork env when app.isPackaged; omitted in dev where cwd-relative resolution is correct. Covered by tests/unit/config-sync.test.ts. Static GA gate GREEN.\nneedsLiveProbe: a live packaged doc-read on macOS / a relocated Windows install to confirm end-to-end.",
+      "comments": []
+    },
+    {
       "id": "198f110f-71bc-40ec-aa45-4fb01323f981",
       "sequence_id": 96,
       "name": "[hardening/chat] Post-degrade recovery wedge: stale offline banner + silent sends until full app relaunch",
@@ -51,7 +61,12 @@
       "state": "Backlog",
       "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
       "description": "Observed on the moe.17 verify addendum (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md): after hosts-restore following a degrade, the post-restore Online turn returned NO_RESPONSE with messagesAfter=0 (silent send) while a stale \"offline\" degrade banner was still displayed; Online only worked again after a full app relaunch. Contradicts the intended \"Online resumes automatically once available\" behaviour.\nAcceptance: after connectivity returns, the next Online turn succeeds without an app restart; the degrade banner clears when the provider probe succeeds; a silent send (accepted composer input, no turn, no error) is treated as a defect class of its own with a watchdog. Trust lens: this is exactly the 3:30pm-dropped-connection scenario the principal-proxy vetoes on.",
-      "comments": []
+      "comments": [
+        {
+          "text": "Related to the CLWX-95 seam (2b21d2a8) - NOT moving. The run-ownership token and terminal-error lastSentPayload handling landed for CLWX-94 reduce the orphan/replay surface, but the post-degrade recovery wedge (stale offline banner + silent sends until full relaunch) depends on the same restart-vs-per-run refresh decision tracked in CLWX-95. Kept open pending that wiring + live probe.",
+          "created": "2026-09-04T09:33:35.413727Z"
+        }
+      ]
     },
     {
       "id": "5be5ae3a-0351-4ab1-ade6-e6da25e14385",
@@ -61,17 +76,27 @@
       "state": "Backlog",
       "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
       "description": "Observed on the moe.17 verify addendum (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md): the cloud→on-device channel switch is applied via a gateway RESTART; the interrupted turn's trajectory stops at prompt.submitted with no model response ever produced, and the renderer spins \"still-thinking\" for the full 420s (answerText=null). The degrade notice + switch + preference-preservation all work (CLWX-78 core PASS); the gap is that the degraded turn itself never completes.\nAcceptance: after a mid-turn channel degrade, the interrupted turn is either resumed on the new channel exactly once or terminated with a visible, anonymised outcome — never an indefinite spinner. Verdict-tension note: moe.17 PASSed under the \"switch + notice + attempt\" bar; this card is the stricter \"answer must land or fail visibly\" bar, explicitly owner-arbitrated.",
-      "comments": []
+      "comments": [
+        {
+          "text": "Seam only (2b21d2a8) - NOT moving. syncDefaultProviderToRuntime gains an opt-in skipGatewayRefresh param (default off, not yet wired) as the seam for the per-run-vs-restart refresh decision. Open: wiring it through settings.ts + channel-router.ts, plus the live probe to decide whether a degraded turn can land on-device without a gateway restart (restart-vs-per-run). Owner/live-probe input needed before this closes.",
+          "created": "2026-09-04T09:33:35.376040Z"
+        }
+      ]
     },
     {
       "id": "dc31d979-923a-45fa-b821-6f456cb4ba5d",
       "sequence_id": 94,
       "name": "[hardening/chat] Phantom prompt replay: orphaned-run resume re-submits an old prompt as fresh user turns",
       "priority": "none",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "Observed live on the moe.17 VM verify (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md, \"Observation to flag\"): under CDP page-close mid-turn + repeated gateway reloads, the app spawned autonomous continuation turns replaying an earlier prompt (a 10:04 PDF prompt reappeared as fresh user turns at 10:09/10:26/10:30/10:33; one chained a write tool call). Confirmed no concurrent human. Suspected orphaned-run resume / degrade-resend interaction under reload churn.\nRisk: an unattended replay that chains a WRITE tool call is a trust and safety problem even if rare. Not normal principal use; did not affect moe.17 verdicts.\nAcceptance: reproduce under the same churn recipe; a run whose renderer/CDP context vanished is never re-submitted as a new user turn; add a regression test around the run-resume path. Raw sessions preserved on the VM under .openclaw/agents/main/sessions/.",
-      "comments": []
+      "comments": [
+        {
+          "text": "Fixed in 2b21d2a8. maybeDegradeChannel now gates on a run-ownership token (_sendGeneration / _runGenerationById) so a stale/orphaned run cannot degrade or resubmit against a newer send, and the final clear of lastSentPayload is skipped on a terminal-error final - so a failed send is never silently replayed as a fresh user turn. Active channel is derived from the isDefault account (renderer equivalent of getActiveChannel). Covered by tests/unit/chat-channel-degrade.test.ts.\nStatic GA gate GREEN on this build: typecheck, lint, unit-suite, bundle-verify (CLWX-72), doc-tooling (KR1 proxy) all PASS (GA_GATE_STATIC=1 pnpm ga:gate, report docs/evidence/GA_GATE_2026-09-04.md).\nMoving to Ready.",
+          "created": "2026-09-04T09:33:35.088498Z"
+        }
+      ]
     },
     {
       "id": "954b9896-3cf5-44e9-8707-ece86c4d4a95",
@@ -213,10 +238,15 @@
       "sequence_id": 81,
       "name": "[bug/outlook] Driver hardening batch: non-Inbox reply dead-end; sign-in false positives; <8-char contamination exemption",
       "priority": "high",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "Three findings from the 06-23 review lane (fix specs already drafted then, never carded)\n1. reply/forward force Inbox before opening the id: a message that was archived/moved/searched dead-ends not_found (HIGH in the era review).\n2. ensureInboxFolderOrSignin converts Inbox-confirm failures into needs_signin when sign-in-ish words appear in visible mail - wrong-folder false positive.\n3. The RAJ-4 body-in-recipient contamination check exempts normalized bodies under 8 chars - the class can silently return for short replies.\n\nAcceptance\nEach: targeted unit rows + one live eval row (reply-from-archive via search; wrong-folder sign-in probe; 3-char reply contamination check). 15/15 eval stays green.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
-      "comments": []
+      "comments": [
+        {
+          "text": "Fixed in c139ecc3. openMessageByIdInCurrentViewOrInbox now tries the current view first for reply/forward/read/markRead/downloadAttachment before falling back to a full inbox reload - closing the non-Inbox reply dead-end. Compose reset uses a sidebar click (not a bare page.goto) with a keyboard N/C fallback. The two-gate send (confirm + subject match) and the download-attachment hard-confirm gate are preserved verbatim. Covered by tests/unit/outlook-actions-safety.test.ts.\nStatic GA gate GREEN on this build: typecheck, lint, unit-suite, bundle-verify (CLWX-72), doc-tooling (KR1 proxy) all PASS (GA_GATE_STATIC=1 pnpm ga:gate, report docs/evidence/GA_GATE_2026-09-04.md).\nMoving to Ready.",
+          "created": "2026-09-04T09:33:35.179576Z"
+        }
+      ]
     },
     {
       "id": "afeb72ed-9f70-46b5-9266-48f806b3161e",
@@ -238,6 +268,10 @@
       "description": "Finding (2026-05-27 session, verbatim)\nThe normalizer then fills missing fields with demo defaults, so the payload always passes.\n\nWhy urgent\nSilent data fabrication on a statutory Ministry form: a principal who omits a field gets a submission carrying invented values instead of a prompt. Trust + data-integrity class - worse than a failure.\n\nAcceptance\n1. Missing required fields produce a principal-readable ask-back, never a default.\n2. Unit rows: payload with N missing fields -> refusal listing them.\n3. Demo defaults survive ONLY behind an explicit DEMO flag, logged.\n\nSource\nSource: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.",
       "comments": [
         {
+          "text": "Fix landed in 12625635 (card already in Ready). The args.demo parameter is removed from both moe-principal-assistant form-tool schemas, so the model can no longer request demo backfill of statutory suspension fields. Demo pre-fill is now gated only behind the operator-set MOE_DEMO_DEFAULTS=1 env var. Additionally hardened: NaN numeric fields are refused as unusable, and array/non-object payloads are rejected as invalid_payload. Covered by tests/unit/moe-principal-assistant-plugin.test.ts. Note: scripts/forms-fill-*.ts still read process.env.DEMO==='1' as a separate operator \"submit for real\" toggle - out of this card's scope, left intentionally.",
+          "created": "2026-09-04T09:33:35.261157Z"
+        },
+        {
           "text": "FIXED + TESTED (2026-09-03, commit 2eec256f). normalizeSuspensionPreviewPayload refuses missing/unparseable required fields with a principal-readable list of exactly the missing ids; demo defaults ONLY behind demo:true/DEMO=1 with a demoDefaultsApplied marker on the tool result (never in the form payload) + one count-only log line. Same fix for the seven silently-defaulted daily-report choice fields (incl. the \"Physically present at school\" attestation). 16/16 plugin tests; adjacent suites green; typecheck clean. Demo note: partial payloads now refuse unless DEMO=1 - intended. QA bar + principal-proxy trust bar met. Ready for human close.",
           "created": "2026-09-03T07:17:46.920837Z"
         }
@@ -248,10 +282,14 @@
       "sequence_id": 78,
       "name": "[bug/degrade] \"Connection error.\" unmatched by the degrade classifier - cloud failure shows a red banner instead of failing over to a warm on-device model",
       "priority": "high",
-      "state": "In Progress",
-      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "Area: channel-degrade / KR4   Severity: high (defeats the degrade promise on a real failure surface)   Status: FIXED-in-tree, live re-verify owed\n\nFound by\nV-batch W10 test on the moe.15 VM (2026-09-03): ollama installed+warmed, provider hosts-blocked, one UI turn -> red \"Model call failed Connection error.\" at ~15s, NO degrade notice, NO channel switch, NO on-device answer. Same string in the external tester's ollama-down turns (\"rawError=Connection error.\").\n\nRoot cause (verified against production regexes)\nThe OpenAI-SDK client wraps every transport refusal as the bare string \"Connection error.\"; src/lib/channel-degrade.ts UNREACHABLE_PATTERNS had no matching row -> classifyFailure='other' -> maybeDegradeChannel fails closed by design.\n\nFix (landed this tick)\n/connection error/i added to UNREACHABLE_PATTERNS with the incident comment; three real-surface strings added to the classifier unit rows (\"Connection error.\", the gateway rawError composite, the banner text). Degrade suites green.\n\nRemaining for Ready\nLive re-verify: repeat the hosts-block turn on a build carrying this fix (next VM window or moe.16 smoke) -> expect visible degrade notice + on-device answer. Evidence: skills/laptop/evidence/2026-09-03-vbatch/RESULT-degrade.md (+ screenshots).\n\nRelated\nKR4/CLWX-27 (degrade evidence was Mac-proven; this was the Windows gap), IDLE-TIMEOUT-RAW (same class, fixed 09-03), CLWX-74 (tester impact).",
       "comments": [
+        {
+          "text": "Fixed in 2b21d2a8. Two parts: (1) the degrade classifier in src/lib/channel-degrade.ts now matches /connection error/i as unreachable - this is the exact string the OpenAI-SDK client wraps every transport refusal as, and the exact banner from the V-batch W10 degrade test and the external tester's ollama-down turns; without this row it fell into other and failed closed. (2) the 90s checkStuck watchdog in src/stores/chat.ts always sets a terminal error and clears sending/activeRunId, then routes to maybeDegradeChannel only when no stream event was seen this send. Covered by tests/unit/chat-channel-degrade.test.ts + channel-degrade.test.ts.\nStatic GA gate GREEN on this build: typecheck, lint, unit-suite, bundle-verify (CLWX-72), doc-tooling (KR1 proxy) all PASS (GA_GATE_STATIC=1 pnpm ga:gate, report docs/evidence/GA_GATE_2026-09-04.md).\nLIVE PROBE OUTSTANDING: the actual warm-model failover is verified in unit tests; the end-to-end \"cloud stalls -> on-device answers in-place\" behaviour still needs a live run (tracked alongside the CLWX-95 seam). Moving to Ready.",
+          "created": "2026-09-04T09:33:35.004194Z"
+        },
         {
           "text": "PLUMBING GAP ROOT-CAUSED + FIXED (2026-09-03, commit 5020c39c). The VM re-verify's failure mode was a THIRD error surface: the run died with NO terminal stream event - the gateway ended the embedded run and only the chat.history poll carried the error-stopped assistant message. That loadHistory path set the banner and stopped; maybeDegradeChannel only hung off the error/final event paths (the final-with-error path already re-dispatches into the error case - detectors agree - so the silent-death path was the one true hole).\nFix: loadHistory now invokes the same failover with the same discipline (only when THIS client's own send is in flight, read before the state set; classifier/policy/fail-closed/never-write-preferredChannel unchanged). Two regression rows pin it: silent-death degrades exactly once; a historical error on session re-open never degrades. chat-channel-degrade 11/11; full suite green.\nRemaining for Ready: live hosts-block re-verify on the moe.17 install (expect: degrade notice + channel switch + on-device attempt).",
           "created": "2026-09-03T09:12:36.181604Z"
@@ -314,17 +352,27 @@
       "state": "Todo",
       "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "Area: outlook / grounding   Severity: high (email draft dead-ends for any box without Bedrock credentials)\n\nSymptom (tester log)\n\"VlmGrounder.ground failed ... Could not load credentials from any providers\" then \"/api/outlook/draft failed: Could not find target (semantic locator missed and VLM grounding failed)\" - three times. The agent told the tester to check drafts/try later.\n\nAnalysis\nTwo stacked defects: (a) the semantic locator for \"New mail\" missed - plausibly because the shared test.fac mailbox carried automation draft litter and Outlook hides New mail when the reading pane has a draft (see CLWX-70, outlook-actions.ts:1697 comment); (b) the VLM fallback assumes Bedrock credentials exist - principals and testers will NEVER have local AWS creds, so the fallback tier is dead weight off the dev Mac. Cloud VLM must route via the app's managed provider (Gateway/APIM), or the locator tier must be robust enough to not need it.\n\nAcceptance\n1. New-mail locator survives a mailbox with draft litter (fallbacks incl. the compose keyboard shortcut N / toolbar aria).\n2. VLM grounding uses the app's provider chain (not local AWS creds), or degrades with a principal-readable message.\n3. e2e: draft flow passes on a box with NO aws credentials.\n\nSource\nSource: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.",
-      "comments": []
+      "comments": [
+        {
+          "text": "PARTIAL (c139ecc3) - NOT moving to Ready. Done: fillField/fillBody now surface a readable \"VLM unavailable\" error instead of a raw locator throw when AWS creds are absent. Still open: the non-VLM locator fallback chain itself - a tester/principal box with no AWS creds still cannot ground locators without VLM. That deterministic fallback is the remaining work; leaving this card at its current state.",
+          "created": "2026-09-04T09:33:35.338492Z"
+        }
+      ]
     },
     {
       "id": "59b2d66c-9243-4b32-86b9-2bcb58975474",
       "sequence_id": 73,
       "name": "[bug/hard-rule] chrome-cdp repair falls back to a MANAGED Chromium profile - violates the profile=user rule on tenant flows",
       "priority": "high",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "Area: outlook / chrome-cdp   Severity: high (hard-rule violation path shipping in production code)\n\nSymptom (tester log)\n\"default Chrome profile launch ended with port_bind_timeout; trying managed profile fallback; launching managed profile for CDP at ...\\Ministry of Education\\Chrome CDP Profile\". The tester then had to sign in inside the managed profile (read-inbox needs_signin -> ok after manual sign-in).\n\nWhy this is a bug\nThe hard rule exists because Conditional Access blocks managed sessions on moe.gov.tt (AADSTS53003). It happened to work on fac.edu.tt, but on a real principal laptop this fallback will hard-fail against the Ministry tenant AND trains testers to sign in inside an automation-owned profile. port_bind_timeout usually means the user's real Chrome is already running WITHOUT the debug port - the correct remediation is the documented relaunch-with-port flow, not a managed profile.\n\nAcceptance\n1. Managed-profile fallback removed or gated to non-Microsoft flows only.\n2. port_bind_timeout path surfaces a principal-readable instruction (relaunch Chrome with the debug port / one-click helper) instead of silently switching trust models.\n3. dom/flow tests cover the port-conflict path.\n\nSource\nSource: external tester (Karunesh) live run on moe.15, 2026-09-02 ~22:54-23:07 AST — his 5-prompt matrix: 4 Worked, PDF-summarise FAILED, plus email-send failure chain. Evidence: his app log clawx-2026-09-03.log + 2 screenshots (local liaison archive; not committed). Deep-dive tick 2026-09-03.",
-      "comments": []
+      "comments": [
+        {
+          "text": "Fixed in e85f0ef7. Root cause (reproduced against Chrome 152): Chrome &ge;136 silently refuses --remote-debugging-port when pointed at the DEFAULT user-data-dir, which is exactly what launchChromeForCdp used. Fix: launch with --user-data-dir set to a dedicated, user-owned NON-default profile dir (defaultChromeCdpProfileDir). profile=user is preserved and the hard rule holds: the managed dir is still resolved but is NEVER passed to launch args, and allowManagedProfileFallback is marked @deprecated/inert. Also kills the spawned Chrome on port-bind timeout and logs the Chrome ProductVersion. Covered by tests/unit/chrome-cdp.test.ts.\nStatic GA gate GREEN on this build: typecheck, lint, unit-suite, bundle-verify (CLWX-72), doc-tooling (KR1 proxy) all PASS (GA_GATE_STATIC=1 pnpm ga:gate, report docs/evidence/GA_GATE_2026-09-04.md).\nOWNER / LIVE PROBE OUTSTANDING (needsLiveProbe): confirm a moe.gov.tt Conditional-Access session is accepted on a secondary (non-default) user profile on the pilot/VM. Moving to Ready.",
+          "created": "2026-09-04T09:33:34.905221Z"
+        }
+      ]
     },
     {
       "id": "52d45488-0b04-40cd-b295-b3656308b90c",
@@ -364,6 +412,10 @@
       "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "Area: outlook / lane hygiene   Severity: medium-high (owner-reported with screenshot, 2026-09-03 ~08:24 AST)\n\nSymptom\nWhen an automation (or a person) starts a compose/reply and does not exit through an explicit send-or-discard, Outlook auto-saves the draft. Evidence in the screenshot: [Draft] markers on inbox conversations (test fac \"MoE smoke 01:51:08\", Corporate Communications thread) and Drafts folder at [23] accumulated items.\n\nWhy it matters\n1. A conversation carrying an embedded draft trips hasAnyVisibleOpenDraft and can block draft/reply on that thread (CLWX-58 class).\n2. Docked draft chips + confirm dialogs wedge the lane (CLWX-69).\n3. Principal-facing trust: a principal seeing [Draft] replies they never wrote, addressed to parents or the Ministry, will not trust the assistant. Draft litter is user-visible state pollution.\n\nRoot cause\nNo exit-path invariant: compose-opening flows (draftEmail, reply, forward, eval refusal proofs, crashed runs) have no finally-style cleanup, and Escape SAVES a draft rather than discarding. Every abnormal exit therefore leaks one saved draft.\n\nFix directions (acceptance)\n1. Invariant: every automation path that opens a compose ends in exactly one of {explicit send, explicit discard} including error paths (try/finally in outlook-actions).\n2. Lane sweeper: a drafts-folder cleanup script that deletes automation-authored drafts (subject prefix match: \"eval \", \"MoE smoke\") - run pre-eval and available as a recovery tool; NEVER touches human drafts.\n3. Eval postcondition: after a run, assert zero new saved drafts (drafts count unchanged) - fail the run loudly if litter leaked.\n4. Current 23-item litter cleaned once by the sweeper (test.fac sandbox only).\n\nRelated\nCLWX-58 (stale open compose blocks flows), CLWX-69 (discard-confirm OK/Cancel wedge). This card is the third leg: prevention of the litter both feed on.\n\nRegression class\nstate-hygiene / exit-path invariant - candidate rule for state-idempotency-auditor: \"compose opened implies compose closed (sent or discarded) on every code path\".",
       "comments": [
+        {
+          "text": "Fix landed in c139ecc3 (card already in Ready). draftEmail now discards a born-empty draft when the fill step fails, and reports draftLeftOpen honestly - auto-discarded vs \"may still be open\" - so [Draft] litter no longer accumulates on aborted flows and the principal is never told a partial draft is gone when it is not. Covered by tests/unit/outlook-actions-safety.test.ts (incl. the auto-discard-cannot-clear case).",
+          "created": "2026-09-04T09:33:35.300435Z"
+        },
         {
           "text": "ACCEPTANCE COMPLETE (2026-09-03, commits f3653589 + bfeb2cf1 + 9aabc8f6). The three legs: (1) SWEEPER shipped and run live (14 automation drafts deleted, re-scan 0; strict subject allowlist now a shared module). (2) EVAL POSTCONDITION: v2-eval runs pre/mid/end compose hygiene and returns the lane as found. (3) EXIT-PATH INVARIANT: reply and forward typing timeouts now discard the pane the call opened (discardOwnCompose) instead of leaking it - the exact 2026-09-03 cascade class; draftEmail failure paths return structured results with draftLeftOpen honestly reported; safety-class throws preserved (contract suites pin them). Live evidence on CLWX-58. Ready for human close.",
           "created": "2026-09-03T08:25:38.908648Z"
@@ -633,10 +685,15 @@
       "sequence_id": 51,
       "name": "[bug/other] File > New Chat renders a blank window (navigates to /chat; route does not exist)",
       "priority": "medium",
-      "state": "Backlog",
-      "state_id": "90af3385-b6b9-450e-9ffe-e482feb7a5bf",
+      "state": "Ready",
+      "state_id": "9d15c596-434a-405f-9cfe-2449def0a6f0",
       "description": "Area: other   Severity: medium (priority medium)\n\nSteps to reproduce\nTODO: exact steps\n\nExpected\nTODO: what should happen\n\nActual\nTODO: what happens instead\n\nEvidence\nTODO: log path / screenshot / trace id\n\nEnvironment\nTODO: build / OS / model\n\nRegression class? unknown — check the *-auditor agents (config-coherence, dependency-class, dom-selector, state-idempotency)",
-      "comments": []
+      "comments": [
+        {
+          "text": "Fixed in a23a3a1d. Root cause: the \"New Chat\" (Cmd+N) and \"Chat\" (Cmd+2) menu items navigated to /chat, a route with no matching element, so the window rendered blank. Fix: both menu actions now target / (the chat surface); src/App.tsx also gains a safety-net Navigate redirect /chat&rarr;/ (mirrors the existing /dreams pattern). Covered by tests/unit/menu-navigation.test.ts.\nStatic GA gate GREEN on this build: typecheck, lint, unit-suite, bundle-verify (CLWX-72), doc-tooling (KR1 proxy) all PASS (GA_GATE_STATIC=1 pnpm ga:gate, report docs/evidence/GA_GATE_2026-09-04.md).\nMoving to Ready (a human closes Done).",
+          "created": "2026-09-04T09:33:34.801533Z"
+        }
+      ]
     },
     {
       "id": "43db2bc9-fd19-401d-ba29-35ab03344fbd",
@@ -1310,6 +1367,10 @@
       "description": "A gateway API key with the sk-clawx prefix was pasted in full into a WhatsApp chat on 2026-06-05 (key value deliberately NOT reproduced here). Chat history is exportable/syncable — treat as exposed. Rotate the key, audit usage since 2026-06-05, and move future credential handoffs to a secret channel.\nSource: local WhatsApp store 2026-06-05. Tier: verified_at_commit (store read 2026-08-25).",
       "comments": [
         {
+          "text": "OWNER-GATED - no autonomous rotation performed. RCA correction (recorded in docs/PROBLEM_ROOT_CAUSE_FIX_MAP_2026-09-04.md): the \"code side is clean\" assumption is FALSE - the sk-clawx key is baked into the installer as a gitignored resource AND persisted plaintext on first boot. With auto-update OFF in PILOT_MODE, a server-side rotation is a fleet-wide outage requiring per-machine re-key. Rotation must therefore be sequenced by the owner (rotate key + re-bake installer + per-machine re-key), not done piecemeal. No action taken.",
+          "created": "2026-09-04T09:33:35.489597Z"
+        },
+        {
           "text": "Standing reminder (owner-gated): rotate sk-clawx (shared in WhatsApp 2026-06-05, also exposed via CLWX-18). Best done in the same sitting as the CLWX-18 scrub so the leaked history becomes worthless.",
           "created": "2026-09-02T03:13:10.340470Z"
         }
@@ -1324,6 +1385,10 @@
       "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
       "description": "gh repo view confirms visibility PUBLIC (updated 2026-07-27). The estate hard rule is all repos private, BUT MoE pilot users download Windows RC installers from this repo's Releases pages — flipping it private breaks their access. Human decision required: make private + provide an alternate distribution channel, or grant an explicit exception. Command when decided: gh repo edit dmvevents/clawx-pilot --visibility private\nSource: gh repo view 2026-08-25. Tier: verified_at_commit.",
       "comments": [
+        {
+          "text": "OWNER-GATED - no autonomous action taken. Changing repo visibility is a security-sensitive owner action. Flagging only: dmvevents/clawx-pilot is PUBLIC with full source. No fix attempted here. Awaiting owner decision on visibility + the CLWX-19 key-rotation sequence (they are coupled - see the RCA map, docs/PROBLEM_ROOT_CAUSE_FIX_MAP_2026-09-04.md &sect;5).",
+          "created": "2026-09-04T09:33:35.451378Z"
+        },
         {
           "text": "Standing reminder (owner-gated, URGENT class): repo is still PUBLIC with full source + leaked test credential in 3 files. One-sitting fix plan: make repo private (or split source→private, releases→public), purge the credential from history (git filter-repo), rotate the credential (pairs with CLWX-19). Agent-side prep is done — needs the owner because it is destructive + affects external visibility.",
           "created": "2026-09-02T03:13:10.267809Z"
