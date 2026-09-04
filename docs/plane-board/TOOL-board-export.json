@@ -1,0 +1,132 @@
+{
+  "exported_at_date": "2026-09-04",
+  "source": {
+    "base": "http://localhost:8090",
+    "workspace": "issues-agent",
+    "project_id": "28f8d593-6937-4880-b323-1ca91304fe55"
+  },
+  "project": {
+    "id": "28f8d593-6937-4880-b323-1ca91304fe55",
+    "name": "Dev Tooling and Plugins — CC/Codex/MCP",
+    "identifier": "TOOL"
+  },
+  "states": [
+    {
+      "id": "1a66c5d0-b5c9-4dbc-8496-d953fe5b1ac1",
+      "name": "Backlog",
+      "group": "backlog"
+    },
+    {
+      "id": "d9dd4364-1765-43be-8d65-547892346fd2",
+      "name": "Todo",
+      "group": "unstarted"
+    },
+    {
+      "id": "7574eb80-8f13-4f2e-a88c-b008e5808f01",
+      "name": "In Progress",
+      "group": "started"
+    },
+    {
+      "id": "284b6e60-65f8-46d5-b713-4cdf5f27e4cf",
+      "name": "Done",
+      "group": "completed"
+    },
+    {
+      "id": "cc9b1f9f-7270-4e17-a2f8-0522cf35c2d7",
+      "name": "Cancelled",
+      "group": "cancelled"
+    }
+  ],
+  "issues": [
+    {
+      "id": "be215392-fd91-4e6a-854c-4325746959b3",
+      "sequence_id": 8,
+      "name": "[inventory] Catalog all plugins/tools/agents/skills/MCP we already have",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "d9dd4364-1765-43be-8d65-547892346fd2",
+      "description": "Owner said \"a board for all the plugins and tools we have\" — this card captures the EXISTING inventory (not just the 3 new repos) so \"all we have\" is real, not aspirational.\n\nEnumerate + one-line purpose for each:\n\n- .claude/agents/*.md (project subagents: clawx-config-doctor, config-coherence-auditor, dependency-class-auditor, dom-selector-regression-tester, state-idempotency-auditor, gateway-recovery, production-readiness, ga-e2e-regression-verifier, skill-audit, windows-smoke, moe-product-manager, principal-proxy, ministry-liaison-monitor, test-lane-prober, ...)\n\n- .claude/skills/* and .claude/commands/* (ga-sprint-driver, windows-demo-resume, windows-runtime-recovery, session-log-miner, ...)\n\n- .codex/{agents,skills} and .agents/skills (the mirrored surfaces)\n\n- resources/skills/* (bundled principal toolkit: pdf, xlsx, docx, pptx, whisper, ...) + resources/skills/bundles.json\n\n- Any MCP servers actually wired (note: shipped gateway has NO MCP host — dev-time only).\n\n- The 3 external tools on this board: codex-plugin-cc, graphify, code-review-graph (declined).\n\nAcceptance: a single catalog doc (surface, name, purpose, shipped-or-dev-only) linked from this card; flags any drift between advertised (bundles.json) and installed.",
+      "comments": []
+    },
+    {
+      "id": "fa92ce42-fc58-4de1-b0b0-6aa484cbf525",
+      "sequence_id": 7,
+      "name": "[docs] Dev-tooling layer section in interop doc + keyless surface stubs",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "d9dd4364-1765-43be-8d65-547892346fd2",
+      "description": "Make the \"universal\" part real without shipping anything.\n\n- Add a \"Dev-tooling layer (never shipped)\" section to docs/AGENT_SKILL_INTEROPERABILITY.md stating the OKR invariants + the 3-tier adapter table (vendor plugin / multi-surface skill / dev MCP server).\n\n- Mirror keyless /graphify skill STUBS (thin pointers, not vendored code) across surfaces: .claude/skills, .codex/skills, .agents/skills — each says \"requires local graphify install; see the plan doc.\"\n\n- If we ever wire a dev-only .mcp.json for graphify-mcp, it must be a keyless local-command entry with empty env; commit only because it no-ops for anyone who hasn't installed graphify.\n\nAcceptance: interop doc updated; stubs present on all surfaces; zero committed keys; graphify-out/ gitignored (already done).",
+      "comments": []
+    },
+    {
+      "id": "922fe24f-1f9d-4b48-92d5-0c5c51d7aa1b",
+      "sequence_id": 6,
+      "name": "[research] Deep-dive — isolate ALL open problems + root-cause + fix path",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "d9dd4364-1765-43be-8d65-547892346fd2",
+      "description": "Owner-explicit: \"create a card for researching and diving deep and really isolating all the problems we have and how to fix it.\"\n\nMethod (proven exemplar): the same root-cause discipline used for the Chrome-attach RCA — evidence-first, competing hypotheses, adversarial verify, no premature conclusions, \"could it be our error?\" as a first-class lens. Exemplar: docs/RCA_CHROME_ATTACH_2026-09-03.md.\n\nScope (broaden beyond chrome-attach to the full defect surface):\n\n- docs/DEFECT_REGISTER_2026-09-02.md (register + deltas)\n\n- docs/KARUNESH_ERROR_LEDGER.md (external tester K1-K14)\n\n- docs/BLOCKER_BUG_COLLECTION_2026-09-03.md (144 mined findings)\n\n- Open CLWX cards: CLWX-73 (chrome attach / profile=user), CLWX-74 (VLM creds email send), CLWX-75 (badge), CLWX-52/53 (trust UI), plus the moe.17 hardening findings (CLWX-94/95/96).\n\nAccelerate with the new tooling: use the graphify code-graph to find blast radius + all callers of a suspect function; use Codex as a second-vendor opinion on each proposed root cause before it's trusted.\n\nDeliverable: a consolidated problem to root-cause to fix map (one row per open problem: symptom, evidence IDs, root cause, is-it-our-error, simplest fix, verification). NO code changes under this card — analysis only, mirrored to a docs artifact.",
+      "comments": []
+    },
+    {
+      "id": "fd6ad26a-e0a9-4679-9423-75841b5f190e",
+      "sequence_id": 5,
+      "name": "[test] Exercise the tooling stack on the ClawX codebase",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "d9dd4364-1765-43be-8d65-547892346fd2",
+      "description": "Owner-explicit: \"create a card for testing them on this particular code base.\"\n\nScope:\n\n- graphify: build a code-only graph over electron/ + src/ (NEVER docs/ or secret files); run the 3 nav queries from the [pilot] card; record whether it beats ripgrep+LSP for real navigation on our tree.\n\n- codex: run codex review / the /codex:adversarial-review slash command on a real code diff (ideally the chrome-cdp fix); capture the verdict.\n\n- Measure value honestly: what each tool caught that our existing agents/grep did not, and what it missed. Evidence lands in docs/evidence/.\n\nGuardrails: code paths only; nothing pointed at gitignored secrets; graphify-out/ stays gitignored; Codex diffs contain no secrets (public source only).\n\nAcceptance: an evidence file in docs/evidence/ with the graph queries + Codex verdict + a keep/drop recommendation per tool.",
+      "comments": [
+        {
+          "text": "Precondition carried from the codex smoke (see TOOL-2): the codex leg of this card MUST run on a build-free checkout — Codex crawls the full working tree ignoring .gitignore and will otherwise read build/openclaw/dist/ where the baked key lives. graphify leg: code paths only (electron/, src/), never docs/ or secret files; graphify-out/ stays gitignored.",
+          "created": "2026-09-04T07:08:05.836713Z"
+        }
+      ]
+    },
+    {
+      "id": "aac23aba-705e-4a98-b0f9-f1f6da1a96a3",
+      "sequence_id": 4,
+      "name": "[decision] code-review-graph — DECLINED (revisit only on CI PR-risk trigger)",
+      "priority": "none",
+      "state": "Backlog",
+      "state_id": "1a66c5d0-b5c9-4dbc-8496-d953fe5b1ac1",
+      "description": "Same tree-sitter code-graph category as graphify; running both is redundant. No integration work now.\n\nSingle revisit condition: if CI-side PR-risk / blast-radius review becomes a goal, evaluate its GitHub Action instead of graphify — they are alternatives, not additions. Recorded here so the decision is not silently re-litigated.",
+      "comments": []
+    },
+    {
+      "id": "62ce113f-ac65-465a-9f2e-f7620dee2125",
+      "sequence_id": 3,
+      "name": "[pilot] graphify — codebase knowledge-graph skill (keyless, code-only)",
+      "priority": "none",
+      "state": "In Progress",
+      "state_id": "7574eb80-8f13-4f2e-a88c-b008e5808f01",
+      "description": "What it buys us: navigation of our oversized code/doc/skill tree as a knowledge graph (god nodes, community detection, path/explain/diagnose queries), packaged as a cross-surface skill.\n\nInstalled (evidence, 2026-09-04): PyPI package graphifyy 0.9.53 via pipx pinned to Python 3.11.16 (binaries: graphify, graphify-mcp); skill installed to ~/.claude/skills/graphify/SKILL.md (user surface, not the repo); graphify-out/ + *.graphify.json added to .gitignore BEFORE any run.\n\nKey correction vs first research: graphify is NOT a deterministic no-model tool. The graph BUILD runs via the /graphify skill inside a Claude Code session and uses THAT session's model to extract concepts (multimodal — Claude vision for docs/images). The CLI itself only does post-processing (path/explain/diagnose/merge). Upside: no separate API key and no egress beyond what CC already does. Constraint: since the model ingests whatever you point it at, the pilot runs it ONLY over code paths (electron/, src/) and NEVER over docs/ or any file that could contain a secret.\n\nAcceptance (keep/drop when): (1) egress check — confirm no outbound beyond the CC session; (2) build a code-only graph on electron/services + src/stores, then run 3 real nav queries (\"every caller of writeOpenClawConfig\", \"what imports chrome-cdp.ts\", \"where is preferredChannel read\") and compare against ripgrep+LSP; (3) verify graphify-out/ never gets committed. Keep if it beats grep+LSP on our tree; drop and say so if not.",
+      "comments": []
+    },
+    {
+      "id": "7c407990-87a9-4db7-8a3e-cf4242171b75",
+      "sequence_id": 2,
+      "name": "[adopt] codex-plugin-cc — second-vendor adversarial review lane",
+      "priority": "none",
+      "state": "In Progress",
+      "state_id": "7574eb80-8f13-4f2e-a88c-b008e5808f01",
+      "description": "What it buys us: a genuinely independent, second-vendor reviewer. A Claude Code session delegates to the local Codex CLI for review / adversarial-review / rescue / transfer, operationalizing our standing rule \"author and review are separate passes; never self-approve in the same context\" — now with a different model family.\n\nInstalled (evidence, 2026-09-04): marketplace openai-codex added; plugin codex@openai-codex installed at user scope; Codex CLI 0.147.0 present at /opt/homebrew/bin/codex and authed (OpenAI API key in the dev's ~/.codex, NOT the repo). Native subcommands confirmed: codex review (non-interactive, supports --uncommitted / --base / --commit) and codex exec.\n\nSmoke in flight: codex review --commit bde78d94 (the +1064-line channel-degrade change) as a real second-vendor read of hard-rule-adjacent code; output to be captured under docs/evidence/.\n\nData-flow note: Codex review sends the reviewed diff to OpenAI. Acceptable ONLY on already-public source; NEVER point it at gitignored secret files (baked key CLWX-18, cloud-gateway.key, [REDACTED]).\n\nWhen to invoke: before any merge to a release branch, and on any change touching a hard-rule path (send gates, channel coherence, chrome-cdp, config writers). The session that wrote the change must not be the one that approves it.\n\nAcceptance (adopt is done when): one real adversarial review through the plugin on the chrome-cdp RCA fix, verdict captured as evidence. Slash commands (/codex:review, /codex:adversarial-review) load next CC session (installed at user scope).",
+      "comments": [
+        {
+          "text": "Smoke result (2026-09-04) — ABORTED for secret safety, and that is the finding: ran codex review --commit bde78d94. Codex's review agent explores the repo itself and does NOT honor .gitignore — it began grep-crawling the whole working tree including build/openclaw/dist/*.js (the minified gateway bundle). build/ is gitignored (absent on a clean clone) but present on any dev box that built the app. Local grep confirmed the baked-key pattern matches files under build/openclaw/dist/ (e.g. provider-auth-token-*.js). Feeding that to OpenAI would breach \"no secrets to third parties\" (CLWX-18). Run was killed before completion.\nPrecondition for a valid codex smoke: run codex review only where build/ is absent (clean checkout / git worktree, or rm -rf build/ first) OR configure a codex ignore for build/. Never on a dev box with a built bundle present. Evidence: docs/evidence/2026-09-04-tooling-install-smoke.md. Adopt acceptance (a captured verdict on the chrome-cdp fix) remains pending, deliberately.",
+          "created": "2026-09-04T07:08:05.802523Z"
+        }
+      ]
+    },
+    {
+      "id": "7f4d24c0-7d50-4e9e-8f25-ba7d6b095885",
+      "sequence_id": 1,
+      "name": "[OKR] Dev-tooling layer — keyless, cross-surface, never shipped",
+      "priority": "none",
+      "state": "In Progress",
+      "state_id": "7574eb80-8f13-4f2e-a88c-b008e5808f01",
+      "description": "Objective: a keyless, dev-layer, cross-surface tooling stack (Codex review lane + graphify code-graph + our four agent surfaces) that strengthens review and codebase navigation WITHOUT ever touching the shipped product.\n\nInvariants (non-negotiable):\n\n- Dev-layer only — shipped gateway has no MCP host; none of these tools enter the asar, none are principal-facing, none count as GA release evidence.\n\n- Public repo (CLWX-18) — no committed keys, nothing that phones home, no generated artifact that embeds source/secrets. graphify-out/ is gitignored before first run.\n\n- Opt-in per developer — Codex auth + Python env live on the dev's machine, never in the tree.\n\n- No vendoring — reference tools by install instruction; do not copy their source in.\n\n- Review stays a separate lane — Codex is a second/cross-vendor reviewer, not self-approval.\n\nKey results:\n\n- KR1 — codex-plugin-cc adopted; one real adversarial review captured as evidence (target: the chrome-cdp fix diff).\n\n- KR2 — graphify pilot verdict (keep/drop) with an egress check + 3 real navigation queries on THIS codebase.\n\n- KR3 — code-review-graph decision recorded (declined + revisit trigger).\n\n- KR4 — interop doc gains a \"Dev-tooling layer (never shipped)\" section; keyless /graphify surface stubs mirrored; zero committed keys; graphify-out/ gitignored.\n\n- KR5 — the tooling stack exercised on the ClawX codebase with captured evidence (card [test]).\n\n- KR6 — a consolidated problem to root-cause to fix map produced with the tooling (card [research]).\n\nPlan: docs/PLUGIN_INTEGRATION_PLAN_2026-09-03.md; evaluation: docs/INTEGRATION_PROPOSAL_PLUGINS_2026-09-03.md.",
+      "comments": []
+    }
+  ]
+}

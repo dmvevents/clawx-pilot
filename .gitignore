@@ -114,3 +114,7 @@ skills/laptop/evidence/**/trace.zip
 skills/laptop/evidence/**/run-01-pass-fallback/
 skills/laptop/evidence/**/full-capture.mov
 skills/laptop/evidence/**/permission-probe.mov
+
+# graphify dev tooling — never commit the graph artifact (public repo; may ingest secrets)
+graphify-out/
+*.graphify.json

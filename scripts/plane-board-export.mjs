@@ -118,7 +118,10 @@ const snapshot = {
   })),
 };
 
-writeFileSync(join(outDir, 'CLWX-board-export.json'), JSON.stringify(snapshot, null, 2));
+// Filenames + sequence-id prefix derive from the project identifier so one
+// script mirrors any board (CLWX, TOOL, ...) without clobbering another's file.
+const ID = project.identifier || 'BOARD';
+writeFileSync(join(outDir, `${ID}-board-export.json`), JSON.stringify(snapshot, null, 2));
 
 // Markdown mirror, grouped by state group order.
 const order = ['backlog', 'unstarted', 'started', 'completed', 'cancelled'];
@@ -128,9 +131,9 @@ for (const i of snapshot.issues) {
   const g = st?.group || 'other';
   (byGroup[g] ||= []).push({ ...i, stateName: st?.name || i.state });
 }
-let md = `# CLWX Plane board — snapshot\n\n`;
+let md = `# ${ID} Plane board — snapshot\n\n`;
 md += `Exported ${stamp} from \`${BASE}\` (workspace \`${WS}\`, project \`${snapshot.project.name}\`).\n`;
-md += `Restore-grade JSON: [\`CLWX-board-export.json\`](./CLWX-board-export.json). `;
+md += `Restore-grade JSON: [\`${ID}-board-export.json\`](./${ID}-board-export.json). `;
 md += `This markdown is the human-readable mirror; the JSON is authoritative.\n\n`;
 md += `> The live board is source of truth for *what to work on*. This file is a\n`;
 md += `> persisted backup so the plan survives on clone and history is versioned.\n\n`;
@@ -139,7 +142,7 @@ for (const g of order) {
   if (!rows || !rows.length) continue;
   md += `## ${g[0].toUpperCase()}${g.slice(1)}\n\n`;
   for (const r of rows.sort((a, b) => (a.sequence_id || 0) - (b.sequence_id || 0))) {
-    md += `### CLWX-${r.sequence_id} — ${r.name}\n\n`;
+    md += `### ${ID}-${r.sequence_id} — ${r.name}\n\n`;
     md += `- **State:** ${r.stateName}  |  **Priority:** ${r.priority || 'none'}\n\n`;
     if (r.description?.trim()) md += `${r.description.trim()}\n\n`;
     if (r.comments?.length) {
@@ -149,5 +152,5 @@ for (const g of order) {
     }
   }
 }
-writeFileSync(join(outDir, 'CLWX-board.md'), md);
+writeFileSync(join(outDir, `${ID}-board.md`), md);
 console.log(`OK: ${snapshot.issues.length} issues, ${states.length} states -> docs/plane-board/`);
