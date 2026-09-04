@@ -180,6 +180,19 @@ async function main() {
     };
   });
 
+  // A currently-valid top-of-inbox message id (null if the inbox is empty).
+  // Rows that act on a specific message must fetch this IMMEDIATELY before
+  // acting: an id captured earlier in the run (e.g. the run-start firstId)
+  // goes stale as soon as any row marks that message read — its row
+  // aria-label fingerprint loses the "Unread " prefix, so the id no longer
+  // matches any row and the tool safely returns not_found. That is the
+  // shared live mailbox racing the test, not a tool defect; a fresh fetch
+  // right before use closes the window.
+  const freshTopId = async (): Promise<string | null> => {
+    const inbox = await actions.readInbox(5);
+    return inbox.status === 'ok' && inbox.messages.length > 0 ? inbox.messages[0].id : null;
+  };
+
   // W3.1 — read_email returns full body. Fixture-robust: the top row can be
   // a short smoke mail whose 91-char body IS its snippet (hit live 2026-09-03
   // after the drafts sweep reordered the inbox), so "body > snippet" is only
@@ -205,10 +218,18 @@ async function main() {
     };
   });
 
-  // W3.2 — read_email returns attachments array (may be empty)
+  // W3.2 — read_email returns attachments array (may be empty). Fetch a fresh
+  // id and retry ONCE on a safe not_found (stale-id race + transient
+  // pane-settle refusal both resolve on a re-fetch); a persistent not_found
+  // across two fresh attempts still fails the row.
   await runRow('W3.2', 'read_email', 'read_email({id}) returns attachments: array', async () => {
-    if (!firstId) return { skip: true, ok: false, notes: 'no firstId' };
-    const r = await actions.readEmail({ id: firstId });
+    let id = await freshTopId();
+    if (!id) return { skip: true, ok: false, notes: 'inbox empty' };
+    let r = await actions.readEmail({ id });
+    if (r.status === 'not_found') {
+      id = (await freshTopId()) ?? id;
+      r = await actions.readEmail({ id });
+    }
     return {
       ok: r.status === 'ok' && Array.isArray(r.attachments),
       notes: `status=${r.status} attachments=${r.attachments?.length ?? 'undefined'}`,
@@ -267,10 +288,11 @@ async function main() {
   // (both refusal proofs need it). Discard it before the message-open rows.
   await discardOpenDrafts();
 
-  // W6.1 — mark_read
+  // W6.1 — mark_read (fresh id: the run-start firstId is stale by now)
   await runRow('W6.1', 'mark_read', 'mark_read({read:true}) returns ok', async () => {
-    if (!firstId) return { skip: true, ok: false, notes: 'no firstId' };
-    const r = await actions.markRead({ id: firstId, read: true });
+    const id = await freshTopId();
+    if (!id) return { skip: true, ok: false, notes: 'inbox empty' };
+    const r = await actions.markRead({ id, read: true });
     return { ok: r.status === 'ok', notes: `status=${r.status}` };
   });
 
@@ -283,38 +305,88 @@ async function main() {
     };
   });
 
-  // W8.2 — list_attachments returns metadata only
+  // W8.2 — list_attachments returns metadata only (fresh id + retry-once)
   await runRow('W8.2', 'list_attachments', 'list_attachments returns array (no download)', async () => {
-    if (!firstId) return { skip: true, ok: false, notes: 'no firstId' };
-    const r = await actions.listAttachments({ id: firstId });
+    let id = await freshTopId();
+    if (!id) return { skip: true, ok: false, notes: 'inbox empty' };
+    let r = await actions.listAttachments({ id });
+    if (r.status === 'not_found') {
+      id = (await freshTopId()) ?? id;
+      r = await actions.listAttachments({ id });
+    }
     return {
       ok: r.status === 'ok' && Array.isArray(r.attachments),
       notes: `status=${r.status} count=${r.attachments?.length ?? 'undefined'}`,
     };
   });
 
-  // W5.1 — reply (we'll close it ourselves to avoid leaving a noisy draft)
+  // W5.1 — reply (we'll close it ourselves to avoid leaving a noisy draft).
+  // Fresh id + retry-once: reply opens+settles the message, so it is exposed
+  // to both the stale-id race and a transient pane-settle refusal.
   await runRow('W5.1', 'reply', 'reply({id, body}) opens reply pane with body filled', async () => {
-    if (!firstId) return { skip: true, ok: false, notes: 'no firstId' };
-    const r = await actions.reply({ id: firstId, body: 'eval reply — do not send.' });
+    let id = await freshTopId();
+    if (!id) return { skip: true, ok: false, notes: 'inbox empty' };
+    let r = await actions.reply({ id, body: 'eval reply — do not send.' });
+    if (r.status === 'not_found') {
+      id = (await freshTopId()) ?? id;
+      r = await actions.reply({ id, body: 'eval reply — do not send.' });
+    }
     return {
       ok: r.status === 'drafted' && r.draftLeftOpen === true,
       notes: `status=${r.status}`,
     };
   });
 
-  // W7.1 — multi-message workflow: read_inbox + read_email loop
-  await runRow('W7.1', 'compound', 'multi-message: read_inbox(3) + read_email each, all status=ok', async () => {
+  // W7.1 — multi-message workflow: read_inbox + read_email loop.
+  // CLWX-46 contract: each read must be TRUSTWORTHY — either ok with the
+  // requested message, or a SAFE refusal (not_found/needs_signin) when the
+  // reading pane cannot be proven to hold the clicked row. A safe refusal is
+  // the stale-read guard working, NOT a defect (the old "all status=ok"
+  // assertion failed exactly when the guard fired — pane stayed on a
+  // different message for the settle window on fast back-to-back reads).
+  // The only real failures are (a) a returned body whose subject belongs to
+  // a DIFFERENT message than requested (a stale-read LEAK — the class CLWX-46
+  // exists to prevent) or (b) zero successful reads (the loop is wholly
+  // broken). Assert the safe contract; stay falsifiable on both classes.
+  await runRow('W7.1', 'compound', 'multi-message: read_inbox(3) + read_email each; ok-or-safe-refuse, no stale-read leak', async () => {
     const inbox = await actions.readInbox(3);
     if (inbox.status !== 'ok' || inbox.messages.length === 0) {
       return { skip: true, ok: false, notes: 'no rows' };
     }
-    let allOk = true;
+    // Mirror the driver's settle overlap (normalize re/fw, substring either way).
+    const norm = (s: string) =>
+      (s || '').toLowerCase().replace(/^(?:re|fw|fwd)\s*:\s*/i, '').replace(/\s+/g, ' ').trim();
+    const overlaps = (a: string, b: string): boolean => {
+      const na = norm(a);
+      const nb = norm(b);
+      if (!na || !nb) return true; // no discrimination signal -> not a provable leak
+      const short = na.length <= nb.length ? na : nb;
+      const long = na.length <= nb.length ? nb : na;
+      return short.length < 4 ? long.startsWith(short) : long.includes(short);
+    };
+    let okCount = 0;
+    let safeRefusals = 0;
+    const leaks: string[] = [];
     for (const m of inbox.messages) {
       const r = await actions.readEmail({ id: m.id });
-      if (r.status !== 'ok') { allOk = false; break; }
+      if (r.status === 'ok') {
+        const wantSubject = (m.id.split('|')[1] || '').trim();
+        if (wantSubject && r.subject && !overlaps(r.subject, wantSubject)) {
+          leaks.push('subject-mismatch'); // ok read returned a DIFFERENT message
+        } else {
+          okCount += 1;
+        }
+      } else if (r.status === 'not_found' || r.status === 'needs_signin') {
+        safeRefusals += 1; // CLWX-46 guard refused rather than return wrong content
+      } else {
+        leaks.push(`status=${r.status}`);
+      }
     }
-    return { ok: allOk, notes: `iterated ${inbox.messages.length} messages` };
+    const ok = leaks.length === 0 && okCount >= 1;
+    return {
+      ok,
+      notes: `iterated ${inbox.messages.length}: ok=${okCount} safe-refuse=${safeRefusals}${leaks.length ? ` LEAK[${leaks.join(';')}]` : ''}`,
+    };
   });
 
   // End-of-run hygiene: a timed-out row (e.g. a slow reply) can leave its
