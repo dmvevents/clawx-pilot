@@ -51,6 +51,7 @@
         "test:e2e:headed": "pnpm run build:vite && playwright test --headed",
         "harness": "pnpm --filter @clawx/harness start --",
         "harness:ci": "pnpm harness list && pnpm harness validate --spec harness/specs/scenarios/gateway-backend-communication.md && pnpm harness validate --spec harness/specs/tasks/fix-chat-history-gateway-timeout.example.md --no-diff && pnpm harness run --spec harness/specs/scenarios/gateway-backend-communication.md --dry-run && pnpm exec vitest run tests/unit/harness-specs.test.ts tests/unit/harness-git.test.ts tests/unit/harness-windows-e2e.test.ts && pnpm harness:doc-tooling-e2e --junit ./harness-doc-tooling-junit.xml && pnpm eval:ci",
+        "harness:artifact": "node scripts/harness-artifact.mjs",
         "harness:doc-tooling-e2e": "tsx harness/run.ts",
         "harness:windows-e2e": "tsx harness/run.ts",
         "eval": "node eval/run.mjs",
