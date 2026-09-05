@@ -510,6 +510,38 @@ GATE (CLWX-99/100/101 class): running app + seeded plugin carry old behavior
 until a build ships these commits; tier 1 ships app-side with the same
 build, so current installs exercise tier 2 by design. Owner asks unchanged._
 
+_**Tick 2026-09-05 (ga-sprint-driver, minimal-time): CLWX-64 forms
+schema-drift detector → Ready (`4ba98d76`).** SENSE: tree clean at
+`ab5960b1`; static gate GREEN (5/0/1, report refreshed); board mirror in
+sync (101 issues); gcloud auth still BLOCKED (owner), :12222 listener stale
+(VM TERMINATED), app not running locally; Chrome wedge not re-probed
+(owner-gated). ANALYZE: §6 agent lane fully consumed (known drift); ranked
+64 over CLWX-77 sub-steps / 83 / 87 / 91 (whole card, statutory-form
+trust class, fully in-tree). ACT: new pure `schema-fingerprint.ts` —
+fingerprints (count + sha256 of normalized ordered labels) STAMPED into
+both driver-consumed schema JSONs and verified at fill time (stored-hash
+integrity + live-structure match) BEFORE any fillField; refusals are
+readable `__form_schema__`/`__form_structure__` rows; strict only on
+definitive drift (missing unconditional question, order regression,
+un-stamped schema edit) because a false park would brick the demo-proven
+fill; re-stamp CLI `scripts/forms-stamp-fingerprint.ts` (idempotent,
+referenced from refusal messages). Separate-lane adversarial review (3
+lenses vs the REAL schemas + the recorded live traces): 3× PASS on
+brick-the-demo (fresh-form simulation passes on both real forms); its
+confirmed MAJOR — the CSS `[role="listitem"]` fallback matches ZERO
+elements on the real page (implicit ARIA invisible to CSS), so the old
+classification certified a dead fallback — closed with a 3-tier
+`questionItemsLocator` (CSS union → Playwright role engine → automation-id
+prefix variant) + checkbox aria fallback + trace-verified classification
+pinned in units and the auditor doc; empty-live-list misreport,
+short-label exemption, no-page throw, doc scope all fixed same tick.
+Evidence: 24-row new suite + updated submit-gate stub (30/30);
+falsifiability (label edit without re-stamp → 3 fail, restored green);
+full suite 1493/6 skipped; typecheck + lint green. Board: CLWX-64 Todo →
+Ready with evidence. Residuals on the card: live-form run of the gate is
+Chrome-restart-gated; prefix-40 blind spot documented (no mis-map
+follows); NEXT-BUILD GATE as usual. Owner asks unchanged._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
