@@ -1,0 +1,34 @@
+{
+  "verdict": "PASS",
+  "driveMechanism": "host-API /api/chat/send-with-media -> app gateway connection -> chat.send RPC (composer-equivalent; osascript keystroke lane TCC-blocked in this context)",
+  "prompt": "Draft a short letter to parents about our upcoming Sports Day and save it as a docx file named sports-day-letter.docx",
+  "followup": "The school is Demo Primary School and my name is A. Alexander. Please save the letter now as sports-day-letter.docx.",
+  "sessionKey": "agent:main:main",
+  "model": {
+    "provider": "google",
+    "modelId": "gemini-2.5-pro"
+  },
+  "outcome": "reply",
+  "turnMs": 15075,
+  "toolCallNames": [
+    "document.write_docx"
+  ],
+  "docxPath": "/Users/antonalexander/.openclaw/media/outbound/sports-day-letter.docx",
+  "parseBack": {
+    "paragraphCount": 2,
+    "wordCount": 109,
+    "firstParagraphs": [
+      "Upcoming School Sports Day",
+      "**Demo Primary School** Ministry of Education, Trinidad & Tobago 5th September 2026 Dear Parents/Guardians, **Re: Upcoming School Sports Day** This letter serves to inform you of our annual school Sports Day, a day for fun, friendly competition, and community spirit. We are pleased to announce that Sports Day will be held on **Friday, 25th September 2026**. We encourage all parents and guardians to attend to support the children. A more detailed schedule of events will be sent out closer to the date. Should you require any further information, please do not hesitate to contact the school office. Yours sincerely, _______________________________ A. Alexander Principal Demo Primary School"
+    ]
+  },
+  "assertions": {
+    "wroteViaTool": true,
+    "docxOnDisk": true,
+    "parsedBack": true,
+    "sportsDayMention": true,
+    "letterStructure": true
+  },
+  "trajectory": "/Users/antonalexander/.openclaw/agents/main/sessions/5092237b-bf53-40cf-96d8-043fa0bd7d60.trajectory.jsonl",
+  "totalMs": 15235
+}
