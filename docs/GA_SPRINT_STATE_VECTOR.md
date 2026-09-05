@@ -110,6 +110,30 @@ restart the signed-in Chrome on `:18792` to clear the wedged CDP target so the
 full T1 live lane re-greens end-to-end (owner action — it closes the principal's
 unrelated open tabs). Prior owner asks unchanged._
 
+_**Tick 2026-09-05 (ga-sprint-driver, one tick — minimal-time mode, concurrent
+with the owner-directed GA-breadth push).** SENSE: static gate GREEN (5/0/1 T0,
+report `docs/evidence/GA_GATE_2026-09-05.md`); board no drift (mirror delta =
+export timestamp only); CDP wedge RE-CONFIRMED live (`connectOverCDP` timeout on
+the same stale target `f0300805…` despite `/json/version` 200 — the clwx46 probe
+is the truth test, not the HTTP endpoint); `:12222` tunnel process still up but
+the VM remains TERMINATED (stale local listener, not a lane). Direction: the
+owner reviewed `docs/GA_DEMO_READINESS_ASSESSMENT_2026-09-05.md` (authored this
+session — two-bar analysis, demo vs GA) and chose the **GA-breadth push**:
+CLWX-61/63/65/66/67. Two sub-agents are IN FLIGHT (61+63 test-surface authoring,
+lane-blocked halves marked authored-not-proven; 65 live in-app write turn via
+the running app — no Chrome dependency); 67 then 66-classification queue behind
+65 on a serialized live-app lane. ANALYZE: no serial promotions (62 = DEMO=1
+owner-gate; 61/63 live halves = Chrome-restart owner-gate; VM legs = terminated
+VM). ACT (bounded, non-colliding): CLWX-66 scope-narrowing verification —
+acceptance item 1 VERIFIED done (`meeting_minutes.md` authored with agenda /
+attendees / decisions / action items + pupil-anonymity note) and item 3 VERIFIED
+done (PRODUCT doc rows already reconciled 2026-09-03, lines 92/102/142); only
+item 2 (classification e2e over 3 fixtures) remains, queued on the live lane.
+CLWX-66 Todo → In Progress with evidence comment. Owner asks unchanged; the
+Chrome restart on `:18792` remains the single highest-value unlock (it un-blocks
+the 61/63 live halves AND the full-gate re-green AND any pre-demo email
+dry-run)._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed

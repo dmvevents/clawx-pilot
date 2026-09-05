@@ -1,6 +1,6 @@
 # CLWX Plane board — snapshot
 
-Exported 2026-09-04 from `http://localhost:8090` (workspace `issues-agent`, project `ClawX — Windows installer + agent`).
+Exported 2026-09-05 from `http://localhost:8090` (workspace `issues-agent`, project `ClawX — Windows installer + agent`).
 Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This markdown is the human-readable mirror; the JSON is authoritative.
 
 > The live board is source of truth for *what to work on*. This file is a
@@ -814,25 +814,6 @@ S3 Documents. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026
 - Windows leg (gap b2) PASS - V-batch 2026-09-03. One live in-app chat turn on the moe.15 VM called document.write_docx then document.read_docx: vbatch-b2.docx (8,620 B) written to media/outbound, independent mammoth read-back matched exactly, and the session transcript carries both toolCall records with args + result {bytes:8620, paragraphs:2}. Three-layer proof in skills/laptop/evidence/2026-09-03-vbatch/RESULT-b2.md. Combined with the external tester's matrix item d, the Windows write-turn is now proven twice. Remaining for Ready: Mac leg + write assertions in demo-office-analysis-e2e.
 - External evidence for the Windows leg: the tester's prompt "Create a Word document listing five things... save it to my Desktop" WORKED on moe.15 (his matrix item d) - a real in-app write turn on a real Windows box. Capture-grade evidence still owed (this card's acceptance), but gap b2 now has a live external datapoint.
 
-### CLWX-66 — [documents] Meeting-minutes template + classify/extract/route e2e + product-doc reconciliation
-
-- **State:** Todo  |  **Priority:** medium
-
-Why
-Audit contradiction: PRODUCT doc claims templates/ is empty but letter.md, memo.md, daily_report_brief.md exist; what is actually missing is meeting_minutes.md. Classification taxonomy (MoE_circular, parent_letter, staff_leave_application...) is encoded in the persona with no e2e and no card (audit: DOCUMENTS, 2026-09-03).
-
-Acceptance
-1. meeting_minutes.md template authored (agenda, attendees, actions, decisions) in extensions/moe-principal-assistant/templates/.
-2. Classification e2e over 3 fixture documents routes each to the right taxonomy class.
-3. PRODUCT doc drafting rows updated from stale claims to current reality (doc fix landed with the 2026-09-03 reconciliation commit).
-
-Story
-S3/S4. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
-
-**Comments (1):**
-
-- Leg 1 DONE (2026-09-03): meeting_minutes.md authored in extensions/moe-principal-assistant/templates/ (house style matched: mustache placeholders, action-items table, Student A/B minors rule). Product-doc template claims reconciled in the same session (all four templates now listed). Remaining for Ready: leg 2 classification e2e over 3 fixture docs.
-
 ### CLWX-67 — [reminders] Reminder pipeline e2e: cron -> agentTurn -> visible chat prompt (Mac leg; Windows = gap D)
 
 - **State:** Todo  |  **Priority:** high
@@ -1510,6 +1491,26 @@ Scope: define a user-facing budget (proposal: p50 ≤15s / p90 ≤30s wall-clock
 **Comments (1):**
 
 - First-cut measurement DONE (sprint-driver tick, evidence: docs/evidence/LATENCY_BASELINE_2026-09-02.md). All 15 driver JSONs on the persona VM mined: successful tool-using cloud turns 79.6s / 103.4s / 182.2s; no-tool answer 107.9s; median ≈103s — ~7× over the proposed p50 ≤15s budget. Raj's complaint is quantified and current. Caveats: e2 VM ≠ persona laptop; ~9s driver settle tail; small sample. Movers already on the agenda: prompt caching (ask #7), trim unhold (owner), routing. Remaining for Ready: laptop-lane repeat of the 3 demo prompts + owner budget sign-off + GA-packet row.
+
+### CLWX-66 — [documents] Meeting-minutes template + classify/extract/route e2e + product-doc reconciliation
+
+- **State:** In Progress  |  **Priority:** medium
+
+Why
+Audit contradiction: PRODUCT doc claims templates/ is empty but letter.md, memo.md, daily_report_brief.md exist; what is actually missing is meeting_minutes.md. Classification taxonomy (MoE_circular, parent_letter, staff_leave_application...) is encoded in the persona with no e2e and no card (audit: DOCUMENTS, 2026-09-03).
+
+Acceptance
+1. meeting_minutes.md template authored (agenda, attendees, actions, decisions) in extensions/moe-principal-assistant/templates/.
+2. Classification e2e over 3 fixture documents routes each to the right taxonomy class.
+3. PRODUCT doc drafting rows updated from stale claims to current reality (doc fix landed with the 2026-09-03 reconciliation commit).
+
+Story
+S3/S4. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+**Comments (2):**
+
+- **CLWX-66 — scope narrowed to ONE remaining leg.** _(ga-sprint-driver tick, 2026-09-05)_ Verification against the three acceptance items (evidence, not assertion): 1. **meeting_minutes.md template — DONE.** `extensions/moe-principal-assistant/templates/meeting_minutes.md` exists and covers the card's required structure: header block (school/meeting/date/time/venue/chair/recorder), Present/Apologies, agenda adoption, previous-minutes confirmation, matters arising, Discussion, Decisions, Action-items table (action/owner/due), next meeting, signature block — plus the pupil-anonymity note ("Student A/B", no pupil names in circulated minutes). 2. **Classification e2e over 3 fixture documents — OPEN (the remaining leg).** Queued on the serialized live-app lane behind the CLWX-65 live write turn (owner-directed GA-breadth push, 2026-09-05). The taxonomy to test against is the persona-encoded set (MoE_circular, parent_letter, staff_leave_application, attendance_report, inventory_form, meeting_minutes, disciplinary_record, other). 3. **PRODUCT doc reconciliation — DONE.** `docs/PRODUCT_PRINCIPAL_ASSISTANT.md` already carries the 2026-09-03 correction: line 102 states templates/ now contains letter.md, memo.md, daily_report_brief.md, meeting_minutes.md with the remaining gap tracked as CLWX-65/66; line 142 matches; line 171 documents the classification taxonomy as built-not-proven. Card moved Todo -> In Progress (2/3 acceptance items verified done; ceiling respected — Ready only when the classification e2e lands with evidence).
+- Leg 1 DONE (2026-09-03): meeting_minutes.md authored in extensions/moe-principal-assistant/templates/ (house style matched: mustache placeholders, action-items table, Student A/B minors rule). Product-doc template claims reconciled in the same session (all four templates now listed). Remaining for Ready: leg 2 classification e2e over 3 fixture docs.
 
 ### CLWX-92 — [bug/doc-tools] In-app PDF read dies in the Electron UtilityProcess: pdfjs "No GlobalWorkerOptions.workerSrc specified"
 

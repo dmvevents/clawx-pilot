@@ -1,5 +1,5 @@
 {
-  "exported_at_date": "2026-09-04",
+  "exported_at_date": "2026-09-05",
   "source": {
     "base": "http://localhost:8090",
     "workspace": "issues-agent",
@@ -501,10 +501,14 @@
       "sequence_id": 66,
       "name": "[documents] Meeting-minutes template + classify/extract/route e2e + product-doc reconciliation",
       "priority": "medium",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "Why\nAudit contradiction: PRODUCT doc claims templates/ is empty but letter.md, memo.md, daily_report_brief.md exist; what is actually missing is meeting_minutes.md. Classification taxonomy (MoE_circular, parent_letter, staff_leave_application...) is encoded in the persona with no e2e and no card (audit: DOCUMENTS, 2026-09-03).\n\nAcceptance\n1. meeting_minutes.md template authored (agenda, attendees, actions, decisions) in extensions/moe-principal-assistant/templates/.\n2. Classification e2e over 3 fixture documents routes each to the right taxonomy class.\n3. PRODUCT doc drafting rows updated from stale claims to current reality (doc fix landed with the 2026-09-03 reconciliation commit).\n\nStory\nS3/S4. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
       "comments": [
+        {
+          "text": "**CLWX-66 — scope narrowed to ONE remaining leg.** _(ga-sprint-driver tick, 2026-09-05)_\n\nVerification against the three acceptance items (evidence, not assertion):\n\n1. **meeting_minutes.md template — DONE.** `extensions/moe-principal-assistant/templates/meeting_minutes.md` exists and covers the card's required structure: header block (school/meeting/date/time/venue/chair/recorder), Present/Apologies, agenda adoption, previous-minutes confirmation, matters arising, Discussion, Decisions, Action-items table (action/owner/due), next meeting, signature block — plus the pupil-anonymity note (\"Student A/B\", no pupil names in circulated minutes).\n2. **Classification e2e over 3 fixture documents — OPEN (the remaining leg).** Queued on the serialized live-app lane behind the CLWX-65 live write turn (owner-directed GA-breadth push, 2026-09-05). The taxonomy to test against is the persona-encoded set (MoE_circular, parent_letter, staff_leave_application, attendance_report, inventory_form, meeting_minutes, disciplinary_record, other).\n3. **PRODUCT doc reconciliation — DONE.** `docs/PRODUCT_PRINCIPAL_ASSISTANT.md` already carries the 2026-09-03 correction: line 102 states templates/ now contains letter.md, memo.md, daily_report_brief.md, meeting_minutes.md with the remaining gap tracked as CLWX-65/66; line 142 matches; line 171 documents the classification taxonomy as built-not-proven.\n\nCard moved Todo -> In Progress (2/3 acceptance items verified done; ceiling respected — Ready only when the classification e2e lands with evidence).",
+          "created": "2026-09-05T07:48:18.893980Z"
+        },
         {
           "text": "Leg 1 DONE (2026-09-03): meeting_minutes.md authored in extensions/moe-principal-assistant/templates/ (house style matched: mustache placeholders, action-items table, Student A/B minors rule). Product-doc template claims reconciled in the same session (all four templates now listed). Remaining for Ready: leg 2 classification e2e over 3 fixture docs.",
           "created": "2026-09-03T02:40:50.762045Z"
