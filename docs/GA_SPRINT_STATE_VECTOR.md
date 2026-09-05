@@ -310,6 +310,20 @@ Guard unit in `moe-principal-assistant-plugin.test.ts` (21/21; guard alone
 fails with the edit stashed). §6 lane-list drift noted: CLWX-79/82/58 already
 Ready, version already moe.18 — the Sep 3 runway count is stale._
 
+_**Driver increment 2026-09-05 (evening): monitor-reported Chrome recovery
+DISPROVEN — no live half run, no cards moved.** The monitor promoted the
+CLWX-61/63 live halves on ":18792 is back". Probe discipline: the clwx63
+probe-only leg still reports NOT attachable (HTTP 200, ws connected to the
+same browser target `f0300805…`, attach handshake timeout at 8s), and a
+manual `connectOverCDP` retry with a 30s timeout fails identically — so the
+signal was ping-level, third independent confirmation of the
+ping-up/attach-down wedge. `lsof` shows no visible foreign client holding
+the port (nothing to clear on our side); Chrome helper processes still carry
+`remote-debugging-port=18792`. Conclusion: the wedge is inside Chrome's
+browser-target DevTools session; the ONLY fix remains the owner restart of
+the signed-in Chrome. CLWX-61/63 stay In Progress / owner-gated; no work
+manufactured per the driver guardrail._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
