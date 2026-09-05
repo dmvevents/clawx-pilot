@@ -1311,7 +1311,7 @@ needsLiveProbe: a live packaged doc-read on macOS / a relocated Windows install 
 
 ### CLWX-98 — [bug/forms] Infraction alias order rewrites "Fight without Weapon" to "Fight with Weapon" (statutory field)
 
-- **State:** Todo  |  **Priority:** none
+- **State:** Ready  |  **Priority:** none
 
 Why
 Found 2026-09-05 during CLWX-63 chain authoring. The Suspensions payload normalizer's alias table (extensions/moe-principal-assistant/index.mjs:196-197) tries /fight.*weapon/i -> "Fight with Weapon" BEFORE /fight|fighting/i -> "Fight without Weapon". The exact form option text "Fight without Weapon" matches the first pattern (.* eats " without "), so the normalizer silently rewrites it to the OPPOSITE statutory answer. This is a wrong-answer rewrite on a statutory field in the product's flagship flow — silent data corruption, worse than a refusal.
@@ -1322,6 +1322,10 @@ Acceptance (QA bar)
 3. Existing plugin unit suite stays green.
 
 Register row: INFRACTION-ALIAS (docs/DEFECT_REGISTER_2026-09-02.md section B). Source: CLWX-63 authoring agent report, verified against the source by the main session.
+
+**Comments (1):**
+
+- **CLWX-98 — FIXED, 6-wide, with a falsifiable full-table guard. Landed `0c935b07`; card to Ready.** _(2026-09-05)_ The filed rewrite was 1 of SIX exact Suspensions option texts silently rewritten by first-match alias tables (broader patterns before narrower; `.*` eats " without " / " unsupervised "): 1. Fight without Weapon -> Fight with Weapon (the filed pair) 2. Assault without Weapon -> Assault with Weapon 3. Threat without Weapon -> Threat with Weapon 4. Cyber Bullying -> Bullying/Intimidation 5. Possession of an Incendiary/Explosive Device -> Misuse of Technology 6. WHEN table: During class time (unsupervised) -> During class time (member of staff present) — a supervision-fact flip, arguably the worst of the six. Fix (extensions/moe-principal-assistant/index.mjs): negative-lookahead carve-outs (`/fight(?!.*without).*weapon/i` and siblings) + new rows ordered above their broader patterns + a comment block stating the ordering rule for future rows. Guard (acceptance item 2, class-wide): NEW tests/unit/moe-suspensions-option-roundtrip.test.ts loads the canonical option lists from the suspensions schema (140 texts, floor asserted >100) and drives EVERY one through the real forms.preview_suspension, asserting identity on the payload actually produced. Falsifiability demonstrated: with the fix stashed (test kept), it FAILS listing exactly the six rewrites. school_name excluded by design (demo-mode school alias intentionally rewrites it; its full option list exists nowhere in-repo). Evidence: 21/21 units green (plugin suite 20 + round-trip 1), independently re-run by the main session before landing; eslint clean; typecheck green. Side effect: free-text mapping IMPROVED ("threatened a classmate, without a weapon" now maps to Threat without Weapon). Register row INFRACTION-ALIAS updated to FIXED in-tree — one row covers the class; the unit guard makes per-hazard rows redundant. Ready per the owner-loop authorization (2026-09-05); a human closes Done.
 
 ## Started
 
