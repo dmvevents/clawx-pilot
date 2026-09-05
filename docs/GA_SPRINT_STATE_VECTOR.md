@@ -199,6 +199,26 @@ fails `typecheck:scripts`, reverted exit 0. Byproduct register row:
 RAJ3-FROM-NOOP (subject-only matching masquerading as subject+from). Full
 typecheck green across all three projects; 21/21 units; eslint clean._
 
+_**GA-breadth landing 5 (2026-09-05): CLWX-66 to Ready — classification e2e
+PASS 3/3, all three acceptance items now proven (`fdefb23f`).** Production
+surface stated honestly: there is NO document.classify tool — the taxonomy is
+persona/product-doc-encoded, so the harness (`scripts/clwx66-classify-e2e.ts`)
+drives the plugin's real persona SYSTEM_PROMPT (imported live from persona.mjs)
++ the product-doc taxonomy as a closed answer set, over text that came through
+the PRODUCTION document reader (writeDocx → readDocx/mammoth — the classifier
+sees reader output, not raw fixture bytes), same Bedrock lane as clwx63.
+Plugin-direct; no app session (live app owned by the CLWX-67 lane); nothing
+sent. Fixtures: 3 documents from 3 distinct classes (MoE_circular,
+staff_leave_application, meeting_minutes), invented data, Teacher A/B, no pupil
+names; raw replies were exact class tokens. Falsifiability: flipped-expectation
+negative control FAILS exit 1. Independently re-run by the main session (PASS
+3/3); `typecheck:scripts` green with the script now INCLUDED (temporary exclude
+removed; the :182 arity error the new check unmasked was fixed in-lane).
+Caveat, same class as CLWX-65's mechanism note: this proves persona+model
+routing, not an in-app chat turn doing it. Still in flight: CLWX-67
+cron-reminder e2e (live-app lane; `scripts/clwx67-reminder-e2e.ts` appeared in
+tree, report pending)._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
