@@ -452,6 +452,34 @@ ANALYZE: no serial promotions; owner gates unchanged (Chrome :18792 restart
 remains the single highest-value unlock). Ceiling respected: nothing moved to
 Ready this tick._
 
+_**Tick 2026-09-05 (ga-sprint-driver, minimal-time): CLWX-101 fixed +
+review-hardened → Ready (`e737af5a` + `1a4f08bd`).** SENSE: tree clean at
+`da5c220f`; board reachable (the .agent-token env var is `PLANE_API_KEY`, not
+`PLANE_API_TOKEN`); owner gates unchanged, not re-probed (Chrome wedge is
+owner-gated; pings are not evidence). ACT: readDocx now refuses non-docx
+containers in principal language — container sniff (OLE2 → legacy .doc;
+OLE2+EncryptedPackage → password-protected, the MS-OFFCRYPTO shared-magic
+catch; `{\rtf` → RTF; non-PK → not-a-Word-doc; 0 bytes → failed-download)
+each naming the cause + the way out, plus a renamed-format tier (.odt class)
+and a catch-ALL damaged-or-incomplete fallback so raw jszip/xmldom text can
+never reach the principal (error CLASS logged, never parser text). Harness
+bar tightened: isReadableRefusal v2.1 (rejects URLs, "[xmldom error]"-style
+tags, "@#[line:" artifacts), per-row refusalCheck in classifyRow, doc-legacy/
+rtf/odt rows pinned to the new wording (old jszip text now FAILs them — pin
+unit proves it), NEW rows docx-badxml + docx-password (hand-rolled STORED-zip
+fixture builder, no new dep). Separate-lane adversarial review (3 lenses)
+FAILed the first commit with two demonstrated MAJORs — the xmldom rethrow
+leak and the password-docx "legacy Word 97-2003" misdiagnosis — both fixed
+same tick with falsifiability proven on both passes (5 then 4 guards fail
+with the fix stashed). Evidence: harness 16 rows — 9 PASS / 6
+REFUSED-READABLY / 0 FAIL / 1 NO-TOOL (report regenerated in place); guards
+41/41; full suite 1446; typecheck+lint clean. Board: CLWX-101 Backlog →
+Ready with evidence; CLWX-77 commented (matrix 14→16, trail updated:
+password-pdf row still open, pdf-corrupt's URL-free "Invalid PDF structure."
+flagged as the next readable-refusal candidate). Same next-build gate class
+as CLWX-99/100: the running app carries the old wording until a build ships
+these commits. Owner asks unchanged._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
