@@ -89,6 +89,9 @@
         "version:prerelease-alpha": "pnpm version prerelease --preid=alpha",
         "version:prerelease-beta": "pnpm version prerelease --preid=beta",
         "release:validate": "node scripts/assert-tag-matches-package.mjs",
+        "release:manifest": "node scripts/release-hash-manifest.mjs generate",
+        "release:manifest:verify": "node scripts/release-hash-manifest.mjs verify",
+        "release:manifest:publish": "node scripts/release-hash-manifest.mjs publish",
         "postversion": "node scripts/post-version-push.mjs",
         "ga:gate": "node scripts/ga-gate.mjs"
     },

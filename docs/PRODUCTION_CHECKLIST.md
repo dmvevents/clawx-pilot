@@ -94,6 +94,7 @@ See `docs/WINDOWS_DEPLOY.md` for the full plan and `docs/FIRST_RUN_GUIDE.md` for
 | 8.5 | `prep:win-binaries` script wired | `package.json` | ✅ |
 | 8.6 | Update sig verification disabled (no cert yet) | `win.verifyUpdateCodeSignature: false` | ✅ |
 | 8.7 | Code-signing cert acquired | OUT OF SCOPE for pilot; flag yellow | ⚠️ deferred |
+| 8.8 | Version-bits hash manifest (CLWX-85) | auto-generated after every build (`run-electron-builder.mjs` → `docs/release-manifests/<version>.json`); `pnpm release:manifest:publish` before shipping makes the version's bits immutable; install-verify diffs via `pnpm release:manifest:verify` (`--only <artifact> --path <installed file>` for install-side checks); any mismatch is a hard stop | ✅ |
 | 8.8 | Real MoE logo asset | `src/assets/logo.svg` is not placeholder | ❌ TODO |
 
 ## 9 · Telemetry & observability

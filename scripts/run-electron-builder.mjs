@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,11 +37,26 @@ function spawnElectronBuilder() {
   });
 }
 
+// CLWX-85: bind the built bits to the version string. Hard-stops only when a
+// PUBLISHED version is rebuilt with different bits (bump moe.N instead).
+function recordHashManifest() {
+  const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'release-hash-manifest.mjs'), 'generate'], {
+    cwd: ROOT,
+    stdio: 'inherit',
+  });
+  // exit 2 = nothing to record (e.g. a --dir build without version-marked
+  // artifacts); that is not a failed build.
+  return result.status === 0 || result.status === 2 ? 0 : (result.status ?? 1);
+}
+
 const child = spawnElectronBuilder();
 child.on('exit', (code, signal) => {
   if (signal) {
     process.kill(process.pid, signal);
     return;
+  }
+  if ((code ?? 1) === 0) {
+    process.exit(recordHashManifest());
   }
   process.exit(code ?? 1);
 });
