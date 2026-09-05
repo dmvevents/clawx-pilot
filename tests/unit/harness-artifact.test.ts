@@ -43,6 +43,11 @@ describe('isReadableRefusal (CLWX-77 principal bar)', () => {
     expect(isReadableRefusal('TypeError: x is not a function')).toBe(false);
     expect(isReadableRefusal('[object Object]')).toBe(false);
   });
+
+  it('rejects internal paths with either separator (review 2026-09-05: not host-locked)', async () => {
+    const { isReadableRefusal } = await load();
+    expect(isReadableRefusal('Cannot find module in node_modules\\pdf-parse\\index.js')).toBe(false);
+  });
 });
 
 describe('classifyRow', () => {
@@ -84,6 +89,21 @@ describe('classifyRow', () => {
     expect(v.status).toBe('FAIL');
   });
 
+  it('FAILs infra outcomes on refusal rows — a timeout is never a passing refusal (review 2026-09-05)', async () => {
+    const { classifyRow } = await load();
+    for (const message of ['row timed out after 60000ms', 'spawn failed: ENOMEM', 'child produced no framed verdict; stderr: ', 'child crashed before the tool ran: boom']) {
+      const v = classifyRow('refusal', { ok: false, infra: true, message });
+      expect(v.status).toBe('FAIL');
+      expect(v.note).toContain('tool never ran');
+    }
+  });
+
+  it('FAILs infra outcomes on ok rows too', async () => {
+    const { classifyRow } = await load();
+    const v = classifyRow('ok', { ok: false, infra: true, message: 'row timed out after 60000ms' });
+    expect(v.status).toBe('FAIL');
+  });
+
   it('records NO-TOOL rows without failing the run', async () => {
     const { classifyRow } = await load();
     const v = classifyRow('no-tool', { ok: false, message: '' });
@@ -108,7 +128,7 @@ describe('MATRIX shape', () => {
   it('covers every slice-1 doc type from the card scope', async () => {
     const { MATRIX } = await load();
     const ids = MATRIX.map((r: { id: string }) => r.id).join(' ');
-    for (const type of ['pdf-text', 'pdf-corrupt', 'docx', 'doc-legacy', 'rtf', 'odt', 'xlsx', 'csv', 'png', 'pptx']) {
+    for (const type of ['pdf-text', 'pdf-corrupt', 'docx', 'doc-legacy', 'rtf', 'odt', 'xlsx', 'csv', 'png', 'png-sharp-binding', 'pptx']) {
       expect(ids).toContain(type);
     }
   });

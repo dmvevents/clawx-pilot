@@ -28,6 +28,9 @@
  *   pnpm harness:artifact --only pdf-text.read_pdf
  *   pnpm harness:artifact --report docs/evidence/HARNESS_ARTIFACT.md
  *   pnpm harness:artifact --stage-dir /tmp/clawx-stage --keep-stage
+ *   # --stage-dir always refreshes the bundle copy from build/openclaw;
+ *   # --reuse-bundle skips the refresh (negative-control probes only —
+ *   # a reused copy may be STALE vs a rebuilt bundle).
  *
  * Slice 1 covers document.read/write against the staged bundle. Later
  * sub-steps (tracked on CLWX-77): packaged-node/electron-env spawn parity,
@@ -60,7 +63,8 @@ export function isReadableRefusal(message) {
   if (/\n\s+at\s+\S/.test(message)) return false; // stack frames leaked
   if (message.includes('[object Object]')) return false;
   if (/\b(ENOENT|EACCES|EPERM|ERR_[A-Z_]+)\b/.test(message)) return false;
-  if (message.includes(`node_modules${path.sep}`)) return false;
+  // Both separators: libraries hard-code either, regardless of host OS.
+  if (message.includes('node_modules/') || message.includes('node_modules\\')) return false;
   if (/^\s*(Type|Reference|Syntax)Error\b/.test(message)) return false;
   return true;
 }
@@ -74,6 +78,13 @@ export function isReadableRefusal(message) {
 export function classifyRow(expectation, outcome, contentCheck) {
   if (expectation === 'no-tool') {
     return { status: 'NO-TOOL', note: 'no document.* entrypoint for this type (persona carve-out, CLWX-80)' };
+  }
+  // Harness-infrastructure failures (timeout, spawn error, no verdict, child
+  // crash) mean the tool NEVER RAN — they must never grade as a passing
+  // refusal, or a hanging parser would show GREEN on exactly the rows this
+  // harness exists to grade strictly (review finding, 2026-09-05).
+  if (!outcome.ok && outcome.infra) {
+    return { status: 'FAIL', note: `harness infrastructure failure (tool never ran): ${outcome.message}` };
   }
   if (expectation === 'ok') {
     if (!outcome.ok) return { status: 'FAIL', note: `expected ok, threw: ${outcome.message}` };
@@ -190,6 +201,16 @@ export const MATRIX = [
     check: (r) => (String(r.dataUrl ?? '').startsWith('data:image/') ? true : 'no dataUrl produced'),
   },
   {
+    // readImage treats sharp as a soft dep (raw bytes fall through), so the
+    // row above can never catch a broken native binding. The bundle SHIPS
+    // sharp, so on the artifact "sharp loads and reads metadata" is the bar:
+    // width comes back non-null ONLY when the native binding worked (review
+    // finding, 2026-09-05 — the moe.15 canvas class, image edition).
+    id: 'png-sharp-binding.read_image', fn: 'readImage', expectation: 'ok',
+    fixture: { name: 'probe.png', bytes: () => PNG_1PX },
+    check: (r) => (r.width === 1 && r.height === 1 ? true : `sharp did not decode metadata (width=${r.width}) — binding missing or broken in the staged bundle`),
+  },
+  {
     id: 'pptx.read', fn: null, expectation: 'no-tool',
     // No document.read_pptx exists; the persona carves .pptx out honestly
     // (CLWX-80 fix). This row keeps the gap visible in every matrix run.
@@ -198,13 +219,20 @@ export const MATRIX = [
 
 // ── staging
 
-async function stageArtifact(stageDir) {
+async function stageArtifact(stageDir, { reuseBundle = false } = {}) {
   const resources = path.join(stageDir, 'resources');
   const pluginDest = path.join(resources, 'extensions', 'moe-principal-assistant');
   const bundleDest = path.join(resources, 'openclaw', 'node_modules');
   await mkdir(path.dirname(pluginDest), { recursive: true });
+  await rm(pluginDest, { recursive: true, force: true });
   await cp(PLUGIN_SRC, pluginDest, { recursive: true });
-  if (!existsSync(bundleDest)) {
+  if (reuseBundle && existsSync(bundleDest)) {
+    // Explicit opt-in only (negative-control probes mutate the stage). A
+    // silently reused stage after a bundle rebuild would test a STALE bundle
+    // and report GREEN for a broken artifact (review finding, 2026-09-05).
+    console.warn('WARNING: --reuse-bundle set — testing the EXISTING staged bundle, which may be stale vs build/openclaw.');
+  } else {
+    await rm(bundleDest, { recursive: true, force: true });
     await mkdir(path.dirname(bundleDest), { recursive: true });
     // APFS clonefile makes the 500MB bundle copy near-instant on darwin; a
     // symlink would be WRONG here — Node resolves modules at their realpath,
@@ -265,22 +293,27 @@ function runChild(spec, resources) {
     let stderr = '';
     child.stdout.on('data', (d) => { stdout += d; });
     child.stderr.on('data', (d) => { stderr += d; });
+    // Timeout / spawn / missing-verdict outcomes carry infra: true — the
+    // tool never produced a graded outcome, so classifyRow must FAIL the
+    // row, never count it as a refusal (review finding, 2026-09-05).
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
-      resolve({ ok: false, message: `row timed out after ${ROW_TIMEOUT_MS}ms` });
+      resolve({ ok: false, infra: true, message: `row timed out after ${ROW_TIMEOUT_MS}ms` });
     }, ROW_TIMEOUT_MS);
     child.on('exit', () => {
       clearTimeout(timer);
-      const line = stdout.split('\n').filter(Boolean).pop() ?? '';
+      // Sentinel-framed verdict: a chatty dep writing to stdout cannot
+      // corrupt the parse (last framed line wins).
+      const line = stdout.split('\n').filter((l) => l.startsWith('CLAWX77_VERDICT:')).pop();
       try {
-        resolve(JSON.parse(line));
+        resolve(JSON.parse(line.slice('CLAWX77_VERDICT:'.length)));
       } catch {
-        resolve({ ok: false, message: `child produced no JSON verdict; stderr: ${stderr.slice(0, 300)}` });
+        resolve({ ok: false, infra: true, message: `child produced no framed verdict; stderr: ${stderr.slice(0, 300)}` });
       }
     });
     child.on('error', (err) => {
       clearTimeout(timer);
-      resolve({ ok: false, message: `spawn failed: ${err.message}` });
+      resolve({ ok: false, infra: true, message: `spawn failed: ${err.message}` });
     });
   });
 }
@@ -288,7 +321,7 @@ function runChild(spec, resources) {
 // ── main
 
 function parseArgs(argv) {
-  const args = { only: null, report: null, stageDir: null, keepStage: false };
+  const args = { only: null, report: null, stageDir: null, keepStage: false, reuseBundle: false };
   for (let i = 2; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === '--only') args.only = argv[++i];
@@ -298,6 +331,7 @@ function parseArgs(argv) {
     else if (a === '--stage-dir') args.stageDir = argv[++i];
     else if (a.startsWith('--stage-dir=')) args.stageDir = a.slice(12);
     else if (a === '--keep-stage') args.keepStage = true;
+    else if (a === '--reuse-bundle') args.reuseBundle = true;
   }
   return args;
 }
@@ -317,7 +351,7 @@ async function main() {
   }
   console.log(`Staging artifact runtime in ${stageDir} …`);
   const t0 = Date.now();
-  const { resources, pluginDest } = await stageArtifact(stageDir);
+  const { resources, pluginDest } = await stageArtifact(stageDir, { reuseBundle: args.reuseBundle });
   const docToolsPath = path.join(pluginDest, 'doc-tools.mjs');
   console.log(`Staged in ${((Date.now() - t0) / 1000).toFixed(1)}s. Running ${MATRIX.length} rows …\n`);
 
