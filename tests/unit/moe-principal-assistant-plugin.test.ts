@@ -109,6 +109,24 @@ describe('moe-principal-assistant plugin registration', () => {
     }
   });
 
+  it('steers document reads away from the generic read tool and is honest about pptx (CLWX-80)', async () => {
+    const { SYSTEM_PROMPT } = await loadPersona();
+    const prompt = String(SYSTEM_PROMPT);
+
+    // The generic core read tool returns raw PK/ZIP bytes for OOXML files;
+    // the persona must forbid it for binary documents outright.
+    expect(prompt).toMatch(/generic file read tool/i);
+    expect(prompt).toMatch(/raw bytes/i);
+    expect(prompt).toMatch(/document\.\* tools are the only reading path/i);
+    // .pptx has no document.* reader: the persona must give the model an
+    // honest escape instead of cornering it into the raw-bytes path.
+    expect(prompt).toMatch(/PowerPoint files are not supported yet/i);
+    expect(prompt).toMatch(/PDF export or pasted text/i);
+    // The filename-only search promise (Downloads/Documents/Desktop/OneDrive)
+    // is the fork-side answer to the "allowlist rejects ~/Downloads" class.
+    expect(prompt).toMatch(/searches Downloads, Documents, Desktop, and the OneDrive-redirected/i);
+  });
+
   it('keeps Outlook/Forms model-facing guidance on the ClawX repair path', async () => {
     const previousPort = process.env.CLAWX_HOST_API_PORT;
     const previousToken = process.env.CLAWX_HOST_API_TOKEN;
