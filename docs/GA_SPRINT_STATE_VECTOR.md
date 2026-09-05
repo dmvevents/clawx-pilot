@@ -289,6 +289,27 @@ stashed); full suite 1377 passed; typecheck + lint green. Same next-build gate
 as CLWX-99: re-run the `scripts/clwx67-reminder-e2e.ts` UI assertions on the
 build carrying `566a7504`._
 
+_**Driver tick 2026-09-05 (afternoon): CLWX-80 fork-side half to Ready
+(`148c4e53`); static GA gate GREEN; Chrome wedge re-verified live.** Pulse:
+`GA_GATE_STATIC=1 pnpm ga:gate` GREEN — 5 pass / 0 fail (typecheck, lint,
+units, bundle-verify, doc-tooling harness; report
+`docs/evidence/GA_GATE_2026-09-05.md`, committed). Probe discipline paid off
+twice: Chrome :18792 answers HTTP and even completes the CDP WebSocket
+connect, but the attach handshake still times out (clwx63 probe-only leg) —
+the wedge PERSISTS, the owner restart ask stands, CLWX-61/63 live halves stay
+owner-gated (NOT promoted); gcloud reauth still required, VM lane still
+owner-gated. Act: CLWX-80 — persona now explicitly bans the generic core read
+tool on .pdf/.docx/.xlsx/.pptx (the raw PK/ZIP-bytes path was never named
+before, only Python skills and exec), and carves out .pptx honestly (no
+document.read_pptx exists; the old blanket "never say tooling is unavailable"
+cornered the model into raw bytes for PowerPoint — it now offers a PDF export
+or pasted text). Acceptance 1 (Downloads/OneDrive allowlist) verified already
+true fork-side (`doc-tools.mjs` RELATIVE_SEARCH_DIRS); acceptance 2 (core
+read-tool OOXML refusal) reclassified UPSTREAM, flagged for the merge pass.
+Guard unit in `moe-principal-assistant-plugin.test.ts` (21/21; guard alone
+fails with the edit stashed). §6 lane-list drift noted: CLWX-79/82/58 already
+Ready, version already moe.18 — the Sep 3 runway count is stale._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
