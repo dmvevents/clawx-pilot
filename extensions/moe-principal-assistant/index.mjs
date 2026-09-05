@@ -181,7 +181,14 @@ const SUSPENSION_CLASS_ALIASES = {
   'Infant 2': 'Second Year',
 };
 
+// CLWX-98: patterns are tried in order and `.*` happily spans words like
+// " without " or " unsupervised ", so every exact form option text must win
+// before any broader pattern that would rewrite it. More-specific rows sit
+// first, and the "with Weapon" rows carve out "without" via lookahead. The
+// identity round-trip over every option text is enforced by
+// tests/unit/moe-suspensions-option-roundtrip.test.ts.
 const SUSPENSION_INFRACTION_WHEN_ALIASES = [
+  [/unsupervised/i, 'During class time (unsupervised)'],
   [/during\s+class/i, 'During class time (member of staff present)'],
   [/assembly/i, 'During assembly'],
   [/before\s+school/i, 'Before school'],
@@ -193,17 +200,19 @@ const SUSPENSION_INFRACTION_WHEN_ALIASES = [
 ];
 
 const SUSPENSION_PRIMARY_INFRACTION_ALIASES = [
-  [/fight.*weapon/i, 'Fight with Weapon'],
+  [/fight(?!.*without).*weapon/i, 'Fight with Weapon'],
   [/fight|fighting/i, 'Fight without Weapon'],
   [/disrespect|defian|authority|staff/i, 'Disrespect/Defiance of Authority'],
   [/disrupt|disorder/i, 'Disorderly/Disruptive Conduct'],
+  [/cyber.*bully/i, 'Cyber Bullying'],
   [/bully|intimid/i, 'Bullying/Intimidation'],
-  [/assault.*weapon/i, 'Assault with Weapon'],
+  [/assault(?!.*without).*weapon/i, 'Assault with Weapon'],
   [/assault/i, 'Assault without Weapon'],
-  [/threat.*weapon/i, 'Threat with Weapon'],
+  [/threat(?!.*without).*weapon/i, 'Threat with Weapon'],
   [/threat/i, 'Threat without Weapon'],
   [/theft|robbery/i, 'Robbery/Theft'],
   [/vandal/i, 'Vandalism'],
+  [/incendiary|explosive/i, 'Possession of an Incendiary/Explosive Device'],
   [/obscene|language|profan/i, 'Use of Obscene Language'],
   [/technology|phone|device/i, 'Misuse of Technology'],
 ];

@@ -158,6 +158,28 @@ CLWX-98 (+ register row INFRACTION-ALIAS):** the Suspensions normalizer rewrites
 field, verified against source before filing. CLWX-65 agent still in flight;
 67 + 66-classification queued behind it on the serialized live-app lane._
 
+_**GA-breadth landings 2+3 (2026-09-05): CLWX-65 live-proven to Ready; CLWX-98
+fixed 6-wide with a falsifiable round-trip guard.** CLWX-65 (`ec162252`): a real
+live in-app turn produced `sports-day-letter.docx` via `document.write_docx`
+(host-API chat relay over the app's gateway connection — composer-equivalent
+`chat.send` RPC; osascript keystroke lane TCC-blocked, documented honestly);
+`demo-office-analysis-e2e.mjs --write-check` added (writeDocx+writeXlsx 8/8,
+re-run independently, exit 0); matrix gap b2 CLOSED on Mac; renderer verified to
+strip leading think-blocks (`message-utils.ts:67`) so the observed `<think>` in
+finalText never reaches the principal; Windows leg queued for V-batch. CLWX-98:
+the filed alias defect turned out to be 1 of SIX silent statutory rewrites (the
+worst: WHEN "During class time (unsupervised)" → "(member of staff present)", a
+supervision-fact flip). Fix = negative-lookahead carve-outs + row reordering in
+`index.mjs` + NEW `tests/unit/moe-suspensions-option-roundtrip.test.ts` driving
+all 140 canonical option texts through the real `forms.preview_suspension` with
+identity asserted (falsifiability: with the fix stashed the test lists exactly
+the 6 rewrites). 21/21 units green, independently re-run by the main session;
+free-text mapping improved as a side effect ("threatened a classmate, without a
+weapon" now maps correctly). Register row INFRACTION-ALIAS updated to FIXED
+in-tree. In flight: CLWX-67 cron-reminder e2e (live-app lane) + CLWX-66
+classification e2e (plugin-direct, collision-isolated); scripts-tsconfig
+scope-add still open with the CLWX-98 agent._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
