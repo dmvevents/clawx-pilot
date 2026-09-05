@@ -7,6 +7,10 @@
 # -DraftEmail drafts only and leaves the compose pane open for inspection.
 # -OutlookReplyMatrix drafts reply/reply-all/forward only and never sends.
 # -OutlookSendMatrix sends compose/reply/reply-all/forward only with confirm:true.
+#
+# CLWX-84: EmailTo/EmailSubject/EmailBody are handed to the node probe via a
+# short-lived BOM-less JSON temp file (--email-payload-file), never as process
+# arguments — argv is visible to any local process listing.
 
 param(
     [string]$Endpoint = "http://127.0.0.1:9223",
@@ -131,8 +135,6 @@ if ($OutlookSendMatrix) {
         exit 5
     }
     $argsList += "--outlook-send-matrix"
-    $argsList += "--email-to"
-    $argsList += $EmailTo
 }
 if ($FormsSmoke) {
     $argsList += "--forms-smoke"
@@ -143,16 +145,6 @@ if ($DraftEmail) {
         exit 5
     }
     $argsList += "--draft-email"
-    $argsList += "--email-to"
-    $argsList += $EmailTo
-    if ($EmailSubject) {
-        $argsList += "--email-subject"
-        $argsList += $EmailSubject
-    }
-    if ($EmailBody) {
-        $argsList += "--email-body"
-        $argsList += $EmailBody
-    }
 }
 if ($SendEmail) {
     if (-not $EmailTo) {
@@ -160,16 +152,6 @@ if ($SendEmail) {
         exit 5
     }
     $argsList += "--send-email"
-    $argsList += "--email-to"
-    $argsList += $EmailTo
-    if ($EmailSubject) {
-        $argsList += "--email-subject"
-        $argsList += $EmailSubject
-    }
-    if ($EmailBody) {
-        $argsList += "--email-body"
-        $argsList += $EmailBody
-    }
 }
 if ($SubmitForms) {
     $argsList += "--submit-forms"
@@ -178,5 +160,24 @@ if ($VisualAcceptance) {
     $argsList += "--visual-acceptance"
 }
 
-& $node @argsList
-exit $LASTEXITCODE
+$payloadPath = $null
+if ($OutlookSendMatrix -or $DraftEmail -or $SendEmail) {
+    $payload = [ordered]@{ to = $EmailTo }
+    if ($EmailSubject) { $payload.subject = $EmailSubject }
+    if ($EmailBody) { $payload.body = $EmailBody }
+    $payloadPath = Join-Path $env:TEMP ("clawx-probe-payload-" + [guid]::NewGuid().ToString("N") + ".json")
+    # BOM-less on purpose: PS 5.1 Set-Content -Encoding UTF8 writes a BOM that breaks JSON.parse.
+    [System.IO.File]::WriteAllText($payloadPath, ($payload | ConvertTo-Json -Compress), (New-Object System.Text.UTF8Encoding($false)))
+    $argsList += "--email-payload-file"
+    $argsList += $payloadPath
+}
+
+try {
+    & $node @argsList
+    $probeExit = $LASTEXITCODE
+} finally {
+    if ($payloadPath -and (Test-Path $payloadPath)) {
+        Remove-Item -Force $payloadPath -ErrorAction SilentlyContinue
+    }
+}
+exit $probeExit

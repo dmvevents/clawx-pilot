@@ -347,6 +347,48 @@ twice (hard-stop off → 1 fails; version check off → 2 fail). Full suite
 `pnpm release:manifest:publish` after shipping the demo build to arm the
 gate._
 
+_**Driver increment 2026-09-05 (morning): CLWX-84 credential-hygiene sweep
+to Ready.** Picked 84 over 74 (74's remaining leg needs the live e2e draft
+flow — Chrome attach-wedged, owner-gated; 84 was fully executable). All
+three acceptance legs landed. LEG 1 (redact + forward): 12 plaintext hits
+across SEVEN files (card said 5+) — the two live liaison logs, both
+SHA-pinned archive copies, and three fleet-mailbox note files; a SECOND
+credential surfaced during the sweep (a Raj temp password from 2026-05-22,
+"Class B") beyond the known sandbox password. All redacted in place with a
+chain-of-custody sidecar (before/after sha256; archive pin verified equal
+to the before-hash and left unmodified):
+`~/openclaw-agent/liaison-archive/REDACTION_2026-09-05_CLWX-84.md`. The
+monitor writer (`raj-kiran-monitor.sh`) now pipes captures through a
+shape-based `redact_creds` filter (LC_ALL=C, open-ended digit runs) before
+both the log and the pushed mailbox note. LEG 2 (probe argv): the pilot CDP
+probe carries recipient/subject/body via a BOM-less JSON temp file
+(`--email-payload-file`, GUID name, unlinked right after read, ps1 finally
+cleanup) — argv flags removed from BOTH the ps1 and the js, laptop-pack
+mirrors resynced; error-path re-parse skips payload resolution so a
+vanished file can't swallow the failure artifact; summary subject now
+truncated to the 120-char floor. LEG 3 (gate):
+`scripts/security-credential-grep.sh` scans ~/openclaw-agent +
+~/fleet-mailbox for six credential shapes printing counts ONLY (never
+matched text), env-indirection excusal scoped to the password-kv pattern
+only; wired into PRODUCTION_CHECKLIST row 4.6 + the owner-sitting bucket;
+live run RESULT: clean. Separate-lane 4-agent adversarial review (1 PASS /
+3 FAIL) caught what mattered and all fix-now findings were closed same
+tick: (a) CRITICAL — the first guard-test draft embedded both credentials
+as trivially reversible bracket-class regexes (replaced with generic-shape
+assertions); (b) MAJOR — `scripts/plane-board-export.mjs:78` had the Class
+A literal embedded as its own REDACT_PATTERNS regex on this unpushed
+branch (replaced with a generic word@NNNN shape, now guard-tested); (c)
+probe error-path/lifetime/locale minors (all fixed). Guards 10/10; gate
+clean; full suite 1401 pass + typecheck + lint green. RESIDUALS
+(owner-gated, recorded in the sidecar addendum + card): fleet-mailbox
+REMOTE TIP + git history still carry both classes (private repo; local
+redaction committed as `4ad272b6` but master is ~459 behind origin — the
+pull/push/scrub is the owner's, folds into CLWX-19); public clawx-pilot
+still carries Class A in 3 files on pilot/main (CLWX-18, pre-existing);
+row 4.1's git-grep now length-quantified so it means what it says. NOTE:
+whatsapp-local/agent-comms MCPs were NOT connected in this session (tool
+registry lacks both); not needed for this card._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed

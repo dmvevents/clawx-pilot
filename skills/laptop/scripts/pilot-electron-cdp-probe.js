@@ -88,7 +88,7 @@ function selectOutlookMatrixSourceMessage(messages) {
     ?? null;
 }
 
-function parseArgs(argv) {
+function parseArgs(argv, { resolvePayload = true } = {}) {
   const out = {
     endpoint: 'http://127.0.0.1:9223',
     artifactDir: path.join(os.homedir(), 'Downloads'),
@@ -106,6 +106,7 @@ function parseArgs(argv) {
     emailTo: '',
     emailSubject: '',
     emailBody: '',
+    emailPayloadFile: '',
     submitForms: false,
     visualAcceptance: false,
     waitMs: 5000,
@@ -129,16 +130,34 @@ function parseArgs(argv) {
     else if (arg === '--forms-smoke') out.formsSmoke = true;
     else if (arg === '--draft-email') out.draftEmail = true;
     else if (arg === '--send-email') out.sendEmail = true;
-    else if (arg === '--email-to') out.emailTo = argv[++i] || out.emailTo;
-    else if (arg === '--email-subject') out.emailSubject = argv[++i] || out.emailSubject;
-    else if (arg === '--email-body') out.emailBody = argv[++i] || out.emailBody;
+    // CLWX-84: recipient/subject/body arrive via a JSON payload file, never argv —
+    // process arguments are visible to any local process listing.
+    else if (arg === '--email-payload-file') out.emailPayloadFile = argv[++i] || out.emailPayloadFile;
     else if (arg === '--submit-forms') out.submitForms = true;
     else if (arg === '--visual-acceptance') out.visualAcceptance = true;
     else if (arg === '--wait-ms') out.waitMs = Number(argv[++i] || out.waitMs);
     else if (arg === '--help' || arg === '-h') {
-      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--chrome-endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--safe-chat-prompt TEXT] [--outlook-smoke] [--outlook-state-matrix] [--outlook-reply-matrix] [--outlook-send-matrix --email-to ADDR] [--forms-smoke] [--draft-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--send-email --email-to ADDR [--email-subject TEXT] [--email-body TEXT]] [--submit-forms] [--visual-acceptance] [--wait-ms N]');
+      console.log('Usage: node pilot-electron-cdp-probe.js [--endpoint URL] [--chrome-endpoint URL] [--artifact-dir DIR] [--safe-chat] [--safe-chat-mode outlook-open|forms-list] [--safe-chat-prompt TEXT] [--outlook-smoke] [--outlook-state-matrix] [--outlook-reply-matrix] [--outlook-send-matrix --email-payload-file FILE] [--forms-smoke] [--draft-email --email-payload-file FILE] [--send-email --email-payload-file FILE] [--submit-forms] [--visual-acceptance] [--wait-ms N]. The payload file is JSON {"to","subject","body"} so recipient/body never appear in a process listing (CLWX-84).');
       process.exit(0);
     }
+  }
+  if (resolvePayload && out.emailPayloadFile) {
+    let payload;
+    try {
+      payload = JSON.parse(fs.readFileSync(out.emailPayloadFile, 'utf8').replace(/^\uFEFF/, ''));
+    } catch (error) {
+      console.error('STATE: EMAIL_PAYLOAD_FILE_UNREADABLE');
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(6);
+    }
+    if (payload && typeof payload === 'object') {
+      if (payload.to) out.emailTo = String(payload.to);
+      if (payload.subject) out.emailSubject = String(payload.subject);
+      if (payload.body) out.emailBody = String(payload.body);
+    }
+    // Consumed \u2014 shrink the plaintext payload's on-disk lifetime to this read;
+    // the ps1 wrapper's Remove-Item tolerates the file already being gone.
+    try { fs.unlinkSync(out.emailPayloadFile); } catch { /* best-effort */ }
   }
   return out;
 }
@@ -1942,7 +1961,7 @@ async function runOutlookSendMatrix(page, playwright, args) {
     return {
       skipped: false,
       ok: false,
-      error: '--email-to is required with --outlook-send-matrix so compose and forward sends use a controlled test recipient.',
+      error: 'an email payload file with "to" is required with --outlook-send-matrix so compose and forward sends use a controlled test recipient.',
       steps: [],
     };
   }
@@ -2206,7 +2225,7 @@ function sampleDailyReportPayload() {
 function buildEmailDraftArgs(args, mode) {
   const to = args.emailTo;
   if (!to) {
-    return { ok: false, error: `--email-to is required with ${mode}` };
+    return { ok: false, error: `an email payload file with "to" is required with ${mode}` };
   }
   const subject = args.emailSubject || `ClawX Windows service test ${new Date().toISOString()}`;
   const body = args.emailBody || [
@@ -2228,7 +2247,9 @@ async function draftTestEmail(page, args, mode = '--draft-email') {
   ).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
 
   return {
-    subject: email.subject,
+    // Hard-rule floor: subjects are truncated to 120 chars in anything that
+    // reaches console or artifact JSON.
+    subject: email.subject == null ? email.subject : String(email.subject).slice(0, 120),
     bodyLength: email.body.length,
     toCount: email.to.split(/[;,]/).filter((part) => part.trim()).length,
     draft: summarizeHostApiCall(draft, (data) => ({
@@ -2566,7 +2587,10 @@ if (require.main === module) {
       stack: error instanceof Error ? error.stack : undefined,
     };
     try {
-      const args = parseArgs(process.argv.slice(2));
+      // Error path only needs artifactDir — never re-resolve the payload file
+      // here (it may already be consumed/deleted; a read failure would exit 6
+      // and swallow the real failure artifact).
+      const args = parseArgs(process.argv.slice(2), { resolvePayload: false });
       fs.mkdirSync(args.artifactDir, { recursive: true });
       const summaryPath = path.join(args.artifactDir, `clawx-electron-probe-failed-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
       fs.writeFileSync(summaryPath, JSON.stringify(redact(failure), null, 2));

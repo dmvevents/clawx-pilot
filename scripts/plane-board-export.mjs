@@ -75,7 +75,7 @@ for (const it of issues) {
 // can reach the repo. Patterns cover known-leaked literals and generic
 // credential shapes; extend the list when a new leak class appears.
 const REDACT_PATTERNS = [
-  /Education@2000/g,                              // leaked test.fac password (CLWX-18)
+  /[A-Za-z][A-Za-z0-9]{2,}@[0-9]{4,}(?![0-9A-Za-z])/g,     // word@NNNN password family (covers the CLWX-18 leaked test.fac password without embedding it)
   /sk-clawx[A-Za-z0-9_-]{8,}/g,                   // key VALUES only; the bare name may appear
   /(password|passwd|pwd)\s*[:=]\s*\S+/gi,         // generic password assignments
   /Bearer\s+[A-Za-z0-9._-]{20,}/g,                // bearer tokens

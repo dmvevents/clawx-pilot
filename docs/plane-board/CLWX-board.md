@@ -1199,7 +1199,7 @@ Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex ro
 
 ### CLWX-84 — [security] Hygiene sweep: plaintext sandbox credentials in local liaison logs/archive; probe args leak recipient/body
 
-- **State:** Todo  |  **Priority:** high
+- **State:** Ready  |  **Priority:** high
 
 Findings
 1. The sandbox account credential pair persists unredacted in local liaison monitor logs and the SHA-pinned 2026-09-01 archive (5+ locations) - local-only but violates the no-secrets floor and compounds CLWX-18/19.
@@ -1212,6 +1212,10 @@ Acceptance
 
 Source
 Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+**Comments (1):**
+
+- ALL THREE ACCEPTANCE LEGS MET (2026-09-05 tick) — moving to Ready; a human closes Done. Leg 1 — redaction + forward-redaction. 12 plaintext hits across SEVEN files (card said 5+): both live liaison logs, both SHA-pinned 2026-09-01 archive copies, and three fleet-mailbox note files. A SECOND credential surfaced during the sweep (a temp password Raj shared in chat 2026-05-22) and was redacted as class B alongside the known sandbox password (class A). Tokens substituted in place; chain-of-custody sidecar with before/after sha256 at ~/openclaw-agent/liaison-archive/REDACTION_2026-09-05_CLWX-84.md (archive pin verified equal to the before-hash and left unmodified). Monitor writer raj-kiran-monitor.sh now pipes every capture through a shape-based redact_creds filter (LC_ALL=C, open-ended digit runs) before BOTH the log write and the pushed mailbox note. Leg 2 — probe payload off argv. pilot-run-electron-cdp-probe.ps1 + pilot-electron-cdp-probe.js (and the skills/laptop mirrors, kept byte-identical by a unit guard): recipient/subject/body travel via a BOM-less JSON temp file (--email-payload-file, GUID name), unlinked immediately after read plus ps1 finally cleanup; --email-to/--email-subject/--email-body argv flags REMOVED from both scripts; error-path re-parse skips payload resolution so a vanished file cannot swallow the failure artifact; summary subject truncated to the 120-char hard-rule floor. Leg 3 — grep gate. scripts/security-credential-grep.sh scans ~/openclaw-agent + ~/fleet-mailbox for six credential shapes and prints file+count ONLY (never matched text); env-indirection excusal scoped to the password-kv pattern only. Wired into PRODUCTION_CHECKLIST row 4.6 and the GA_FINISH_SPRINT owner-sitting bucket. Live run: RESULT clean, exit 0. Separate-lane review (4 adversarial agents, 1 PASS / 3 FAIL) — all fix-now findings closed same tick: (a) CRITICAL: first guard-test draft embedded both credentials as trivially reversible bracket-class regexes — replaced with generic-shape assertions; (b) MAJOR: scripts/plane-board-export.mjs line 78 embedded the class A literal as its own REDACT_PATTERNS regex (branch-local, unpushed) — replaced with a generic word@NNNN shape, now guard-tested; (c) probe error-path exit-6 masking, payload lifetime on hard kill, sed locale abort — all fixed. Guards tests/unit/clwx84-hygiene-guards.test.ts 10/10; full suite 1401 pass; typecheck + lint green. RESIDUALS (owner-gated, not blocking this card): (1) fleet-mailbox REMOTE TIP + git history still carry both classes (repo is PRIVATE; local redaction committed as 4ad272b6 but local master is ~459 behind origin — pull/push/history-scrub is an owner action, folds into the CLWX-19 rotation sitting); (2) public clawx-pilot still carries class A in 3 files on pilot/main — pre-existing, owned by CLWX-18; (3) installers ship resources/cloud-gateway.key by design — CLWX-19 rotation scope.
 
 ### CLWX-85 — [release] Version-bits integrity: same version string shipped different bits twice - hash-manifest gate
 

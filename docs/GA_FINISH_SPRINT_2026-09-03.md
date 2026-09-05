@@ -131,7 +131,7 @@ three ways below.
 | Lane | Items | What closes them |
 |---|---|---|
 | **Agent (me, next ticks)** | 1. ga:gate first GREEN run (in flight). 2. **moe.16 cut** (carries CLWX-46/59/72/78 fixes) + fresh-install re-verify: drag-PDF, degrade failover, K14 matrix → closes CLWX-72/78, refreshes KR1/KR2 evidence, gives the tester the ExtVal-B build. 3. CLWX-79 urgent (demo-default backfill). 4. CLWX-82 (typecheck electron/**, then fix what it reveals). 5. CLWX-62 recorded leg. 6. CLWX-58+70 (auto-recovery + exit-path invariant). 7. GA evidence packet refresh (CLWX-10). | ~3–4 driver ticks |
-| **Owner (one sitting, ~1–2 h)** | Close the 22 Ready cards · CLWX-18 scrub · CLWX-19 rotate · trim unhold (7add864b) · latency budget number · KR2 assisted recording (RDP ≥1920×1080; everything staged) · CLWX-45 per-item GO · then check the boxes | one sitting |
+| **Owner (one sitting, ~1–2 h)** | Close the 22 Ready cards · CLWX-18 scrub · CLWX-19 rotate (rotation scope now includes the fleet-mailbox private repo: the sandbox password + a Raj temp password sat in 3 pushed note files; the 2026-09-05 CLWX-84 pass redacted + committed locally, but the REMOTE TIP and full git history still carry them — local master is ~459 behind origin, so pull/push/scrub is the owner's call) · run `bash scripts/security-credential-grep.sh` (CLWX-84 gate, expect `RESULT: clean`) · trim unhold (7add864b) · latency budget number · KR2 assisted recording (RDP ≥1920×1080; everything staged) · CLWX-45 per-item GO · then check the boxes | one sitting |
 | **Ministry (post-GA-acceptable per the finish vector)** | KR7 App-Insights verify · KR8 session + real values · CLWX-7/8/40 | Raj-paced |
 
 **Definition of done for GA (unchanged, now mechanized):** bucket-agent

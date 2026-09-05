@@ -48,11 +48,12 @@
 
 | # | Check | How to verify | State |
 |---|---|---|---|
-| 4.1 | No committed API keys | `git grep -E "(sk-ant-\|sk-proj-\|hf_[A-Za-z0-9]{30,})"` → empty | ✅ |
+| 4.1 | No committed API keys | `git grep -E "(sk-ant-\|sk-proj-)[A-Za-z0-9]{20,}\|hf_[A-Za-z0-9]{30,}"` → empty (length-quantified so docs describing the check don't self-match) | ✅ |
 | 4.2 | `.env` gitignored | `grep -E "^\.env" .gitignore` matches | ✅ |
 | 4.3 | MoE test password rotated | Verbal confirmation from Anton; no stored plaintext anywhere in repo | ⚠️ pending |
 | 4.4 | `microsoft-graph.enabled: false` in default seed | `electron/main/gateway-plugin-config-seed.ts` line 39 | ✅ |
 | 4.5 | Browser automation forces `profile=user` | grep `profile=user` in `electron/` browser code paths | ⚠️ verify in browser-automation skill |
+| 4.6 | Local liaison surfaces free of credential shapes (CLWX-84) | `bash scripts/security-credential-grep.sh` → `RESULT: clean` (scans `~/openclaw-agent` + `~/fleet-mailbox`; counts only, never matched text). Run before every security sitting. Monitor writer redacts at capture (`raj-kiran-monitor.sh::redact_creds`); pilot CDP probe carries email payloads via temp file, never argv | ✅ 2026-09-05 |
 
 ## 5 · Locales
 
