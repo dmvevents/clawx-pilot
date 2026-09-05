@@ -91,6 +91,77 @@ describe('document.* native tools (Lane A — Windows-safe)', () => {
   });
 });
 
+describe('readDocx refuses non-docx containers in principal language (CLWX-101)', () => {
+  // The regression this closes: mammoth hands non-zip input to jszip, whose
+  // error ("Can't find end of central directory : is this a zip file ? If it
+  // is, see https://stuk.github.io/jszip/…") reached the principal verbatim.
+  const LIBRARY_INTERNALS = /central directory|jszip|stuk\.github\.io|https?:\/\//i;
+
+  async function readDocxError(name: string, bytes: Buffer | string): Promise<string> {
+    const { readDocx } = await loadDocTools();
+    const p = path.join(workDir, name);
+    writeFileSync(p, bytes);
+    try {
+      await readDocx({ path: p });
+    } catch (e) {
+      return String((e as Error).message);
+    }
+    return '';
+  }
+
+  it('names legacy Word (.doc) and the Save-As way out for an OLE2 container', async () => {
+    const msg = await readDocxError(
+      'legacy.doc',
+      Buffer.concat([Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), Buffer.alloc(512)]),
+    );
+    expect(msg).toMatch(/legacy Word document \(\.doc\b/);
+    expect(msg).toMatch(/Save As/i);
+    expect(msg).toMatch(/\.docx/);
+    expect(msg).not.toMatch(LIBRARY_INTERNALS);
+  });
+
+  it('names Rich Text Format (.rtf) and the way out', async () => {
+    const msg = await readDocxError('memo.rtf', '{\\rtf1\\ansi Hello.}');
+    expect(msg).toMatch(/Rich Text Format file \(\.rtf\)/);
+    expect(msg).toMatch(/Save As/i);
+    expect(msg).not.toMatch(LIBRARY_INTERNALS);
+  });
+
+  it('refuses a plain-text imposter as not-a-Word-document, without jszip language', async () => {
+    const msg = await readDocxError('notes.docx', 'just some plain text pretending to be a docx');
+    expect(msg).toMatch(/not a modern Word document/);
+    expect(msg).not.toMatch(LIBRARY_INTERNALS);
+  });
+
+  it('maps a damaged zip container to the damaged-or-incomplete wording', async () => {
+    // Starts with PK so it passes the container sniff, but jszip cannot
+    // parse it — this exercises the mapDocxParseError tier, not the sniff.
+    const msg = await readDocxError('damaged.docx', Buffer.concat([Buffer.from('PK\x03\x04'), Buffer.alloc(8, 0xff)]));
+    expect(msg).toMatch(/damaged or incomplete/);
+    expect(msg).not.toMatch(LIBRARY_INTERNALS);
+  });
+
+  it('maps a zip that is not a docx inside (the .odt class) to the renamed-format wording', async () => {
+    // A valid but EMPTY zip: end-of-central-directory record only.
+    const msg = await readDocxError('notes.odt', Buffer.concat([Buffer.from('PK\x05\x06', 'latin1'), Buffer.alloc(18)]));
+    expect(msg).toMatch(/not a Word document inside/);
+    expect(msg).toMatch(/OpenDocument/);
+    expect(msg).not.toMatch(/main document part/i);
+    expect(msg).not.toMatch(LIBRARY_INTERNALS);
+  });
+
+  it('still reads a genuine .docx after the sniff (no false refusal)', async () => {
+    const { readDocx } = await loadDocTools();
+    const p = path.join(workDir, 'genuine.docx');
+    const doc = new Document({
+      sections: [{ properties: {}, children: [new Paragraph({ text: 'Sniff must not block real files.' })] }],
+    });
+    writeFileSync(p, await Packer.toBuffer(doc));
+    const result = (await readDocx({ path: p })) as { markdown: string };
+    expect(result.markdown).toContain('Sniff must not block real files');
+  });
+});
+
 describe('parser dep loading is truthful: notFound vs loadError (CLWX-76)', () => {
   // The regression this closes: every doc-tool used to funnel a failed
   // require through a masking wrapper that returned null on ANY failure, then

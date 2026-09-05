@@ -48,6 +48,12 @@ describe('isReadableRefusal (CLWX-77 principal bar)', () => {
     const { isReadableRefusal } = await load();
     expect(isReadableRefusal('Cannot find module in node_modules\\pdf-parse\\index.js')).toBe(false);
   });
+
+  it('rejects library documentation URLs — the jszip leak that passed v1 (CLWX-101)', async () => {
+    const { isReadableRefusal } = await load();
+    expect(isReadableRefusal("Can't find end of central directory : is this a zip file ? If it is, see https://stuk.github.io/jszip/documentation/howto/read_zip.html")).toBe(false);
+    expect(isReadableRefusal('see HTTPS://example.com/docs for details')).toBe(false);
+  });
 });
 
 describe('classifyRow', () => {
@@ -110,6 +116,21 @@ describe('classifyRow', () => {
     expect(v.status).toBe('NO-TOOL');
     expect(v.note).toContain('no document.*');
   });
+
+  it('FAILs a readable refusal whose row wording check does not hold (CLWX-101)', async () => {
+    const { classifyRow } = await load();
+    const check = (m: string) => (/legacy Word document/.test(m) ? true : 'must name legacy .doc');
+    const v = classifyRow('refusal', { ok: false, message: 'This file type is not supported.' }, undefined, check);
+    expect(v.status).toBe('FAIL');
+    expect(v.note).toContain('must name legacy .doc');
+  });
+
+  it('passes a refusal that meets its row wording check', async () => {
+    const { classifyRow } = await load();
+    const check = (m: string) => (/legacy Word document/.test(m) ? true : 'must name legacy .doc');
+    const v = classifyRow('refusal', { ok: false, message: 'This looks like a legacy Word document (.doc). Save it as .docx and retry.' }, undefined, check);
+    expect(v.status).toBe('REFUSED-READABLY');
+  });
 });
 
 describe('MATRIX shape', () => {
@@ -130,6 +151,16 @@ describe('MATRIX shape', () => {
     const ids = MATRIX.map((r: { id: string }) => r.id).join(' ');
     for (const type of ['pdf-text', 'pdf-corrupt', 'docx', 'doc-legacy', 'rtf', 'odt', 'xlsx', 'csv', 'png', 'png-sharp-binding', 'pptx']) {
       expect(ids).toContain(type);
+    }
+  });
+
+  it('pins the CLWX-101 wording bar on the legacy-doc and rtf rows: the old jszip text must fail them', async () => {
+    const { MATRIX } = await load();
+    const jszipText = "Can't find end of central directory : is this a zip file ? If it is, see https://stuk.github.io/jszip/documentation/howto/read_zip.html";
+    for (const id of ['doc-legacy.read_docx', 'rtf.read_docx']) {
+      const row = MATRIX.find((r: { id: string }) => r.id === id);
+      expect(typeof row.refusalCheck).toBe('function');
+      expect(row.refusalCheck(jszipText)).not.toBe(true);
     }
   });
 

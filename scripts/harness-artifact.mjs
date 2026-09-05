@@ -54,9 +54,11 @@ const ROW_TIMEOUT_MS = 60_000;
 // ── classification (pure; unit-tested in tests/unit/harness-artifact.test.ts)
 
 /**
- * Principal-readable refusal heuristic v1: the message must exist and must
+ * Principal-readable refusal heuristic v2: the message must exist and must
  * not look like an internal dump. "Readable" here is the CLWX-77 bar —
- * "never raw stack traces" — not a prose-quality judgement.
+ * "never raw stack traces" — not a prose-quality judgement. v2 adds the URL
+ * reject: jszip's "see https://stuk.github.io/jszip/…" passed v1 while being
+ * pure library internals (CLWX-101) — no principal refusal links anywhere.
  */
 export function isReadableRefusal(message) {
   if (typeof message !== 'string' || !message.trim()) return false;
@@ -66,6 +68,7 @@ export function isReadableRefusal(message) {
   // Both separators: libraries hard-code either, regardless of host OS.
   if (message.includes('node_modules/') || message.includes('node_modules\\')) return false;
   if (/^\s*(Type|Reference|Syntax)Error\b/.test(message)) return false;
+  if (/https?:\/\//i.test(message)) return false; // library doc-links (CLWX-101)
   return true;
 }
 
@@ -74,8 +77,11 @@ export function isReadableRefusal(message) {
  *  expectation: 'ok' | 'refusal' | 'no-tool'
  *  outcome: { ok: true, result } | { ok: false, message }
  *  contentCheck: optional (result) => true | string  (string = failure note)
+ *  refusalCheck: optional (message) => true | string — wording bar for rows
+ *    whose refusal must say something specific (CLWX-101), on top of the
+ *    generic isReadableRefusal heuristic.
  */
-export function classifyRow(expectation, outcome, contentCheck) {
+export function classifyRow(expectation, outcome, contentCheck, refusalCheck) {
   if (expectation === 'no-tool') {
     return { status: 'NO-TOOL', note: 'no document.* entrypoint for this type (persona carve-out, CLWX-80)' };
   }
@@ -98,6 +104,12 @@ export function classifyRow(expectation, outcome, contentCheck) {
   if (outcome.ok) return { status: 'FAIL', note: 'expected a refusal, call resolved ok' };
   if (!isReadableRefusal(outcome.message)) {
     return { status: 'FAIL', note: `refusal is not principal-readable: ${outcome.message}` };
+  }
+  if (refusalCheck) {
+    const verdict = refusalCheck(outcome.message);
+    if (verdict !== true) {
+      return { status: 'FAIL', note: `refusal wording check failed: ${verdict} — got: ${outcome.message.slice(0, 160)}` };
+    }
   }
   return { status: 'REFUSED-READABLY', note: outcome.message.slice(0, 160) };
 }
@@ -166,10 +178,16 @@ export const MATRIX = [
   {
     id: 'doc-legacy.read_docx', fn: 'readDocx', expectation: 'refusal',
     fixture: { name: 'legacy.doc', bytes: () => Buffer.concat([OLE_MAGIC, Buffer.alloc(512)]) },
+    // CLWX-101: must name the likely format and the way out — jszip's
+    // "end of central directory … see https://stuk.github.io/…" FAILs here.
+    refusalCheck: (m) => (/legacy Word document \(\.doc\b/.test(m) && /Save As/i.test(m) && /\.docx/.test(m)
+      ? true : 'must name legacy Word (.doc) and the Save-As-.docx way out'),
   },
   {
     id: 'rtf.read_docx', fn: 'readDocx', expectation: 'refusal',
     fixture: { name: 'memo.rtf', bytes: () => '{\\rtf1\\ansi Hello from RTF land.}' },
+    refusalCheck: (m) => (/Rich Text Format file \(\.rtf\)/.test(m) && /Save As/i.test(m) && /\.docx/.test(m)
+      ? true : 'must name Rich Text Format (.rtf) and the Save-As-.docx way out'),
   },
   {
     id: 'odt.read_docx', fn: 'readDocx', expectation: 'refusal',
@@ -372,7 +390,7 @@ async function main() {
       const fixturePath = await seedRowFixture(row, workDir);
       const callArgs = row.args ? row.args(workDir) : { path: fixturePath };
       const outcome = await runChild({ docToolsPath, fn: row.fn, args: callArgs }, resources);
-      verdict = classifyRow(row.expectation, outcome, row.check);
+      verdict = classifyRow(row.expectation, outcome, row.check, row.refusalCheck);
     }
     const ms = Date.now() - started;
     results.push({ id: row.id, ...verdict, ms });

@@ -617,14 +617,72 @@ export async function readPdf({ path: inputPath, maxChars = 200_000 } = {}) {
 
 // ── DOCX ─────────────────────────────────────────────────────────────────
 
+/**
+ * CLWX-101: mammoth's underlying jszip error for non-zip input ("Can't find
+ * end of central directory : is this a zip file ? If it is, see
+ * https://stuk.github.io/jszip/…") passes the no-stack bar but is library
+ * language, not principal language. Sniff the container up front and name
+ * the likely format plus the way out; anything jszip/mammoth still rejects
+ * maps to the damaged-or-renamed wording in mapDocxParseError below.
+ */
+const OLE2_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+const DOCX_RESAVE_HINT =
+  'Open it in Word and use Save As with the "Word Document (.docx)" format, then try again — or ask the sender to re-send it as .docx.';
+
+function refuseNonDocxContainer(buf, filePath) {
+  const name = path.basename(filePath);
+  if (buf.subarray(0, 8).equals(OLE2_MAGIC)) {
+    throw new Error(
+      `"${name}" looks like a legacy Word document (.doc, Word 97-2003), which this reader cannot open. ${DOCX_RESAVE_HINT}`,
+    );
+  }
+  if (buf.subarray(0, 5).toString('latin1') === '{\\rtf') {
+    throw new Error(
+      `"${name}" looks like a Rich Text Format file (.rtf), which this reader cannot open. ${DOCX_RESAVE_HINT}`,
+    );
+  }
+  if (buf.subarray(0, 2).toString('latin1') !== 'PK') {
+    throw new Error(
+      `"${name}" is not a modern Word document (.docx) — it appears to be a different file type. ${DOCX_RESAVE_HINT}`,
+    );
+  }
+}
+
+function mapDocxParseError(err, filePath) {
+  const name = path.basename(filePath);
+  const detail = err instanceof Error ? err.message : String(err);
+  // Zip-container failures (truncated download, damaged file): jszip's
+  // messages vary but always talk about the zip/central-directory/data.
+  if (/central director|zip file|corrupted zip|end of data/i.test(detail)) {
+    return new Error(
+      `"${name}" could not be opened as a Word document (.docx) — the file appears damaged or incomplete. ${DOCX_RESAVE_HINT}`,
+    );
+  }
+  // Valid zip, but not a docx inside (e.g. an OpenDocument .odt renamed).
+  if (/main document part|body element/i.test(detail)) {
+    return new Error(
+      `"${name}" is not a Word document inside — it may be another format (for example OpenDocument .odt) saved under a .docx name. ${DOCX_RESAVE_HINT}`,
+    );
+  }
+  return err;
+}
+
 export async function readDocx({ path: inputPath, format = 'markdown' } = {}) {
   const filePath = resolveReadablePath(inputPath);
   const mammoth = requireDocDep('mammoth');
   const buf = await readFile(filePath);
+  refuseNonDocxContainer(buf, filePath);
   const options = { buffer: buf };
+  const convert = async (fn) => {
+    try {
+      return await fn();
+    } catch (err) {
+      throw mapDocxParseError(err, filePath);
+    }
+  };
   let result;
   if (format === 'html') {
-    result = await mammoth.convertToHtml(options);
+    result = await convert(() => mammoth.convertToHtml(options));
     return {
       path: filePath,
       bytes: buf.length,
@@ -637,7 +695,7 @@ export async function readDocx({ path: inputPath, format = 'markdown' } = {}) {
     };
   }
   if (format === 'text' || format === 'plain') {
-    result = await mammoth.extractRawText(options);
+    result = await convert(() => mammoth.extractRawText(options));
     return {
       path: filePath,
       bytes: buf.length,
@@ -649,7 +707,7 @@ export async function readDocx({ path: inputPath, format = 'markdown' } = {}) {
       })),
     };
   }
-  result = await mammoth.convertToMarkdown(options);
+  result = await convert(() => mammoth.convertToMarkdown(options));
   return {
     path: filePath,
     bytes: buf.length,
