@@ -480,6 +480,36 @@ flagged as the next readable-refusal candidate). Same next-build gate class
 as CLWX-99/100: the running app carries the old wording until a build ships
 these commits. Owner asks unchanged._
 
+_**Tick 2026-09-05 (ga-sprint-driver, minimal-time): CLWX-86 capability
+handshake fixed + review-hardened → Ready (`1fba3f44` + `e6795d04`).** SENSE:
+tree clean at `88518dd2`; board 200; owner gates unchanged (Chrome :18792
+wedge not re-probed — owner-gated, pings are not evidence). ANALYZE: ranked
+86 over a CLWX-77 sub-step (whole card retired vs partial advance; unit-
+seamable, non-Chrome). ACT: tool↔host-API version-skew class closed — new
+`capability-gate.mjs` probes ONCE at plugin registration (tier 1: new
+authoritative `GET /api/capabilities` endpoint with app version + per-family
+allowlist state, drift-triangle-guarded; tier 2 for legacy installs:
+side-effect-free family GET probes — 405 present / 404-disabled allowlist
+(NOT parked, kill-switch unchanged) / global-404 absent); all 18 host-API
+tools gated at the facade seam — parked calls return principal-readable
+"update the app" with ZERO HTTP (dispatch/download hard-confirm gates
+untouched); indeterminate probes fail OPEN + re-probe (no false parks on
+boot races); facade 404 handling flipped so only an explicit "capability
+disabled" body keeps the allowlist wording — previously outlook/forms
+misdiagnosed skew as disabled and browser leaked the raw "No route for POST
+/api/browser/diagnose" (the card's verbatim moe.15 finding). Separate-lane
+adversarial review (3 lenses, 1 PASS / 2 FAIL): deduplicated CONFIRMED MAJOR
+— the index.mjs route maps were an unguarded third copy (a one-char typo
+would permanently false-park a working tool with all tests green, proven by
+mutation) — closed with an index.mjs drift-guard leg + 18-row tier-1
+positive control + one-POST assertion; reviewer's exact mutation now fails
+3 guards. Evidence: 44/44 across three suites; full suite 1469/6 skipped;
+typecheck + lint green; falsifiability proven twice (wiring stash → 3 fail;
+mutation → 3 fail). Board: CLWX-86 Todo → Ready with evidence. NEXT-BUILD
+GATE (CLWX-99/100/101 class): running app + seeded plugin carry old behavior
+until a build ships these commits; tier 1 ships app-side with the same
+build, so current installs exercise tier 2 by design. Owner asks unchanged._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
