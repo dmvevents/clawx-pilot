@@ -6,11 +6,32 @@
 import type { RawMessage, ContentBlock } from '@/stores/chat';
 
 /**
+ * Collapse a Gateway cron-run user turn to its principal-facing headline.
+ * The injected turn is plumbing shaped like:
+ *   "[cron:<job id> <job name>] <headline paragraph>\n\n<agent instructions…>\nCurrent time: … (zone) / … UTC"
+ * The principal should see the headline only — never the job UUID, the
+ * instruction block, or the injected clock header. Returns null when the
+ * text is not a cron-run turn.
+ */
+function cleanCronRunText(text: string): string | null {
+  const match = text.match(/^\[cron:([0-9a-f][0-9a-f-]{7,})\s*([^\]]*)\]\s*([\s\S]*)$/i);
+  if (!match) return null;
+  const body = match[3]
+    .replace(/\n\s*Current time:[^\n]*\s*$/i, '')
+    .trim();
+  const headline = body.split(/\n\s*\n/, 1)[0]?.trim() ?? '';
+  return headline || (match[2] ?? '').trim() || 'Reminder';
+}
+
+/**
  * Clean Gateway metadata from user message text for display.
  * Strips: [media attached: ... | ...], [message_id: ...],
  * and the timestamp prefix [Day Date Time Timezone].
+ * Cron-run turns collapse to their headline (see cleanCronRunText).
  */
 function cleanUserText(text: string): string {
+  const cronHeadline = cleanCronRunText(text);
+  if (cronHeadline !== null) return cronHeadline;
   return text
     // Remove [media attached: path (mime) | path] references
     .replace(/\s*\[media attached:[^\]]*\]/g, '')
@@ -63,15 +84,19 @@ function stripAssistantProviderWrappers(text: string): string {
   if (!text) return text;
   let result = text.trim();
 
+  // Bounded thinking blocks can appear anywhere in a reply (small on-device
+  // models interleave them mid-text), not only as a leading wrapper.
   result = result
-    .replace(/^\s*(?:<think>|\[think\])[\s\S]*?(?:<\/think>|\[\/think\])\s*/i, '')
+    .replace(/[ \t]*(?:<think>|\[think\])[\s\S]*?(?:<\/think>|\[\/think\])[ \t]*/gi, '\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-  if (/^\s*(?:<think>|\[think\])/i.test(result)) {
+  if (/(?:<think>|\[think\])/i.test(result)) {
+    // An unclosed thinking wrapper is contaminated provider reasoning; hide
+    // from the opener onward unless a bounded final block can be recovered.
     const finalMatch = result.match(/(?:<final>|\[final\])\s*([\s\S]*?)\s*(?:<\/final>|\[\/final\])/i);
-    // Unclosed thinking wrappers are contaminated provider reasoning; hide
-    // them unless a bounded final block can be recovered safely.
-    return finalMatch?.[1]?.trim() ?? '';
+    if (finalMatch?.[1]?.trim()) return finalMatch[1].trim();
+    result = result.replace(/(?:<think>|\[think\])[\s\S]*$/i, '').trim();
   }
 
   return result
