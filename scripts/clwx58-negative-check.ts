@@ -22,7 +22,7 @@ async function main() {
   console.log('Step 1: seed a HUMAN-looking draft (must survive recovery)');
   const first = await actions.draftEmail({
     to: ['test.fac@fac.edu.tt'], subject: HUMAN_SUBJECT,
-    body: 'Notes a principal might be mid-writing. Do not touch.', confirm: false,
+    body: 'Notes a principal might be mid-writing. Do not touch.',
   });
   console.log(`  → ${first.status} leftOpen=${first.draftLeftOpen}`);
   if (first.status !== 'drafted') { console.log('  ✗ could not seed'); process.exit(2); }
@@ -30,7 +30,7 @@ async function main() {
   console.log('Step 2: second draft must be BLOCKED with the human draft named');
   const second = await actions.draftEmail({
     to: ['test.fac@fac.edu.tt'], subject: `eval ${new Date().toISOString().slice(11, 19)}`,
-    body: 'should be blocked', confirm: false,
+    body: 'should be blocked',
   });
   const blocked = second.status !== 'drafted';
   const named = (second.message ?? '').includes(HUMAN_SUBJECT);

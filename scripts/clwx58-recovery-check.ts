@@ -24,7 +24,7 @@ async function main() {
   console.log('Step 1: seed a stale automation draft');
   const first = await actions.draftEmail({
     to: ['test.fac@fac.edu.tt'], subject: `eval ${stamp()}`,
-    body: 'Eval harness draft — do not send (CLWX-58 seed)', confirm: false,
+    body: 'Eval harness draft — do not send (CLWX-58 seed)',
   });
   console.log(`  → ${first.status} leftOpen=${first.draftLeftOpen}`);
   if (first.status !== 'drafted') { console.log('  ✗ could not seed'); process.exit(2); }
@@ -32,7 +32,7 @@ async function main() {
   console.log('Step 2: second draft must auto-recover, not block');
   const second = await actions.draftEmail({
     to: ['test.fac@fac.edu.tt'], subject: `eval ${stamp()}`,
-    body: 'Eval harness draft — do not send (CLWX-58 second)', confirm: false,
+    body: 'Eval harness draft — do not send (CLWX-58 second)',
   });
   console.log(`  → ${second.status} msg=${(second.message ?? '').slice(0, 90)}`);
 

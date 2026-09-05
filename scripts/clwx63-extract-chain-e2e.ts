@@ -183,7 +183,6 @@ async function registerPlugin(): Promise<Record<string, RegisteredTool>> {
   // Statutory no-invention contract stays live: a field the LLM failed to
   // extract must REFUSE, never demo-default.
   delete process.env.MOE_DEMO_DEFAULTS;
-  // @ts-expect-error untyped gateway plugin module (.mjs)
   const plugin = await import('../extensions/moe-principal-assistant/index.mjs');
   const tools: RegisteredTool[] = [];
   plugin.register({
@@ -283,7 +282,6 @@ async function main() {
 
   // Step 1: fixture letter -> real .docx -> production readDocx.
   console.log('Step 1: fixture letter -> .docx (writeDocx) -> letter text (readDocx, production reader)');
-  // @ts-expect-error untyped gateway plugin module (.mjs)
   const docTools = await import('../extensions/moe-principal-assistant/doc-tools.mjs');
   const letterSource = readFileSync(LETTER_TXT, 'utf-8');
   const docxPath = join(os.tmpdir(), 'clwx63-suspension-letter.docx');

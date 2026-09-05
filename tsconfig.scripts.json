@@ -1,0 +1,29 @@
+{
+  // Typecheck-only view of the ops/eval scripts (CLWX-98).
+  //
+  // `pnpm typecheck` covered only src/** and electron/**, so the gate-relevant
+  // scripts (v2-eval, clwx*-checks, forms drivers) were never type-checked —
+  // the "typecheck green" bar was vacuous for eval-script changes. Same shape
+  // as tsconfig.electron-typecheck.json: extend the node project's strictness,
+  // drop `composite`, never emit. Imports from electron/** are pulled in and
+  // checked transitively.
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    // Scripts run under tsx, which requires explicit .ts extensions on
+    // relative imports; legal for tsc only when nothing is emitted.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["scripts/**/*.ts"],
+  // Pre-existing type errors in legacy one-off probes/smokes (11 across these
+  // four); excluded rather than mass-fixed — new scripts are covered by default.
+  "exclude": [
+    "scripts/forms-probe-dom.ts",
+    "scripts/forms-probe2.ts",
+    "scripts/forms-fill-via-dom.ts",
+    "scripts/raj3-reply-archive-check.ts",
+    // In-flight on a concurrent lane (CLWX-66); include once it lands green.
+    "scripts/clwx66-classify-e2e.ts"
+  ]
+}
