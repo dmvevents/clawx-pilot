@@ -201,11 +201,15 @@ describe('moe-principal-assistant plugin registration', () => {
     const calls: Array<{ url: string; body: unknown; headers: Record<string, string> }> = [];
     vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
       const body = typeof init.body === 'string' ? JSON.parse(init.body) : {};
-      calls.push({
-        url: String(url),
-        body,
-        headers: init.headers as Record<string, string>,
-      });
+      // The CLWX-86 capability handshake issues side-effect-free GET probes
+      // at registration; this test asserts the POST tool-call sequence only.
+      if ((init.method ?? 'GET') !== 'GET') {
+        calls.push({
+          url: String(url),
+          body,
+          headers: init.headers as Record<string, string>,
+        });
+      }
       return jsonResponse({ success: true, data: { status: 'ok' } });
     }));
 
@@ -274,7 +278,10 @@ describe('moe-principal-assistant plugin registration', () => {
     const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
     vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
       const body = typeof init.body === 'string' ? JSON.parse(init.body) : {};
-      calls.push({ url: String(url), body });
+      // Skip the CLWX-86 registration handshake GETs — POST sequence only.
+      if (((init as RequestInit).method ?? 'GET') !== 'GET') {
+        calls.push({ url: String(url), body });
+      }
       return jsonResponse({ success: true, data: { status: 'sent' } });
     }));
 
@@ -595,7 +602,10 @@ describe('moe-principal-assistant plugin registration', () => {
     const calls: Array<{ url: string; body: unknown }> = [];
     vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit = {}) => {
       const body = typeof init.body === 'string' ? JSON.parse(init.body) : {};
-      calls.push({ url: String(url), body });
+      // Skip the CLWX-86 registration handshake GETs — POST sequence only.
+      if ((init.method ?? 'GET') !== 'GET') {
+        calls.push({ url: String(url), body });
+      }
       return jsonResponse({ success: true, data: { status: 'previewed', filledCount: 29, skippedCount: 1, errors: [] } });
     }));
 
@@ -694,7 +704,10 @@ describe('moe-principal-assistant plugin registration', () => {
     const calls: Array<{ body: unknown }> = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit = {}) => {
       const body = typeof init.body === 'string' ? JSON.parse(init.body) : {};
-      calls.push({ body });
+      // Skip the CLWX-86 registration handshake GETs — POST sequence only.
+      if ((init.method ?? 'GET') !== 'GET') {
+        calls.push({ body });
+      }
       return jsonResponse({ success: true, data: { status: 'previewed', filledCount: 29, skippedCount: 1, errors: [] } });
     }));
 
@@ -835,7 +848,13 @@ describe('moe-principal-assistant plugin registration', () => {
         expect(result.message).toContain(fieldId);
       }
       // No browser preview is attempted for a refused payload.
-      expect(fetchMock).not.toHaveBeenCalled();
+      // (the CLWX-86 registration handshake GET probe is allowed; a browser
+      // preview would be a POST)
+      expect(
+        fetchMock.mock.calls.filter(
+          ([, init]) => (((init ?? {}) as RequestInit).method ?? 'GET') !== 'GET',
+        ),
+      ).toHaveLength(0);
     } finally {
       if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
       else process.env.CLAWX_HOST_API_PORT = previousPort;
@@ -885,7 +904,13 @@ describe('moe-principal-assistant plugin registration', () => {
       expect(result.status).toBe('refused');
       expect(result.missingFields).toContain('victim_type');
       expect(result.missingFields).toContain('additional_infractions');
-      expect(fetchMock).not.toHaveBeenCalled();
+      // (the CLWX-86 registration handshake GET probe is allowed; a browser
+      // preview would be a POST)
+      expect(
+        fetchMock.mock.calls.filter(
+          ([, init]) => (((init ?? {}) as RequestInit).method ?? 'GET') !== 'GET',
+        ),
+      ).toHaveLength(0);
     } finally {
       if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
       else process.env.CLAWX_HOST_API_PORT = previousPort;
@@ -933,7 +958,13 @@ describe('moe-principal-assistant plugin registration', () => {
       // written_reports_collected is exactly the kind of attestation demo
       // fabrication used to invent; it must be listed as missing instead.
       expect(result.missingFields).toContain('written_reports_collected');
-      expect(fetchMock).not.toHaveBeenCalled();
+      // (the CLWX-86 registration handshake GET probe is allowed; a browser
+      // preview would be a POST)
+      expect(
+        fetchMock.mock.calls.filter(
+          ([, init]) => (((init ?? {}) as RequestInit).method ?? 'GET') !== 'GET',
+        ),
+      ).toHaveLength(0);
     } finally {
       if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
       else process.env.CLAWX_HOST_API_PORT = previousPort;
@@ -978,7 +1009,13 @@ describe('moe-principal-assistant plugin registration', () => {
 
       expect(result.status).toBe('refused');
       expect(result.missingFields).toContain('term_suspension_count');
-      expect(fetchMock).not.toHaveBeenCalled();
+      // (the CLWX-86 registration handshake GET probe is allowed; a browser
+      // preview would be a POST)
+      expect(
+        fetchMock.mock.calls.filter(
+          ([, init]) => (((init ?? {}) as RequestInit).method ?? 'GET') !== 'GET',
+        ),
+      ).toHaveLength(0);
     } finally {
       if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
       else process.env.CLAWX_HOST_API_PORT = previousPort;
@@ -1022,7 +1059,13 @@ describe('moe-principal-assistant plugin registration', () => {
 
       expect(result.status).toBe('refused');
       expect(result.reason).toBe('invalid_payload');
-      expect(fetchMock).not.toHaveBeenCalled();
+      // (the CLWX-86 registration handshake GET probe is allowed; a browser
+      // preview would be a POST)
+      expect(
+        fetchMock.mock.calls.filter(
+          ([, init]) => (((init ?? {}) as RequestInit).method ?? 'GET') !== 'GET',
+        ),
+      ).toHaveLength(0);
     } finally {
       if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
       else process.env.CLAWX_HOST_API_PORT = previousPort;

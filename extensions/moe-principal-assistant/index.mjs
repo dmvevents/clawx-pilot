@@ -36,6 +36,12 @@ import {
   writeXlsx as docWriteXlsx,
   readImage as docReadImage,
 } from './doc-tools.mjs';
+import {
+  createHostApiCapabilityGate,
+  gateHostApiFacade,
+  hostApiSkewMessage,
+  isNoRouteBody,
+} from './capability-gate.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = __dirname;
@@ -1436,9 +1442,26 @@ export function register(api) {
   // routes return 404 and the tool handlers surface that error.
   const hostApiPort = process.env.CLAWX_HOST_API_PORT;
   const hostApiToken = process.env.CLAWX_HOST_API_TOKEN;
+  // CLWX-86: one-shot capability handshake at registration. Detects tool<->
+  // host-API version skew (plugin newer than the installed app) and self-
+  // parks affected tools with a readable update-the-app message instead of
+  // letting a raw "No route for POST ..." reach the agent.
+  const capabilityGate =
+    hostApiPort && hostApiToken
+      ? createHostApiCapabilityGate({ port: hostApiPort, token: hostApiToken, log })
+      : null;
+  if (capabilityGate) void capabilityGate.probe();
   const browser =
     hostApiPort && hostApiToken
-      ? createHostApiBrowserFacade(hostApiPort, hostApiToken)
+      ? gateHostApiFacade(
+          createHostApiBrowserFacade(hostApiPort, hostApiToken),
+          'browser',
+          {
+            diagnose: 'POST /api/browser/diagnose',
+            repairChromeCdp: 'POST /api/browser/repair-chrome-cdp',
+          },
+          capabilityGate,
+        )
       : null;
   if (browser) {
     registerTool({
@@ -1460,7 +1483,24 @@ export function register(api) {
 
   const outlook =
     hostApiPort && hostApiToken
-      ? createHostApiOutlookFacade(hostApiPort, hostApiToken)
+      ? gateHostApiFacade(
+          createHostApiOutlookFacade(hostApiPort, hostApiToken),
+          'outlook',
+          {
+            open: 'POST /api/outlook/open',
+            readInbox: 'POST /api/outlook/read-inbox',
+            draftEmail: 'POST /api/outlook/draft',
+            sendEmail: 'POST /api/outlook/send',
+            searchInbox: 'POST /api/outlook/search-inbox',
+            readEmail: 'POST /api/outlook/read-email',
+            reply: 'POST /api/outlook/reply',
+            forward: 'POST /api/outlook/forward',
+            markRead: 'POST /api/outlook/mark-read',
+            listAttachments: 'POST /api/outlook/list-attachments',
+            downloadAttachment: 'POST /api/outlook/download-attachment',
+          },
+          capabilityGate,
+        )
       : null;
   // Honour explicit host.skillAllowlist override (legacy contract). When the
   // gateway exposes neither host.outlook nor host.skillAllowlist (current
@@ -1712,7 +1752,18 @@ export function register(api) {
   // which owns the FormsBrowserManager singleton + the Playwright driver.
   const forms =
     hostApiPort && hostApiToken
-      ? createHostApiFormsFacade(hostApiPort, hostApiToken)
+      ? gateHostApiFacade(
+          createHostApiFormsFacade(hostApiPort, hostApiToken),
+          'forms',
+          {
+            list: 'POST /api/forms/list',
+            previewDailyReport: 'POST /api/forms/preview-daily-report',
+            submitDailyReport: 'POST /api/forms/submit-daily-report',
+            previewSuspension: 'POST /api/forms/preview-suspension',
+            submitSuspension: 'POST /api/forms/submit-suspension',
+          },
+          capabilityGate,
+        )
       : null;
   if (forms) {
     registerTool({
@@ -1846,6 +1897,11 @@ function createHostApiBrowserFacade(port, token) {
     try { data = text ? JSON.parse(text) : null; } catch { /* fall through */ }
     if (!resp.ok) {
       const errMsg = (data && (data.error || data.message)) || text.slice(0, 200) || `HTTP ${resp.status}`;
+      // CLWX-86: a global-404 body means the installed app predates this
+      // route (version skew) — refuse in principal language, never raw HTTP.
+      if (resp.status === 404 && isNoRouteBody(errMsg)) {
+        throw new Error(hostApiSkewMessage('browser'));
+      }
       throw new Error(`browser host-API ${path}: ${errMsg}`);
     }
     if (data && typeof data === 'object' && 'success' in data) {
@@ -1888,6 +1944,11 @@ function createHostApiFormsFacade(port, token) {
       throw new Error(`forms host-API ${path} unreachable: ${msg}`);
     }
     if (resp.status === 404) {
+      // CLWX-86: disambiguate the two 404 shapes (see the outlook facade).
+      const body404 = await resp.text().catch(() => '');
+      if (isNoRouteBody(body404)) {
+        throw new Error(hostApiSkewMessage('forms'));
+      }
       throw new Error(
         `forms capability disabled: ${path} returned 404 — check that 'forms' is in PRINCIPAL_SKILL_ALLOWLIST.`,
       );
@@ -1973,14 +2034,22 @@ function createHostApiOutlookFacade(port, token) {
       const msg = err instanceof Error ? err.message : String(err);
       return structuredError(path, `outlook host-API ${path} unreachable: ${msg}`);
     }
+    const text = await resp.text().catch(() => '');
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { /* fall through */ }
     if (resp.status === 404) {
+      // CLWX-86: disambiguate the two 404 shapes. A global "No route for ..."
+      // body means the installed app predates this route (version skew — the
+      // route never executed, so no side effects are possible); the
+      // allowlist-off shape carries "capability disabled" in the body.
+      const bodyMsg = (data && (data.error || data.message)) || text;
+      if (isNoRouteBody(bodyMsg)) {
+        return { status: 'unavailable', message: hostApiSkewMessage('outlook') };
+      }
       throw new Error(
         `outlook capability disabled: ${path} returned 404 — check that 'outlook' is in PRINCIPAL_SKILL_ALLOWLIST.`,
       );
     }
-    const text = await resp.text().catch(() => '');
-    let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch { /* fall through */ }
     if (!resp.ok) {
       const errMsg = (data && (data.error || data.message)) || text.slice(0, 200) || `HTTP ${resp.status}`;
       return structuredError(path, `outlook host-API ${path}: ${errMsg}`);
