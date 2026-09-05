@@ -1370,7 +1370,7 @@ SECONDARY (same surface, may split): raw [cron:<uuid> <name>] prefix + internal 
 
 ### CLWX-100 — [trust/low] Cron-session cosmetics: user bubble leaks [cron:<uuid>]+instructions+tz header; think-block render; confirm RC composer anonymises model id
 
-- **State:** Todo  |  **Priority:** low
+- **State:** Ready  |  **Priority:** low
 
 Low-priority trust cosmetics observed during the CLWX-67 reminder e2e and CLWX-65 evidence capture (principal-proxy lens). Filed separately per the no-scope-creep rule on CLWX-99; none of these blocks the pipeline working.
 
@@ -1383,6 +1383,10 @@ Low-priority trust cosmetics observed during the CLWX-67 reminder e2e and CLWX-6
 4. NOISY DELIVERY ERROR IN RUN LOG. Cron runs log "Channel is required (no configured channels detected)" even though delivery.mode falls back to none and deliveryStatus is not-requested (run-summary.json). Log-only noise; confuses log-based triage.
 
 Acceptance: (1)+(2) — a cron reminder session shows the principal a clean reminder bubble with no UUID/instruction/tz-header and no think text, verified by re-running scripts/clwx67-reminder-e2e.ts UI assertions; (3) — RC composer screenshot showing anonymised model surface, or a fix if it leaks; (4) — run log free of the spurious channel error for delivery-none jobs.
+
+**Comments (1):**
+
+- FIXED in-tree (commit 566a7504) — moving to Ready; a human closes Done. Full evidence: docs/evidence/CLWX100_2026-09-05.md. Per-item disposition: 1. CRON BUBBLE PLUMBING LEAK — FIXED. cleanUserText (src/pages/Chat/message-utils.ts) now collapses a [cron:<uuid> <name>]-prefixed user turn to its headline paragraph, dropping the UUID prefix, the instruction block, and the injected "Current time: ..." header. Display-only; job-name fallback; single-paragraph job messages show in full. The CLWX-67 evidence payload now renders as just "Reminder: 3:45pm — submit today's Daily Report." 2. THINK-BLOCK LEAK — FIXED. stripAssistantProviderWrappers now strips bounded think blocks anywhere in the reply (was leading-only) and truncates an unclosed mid-text opener, keeping the text before it. <final>-recovery preserved; all 7 pre-existing tests still green. 3. RAW MODEL ID IN COMPOSER — CLOSED, dev-only by code. The raw-id dropdown is gated behind devModeUnlocked (ChatInput.tsx:308-311), which defaults false (settings.ts:101) and is a persisted opt-in; the principal-facing surface is the anonymised ChannelToggle. The leak in the evidence screenshots was the dev machine with dev mode unlocked. No RC exposure. 4. SPURIOUS "Channel is required" IN RUN JOURNAL — UPSTREAM, not fork-fixable in-tree. Thrown by node_modules/openclaw/dist/channel-selection-DARF15EW.js:122; the journal records a speculative delivery resolution even for delivery-none runs (deliveryStatus stays not-requested, status ok). The fork already clears it at every fork-owned surface (ipc-handlers.ts:970, cron.ts:532). Patching upstream dist mid-pilot was rejected on CLWX-99; flagged for the next upstream merge pass. Verification: 6 new units in tests/unit/message-utils.test.ts (13/13); falsifiability 5/13 fail with the fix stashed, scoping control green both ways by design. Full suite 1377 passed / 6 skipped, typecheck exit 0, lint clean. RESIDUAL (same next-build gate as CLWX-99): the RUNNING app renders the old bubbles until a build with 566a7504 is installed and restarted. On that build, re-run the scripts/clwx67-reminder-e2e.ts UI assertions: headline-only reminder bubble, no think text in the defer reply.
 
 ## Started
 

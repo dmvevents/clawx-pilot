@@ -270,6 +270,25 @@ NOTE: the RUNNING app carries the defect until the next build+restart — the
 Monday demo build must include `6b446d13` for the reminder to fire on the
 principal's clock._
 
+_**CLWX-100 fixed (2026-09-05, monitor-directed tick): cron trust cosmetics to
+Ready (`566a7504`).** Items 1+2 fixed in the renderer
+(`src/pages/Chat/message-utils.ts`): a `[cron:<uuid> <name>]`-prefixed user
+turn now collapses to its headline paragraph (UUID prefix, instruction block,
+and injected "Current time:" header all hidden, display-only, job-name
+fallback), and think blocks are stripped anywhere in an assistant reply (was
+leading-only; unclosed mid-text openers truncate, `<final>`-recovery
+preserved). Item 3 (raw model id in composer) CLOSED dev-only by code — the
+raw-id dropdown is gated behind `devModeUnlocked` (default false,
+`settings.ts:101`; gate at `ChatInput.tsx:308-311`); no RC exposure. Item 4
+(spurious "Channel is required" in the run journal) reclassified UPSTREAM —
+thrown by gateway dist `channel-selection` even for delivery-none runs; fork
+already clears it at every fork-owned surface; flagged for the next upstream
+merge pass (dist patching mid-pilot rejected on CLWX-99). Evidence:
+`docs/evidence/CLWX100_2026-09-05.md`; 6 new units (13/13, 5 fail with the fix
+stashed); full suite 1377 passed; typecheck + lint green. Same next-build gate
+as CLWX-99: re-run the `scripts/clwx67-reminder-e2e.ts` UI assertions on the
+build carrying `566a7504`._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
