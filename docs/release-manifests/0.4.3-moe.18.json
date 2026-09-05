@@ -1,6 +1,6 @@
 {
   "version": "0.4.3-moe.18",
-  "generatedAt": "2026-09-05T10:37:51.069Z",
+  "generatedAt": "2026-09-05T11:00:24.509Z",
   "published": false,
   "artifacts": [
     {
@@ -15,6 +15,7 @@
       "name": "win:app.asar",
       "path": "win-unpacked/resources/app.asar",
       "kind": "asar",
+      "asarVersion": "0.4.3-moe.18",
       "sha256": "31a61d9aeff705baed91f268b07b02909879f15fc76249c8d2fe82a8d3f31192",
       "bytes": 242345879,
       "mtimeMs": 1788435980133.188
@@ -23,7 +24,7 @@
       "name": "win:extensions",
       "path": "win-unpacked/resources/extensions",
       "kind": "bundle-dir",
-      "sha256": "0ad81a44fd7ea76db038f8083b6ddca609f7edd6379d699ce98852b27fb2f1e5",
+      "sha256": "00abd0e4684f1df2da5c4a25c5b69b2d4d79d061da8751fb94f5920d1d997620",
       "fileCount": 26,
       "mtimeMs": 1788435983103.6646
     },
@@ -31,63 +32,15 @@
       "name": "win:openclaw-plugins",
       "path": "win-unpacked/resources/openclaw-plugins",
       "kind": "bundle-dir",
-      "sha256": "6e53a80532f1fa246d5008050ceb8d7c4b13d2ef0376ee13760da5602c334bda",
+      "sha256": "b3f380f4fbe6742959b020e98aa084f192843dd5d50683de0436bd2747600e66",
       "fileCount": 4678,
       "mtimeMs": 1788436000803.427
-    },
-    {
-      "name": "mac-arm64:app.asar",
-      "path": "mac-arm64/Ministry of Education.app/Contents/Resources/app.asar",
-      "kind": "asar",
-      "sha256": "102f38f70b35d858d6dd5e84fd93e696d5df4cb346332b1d3078ce6cd8afc605",
-      "bytes": 175398943,
-      "mtimeMs": 1779730719431.015
-    },
-    {
-      "name": "mac-arm64:extensions",
-      "path": "mac-arm64/Ministry of Education.app/Contents/Resources/extensions",
-      "kind": "bundle-dir",
-      "sha256": "8b7f6c69cb679381c84ae6293a10e9b03ed0eae3b9b4c01aea1a92cf33c1d699",
-      "fileCount": 16,
-      "mtimeMs": 1779730724299.4922
-    },
-    {
-      "name": "mac-arm64:openclaw-plugins",
-      "path": "mac-arm64/Ministry of Education.app/Contents/Resources/openclaw-plugins",
-      "kind": "bundle-dir",
-      "sha256": "ec97feca40b5c3981c052afecf815426ed2ead8f95d68d35fe39d0ad723f47da",
-      "fileCount": 4677,
-      "mtimeMs": 1779730764967.7944
-    },
-    {
-      "name": "mac:app.asar",
-      "path": "mac/Ministry of Education.app/Contents/Resources/app.asar",
-      "kind": "asar",
-      "sha256": "102f38f70b35d858d6dd5e84fd93e696d5df4cb346332b1d3078ce6cd8afc605",
-      "bytes": 175398943,
-      "mtimeMs": 1779730670597.3113
-    },
-    {
-      "name": "mac:extensions",
-      "path": "mac/Ministry of Education.app/Contents/Resources/extensions",
-      "kind": "bundle-dir",
-      "sha256": "8b7f6c69cb679381c84ae6293a10e9b03ed0eae3b9b4c01aea1a92cf33c1d699",
-      "fileCount": 16,
-      "mtimeMs": 1779730672706.6433
-    },
-    {
-      "name": "mac:openclaw-plugins",
-      "path": "mac/Ministry of Education.app/Contents/Resources/openclaw-plugins",
-      "kind": "bundle-dir",
-      "sha256": "d2eff179d9d39735129f9f5da301394f26c16c444a16487c542050ed9f70b802",
-      "fileCount": 4677,
-      "mtimeMs": 1779730690877.0828
     }
   ],
   "supersededBuilds": [],
   "warnings": [
-    "STALENESS: Ministry of Education-0.4.3-moe.18-win-x64.exe and win:app.asar were written 86 min apart — they may come from different builds; the installer's embedded asar can differ from the unpacked tree (the moe.10 defect).",
-    "STALENESS: Ministry of Education-0.4.3-moe.18-win-x64.exe and mac-arm64:app.asar were written 145174 min apart — they may come from different builds; the installer's embedded asar can differ from the unpacked tree (the moe.10 defect).",
-    "STALENESS: Ministry of Education-0.4.3-moe.18-win-x64.exe and mac:app.asar were written 145175 min apart — they may come from different builds; the installer's embedded asar can differ from the unpacked tree (the moe.10 defect)."
+    "mac-arm64/Ministry of Education.app/Contents/Resources/app.asar carries version 0.4.3-moe.10, not 0.4.3-moe.18 — tree skipped (stale build leftovers are never recorded under the wrong version)",
+    "mac/Ministry of Education.app/Contents/Resources/app.asar carries version 0.4.3-moe.10, not 0.4.3-moe.18 — tree skipped (stale build leftovers are never recorded under the wrong version)",
+    "STALENESS: Ministry of Education-0.4.3-moe.18-win-x64.exe and win:app.asar were written 86 min apart — they may come from different builds; the installer's embedded asar can differ from the unpacked tree (the moe.10 defect)."
   ]
 }

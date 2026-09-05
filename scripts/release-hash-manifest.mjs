@@ -23,11 +23,17 @@
  *               verify a single artifact at a custom path via --only/--path.
  *
  * Wired into scripts/run-electron-builder.mjs (generate runs after every
- * successful build). Exit codes: 0 OK / 1 mismatch or published-drift /
- * 2 usage or missing inputs.
+ * successful build). Exit codes: 0 OK / 1 unexpected crash / 2 usage or
+ * missing inputs / 3 deliberate policy stop (verify mismatch or
+ * published-drift). The build wrapper fails the build ONLY on 3: a crash in
+ * this script must never block a legitimate build (it warns loudly instead).
+ *
+ * Unpacked trees are version-checked by reading package.json out of the
+ * app.asar (release/ accumulates trees from many builds; recording a stale
+ * tree under the current version was the original review finding).
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -50,8 +56,46 @@ export function sha256File(filePath) {
   });
 }
 
+/**
+ * Read the packaged app's package.json version straight out of an asar
+ * archive (16-byte pickle header, then a JSON index, then file data). Returns
+ * null when anything about the archive is unreadable — callers treat that as
+ * "cannot prove the tree's version" and skip the tree rather than record it.
+ */
+export function readAsarPackageVersion(asarPath) {
+  let fd = null;
+  try {
+    fd = openSync(asarPath, 'r');
+    const head = Buffer.alloc(16);
+    if (readSync(fd, head, 0, 16, 0) !== 16) return null;
+    const headerPickleSize = head.readUInt32LE(4);
+    const jsonLength = head.readUInt32LE(12);
+    const indexBuf = Buffer.alloc(jsonLength);
+    if (readSync(fd, indexBuf, 0, jsonLength, 16) !== jsonLength) return null;
+    const index = JSON.parse(indexBuf.toString('utf8'));
+    const entry = index?.files?.['package.json'];
+    if (!entry || entry.size == null || entry.offset == null) return null;
+    const dataStart = 8 + headerPickleSize;
+    const pkgBuf = Buffer.alloc(entry.size);
+    if (readSync(fd, pkgBuf, 0, entry.size, dataStart + Number(entry.offset)) !== entry.size) return null;
+    const version = JSON.parse(pkgBuf.toString('utf8')).version;
+    return typeof version === 'string' ? version : null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) closeSync(fd);
+  }
+}
+
+// Plain code-unit sort: localeCompare is locale-sensitive and could produce
+// different directory digests for identical bytes on differently-configured
+// machines.
+function byName(a, b) {
+  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+}
+
 function walkFiles(dir, base = dir, out = []) {
-  for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const entry of readdirSync(dir, { withFileTypes: true }).sort(byName)) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walkFiles(full, base, out);
     else if (entry.isFile()) out.push(full);
@@ -70,13 +114,27 @@ export async function hashDirectory(dir) {
   return { sha256: hash.digest('hex'), fileCount: files.length };
 }
 
-/** Find this version's artifact set under the release dir. */
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Find this version's artifact set under the release dir. release/ is
+ * long-lived and accumulates installers and unpacked trees from many
+ * versions: installers are matched by an exact version segment in the
+ * filename, and unpacked trees are recorded ONLY when the version read out
+ * of their app.asar matches (an unprovable or mismatched tree is skipped,
+ * reported in the returned skipped list). Returns { artifacts, skipped }.
+ */
 export function discoverArtifacts({ releaseDir, version }) {
   const artifacts = [];
-  if (!existsSync(releaseDir)) return artifacts;
-  const marker = `-${version}-`;
+  const skipped = [];
+  if (!existsSync(releaseDir)) return { artifacts, skipped };
+  // Bounded marker: "-<version>-<platform...>" so a plain "0.4.3" can never
+  // sweep the "0.4.3-moe.N" artifact families.
+  const installerMarker = new RegExp(`-${escapeRegExp(version)}-(win|mac|linux)`);
   for (const name of readdirSync(releaseDir).sort()) {
-    if (!name.includes(marker)) continue;
+    if (!installerMarker.test(name)) continue;
     if (!INSTALLER_EXTENSIONS.has(path.extname(name))) continue;
     artifacts.push({ name, path: name, kind: 'installer' });
   }
@@ -95,14 +153,19 @@ export function discoverArtifacts({ releaseDir, version }) {
     }
   }
   for (const { platform, resources, rel } of unpackedRoots) {
-    artifacts.push({ name: `${platform}:app.asar`, path: `${rel}/app.asar`, kind: 'asar' });
+    const asarVersion = readAsarPackageVersion(path.join(resources, 'app.asar'));
+    if (asarVersion !== version) {
+      skipped.push(`${rel}/app.asar carries version ${asarVersion ?? '(unreadable)'}, not ${version} — tree skipped (stale build leftovers are never recorded under the wrong version)`);
+      continue;
+    }
+    artifacts.push({ name: `${platform}:app.asar`, path: `${rel}/app.asar`, kind: 'asar', asarVersion });
     for (const bundle of BUNDLE_DIR_NAMES) {
       if (existsSync(path.join(resources, bundle))) {
         artifacts.push({ name: `${platform}:${bundle}`, path: `${rel}/${bundle}`, kind: 'bundle-dir' });
       }
     }
   }
-  return artifacts;
+  return { artifacts, skipped };
 }
 
 async function hashArtifact(releaseDir, artifact) {
@@ -160,26 +223,36 @@ function writeManifestAtomic(manifestDir, manifest) {
  * existing manifest is published and any overlapping artifact hash differs.
  */
 export async function generateManifest({ releaseDir, version, manifestDir, now = () => new Date().toISOString() }) {
-  const discovered = discoverArtifacts({ releaseDir, version });
+  const { artifacts: discovered, skipped } = discoverArtifacts({ releaseDir, version });
   if (discovered.length === 0) {
-    return { manifest: null, action: 'no-artifacts', warnings: [`no artifacts for ${version} under ${releaseDir}`], hardStop: null };
+    return { manifest: null, action: 'no-artifacts', warnings: [...skipped, `no artifacts for ${version} under ${releaseDir}`], hardStop: null };
   }
   const hashed = [];
   for (const artifact of discovered) hashed.push(await hashArtifact(releaseDir, artifact));
-  const warnings = stalenessWarnings(hashed);
+  const warnings = [...skipped, ...stalenessWarnings(hashed)];
   const existing = readManifest(manifestDir, version);
   if (!existing) {
     const manifest = { version, generatedAt: now(), published: false, artifacts: hashed, supersededBuilds: [], warnings };
     return { manifest, action: 'created', warnings, hardStop: null };
   }
+  const driftedPriors = [];
   const drift = [];
   for (const artifact of hashed) {
     const prior = existing.artifacts.find((a) => a.name === artifact.name);
-    if (prior && prior.sha256 !== artifact.sha256) drift.push(`${artifact.name}: recorded ${prior.sha256.slice(0, 12)}… != current ${artifact.sha256.slice(0, 12)}…`);
+    if (prior && prior.sha256 !== artifact.sha256) {
+      driftedPriors.push(prior);
+      drift.push(`${artifact.name}: recorded ${prior.sha256.slice(0, 12)}… != current ${artifact.sha256.slice(0, 12)}…`);
+    }
   }
+  // Merge semantics on BOTH branches: current hashes replace same-name
+  // entries, artifacts recorded by earlier builds (e.g. the other platform,
+  // built on another day or machine) stay in force. Replacing wholesale
+  // would silently drop them from verify coverage.
+  const merged = [
+    ...existing.artifacts.map((prior) => hashed.find((a) => a.name === prior.name) ?? prior),
+    ...hashed.filter((a) => !existing.artifacts.some((prior) => prior.name === a.name)),
+  ];
   if (drift.length === 0) {
-    const merged = [...existing.artifacts];
-    for (const artifact of hashed) if (!merged.some((a) => a.name === artifact.name)) merged.push(artifact);
     const manifest = { ...existing, artifacts: merged, warnings: [...new Set([...(existing.warnings ?? []), ...warnings])] };
     return { manifest, action: merged.length === existing.artifacts.length ? 'unchanged' : 'merged', warnings, hardStop: null };
   }
@@ -195,8 +268,8 @@ export async function generateManifest({ releaseDir, version, manifestDir, now =
     version,
     generatedAt: now(),
     published: false,
-    artifacts: hashed,
-    supersededBuilds: [...(existing.supersededBuilds ?? []), { generatedAt: existing.generatedAt, artifacts: existing.artifacts }],
+    artifacts: merged,
+    supersededBuilds: [...(existing.supersededBuilds ?? []), { generatedAt: existing.generatedAt, artifacts: driftedPriors }],
     warnings,
   };
   return { manifest, action: 'updated', warnings: [...warnings, `UNPUBLISHED REBUILD of ${version} with different bits (${drift.length} artifact(s)); prior hashes kept in supersededBuilds. If the prior bits ever shipped, bump moe.N now. Drift:\n  ${drift.join('\n  ')}`], hardStop: null };
@@ -248,10 +321,11 @@ async function main() {
   if (opts.command === 'generate') {
     const { manifest, action, warnings, hardStop } = await generateManifest(opts);
     for (const warning of warnings) console.warn(`[release-hash-manifest] WARN ${warning}`);
-    if (hardStop) { console.error(`[release-hash-manifest] HARD STOP: ${hardStop}`); process.exit(1); }
+    if (hardStop) { console.error(`[release-hash-manifest] HARD STOP: ${hardStop}`); process.exit(3); }
     if (action === 'no-artifacts') { console.warn(`[release-hash-manifest] nothing to record for ${opts.version}`); process.exit(2); }
     const file = writeManifestAtomic(opts.manifestDir, manifest);
     console.log(`[release-hash-manifest] ${action}: ${path.relative(ROOT, file)} (${manifest.artifacts.length} artifact(s))`);
+    if (!manifest.published) console.log(`[release-hash-manifest] NOTE: run "pnpm release:manifest:publish" when these bits ship — until then the same-version rebuild gate is not armed`);
     return;
   }
   if (opts.command === 'publish') {
@@ -264,11 +338,14 @@ async function main() {
     return;
   }
   if (opts.command === 'verify') {
+    if (opts.pathOverride && !opts.only) { console.error('[release-hash-manifest] --path requires --only <artifact name>'); process.exit(2); }
     const manifest = readManifest(opts.manifestDir, opts.version);
     if (!manifest) { console.error(`[release-hash-manifest] no manifest for ${opts.version}`); process.exit(2); }
     const { ok, results } = await verifyManifest({ manifest, releaseDir: opts.releaseDir, only: opts.only, pathOverride: opts.pathOverride, allowMissing: opts.allowMissing });
     for (const result of results) console.log(`[release-hash-manifest] ${result.status.toUpperCase()} ${result.name}${result.status === 'mismatch' ? ` expected ${result.expected.slice(0, 12)}… got ${result.actual.slice(0, 12)}…` : ''}`);
-    if (!ok) { console.error(`[release-hash-manifest] HARD STOP: artifact set does not match the ${opts.version} manifest`); process.exit(1); }
+    for (const warning of manifest.warnings ?? []) console.warn(`[release-hash-manifest] WARN (recorded at generate time) ${warning}`);
+    if (!manifest.published) console.warn(`[release-hash-manifest] WARN manifest for ${opts.version} is not published — hashes match a build record, not a shipped artifact set`);
+    if (!ok) { console.error(`[release-hash-manifest] HARD STOP: artifact set does not match the ${opts.version} manifest`); process.exit(3); }
     console.log(`[release-hash-manifest] OK: ${results.filter((r) => r.status === 'ok').length} artifact(s) match ${opts.version}`);
     return;
   }

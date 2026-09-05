@@ -37,16 +37,21 @@ function spawnElectronBuilder() {
   });
 }
 
-// CLWX-85: bind the built bits to the version string. Hard-stops only when a
-// PUBLISHED version is rebuilt with different bits (bump moe.N instead).
+// CLWX-85: bind the built bits to the version string. The ONLY outcome that
+// fails the build is the script's deliberate policy stop (exit 3: a PUBLISHED
+// version rebuilt with different bits — bump moe.N instead). Exit 2 means
+// nothing to record; any other failure (a crash in the manifest script) must
+// never block a legitimate build, so it warns loudly and passes.
 function recordHashManifest() {
   const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'release-hash-manifest.mjs'), 'generate'], {
     cwd: ROOT,
     stdio: 'inherit',
   });
-  // exit 2 = nothing to record (e.g. a --dir build without version-marked
-  // artifacts); that is not a failed build.
-  return result.status === 0 || result.status === 2 ? 0 : (result.status ?? 1);
+  if (result.status === 3) return 3;
+  if (result.status !== 0 && result.status !== 2) {
+    console.warn(`[run-electron-builder] WARN release-hash-manifest crashed (status ${result.status ?? 'signal'}) — build is OK but its bits were NOT recorded; run "pnpm release:manifest" manually and report the crash.`);
+  }
+  return 0;
 }
 
 const child = spawnElectronBuilder();
