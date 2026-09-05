@@ -1,0 +1,29 @@
+{
+  "taxonomy": [
+    "MoE_circular",
+    "parent_letter",
+    "staff_leave_application",
+    "attendance_report",
+    "inventory_form",
+    "meeting_minutes",
+    "disciplinary_record",
+    "other"
+  ],
+  "documents": [
+    {
+      "file": "moe-circular.txt",
+      "expectedClass": "MoE_circular",
+      "note": "Ministry Circular Memorandum to all principals; invented circular no. 47/2026"
+    },
+    {
+      "file": "staff-leave-application.txt",
+      "expectedClass": "staff_leave_application",
+      "note": "Teacher A applies for vacation leave; handover to Teacher B"
+    },
+    {
+      "file": "staff-meeting-minutes.txt",
+      "expectedClass": "meeting_minutes",
+      "note": "Staff meeting minutes with agenda, attendees, decisions, action items"
+    }
+  ]
+}

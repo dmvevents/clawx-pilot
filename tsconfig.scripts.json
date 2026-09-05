@@ -22,8 +22,6 @@
     "scripts/forms-probe-dom.ts",
     "scripts/forms-probe2.ts",
     "scripts/forms-fill-via-dom.ts",
-    "scripts/raj3-reply-archive-check.ts",
-    // In-flight on a concurrent lane (CLWX-66); include once it lands green.
-    "scripts/clwx66-classify-e2e.ts"
+    "scripts/raj3-reply-archive-check.ts"
   ]
 }
