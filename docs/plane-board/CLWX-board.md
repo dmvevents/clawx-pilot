@@ -1352,7 +1352,7 @@ Register row: INFRACTION-ALIAS (docs/DEFECT_REGISTER_2026-09-02.md section B). S
 
 ### CLWX-99 — [cron] schedule.tz never set — reminders fire at gateway-process tz, not the principal’s clock (+ naive agent defer writes)
 
-- **State:** Todo  |  **Priority:** none
+- **State:** Ready  |  **Priority:** none
 
 Found live during the CLWX-67 reminder e2e (evidence: docs/evidence/CLWX67_2026-09-05.md, findings 1-2; run-summary.json carries both nextRun values).
 
@@ -1363,6 +1363,26 @@ DEFECT 2 — agent defer writes are naive. Honoring "3:40pm tomorrow", the cron 
 FIX DIRECTION: creation surfaces (route handler + moe-seed) set schedule.tz to the current system IANA zone at creation time; the cron agent tool prompt/schema requires an explicit zone or converts to UTC with the system zone before writing. Acceptance: (a) a job created with no tz fires at the SYSTEM wall-clock minute even when the gateway process resolves a different tz; (b) a defer "at 3:40pm tomorrow" lands at 15:40 system-local; (c) regression rows in the clwx67 harness assert nextRun is within the scheduled minute in system-local terms.
 
 SECONDARY (same surface, may split): raw [cron:<uuid> <name>] prefix + internal instruction text + "Current time: ... (Asia/Calcutta)" header render in the principal-visible user bubble of cron sessions — principal-proxy trust leak; and the run log emits a noisy "Channel is required (no configured channels detected)" delivery-resolution error even though delivery.mode fell back to none.
+
+**Comments (1):**
+
+- **CLWX-99 — FIXED in-tree at every creation surface, with unit falsifiability AND a live two-leg proof. Landed `6b446d13`; card to Ready.** _(2026-09-05)_ Root cause confirmed live before fixing: the running gateway (up since Sep 3, no TZ env) still resolves Asia/Calcutta — a boot-time ICU cache from before a system zone change to Asia/Dubai. That is the "laptop tz change without app restart" fleet path, live on this machine. Separately, the gateway appends Z to zone-less "at" timestamps (naive = UTC unconditionally; tz is never consulted on that branch). Fix: NEW electron/utils/cron-tz.ts — systemTimeZone() reads the OS truth FRESH per call (/etc/localtime symlink, validated; Intl fallback on Windows), deliberately not the process-cached Intl zone which goes stale exactly like the gateway's. POST /api/cron/jobs pins tz; PUT pins tz on bare strings and untz'd cron objects while never overriding an explicit tz; the seeded 3:30pm fleet reminder carries tz AND gets a repair path (found-by-name idempotency would otherwise never deliver tz to already-seeded installs — returns repairedTz:true). Agent surface: persona rule requires an explicit UTC offset on one-off "at" timestamps (computed from the current-time header) and schedule.tz on recurring exprs — the cron tool itself is upstream gateway code, so prompt-level is the fork lever, stated honestly. Evidence (docs/evidence/CLWX99_2026-09-05.md): (1) tests/unit/cron-tz.test.ts 10/10 — the seeded expr pinned to America/Port_of_Spain lands Mon 15:30 local within the week (year-out class asserted away), wrong-zone control differs, and with the fixes stashed exactly the 5 fix-dependent tests FAIL. (2) scripts/clwx99-tz-check.ts live run: leg A on the RUNNING pre-fix build FAILS honestly — a job created through the app right now would fire at 22:29 instead of 23:59 local (90 minutes early); leg B (explicit tz through the same route) lands 23:59 exactly, proving the mechanism end-to-end today. Leg A flips to PASS on the first build carrying the fix — the regression proof for the next RC. Self-cleaning with removal verified. Full suite 1371 passed; typecheck green across all three projects; eslint clean. Residual, stated honestly: agent-side compliance is prompt-level (unit guards the rule's presence, not the model's behaviour) — the next clwx67 harness pass should assert the defer follow-up's "at" carries an offset; Windows systemTimeZone() falls back to process-cached Intl (dev-machine class; Trinidad is fixed UTC-4/no-DST). Ready per the owner-loop authorization (2026-09-05); a human closes Done. Note: the fix is in-tree — the RUNNING app still has the defect until the next build+restart.
+
+### CLWX-100 — [trust/low] Cron-session cosmetics: user bubble leaks [cron:<uuid>]+instructions+tz header; think-block render; confirm RC composer anonymises model id
+
+- **State:** Todo  |  **Priority:** low
+
+Low-priority trust cosmetics observed during the CLWX-67 reminder e2e and CLWX-65 evidence capture (principal-proxy lens). Filed separately per the no-scope-creep rule on CLWX-99; none of these blocks the pipeline working.
+
+1. CRON USER BUBBLE LEAKS PLUMBING. The cron run session renders, in the principal-visible USER bubble: the raw "[cron:<uuid> <job name>]" prefix, the full internal instruction text of the job payload, and the injected "Current time: ... (Asia/Calcutta) / ... UTC" header. Evidence: docs/evidence/clwx67-reminder/reminder-visible.png + ui-texts-after-open.txt. A principal at 3:30pm should see something like "Reminder: Daily Report due at 3:45pm", not a UUID and an instruction block. Candidate fix direction: the renderer's cron-session view collapses/labels the injected turn (same class as the think-block strip at src/pages/Chat/message-utils.ts).
+
+2. THINK-BLOCK RENDER IN CRON/DEFER REPLIES. The defer acknowledgment rendered the model's think block verbatim (defer-visible.png). Known existing class: message-utils.ts strips LEADING think blocks; mid-text blocks leak. Low, but cron sessions are principal-facing.
+
+3. RAW MODEL ID IN COMPOSER (dev build). The composer in the evidence screenshots shows "gemini-2.5-flash" next to the Online toggle. The hard rule is model anonymity in chat-facing surfaces ("Online" / "On this device"). This was captured on the dev machine — FIRST confirm whether the pilot/RC build anonymises the composer dropdown; if it does, close this item as dev-only. If it leaks on the RC, it is a hard-rule violation and rises above low priority.
+
+4. NOISY DELIVERY ERROR IN RUN LOG. Cron runs log "Channel is required (no configured channels detected)" even though delivery.mode falls back to none and deliveryStatus is not-requested (run-summary.json). Log-only noise; confuses log-based triage.
+
+Acceptance: (1)+(2) — a cron reminder session shows the principal a clean reminder bubble with no UUID/instruction/tz-header and no think text, verified by re-running scripts/clwx67-reminder-e2e.ts UI assertions; (3) — RC composer screenshot showing anonymised model surface, or a fix if it leaks; (4) — run log free of the spurious channel error for delivery-none jobs.
 
 ## Started
 

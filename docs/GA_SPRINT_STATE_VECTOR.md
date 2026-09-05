@@ -242,6 +242,34 @@ on the RC). Windows leg = V-batch (gap D unchanged). **All five GA-breadth
 cards are now landed: 65/66/67/98 Ready this session; 61/63 In Progress with
 only their live halves owner-gated on the Chrome :18792 restart.**_
 
+_**CLWX-99 fixed (2026-09-05, owner-directed next block): cron schedules now
+pin the principal's wall-clock at every creation surface (`6b446d13`); card to
+Ready.** Root cause confirmed live before fixing: the running gateway (up since
+Sep 3, no TZ env) still resolves Asia/Calcutta — a boot-time ICU cache from
+before the system zone changed to Asia/Dubai (the "laptop tz change without app
+restart" path, live on this machine); separately the gateway appends Z to
+zone-less "at" ISO strings (naive = UTC unconditionally). Fix: new
+`electron/utils/cron-tz.ts` — `systemTimeZone()` reads `/etc/localtime` FRESH
+per call (validated, Intl fallback on Windows), deliberately not the
+process-cached Intl zone; POST pins tz, PUT (`buildCronUpdatePatch`) pins bare
+strings and untz'd cron objects without overriding explicit tz, the seeded
+3:30pm fleet reminder carries tz plus a REPAIR path for already-seeded installs
+(found-by-name idempotency would otherwise never deliver it); persona rule
+requires explicit UTC offsets on agent "at" writes (the cron tool is upstream
+gateway code — prompt-level is the fork lever, stated honestly). Evidence: NEW
+`tests/unit/cron-tz.test.ts` 10/10 with demonstrated falsifiability (5
+fix-dependent tests fail with the fix stashed); NEW `scripts/clwx99-tz-check.ts`
+live two-leg check — leg A documents the defect on the RUNNING pre-fix build
+(job would fire 22:29 instead of 23:59 local, 90min early; flips to regression
+proof on the next build), leg B proves the gateway honors explicit tz
+end-to-end today (23:59 exact), self-cleaning with removal verified. Full suite
+1371 passed; typecheck green; eslint clean. Trust cosmetics from the CLWX-67/65
+evidence filed as **CLWX-100** (low): cron user-bubble plumbing leak,
+think-block render, RC-composer model-id confirmation, noisy delivery error.
+NOTE: the RUNNING app carries the defect until the next build+restart — the
+Monday demo build must include `6b446d13` for the reminder to fire on the
+principal's clock._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
