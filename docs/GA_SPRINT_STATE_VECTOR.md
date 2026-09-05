@@ -219,6 +219,29 @@ routing, not an in-app chat turn doing it. Still in flight: CLWX-67
 cron-reminder e2e (live-app lane; `scripts/clwx67-reminder-e2e.ts` appeared in
 tree, report pending)._
 
+_**GA-breadth landing 6 (2026-09-05): CLWX-67 to Ready — first-ever e2e proof
+of the agentTurn cron path (`2c71f20f`) — and it found CLWX-99 (cron tz).**
+One live SCHEDULED fire (12ms after its minute, never force-triggered), the
+principal-facing reminder visible in-app and asserted via the window AX tree
+(this context holds TCC assistive access, unlike the clwx65 lane); defer path
+PASS and chat-only (only session_status + cron tools — asserted against a
+send/submit denylist), with a GENUINE re-schedule (one-shot `kind:"at"`,
+`deleteAfterRun:true`) — the reminder loop closes for real. Hygiene verified
+independently: cron store empty on disk afterward, DELETE-verified, harness
+finally-block sweeps its run window. All 11 assertions green;
+`typecheck:scripts` green with the harness included. THE FIND: **CLWX-99** —
+neither creation surface sets `schedule.tz`, so exprs parse in the gateway's
+boot-time tz (observed Asia/Calcutta vs system Asia/Dubai; first `nextRun`
+landed in 2027); the seeded 3:30pm fleet reminder fires at gateway tz, not the
+principal's clock, and the agent defer write stores naive ISO as UTC (4h late
+observed). Register row CRON-TZ. Trust cosmetics recorded on the card: raw
+`[cron:<uuid>]` prefix + internal instruction + tz header in the user bubble;
+think-block render in the defer reply (existing class); dev composer shows a
+raw model id in the evidence screenshot (pilot-build anonymisation to confirm
+on the RC). Windows leg = V-batch (gap D unchanged). **All five GA-breadth
+cards are now landed: 65/66/67/98 Ready this session; 61/63 In Progress with
+only their live halves owner-gated on the Chrome :18792 restart.**_
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
