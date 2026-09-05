@@ -1,0 +1,31 @@
+Ministry of Education
+Models
+Agents
+Channels
+Skills
+Cron Tasks
+Today
+Main Agent
+Cron: CLWX-67 reminder e2e 08:35
+Main Agent
+ClawX
+Within 1 Week
+Main Agent
+Reply with exactly: STORE FIX OK
+Main Agent
+Reply with exactly: CHANNEL OK
+Settings
+Talking to Main Agent
+Online
+[cron:d04cb6c2-c80d-4461-9deb-526d4fb98416 CLWX-67 reminder e2e 08:35] Reminder: 3:45pm — submit today's Daily Report.
+Deliver this reminder to the principal in one short message: the Primary
+School Daily Report is due by 3:45pm today. Ask whether they want to
+proceed now or defer. This is a reminder turn ONLY — do not open, fill, or
+submit any form, and do not send any email. If the principal replies with
+a defer, acknowledge the deferral and confirm when they will be reminded.
+Current time: Saturday, September 5th, 2026 - 2:07 PM (Asia/Calcutta) / 2026-09-05 08:37 UTC
+just now
+Good afternoon. A reminder that the Primary School Daily Report is due by 3:45 pm today.
+Would you like to begin now, or shall I remind you again closer to the time?
+just now
+gateway connected | port: 18789 | pid: 32477

@@ -1,0 +1,81 @@
+{
+  "verdict": "PASS",
+  "card": "CLWX-67",
+  "driveMechanism": "host-API /api/cron/jobs (cron.add: agentTurn, isolated, next-heartbeat, delivery none) -> scheduled gateway fire -> System Events AX open + screencapture -> defer via /api/chat/send-with-media into the cron run session",
+  "job": {
+    "id": "d04cb6c2-c80d-4461-9deb-526d4fb98416",
+    "name": "CLWX-67 reminder e2e 08:35",
+    "scheduledFor": "2026-09-05T08:37:00.000Z",
+    "nextRunBeforeTzFix": "2027-09-05T03:07:00.000Z",
+    "nextRunAfterTzFix": "2026-09-05T08:37:00.000Z"
+  },
+  "reminderMessage": "Reminder: 3:45pm — submit today's Daily Report.\n\nDeliver this reminder to the principal in one short message: the Primary\nSchool Daily Report is due by 3:45pm today. Ask whether they want to\nproceed now or defer. This is a reminder turn ONLY — do not open, fill, or\nsubmit any form, and do not send any email. If the principal replies with\na defer, acknowledge the deferral and confirm when they will be reminded.",
+  "deferMessage": "Defer this reminder — I'm still in a staff meeting. Remind me again at 3:40pm tomorrow; do not fill or submit anything.",
+  "runEntry": {
+    "ts": 1788597428944,
+    "jobId": "d04cb6c2-c80d-4461-9deb-526d4fb98416",
+    "action": "finished",
+    "status": "ok",
+    "summary": "Good afternoon. A reminder that the Primary School Daily Report is due by 3:45 pm today.\n\nWould you like to begin now, or shall I remind you again closer to the time?",
+    "delivered": false,
+    "deliveryStatus": "not-requested",
+    "delivery": {
+      "intended": {
+        "channel": "last",
+        "to": null,
+        "source": "last"
+      },
+      "resolved": {
+        "ok": false,
+        "to": null,
+        "source": "last",
+        "error": "Channel is required (no configured channels detected). Set delivery.channel explicitly or use a main session with a previous channel."
+      },
+      "fallbackUsed": false,
+      "delivered": false
+    },
+    "sessionId": "d88bbc5a-7897-433f-87f0-c46058367477",
+    "sessionKey": "agent:main:cron:d04cb6c2-c80d-4461-9deb-526d4fb98416:run:d88bbc5a-7897-433f-87f0-c46058367477",
+    "runAtMs": 1788597420012,
+    "durationMs": 8928,
+    "nextRunAtMs": 1820133420000,
+    "model": "gemini-2.5-pro",
+    "provider": "google"
+  },
+  "reminderTurn": {
+    "outcome": "reply",
+    "provider": "google",
+    "modelId": "gemini-2.5-pro",
+    "tsMs": 1788597428807,
+    "toolCallNames": [],
+    "finalText": "Good afternoon. A reminder that the Primary School Daily Report is due by 3:45 pm today.\n\nWould you like to begin now, or shall I remind you again closer to the time?",
+    "trajectory": "/Users/antonalexander/.openclaw/agents/main/sessions/d88bbc5a-7897-433f-87f0-c46058367477.trajectory.jsonl"
+  },
+  "deferTurn": {
+    "outcome": "reply",
+    "provider": "google",
+    "modelId": "gemini-2.5-pro",
+    "tsMs": 1788597454805,
+    "toolCallNames": [
+      "session_status",
+      "cron"
+    ],
+    "finalText": "<think>\nThe user wants to defer the reminder. They specified \"3:40pm tomorrow\".\nThe current date is Saturday, September 5th, 2026. \"Tomorrow\" is Sunday, September 6th, 2026.\nThe time is 3:40 PM.\n\n1.  **Acknowledge the deferral:** Confirm that the reminder has been postponed.\n2.  **Confirm the new time:** State clearly that the new reminder is set for 3:40 PM tomorrow (Sunday, September 6th).\n3.  **Set the new reminder:** Use the `cron` tool to schedule a one-time reminder for the specified date and time.\n    *   `action`: \"add\"\n    *   `schedule`: `{ \"kind\": \"at\", \"at\": \"2026-09-06T15:40:00\" }` (Assuming the user's timezone is the same as the system's, which is a reasonable assumption for a personal assistant). I'll use the ISO 8601 format. The `session_status` call returned the current date, so I know \"tomorrow\" is the 6th.\n    *   `payload`: `{ \"kind\": \"systemEvent\", \"text\": \"Reminder: The Daily Report is due. It is now 3:40 pm.\" }`\n    *   `deleteAfterRun`: `true` because this is a one-off reminder.\n\nThe `session_status` call gave me the current date and time, confirming today is the 5th.\nThe user said \"tomorrow\", so the new date is `2026-09-06`.\nThe time is `15:40:00`.\nThe `cron` call was successful.\n\nNow, construct the final response to the user.Of course. I have deferred the reminder. I will remind you again tomorrow at 3:40 pm.",
+    "trajectory": "/Users/antonalexander/.openclaw/agents/main/sessions/d88bbc5a-7897-433f-87f0-c46058367477.trajectory.jsonl"
+  },
+  "assertions": {
+    "jobCreated": true,
+    "scheduledFire": true,
+    "reminderTurnSettled": true,
+    "reminderNoForbiddenTools": true,
+    "reminderVisibleInUi": true,
+    "reminderScreenshot": true,
+    "deferReplySettled": true,
+    "deferNoForbiddenTools": true,
+    "deferVisibleInUi": true,
+    "deferScreenshot": true,
+    "cleanupVerified": true
+  },
+  "failure": null,
+  "totalMs": 134597
+}

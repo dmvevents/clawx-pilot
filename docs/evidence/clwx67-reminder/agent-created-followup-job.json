@@ -1,0 +1,19 @@
+[
+    {
+        "id": "40d85bfc-b691-4d29-aef8-546aaf6cd539",
+        "name": "Reminder: The Daily Report is due. It is now 3:40 pm.",
+        "message": "Reminder: The Daily Report is due. It is now 3:40 pm.",
+        "schedule": {
+            "at": "2026-09-06T15:40:00.000Z",
+            "kind": "at"
+        },
+        "delivery": {
+            "mode": "none"
+        },
+        "enabled": true,
+        "createdAt": "2026-09-05T08:37:29.916Z",
+        "updatedAt": "2026-09-05T08:37:29.916Z",
+        "nextRun": "2026-09-06T15:40:00.000Z",
+        "agentId": "main"
+    }
+]
