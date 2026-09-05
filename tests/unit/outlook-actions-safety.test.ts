@@ -994,6 +994,42 @@ describe('OutlookActions safety gates', () => {
     expect(driver.typeText).not.toHaveBeenCalled();
   });
 
+  it('fillField grounds To via the deterministic DOM tier without waking the VLM (CLWX-74)', async () => {
+    const { actions, grounder, driver } = createActions();
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, width: 120, height: 32, top: 0, left: 0, right: 120, bottom: 32, toJSON: () => ({}),
+    } as DOMRect);
+    document.body.innerHTML = [
+      '<div>',
+      '<input aria-label="To">',
+      '<button aria-label="Send">Send</button>',
+      '</div>',
+    ].join('');
+    const emptyLocator: FakeLocator = {
+      count: vi.fn(async () => 0),
+      first: () => emptyLocator,
+      click: vi.fn(async () => undefined),
+      fill: vi.fn(async () => undefined),
+    };
+    const page = {
+      getByLabel: vi.fn(() => emptyLocator),
+      locator: vi.fn(() => emptyLocator),
+      evaluate: async (fn: unknown, arg: unknown) => (fn as (a: unknown) => unknown)(arg),
+    } as unknown as FakeFillPage;
+
+    try {
+      // Selector chain misses everywhere; the DOM tier must ground the field
+      // on a box with NO cloud credentials — the grounder must stay cold.
+      await actions.fillField(page, 'To', 'recipient@example.invalid');
+      expect(driver.typeText).toHaveBeenCalledWith('recipient@example.invalid');
+      expect(grounder.ground).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(document.querySelector('[aria-label="To"]'));
+    } finally {
+      rectSpy.mockRestore();
+      document.body.innerHTML = '';
+    }
+  });
+
   it('fillBody surfaces a readable error when the visual assistant is unavailable (CLWX-74)', async () => {
     const { actions, grounder, driver } = createActions();
     grounder.ground = vi.fn(async () => ({

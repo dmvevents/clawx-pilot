@@ -24,7 +24,7 @@ import { PlaywrightDriver } from './playwright-driver';
 import { VlmGrounder, bboxCentre } from './vlm-grounder';
 import { matchesSearchArgsForTests } from './search-helpers';
 import { isAutomationSubject } from './automation-subjects';
-import { readOutlookDomState } from './dom-heuristics';
+import { focusComposeRecipientField, readOutlookDomState } from './dom-heuristics';
 import type {
   OutlookOpenResult,
   ReadInboxResult,
@@ -2829,7 +2829,13 @@ export class OutlookActions {
       }
       await this.driver.sleep(250);
     }
-    if (label === 'Subject' && await this.fillSubjectFieldDom(page, value)) {
+    if (label === 'Subject') {
+      if (await this.fillSubjectFieldDom(page, value)) return;
+    } else if (await this.focusRecipientFieldDom(page, label)) {
+      // Deterministic non-VLM tier (CLWX-74): the recipient well is focused
+      // in-page; type with real keystrokes so the picker/chip commit behaves
+      // exactly as for a human. commitRecipientField then settles the chips.
+      await this.driver.typeText(value);
       return;
     }
     // VLM fallback for the field itself.
@@ -2954,6 +2960,20 @@ export class OutlookActions {
     }, value).catch((err) => {
       logger.debug?.(
         `[outlook-v2] subject DOM fill failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return false;
+    });
+  }
+
+  private async focusRecipientFieldDom(page: Page, label: 'To' | 'Cc' | 'Bcc'): Promise<boolean> {
+    const evaluate = (page as unknown as {
+      evaluate?: (fn: (arg: string) => boolean, arg: string) => Promise<boolean>;
+    }).evaluate;
+    if (typeof evaluate !== 'function') return false;
+    await this.prepareFunctionEvaluate(page);
+    return evaluate.call(page, focusComposeRecipientField, label).catch((err) => {
+      logger.debug?.(
+        `[outlook-v2] recipient DOM focus failed: ${err instanceof Error ? err.message : String(err)}`,
       );
       return false;
     });

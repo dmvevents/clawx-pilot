@@ -389,6 +389,39 @@ row 4.1's git-grep now length-quantified so it means what it says. NOTE:
 whatsapp-local/agent-comms MCPs were NOT connected in this session (tool
 registry lacks both); not needed for this card._
 
+_**Tick 2026-09-05 (ga-sprint-driver, minimal-time): CLWX-74 deterministic
+recipient tier → Ready.** SENSE: tree clean @ a2e8e766; board == mirror;
+static gate GREEN (5/0/1, report `docs/evidence/GA_GATE_2026-09-05.md`);
+Chrome :18792 wedge RE-CONFIRMED with a REAL CDP attach probe (HTTP ping
+200, websocket attach 10s timeout — 4th confirmation; pings alone remain
+insufficient evidence, per standing rule); gateway/host-API down (app not
+running — T1 needs an app start); gcloud not even on PATH (VM lane
+unchanged, owner). ANALYZE: 74 ranked highest — its leg 2 was already
+satisfied by c139ecc3's readable degrade, leg 1's button half by the N/C
+shortcut fallback; the true remainder was field grounding: Body and
+Subject had DOM-heuristic tiers, To/Cc/Bcc fell straight to VLM (dead on
+credless boxes). ACT: `focusComposeRecipientField` added to
+dom-heuristics.ts (self-contained/serializable; naming-attrs-only,
+exact+prefix-only matching; send-button compose anchor with a
+DEEPEST-ANCHOR discriminator) and wired into fillField before the VLM
+tier; value typed with real keystrokes so picker/chips behave;
+commitRecipientField unchanged; two-gate send + download hard-confirm
+untouched. Separate-lane review (2 agents): send-gates PASS; heuristic
+FAIL with a CONFIRMED major — the naive ancestor anchor is vacuous under
+Outlook's single SPA root (jsdom repro: exact-labelled decoy outside the
+pane beat the real prefix-labelled well) — fixed same tick via the
+anchor-depth sort + 4 adversarial pins (SPA-root discrimination,
+chip-text refusal, icon-only "Send (Ctrl+Enter)" anchor, 'search' deep in
+a long well label). Falsifiability: sort flipped → exactly the
+discrimination pin fails; restored → 13/13. Safety suite 84/84 incl. a
+tier-order proof (grounder stays COLD while typeText fires). Board:
+CLWX-74 → Ready with the honest leg-3 remainder (live credless-box e2e)
+named as Chrome-restart-gated. Residuals on the card: forward() lacks a
+post-fill recipient probe (pre-existing, CLWX-61 family);
+aria-labelledby-wrapper wells are false negatives that degrade to the
+readable error; multi-compose tie-break is DOM-order (pre-existing
+class); tsx-lane dependence on the __name shim ordering documented._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
