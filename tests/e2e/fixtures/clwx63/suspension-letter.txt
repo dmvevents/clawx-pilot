@@ -1,0 +1,51 @@
+Aranguez Government Primary School (Aranguez GPS)
+Education District: Caroni
+School Type: Government
+
+NOTICE OF SUSPENSION - PRINCIPAL'S REPORT
+
+Prepared for the Primary School Student Suspensions return (Term 3 2025/26).
+Every person in this letter is invented test data; no real pupil or parent is
+named anywhere in this fixture.
+
+Pupil details
+
+Name of pupil: Student A
+Sex: Male
+Date of birth: 2015-04-12
+Age: 11
+Student birth certificate PIN: TEST-PIN-63001
+Class: Standard 4
+
+Incident details
+
+Date of infraction: 2026-09-01
+Date of issue of suspension: 2026-09-02
+For the current term this pupil has been suspended 1 time (this suspension).
+The infraction occurred: During class time (member of staff present)
+Type of infraction committed (main issue which prompted the suspension): Bullying/Intimidation
+Were there any additional infractions committed during the incident: No
+Was there a victim involved: Yes
+The victim was a/an: Student of the same school
+Written reports were collected from the perpetrator, the victim, and other persons of interest: Yes
+Length of suspension: 2 days
+Was an application made for an extended suspension: No
+Was the student referred to SSSD: No
+Was the pupil's parent/guardian/representative present when the suspension was issued: Yes
+Did the parent/guardian/representative sign the Notice of Suspension form: Yes
+
+National School Discipline Matrix
+
+The level of the offence, the identified consequences, and the process
+outlined in the National School Discipline Matrix were taken into
+consideration when issuing this suspension: Yes
+Level of offence: Minor
+
+Parent / guardian details
+
+Name of the parent/guardian/representative present: Parent A
+Phone number (1): 868-123-0063
+Phone number (2): 868-123-0064
+Address - house number: 45
+Address - street: Test Street
+Address - city/town/village: Aranguez

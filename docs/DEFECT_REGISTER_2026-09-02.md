@@ -90,6 +90,7 @@ were closed by work that landed the same day, after the sweep's read of the tree
 | COMPOSER-OVERRIDE | boot | Chat picked Flash though config said Pro (2026-05-25) | UNKNOWN; likely absorbed by the four-store channel-router work | UNVERIFIED — likely stale, never explicitly closed | CLAUDE.md |
 | UPSTREAM-GAP | infra | Fork ~102 commits behind upstream | Deliberate audit-then-cherry-pick posture | OPEN (accepted risk) | UPSTREAM_MERGE_ASSESSMENT_2026-08-20 |
 | ATLAS-DOCGAP | docs | Atlas §16–§18 known but unwritten (hidden-launch trap; extension path move; firewall silent-drop) | Documentation backlog; behaviors codified as flight checks | OPEN (doc-only) | state vector IF-4 |
+| INFRACTION-ALIAS | forms/statutory | "Fight without Weapon" silently normalizes to "Fight with Weapon" — wrong answer written to a statutory Suspensions field | Alias table order at `extensions/moe-principal-assistant/index.mjs:196-197`: `/fight.*weapon/i` (→ with Weapon) is tried before `/fight\|fighting/i` and `.*` matches " without " | OPEN — found 2026-09-05 by the CLWX-63 authoring pass; fix = order/anchor the without-case first + unit over the full alias table with exact form option texts; board card filed | CLWX-63 agent report |
 
 ## C. FIXED, needing regression coverage in a shipped installer
 

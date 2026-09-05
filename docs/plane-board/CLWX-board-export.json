@@ -44,6 +44,16 @@
   ],
   "issues": [
     {
+      "id": "af4f9be0-c6fd-44f4-8774-c8bfcdf7427e",
+      "sequence_id": 98,
+      "name": "[bug/forms] Infraction alias order rewrites \"Fight without Weapon\" to \"Fight with Weapon\" (statutory field)",
+      "priority": "none",
+      "state": "Todo",
+      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "description": "Why\nFound 2026-09-05 during CLWX-63 chain authoring. The Suspensions payload normalizer's alias table (extensions/moe-principal-assistant/index.mjs:196-197) tries /fight.*weapon/i -> \"Fight with Weapon\" BEFORE /fight|fighting/i -> \"Fight without Weapon\". The exact form option text \"Fight without Weapon\" matches the first pattern (.* eats \" without \"), so the normalizer silently rewrites it to the OPPOSITE statutory answer. This is a wrong-answer rewrite on a statutory field in the product's flagship flow — silent data corruption, worse than a refusal.\n\nAcceptance (QA bar)\n1. Alias table fixed so both exact option texts round-trip unchanged (\"Fight with Weapon\" -> itself, \"Fight without Weapon\" -> itself); order/anchor the without-case first or use mutually exclusive patterns.\n2. A unit test iterates EVERY exact Suspensions form option text through the normalizer and asserts identity round-trip (catches the whole class, not just this pair).\n3. Existing plugin unit suite stays green.\n\nRegister row: INFRACTION-ALIAS (docs/DEFECT_REGISTER_2026-09-02.md section B). Source: CLWX-63 authoring agent report, verified against the source by the main session.",
+      "comments": []
+    },
+    {
       "id": "b7e862fe-9fc3-47fc-a97d-f4176fb899ad",
       "sequence_id": 97,
       "name": "[bug/packaging] Packaged doc reads fail: parser load-path not resolved from resourcesPath (K8)",
@@ -549,10 +559,15 @@
       "sequence_id": 63,
       "name": "[forms] Document-to-form extraction chain e2e: suspension letter -> extracted fields -> prefilled form",
       "priority": "high",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "Why\nDemo flow #2 and the product's core promise: extraction is built, fill is proven, but the full chain (drop a suspension report -> agent extracts 32 fields -> prefills the form) has no end-to-end test (audit: FORMS, 2026-09-03).\n\nAcceptance (QA bar)\nFixture suspension letter (docx or pdf) -> live agent extraction -> prefill on the test.fac Suspensions clone; diff of filled values vs expected JSON shows <=3 misses; hard-confirm gate holds (no submit without confirm). Re-runnable script committed.\n\nStory\nS2/S3 boundary. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
-      "comments": []
+      "comments": [
+        {
+          "text": "**CLWX-63 — full extraction-chain e2e AUTHORED + static-verified; live proof LANE-BLOCKED.** _(GA-breadth push, 2026-09-05)_\n\nNew in the working tree:\n- scripts/clwx63-extract-chain-e2e.ts — the chain the card demands, using PRODUCTION surfaces at every step: fixture letter -> writeDocx -> readDocx (production reader) -> Bedrock extraction against the REGISTERED principal.suspension_payload description+schema -> real principal.suspension_payload execute (production normalizers, statutory no-invention refusal, MOE_DEMO_DEFAULTS never set) -> real forms.preview_suspension -> SuspensionsActions open+fill on the test.fac clone -> diff vs expected JSON (PASS iff <=3 misses, fill errors count as misses) -> gate leg: submit with confirm:false must REFUSE. Only the host-API HTTP hop is shimmed (same approach as the unit suite); the shim HARD-THROWS if a truthy confirm ever reaches the submit route — this harness structurally cannot submit. Exit 0/1/2 per lane convention; CLWX63_PROBE_ONLY=1 gives a safe lane probe.\n- tests/e2e/fixtures/clwx63/suspension-letter.txt — invented Student A / Parent A data, all 32 fields explicit, exact option texts.\n- tests/e2e/fixtures/clwx63/expected-values.json — 31 expected fields pre-computed through the real normalizers.\n\nEvidence run: ad-hoc strict tsc + eslint -> exit 0; plugin tool-surface unit 20/20; probe-only run reproduces the EXACT current wedge (json/version answers 200, ws connects, attach times out) -> clean exit 2. An HTTP-only lane probe would lie; this one attaches with an 8s bound.\n\nDEFECT FOUND during authoring (filed separately + register row INFRACTION-ALIAS): extensions/moe-principal-assistant/index.mjs:196-197 — \"Fight without Weapon\" normalizes to \"Fight with Weapon\" because /fight.*weapon/i is tried first and .* matches \" without \". Wrong-answer rewrite on a statutory field. The fixture deliberately uses \"Bullying/Intimidation\" to stay defect-independent.\n\nRemaining to Ready: one live green run once the CDP lane recovers (Chrome restart, owner-gated). Card stays In Progress.",
+          "created": "2026-09-05T08:09:36.097264Z"
+        }
+      ]
     },
     {
       "id": "c2cf60f1-d58b-48de-97c9-81cd37c654e2",
@@ -582,10 +597,15 @@
       "sequence_id": 61,
       "name": "[email/eval] Close Outlook eval gaps: forward e2e + live download_attachment + attachment metadata assertion",
       "priority": "medium",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "Why\nForward and download_attachment are implemented and hard-confirm gated, but no v2-eval row exercises either live; W3.2 asserts only that an attachments array exists, not that it carries filename/size/type. Built-untested is not proven (audit: EMAIL, 2026-09-03).\n\nAcceptance (QA bar)\n1. v2-eval gains a forward row: open message, forward, fill recipient, verify pane, discard - PASS live on test.fac.\n2. A download_attachment(confirm:true) row runs live against a seeded email with attachment; refusal without confirm proved first.\n3. W3.2 asserts attachment metadata fields (name, size, contentType).\n4. Eval suite still fully green.\n\nStory\nS1 Email. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.",
-      "comments": []
+      "comments": [
+        {
+          "text": "**CLWX-61 — all four acceptance surfaces AUTHORED + static-verified; live proof LANE-BLOCKED.** _(GA-breadth push, 2026-09-05)_\n\nLanded in the working tree (scripts/v2-eval.ts):\n1. W5.2 (new, forward row): hygiene-discard, forward the fresh-top message, assert drafted+draftLeftOpen, verify the pane is genuinely a forward (FW:/FWD: prefix + subject overlap with the source row — preview.to is an args echo, only preview.subject is a real pane read-back), then DISCARD. Never dispatches mail; the two-gate dispatch protection is untouched.\n2. W8.3 (new, refusal FIRST): downloadAttachment confirm:false must return refused — the gate fires before any browser interaction (outlook-actions.ts:1100), so this leg always runs.\n3. W8.4 (new, confirm leg second): resolves a seeded attachment via searchInbox(hasAttachment)+listAttachments, downloads with confirm (test.fac sandbox only), asserts downloaded; SKIPS loudly when no attachment mail is seeded.\n4. W3.2 extended: per-entry metadata hard-asserts (filename non-empty, sizeBytes>0, mimeType non-empty); notes say \"metadata leg UNEXERCISED\" rather than passing green when nothing is seeded.\n\nStatic evidence: ad-hoc strict tsc over the script -> exit 0 (NOTE: `pnpm typecheck` does NOT cover scripts/ — root tsconfig includes only src/, electron config only electron/; the card's \"typecheck green\" bar is vacuous for eval-script changes; a scripts tsconfig is worth a follow-up). eslint -> exit 0.\n\nRemaining to Ready: a live eval run once the CDP lane recovers (Chrome restart, owner-gated) AND a seeded attachment email in test.fac — seed a mainstream type (.pdf recommended; the scraper's metadata is regex/extension-map best-effort, outlook-actions.ts:798-820). Card stays In Progress.",
+          "created": "2026-09-05T08:09:36.035574Z"
+        }
+      ]
     },
     {
       "id": "99271ad8-b00d-400e-8ddd-8bf9b17fee6b",

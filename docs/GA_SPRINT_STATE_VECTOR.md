@@ -134,6 +134,30 @@ Chrome restart on `:18792` remains the single highest-value unlock (it un-blocks
 the 61/63 live halves AND the full-gate re-green AND any pre-demo email
 dry-run)._
 
+_**GA-breadth landing 1 of 2 (2026-09-05): CLWX-61 + CLWX-63 test surfaces
+authored, static-verified, lane-blocked for live proof.** The authoring agent
+delivered: (a) `scripts/v2-eval.ts` — W5.2 forward row (drafted+pane-verified
+via FW:/FWD: subject overlap, then discarded; dispatch gates untouched), W8.3
+download refusal-FIRST row (gate fires pre-browser, always runs), W8.4 seeded
+confirm leg (loud SKIP when nothing seeded), W3.2 per-entry attachment-metadata
+hard-asserts; (b) `scripts/clwx63-extract-chain-e2e.ts` — the full
+letter→writeDocx→readDocx→Bedrock-extraction (registered tool contract)→
+`principal.suspension_payload`→`forms.preview_suspension`→live fill→diff (≤3
+misses)→confirm:false refusal chain over PRODUCTION surfaces with only the
+host-API HTTP hop shimmed; the shim HARD-THROWS on any truthy confirm (verified
+at line 170) so the harness structurally cannot submit; (c) fixtures
+(`tests/e2e/fixtures/clwx63/` — Student A invented data, 31 expected normalized
+values). Evidence: ad-hoc strict tsc + eslint exit 0 (NOTE: `pnpm typecheck`
+does not cover `scripts/` — follow-up worth a scripts tsconfig); plugin units
+20/20; probe-only run reproduces the exact CDP wedge and exits 2 cleanly. Both
+cards Todo → In Progress (live-proof halves owner-gated on the Chrome restart;
+W3.2/W8.4 additionally need a seeded .pdf attachment in test.fac). **NEW DEFECT
+CLWX-98 (+ register row INFRACTION-ALIAS):** the Suspensions normalizer rewrites
+"Fight without Weapon" → "Fight with Weapon" (`index.mjs:196-197`, alias order —
+`/fight.*weapon/i` matches " without "); wrong-answer rewrite on a statutory
+field, verified against source before filing. CLWX-65 agent still in flight;
+67 + 66-classification queued behind it on the serialized live-app lane._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed

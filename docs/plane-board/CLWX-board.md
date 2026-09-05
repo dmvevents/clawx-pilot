@@ -731,22 +731,6 @@ Regression class? unknown — check the *-auditor agents (config-coherence, depe
 
 - EVALUATED + FIXED + VERIFIED (2026-09-03 session). Root cause (dom-selector-regression-tester sub-agent): Outlook rotated the compose primary action to a Fluent UI SplitButton whose OUTER wrapper div carries data-testid="ComposeSendButton" but is not visible; only the inner button is. The old comma-joined waitForSelector matched the wrapper first in DOM order and waited forever for it to become visible (outlook-actions.ts:2273). Fix applied: waitForComposePane rewritten so every branch is guarded with :visible (waitForSelector can only latch a visible match); vendor-stable role+aria selectors first; rotated title/data-testid branches survive only as fallbacks, with the data-testid branch targeting the inner button not the wrapper. Meets the DOM-selector hard rule (3+ fallbacks for rotated UIs). Verification: pnpm typecheck 0 errors. Live re-run of scripts/v2-send-test.ts PASS end-to-end against the test.fac sandbox — draft ok, subject-mismatch REFUSED (gate 1), matching subject + confirm:true delivered via Outlook Web (gate 2). Both hard-confirm gates intact. Ready for a human to close. Sibling rotated selectors flagged for follow-up: sign-in data-testid (1611-1612), attachment-chip user-input selector (1040), nav substrings (323/1194).
 
-### CLWX-61 — [email/eval] Close Outlook eval gaps: forward e2e + live download_attachment + attachment metadata assertion
-
-- **State:** Todo  |  **Priority:** medium
-
-Why
-Forward and download_attachment are implemented and hard-confirm gated, but no v2-eval row exercises either live; W3.2 asserts only that an attachments array exists, not that it carries filename/size/type. Built-untested is not proven (audit: EMAIL, 2026-09-03).
-
-Acceptance (QA bar)
-1. v2-eval gains a forward row: open message, forward, fill recipient, verify pane, discard - PASS live on test.fac.
-2. A download_attachment(confirm:true) row runs live against a seeded email with attachment; refusal without confirm proved first.
-3. W3.2 asserts attachment metadata fields (name, size, contentType).
-4. Eval suite still fully green.
-
-Story
-S1 Email. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
-
 ### CLWX-62 — [forms] Daily Report form e2e: fill + gate + recorded submit on the test.fac clone
 
 - **State:** Ready  |  **Priority:** high
@@ -765,19 +749,6 @@ S2 Forms - highest-leverage new card. Filed by the 2026-09-03 reconciliation (do
 - Fill+gate dry PASS this tick. Daily Report fill+gate (dry, CLWX-62) PASS in the T1 live lane. Honest remainder: the card's recorded live submit acceptance leg is NOT covered by the dry lane &mdash; a confirmed real submit stays owner-gated (not run autonomously). Card stays at Ready pending that recorded submit. full pnpm ga:gate GREEN — 9 pass / 0 fail / 2 opt-in skip (commit e2f084d5). Report docs/evidence/GA_GATE_2026-09-04.md.
 - RECORDED LEG DONE - full acceptance met (2026-09-03, commit 8430a777). scripts/forms-submit-recorded-daily.ts (URL hard-pinned, form-id re-asserted, single-submission latch): fill 55/57 / 0 errors, refusal proved BEFORE the one confirmed submit, submitted, responses count verified 7 -> 8 via the owner analysis page, video+trace+screenshots in skills/laptop/evidence/2026-09-03-daily-report-recorded/. Combined with the e2e proof (66790d22), the statutory 3:45pm form is fill+gate+submit+verify+RECORDED. Ready for human close.
 - LIVE E2E PROVEN (sprint-driver tick 2026-09-03). New script scripts/forms-fill-daily-report.ts (mirrors the Suspensions pattern) ran against the test.fac clone over the user-Chrome CDP session: 1. open: status=opened, title "Primary School Daily Report: Term 3 2025/26". 2. fill: 55/57 filled, 0 errors (96%, above the 90% acceptance floor; max-visibility payload - school open, both NSDSL meals, suspension, PTSC, last-day absentee summary; internally consistent counts; reason_no_school hidden by design). 3. gate: submit WITHOUT confirm REFUSED ("confirm:true required... after the principal has reviewed"). 4. DEMO=1 confirmed submit: status=submitted, "Form submitted via Microsoft Forms" - SEND PASS. typecheck 0. QA bar met for fill+gate+submit; PM matrix row "Forms: Daily Report e2e" moves from untested to live-proven. Resumable trail (last acceptance leg before Ready): the RECORDED run - adapt forms-submit-recorded.ts to the Daily Report URL (hard-pinned), assert responses count increments and capture video+trace. Then move to Ready.
-
-### CLWX-63 — [forms] Document-to-form extraction chain e2e: suspension letter -> extracted fields -> prefilled form
-
-- **State:** Todo  |  **Priority:** high
-
-Why
-Demo flow #2 and the product's core promise: extraction is built, fill is proven, but the full chain (drop a suspension report -> agent extracts 32 fields -> prefills the form) has no end-to-end test (audit: FORMS, 2026-09-03).
-
-Acceptance (QA bar)
-Fixture suspension letter (docx or pdf) -> live agent extraction -> prefill on the test.fac Suspensions clone; diff of filled values vs expected JSON shows <=3 misses; hard-confirm gate holds (no submit without confirm). Re-runnable script committed.
-
-Story
-S2/S3 boundary. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
 
 ### CLWX-64 — [forms/hardening] Forms schema-drift detector + forms selector audit coverage
 
@@ -1337,6 +1308,20 @@ Root cause: the bundled document parsers are resolved relative to the wrong root
 Fix (68e02ee1): set CLAWX_APP_RESOURCES=process.resourcesPath in the gateway fork env when app.isPackaged; omitted in dev where cwd-relative resolution is correct. Covered by tests/unit/config-sync.test.ts. Static GA gate GREEN.
 needsLiveProbe: a live packaged doc-read on macOS / a relocated Windows install to confirm end-to-end.
 
+### CLWX-98 — [bug/forms] Infraction alias order rewrites "Fight without Weapon" to "Fight with Weapon" (statutory field)
+
+- **State:** Todo  |  **Priority:** none
+
+Why
+Found 2026-09-05 during CLWX-63 chain authoring. The Suspensions payload normalizer's alias table (extensions/moe-principal-assistant/index.mjs:196-197) tries /fight.*weapon/i -> "Fight with Weapon" BEFORE /fight|fighting/i -> "Fight without Weapon". The exact form option text "Fight without Weapon" matches the first pattern (.* eats " without "), so the normalizer silently rewrites it to the OPPOSITE statutory answer. This is a wrong-answer rewrite on a statutory field in the product's flagship flow — silent data corruption, worse than a refusal.
+
+Acceptance (QA bar)
+1. Alias table fixed so both exact option texts round-trip unchanged ("Fight with Weapon" -> itself, "Fight without Weapon" -> itself); order/anchor the without-case first or use mutually exclusive patterns.
+2. A unit test iterates EVERY exact Suspensions form option text through the normalizer and asserts identity round-trip (catches the whole class, not just this pair).
+3. Existing plugin unit suite stays green.
+
+Register row: INFRACTION-ALIAS (docs/DEFECT_REGISTER_2026-09-02.md section B). Source: CLWX-63 authoring agent report, verified against the source by the main session.
+
 ## Started
 
 ### CLWX-22 — ★ OKR ANCHOR — ClawX GA
@@ -1491,6 +1476,43 @@ Scope: define a user-facing budget (proposal: p50 ≤15s / p90 ≤30s wall-clock
 **Comments (1):**
 
 - First-cut measurement DONE (sprint-driver tick, evidence: docs/evidence/LATENCY_BASELINE_2026-09-02.md). All 15 driver JSONs on the persona VM mined: successful tool-using cloud turns 79.6s / 103.4s / 182.2s; no-tool answer 107.9s; median ≈103s — ~7× over the proposed p50 ≤15s budget. Raj's complaint is quantified and current. Caveats: e2 VM ≠ persona laptop; ~9s driver settle tail; small sample. Movers already on the agenda: prompt caching (ask #7), trim unhold (owner), routing. Remaining for Ready: laptop-lane repeat of the 3 demo prompts + owner budget sign-off + GA-packet row.
+
+### CLWX-61 — [email/eval] Close Outlook eval gaps: forward e2e + live download_attachment + attachment metadata assertion
+
+- **State:** In Progress  |  **Priority:** medium
+
+Why
+Forward and download_attachment are implemented and hard-confirm gated, but no v2-eval row exercises either live; W3.2 asserts only that an attachments array exists, not that it carries filename/size/type. Built-untested is not proven (audit: EMAIL, 2026-09-03).
+
+Acceptance (QA bar)
+1. v2-eval gains a forward row: open message, forward, fill recipient, verify pane, discard - PASS live on test.fac.
+2. A download_attachment(confirm:true) row runs live against a seeded email with attachment; refusal without confirm proved first.
+3. W3.2 asserts attachment metadata fields (name, size, contentType).
+4. Eval suite still fully green.
+
+Story
+S1 Email. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+**Comments (1):**
+
+- **CLWX-61 — all four acceptance surfaces AUTHORED + static-verified; live proof LANE-BLOCKED.** _(GA-breadth push, 2026-09-05)_ Landed in the working tree (scripts/v2-eval.ts): 1. W5.2 (new, forward row): hygiene-discard, forward the fresh-top message, assert drafted+draftLeftOpen, verify the pane is genuinely a forward (FW:/FWD: prefix + subject overlap with the source row — preview.to is an args echo, only preview.subject is a real pane read-back), then DISCARD. Never dispatches mail; the two-gate dispatch protection is untouched. 2. W8.3 (new, refusal FIRST): downloadAttachment confirm:false must return refused — the gate fires before any browser interaction (outlook-actions.ts:1100), so this leg always runs. 3. W8.4 (new, confirm leg second): resolves a seeded attachment via searchInbox(hasAttachment)+listAttachments, downloads with confirm (test.fac sandbox only), asserts downloaded; SKIPS loudly when no attachment mail is seeded. 4. W3.2 extended: per-entry metadata hard-asserts (filename non-empty, sizeBytes>0, mimeType non-empty); notes say "metadata leg UNEXERCISED" rather than passing green when nothing is seeded. Static evidence: ad-hoc strict tsc over the script -> exit 0 (NOTE: `pnpm typecheck` does NOT cover scripts/ — root tsconfig includes only src/, electron config only electron/; the card's "typecheck green" bar is vacuous for eval-script changes; a scripts tsconfig is worth a follow-up). eslint -> exit 0. Remaining to Ready: a live eval run once the CDP lane recovers (Chrome restart, owner-gated) AND a seeded attachment email in test.fac — seed a mainstream type (.pdf recommended; the scraper's metadata is regex/extension-map best-effort, outlook-actions.ts:798-820). Card stays In Progress.
+
+### CLWX-63 — [forms] Document-to-form extraction chain e2e: suspension letter -> extracted fields -> prefilled form
+
+- **State:** In Progress  |  **Priority:** high
+
+Why
+Demo flow #2 and the product's core promise: extraction is built, fill is proven, but the full chain (drop a suspension report -> agent extracts 32 fields -> prefills the form) has no end-to-end test (audit: FORMS, 2026-09-03).
+
+Acceptance (QA bar)
+Fixture suspension letter (docx or pdf) -> live agent extraction -> prefill on the test.fac Suspensions clone; diff of filled values vs expected JSON shows <=3 misses; hard-confirm gate holds (no submit without confirm). Re-runnable script committed.
+
+Story
+S2/S3 boundary. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
+
+**Comments (1):**
+
+- **CLWX-63 — full extraction-chain e2e AUTHORED + static-verified; live proof LANE-BLOCKED.** _(GA-breadth push, 2026-09-05)_ New in the working tree: - scripts/clwx63-extract-chain-e2e.ts — the chain the card demands, using PRODUCTION surfaces at every step: fixture letter -> writeDocx -> readDocx (production reader) -> Bedrock extraction against the REGISTERED principal.suspension_payload description+schema -> real principal.suspension_payload execute (production normalizers, statutory no-invention refusal, MOE_DEMO_DEFAULTS never set) -> real forms.preview_suspension -> SuspensionsActions open+fill on the test.fac clone -> diff vs expected JSON (PASS iff <=3 misses, fill errors count as misses) -> gate leg: submit with confirm:false must REFUSE. Only the host-API HTTP hop is shimmed (same approach as the unit suite); the shim HARD-THROWS if a truthy confirm ever reaches the submit route — this harness structurally cannot submit. Exit 0/1/2 per lane convention; CLWX63_PROBE_ONLY=1 gives a safe lane probe. - tests/e2e/fixtures/clwx63/suspension-letter.txt — invented Student A / Parent A data, all 32 fields explicit, exact option texts. - tests/e2e/fixtures/clwx63/expected-values.json — 31 expected fields pre-computed through the real normalizers. Evidence run: ad-hoc strict tsc + eslint -> exit 0; plugin tool-surface unit 20/20; probe-only run reproduces the EXACT current wedge (json/version answers 200, ws connects, attach times out) -> clean exit 2. An HTTP-only lane probe would lie; this one attaches with an 8s bound. DEFECT FOUND during authoring (filed separately + register row INFRACTION-ALIAS): extensions/moe-principal-assistant/index.mjs:196-197 — "Fight without Weapon" normalizes to "Fight with Weapon" because /fight.*weapon/i is tried first and .* matches " without ". Wrong-answer rewrite on a statutory field. The fixture deliberately uses "Bullying/Intimidation" to stay defect-independent. Remaining to Ready: one live green run once the CDP lane recovers (Chrome restart, owner-gated). Card stays In Progress.
 
 ### CLWX-66 — [documents] Meeting-minutes template + classify/extract/route e2e + product-doc reconciliation
 

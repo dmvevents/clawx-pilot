@@ -12,6 +12,11 @@
  *   3. At least one inbox message; multi-message inboxes give richer
  *      coverage. The eval tolerates 1-message inboxes by skipping rows
  *      that can't be exercised.
+ *   4. CLWX-61 rows (W3.2 metadata leg, W8.3/W8.4 download pair, W5.2
+ *      forward) want a seeded mail WITH an attachment in the test.fac
+ *      inbox; without one the download confirm leg skips and the metadata
+ *      leg reports itself unexercised. W8.4 downloads that attachment
+ *      (sandbox only); W5.2 drafts a forward and always discards it.
  *
  * Run:
  *   pnpm exec tsx scripts/v2-eval.ts
@@ -218,11 +223,15 @@ async function main() {
     };
   });
 
-  // W3.2 — read_email returns attachments array (may be empty). Fetch a fresh
-  // id and retry ONCE on a safe not_found (stale-id race + transient
-  // pane-settle refusal both resolve on a re-fetch); a persistent not_found
-  // across two fresh attempts still fails the row.
-  await runRow('W3.2', 'read_email', 'read_email({id}) returns attachments: array', async () => {
+  // W3.2 — read_email returns attachments: array (may be empty); on an
+  // attachment-bearing message every entry must also carry metadata —
+  // filename, sizeBytes, mimeType all non-empty (CLWX-61: the old row only
+  // proved the array existed, which stayed green even if the parser dropped
+  // every metadata field). Fetch a fresh id and retry ONCE on a safe
+  // not_found (stale-id race + transient pane-settle refusal both resolve on
+  // a re-fetch); a persistent not_found across two fresh attempts still
+  // fails the row.
+  await runRow('W3.2', 'read_email', 'read_email({id}) returns attachments: array; metadata (filename/size/mime) non-empty where attachments exist', async () => {
     let id = await freshTopId();
     if (!id) return { skip: true, ok: false, notes: 'inbox empty' };
     let r = await actions.readEmail({ id });
@@ -230,9 +239,46 @@ async function main() {
       id = (await freshTopId()) ?? id;
       r = await actions.readEmail({ id });
     }
+    if (r.status !== 'ok' || !Array.isArray(r.attachments)) {
+      return { ok: false, notes: `status=${r.status} attachments=${r.attachments?.length ?? 'undefined'}` };
+    }
+    // Metadata leg: the top message usually has no attachments, so hunt for
+    // an attachment-bearing one (the CLWX-61 seeded mail is the intended
+    // target). Without one the leg is reported as unexercised rather than
+    // silently green.
+    let attachments = r.attachments;
+    let source = 'top message';
+    if (attachments.length === 0) {
+      const search = await actions.searchInbox({ hasAttachment: true });
+      const candidate = search.status === 'ok' ? search.messages[0] : undefined;
+      if (!candidate) {
+        return {
+          ok: true,
+          notes: 'array ok (0 on top message); metadata leg UNEXERCISED — no attachment-bearing message in view, seed one per CLWX-61',
+        };
+      }
+      const read = await actions.readEmail({ id: candidate.id });
+      if (read.status !== 'ok' || (read.attachments?.length ?? 0) === 0) {
+        return {
+          ok: true,
+          notes: `array ok (0 on top message); metadata leg UNEXERCISED — hasAttachment hit unreadable (status=${read.status}, attachments=${read.attachments?.length ?? 'undefined'})`,
+        };
+      }
+      attachments = read.attachments ?? [];
+      source = 'hasAttachment search hit';
+    }
+    const bad = attachments.filter(
+      (a) => !(a.filename ?? '').trim()
+        || typeof a.sizeBytes !== 'number' || !(a.sizeBytes > 0)
+        || !(a.mimeType ?? '').trim(),
+    );
     return {
-      ok: r.status === 'ok' && Array.isArray(r.attachments),
-      notes: `status=${r.status} attachments=${r.attachments?.length ?? 'undefined'}`,
+      ok: bad.length === 0,
+      notes: bad.length === 0
+        ? `array ok; metadata ok on ${attachments.length} attachment(s) from ${source}`
+        : `${bad.length}/${attachments.length} attachment(s) missing metadata (${source}): ${bad
+          .map((a) => `"${(a.filename ?? '').slice(0, 40) || '<no name>'}" size=${a.sizeBytes ?? 'undef'} mime=${a.mimeType ?? 'undef'}`)
+          .join('; ')}`,
     };
   });
 
@@ -320,6 +366,51 @@ async function main() {
     };
   });
 
+  // W8.3 — download_attachment REFUSES without confirm (CLWX-61). The hard
+  // gate fires before any browser interaction (mirrors W4.2 for send), so
+  // this refusal leg ALWAYS runs — and by design runs FIRST, before the
+  // confirm leg in W8.4. It prefers the same seeded target W8.4 will
+  // download so both legs prove the same gate on the same message; without a
+  // seeded attachment mail the gate is still provable against a synthetic
+  // probe id (the refusal short-circuits before the id is ever looked up).
+  let seededAttachment: { id: string; filename: string } | null = null;
+  const findSeededAttachment = async (): Promise<{ id: string; filename: string } | null> => {
+    const search = await actions.searchInbox({ hasAttachment: true });
+    const candidate = search.status === 'ok' ? search.messages[0] : undefined;
+    if (!candidate) return null;
+    const listed = await actions.listAttachments({ id: candidate.id });
+    const first = listed.status === 'ok' ? listed.attachments[0] : undefined;
+    return first?.filename ? { id: candidate.id, filename: first.filename } : null;
+  };
+  await runRow('W8.3', 'download_attachment', 'download_attachment without confirm is refused (refusal leg runs before the confirm leg)', async () => {
+    seededAttachment = await findSeededAttachment();
+    const target = seededAttachment ?? { id: 'w83-gate-probe|no-such-message|now', filename: 'w83-gate-probe.pdf' };
+    const r = await actions.downloadAttachment({ id: target.id, filename: target.filename, confirm: false });
+    return {
+      ok: r.status === 'refused',
+      notes: `status=${r.status} target=${seededAttachment ? 'seeded attachment mail' : 'synthetic probe (no attachment mail in view; gate still provable)'} reason=${(r.reason ?? '').slice(0, 80)}`,
+    };
+  });
+
+  // W8.4 — download_attachment WITH confirm downloads the seeded attachment
+  // (test.fac sandbox only; the second step of the W8.3/W8.4 pair). Skips
+  // when no attachment-bearing mail is seeded. Re-resolves the target ONCE on
+  // a safe not_found (stale-id race), mirroring the other id-scoped rows.
+  await runRow('W8.4', 'download_attachment', 'download_attachment with confirm downloads the seeded attachment (test.fac sandbox)', async () => {
+    if (!seededAttachment) {
+      return { skip: true, ok: false, notes: 'no attachment-bearing mail in view — seed one per CLWX-61' };
+    }
+    let r = await actions.downloadAttachment({ ...seededAttachment, confirm: true });
+    if (r.status === 'not_found') {
+      const fresh = await findSeededAttachment();
+      if (fresh) r = await actions.downloadAttachment({ ...fresh, confirm: true });
+    }
+    return {
+      ok: r.status === 'downloaded',
+      notes: `status=${r.status} filename="${r.filename.slice(0, 60)}" savedPath=${r.savedPath ? 'set' : 'unset'}${r.reason ? ` reason=${r.reason.slice(0, 80)}` : ''}`,
+    };
+  });
+
   // W5.1 — reply (we'll close it ourselves to avoid leaving a noisy draft).
   // Fresh id + retry-once: reply opens+settles the message, so it is exposed
   // to both the stale-id race and a transient pane-settle refusal.
@@ -336,6 +427,44 @@ async function main() {
       notes: `status=${r.status}`,
     };
   });
+
+  // W5.2 — forward (CLWX-61): open a fresh message, forward it to the
+  // sandbox self-address, verify the open pane really is a forward of the
+  // requested message, then DISCARD. A forward is NEVER sent by the eval.
+  // W5.1 leaves its reply pane open and forward() refuses to stack drafts,
+  // so hygiene runs first (and again on the retry leg).
+  await discardOpenDrafts();
+  await runRow('W5.2', 'forward', 'forward({id, to}) opens forward pane (FW: + subject match), then draft is discarded — never sent', async () => {
+    const norm = (s: string) =>
+      (s || '').toLowerCase().replace(/^(?:re|fw|fwd)\s*:\s*/i, '').replace(/\s+/g, ' ').trim();
+    let id = await freshTopId();
+    if (!id) return { skip: true, ok: false, notes: 'inbox empty' };
+    let r = await actions.forward({ id, to: 'test.fac@fac.edu.tt', body: 'eval forward — do not send.' });
+    if (r.status === 'not_found') {
+      await discardOpenDrafts();
+      id = (await freshTopId()) ?? id;
+      r = await actions.forward({ id, to: 'test.fac@fac.edu.tt', body: 'eval forward — do not send.' });
+    }
+    if (r.status !== 'drafted' || r.draftLeftOpen !== true) {
+      return { ok: false, notes: `status=${r.status} leftOpen=${r.draftLeftOpen}` };
+    }
+    // Pane verification: `drafted` already proves To was typed + committed
+    // (fillField/commitRecipientField throw on failure); the pane SUBJECT is
+    // the one field read back from the live compose, so assert it is a
+    // forward of the requested message, not some other draft.
+    const paneSubject = (r.preview?.subject ?? '').trim();
+    const wantSubject = norm((id.split('|')[1] ?? '').slice(0, 60));
+    const isForward = /^(?:fw|fwd)\s*:/i.test(paneSubject);
+    const matches = wantSubject.length >= 4
+      ? norm(paneSubject).includes(wantSubject.slice(0, 40))
+      : norm(paneSubject).startsWith(wantSubject);
+    return {
+      ok: paneSubject.length > 0 && isForward && matches,
+      notes: `pane subject="${paneSubject.slice(0, 60)}" fwPrefix=${isForward} subjectMatch=${matches}`,
+    };
+  });
+  // The forward draft is eval residue — discard it before the compound row.
+  await discardOpenDrafts();
 
   // W7.1 — multi-message workflow: read_inbox + read_email loop.
   // CLWX-46 contract: each read must be TRUSTWORTHY — either ok with the
