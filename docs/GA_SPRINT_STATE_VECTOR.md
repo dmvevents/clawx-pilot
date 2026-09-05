@@ -180,6 +180,25 @@ in-tree. In flight: CLWX-67 cron-reminder e2e (live-app lane) + CLWX-66
 classification e2e (plugin-direct, collision-isolated); scripts-tsconfig
 scope-add still open with the CLWX-98 agent._
 
+_**GA-breadth landing 4 (2026-09-05): scripts/ typecheck coverage — the
+vacuous bar is closed (`c4e11d4f`).** `pnpm typecheck` covered only src/ +
+electron/, so every eval/gate script (v2-eval, clwx\*-checks, forms drivers)
+shipped type-unchecked. New `tsconfig.scripts.json` (extends tsconfig.node.json,
+noEmit, allowImportingTsExtensions for tsx-style imports) + `typecheck:scripts`
++ appended to `pnpm typecheck` — ga-gate T0 runs `pnpm typecheck`, so the GA
+gate inherits it with no gate edit. Census: 74 errors → 51 were config
+artifacts, 10 genuine fixed with zero behavior change (honest `as unknown as`
+casts on LLM-produced args; dead `confirm:false` removed from draftEmail
+literals — `DraftEmailArgs` never had the field, SEND gate untouched), 11 legacy
+one-off probes excluded with reasons, `clwx66-classify-e2e.ts` excluded as
+in-flight (include once it lands — it has a real arity error at :182 the new
+check unmasked). `scripts/types/mjs-modules.d.ts` declares `*.mjs` as any
+(scripts project only) so plugin-importing scripts keep their other coverage.
+Falsifiability independently re-proven by the main session: injected TS2322
+fails `typecheck:scripts`, reverted exit 0. Byproduct register row:
+RAJ3-FROM-NOOP (subject-only matching masquerading as subject+from). Full
+typecheck green across all three projects; 21/21 units; eslint clean._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
