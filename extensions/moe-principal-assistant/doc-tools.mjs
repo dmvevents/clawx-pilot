@@ -626,12 +626,36 @@ export async function readPdf({ path: inputPath, maxChars = 200_000 } = {}) {
  * maps to the damaged-or-renamed wording in mapDocxParseError below.
  */
 const OLE2_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+// CFB directory entries are UTF-16LE; an EncryptedPackage stream marks a
+// password-protected OOXML document (MS-OFFCRYPTO), which shares the OLE2
+// magic with legacy .doc — without this sniff a protected modern .docx gets
+// a confidently WRONG "legacy Word" cause (review finding, 2026-09-05).
+const ENCRYPTED_PACKAGE_UTF16 = Buffer.from('EncryptedPackage', 'utf16le');
 const DOCX_RESAVE_HINT =
   'Open it in Word and use Save As with the "Word Document (.docx)" format, then try again — or ask the sender to re-send it as .docx.';
 
+/**
+ * Filenames may legally contain control characters on macOS; embedded raw in
+ * a refusal they can fake stack frames in chat or trip readable-refusal
+ * checks (review finding, 2026-09-05).
+ */
+function displayName(filePath) {
+  return path.basename(filePath).replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 80);
+}
+
 function refuseNonDocxContainer(buf, filePath) {
-  const name = path.basename(filePath);
-  if (buf.subarray(0, 8).equals(OLE2_MAGIC)) {
+  const name = displayName(filePath);
+  if (buf.length === 0) {
+    throw new Error(
+      `"${name}" is empty (0 bytes) — the download or sync may not have completed. Re-download or re-sync the file and try again.`,
+    );
+  }
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(OLE2_MAGIC)) {
+    if (buf.includes(ENCRYPTED_PACKAGE_UTF16)) {
+      throw new Error(
+        `"${name}" appears to be password-protected, and this reader cannot open protected documents. Open it in Word with its password, save an unprotected copy as "Word Document (.docx)", then try again.`,
+      );
+    }
     throw new Error(
       `"${name}" looks like a legacy Word document (.doc, Word 97-2003), which this reader cannot open. ${DOCX_RESAVE_HINT}`,
     );
@@ -649,22 +673,28 @@ function refuseNonDocxContainer(buf, filePath) {
 }
 
 function mapDocxParseError(err, filePath) {
-  const name = path.basename(filePath);
+  const name = displayName(filePath);
   const detail = err instanceof Error ? err.message : String(err);
-  // Zip-container failures (truncated download, damaged file): jszip's
-  // messages vary but always talk about the zip/central-directory/data.
-  if (/central director|zip file|corrupted zip|end of data/i.test(detail)) {
-    return new Error(
-      `"${name}" could not be opened as a Word document (.docx) — the file appears damaged or incomplete. ${DOCX_RESAVE_HINT}`,
-    );
-  }
   // Valid zip, but not a docx inside (e.g. an OpenDocument .odt renamed).
   if (/main document part|body element/i.test(detail)) {
     return new Error(
       `"${name}" is not a Word document inside — it may be another format (for example OpenDocument .odt) saved under a .docx name. ${DOCX_RESAVE_HINT}`,
     );
   }
-  return err;
+  // Everything else mammoth throws past the container sniff is some flavour
+  // of unreadable file — jszip zip-level text, xmldom parse errors for
+  // mangled XML, null-deref TypeErrors on garbage markup. None of it is
+  // principal language, so the fallback is the damaged wording, never a
+  // rethrow: the rethrow path is exactly how "[xmldom error] …" reached a
+  // principal verbatim (review finding, 2026-09-05). Only the error CLASS is
+  // logged — parser messages can quote document content, and content never
+  // goes to logs.
+  console.warn(
+    `readDocx: unreadable docx mapped to damaged-file refusal (${err?.constructor?.name ?? typeof err})`,
+  );
+  return new Error(
+    `"${name}" could not be opened as a Word document (.docx) — the file appears damaged or incomplete. ${DOCX_RESAVE_HINT}`,
+  );
 }
 
 export async function readDocx({ path: inputPath, format = 'markdown' } = {}) {

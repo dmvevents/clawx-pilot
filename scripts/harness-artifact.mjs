@@ -43,6 +43,7 @@ import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { crc32 } from 'node:zlib';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(__dirname, '..');
@@ -69,6 +70,11 @@ export function isReadableRefusal(message) {
   if (message.includes('node_modules/') || message.includes('node_modules\\')) return false;
   if (/^\s*(Type|Reference|Syntax)Error\b/.test(message)) return false;
   if (/https?:\/\//i.test(message)) return false; // library doc-links (CLWX-101)
+  // Bracketed library tags ("[xmldom error]") and parser-location artifacts
+  // ("@#[line:…") are internal dumps that carry none of the other markers
+  // (review finding, 2026-09-05).
+  if (/\[[a-z]+ (error|warning)\]/i.test(message)) return false;
+  if (message.includes('@#[line:')) return false;
   return true;
 }
 
@@ -143,6 +149,53 @@ function pdfNoText() {
 }
 const OLE_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
 const EMPTY_ZIP = Buffer.concat([Buffer.from('PK\x05\x06', 'binary'), Buffer.alloc(18)]);
+
+/**
+ * Minimal STORED (no compression) zip builder for fixtures that must be a
+ * VALID zip container with controlled entry content — e.g. a docx whose
+ * word/document.xml is malformed (the residual xmldom class, CLWX-101 review
+ * finding). Hand-rolled so fixtures don't depend on a zip library the
+ * workspace only carries transitively. entries: Array<[name, content]>.
+ */
+export function buildStoredZip(entries) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const [name, content] of entries) {
+    const nameBuf = Buffer.from(name, 'utf8');
+    const data = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf8');
+    const crc = crc32(data) >>> 0;
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0); // local file header signature
+    local.writeUInt16LE(20, 4);         // version needed to extract
+    local.writeUInt16LE(0, 8);          // method: stored
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(nameBuf.length, 26);
+    locals.push(local, nameBuf, data);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0); // central directory signature
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0, 10);         // method: stored
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(nameBuf.length, 28);
+    central.writeUInt32LE(offset, 42);    // local header offset
+    centrals.push(central, nameBuf);
+    offset += local.length + nameBuf.length + data.length;
+  }
+  const centralBuf = Buffer.concat(centrals);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);      // end-of-central-directory signature
+  eocd.writeUInt16LE(entries.length, 8);
+  eocd.writeUInt16LE(entries.length, 10);
+  eocd.writeUInt32LE(centralBuf.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, centralBuf, eocd]);
+}
 const PNG_1PX = Buffer.from(
   '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c626001000000050001aaaaaa00000000049454e44ae426082',
   'hex',
@@ -192,6 +245,32 @@ export const MATRIX = [
   {
     id: 'odt.read_docx', fn: 'readDocx', expectation: 'refusal',
     fixture: { name: 'notes.odt', bytes: () => EMPTY_ZIP },
+    // Pinned so a mammoth upgrade that changes its missing-part text can't
+    // silently re-leak library language here (review finding, 2026-09-05).
+    refusalCheck: (m) => (/not a Word document inside/.test(m) && /OpenDocument/.test(m)
+      ? true : 'must name the renamed-format cause (e.g. OpenDocument), not mammoth internals'),
+  },
+  {
+    // Valid zip container, mangled XML inside — the residual class that
+    // reached the principal as raw "[xmldom error] …" text (CLWX-101 review
+    // finding, 2026-09-05): jszip parses fine, mammoth's xmldom throws.
+    id: 'docx-badxml.read_docx', fn: 'readDocx', expectation: 'refusal',
+    fixture: { name: 'mangled.docx', bytes: () => buildStoredZip([['word/document.xml', '<w:document><w:body><w:p><unclosed']]) },
+    refusalCheck: (m) => (/damaged or incomplete/.test(m) && !/xmldom|@#\[line:/i.test(m)
+      ? true : 'must use the damaged-file wording, never xmldom internals'),
+  },
+  {
+    // Password-protected modern .docx is an OLE2/CFB container
+    // (MS-OFFCRYPTO) with an EncryptedPackage stream — same magic as legacy
+    // .doc. The refusal must name the password, not "legacy Word 97-2003"
+    // (CLWX-101 review finding, 2026-09-05).
+    id: 'docx-password.read_docx', fn: 'readDocx', expectation: 'refusal',
+    fixture: {
+      name: 'protected.docx',
+      bytes: () => Buffer.concat([OLE_MAGIC, Buffer.alloc(64), Buffer.from('EncryptedPackage', 'utf16le'), Buffer.alloc(64)]),
+    },
+    refusalCheck: (m) => (/password-protected/.test(m) && !/legacy Word/.test(m)
+      ? true : 'must name password protection, not legacy Word'),
   },
   {
     id: 'docx-out.write_docx', fn: 'writeDocx', expectation: 'ok',

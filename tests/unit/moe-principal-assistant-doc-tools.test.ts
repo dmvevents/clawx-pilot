@@ -150,6 +150,52 @@ describe('readDocx refuses non-docx containers in principal language (CLWX-101)'
     expect(msg).not.toMatch(LIBRARY_INTERNALS);
   });
 
+  it('names password protection for an encrypted OOXML container, never "legacy Word" (review 2026-09-05)', async () => {
+    // MS-OFFCRYPTO: a password-protected modern .docx is an OLE2/CFB file
+    // with an EncryptedPackage stream (UTF-16LE directory entry) — same
+    // 8-byte magic as legacy .doc.
+    const msg = await readDocxError(
+      'confidential-report.docx',
+      Buffer.concat([
+        Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+        Buffer.alloc(64),
+        Buffer.from('EncryptedPackage', 'utf16le'),
+        Buffer.alloc(64),
+      ]),
+    );
+    expect(msg).toMatch(/password-protected/);
+    expect(msg).not.toMatch(/legacy Word/);
+    expect(msg).not.toMatch(LIBRARY_INTERNALS);
+  });
+
+  it('names the empty-file cause for a zero-byte docx (failed download/sync), not "different file type"', async () => {
+    const msg = await readDocxError('empty.docx', Buffer.alloc(0));
+    expect(msg).toMatch(/empty \(0 bytes\)/);
+    expect(msg).toMatch(/download or sync/);
+    expect(msg).not.toMatch(LIBRARY_INTERNALS);
+  });
+
+  it('maps a valid zip with mangled XML inside to the damaged wording, never raw xmldom text (review 2026-09-05)', async () => {
+    const { buildStoredZip } = await import('../../scripts/harness-artifact.mjs');
+    const msg = await readDocxError(
+      'mangled.docx',
+      buildStoredZip([['word/document.xml', '<w:document><w:body><w:p><unclosed']]),
+    );
+    expect(msg).toMatch(/damaged or incomplete/);
+    expect(msg).not.toMatch(/xmldom|@#\[line:|element parse error/i);
+    expect(msg).not.toMatch(LIBRARY_INTERNALS);
+  });
+
+  it('sanitizes control characters out of the quoted filename (no fake stack frames in chat)', async () => {
+    // macOS permits newlines in filenames; embedded raw they can fake a
+    // stack frame inside an official refusal (review 2026-09-05).
+    if (process.platform === 'win32') return;
+    const msg = await readDocxError('memo\n    at Object.fake (x.js:1:1).rtf', '{\\rtf1\\ansi Hi.}');
+    expect(msg).toMatch(/Rich Text Format/);
+    expect(msg).not.toMatch(/\n\s+at\s+\S/);
+    expect(msg).not.toContain('\n');
+  });
+
   it('still reads a genuine .docx after the sniff (no false refusal)', async () => {
     const { readDocx } = await loadDocTools();
     const p = path.join(workDir, 'genuine.docx');

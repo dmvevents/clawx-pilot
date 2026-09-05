@@ -54,6 +54,13 @@ describe('isReadableRefusal (CLWX-77 principal bar)', () => {
     expect(isReadableRefusal("Can't find end of central directory : is this a zip file ? If it is, see https://stuk.github.io/jszip/documentation/howto/read_zip.html")).toBe(false);
     expect(isReadableRefusal('see HTTPS://example.com/docs for details')).toBe(false);
   });
+
+  it('rejects bracketed library tags and parser-location artifacts — the xmldom dump that passed v2 (review 2026-09-05)', async () => {
+    const { isReadableRefusal } = await load();
+    expect(isReadableRefusal('error: [xmldom error]\telement parse error: Error: Hierarchy request error\n@#[line:undefined,col:undefined]')).toBe(false);
+    expect(isReadableRefusal('warning: [xmldom warning]\tunclosed xml attribute')).toBe(false);
+    expect(isReadableRefusal('parse failed @#[line:3,col:9]')).toBe(false);
+  });
 });
 
 describe('classifyRow', () => {
@@ -149,7 +156,7 @@ describe('MATRIX shape', () => {
   it('covers every slice-1 doc type from the card scope', async () => {
     const { MATRIX } = await load();
     const ids = MATRIX.map((r: { id: string }) => r.id).join(' ');
-    for (const type of ['pdf-text', 'pdf-corrupt', 'docx', 'doc-legacy', 'rtf', 'odt', 'xlsx', 'csv', 'png', 'png-sharp-binding', 'pptx']) {
+    for (const type of ['pdf-text', 'pdf-corrupt', 'docx', 'doc-legacy', 'rtf', 'odt', 'docx-badxml', 'docx-password', 'xlsx', 'csv', 'png', 'png-sharp-binding', 'pptx']) {
       expect(ids).toContain(type);
     }
   });
