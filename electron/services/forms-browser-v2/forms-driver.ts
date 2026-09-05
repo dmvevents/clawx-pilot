@@ -375,15 +375,51 @@ export class FormsDriver {
     return '';
   }
 
-  async getVisibleQuestionText(): Promise<string> {
+  /**
+   * Question-item locator, tiered (CLWX-64, dom-selector-regression-tester).
+   *
+   * Selector classification, verified against the recorded live traces
+   * (skills/laptop/evidence/2026-09-03-*-recorded): the response page renders
+   * `[data-automation-id="questionItem"]` (vendor-ROTATED — this family
+   * rotated once already, moe.5 editor pivot) and NO explicit role attribute,
+   * so the CSS `[role="listitem"]` alternative matches nothing there today —
+   * it is an explicit-attribute fallback only. The real fallback tiers:
+   *   1. CSS union: rotated data-automation-id + explicit role attribute.
+   *   2. Playwright role engine `getByRole('listitem')` — resolves IMPLICIT
+   *      ARIA roles (li elements, aria mappings) that CSS cannot see.
+   *   3. Prefix variant `[data-automation-id^="question"]` — survives suffix
+   *      renames of the automation id.
+   */
+  private async questionItemsLocator(): Promise<Locator> {
     if (!this.page) throw new Error('no page; call ensureFormsTab first');
-    const items = this.page.locator('[data-automation-id="questionItem"], [role="listitem"]');
+    const tiers: Locator[] = [
+      this.page.locator('[data-automation-id="questionItem"], [role="listitem"]'),
+      this.page.getByRole('listitem'),
+      this.page.locator('[data-automation-id^="question"]'),
+    ];
+    for (const tier of tiers) {
+      if ((await tier.count().catch(() => 0)) > 0) return tier;
+    }
+    return tiers[0];
+  }
+
+  /**
+   * List the rendered question items' innerText in DOM order — the live
+   * side of the CLWX-64 schema-drift check (schema-fingerprint.ts).
+   */
+  async listQuestionItemTexts(maxItems = 80): Promise<string[]> {
+    const items = await this.questionItemsLocator();
     const count = await items.count().catch(() => 0);
     const texts: string[] = [];
-    for (let i = 0; i < Math.min(count, 40); i += 1) {
+    for (let i = 0; i < Math.min(count, maxItems); i += 1) {
       const text = await items.nth(i).innerText({ timeout: 1_000 }).catch(() => '');
       if (text.trim()) texts.push(text.trim());
     }
+    return texts;
+  }
+
+  async getVisibleQuestionText(): Promise<string> {
+    const texts = await this.listQuestionItemTexts(40);
     return texts.join('\n');
   }
 
@@ -451,6 +487,15 @@ export class FormsDriver {
             if ((await cb.count()) > 0) {
               await cb.click({ timeout: this.fieldTimeoutMs });
               any = true;
+              continue;
+            }
+            // CLWX-64: aria fallback mirroring the single_choice path — some
+            // Forms renders expose choices as role="checkbox" without a
+            // clickable <label> wrapper.
+            const aria = item.locator(`[role="checkbox"][aria-label="${t}"]`).first();
+            if ((await aria.count()) > 0) {
+              await aria.click({ timeout: this.fieldTimeoutMs });
+              any = true;
             }
           }
           return any ? { ok: true } : { ok: false, reason: `no checkbox options matched: ${targets.join(', ')}` };
@@ -464,7 +509,7 @@ export class FormsDriver {
 
   private async findQuestionItem(label: string): Promise<Locator | null> {
     if (!this.page) return null;
-    const questionItems = this.page.locator('[data-automation-id="questionItem"], [role="listitem"]');
+    const questionItems = await this.questionItemsLocator();
     const needles = labelNeedles(label);
     for (const needle of needles) {
       const item = questionItems.filter({ hasText: new RegExp(escapeRegex(needle), 'i') }).first();

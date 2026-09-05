@@ -9,6 +9,11 @@
 import { readFileSync } from 'node:fs';
 import { FormsDriver, type FillResult, type SubmitResult } from './forms-driver';
 import { formsResourcePath } from './paths';
+import {
+  matchLiveQuestions,
+  verifyStoredFingerprint,
+  type SchemaFingerprint,
+} from './schema-fingerprint';
 import { logger } from '../../utils/logger';
 
 const SCHEMA_PATH = formsResourcePath('extensions/moe-principal-assistant/forms/daily-report-schema.vlm.json');
@@ -84,8 +89,16 @@ export class DailyReportActions {
   }
 
   async fill(payload: DailyReportPayload): Promise<FillResult> {
-    const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf-8')) as { fields: SchemaField[] };
+    const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf-8')) as {
+      fields: SchemaField[];
+      fingerprint?: SchemaFingerprint;
+    };
     const fields = Array.isArray(schema.fields) ? schema.fields : [];
+
+    // CLWX-64 schema-drift gate: refuse LOUDLY rather than mis-map answers
+    // onto a statutory form that no longer matches the captured schema.
+    const drift = await this.verifyFormMatchesSchema(fields, schema.fingerprint);
+    if (drift) return drift;
     const errors: Array<{ fieldId: string; reason: string }> = [];
     let filledCount = 0;
     let skippedCount = 0;
@@ -125,6 +138,59 @@ export class DailyReportActions {
       expectedTitle: 'Primary School Daily Report',
       expectedQuestionLabels: DAILY_REPORT_FORM_FINGERPRINT_LABELS,
     });
+  }
+
+  /** CLWX-64: stored-fingerprint integrity + live-form structure check. */
+  private async verifyFormMatchesSchema(
+    fields: SchemaField[],
+    stored: SchemaFingerprint | undefined,
+  ): Promise<FillResult | null> {
+    const labels = fields.map((f) => f.label);
+    const integrity = verifyStoredFingerprint(labels, stored, 'Daily Report schema');
+    if (!integrity.ok) {
+      logger.warn(`[forms-v2/daily-report] ${integrity.reason}`);
+      return {
+        status: 'error',
+        filledCount: 0,
+        skippedCount: 0,
+        errors: [{ fieldId: '__form_schema__', reason: integrity.reason ?? 'schema fingerprint mismatch' }],
+      };
+    }
+    const relevant = fields.filter((f) => !AUTO_RECORDED_FIELD_IDS.has(f.id));
+    // Unconditional = must be visible on a freshly opened form: no showWhen
+    // AND no entry in the branch-visibility map (Forms hides those until
+    // their controlling answer is set).
+    const unconditional = relevant.filter(
+      (f) => !f.showWhen && !DAILY_REPORT_CONDITIONAL_VISIBILITY[f.id],
+    );
+    let liveTexts: string[];
+    try {
+      liveTexts = await this.driver.listQuestionItemTexts();
+    } catch (err) {
+      const reason =
+        `Daily Report form: could not read the form page to verify it against the captured schema ` +
+        `(${err instanceof Error ? err.message : String(err)}). Re-open the form and try again.`;
+      logger.warn(`[forms-v2/daily-report] ${reason}`);
+      return { status: 'error', filledCount: 0, skippedCount: 0, errors: [{ fieldId: '__form_structure__', reason }] };
+    }
+    const live = matchLiveQuestions({
+      orderedLabels: relevant.map((f) => f.label),
+      unconditionalLabels: unconditional.map((f) => f.label),
+      liveTexts,
+      formName: 'Daily Report form',
+    });
+    logger.info(
+      `[forms-v2/daily-report] schema-drift check: matched=${live.matchedCount}/${live.demandedCount} unmatchedLive=${live.unmatchedLiveCount} ok=${live.ok}`,
+    );
+    if (!live.ok) {
+      return {
+        status: 'error',
+        filledCount: 0,
+        skippedCount: 0,
+        errors: [{ fieldId: '__form_structure__', reason: live.reason ?? 'live form does not match schema' }],
+      };
+    }
+    return null;
   }
 }
 

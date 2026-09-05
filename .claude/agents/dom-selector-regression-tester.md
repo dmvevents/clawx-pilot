@@ -54,3 +54,41 @@ A PR cannot merge a new browser-automation skill without:
 - A comment on each rotated selector explaining WHY this UI element doesn't have a stable role/aria-label
 - A fallback chain (3+ strategies) implemented for that selector
 - A live-test stub in `scripts/v2-eval.ts` that exercises the path
+
+## Forms schema-fingerprint rule (CLWX-64)
+
+The forms fill drivers no longer trust the captured schemas blindly:
+
+- The two DRIVER-CONSUMED schemas (`suspensions-schema.json`,
+  `daily-report-schema.vlm.json` — the files the fill drivers load) MUST carry
+  a `fingerprint` block (`questionCount` + `orderedLabelsHash`, algorithm
+  `sha256/normalized-labels-v1` from
+  `electron/services/forms-browser-v2/schema-fingerprint.ts`). The unit guard
+  `tests/unit/forms-schema-fingerprint.test.ts` recomputes it from the
+  committed files — any schema edit (recapture, hand-edit, an enrichment
+  script rewrite) without a conscious re-stamp fails the suite LOUDLY.
+  Re-stamp with `pnpm exec tsx scripts/forms-stamp-fingerprint.ts` AFTER
+  verifying the capture against the live form. Capture-intermediate files
+  (e.g. `suspensions-schema.vlm.json`) are out of scope.
+- At fill time both drivers verify (a) the loaded schema against its stored
+  fingerprint and (b) the LIVE form's rendered questions against the schema
+  (missing unconditional question or order regression = refuse to fill with a
+  readable `__form_structure__` error). Branch-hidden (showWhen /
+  DAILY_REPORT_CONDITIONAL_VISIBILITY) questions are exempt from the presence
+  demand; unmatched live items are counted and logged but non-fatal until a
+  live-lane run pins the decorative-item baseline (tighten then).
+- Current forms-driver.ts classification (pinned by unit; verified against
+  the recorded live traces 2026-09-03): `[data-automation-id="questionItem"]`
+  is rotated and currently the ONLY selector that matches the real response
+  page — the page renders NO explicit `role` attributes, so the CSS
+  `[role="listitem"]` alternative is inert there (CSS cannot see implicit
+  ARIA roles). The tiered fallback chain in `questionItemsLocator()` is the
+  real protection: (1) the CSS union, (2) Playwright's role engine
+  `getByRole('listitem')` which DOES resolve implicit roles, (3) the prefix
+  variant `[data-automation-id^="question"]`. `formTitle` rotated → candidate
+  chain with `getByRole('heading', {level:1})` and `h1`; radio/checkbox
+  choices → visible `<label>` text filter with `[role=...][aria-label=...]`
+  fallback; submit → `getByRole('button')`. When auditing this service,
+  verify the pin tests in `tests/unit/forms-schema-fingerprint.test.ts` still
+  reflect reality — and never call a fallback "load-bearing" without trace
+  evidence that it matches the live DOM.
