@@ -422,6 +422,36 @@ aria-labelledby-wrapper wells are false negatives that degrade to the
 readable error; multi-compose tie-break is DOM-order (pre-existing
 class); tsx-lane dependence on the __name shim ordering documented._
 
+_**Tick 2026-09-05 (ga-sprint-driver, minimal-time): CLWX-77 slice 1 — the
+artifact-grade harness exists and is GREEN.** SENSE: static gate GREEN (5/0/1
+T0, report `docs/evidence/GA_GATE_2026-09-05.md` refreshed); tree clean at
+`211865e7`; board reachable (201s on the correct project path). ACT:
+`pnpm harness:artifact` shipped (commits `19343f95` + review pass `8a57ff4b`)
+— stages the shipped plugin source + the REAL gateway bundle
+(`build/openclaw/node_modules`, APFS clonefile ~2s) in a temp dir OUTSIDE the
+repo tree and runs each doc-type×command row in a child whose only dep roots
+are the staged bundle via the `CLAWX_APP_RESOURCES` seam, closing the
+test-the-workspace masking class (moe.15 canvas / CLWX-72 pdf-parse; moe.9
+playwright-core is asar-side, stays with dependency-class-auditor). Fresh full
+run: **14 rows — 9 PASS / 4 REFUSED-READABLY / 0 FAIL / 1 NO-TOOL**
+(`docs/evidence/HARNESS_ARTIFACT_2026-09-05.md`). Negative control proven:
+hiding mammoth in the STAGED bundle only flipped docx.read_docx to FAIL while
+repo node_modules still carried it. Separate-lane adversarial review:
+isolation SOUND (re-proven independently two ways), 3 MAJOR false-GREEN paths
+found and FIXED same tick (infra outcomes — timeout/spawn/no-verdict — now
+FAIL instead of grading REFUSED-READABLY, sentinel-framed verdict protocol;
+--stage-dir reuse now refreshes the bundle every run with --reuse-bundle as a
+loud opt-out; new png-sharp-binding row proves the shipped native binding
+decodes). Guards 18/18; typecheck+lint green. Gap filed per acceptance 4:
+**CLWX-101** (readDocx surfaces jszip internals for legacy .doc/.rtf — wrong
+language for the principal bar). Card moves: CLWX-77 Todo → In Progress
+(acceptance 1 substantially met for doc-tools; resumable trail on the card —
+packaged-node parity, password/large pdf rows, outlook/forms registration
+smoke, gateway transport, preflight wiring, K-ledger rows, Windows-lane run).
+ANALYZE: no serial promotions; owner gates unchanged (Chrome :18792 restart
+remains the single highest-value unlock). Ceiling respected: nothing moved to
+Ready this tick._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed

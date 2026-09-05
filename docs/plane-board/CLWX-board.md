@@ -193,6 +193,15 @@ Acceptance: after connectivity returns, the next Online turn succeeds without an
 
 - Related to the CLWX-95 seam (2b21d2a8) - NOT moving. The run-ownership token and terminal-error lastSentPayload handling landed for CLWX-94 reduce the orphan/replay surface, but the post-degrade recovery wedge (stale offline banner + silent sends until full relaunch) depends on the same restart-vs-per-run refresh decision tracked in CLWX-95. Kept open pending that wiring + live probe.
 
+### CLWX-101 — [bug/doc-tools/trust] readDocx surfaces jszip internals for legacy .doc / .rtf refusals
+
+- **State:** Backlog  |  **Priority:** medium
+
+Found by the first pnpm harness:artifact run (CLWX-77 slice 1, 2026-09-05, report docs/evidence/HARNESS_ARTIFACT_2026-09-05.md).
+Finding: feeding a legacy OLE .doc or an .rtf to document.read_docx refuses with jszip's internal text: "Can't find end of central directory : is this a zip file ? If it is, see https://stuk.github.io/jszip/documentation/howto/read_zip.html" — zip internals plus a developer docs link for what is, to a principal, simply "not a Word .docx". Passes the v1 no-raw-stack bar but fails the principal-proxy language bar.
+Acceptance: readDocx maps zip-container errors to a principal-readable refusal that names the likely cause (old .doc format / not a .docx) and the way out (re-save as .docx or export PDF); harness matrix rows doc-legacy.read_docx and rtf.read_docx tightened to expect the new wording; unit row in the doc-tools suite.
+Related: CLWX-77 (matrix), CLWX-80 (read-path steering), scanned-pdf empty-text note in the same report.
+
 ## Unstarted
 
 ### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy
@@ -1040,33 +1049,6 @@ CLWX-72 five-whys, 2026-09-03. Register: CANVAS-BINDING.
 
 - All three acceptance legs landed in e2cd8369. Leg 1 (doc-tools.mjs): the four remaining masking call sites &mdash; readDocx/mammoth, writeDocx/docx, readXlsx+writeXlsx/xlsx &mdash; now route through a new requireDocDep() helper that keeps loadDepDetailed's notFound (rebuild) vs loadError (present-but-failed, surfaces the real cause + native hint) distinction, mirroring readPdf. The masking loadDep() wrapper is removed so it can't be reintroduced. readImage keeps its intentional raw-bytes fallback but now surfaces a non-fatal sharpUnavailable field on a sharp load error instead of masking it. requireDocDep/loadDepDetailed exported; 3 new falsifiable unit tests prove the split (absent &rarr; "module not found"; present-but-broken &rarr; "present but failed to load" with the real message + native hint; never crossed). 8/8 in tests/unit/moe-principal-assistant-doc-tools.test.ts. Leg 2 (dependency-class-auditor.md): two bundled-parser rules added &mdash; (a) every EXTRA_BUNDLED_PACKAGES entry must pass scripts/verify-openclaw-bundle.mjs (exit 0); (b) any bundled package with platform-native optionalDependencies must ship all SHIP_TARGETS bindings, loadability (not require.resolve) being the bar. Leg 3 (pilot-office-runtime-check.ps1): the on-target packaged-node probe upgraded from require.resolve (presence) to require (LOADABILITY) with a DOMMatrix-polyfill mirror and a MISSING-vs-FAILED-LOAD split. The 0/10 exit contract (STATE line) is preserved. Static GA gate GREEN on this build (GA_GATE_STATIC=1 pnpm ga:gate): typecheck, lint, unit-suite, bundle-verify (CLWX-72), doc-tooling all PASS. Report docs/evidence/GA_GATE_2026-09-04.md. needsLiveProbe: leg-3's live re-run of the extended probe on a packaged install is the only remainder and overlaps CLWX-92/moe.16. Moving to Ready (a human closes Done).
 
-### CLWX-77 — [testing] Artifact-grade corner-gap matrix: every doc type x every command against the PACKAGED runtime
-
-- **State:** Todo  |  **Priority:** high
-
-Why (owner ask: "look around the corner")
-Every packaging-class defect so far (playwright-core moe.9, canvas binding moe.15) shipped because our tests run from the repo workspace, which resolves repo node_modules and masks packaged-runtime gaps. The systemic fix is a suite that exercises the ARTIFACT: the bundled gateway + packaged node, per doc type and per command.
-
-Scope - doc types to cover
-pdf (text + SCANNED/image-only + large >10MB + password-protected -> readable refusal), docx (+ legacy .doc -> readable refusal), xlsx (+ csv), pptx (status ambiguity noted in the audit - support or refuse cleanly), images (png/jpg via VLM path), odt/rtf -> refusal wording. Each: read, summarise-turn, and where applicable write.
-
-Scope - commands
-document.read_* / write_* via a real gateway process from build/openclaw (not repo imports); outlook + forms tool registration smoke; skill-load smoke for the principal bundle. Optionally driven through the CLWX-71 MCP adapter once it exists - an MCP client against the packaged app is exactly the artifact-grade transport.
-
-Acceptance
-1. New harness target (pnpm harness:artifact) spawning the bundled runtime; one row per doc-type x command with PASS/REFUSED-READABLY/FAIL.
-2. Wired into preflight for package:win/mac (can be a fast subset) + full matrix in CI/nightly.
-3. Unknown/unsupported types produce principal-readable refusals, never raw stack traces (principal-proxy bar).
-4. First full run documented with gaps filed as cards.
-
-Source
-Owner directive 2026-09-03 + CLWX-72 lesson: test the artifact, not the workspace.
-
-**Comments (2):**
-
-- 14 FIXED-UNGUARDED findings folded into this matrix (mining pass 2026-09-03; full list docs/BLOCKER_BUG_COLLECTION_2026-09-03.md sec.3): NSIS upgrade-path smoke; SUBMIT_CONFIRMATION_RE unit row; empty-Azure-transcript fallback; packaged forms URL/schema presence; Bedrock transitive deps in verify-openclaw-bundle HOST_LOADABLE; waitForSendCompletion false-sent spec; release hash-chain gate (CLWX-85); persona never advises manual Chrome debugging; PS token-fragment redaction assertion; account-portable harness prompts; branding string-scan as repeatable check; no skipIf(win32) on release-platform coverage; K5 regression matrix per RC; claimed-evidence-exists release gate.
-- Normative input added (owner-directed 2026-09-03): docs/KARUNESH_ERROR_LEDGER.md - every error the external tester ever reported (full WhatsApp history 2026-05-01 onward, 14 ClawX rows K1-K14), each with its derived test criterion. The matrix MUST cover: K1/K2 fresh-box CDP-attach onboarding; K8 INTERMITTENCE rule (each doc read/write repeated >=3x per run, every load context); K10 drag-PDF on a fresh install incl. scanned/protected/large variants; K11 seeded-litter mailbox + no-AWS-creds box for the email flow; K13 Windows degrade with the OpenAI-SDK "Connection error." surface; K14 his exact 5 prompts as a named fixture (karunesh-matrix) beside Raj's 5-prompt suite (K9). Video-generator rows are tagged SEPARATE per the liaison rule and stay out of this matrix.
-
 ### CLWX-78 — [bug/degrade] "Connection error." unmatched by the degrade classifier - cloud failure shows a red banner instead of failing over to a warm on-device model
 
 - **State:** Ready  |  **Priority:** high
@@ -1591,6 +1573,34 @@ S2/S3 boundary. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_20
 
 - Monitor-reported Chrome :18792 recovery DISPROVEN (2026-09-05 evening). Probe evidence: clwx63 probe-only leg reports NOT attachable (HTTP 200, ws connected to browser target f0300805…, attach timeout 8s); a manual connectOverCDP retry with a 30s timeout fails identically. Third independent confirmation of the ping-up/attach-down wedge. lsof shows no foreign client on the port to clear; the wedge is inside Chrome's browser-target DevTools session. The live half of this card (and CLWX-61's) remains owner-gated on the Chrome restart. Do not re-promote on HTTP/ws pings — the probe must complete an attach.
 - **CLWX-63 — full extraction-chain e2e AUTHORED + static-verified; live proof LANE-BLOCKED.** _(GA-breadth push, 2026-09-05)_ New in the working tree: - scripts/clwx63-extract-chain-e2e.ts — the chain the card demands, using PRODUCTION surfaces at every step: fixture letter -> writeDocx -> readDocx (production reader) -> Bedrock extraction against the REGISTERED principal.suspension_payload description+schema -> real principal.suspension_payload execute (production normalizers, statutory no-invention refusal, MOE_DEMO_DEFAULTS never set) -> real forms.preview_suspension -> SuspensionsActions open+fill on the test.fac clone -> diff vs expected JSON (PASS iff <=3 misses, fill errors count as misses) -> gate leg: submit with confirm:false must REFUSE. Only the host-API HTTP hop is shimmed (same approach as the unit suite); the shim HARD-THROWS if a truthy confirm ever reaches the submit route — this harness structurally cannot submit. Exit 0/1/2 per lane convention; CLWX63_PROBE_ONLY=1 gives a safe lane probe. - tests/e2e/fixtures/clwx63/suspension-letter.txt — invented Student A / Parent A data, all 32 fields explicit, exact option texts. - tests/e2e/fixtures/clwx63/expected-values.json — 31 expected fields pre-computed through the real normalizers. Evidence run: ad-hoc strict tsc + eslint -> exit 0; plugin tool-surface unit 20/20; probe-only run reproduces the EXACT current wedge (json/version answers 200, ws connects, attach times out) -> clean exit 2. An HTTP-only lane probe would lie; this one attaches with an 8s bound. DEFECT FOUND during authoring (filed separately + register row INFRACTION-ALIAS): extensions/moe-principal-assistant/index.mjs:196-197 — "Fight without Weapon" normalizes to "Fight with Weapon" because /fight.*weapon/i is tried first and .* matches " without ". Wrong-answer rewrite on a statutory field. The fixture deliberately uses "Bullying/Intimidation" to stay defect-independent. Remaining to Ready: one live green run once the CDP lane recovers (Chrome restart, owner-gated). Card stays In Progress.
+
+### CLWX-77 — [testing] Artifact-grade corner-gap matrix: every doc type x every command against the PACKAGED runtime
+
+- **State:** In Progress  |  **Priority:** high
+
+Why (owner ask: "look around the corner")
+Every packaging-class defect so far (playwright-core moe.9, canvas binding moe.15) shipped because our tests run from the repo workspace, which resolves repo node_modules and masks packaged-runtime gaps. The systemic fix is a suite that exercises the ARTIFACT: the bundled gateway + packaged node, per doc type and per command.
+
+Scope - doc types to cover
+pdf (text + SCANNED/image-only + large >10MB + password-protected -> readable refusal), docx (+ legacy .doc -> readable refusal), xlsx (+ csv), pptx (status ambiguity noted in the audit - support or refuse cleanly), images (png/jpg via VLM path), odt/rtf -> refusal wording. Each: read, summarise-turn, and where applicable write.
+
+Scope - commands
+document.read_* / write_* via a real gateway process from build/openclaw (not repo imports); outlook + forms tool registration smoke; skill-load smoke for the principal bundle. Optionally driven through the CLWX-71 MCP adapter once it exists - an MCP client against the packaged app is exactly the artifact-grade transport.
+
+Acceptance
+1. New harness target (pnpm harness:artifact) spawning the bundled runtime; one row per doc-type x command with PASS/REFUSED-READABLY/FAIL.
+2. Wired into preflight for package:win/mac (can be a fast subset) + full matrix in CI/nightly.
+3. Unknown/unsupported types produce principal-readable refusals, never raw stack traces (principal-proxy bar).
+4. First full run documented with gaps filed as cards.
+
+Source
+Owner directive 2026-09-03 + CLWX-72 lesson: test the artifact, not the workspace.
+
+**Comments (3):**
+
+- Slice 1 landed (2026-09-05, commits 19343f95 + review pass 8a57ff4b): pnpm harness:artifact exists and runs GREEN against the real bundle. What it does: stages the shipped plugin source + the real gateway bundle (build/openclaw/node_modules, APFS clonefile ~2s) in a temp dir OUTSIDE the repo tree, then runs each doc-type &times; command row in a child process whose only dep roots are the staged bundle via the CLAWX_APP_RESOURCES seam — the exact resolution path the installed app uses. This closes the workspace-masking class (moe.15 canvas, CLWX-72 pdf-parse; the moe.9 playwright-core class lives on the Electron/asar side and stays with dependency-class-auditor). Fresh full run (14 rows): 9 PASS / 4 REFUSED-READABLY / 0 FAIL / 1 NO-TOOL. Rows: pdf text/scanned/corrupt, docx + legacy-.doc/.rtf/.odt refusals, write_docx, xlsx + csv, write_xlsx, png + png-sharp-binding (native decode proof), pptx NO-TOOL (persona carve-out). Content checks prevent false-PASS; refusal rows enforce the no-raw-stack bar. Report: docs/evidence/HARNESS_ARTIFACT_2026-09-05.md. Negative control (falsifiability): hiding mammoth in the STAGED bundle only (repo untouched) flipped docx.read_docx to FAIL with the truthful module-not-found message; restored, re-green. The child provably cannot see repo node_modules. Separate-lane adversarial review: isolation claim confirmed SOUND (reviewer re-proved it two independent ways, verified zero bundle symlinks + extraResources layout parity). 3 MAJOR false-GREEN paths found and fixed same tick: infra failures (timeout/spawn/no-verdict) now FAIL instead of grading REFUSED-READABLY, with a sentinel-framed verdict protocol; --stage-dir reuse now refreshes the bundle copy every run (--reuse-bundle is a loud opt-out); png row upgraded with a sharp-binding metadata-decode check. Guards 18/18; typecheck + lint green; static GA gate GREEN same tick (docs/evidence/GA_GATE_2026-09-05.md). Gaps filed (acceptance 4): CLWX-101 — readDocx surfaces jszip internals for legacy .doc/.rtf refusals (passes v1 no-stack bar, fails principal language bar). Also noted: scanned pdf returns ok with totalChars=0 and no explicit no-text signal (persona wording). Resumable trail (remaining on this card): packaged-node / Electron utility-env spawn parity (CLWX-92 check covers the pdfjs class meanwhile); password-protected + >10MB pdf rows; outlook/forms tool-registration smoke; gateway-process transport (CLWX-71 MCP adapter candidate); package:mac/win preflight wiring (fast subset); K-ledger rows (K8 3x-repeat, K10 drag-PDF variants, K14 fixture); Windows-lane run for win-native binding proof. Card stays In Progress — acceptance 1 is substantially met for doc-tools; 2–4 partial.
+- 14 FIXED-UNGUARDED findings folded into this matrix (mining pass 2026-09-03; full list docs/BLOCKER_BUG_COLLECTION_2026-09-03.md sec.3): NSIS upgrade-path smoke; SUBMIT_CONFIRMATION_RE unit row; empty-Azure-transcript fallback; packaged forms URL/schema presence; Bedrock transitive deps in verify-openclaw-bundle HOST_LOADABLE; waitForSendCompletion false-sent spec; release hash-chain gate (CLWX-85); persona never advises manual Chrome debugging; PS token-fragment redaction assertion; account-portable harness prompts; branding string-scan as repeatable check; no skipIf(win32) on release-platform coverage; K5 regression matrix per RC; claimed-evidence-exists release gate.
+- Normative input added (owner-directed 2026-09-03): docs/KARUNESH_ERROR_LEDGER.md - every error the external tester ever reported (full WhatsApp history 2026-05-01 onward, 14 ClawX rows K1-K14), each with its derived test criterion. The matrix MUST cover: K1/K2 fresh-box CDP-attach onboarding; K8 INTERMITTENCE rule (each doc read/write repeated >=3x per run, every load context); K10 drag-PDF on a fresh install incl. scanned/protected/large variants; K11 seeded-litter mailbox + no-AWS-creds box for the email flow; K13 Windows degrade with the OpenAI-SDK "Connection error." surface; K14 his exact 5 prompts as a named fixture (karunesh-matrix) beside Raj's 5-prompt suite (K9). Video-generator rows are tagged SEPARATE per the liaison rule and stay out of this matrix.
 
 ### CLWX-92 — [bug/doc-tools] In-app PDF read dies in the Electron UtilityProcess: pdfjs "No GlobalWorkerOptions.workerSrc specified"
 
