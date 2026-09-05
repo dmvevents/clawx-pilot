@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
 import { getOpenClawConfigDir } from '../../utils/paths';
+import { cronScheduleFrom, systemTimeZone } from '../../utils/cron-tz';
 import { resolveAccountIdFromSessionHistory } from '../../utils/session-util';
 import { toOpenClawChannelType, toUiChannelType } from '../../utils/channel-alias';
 import { resolveAgentIdFromChannel } from '../../utils/agent-config';
@@ -337,11 +338,20 @@ function normalizeCronDeliveryPatch(rawDelivery: unknown): Record<string, unknow
   return patch;
 }
 
-function buildCronUpdatePatch(input: Record<string, unknown>): Record<string, unknown> {
+export function buildCronUpdatePatch(input: Record<string, unknown>): Record<string, unknown> {
   const patch = { ...input };
 
   if (typeof patch.schedule === 'string') {
-    patch.schedule = { kind: 'cron', expr: patch.schedule };
+    patch.schedule = cronScheduleFrom(patch.schedule);
+  } else if (
+    patch.schedule && typeof patch.schedule === 'object'
+    && (patch.schedule as JsonRecord).kind === 'cron'
+    && typeof (patch.schedule as JsonRecord).expr === 'string'
+    && !(patch.schedule as JsonRecord).tz
+  ) {
+    // A cron expr without tz resolves in the gateway process's cached zone,
+    // not the principal's clock (CLWX-99). Explicit tz is left untouched.
+    patch.schedule = { ...(patch.schedule as JsonRecord), tz: systemTimeZone() };
   }
 
   if (typeof patch.message === 'string') {
@@ -619,7 +629,7 @@ export async function handleCronRoutes(
       }
       const result = await ctx.gatewayManager.rpc('cron.add', {
         name: input.name,
-        schedule: { kind: 'cron', expr: input.schedule },
+        schedule: cronScheduleFrom(input.schedule),
         payload: { kind: 'agentTurn', message: input.message },
         enabled: input.enabled ?? true,
         wakeMode: 'next-heartbeat',
