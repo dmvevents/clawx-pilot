@@ -40,7 +40,6 @@ import {
   createHostApiCapabilityGate,
   gateHostApiFacade,
   hostApiSkewMessage,
-  isNoRouteBody,
 } from './capability-gate.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1833,7 +1832,7 @@ export function register(api) {
     registerTool({
       name: 'forms.submit_suspension',
       description:
-        'Submit the Suspensions form. HARD GATE: refuses unless { confirm: true }. The agent MUST show the principal the filled form (forms.preview_suspension first) and obtain explicit confirmation ("yes, submit") before passing confirm=true. Returns { status: "submitted" | "refused" | "error", message?, reason? }.',
+        'Submit the Suspensions form. HARD GATE: refuses unless { confirm: true }. The agent MUST show the principal the filled form (forms.preview_suspension first) and obtain explicit confirmation ("yes, submit") before passing confirm=true. Returns { status: "submitted" | "refused" | "error" | "unavailable", message?, reason? }.',
       parameters: toolParameters(
         {
           confirm: booleanSchema,
@@ -1846,7 +1845,7 @@ export function register(api) {
     registerTool({
       name: 'forms.submit_daily_report',
       description:
-        'Submit the Primary School Daily Report form. HARD GATE: refuses unless { confirm: true }. The agent MUST show the filled form (forms.preview_daily_report first) and obtain explicit confirmation ("yes, submit") before passing confirm=true. Returns { status: "submitted" | "refused" | "error", message?, reason? }.',
+        'Submit the Primary School Daily Report form. HARD GATE: refuses unless { confirm: true }. The agent MUST show the filled form (forms.preview_daily_report first) and obtain explicit confirmation ("yes, submit") before passing confirm=true. Returns { status: "submitted" | "refused" | "error" | "unavailable", message?, reason? }.',
       parameters: toolParameters(
         {
           confirm: booleanSchema,
@@ -1897,9 +1896,11 @@ function createHostApiBrowserFacade(port, token) {
     try { data = text ? JSON.parse(text) : null; } catch { /* fall through */ }
     if (!resp.ok) {
       const errMsg = (data && (data.error || data.message)) || text.slice(0, 200) || `HTTP ${resp.status}`;
-      // CLWX-86: a global-404 body means the installed app predates this
-      // route (version skew) — refuse in principal language, never raw HTTP.
-      if (resp.status === 404 && isNoRouteBody(errMsg)) {
+      // CLWX-86: the browser family has no allowlist state, so ANY 404
+      // ("No route for ...", "Unknown browser endpoint") means the installed
+      // app does not serve this route — version skew. Refuse in principal
+      // language, never raw HTTP.
+      if (resp.status === 404) {
         throw new Error(hostApiSkewMessage('browser'));
       }
       throw new Error(`browser host-API ${path}: ${errMsg}`);
@@ -1944,14 +1945,17 @@ function createHostApiFormsFacade(port, token) {
       throw new Error(`forms host-API ${path} unreachable: ${msg}`);
     }
     if (resp.status === 404) {
-      // CLWX-86: disambiguate the two 404 shapes (see the outlook facade).
+      // CLWX-86: disambiguate the 404 shapes (see the outlook facade). Only
+      // the explicit allowlist body keeps the kill-switch wording; anything
+      // else ("No route for ...", "Unknown forms endpoint", unreadable) is
+      // version skew.
       const body404 = await resp.text().catch(() => '');
-      if (isNoRouteBody(body404)) {
-        throw new Error(hostApiSkewMessage('forms'));
+      if (/capability disabled/i.test(body404)) {
+        throw new Error(
+          `forms capability disabled: ${path} returned 404 — check that 'forms' is in PRINCIPAL_SKILL_ALLOWLIST.`,
+        );
       }
-      throw new Error(
-        `forms capability disabled: ${path} returned 404 — check that 'forms' is in PRINCIPAL_SKILL_ALLOWLIST.`,
-      );
+      throw new Error(hostApiSkewMessage('forms'));
     }
     if (!resp.ok) {
       const text = await resp.text().catch(() => '');
@@ -2038,17 +2042,18 @@ function createHostApiOutlookFacade(port, token) {
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch { /* fall through */ }
     if (resp.status === 404) {
-      // CLWX-86: disambiguate the two 404 shapes. A global "No route for ..."
-      // body means the installed app predates this route (version skew — the
-      // route never executed, so no side effects are possible); the
-      // allowlist-off shape carries "capability disabled" in the body.
-      const bodyMsg = (data && (data.error || data.message)) || text;
-      if (isNoRouteBody(bodyMsg)) {
-        return { status: 'unavailable', message: hostApiSkewMessage('outlook') };
+      // CLWX-86: disambiguate the 404 shapes. Only the explicit allowlist
+      // body ("capability disabled") keeps the kill-switch wording; every
+      // other 404 (global "No route for ...", unknown-endpoint, unreadable
+      // body) means the installed app does not serve this route — version
+      // skew. The route never executed, so no side effects are possible.
+      const bodyMsg = String((data && (data.error || data.message)) || text || '');
+      if (/capability disabled/i.test(bodyMsg)) {
+        throw new Error(
+          `outlook capability disabled: ${path} returned 404 — check that 'outlook' is in PRINCIPAL_SKILL_ALLOWLIST.`,
+        );
       }
-      throw new Error(
-        `outlook capability disabled: ${path} returned 404 — check that 'outlook' is in PRINCIPAL_SKILL_ALLOWLIST.`,
-      );
+      return { status: 'unavailable', message: hostApiSkewMessage('outlook') };
     }
     if (!resp.ok) {
       const errMsg = (data && (data.error || data.message)) || text.slice(0, 200) || `HTTP ${resp.status}`;

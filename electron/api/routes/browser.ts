@@ -8,6 +8,9 @@ export async function handleBrowserRoutes(
   res: ServerResponse,
   url: URL,
 ): Promise<boolean> {
+  // CLWX-86 drift-guard convention: endpoints in this family must dispatch
+  // via single-quoted url.pathname equality literals - the inventory guard in
+  // tests/unit/host-api-capabilities-route.test.ts parses exactly that shape.
   if (!url.pathname.startsWith('/api/browser/')) return false;
   if (req.method !== 'POST') {
     sendJson(res, 405, { success: false, error: 'Method not allowed' });

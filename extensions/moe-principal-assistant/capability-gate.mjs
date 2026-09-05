@@ -47,8 +47,8 @@ export function hostApiSkewMessage(family) {
   const label = FAMILY_LABELS[family] ?? String(family ?? 'this');
   return (
     `The installed Ministry of Education app does not support ${label} ` +
-    'actions yet — the assistant is newer than the app. Please install the ' +
-    'latest Ministry of Education app update, then try again.'
+    'actions yet — the app and its assistant are out of step. Please ' +
+    'install the latest Ministry of Education app update, then try again.'
   );
 }
 

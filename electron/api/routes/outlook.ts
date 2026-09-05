@@ -210,6 +210,9 @@ export async function handleOutlookRoutes(
   res: ServerResponse,
   url: URL,
 ): Promise<boolean> {
+  // CLWX-86 drift-guard convention: endpoints in this family must dispatch
+  // via single-quoted url.pathname equality literals - the inventory guard in
+  // tests/unit/host-api-capabilities-route.test.ts parses exactly that shape.
   if (!url.pathname.startsWith('/api/outlook/')) return false;
 
   // Feature gate. When 'outlook' is not in the allowlist we behave as if

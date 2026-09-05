@@ -105,6 +105,28 @@ const CAPABILITIES_OK: StubResponse = {
   },
 };
 
+/** Tool name → minimal args that pass execute-level validation. */
+const TOOL_ROWS: Array<[string, Record<string, unknown>]> = [
+  ['browser.diagnose', {}],
+  ['browser.repair_chrome_cdp', {}],
+  ['outlook.open', {}],
+  ['outlook.read_inbox', {}],
+  ['outlook.draft_email', { to: 'someone@example.com', subject: 'Test', body: 'Body' }],
+  ['outlook.send_email', { confirm: true }],
+  ['outlook.search_inbox', {}],
+  ['outlook.read_email', { id: 'msg-1' }],
+  ['outlook.reply', { id: 'msg-1', body: 'Body' }],
+  ['outlook.forward', { id: 'msg-1', to: 'someone@example.com' }],
+  ['outlook.mark_read', { id: 'msg-1', read: true }],
+  ['outlook.list_attachments', { id: 'msg-1' }],
+  ['outlook.download_attachment', { id: 'msg-1', filename: 'a.pdf', confirm: true }],
+  ['forms.list', {}],
+  ['forms.preview_suspension', { payload: {} }],
+  ['forms.preview_daily_report', { payload: { attendance: '250' } }],
+  ['forms.submit_suspension', { confirm: true }],
+  ['forms.submit_daily_report', { confirm: true }],
+];
+
 function collectLog() {
   const lines: string[] = [];
   return {
@@ -240,28 +262,6 @@ describe('per-tool self-park rows on a skewed (legacy, family-less) app — CLWX
     delete process.env.MOE_DEMO_DEFAULTS;
   });
 
-  /** Tool name → minimal args that pass execute-level validation. */
-  const PARK_ROWS: Array<[string, Record<string, unknown>]> = [
-    ['browser.diagnose', {}],
-    ['browser.repair_chrome_cdp', {}],
-    ['outlook.open', {}],
-    ['outlook.read_inbox', {}],
-    ['outlook.draft_email', { to: 'someone@example.com', subject: 'Test', body: 'Body' }],
-    ['outlook.send_email', { confirm: true }],
-    ['outlook.search_inbox', {}],
-    ['outlook.read_email', { id: 'msg-1' }],
-    ['outlook.reply', { id: 'msg-1', body: 'Body' }],
-    ['outlook.forward', { id: 'msg-1', to: 'someone@example.com' }],
-    ['outlook.mark_read', { id: 'msg-1', read: true }],
-    ['outlook.list_attachments', { id: 'msg-1' }],
-    ['outlook.download_attachment', { id: 'msg-1', filename: 'a.pdf', confirm: true }],
-    ['forms.list', {}],
-    ['forms.preview_suspension', { payload: {} }],
-    ['forms.preview_daily_report', { payload: { attendance: '250' } }],
-    ['forms.submit_suspension', { confirm: true }],
-    ['forms.submit_daily_report', { confirm: true }],
-  ];
-
   it('all 18 host-API tools park readably and zero POSTs reach the host-API', async () => {
     process.env.CLAWX_HOST_API_PORT = '13299';
     process.env.CLAWX_HOST_API_TOKEN = 'unit-test-token';
@@ -281,7 +281,7 @@ describe('per-tool self-park rows on a skewed (legacy, family-less) app — CLWX
     });
     const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
 
-    for (const [name, args] of PARK_ROWS) {
+    for (const [name, args] of TOOL_ROWS) {
       const tool = byName[name];
       expect(tool, `tool ${name} should be registered`).toBeTruthy();
       const result = (await tool.execute?.('t1', args)) as { status?: string; message?: string };
@@ -294,6 +294,40 @@ describe('per-tool self-park rows on a skewed (legacy, family-less) app — CLWX
     expect(posts).toEqual([]);
     // The handshake itself is GET-only and ran at least once.
     expect(calls.some((c) => c.method === 'GET' && c.url === '/api/capabilities')).toBe(true);
+  });
+
+  it('tier-1 positive control: with the full inventory NO tool is parked (route-map typo guard)', async () => {
+    // Functional half of the route-map drift guard (adversarial-review
+    // MAJOR): a typo in any of the 18 route strings in index.mjs would park
+    // that tool against a current app — this row fails on exactly that.
+    process.env.CLAWX_HOST_API_PORT = '13299';
+    process.env.CLAWX_HOST_API_TOKEN = 'unit-test-token';
+    process.env.MOE_DEMO_DEFAULTS = '1';
+
+    const { fetchImpl } = makeFetchStub((method, pathname) => {
+      if (method === 'GET' && pathname === '/api/capabilities') return CAPABILITIES_OK;
+      if (method === 'POST') {
+        return { status: 200, body: { success: true, data: { status: 'ok' } } };
+      }
+      return undefined;
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const { register } = await loadPlugin();
+    const tools: RegisteredTool[] = [];
+    register({
+      pluginConfig,
+      registerTool: (tool: RegisteredTool) => tools.push(tool),
+      log: { info() {}, warn() {} },
+    });
+    const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+
+    for (const [name, args] of TOOL_ROWS) {
+      const result = (await byName[name].execute?.('t1', args)) as { status?: string };
+      expect(result?.status, `tool ${name} must NOT be parked on a current app`).not.toBe(
+        'unavailable',
+      );
+    }
   });
 });
 
@@ -336,7 +370,7 @@ describe('facade 404 disambiguation + positive control — CLWX-86', () => {
   it('endpoint-level skew on a legacy app: outlook surfaces the readable message, not raw HTTP', async () => {
     // Gate sees the route as present (inventory lists it) but the POST 404s
     // with the global no-route shape — the facade must translate it.
-    const { byName } = await registerWithStub((method, pathname) => {
+    const { byName, calls } = await registerWithStub((method, pathname) => {
       if (method === 'GET' && pathname === '/api/capabilities') return CAPABILITIES_OK;
       return undefined; // every POST → global 404
     });
@@ -347,6 +381,9 @@ describe('facade 404 disambiguation + positive control — CLWX-86', () => {
     expect(result.status).toBe('unavailable');
     expect(result.message).toContain('Ministry of Education app update');
     expect(result.message).not.toMatch(/No route for/i);
+    // Exactly one POST proves this outcome came from the facade translation,
+    // not from a gate park (which would have made zero POSTs).
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(1);
   });
 
   it('allowlist-off 404 keeps the kill-switch wording (outlook)', async () => {
@@ -373,5 +410,83 @@ describe('facade 404 disambiguation + positive control — CLWX-86', () => {
     await expect(byName['browser.diagnose'].execute?.('t1', {})).rejects.toThrow(
       /Ministry of Education app update/,
     );
+  });
+
+  it('within-family unknown-endpoint 404s are skew, not allowlist wording (review MINOR)', async () => {
+    // A legacy app whose family handler claims the prefix but lacks the
+    // endpoint answers 404 "Unknown <family> endpoint" — that is version
+    // skew, and must never point the operator at PRINCIPAL_SKILL_ALLOWLIST.
+    const { byName } = await registerWithStub((method, pathname) => {
+      if (method === 'GET' && pathname === '/api/capabilities') return CAPABILITIES_OK;
+      if (method === 'POST' && pathname === '/api/forms/list') {
+        return { status: 404, body: { success: false, error: 'Unknown forms endpoint' } };
+      }
+      if (method === 'POST' && pathname === '/api/browser/diagnose') {
+        return { status: 404, body: { success: false, error: 'Unknown browser endpoint' } };
+      }
+      return undefined;
+    });
+    const formsErr = await byName['forms.list'].execute?.('t1', {}).then(
+      () => null,
+      (e: unknown) => String(e),
+    );
+    expect(formsErr).toContain('Ministry of Education app update');
+    expect(formsErr).not.toContain('PRINCIPAL_SKILL_ALLOWLIST');
+    await expect(byName['browser.diagnose'].execute?.('t1', {})).rejects.toThrow(
+      /Ministry of Education app update/,
+    );
+  });
+});
+
+describe('gate tier-1 payload variants — CLWX-86 review pass', () => {
+  it('routes-only payload (no families object): presence inferred from the route list', async () => {
+    const shaped = structuredClone(CAPABILITIES_OK) as typeof CAPABILITIES_OK;
+    const data = (shaped.body as { data: Record<string, unknown> }).data;
+    delete data.families;
+    data.routes = (data.routes as string[]).filter((r) => !r.includes('/api/forms/'));
+    const { fetchImpl } = makeFetchStub((method, pathname) =>
+      method === 'GET' && pathname === '/api/capabilities' ? shaped : undefined,
+    );
+    const gate = createHostApiCapabilityGate({ port: 13299, token: 't', log: collectLog().log, fetchImpl });
+
+    expect((await gate.check({ family: 'outlook', route: 'POST /api/outlook/open' })).ok).toBe(true);
+    const parked = await gate.check({ family: 'forms', route: 'POST /api/forms/list' });
+    expect(parked.ok).toBe(false);
+    expect(parked.reason).toBe(hostApiSkewMessage('forms'));
+  });
+
+  it('families-only payload (routes missing): route-level checks are skipped', async () => {
+    const shaped = structuredClone(CAPABILITIES_OK) as typeof CAPABILITIES_OK;
+    delete (shaped.body as { data: Record<string, unknown> }).data.routes;
+    const { fetchImpl } = makeFetchStub((method, pathname) =>
+      method === 'GET' && pathname === '/api/capabilities' ? shaped : undefined,
+    );
+    const gate = createHostApiCapabilityGate({ port: 13299, token: 't', log: collectLog().log, fetchImpl });
+    // Even a route the app would not serve passes — family presence is the
+    // only definitive evidence available, so the gate must not park.
+    expect((await gate.check({ family: 'outlook', route: 'POST /api/outlook/ghost' })).ok).toBe(true);
+  });
+
+  it('malformed 200 body is indeterminate: fail open, then re-probe', async () => {
+    let malformed = true;
+    const { fetchImpl, calls } = makeFetchStub((method, pathname) => {
+      if (method === 'GET' && pathname === '/api/capabilities') {
+        return malformed ? { status: 200, body: { success: true, data: 'nope' } } : CAPABILITIES_OK;
+      }
+      return undefined;
+    });
+    const gate = createHostApiCapabilityGate({ port: 13299, token: 't', log: collectLog().log, fetchImpl });
+
+    const first = await gate.check({ family: 'outlook', route: 'POST /api/outlook/open' });
+    expect(first).toMatchObject({ ok: true, indeterminate: true });
+
+    malformed = false;
+    const second = await gate.check({ family: 'outlook', route: 'POST /api/outlook/open' });
+    expect(second.ok).toBe(true);
+    expect(second).not.toHaveProperty('indeterminate');
+    // Definitive now — a third check must not re-fetch.
+    const settled = calls.length;
+    await gate.check({ family: 'forms', route: 'POST /api/forms/list' });
+    expect(calls.length).toBe(settled);
   });
 });

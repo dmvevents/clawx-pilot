@@ -101,13 +101,35 @@ describe('handleCapabilitiesRoutes (CLWX-86)', () => {
         path.join(REPO_ROOT, 'electron', 'api', 'routes', `${family}.ts`),
         'utf8',
       );
-      for (const match of src.matchAll(/url\.pathname === '(\/api\/[^']+)'/g)) {
+      // Strip line comments so documentation mentioning the dispatch shape
+      // is never counted as a live route.
+      const code = src.replace(/^\s*\/\/.*$/gm, '');
+      for (const match of code.matchAll(/url\.pathname === '(\/api\/[^']+)'/g)) {
         // All three family handlers are POST-only (non-POST → 405).
         fromSource.add(`POST ${match[1]}`);
       }
     }
     expect(fromSource.size).toBeGreaterThanOrEqual(18);
     expect(new Set(PLUGIN_FACING_HOST_API_ROUTES)).toEqual(fromSource);
+  });
+
+  it('drift guard: the plugin-side route maps in index.mjs set-equal the inventory', async () => {
+    // The three gateHostApiFacade maps in the plugin are a third copy of the
+    // route list; the tier-1 gate does an exact Set.has() on these strings,
+    // so a single-character typo would permanently false-park a working tool
+    // on up-to-date apps (adversarial-review MAJOR, 2026-09-05). This leg
+    // closes the drift triangle: inventory == route files == plugin maps.
+    const { PLUGIN_FACING_HOST_API_ROUTES } = await loadHandler();
+    const src = readFileSync(
+      path.join(REPO_ROOT, 'extensions', 'moe-principal-assistant', 'index.mjs'),
+      'utf8',
+    );
+    const fromPlugin = new Set<string>();
+    for (const match of src.matchAll(/'(POST \/api\/[^']+)'/g)) {
+      fromPlugin.add(match[1]);
+    }
+    expect(fromPlugin.size).toBeGreaterThanOrEqual(18);
+    expect(fromPlugin).toEqual(new Set(PLUGIN_FACING_HOST_API_ROUTES));
   });
 
   it('drift guard: server.ts wires the capabilities handler', () => {
