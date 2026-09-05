@@ -324,6 +324,29 @@ browser-target DevTools session; the ONLY fix remains the owner restart of
 the signed-in Chrome. CLWX-61/63 stay In Progress / owner-gated; no work
 manufactured per the driver guardrail._
 
+_**Driver increment 2026-09-05 (night): CLWX-85 version-bits hash-manifest
+gate to Ready (`a5db3b1f` + review pass `5dd5f26f`).** Monitor directed one
+non-Chrome increment from CLWX-74/84/85; picked 85 (in-tree only, no
+evidence-mutation risk, and it directly serves Monday's build — the demo
+build must verifiably carry `6b446d13`+`566a7504`+`148c4e53`).
+`scripts/release-hash-manifest.mjs` generate/publish/verify + auto-run
+after every electron-builder invocation; unpublished rebuild = loud
+supersededBuilds history, PUBLISHED rebuild with different bits = hard stop
+(exit 3, "bump moe.N" — convention now enforced); install-side diff via
+`--only/--path`. Adversarial 3-lens/10-agent review CONFIRMED 7/7 findings
+(critical: version-blind tree discovery bound moe.10-era mac bits into the
+moe.18 manifest and could have spuriously hard-stopped a legitimate
+`package:mac`); all fixed — trees are now version-checked by reading
+package.json out of the asar (no new dep), drift merges instead of
+replacing, a manifest-script crash can never fail a build (only the policy
+stop can). Committed moe.18 manifest is honest: win set recorded (asar
+verifies moe.18), both stale mac trees skipped (asar reads moe.10), 86-min
+exe/tree staleness warning preserved. Guards 14/14; falsifiability proven
+twice (hard-stop off → 1 fails; version check off → 2 fail). Full suite
+1387 pass, typecheck+lint green, checklist row 8.8. OWNER: run
+`pnpm release:manifest:publish` after shipping the demo build to arm the
+gate._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed

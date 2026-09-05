@@ -1215,7 +1215,7 @@ Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex ro
 
 ### CLWX-85 — [release] Version-bits integrity: same version string shipped different bits twice - hash-manifest gate
 
-- **State:** Todo  |  **Priority:** high
+- **State:** Ready  |  **Priority:** high
 
 Findings
 1. moe.10-era: release/win-unpacked and the NSIS installer carried the SAME version with different code (installer embedded a day-older app.asar).
@@ -1226,6 +1226,10 @@ Release workflow gate: version string must be unique per artifact set; a hash ma
 
 Source
 Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+**Comments (1):**
+
+- FIXED in-tree (commits a5db3b1f + review pass 5dd5f26f) — moving to Ready; a human closes Done. What landed (acceptance mapped): 1. HASH MANIFEST AT BUILD. scripts/release-hash-manifest.mjs generate runs automatically after every successful electron-builder invocation (wired in run-electron-builder.mjs). It hashes the version's installers + the unpacked app.asar + the plugin bundle dirs (extensions, openclaw-plugins) into docs/release-manifests/<version>.json (committed = published with the release). Unpacked trees are VERSION-CHECKED by reading package.json out of the asar (minimal 16-byte-header reader, no new dependency) so stale build leftovers can never be recorded under the wrong version. 2. VERSION-UNIQUENESS ENFORCED. Rebuilding a version with different bits: while unpublished = loud warning + prior hashes kept in supersededBuilds; once published (pnpm release:manifest:publish at ship time) = HARD STOP (exit 3) that fails the build with "bump moe.N" — the CLAUDE.md convention is now enforced, not advisory. A crash of the manifest script itself can never block a legitimate build (warn-and-pass); only the deliberate policy stop does. 3. INSTALL-VERIFY DIFF. pnpm release:manifest:verify recomputes and diffs; any mismatch is a hard stop. Install-side single-artifact checks: verify --only win:app.asar --path <installed app.asar>. verify also replays the generate-time warnings and flags an unarmed (unpublished) manifest. Adversarial review: 3-lens / 10-agent pass on the first commit returned 7 CONFIRMED findings (1 critical: version-blind tree discovery had bound moe.10-era mac bits into the moe.18 manifest); all fixed in 5dd5f26f. Live evidence: the committed 0.4.3-moe.18 manifest correctly skips the two stale mac trees (asar reads 0.4.3-moe.10) and records the win set (asar reads moe.18); the 86-min exe-vs-tree staleness warning is preserved. Guards: tests/unit/release-hash-manifest.test.ts 14/14, falsifiability proven twice (published-drift stop disabled = exactly 1 fails; version check disabled = exactly 2 fail). Full suite 1387 pass, typecheck + lint green. PRODUCTION_CHECKLIST row 8.8 added. OWNER NOTE for Monday's demo build: after cutting + handing over the build, run `pnpm release:manifest:publish` to arm the immutability gate for that version. RESIDUALS (documented in 5dd5f26f, not blocking): symlinks excluded from dir digests; blockmap/latest.yml outside coverage (auto-update OFF in pilot); concurrent-generate race; publish remains a human ship step.
 
 ### CLWX-86 — [bug/runtime] Tool<->host-API version skew: agent advertises routes the installed app lacks
 
