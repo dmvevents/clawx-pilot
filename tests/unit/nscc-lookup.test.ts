@@ -195,9 +195,31 @@ describe('searchNscc — honesty and edge cases (falsifiability)', () => {
     // into its predecessor (lens minor 12 fix) — still firmly bounded.
     for (const p of passages) expect(p.length).toBeLessThanOrEqual(1900);
     const total = passages.reduce((n: number, p: string) => n + p.length, 0);
-    // Split loses only inter-block whitespace, page-number artifacts, and
-    // TOC dot-leader lines (intended noise removal; measured ratio 0.897 on
-    // the shipped file) — never body content.
-    expect(total).toBeGreaterThan(nsccText.length * 0.85);
+    // Aggregate floor pinned within <1 point of the measured ratio (0.897 on
+    // the shipped file): the split loses only inter-block whitespace,
+    // page-number artifacts, and TOC dot-leader lines. An earlier 0.85 floor
+    // left 4.7 points of slack — real body text could vanish silently
+    // (owner gate flag, 2026-09-06).
+    expect(total).toBeGreaterThan(nsccText.length * 0.89);
+  });
+
+  it('drops ONLY known noise classes — every non-noise source line survives into some passage (owner gate flag, 2026-09-06)', async () => {
+    const { splitNsccPassages } = await load();
+    const passages = splitNsccPassages(nsccText);
+    // Whitespace-collapsed containment: block-edge trims and split points
+    // land on line boundaries, so any body LINE the splitter dropped fails
+    // here BY NAME instead of hiding inside an aggregate ratio.
+    const collapse = (s: string) => s.replace(/\s+/g, ' ').trim();
+    const joined = collapse(passages.join('\n'));
+    const isNoise = (line: string) =>
+      /^\s*$/.test(line)                    // blank / inter-block whitespace
+      || /^[ \t]*\d{1,3}[ \t]*$/.test(line) // bare page-number artifact
+      || /\.{5,}\s*\d+\s*$/.test(line);     // TOC dot-leader entry
+    const missing: string[] = [];
+    for (const line of nsccText.split(/\r?\n/)) {
+      if (isNoise(line)) continue;
+      if (!joined.includes(collapse(line))) missing.push(line.slice(0, 80));
+    }
+    expect(missing).toEqual([]);
   });
 });
