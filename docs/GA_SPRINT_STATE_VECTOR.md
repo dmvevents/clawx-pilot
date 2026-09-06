@@ -1488,6 +1488,40 @@ the production-integration milestone, not a GA blocker.
   stays In Progress — remaining trail: Windows-lane run (NODE_OPTIONS
   backslash nuance recorded; un-stubbed Electron lane now fails loudly via
   the sentinel), in-app K10 drag-gesture cell.
+- **CLWX-42 NSCC knowledge pack SHIPPED in-tree (2026-09-06 seventh tick) —
+  Raj's clearest explicit ask + the K14 substance gap, built +
+  review-hardened + live-proven on both lanes (`ae4779c5` + `d215ebe0`).**
+  SENSE promotions this tick: **gcloud auth RESTORED** (instance list
+  works — VM lane unblocked pending an owner VM-start spend decision);
+  Windows RC VM is actually **TERMINATED** (the resume brief's "VM still
+  RUNNING" is stale; :12222 is a dead local listener — SSH banner timeout
+  proven); the local app IS running (gateway 18789 + host-API 13210 up).
+  Gate pulse GREEN 7/0/2. WHAT SHIPPED: the content-verified nscc-2026.txt
+  (sha256 e13fd290… = the recorded eval hash) inside the plugin dir;
+  `principal.nscc_lookup` deterministic retrieval (top-8 passages ≤~12KB —
+  the KR6 token-floor decision, NOT a bootstrap doc); persona steering
+  (call the tool, cite the NSCC, never ask for the file, retry-then-report
+  on a miss — never "the Code lacks it"); NSCC_EVAL_LANE=tool re-runs the
+  stakeholder eval over the REAL retrieval; inventory contract 31→32
+  consciously updated + re-proven through the mock-API row AND the
+  real-gateway transport row. REVIEW: Codex needs-attention 2 HIGH + 1 MED
+  all fixed same tick (excerpt truncation discarded scored tails;
+  page-break split the 4-part suspension/expulsion safeguards; colloquial
+  miss mislabelled as absent policy → synonym bridge + honest note);
+  follow-on scoring fixes (informative-bigram df cut, corpus-frequent term
+  down-weighting, heading-match bonus). EVIDENCE: tool lane 17/20 = 85%
+  (floor 80) with 20/20 NSCC citations; context lane on the shipped file
+  18/20 = 90% (identical rows to the 2026-09-03 baseline); deterministic
+  fixture coverage 20/20; Q20 now PASSES on the tool lane (fails
+  full-context — retrieval beats it there). Guards 105/105; suite
+  1590/6-skip; typecheck+lint clean. Card stays In Progress on two named
+  items: the Claude-lens verdicts (2 bounded reviewers in flight at tick
+  close — the before-Ready bar; fold = next action) and the
+  NEXT-BUILD/RESTART gate for the literal fresh-session in-app turn (the
+  running gateway predates the tool; owner restart or next build).
+  NEW OWNER ASK: start `clawx-win-rc-20260609` (spend, ~$0.13/hr) when
+  ready to unlock CLWX-87 System.Speech + the CLWX-77 Windows-lane run —
+  gcloud auth is no longer the blocker.
 
 ---
 
