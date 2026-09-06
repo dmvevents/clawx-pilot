@@ -940,32 +940,6 @@ state-hygiene / exit-path invariant - candidate rule for state-idempotency-audit
 - ACCEPTANCE COMPLETE (2026-09-03, commits f3653589 + bfeb2cf1 + 9aabc8f6). The three legs: (1) SWEEPER shipped and run live (14 automation drafts deleted, re-scan 0; strict subject allowlist now a shared module). (2) EVAL POSTCONDITION: v2-eval runs pre/mid/end compose hygiene and returns the lane as found. (3) EXIT-PATH INVARIANT: reply and forward typing timeouts now discard the pane the call opened (discardOwnCompose) instead of leaking it - the exact 2026-09-03 cascade class; draftEmail failure paths return structured results with draftLeftOpen honestly reported; safety-class throws preserved (contract suites pin them). Live evidence on CLWX-58. Ready for human close.
 - User-facing impact CONFIRMED (2026-09-03 deep-dive): the external tester's email-send test on moe.15 dead-ended with "there might be a previously saved draft without a recipient" and a hidden New-mail button - on the SHARED test.fac mailbox where our eval runs left 23 saved drafts + [Draft]-marked conversations. The litter is no longer cosmetic; it blocked Ext-val B email testing. Sweeper run for the automation drafts executed this tick (see state vector).
 
-### CLWX-71 — [feature/mcp] Thin MCP adapter over host-API :13210 - gated forms/outlook tools for any MCP client
-
-- **State:** Todo  |  **Priority:** medium
-
-Area: integration   Priority: medium (post-GA enhancement; owner-requested research 2026-09-03)
-
-Research verdict (docs/MCP_INTEGRATION_RESEARCH_2026-09-03.md, web-verified 2026-09-02/03)
-NO MCP server anywhere can submit Microsoft Forms responses - no public Graph/REST API exists; the Power Automate connector remains read-only (doc upd. 2025-10-06). Browser MCPs (Playwright MCP --cdp-endpoint, chrome-devtools-mcp --browserUrl) CAN attach to the user Chrome at :18792 (Conditional Access constraint satisfied) but are UNGATED click/type surfaces - dev/debug only, never principal-facing.
-
-Build
-A ~200-line stdio MCP server (@modelcontextprotocol/sdk v2) that proxies the existing host-API endpoints as MCP tools: forms list/preview-daily-report/submit-daily-report/preview-suspension/submit-suspension + outlook open/read-inbox/draft/send (~9 registerTool blocks). The hard-confirm gates (confirm:true + title/subject fingerprint) stay server-side in FormsBrowserManager/outlook manager, so EVERY MCP client (Claude Code, Claude Desktop, future agents) inherits them and cannot bypass them. This is how MCP re-enhances the app: its capabilities become tools other agents can drive - same gates, same logs, zero new attack surface, no CDP contention.
-
-Acceptance (QA + security bar)
-1. Adapter connects from Claude Code; tools list correctly.
-2. Read-only proof: forms preview + outlook read-inbox through MCP.
-3. GATE PROOF through MCP: submit/send WITHOUT confirm is refused end-to-end; with confirm:true + matching fingerprint it completes on the test.fac sandbox only.
-4. :13210 auth token via env var (never argv/logs); adapter logs counts only, never payload bodies.
-5. MCP SDK in dependencies, not devDependencies (dependency-class-auditor rule).
-6. README note: raw browser MCPs are dev/debug only.
-
-Non-goals
-No Graph MCP for forms (no API to wrap). Logic Apps-as-MCP-server (preview) revisits when Ministry IT stands up the Power Automate path - the sanctioned long-term fix is writing the form's backing store directly, exposed as a gated server-side tool.
-
-Sources
-microsoft/mcp catalog; microsoft/playwright-mcp; ChromeDevTools/chrome-devtools-mcp; softeria/ms-365-mcp-server; learn.microsoft.com Forms connector + Logic Apps MCP preview + Enterprise Graph MCP; modelcontextprotocol/typescript-sdk. Full report in docs/MCP_INTEGRATION_RESEARCH_2026-09-03.md.
-
 ### CLWX-72 — [bug/packaging] moe.15 Windows runtime missing pdf-parse - document.read_pdf dead on tester install (KAR-PDF root cause)
 
 - **State:** Ready  |  **Priority:** urgent
@@ -1675,6 +1649,36 @@ S2/S3 boundary. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_20
 
 - Monitor-reported Chrome :18792 recovery DISPROVEN (2026-09-05 evening). Probe evidence: clwx63 probe-only leg reports NOT attachable (HTTP 200, ws connected to browser target f0300805…, attach timeout 8s); a manual connectOverCDP retry with a 30s timeout fails identically. Third independent confirmation of the ping-up/attach-down wedge. lsof shows no foreign client on the port to clear; the wedge is inside Chrome's browser-target DevTools session. The live half of this card (and CLWX-61's) remains owner-gated on the Chrome restart. Do not re-promote on HTTP/ws pings — the probe must complete an attach.
 - **CLWX-63 — full extraction-chain e2e AUTHORED + static-verified; live proof LANE-BLOCKED.** _(GA-breadth push, 2026-09-05)_ New in the working tree: - scripts/clwx63-extract-chain-e2e.ts — the chain the card demands, using PRODUCTION surfaces at every step: fixture letter -> writeDocx -> readDocx (production reader) -> Bedrock extraction against the REGISTERED principal.suspension_payload description+schema -> real principal.suspension_payload execute (production normalizers, statutory no-invention refusal, MOE_DEMO_DEFAULTS never set) -> real forms.preview_suspension -> SuspensionsActions open+fill on the test.fac clone -> diff vs expected JSON (PASS iff <=3 misses, fill errors count as misses) -> gate leg: submit with confirm:false must REFUSE. Only the host-API HTTP hop is shimmed (same approach as the unit suite); the shim HARD-THROWS if a truthy confirm ever reaches the submit route — this harness structurally cannot submit. Exit 0/1/2 per lane convention; CLWX63_PROBE_ONLY=1 gives a safe lane probe. - tests/e2e/fixtures/clwx63/suspension-letter.txt — invented Student A / Parent A data, all 32 fields explicit, exact option texts. - tests/e2e/fixtures/clwx63/expected-values.json — 31 expected fields pre-computed through the real normalizers. Evidence run: ad-hoc strict tsc + eslint -> exit 0; plugin tool-surface unit 20/20; probe-only run reproduces the EXACT current wedge (json/version answers 200, ws connects, attach times out) -> clean exit 2. An HTTP-only lane probe would lie; this one attaches with an 8s bound. DEFECT FOUND during authoring (filed separately + register row INFRACTION-ALIAS): extensions/moe-principal-assistant/index.mjs:196-197 — "Fight without Weapon" normalizes to "Fight with Weapon" because /fight.*weapon/i is tried first and .* matches " without ". Wrong-answer rewrite on a statutory field. The fixture deliberately uses "Bullying/Intimidation" to stay defect-independent. Remaining to Ready: one live green run once the CDP lane recovers (Chrome restart, owner-gated). Card stays In Progress.
+
+### CLWX-71 — [feature/mcp] Thin MCP adapter over host-API :13210 - gated forms/outlook tools for any MCP client
+
+- **State:** In Progress  |  **Priority:** medium
+
+Area: integration   Priority: medium (post-GA enhancement; owner-requested research 2026-09-03)
+
+Research verdict (docs/MCP_INTEGRATION_RESEARCH_2026-09-03.md, web-verified 2026-09-02/03)
+NO MCP server anywhere can submit Microsoft Forms responses - no public Graph/REST API exists; the Power Automate connector remains read-only (doc upd. 2025-10-06). Browser MCPs (Playwright MCP --cdp-endpoint, chrome-devtools-mcp --browserUrl) CAN attach to the user Chrome at :18792 (Conditional Access constraint satisfied) but are UNGATED click/type surfaces - dev/debug only, never principal-facing.
+
+Build
+A ~200-line stdio MCP server (@modelcontextprotocol/sdk v2) that proxies the existing host-API endpoints as MCP tools: forms list/preview-daily-report/submit-daily-report/preview-suspension/submit-suspension + outlook open/read-inbox/draft/send (~9 registerTool blocks). The hard-confirm gates (confirm:true + title/subject fingerprint) stay server-side in FormsBrowserManager/outlook manager, so EVERY MCP client (Claude Code, Claude Desktop, future agents) inherits them and cannot bypass them. This is how MCP re-enhances the app: its capabilities become tools other agents can drive - same gates, same logs, zero new attack surface, no CDP contention.
+
+Acceptance (QA + security bar)
+1. Adapter connects from Claude Code; tools list correctly.
+2. Read-only proof: forms preview + outlook read-inbox through MCP.
+3. GATE PROOF through MCP: submit/send WITHOUT confirm is refused end-to-end; with confirm:true + matching fingerprint it completes on the test.fac sandbox only.
+4. :13210 auth token via env var (never argv/logs); adapter logs counts only, never payload bodies.
+5. MCP SDK in dependencies, not devDependencies (dependency-class-auditor rule).
+6. README note: raw browser MCPs are dev/debug only.
+
+Non-goals
+No Graph MCP for forms (no API to wrap). Logic Apps-as-MCP-server (preview) revisits when Ministry IT stands up the Power Automate path - the sanctioned long-term fix is writing the form's backing store directly, exposed as a gated server-side tool.
+
+Sources
+microsoft/mcp catalog; microsoft/playwright-mcp; ChromeDevTools/chrome-devtools-mcp; softeria/ms-365-mcp-server; learn.microsoft.com Forms connector + Logic Apps MCP preview + Enterprise Graph MCP; modelcontextprotocol/typescript-sdk. Full report in docs/MCP_INTEGRATION_RESEARCH_2026-09-03.md.
+
+**Comments (1):**
+
+- Adapter BUILT + live-proven + review-hardened (2026-09-06 driver tick; commits 0d8b0fbb + 1e3a9170 + 61fb895e) — and its review lane found a PRODUCTION two-gate hole. Card Todo → In Progress. - Built: scripts/clawx-mcp-server.mjs — stdio MCP server (SDK low-level API, no phantom deps), nine tools proxying the host-API verbatim so the two-gate send, forms hard-confirm, kill-switch and audit-first outbox writes ALL stay server-side; token env-only with fail-fast; stderr-only logging with identifier-shaped key names + counts; pnpm mcp:serve; docs/MCP_ADAPTER.md incl. the raw-browser-MCPs-are-dev/debug-only warning (acceptance 6); SDK in dependencies (acceptance 5). - Live proof (scripts/clwx71-mcp-handshake.ts, SDK client over stdio vs the RUNNING app): handshake OK; tools/list 9/9 exact-set (acceptance 1); outlook_send_email WITHOUT confirm → status "refused" end-to-end with the exact confirm-gate reason (acceptance 3 refusal leg). Recorded honestly: the installed app is moe.10 so /api/forms/* 404s (relayed readably; provable next build); outlook_read_inbox returns the readable Chrome-attach error (proxy path proven; live read Chrome-gated). - THE FIND (Codex HIGH, confirmed in source, fixed in production code 1e3a9170): sendEmail's current-reviewed branch DROPPED the subject — a bare {confirm:true} (or confirm + wrong subject) sent whatever single draft was open with ZERO second-gate verification, reachable from the in-app agent identically. Fixed three layers deep: subject assertion now REQUIRED on every confirmed send; snapshot-subject match before the click; subject enforced in the click-time DOM probe. Codex's probe replays are permanent regressions; the two legacy tests that encoded the vulnerable contract updated. Safety suite 87/87. NEXT-BUILD GATE: installed apps carry the old gate until a build ships this. Register row SEND-GATE-SUBJECT-SKIP. - Codex 5-for-5 closed (verdict verbatim: docs/evidence/CODEX_ADVERSARIAL_REVIEW_2026-09-06_CLWX-71.md): H2 mutating-tool transport failures now return OUTCOME UNKNOWN + do-not-retry (a post-dispatch loss may follow a completed send) and MCP cancellation propagates into the fetch; M1 content-bearing/newline key names withheld from logs; M2 the harness gate proof requires the exact confirm-gate reason (the "No open draft" false-PASS mutation now fails); M3 token-free registration via scripts/clawx-mcp-launcher.mjs (in-process recovery — the credential never appears in ANY argv; the old -e TOKEN example removed and guard-pinned). Guards 22/22; live handshake re-run PASS; full suite 1627/6-skip; typecheck+lint clean. Remaining for Ready (all gated, none agent-executable today): confirmed-submit/send positive leg (test.fac sandbox + healthy Chrome), live read-only proofs (Chrome :18792 restart), the Claude-Code-registered-client leg (operator session), forms refusal leg on a current build, and the full Claude-lens review at the Ready move. Blocker log: Chrome wedge + moe.10 install are the two lane gates; neither blocks the next queued card (CLWX-105).
 
 ### CLWX-77 — [testing] Artifact-grade corner-gap matrix: every doc type x every command against the PACKAGED runtime
 

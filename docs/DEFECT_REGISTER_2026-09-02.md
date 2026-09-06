@@ -105,6 +105,7 @@ were closed by work that landed the same day, after the sweep's read of the tree
 | DRIVER-SETTLE | test tooling | `ecf31c4b` — placeholder rejection + 9s stable window in chat-turn driver | One green Lane-2 run under the fixed driver |
 | SEED-OOXML | test fixture | `1804aaab` + `128fcab6` — forward-slash ZIP entries + strict validator | **Already re-verified** (KR1 re-run PASS 02:13 UTC); keep FIXTURE-HYG purge in demo prep |
 | KR5-WIRING | offline | `ebc4be75` — real actions through outbox + restart tests | Unit-level restart proof done; optional live kill-9 smoke on persona VM |
+| SEND-GATE-SUBJECT-SKIP | email safety | `1e3a9170` — subject assertion REQUIRED on every confirmed send + snapshot match on the current-reviewed path + click-time DOM subject filter | Found by the CLWX-71 Codex lane 2026-09-06: a bare `{confirm:true}` sent the open draft with ZERO second-gate check (CLAUDE.md hard rule); regressions 87/87; NEXT-BUILD gate — installed apps carry the old gate until a build ships |
 
 ## D. MOOT / closed (22 entries — summary)
 

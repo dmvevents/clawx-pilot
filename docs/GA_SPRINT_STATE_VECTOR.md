@@ -1617,6 +1617,27 @@ the production-integration milestone, not a GA blocker.
   **Product KRs 2/8 → 4/8; scorecard 6 checked; every remaining unchecked
   box is an owner/Ministry call or at-the-tag** — no agent-executable
   scorecard box remains.
+- **CLWX-71 MCP adapter BUILT + live-proven; its review lane found and
+  fixed a PRODUCTION two-gate hole (2026-09-06 tenth tick; `0d8b0fbb` +
+  `1e3a9170` + `61fb895e`); card Todo → In Progress.** Built: stdio MCP
+  server proxying the host-API's nine forms/outlook tools verbatim (gates
+  stay server-side), env-only token + fail-fast, stderr counts-only
+  logging, docs incl. the browser-MCPs-are-dev/debug-only warning, SDK in
+  dependencies. Live: SDK-client handshake OK, 9/9 exact inventory,
+  no-confirm send REFUSED end-to-end with the exact gate reason; moe.10
+  realities recorded honestly (forms routes 404; Chrome-wedge read).
+  **THE FIND (Codex HIGH, source-confirmed):** sendEmail's
+  current-reviewed branch dropped args.subject and validate didn't require
+  one — bare `{confirm:true}` sent the open draft with NO second-gate
+  check (in-app reachable too). Fixed 3 layers (required assertion +
+  snapshot match + click-time DOM filter); legacy tests that encoded the
+  vulnerable contract updated; safety 87/87; register row
+  SEND-GATE-SUBJECT-SKIP; NEXT-BUILD gate. Codex 5-for-5 closed (unknown-
+  outcome + cancellation on mutating tools, key-name log hygiene, exact-
+  reason gate proof, token-free launcher — no argv secret). Suite
+  1627/6-skip; typecheck+lint clean. Remaining for Ready: sandbox positive
+  legs + Claude-Code client leg + full lenses (Chrome/build/operator-
+  gated). NEXT QUEUED: CLWX-105 (in-line error chip).
 
 ---
 
