@@ -83,6 +83,13 @@ developer's Codex config, not the repo.
   is the ideal first target. Capture the Codex verdict as evidence under
   `docs/evidence/`. If it catches or corroborates a real issue, adoption is
   proven; document and move on.
+- **MET 2026-09-06** (owner-directed; target was the CLWX-83 diff rather than
+  chrome-cdp): `/codex:setup` ready, real adversarial review ran (GPT-5.5
+  family via codex-cli 0.153.4), verdict needs-attention with 5 findings — 2
+  mechanically demonstrated by Codex itself, all 5 confirmed and fixed same
+  tick. Evidence: `docs/evidence/CODEX_ADVERSARIAL_REVIEW_2026-09-06.md`.
+  Protocol wiring: `.claude/skills/ga-sprint-driver/SKILL.md` §3b +
+  `docs/AGENT_SKILL_INTEROPERABILITY.md` dev-tooling layer.
 
 ---
 

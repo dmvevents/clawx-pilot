@@ -28,6 +28,12 @@ Current candidate pointer: `docs/CURRENT_WINDOWS_RC.md`. As of the 2026-06-23 em
 | Claude Code | `CLAUDE.md` | `.claude/skills/<skill>/SKILL.md` | `.claude/agents/*.md` | `.claude/commands` still works, but project workflows should move toward skills. |
 | Windows pilot | `windows-pilot/AGENTS.md` | `windows-pilot/skills/*.md` | `windows-pilot/agents/*.md` | Domain runbooks and specialist prompts for laptop operations. |
 
+### Dev-tooling layer (per-developer, not committed)
+
+| Tool | Install | Role | Notes |
+|---|---|---|---|
+| codex-plugin-cc (`codex@openai-codex`) | Claude Code plugin mechanism, user scope; requires local Codex CLI authed with the developer's own credentials (never committed) | Cross-vendor review lane: `/codex:review` and `/codex:adversarial-review` delegate to the local Codex CLI (GPT-5.5) as a second-model adversary for the separate-lane review protocol | Additive only — a Codex verdict never replaces the Claude-lens review or loosens a gate. Protocol: `.claude/skills/ga-sprint-driver/SKILL.md` §3b; adoption record: `docs/PLUGIN_INTEGRATION_PLAN_2026-09-03.md` §1. |
+
 ## Canonical Skill Map
 
 | Capability | Codex official skill | Codex/OMX skill | Claude skill | Windows pilot reference |

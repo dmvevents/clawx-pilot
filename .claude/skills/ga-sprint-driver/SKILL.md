@@ -48,6 +48,30 @@ is large, do its next atomic sub-step and leave a resumable trail on the card.
 If NOTHING is P (all gates owner/external), skip to 4 and say so — do not
 manufacture work.
 
+### 3b. Separate-lane review (before any Ready move that changed code)
+The session that wrote a change never approves it. Two lens families, both
+review-only (reviewers never edit; the driver fixes and re-proves):
+- **Claude lenses (required):** 2–3 fresh sub-agent contexts (e.g.
+  `code-reviewer`, domain auditor, falsifiability lens), each passed the diff +
+  acceptance text, never the authoring transcript. This is the existing bar —
+  unchanged.
+- **Codex cross-model lens (additive, use when available):** the
+  `codex@openai-codex` plugin delegates to the local Codex CLI (GPT-5.5) — a
+  second-vendor adversary with no shared blind spots with the authoring model.
+  Preflight once per session: `codex-companion.mjs setup --json` must report
+  `ready: true` (plugin root: `~/.claude/plugins/cache/openai-codex/codex/<ver>/scripts/`).
+  Invoke as `/codex:adversarial-review` (or headless:
+  `codex-companion.mjs adversarial-review "--wait --base <ref> --scope branch <focus>"`),
+  scoped to the tick's commits, with focus text naming the change's riskiest
+  assumptions. Capture the verdict verbatim under `docs/evidence/` and triage
+  every finding exactly like a Claude-lens finding (confirm → fix same tick →
+  falsifiability, or refute with evidence on the card).
+Non-negotiables: the Codex lens ADDS a lane, it never replaces one — a Codex
+PASS does not override a Claude-lens FAIL, does not skip the Claude lenses, and
+never loosens any gate (two-gate send, hard-confirm download, profile=user,
+ceiling=Ready all unchanged). If Codex is unavailable, proceed on Claude lenses
+alone and say so in the tick report.
+
 ### 4. SYNC (the invariant)
 - Post evidence comments on every card the tick touched; move cards that met
   acceptance to Ready (never Done).

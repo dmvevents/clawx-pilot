@@ -645,6 +645,49 @@ toml failing exactly 1 guard. Board: CLWX-83 Todo → Ready with evidence.
 Register rows added: VITEST-OOM / PWSH-LINT-GAP / MODEL-PIN-STALE. Owner asks
 unchanged (Chrome :18792 restart remains the highest-value unlock)._
 
+_**Tick 2026-09-06 (ga-sprint-driver, owner-directive first): Codex
+cross-model adversary lens WIRED + PROVEN on its first live run; CLWX-77
+slice 2 (pdf password/large rows) landed; CLWX-83 review-hardened 5-for-5.**
+SENSE: tree clean at `d79a89b9`; Chrome :18792 + gcloud/VM lanes owner-gated,
+not re-probed (standing rule). OWNER DIRECTIVE: `/codex:setup` verified
+`ready:true` (codex-cli 0.153.4, apiKey auth); the separate-lane review
+protocol now has a codified §3b in the ga-sprint-driver skill — Claude lenses
+required as before, Codex/GPT-5.5-family lens ADDITIVE (a Codex PASS never
+overrides a Claude FAIL, no gate loosened, unavailable = proceed on Claude
+lenses and say so); interop doc gained the dev-tooling layer row; plugin-plan
+§1.4 acceptance MET. PROOF: one real `/codex:adversarial-review` on the
+CLWX-83 diff (`--base b6c990ae`) — verdict needs-attention, 5 findings (3
+high / 2 medium), Codex mechanically demonstrated two itself (comment-hidden
+TOML pin `model = "x" # \"\"\"` skipped as multiline; `gpt-5.55-typo` active
+pin passing without --strict). ALL 5 confirmed + fixed same tick: (1) lint:ps
++ doctor:agents wired into `preflight` AND ga-gate T0 (fail-open-by-omission
+closed; PR-CI lint:ps step = named residual, unit guard already rides `pnpm
+test`); (2) ACTIVE unknown user pins now FAIL by default while dead
+[profiles.*] pins stay WARN (owner fleet call honored) — first live run then
+caught REAL drift, top-level `gpt-5.6-sol`, verified live via codex exec and
+allowlisted; (3) quote-aware comment strip + all-frontmatter-keys parsing
+with duplicate-key failure + 3 regression fixtures (fix stashed → exactly 3
+fail, proven); (4) `$ErrorActionPreference=Stop` + `-ErrorAction Stop` closes
+the partial-analysis false GREEN (re-run GREEN 130/0-gating); (5) committed
+worker-side heap probe (`clwx83-vitest-heap-execargv.test.ts`) — the ad-hoc
+claim is now a durable per-run assertion. Evidence:
+`docs/evidence/CODEX_ADVERSARIAL_REVIEW_2026-09-06.md`. CLWX-77 slice 2
+(the trail's named next sub-step): readPdf now maps PasswordException /
+InvalidPDFException / zero-byte to principal language naming cause + way out
+(mirrors CLWX-101 docx tiers; parser text never reaches the principal, error
+CLASS logged only); harness matrix 16→18 rows — NEW pdf-password
+(REFUSED-READABLY) + pdf-large (>10MB, PASS 325ms), pdf-corrupt pinned to the
+new wording (old "Invalid PDF structure." now FAILs it, proven by stash →
+exact-row FAIL). Fresh full artifact run: **18 rows — 10 PASS / 7
+REFUSED-READABLY / 0 FAIL / 1 NO-TOOL**
+(`docs/evidence/HARNESS_ARTIFACT_2026-09-06.md`). Gates: full suite 1517/6
+skipped (179 files); typecheck + eslint clean; doctor exit 0; NEXT-BUILD GATE
+(CLWX-99/100/101 class): readPdf wording ships with the next build. Board:
+CLWX-77 stays In Progress (trail updated: packaged-node parity,
+outlook/forms registration smoke, gateway transport, K-ledger rows remain);
+CLWX-83 stays Ready (hardening commented). Owner asks unchanged (Chrome
+:18792 restart remains the highest-value unlock)._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
