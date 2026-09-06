@@ -150,7 +150,26 @@ describe('MATRIX shape', () => {
   it('uses only shipped doc-tools entrypoints (or null for no-tool rows)', async () => {
     const { MATRIX } = await load();
     const known = new Set(['readPdf', 'readDocx', 'writeDocx', 'readXlsx', 'writeXlsx', 'readImage', null]);
-    for (const row of MATRIX) expect(known.has(row.fn)).toBe(true);
+    for (const row of MATRIX) {
+      if (row.mode === 'register') continue; // registration rows call register(), not a doc-tools fn
+      expect(known.has(row.fn)).toBe(true);
+    }
+  });
+
+  it('registration rows carry a register spec and a check (no doc-tools fn)', async () => {
+    const { MATRIX } = await load();
+    const regRows = MATRIX.filter((r: { mode?: string }) => r.mode === 'register');
+    expect(regRows.map((r: { id: string }) => r.id).sort()).toEqual([
+      'plugin-registration.full',
+      'plugin-registration.no-config',
+      'plugin-registration.no-hostapi',
+    ]);
+    for (const row of regRows) {
+      expect(row.fn).toBeUndefined();
+      expect(row.expectation).toBe('ok');
+      expect(typeof row.check).toBe('function');
+      expect(row.register && typeof row.register).toBe('object');
+    }
   });
 
   it('covers every slice-1 doc type from the card scope', async () => {
@@ -197,8 +216,60 @@ describe('MATRIX shape', () => {
     for (const row of MATRIX) {
       expect(['ok', 'refusal', 'no-tool']).toContain(row.expectation);
       if (row.expectation !== 'no-tool') {
-        expect(row.fixture || row.args).toBeTruthy();
+        // Doc rows need an input (fixture or args); registration rows need
+        // their register spec instead.
+        expect(row.mode === 'register' ? row.register : (row.fixture || row.args)).toBeTruthy();
       }
     }
+  });
+});
+
+describe('inventoryDiff + registration-row contracts (CLWX-77 registration leg)', () => {
+  it('accepts exact set equality regardless of order', async () => {
+    const { inventoryDiff } = await load();
+    expect(inventoryDiff(['b', 'a'], ['a', 'b'])).toBe(true);
+  });
+
+  it('names every missing tool — a partial register can never pass by count', async () => {
+    const { inventoryDiff } = await load();
+    const note = inventoryDiff(['outlook.send_email', 'outlook.forward'], ['outlook.send_email', 'outlook.reply']);
+    expect(note).toContain('missing: outlook.forward');
+    expect(note).toContain('unexpected: outlook.reply');
+  });
+
+  it('rejects an empty actual inventory loudly', async () => {
+    const { inventoryDiff, DOC_TOOL_NAMES } = await load();
+    const note = inventoryDiff(DOC_TOOL_NAMES, []);
+    expect(note).toContain('missing:');
+    expect(note).toContain('document.read_pdf');
+  });
+
+  it('full-registration row check FAILs when a capability family is absent (falsifiability)', async () => {
+    const { MATRIX, DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES, BROWSER_TOOL_NAMES, OUTLOOK_TOOL_NAMES, FORMS_TOOL_NAMES } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'plugin-registration.full');
+    const all = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES];
+    expect(row.check({ names: all })).toBe(true);
+    const noOutlook = all.filter((n: string) => !n.startsWith('outlook.'));
+    const verdict = row.check({ names: noOutlook });
+    expect(verdict).not.toBe(true);
+    expect(String(verdict)).toContain('outlook.send_email');
+  });
+
+  it('no-hostapi row check REJECTS any outlook/forms/browser tool sneaking in', async () => {
+    const { MATRIX, DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'plugin-registration.no-hostapi');
+    const expected = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES];
+    expect(row.check({ names: expected })).toBe(true);
+    const verdict = row.check({ names: [...expected, 'outlook.send_email'] });
+    expect(verdict).not.toBe(true);
+    expect(String(verdict)).toContain('unexpected: outlook.send_email');
+  });
+
+  it('no-config row check requires the early-return contract, not just the doc inventory', async () => {
+    const { MATRIX, DOC_TOOL_NAMES } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'plugin-registration.no-config');
+    expect(row.check({ names: [...DOC_TOOL_NAMES], returned: { registered: false, docToolsRegistered: true } })).toBe(true);
+    expect(row.check({ names: [...DOC_TOOL_NAMES], returned: null })).not.toBe(true);
+    expect(row.check({ names: [...DOC_TOOL_NAMES], returned: { registered: true } })).not.toBe(true);
   });
 });

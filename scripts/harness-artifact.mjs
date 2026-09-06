@@ -32,11 +32,12 @@
  *   # --reuse-bundle skips the refresh (negative-control probes only —
  *   # a reused copy may be STALE vs a rebuilt bundle).
  *
- * Slice 1 covers document.read/write against the staged bundle, including
- * the password-protected + >10MB pdf rows (landed 2026-09-06). Later
- * sub-steps (tracked on CLWX-77): packaged-node/electron-env spawn parity,
- * outlook/forms registration smoke, gateway-process transport, package
- * preflight wiring, K-ledger rows.
+ * Covered so far: document.read/write against the staged bundle incl. the
+ * password-protected + >10MB pdf rows (2026-09-06), and the plugin
+ * REGISTRATION smoke (outlook/forms/browser/principal/document inventory per
+ * activation mode, 2026-09-06). Later sub-steps (tracked on CLWX-77):
+ * packaged-node/electron-env spawn parity, gateway-process transport,
+ * package preflight wiring, K-ledger rows, Windows-lane run.
  */
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -225,6 +226,60 @@ const PNG_1PX = Buffer.from(
   'hex',
 );
 
+// ── registration-smoke contract (CLWX-77 outlook/forms registration leg)
+//
+// The plugin's registered-tool inventory is a CONTRACT: a bundled-dep break
+// anywhere in index.mjs's import graph, or a regression in the config/env
+// gates, silently costs the principal whole capability families ("the agent
+// can't do email"). These lists pin the inventory per activation mode; adding
+// a tool is a conscious matrix update, exactly like adding a doc-type row.
+export const DOC_TOOL_NAMES = [
+  'document.read_pdf', 'document.read_docx', 'document.write_docx',
+  'document.read_xlsx', 'document.write_xlsx', 'document.read_image',
+];
+export const PRINCIPAL_TOOL_NAMES = [
+  'principal.draft_letter', 'principal.draft_memo', 'principal.summarise_circular',
+  'principal.daily_report_payload', 'principal.daily_report_form_payload',
+  'principal.suspension_payload', 'principal.find_school',
+];
+export const BROWSER_TOOL_NAMES = ['browser.diagnose', 'browser.repair_chrome_cdp'];
+export const OUTLOOK_TOOL_NAMES = [
+  'outlook.open', 'outlook.read_inbox', 'outlook.draft_email', 'outlook.send_email',
+  'outlook.search_inbox', 'outlook.read_email', 'outlook.reply', 'outlook.forward',
+  'outlook.mark_read', 'outlook.list_attachments', 'outlook.download_attachment',
+];
+export const FORMS_TOOL_NAMES = [
+  'forms.list', 'forms.preview_suspension', 'forms.preview_daily_report',
+  'forms.submit_suspension', 'forms.submit_daily_report',
+];
+
+/**
+ * Set-equality check for a registration row (pure; unit-tested). Returns
+ * true or a note naming every missing/unexpected tool — a partial register
+ * must never pass by count alone.
+ */
+export function inventoryDiff(expected, actual) {
+  const exp = new Set(expected);
+  const act = new Set(actual ?? []);
+  const missing = [...exp].filter((n) => !act.has(n)).sort();
+  const unexpected = [...act].filter((n) => !exp.has(n)).sort();
+  if (!missing.length && !unexpected.length) return true;
+  const parts = [];
+  if (missing.length) parts.push(`missing: ${missing.join(', ')}`);
+  if (unexpected.length) parts.push(`unexpected: ${unexpected.join(', ')}`);
+  return parts.join('; ');
+}
+
+// A closed local port: the CLWX-86 capability probe fails unreachable →
+// indeterminate → fail-open. Registration itself makes no other HTTP calls.
+const FAKE_HOST_API = { port: 65123, token: 'artifact-harness-fake-token' };
+const FULL_PLUGIN_CONFIG = {
+  principalName: 'Test Principal',
+  schoolName: 'Artifact Primary',
+  educationDistrict: 'Victoria',
+  schoolType: 'Government',
+};
+
 /**
  * The slice-1 matrix. `fixture` seeds a file in the row's work dir (string |
  * Buffer | async fn(workDir) => filePath); `args` may reference the seeded
@@ -357,6 +412,40 @@ export const MATRIX = [
     id: 'pptx.read', fn: null, expectation: 'no-tool',
     // No document.read_pptx exists; the persona carves .pptx out honestly
     // (CLWX-80 fix). This row keeps the gap visible in every matrix run.
+  },
+  {
+    // Registration smoke, full activation: complete config + host-API env →
+    // the ENTIRE 31-tool inventory must register from the staged bundle
+    // (outlook 11 + forms 5 + browser 2 + principal 7 + document 6). Catches
+    // bundled-dep breaks in index.mjs's import graph and gate regressions.
+    id: 'plugin-registration.full', mode: 'register', expectation: 'ok',
+    register: { pluginConfig: FULL_PLUGIN_CONFIG, hostApi: FAKE_HOST_API },
+    check: (r) => inventoryDiff(
+      [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES],
+      r.names,
+    ),
+  },
+  {
+    // No host-API env (e.g. gateway launched outside the app): outlook/
+    // forms/browser tools must NOT register (nothing to call), while doc +
+    // principal tools still do — the honest-degradation contract.
+    id: 'plugin-registration.no-hostapi', mode: 'register', expectation: 'ok',
+    register: { pluginConfig: FULL_PLUGIN_CONFIG },
+    check: (r) => inventoryDiff([...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES], r.names),
+  },
+  {
+    // Missing principal config: register() takes the early-return path —
+    // ONLY the document tools register (they are deliberately registered
+    // before the config gate; the moe-principal warn path). Pins BUG-012
+    // adjacent behavior: a bad config must never take doc tools down.
+    id: 'plugin-registration.no-config', mode: 'register', expectation: 'ok',
+    register: { pluginConfig: {}, hostApi: FAKE_HOST_API },
+    check: (r) => {
+      const diff = inventoryDiff(DOC_TOOL_NAMES, r.names);
+      if (diff !== true) return diff;
+      return r.returned && r.returned.registered === false && r.returned.docToolsRegistered === true
+        ? true : `expected returned {registered:false, docToolsRegistered:true}, got ${JSON.stringify(r.returned)}`;
+    },
   },
 ];
 
@@ -509,6 +598,12 @@ async function main() {
     let verdict;
     if (row.expectation === 'no-tool') {
       verdict = classifyRow('no-tool', { ok: false, message: '' });
+    } else if (row.mode === 'register') {
+      const outcome = await runChild(
+        { mode: 'register', pluginIndexPath: path.join(pluginDest, 'index.mjs'), ...row.register },
+        resources,
+      );
+      verdict = classifyRow(row.expectation, outcome, row.check, row.refusalCheck);
     } else {
       const workDir = path.join(stageDir, 'work', row.id.replace(/[^a-z0-9_.-]/gi, '_'));
       await mkdir(workDir, { recursive: true });
@@ -530,10 +625,12 @@ async function main() {
 
   if (args.report) {
     const lines = [
-      `# Artifact harness matrix — slice 1 (CLWX-77)`,
+      `# Artifact harness matrix (CLWX-77)`,
       '',
       `Staged plugin + gateway bundle outside the repo tree; each row ran in a`,
       `child process resolving deps ONLY from the staged bundle (CLAWX_APP_RESOURCES seam).`,
+      `Registration rows call the staged plugin's register() with a mock gateway API`,
+      `(closed-port host-API env; the CLWX-86 probe fails open; zero HTTP side effects).`,
       '',
       '| Row | Status | Note | ms |',
       '|---|---|---|---|',

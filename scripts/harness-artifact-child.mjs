@@ -10,6 +10,7 @@
  * as the installed app does.
  *
  * argv[2]: JSON { docToolsPath, fn, args }
+ *       or JSON { mode: 'register', pluginIndexPath, pluginConfig, hostApi? }
  * stdout: one line "CLAWX77_VERDICT:" + JSON
  *   { ok: true, result } | { ok: false, message } | { ok: false, infra: true, message }
  * The sentinel prefix keeps a chatty dep writing to stdout from corrupting
@@ -26,8 +27,53 @@ function emit(verdict) {
   console.log(`CLAWX77_VERDICT:${JSON.stringify(verdict)}`);
 }
 
+/**
+ * Registration-smoke mode (CLWX-77 outlook/forms registration leg): import
+ * the STAGED plugin entry and call register() with a mock gateway API that
+ * only collects tool names. Proves the plugin's whole import graph loads
+ * from the staged bundle and the tool inventory registers per contract.
+ * Host-API env is set to a CLOSED local port — the CLWX-86 capability probe
+ * fails unreachable → indeterminate → fail-open, so no tool parks and no
+ * HTTP side effects are possible. register() itself never sends anything.
+ */
+async function runRegisterMode(spec) {
+  if (spec.hostApi) {
+    process.env.CLAWX_HOST_API_PORT = String(spec.hostApi.port);
+    process.env.CLAWX_HOST_API_TOKEN = String(spec.hostApi.token);
+  } else {
+    // The parent's dev environment may carry live host-API vars; the
+    // no-hostapi row must genuinely run without them.
+    delete process.env.CLAWX_HOST_API_PORT;
+    delete process.env.CLAWX_HOST_API_TOKEN;
+  }
+  const plugin = await import(pathToFileURL(spec.pluginIndexPath).href);
+  if (typeof plugin.register !== 'function') {
+    emit({ ok: false, infra: true, message: 'plugin entry has no register() export' });
+    return;
+  }
+  const names = [];
+  const quiet = { info() {}, warn() {}, error() {}, debug() {} };
+  const api = {
+    pluginConfig: spec.pluginConfig ?? {},
+    registerTool: (def) => { names.push(typeof def?.name === 'string' ? def.name : '(unnamed)'); },
+    log: quiet,
+    logger: quiet,
+    host: {},
+  };
+  try {
+    const returned = await plugin.register(api);
+    emit({ ok: true, result: { names: [...names].sort(), returned: returned ?? null } });
+  } catch (err) {
+    emit({ ok: false, message: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 async function main() {
   const spec = JSON.parse(process.argv[2] ?? '{}');
+  if (spec.mode === 'register') {
+    await runRegisterMode(spec);
+    return;
+  }
   const tools = await import(pathToFileURL(spec.docToolsPath).href);
   const fn = tools[spec.fn];
   if (typeof fn !== 'function') {
