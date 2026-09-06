@@ -1314,6 +1314,26 @@ the production-integration milestone, not a GA blocker.
   (start the VM + the 10-sec SA-key command) then the delegated verifier
   session runs `/tmp/moe18-vm-verify-packet.md`. No cards moved (the one
   agent-lane item that was evidence-complete, CLWX-82, is already Ready).
+- **moe.18 full-matrix verify RAN live on the VM (2026-09-06) — NOT ALL-GREEN.**
+  Owner restored gcloud auth; VM started, tunnels rebuilt with the control leg.
+  Steps 1–7 + K14 executed with screenshots + app-log evidence
+  (`skills/laptop/evidence/2026-09-03-moe18-verify/RESULT.md`): install /
+  launch / migration-headline / K10-PDF / K13-dir1-core all **PASS**; end state
+  clean (hosts clean, ollama RUNNING, channel reasserted Online, banners
+  cleared). **K13 direction 2 = PARTIAL FAIL:** the correct anonymised
+  on-device-outage prompt fires ("the model on this device isn't responding →
+  switch to Online"), but the generic `chat-run-error` component co-renders with
+  online-centric copy that CONTRADICTS it, and its "Technical details" expander
+  surfaces raw "Connection error." (no model IDs/cost/provider/IP — mildest leak
+  class, opt-in — but the packet bar says NOT raw "Connection error."). Same
+  stacked-banner behaviour seen in dir 1 (three error banners at once). This is a
+  degrade-UX finding for the **CLWX-78 / CLWX-95** family (the Lane-A2 degrade
+  path itself works; the run-error notice de-dup + channel-agnostic copy is the
+  gap). K14 answered 5/5 with 0 raw errors but content-shallow — **NSCC pack
+  proven ABSENT from the installed moe.18 tree** (CLWX-42 / gap P12). Steps 8
+  (K11 email), 9 (K12 badge), the no-clobber leg, and the full trust sweep were
+  **not run this session** — so ALL-GREEN is not achievable and the Karunesh
+  handoff does NOT fire; those are the next tick. VM left RUNNING (owner testing).
 
 ---
 
