@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 import { useStickToBottomInstant } from '@/hooks/use-stick-to-bottom-instant';
 import { useMinLoading } from '@/hooks/use-min-loading';
 import { extractGeneratedFiles, generatedFileHasDiffPayload, type GeneratedFile } from '@/lib/generated-files';
-import { principalErrorDisplay, errorBannerVisibility, type ErrorDisplayKind } from '@/lib/error-display';
+import { principalErrorDisplay, errorBannerVisibility, ERROR_DISPLAY_KEY } from '@/lib/error-display';
 import { GeneratedFilesPanel } from '@/components/file-preview/GeneratedFilesPanel';
 import type { FilePreviewTarget } from '@/components/file-preview/types';
 import { buildPreviewTarget } from '@/components/file-preview/build-preview-target';
@@ -42,12 +42,9 @@ const PanelResizeDividerLazy = lazy(() =>
   import('@/components/file-preview/PanelResizeDivider').then((m) => ({ default: m.PanelResizeDivider })),
 );
 
-const ERROR_DISPLAY_KEY: Record<ErrorDisplayKind, string> = {
-  unreachable: 'errorDisplay.unreachable',
-  'rate-limited': 'errorDisplay.rateLimited',
-  'auth-config': 'errorDisplay.authConfig',
-  generic: 'errorDisplay.generic',
-};
+// ERROR_DISPLAY_KEY now lives in @/lib/error-display, shared with the
+// in-line message error chip (CLWX-105) — one wording per failure class
+// everywhere the principal sees it.
 
 type GraphStepCacheEntry = {
   steps: ReturnType<typeof deriveTaskSteps>;

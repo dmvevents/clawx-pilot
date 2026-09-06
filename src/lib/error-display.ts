@@ -102,3 +102,16 @@ export function principalErrorDisplay(raw: string | null | undefined): ErrorDisp
   if (failureClass === 'rate-limited') return { kind: 'rate-limited', detail };
   return { kind: 'generic', detail };
 }
+
+/**
+ * i18n keys (chat namespace) for each display kind — shared by the global
+ * error banner/callout (src/pages/Chat/index.tsx) and the in-line error chip
+ * on error-stopped assistant messages (ChatMessage.tsx, CLWX-105) so the
+ * principal reads ONE wording for the same failure class everywhere.
+ */
+export const ERROR_DISPLAY_KEY: Record<ErrorDisplayKind, string> = {
+  unreachable: 'errorDisplay.unreachable',
+  'rate-limited': 'errorDisplay.rateLimited',
+  'auth-config': 'errorDisplay.authConfig',
+  generic: 'errorDisplay.generic',
+};
