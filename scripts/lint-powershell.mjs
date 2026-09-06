@@ -87,10 +87,17 @@ function main() {
   const outFile = join(scratch, 'findings.json');
   try {
     const psCommand = [
+      // $ErrorActionPreference = Stop: PSScriptAnalyzer's per-file problems
+      // surface as NON-terminating error records that skip the try/catch and
+      // still produce JSON for the files it did process — a partial-analysis
+      // false GREEN (Codex adversarial review, 2026-09-06). Stop promotes
+      // every error record to terminating, so any analyzer-side error fails
+      // the run loudly instead of shrinking its coverage.
       'try {',
+      "  $ErrorActionPreference = 'Stop';",
       '  Import-Module PSScriptAnalyzer -ErrorAction Stop;',
       `  $files = @(Get-ChildItem -Path '${TARGET_DIR}' -Recurse -Include *.ps1,*.psm1,*.psd1 -File);`,
-      `  $results = @(Invoke-ScriptAnalyzer -Path '${TARGET_DIR}' -Recurse -Settings '${SETTINGS}');`,
+      `  $results = @(Invoke-ScriptAnalyzer -Path '${TARGET_DIR}' -Recurse -Settings '${SETTINGS}' -ErrorAction Stop);`,
       '  $payload = @($results | Select-Object RuleName, Severity, ScriptPath, Line, Message);',
       '  $doc = @{ filesAnalyzed = $files.Count; findings = $payload };',
       `  ConvertTo-Json -InputObject $doc -Depth 4 -EnumsAsStrings | Set-Content -Path '${outFile}' -Encoding utf8NoBOM;`,

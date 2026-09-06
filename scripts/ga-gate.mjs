@@ -59,6 +59,13 @@ console.log(`=== GA gate ${new Date().toISOString()} (static=${STATIC_ONLY} full
 // ── T0: static — always required ─────────────────────────────────────────
 run('typecheck', 'T0', 'hygiene', 'pnpm typecheck');
 run('lint', 'T0', 'hygiene', 'pnpm lint:check');
+// CLWX-83 gates were exposed as standalone scripts but absent from every
+// release path — a fail-open-by-omission (Codex adversarial review,
+// 2026-09-06). lint:ps exits 2 when pwsh/PSScriptAnalyzer are missing,
+// which FAILS the row: on the acceptance machine a missing analyzer is a
+// lane defect, not a skip (setup: windows-pilot/README.md).
+run('pwsh lint (CLWX-83)', 'T0', 'hygiene', 'pnpm lint:ps');
+run('agent model pins (CLWX-83)', 'T0', 'hygiene', 'pnpm doctor:agents');
 run('unit-suite', 'T0', 'hygiene', 'pnpm exec vitest run tests/unit --silent');
 run('bundle-verify (CLWX-72 gate)', 'T0', 'hygiene+KR1', 'pnpm exec zx scripts/bundle-openclaw.mjs >/dev/null 2>&1 && node scripts/verify-openclaw-bundle.mjs');
 run('doc-tooling harness (KR1 proxy)', 'T0', 'KR1', 'pnpm run harness:doc-tooling-e2e');

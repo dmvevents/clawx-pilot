@@ -13,8 +13,10 @@
  *      must be a tier alias (haiku/sonnet/opus/fable/inherit); bare model
  *      IDs break under Bedrock/proxy routing per the harness enforcer.
  *   3. ~/.codex/config.toml (best-effort, machine-local) — knownBadModels
- *      pins FAIL; legacy [profiles.*] tables WARN (codex >= 0.153 refuses
- *      `--profile` against legacy tables outright, so they are dead config).
+ *      pins FAIL; ACTIVE pins outside codexModels FAIL (the next-typo class,
+ *      Codex adversarial review 2026-09-06); legacy [profiles.*] tables and
+ *      the pins inside them WARN (codex >= 0.153 refuses `--profile` against
+ *      legacy tables outright, so they are dead config; cleanup = owner call).
  *
  * Parser notes (adversarial review, this card): pins are matched in BOTH
  * TOML quote styles, as dotted keys (`profiles.x.model = ...`), and inside
@@ -39,18 +41,43 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
+ * Cut an unquoted trailing `#` comment off a TOML line. Quote-aware so a `#`
+ * inside a string value survives. Without this, delimiter counting below saw
+ * comment text — `model = "x" # """` counted an odd number of triple quotes,
+ * opened a phantom multiline, and SKIPPED the real pin (Codex adversarial
+ * review, 2026-09-06: demonstrated false-clean bypass).
+ */
+function stripTomlComment(line) {
+  let quote = null;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (quote) {
+      if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === '#') {
+      return line.slice(0, i).trimEnd();
+    }
+  }
+  return line;
+}
+
+/**
  * Yield trimmed TOML lines that sit OUTSIDE multi-line strings, so string
  * content (e.g. developer_instructions docstrings) is never scanned.
+ * Comments are stripped BEFORE multiline-delimiter counting (see above).
  */
 function* tomlScanLines(text) {
   let inMultiline = null; // the open delimiter: '"""' or "'''"
   for (const rawLine of text.replace(/^﻿/, '').split(/\r?\n/)) {
-    const line = rawLine.trim();
     if (inMultiline) {
-      if (line.includes(inMultiline)) inMultiline = null;
+      // Raw line on purpose: the closing delimiter may share a line with a
+      // string-content `#` that must not hide it.
+      if (rawLine.includes(inMultiline)) inMultiline = null;
       continue;
     }
-    if (!line || line.startsWith('#')) continue;
+    const line = stripTomlComment(rawLine.trim());
+    if (!line) continue;
     let opensMultiline = false;
     for (const delim of ['"""', "'''"]) {
       const count = line.split(delim).length - 1;
@@ -93,14 +120,25 @@ export function parseTomlModelPins(text) {
 }
 
 /**
- * Parse the `model:` frontmatter value from an agent .md, or null.
- * Tolerates a UTF-8 BOM, quoted values, and trailing YAML comments.
+ * Parse ALL `model:` frontmatter values from an agent .md (array, possibly
+ * empty). Tolerates a UTF-8 BOM, quoted values, and trailing YAML comments.
+ * All occurrences matter: duplicate keys are ambiguous across YAML parsers,
+ * so a clean first key must never mask a bad second one (Codex adversarial
+ * review, 2026-09-06: demonstrated first-match-only bypass).
  */
-export function parseAgentMdModelPin(text) {
+export function parseAgentMdModelPins(text) {
   const fm = text.replace(/^﻿/, '').match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (!fm) return null;
-  const pin = fm[1].match(/^model:\s*["']?([^\s"'#]+)["']?\s*(?:#.*)?$/m);
-  return pin ? pin[1] : null;
+  if (!fm) return [];
+  const pins = [];
+  const re = /^model:\s*["']?([^\s"'#]+)["']?\s*(?:#.*)?$/gm;
+  let match;
+  while ((match = re.exec(fm[1])) !== null) pins.push(match[1]);
+  return pins;
+}
+
+/** First `model:` pin or null — kept for existing callers/fixtures. */
+export function parseAgentMdModelPin(text) {
+  return parseAgentMdModelPins(text)[0] ?? null;
 }
 
 /** List legacy [profiles.*] table names in a codex config TOML. */
@@ -131,11 +169,19 @@ export function auditRepoAgentSurfaces({ codexTomlFiles = [], agentMdFiles = [],
     }
   }
   for (const file of agentMdFiles) {
-    const pin = parseAgentMdModelPin(file.text);
-    if (pin !== null && !tierAliases.has(pin)) {
+    const pins = parseAgentMdModelPins(file.text);
+    const distinct = [...new Set(pins)];
+    if (distinct.length > 1) {
       failures.push(
-        `${file.path}: frontmatter pins model "${pin}" — must be a tier alias (${[...tierAliases].join('/')}); bare model IDs silently break under Bedrock/proxy routing`,
+        `${file.path}: frontmatter has ${pins.length} model: keys (${distinct.join(', ')}) — duplicate keys are ambiguous across YAML parsers; keep exactly one`,
       );
+    }
+    for (const pin of distinct) {
+      if (!tierAliases.has(pin)) {
+        failures.push(
+          `${file.path}: frontmatter pins model "${pin}" — must be a tier alias (${[...tierAliases].join('/')}); bare model IDs silently break under Bedrock/proxy routing`,
+        );
+      }
     }
   }
   return { failures };
@@ -149,10 +195,22 @@ export function auditCodexUserConfig(text, allowlist) {
   const codexModels = new Set(allowlist.codexModels);
   for (const pin of parseTomlModelPins(text)) {
     const where = pin.section ? `[${pin.section}]` : 'top-level';
+    // Legacy [profiles.*] pins are DEAD config (codex >= 0.153 refuses the
+    // tables outright) — they cannot cause silent worker loss, and their
+    // cleanup is a recorded owner fleet call, so they stay warnings.
+    const inDeadProfileTable = /^profiles\./.test(pin.section ?? '');
     if (knownBad.has(pin.model)) {
       failures.push(`${where} pins "${pin.model}" — PROVEN nonexistent (the CLWX-83 silent-worker-loss class)`);
     } else if (!codexModels.has(pin.model)) {
-      warnings.push(`${where} pins "${pin.model}" — not in the verified allowlist; verify it exists, then add it`);
+      if (inDeadProfileTable) {
+        warnings.push(`${where} pins "${pin.model}" — not in the verified allowlist (inside a dead legacy profile table; cleanup is an owner call)`);
+      } else {
+        // ACTIVE unknown pins FAIL by default: the next typo is exactly the
+        // spark class, and a warning-only default is a fail-open path (Codex
+        // adversarial review, 2026-09-06). Verify the model live, then add
+        // it to scripts/agent-model-allowlist.json.
+        failures.push(`${where} pins "${pin.model}" — ACTIVE pin not in the verified allowlist (the next-typo class); verify it exists, then add it to scripts/agent-model-allowlist.json`);
+      }
     }
   }
   const legacy = parseLegacyProfileTables(text);

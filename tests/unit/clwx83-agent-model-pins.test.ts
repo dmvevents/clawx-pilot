@@ -162,4 +162,50 @@ describe('CLWX-83 agent model pins', () => {
     expect(failures).toEqual([]);
     expect(warnings).toEqual([]);
   });
+
+  // ── Codex adversarial review 2026-09-06: demonstrated bypass fixtures ──
+
+  it('a pin followed by a trailing comment containing triple quotes is still caught (comment-tripleq bypass)', async () => {
+    const { parseTomlModelPins, auditRepoAgentSurfaces } = await loadDoctor();
+    // Before the fix, the odd delimiter count in the COMMENT opened a
+    // phantom multiline string and the real pin was skipped as clean.
+    expect(parseTomlModelPins('model = "gpt-5.3-codex-spark" # """\n')).toEqual([
+      { section: '', model: 'gpt-5.3-codex-spark' },
+    ]);
+    const { failures } = auditRepoAgentSurfaces({
+      codexTomlFiles: [{ path: 'evasive.toml', text: 'model = "gpt-5.3-codex-spark" # """\n' }],
+      agentMdFiles: [],
+      allowlist,
+    });
+    expect(failures).toHaveLength(1);
+    // A genuine multiline docstring must still be skipped after the fix.
+    expect(parseTomlModelPins('doc = """\nmodel = "fake-in-doc"\n"""\n')).toEqual([]);
+  });
+
+  it('duplicate frontmatter model: keys fail even when the first one is a clean alias (first-match bypass)', async () => {
+    const { parseAgentMdModelPins, auditRepoAgentSurfaces } = await loadDoctor();
+    const text = '---\nname: x\nmodel: sonnet\nmodel: claude-sonnet-4-6\n---\nbody';
+    expect(parseAgentMdModelPins(text)).toEqual(['sonnet', 'claude-sonnet-4-6']);
+    const { failures } = auditRepoAgentSurfaces({
+      codexTomlFiles: [],
+      agentMdFiles: [{ path: 'dup.md', text }],
+      allowlist,
+    });
+    // Both the ambiguity itself and the bare-ID second key must fail.
+    expect(failures.some((f: string) => f.includes('duplicate'))).toBe(true);
+    expect(failures.some((f: string) => f.includes('claude-sonnet-4-6'))).toBe(true);
+  });
+
+  it('an ACTIVE unknown user-config pin FAILS by default (next-typo class), while dead-profile pins stay warnings', async () => {
+    const { auditCodexUserConfig } = await loadDoctor();
+    const active = auditCodexUserConfig('model = "gpt-5.55-typo"\n', allowlist);
+    expect(active.failures).toHaveLength(1);
+    expect(active.failures[0]).toContain('gpt-5.55-typo');
+    // The same unknown model inside a legacy [profiles.*] table is dead
+    // config (codex >= 0.153 refuses the tables) — warning, per the recorded
+    // owner fleet call.
+    const dead = auditCodexUserConfig('[profiles.old-lane]\nmodel = "gpt-5.55-typo"\n', allowlist);
+    expect(dead.failures).toEqual([]);
+    expect(dead.warnings.some((w: string) => w.includes('gpt-5.55-typo'))).toBe(true);
+  });
 });
