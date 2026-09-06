@@ -21,17 +21,23 @@ CLAWX_HOST_API_TOKEN=<token> node scripts/clawx-mcp-server.mjs
 CLAWX_HOST_API_TOKEN=<token> pnpm mcp:serve
 ```
 
-Claude Code registration:
+Claude Code registration — use the TOKEN-FREE launcher (an inline
+`-e CLAWX_HOST_API_TOKEN=...` would put the credential in the registration
+command's argv, which defeats the env-only contract — Codex adversarial
+review, 2026-09-06):
 
 ```bash
-claude mcp add clawx -e CLAWX_HOST_API_TOKEN=<token> -- node scripts/clawx-mcp-server.mjs
+claude mcp add clawx -- node scripts/clawx-mcp-launcher.mjs
 ```
 
+The launcher recovers the per-boot token IN-PROCESS from the running app's
+gateway child env (KERN_PROCARGS2, macOS) and starts the server with the
+token held in memory only — no secret ever appears in any argv.
+
 **Token contract:** the bearer token comes ONLY from the
-`CLAWX_HOST_API_TOKEN` env var — never argv, never files, never logged. It
-is per-app-boot and in-memory only; with the app running, an operator can
-recover it from the spawned gateway child's env (the documented
-KERN_PROCARGS2 mechanism used by the live harnesses).
+`CLAWX_HOST_API_TOKEN` env var (already-set env wins over recovery) —
+never argv, never files, never logged. It is per-app-boot and in-memory
+only.
 
 ## Tools
 

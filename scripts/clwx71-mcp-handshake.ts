@@ -142,8 +142,12 @@ function firstText(result: { content?: Array<{ type?: string; text?: string }> }
   if (/"status"\s*:\s*"sent"/.test(refusalText)) {
     fatal(1, `GATE BREACH: send without confirm reported sent!\n${refusalText.slice(0, 400)}`);
   }
-  if (!/"status"\s*:\s*"refused"/.test(refusalText) || !/confirm/i.test(refusalText)) {
-    fatal(1, `expected the confirm-gate refusal, got: ${refusalText.slice(0, 300)}`);
+  // The refusal must be THE CONFIRM GATE specifically ("confirm flag not
+  // set") — a downstream refusal like "No open draft found" also says
+  // "confirm" and previously false-PASSed this proof (Codex M2 mutation:
+  // adding confirm:true still exited 0). Exact-reason matching closes it.
+  if (!/"status"\s*:\s*"refused"/.test(refusalText) || !/confirm flag not set/i.test(refusalText)) {
+    fatal(1, `expected the CONFIRM-GATE refusal ("confirm flag not set"), got: ${refusalText.slice(0, 300)}`);
   }
   log(`PROOF 2: outlook_send_email WITHOUT confirm → status "refused" end-to-end (never sent). Refusal head: ${refusalText.replace(/\s+/g, ' ').slice(0, 140)}`);
 
