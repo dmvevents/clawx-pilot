@@ -56,13 +56,32 @@ mkdir -p "$EVIDENCE_DIR"
 [ -f "$EXE" ] || { log "BLOCKED: installer not found: $EXE"; exit 3; }
 SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
 log "artifact: $(basename "$EXE") bytes=$(stat -f%z "$EXE") sha256=$SHA"
+
+# ── Phase 0b — credential gate (before ANY cloud call that costs time) ───────
+# Credentials are proven before the VM status is believed and before the 430MB
+# upload is attempted. An expired refresh token makes the status query print
+# nothing, and swallowing its stderr made the old code read that silence as
+# "the VM is not running" and hand the owner `instances start` — the wrong, and
+# billable, remedy for a credential problem. Live 2026-09-06:
+# "Reauthentication failed. cannot prompt during non-interactive execution."
+GC_ERR="$(mktemp)"
+STATUS=$(gcloud compute instances list --project "$PROJECT" --filter="name=$VM" --format='value(status)' 2>"$GC_ERR" || true)
+if grep -qiE 'reauthentication|invalid_grant|refreshing your current auth|do(es)? not have any valid credentials' "$GC_ERR"; then
+  log "BLOCKED: gcloud credentials expired — a credential gate, NOT a stopped VM."
+  log "  $(head -1 "$GC_ERR")"
+  log "  Owner (interactive, cannot be done from here):"
+  log "    gcloud auth login"
+  rm -f "$GC_ERR"
+  exit 3
+fi
+rm -f "$GC_ERR"
+
 if ! gsutil ls "${GCS_DEST}" 2>/dev/null | grep -q "moe.19-win-x64.exe"; then
   log "uploading to $GCS_DEST ..."
   gsutil cp "$EXE" "$GCS_DEST"
 fi
 
 # ── Phase 1 — VM status gate (NEVER starts it) ──────────────────────────────
-STATUS=$(gcloud compute instances list --project "$PROJECT" --filter="name=$VM" --format='value(status)' 2>/dev/null || true)
 if [ "$STATUS" != "RUNNING" ]; then
   log "BLOCKED: VM $VM is '${STATUS:-unknown}'. Owner spend call:"
   log "  gcloud compute instances start $VM --zone $ZONE --project $PROJECT"
@@ -79,7 +98,21 @@ if ! nc -z -w3 localhost "$SSH_PORT" 2>/dev/null; then
   for i in $(seq 1 20); do nc -z -w2 localhost "$SSH_PORT" 2>/dev/null && break; sleep 2; done
 fi
 if nc -z -w2 localhost 9999 2>/dev/null; then log "FAIL: control-leg port 9999 unexpectedly open"; exit 1; fi
-guest 'echo GUEST_SSH_OK' | grep -q GUEST_SSH_OK || { log "FAIL: guest ssh"; exit 1; }
+# nc only proves the LOCAL listener is bound. A tunnel whose credentials have
+# died keeps that listener up and resets every connection
+# ("kex_exchange_identification: read: Connection reset by peer"), so nc
+# false-POSITIVES here — the inverse of the known Windows-Firewall false
+# negative. Classify that as BLOCKED (an environment gate the owner clears),
+# never as a product FAIL.
+GUEST_PROBE=$(guest 'echo GUEST_SSH_OK' 2>&1 || true)
+if ! printf '%s' "$GUEST_PROBE" | grep -q GUEST_SSH_OK; then
+  log "BLOCKED: port $SSH_PORT is bound but the guest ssh handshake failed."
+  log "  probe: $(printf '%s' "$GUEST_PROBE" | head -1)"
+  log "  Most likely the tunnel is alive with dead credentials. Owner (interactive):"
+  log "    gcloud auth login    # then re-run: the tunnel is rebuilt automatically"
+  log "  If auth is already good: pkill -f start-iap-tunnel && re-run."
+  exit 3
+fi
 log "tunnel + guest ssh OK (control leg held)"
 
 # ── Phase 3 — installer to guest + both-hop hash ────────────────────────────
@@ -126,15 +159,43 @@ log "install-artifact evidence (pilot-check-install-artifacts.ps1)"
 scp -P "$SSH_PORT" "$REPO_ROOT/skills/laptop/scripts/pilot-check-install-artifacts.ps1" "$GUEST_USER@localhost:Downloads/" >/dev/null
 guest "powershell -NoProfile -ExecutionPolicy Bypass -File \"$GUEST_DL\\pilot-check-install-artifacts.ps1\"" | tr -d '\r' | tee "$EVIDENCE_DIR/install-artifacts.txt"
 log "no-excluded-packages proof: every EXTRA_BUNDLED_PACKAGES entry present in the installed bundle"
-PKGS=$(node -e "const s=require('fs').readFileSync('$REPO_ROOT/scripts/verify-openclaw-bundle.mjs','utf8');const m=s.match(/EXTRA_BUNDLED_PACKAGES\s*=\s*\[([^\]]*)\]/s);if(!m)process.exit(1);console.log([...m[1].matchAll(/'([^']+)'/g)].map(x=>x[1]).join(' '))")
+# Import the list; never regex-scrape it. Two reasons, both found live:
+# the constant is DEFINED in openclaw-bundle-config.mjs and only imported by
+# verify-openclaw-bundle.mjs, so scraping the latter matched nothing and this
+# whole phase silently checked zero packages and logged a pass; and the
+# apostrophes in the config file's comments ("OpenClaw's own") make a
+# quoted-string regex return comment fragments as package names.
+PKGS=$(node -e "import('node:url').then(async (u) => {
+  const mod = await import(u.pathToFileURL('$REPO_ROOT/scripts/openclaw-bundle-config.mjs').href);
+  const pkgs = mod.EXTRA_BUNDLED_PACKAGES;
+  if (!Array.isArray(pkgs) || pkgs.length === 0) process.exit(1);
+  console.log(pkgs.join(' '));
+}).catch(() => process.exit(1))")
+# An empty list must fail the phase, not pass it vacuously.
+[ -n "$PKGS" ] || { log "FAIL: could not read EXTRA_BUNDLED_PACKAGES — refusing to report a pass on zero packages"; exit 1; }
+# Write the per-package readout as a reviewable artifact, not just a summary
+# line. A one-line "all present (N checked)" cannot be audited after the fact,
+# and it is what hid the zero-package pass above.
+PRESENCE="$EVIDENCE_DIR/packages-nscc-presence.txt"
+: > "$PRESENCE"
 MISSING=""
 for pkg in $PKGS; do
-  gpwsh "Test-Path '$GUEST_APP\\resources\\openclaw\\node_modules\\$(echo "$pkg" | sed 's|/|\\\\|g')'" | tr -d '\r' | grep -qi true || MISSING="$MISSING $pkg"
+  if gpwsh "Test-Path '$GUEST_APP\\resources\\openclaw\\node_modules\\$(echo "$pkg" | sed 's|/|\\\\|g')'" | tr -d '\r' | grep -qi true; then
+    echo "$pkg=True" >> "$PRESENCE"
+  else
+    echo "$pkg=False" >> "$PRESENCE"
+    MISSING="$MISSING $pkg"
+  fi
 done
 if [ -n "$MISSING" ]; then log "FAIL: excluded/missing bundled packages:$MISSING"; exit 1; fi
-log "bundled packages all present ($(echo "$PKGS" | wc -w | tr -d ' ') checked)"
+log "bundled packages all present ($(echo "$PKGS" | wc -w | tr -d ' ') checked -> $PRESENCE)"
 log "NSCC pack present (CLWX-42 — moe.18 probed NONE, moe.19 must be PRESENT)"
-gpwsh "Test-Path '$GUEST_APP\\resources\\extensions\\moe-principal-assistant\\data\\nscc-2026.txt'" | tr -d '\r' | grep -qi true || { log "FAIL: nscc-2026.txt ABSENT"; exit 1; }
+if gpwsh "Test-Path '$GUEST_APP\\resources\\extensions\\moe-principal-assistant\\data\\nscc-2026.txt'" | tr -d '\r' | grep -qi true; then
+  echo "nscc-2026.txt=True" >> "$PRESENCE"
+else
+  echo "nscc-2026.txt=False" >> "$PRESENCE"
+  log "FAIL: nscc-2026.txt ABSENT"; exit 1
+fi
 
 # ── Phase 6 — REAL desktop screenshots + VLM grading (owner directive) ──────
 log "desktop capture (interactive session; ~2000px — Bedrock cap)"
