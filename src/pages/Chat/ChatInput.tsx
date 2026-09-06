@@ -244,6 +244,14 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
   const providerDefaultAccountId = useProviderStore((s) => s.defaultAccountId);
   const refreshProviderSnapshot = useProviderStore((s) => s.refreshProviderSnapshot);
   const currentAgentId = useChatStore((s) => s.currentAgentId);
+  // Where the runtime actually is for THIS session (a proven degrade cutover),
+  // or null. Per-session because the pin is: another thread may still be on the
+  // configured channel.
+  const runtimeChannelPin = useChatStore((s) => (
+    s.runtimeChannelPin && s.runtimeChannelPin.sessionKey === s.currentSessionKey
+      ? s.runtimeChannelPin.channel
+      : null
+  ));
   const currentAgent = useMemo(
     () => (agents ?? []).find((agent) => agent.id === currentAgentId) ?? null,
     [agents, currentAgentId],
@@ -279,14 +287,22 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
     'on-device': onDeviceAccount !== null,
   }), [onlineAccount, onDeviceAccount]);
   const showChannelToggle = channelsAvailable.online && channelsAvailable['on-device'];
-  // Effective channel: session override → user setting (if available) →
+  // Effective channel: what the RUNTIME is pinned to for this session (a proven
+  // degrade cutover) → session override → user setting (if available) →
   // whichever channel is actually configured (graceful degrade).
+  //
+  // The runtime pin comes first because everything after it is a PREFERENCE, and
+  // after a degrade the preference is deliberately left alone. Showing it here
+  // would put "Online" on the pill over a runtime that is answering on this
+  // device — contradicting the notice directly above the composer, and inviting
+  // the principal to read the weaker draft as the Online model getting worse.
   const effectiveChannel: ProviderClass = useMemo(() => {
+    if (runtimeChannelPin) return runtimeChannelPin;
     if (sessionChannelOverride) return sessionChannelOverride;
     if (channelsAvailable[userPreferredChannel]) return userPreferredChannel;
     if (channelsAvailable['on-device']) return 'on-device';
     return 'online';
-  }, [sessionChannelOverride, userPreferredChannel, channelsAvailable]);
+  }, [runtimeChannelPin, sessionChannelOverride, userPreferredChannel, channelsAvailable]);
   const mentionableAgents = useMemo(
     () => (agents ?? []).filter((agent) => agent.id !== currentAgentId),
     [agents, currentAgentId],

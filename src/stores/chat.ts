@@ -1697,12 +1697,57 @@ const SESSION_PATCH_TIMEOUT_MS = 15_000;
 const DEGRADE_ROUTE_TIMEOUT_MS = 20_000;
 
 /**
+ * The reconcile below is a store WRITE sitting in front of the first send of a
+ * session, so it gets a much smaller budget than a cutover: a session-store
+ * patch is milliseconds of work, and on Windows (`%APPDATA%` under folder sync
+ * or AV) a wedged gateway would otherwise hold the principal's first message for
+ * the full 15s with nothing on screen moving, before the turn is even
+ * dispatched — the 30s/90s watchdogs cannot see a stall that happens before
+ * them. On expiry we count the attempt and send anyway.
+ */
+const RECONCILE_PATCH_TIMEOUT_MS = 3_000;
+
+/**
+ * How many times a session may try to drop a stale pin per app run. Bounded
+ * because the clear is retried on subsequent sends now (see
+ * `_pinReconciledSessions`), and an unbounded retry against a gateway that is
+ * refusing patches would add an RPC to every message.
+ */
+const RECONCILE_MAX_ATTEMPTS = 3;
+
+/**
  * Sessions whose model pin has already been reconciled with the configured
  * channel during this app run. Module-level (not store state) so it resets with
  * the process, which is exactly the lifetime we want: a pin written on disk by
  * yesterday's outage must be reconciled once after each launch.
+ *
+ * A session is added only on a SUCCESSFUL clear. Marking before the await (as
+ * this did originally) turns "one attempt per session" into a burn: the one
+ * attempt lands while the gateway is restarting — precisely the condition around
+ * an outage — the RPC fails, and the session is then skipped for the rest of the
+ * run, leaving the principal on-device with the composer reading Online. That is
+ * the trap this reconcile exists to prevent.
  */
 const _pinReconciledSessions = new Set<string>();
+
+/** Attempts spent per session this run (see RECONCILE_MAX_ATTEMPTS). */
+const _pinReconcileAttempts = new Map<string, number>();
+
+/** Sessions with a reconcile RPC in flight, so concurrent sends do not stampede. */
+const _pinReconcileInFlight = new Set<string>();
+
+/**
+ * True while a degrade is installing a session pin and replaying the turn onto
+ * it. The replay goes through `sendMessage`, which reconciles pins at the top —
+ * so without this the reconciler can delete the pin the degrade just proved and
+ * hand the resend straight back to the provider that failed, under a notice
+ * claiming the turn was answered on this device. The memo set alone does NOT
+ * protect that window: a session the principal switched to mid-turn (or any
+ * session after a renderer reload) has never been reconciled, and the renderer's
+ * provider snapshot still shows the cloud account as default, so the reconcile
+ * fires. Found by the code-review lens, 2026-09-06.
+ */
+let _degradeResendInFlight = false;
 
 /**
  * Move ONE session onto `modelRef` and wait for the gateway to acknowledge it.
@@ -1750,13 +1795,16 @@ async function cutoverSessionModel(sessionKey: string, modelRef: string): Promis
  * the next turn resolves from config. Idempotent: a session with no pin is
  * unaffected.
  */
-async function clearSessionModelPinRpc(sessionKey: string): Promise<boolean> {
+async function clearSessionModelPinRpc(
+  sessionKey: string,
+  timeoutMs: number = SESSION_PATCH_TIMEOUT_MS,
+): Promise<boolean> {
   if (!sessionKey) return false;
   try {
     await useGatewayStore.getState().rpc<unknown>(
       'sessions.patch',
       { key: sessionKey, model: null },
-      SESSION_PATCH_TIMEOUT_MS,
+      timeoutMs,
     );
     return true;
   } catch (error) {
@@ -1782,14 +1830,27 @@ async function clearSessionModelPinRpc(sessionKey: string): Promise<boolean> {
  * "null means unproven, never assume" rule the runtime-vs-preference derivation
  * follows (CLWX-94/96).
  */
-async function reconcileSessionModelPin(sessionKey: string): Promise<void> {
+async function reconcileSessionModelPin(sessionKey: string, set: ChatSet): Promise<void> {
   if (!sessionKey || _pinReconciledSessions.has(sessionKey)) return;
+  if (_pinReconcileInFlight.has(sessionKey)) return;
+  // A degrade is installing (or has just proved) a pin for this turn. Its replay
+  // comes back through sendMessage, and undoing that pin here would send the
+  // turn out on the provider that just failed.
+  if (_degradeResendInFlight) return;
+  if ((_pinReconcileAttempts.get(sessionKey) ?? 0) >= RECONCILE_MAX_ATTEMPTS) return;
   const defaultAccount = (useProviderStore.getState().accounts ?? []).find((a) => a.isDefault === true);
   if (!defaultAccount || classifyProvider(defaultAccount) !== 'online') return;
-  // Mark before awaiting: one attempt per session per run, so a gateway that is
-  // refusing patches cannot add an RPC to every send.
-  _pinReconciledSessions.add(sessionKey);
-  await clearSessionModelPinRpc(sessionKey);
+  _pinReconcileInFlight.add(sessionKey);
+  _pinReconcileAttempts.set(sessionKey, (_pinReconcileAttempts.get(sessionKey) ?? 0) + 1);
+  try {
+    // Only a confirmed clear closes this session out for the run.
+    if (await clearSessionModelPinRpc(sessionKey, RECONCILE_PATCH_TIMEOUT_MS)) {
+      _pinReconciledSessions.add(sessionKey);
+      set((s) => (s.runtimeChannelPin?.sessionKey === sessionKey ? { runtimeChannelPin: null } : {}));
+    }
+  } finally {
+    _pinReconcileInFlight.delete(sessionKey);
+  }
 }
 
 /**
@@ -1928,34 +1989,68 @@ async function maybeDegradeChannel(
   // The config stores now say on-device. That is NOT yet true of the running
   // gateway (see cutoverSessionModel), so pin this session and WAIT for the
   // acknowledgement before doing anything that depends on the new channel.
-  const cutover = await cutoverSessionModel(get().currentSessionKey, modelRef);
-  if (!cutover) {
-    // Unproven cutover: an immediate resend could go straight back out on the
-    // provider that just failed, and the principal would see the same error
-    // twice under a banner claiming we had switched. Say what is actually true —
-    // the switch could not be completed — and leave the original error visible
-    // so it stays the actionable thing on screen.
-    set({ degradeNotice: { reason, resent: false, to: 'on-device', cutoverConfirmed: false } });
-    return;
-  }
-
-  const payload = get().lastSentPayload;
-  if (!decision.resend || !payload?.text?.trim()) {
-    // Channel moved but we are not replaying. The principal's own retry will
-    // now run on-device.
-    set({ degradeNotice: { reason, resent: false, to: 'on-device' } });
-    return;
-  }
-
-  set({ degradeNotice: { reason, resent: true, to: 'on-device' }, runError: null, error: null });
+  //
+  // Pin the key the REPLAY will run on, not merely the current one: sendMessage
+  // re-derives its session from `targetAgentId` against a live agents snapshot,
+  // so resolving the two independently can pin one session and run the turn on
+  // another, unpinned one.
+  const pinPayload = get().lastSentPayload;
+  const pinSessionKey = resolveMainSessionKeyForAgent(pinPayload?.targetAgentId) ?? get().currentSessionKey;
+  // Fence everything from here on. The pin reconcile at the top of sendMessage is
+  // free to delete exactly the pin we are installing — via this function's own
+  // replay, or via a message the principal sends while the switch is running —
+  // and the turn would then run on the provider that just failed under a notice
+  // saying it had been answered on this device.
+  _degradeResendInFlight = true;
   try {
-    await get().sendMessage(payload.text, payload.attachments, payload.targetAgentId);
-    // sendMessage resets degradedThisTurn for the new turn; re-assert it so a
-    // second failure (now on-device) surfaces instead of looping.
-    set({ degradedThisTurn: true, degradeNotice: { reason, resent: true, to: 'on-device' } });
-  } catch (error) {
-    console.warn('[chat] on-device resend failed:', error);
-    set({ degradeNotice: { reason, resent: false, to: 'on-device' } });
+    const cutover = await cutoverSessionModel(pinSessionKey, modelRef);
+    if (!cutover) {
+      // Unproven cutover: an immediate resend could go straight back out on the
+      // provider that just failed, and the principal would see the same error
+      // twice under a banner claiming we had switched. Say what is actually
+      // true — the switch could not be completed — and leave the original error
+      // visible so it stays the actionable thing on screen.
+      set({ degradeNotice: { reason, resent: false, to: 'on-device', cutoverConfirmed: false } });
+      return;
+    }
+
+    // The runtime really is on this device now, for THIS session. Record that so
+    // the composer pill and Settings stop reading "Online" over an on-device
+    // runtime: before the cutover existed the pill was equally stale but the
+    // runtime had not moved either, so they agreed; now a stale pill contradicts
+    // both the runtime and the notice directly above it, and the principal reads
+    // the weaker draft as "the Online model got worse" (code-review lens,
+    // 2026-09-06). Deliberately NOT tied to the dismissible notice — dismissing
+    // an explanation must not restore the lie — and NOT written to
+    // `preferredChannel`, which stays the principal's own choice.
+    set({ runtimeChannelPin: { sessionKey: pinSessionKey, channel: 'on-device' } });
+    // The renderer's provider snapshot still shows the cloud account as default
+    // until it is re-read, and the failover classifies the runtime channel from
+    // that snapshot. Refresh it (fire-and-forget: the host API has no timeout of
+    // its own and the replay must not wait on it) so a second failure this turn
+    // is judged against what the runtime actually is.
+    void useProviderStore.getState().refreshProviderSnapshot();
+
+    const payload = get().lastSentPayload;
+    if (!decision.resend || !payload?.text?.trim()) {
+      // Channel moved but we are not replaying. The principal's own retry will
+      // now run on-device.
+      set({ degradeNotice: { reason, resent: false, to: 'on-device' } });
+      return;
+    }
+
+    set({ degradeNotice: { reason, resent: true, to: 'on-device' }, runError: null, error: null });
+    try {
+      await get().sendMessage(payload.text, payload.attachments, payload.targetAgentId);
+      // sendMessage resets degradedThisTurn for the new turn; re-assert it so a
+      // second failure (now on-device) surfaces instead of looping.
+      set({ degradedThisTurn: true, degradeNotice: { reason, resent: true, to: 'on-device' } });
+    } catch (error) {
+      console.warn('[chat] on-device resend failed:', error);
+      set({ degradeNotice: { reason, resent: false, to: 'on-device' } });
+    }
+  } finally {
+    _degradeResendInFlight = false;
   }
 }
 
@@ -2009,6 +2104,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   lastSentPayload: null,
   degradedThisTurn: false,
   degradeNotice: null,
+  runtimeChannelPin: null,
 
   sessions: [],
   currentSessionKey: DEFAULT_SESSION_KEY,
@@ -2952,7 +3048,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Drop a model pin left behind by a degrade in an earlier app run, before
       // the turn resolves its model. No-op on all but the first send per session
       // per run, and never acts while the configured channel is still on-device.
-      await reconcileSessionModelPin(currentSessionKey);
+      await reconcileSessionModelPin(currentSessionKey, set);
 
       const idempotencyKey = crypto.randomUUID();
       const hasMedia = attachments && attachments.length > 0;
@@ -3520,11 +3616,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   clearSessionModelPin: async (sessionKey?: string) => {
     const key = sessionKey ?? get().currentSessionKey;
+    // An explicit channel pick is a statement about the whole app, but a pin is
+    // per-SESSION and only this session's can be cleared from here. Re-open the
+    // once-per-run reconcile for every other session so their next send drops
+    // their own stale pin: without this, a principal who degrades in the letter
+    // thread, opens a new chat, and presses "Online" there gets that thread
+    // fixed and the letter thread left answering on this device for the rest of
+    // the run with the composer reading Online — the same dishonesty this pin
+    // machinery exists to prevent, scoped to a session instead of a run
+    // (code-review lens, 2026-09-06). Also covers the channel surfaces that
+    // cannot reach a pin at all (Settings default-provider card, host-API
+    // callers such as the pilot channel script).
+    _pinReconciledSessions.clear();
+    _pinReconcileAttempts.clear();
     const cleared = await clearSessionModelPinRpc(key);
     // A cleared pin means the boot-time safety net has nothing left to do for
-    // this session, and a failed clear should not be retried on the next send
-    // (the reconciler would fire against a gateway that just refused).
-    if (cleared) _pinReconciledSessions.add(key);
+    // this session.
+    if (cleared) {
+      _pinReconciledSessions.add(key);
+      set((s) => (s.runtimeChannelPin?.sessionKey === key ? { runtimeChannelPin: null } : {}));
+    }
     return cleared;
   },
 }));

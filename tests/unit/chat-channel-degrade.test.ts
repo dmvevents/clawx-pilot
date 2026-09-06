@@ -9,6 +9,8 @@
  * an on-device user forever, and nobody finds out until they ask why the
  * assistant "got worse".
  */
+import { readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { gatewayRpcMock, hostApiFetchMock, agentsState, settingsState, providerState } = vi.hoisted(() => ({
@@ -21,6 +23,10 @@ const { gatewayRpcMock, hostApiFetchMock, agentsState, settingsState, providerSt
   },
   providerState: {
     accounts: [] as Array<Record<string, unknown>>,
+    // Real member of the store surface: a proven cutover re-reads the provider
+    // snapshot so a second failure this turn is judged against the runtime it
+    // actually has. A mock missing it would throw inside the failover.
+    refreshProviderSnapshot: vi.fn(async () => undefined),
   },
 }));
 
@@ -48,6 +54,17 @@ const BOTH_CHANNELS = [
 ];
 
 /**
+ * The same two accounts with the cloud one PROVABLY default — the shape the
+ * stale-pin reconcile is allowed to act on. Most degrade rows deliberately omit
+ * `isDefault` (unproven default, reconcile stands down), so any row that has to
+ * exercise the reconcile alongside a degrade must opt into this fixture.
+ */
+const ONLINE_DEFAULT = [
+  { id: 'google', type: 'google', vendorId: 'google', model: 'gemini-2.5-pro', isDefault: true },
+  { id: 'ollama', type: 'ollama', vendorId: 'ollama', baseUrl: 'http://127.0.0.1:11434', model: 'qwen2.5:3b-instruct' },
+];
+
+/**
  * A `sessions.patch` acknowledgement proving the session now resolves to the
  * on-device model. `resolved` is the gateway's readback of the EFFECTIVE model
  * after the write — the only honest evidence the cutover took, which is why the
@@ -67,8 +84,29 @@ const PATCH_ACK = {
  * failed cutover.
  */
 function mockHistory(rest: unknown) {
-  gatewayRpcMock.mockImplementation(async (method: string) =>
-    (method === 'sessions.patch' ? PATCH_ACK : rest));
+  gatewayRpcMock.mockImplementation(async (method: string, params: unknown) =>
+    (method === 'sessions.patch' ? ackFor(params) : rest));
+}
+
+/**
+ * Build the acknowledgement a healthy gateway would return for THIS patch, by
+ * echoing the ref that was actually requested. A constant ack would confirm the
+ * cutover no matter what the store asked for, so a mutation that corrupted the
+ * requested ref (swapping provider and model, lowercasing it) would still read
+ * as proven — the gate compares the ack against the ref it INTENDED to pin, so
+ * the ack has to follow the request for that comparison to mean anything
+ * (falsifiability lens, 2026-09-06).
+ */
+function ackFor(params: unknown) {
+  const requested = String((params as { model?: unknown } | undefined)?.model ?? '');
+  const slash = requested.indexOf('/');
+  return {
+    ok: true,
+    key: (params as { key?: string } | undefined)?.key ?? 'agent:main:main',
+    resolved: slash > 0
+      ? { modelProvider: requested.slice(0, slash), model: requested.slice(slash + 1) }
+      : {},
+  };
 }
 
 /** Paths POSTed/PUT to the host API, in order. */
@@ -77,6 +115,17 @@ const calledPaths = () => hostApiFetchMock.mock.calls.map((c) => String(c[0]));
 const patchCalls = () => gatewayRpcMock.mock.calls
   .filter((c) => c[0] === 'sessions.patch')
   .map((c) => c[1] as { key?: string; model?: string | null });
+/**
+ * `sessions.patch` calls as [model, timeoutMs] pairs. The budget is part of the
+ * contract, not a detail: the pin WRITE sits in front of the first send of the
+ * app run, so it gets a short budget, while the cutover happens inside an
+ * already-failed turn and gets the full one. Neither is observable from the
+ * model/key alone, so without this the numbers could be swapped or dropped and
+ * every other row would stay green.
+ */
+const patchBudgets = () => gatewayRpcMock.mock.calls
+  .filter((c) => c[0] === 'sessions.patch')
+  .map((c) => [(c[1] as { model?: string | null }).model ?? null, c[2]] as [string | null, unknown]);
 const degradeCalls = () => hostApiFetchMock.mock.calls.filter((c) => String(c[0]) === '/api/settings/degradeChannel');
 const preferenceWrites = () => hostApiFetchMock.mock.calls.filter((c) => String(c[0]).includes('preferredChannel'));
 
@@ -644,6 +693,152 @@ describe('chat store: send-time channel degradation', () => {
     expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
   });
 
+  it('does NOT let the pre-send reconcile undo the pin the degrade just installed', async () => {
+    // The worst reachable state of the pin machinery: the default is (still)
+    // Online, so the once-per-run reconcile is armed, and the failover's own
+    // replay re-enters sendMessage. Unfenced, the reconcile clears the pin
+    // between the proven cutover and the send — the replay goes back out on the
+    // provider that just failed, under a notice saying it was answered on this
+    // device (code-review + falsifiability lenses, 2026-09-06).
+    providerState.accounts = [...ONLINE_DEFAULT];
+    const store = await loadStore();
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    // Exactly the pin. No `model: null` anywhere in the sequence.
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' }]);
+    const methods = gatewayRpcMock.mock.calls.map((c) => c[0]);
+    expect(methods).toContain('chat.send');
+    expect(methods.indexOf('sessions.patch')).toBeLessThan(methods.indexOf('chat.send'));
+    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: true, to: 'on-device' });
+  });
+
+  it('records the on-device runtime for the session so the pill and Settings stop reading Online', async () => {
+    // The pin moves the RUNTIME; `preferredChannel` stays the principal's own
+    // choice. Nothing else in the app could tell the two apart, so the composer
+    // kept reading "Online" over an on-device thread and the principal reads the
+    // weaker answers as "the Online model got worse".
+    const store = await loadStore();
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(store.getState().runtimeChannelPin).toEqual({ sessionKey: 'agent:main:main', channel: 'on-device' });
+    // And the principal's stored preference is untouched.
+    expect(preferenceWrites()).toHaveLength(0);
+    expect(settingsState.setPreferredChannel).not.toHaveBeenCalled();
+  });
+
+  it('does NOT record an on-device runtime when the cutover was never proven', async () => {
+    // Unproven cutover means the runtime may still be Online — claiming
+    // on-device here would make the pill lie in the other direction.
+    const store = await loadStore();
+    gatewayRpcMock.mockImplementation(async (method: string) => (method === 'sessions.patch'
+      ? { ok: true, resolved: { modelProvider: 'google', model: 'gemini-2.5-pro' } }
+      : undefined));
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(store.getState().runtimeChannelPin).toBeNull();
+  });
+
+  it('drops the recorded on-device runtime when the pin is cleared, and keeps it when the clear fails', async () => {
+    const store = await loadStore();
+    store.setState({ runtimeChannelPin: { sessionKey: 'agent:main:main', channel: 'on-device' } });
+
+    await expect(store.getState().clearSessionModelPin()).resolves.toBe(true);
+    expect(store.getState().runtimeChannelPin).toBeNull();
+
+    // A clear the gateway never accepted leaves the runtime where it was: the
+    // pill must not go back to reading Online on an unproven claim.
+    store.setState({ runtimeChannelPin: { sessionKey: 'agent:main:main', channel: 'on-device' } });
+    gatewayRpcMock.mockImplementation(async () => { throw new Error('gateway not connected'); });
+    await expect(store.getState().clearSessionModelPin()).resolves.toBe(false);
+    expect(store.getState().runtimeChannelPin)
+      .toEqual({ sessionKey: 'agent:main:main', channel: 'on-device' });
+  });
+
+  it('re-opens the once-per-run reconcile for OTHER sessions when a channel is picked explicitly', async () => {
+    // A pick is a statement about the whole app but a pin is per-session, and
+    // only the current session's can be cleared from the toggle. Degrade in the
+    // letter thread, open a new chat, press Online there: without this the
+    // letter thread keeps answering on-device for the rest of the run with its
+    // composer reading Online.
+    providerState.accounts = [...ONLINE_DEFAULT];
+    const store = await loadStore();
+
+    await store.getState().sendMessage('first turn');            // reconciles agent:main:main
+    await store.getState().clearSessionModelPin('agent:main:other'); // explicit pick elsewhere
+    await store.getState().sendMessage('second turn');           // main is eligible again
+
+    expect(patchCalls()).toEqual([
+      { key: 'agent:main:main', model: null },
+      { key: 'agent:main:other', model: null },
+      { key: 'agent:main:main', model: null },
+    ]);
+  });
+
+  it('retries the reconcile on a later send when the gateway refused the first clear', async () => {
+    // The gateway is commonly mid-restart when the first send of an app run
+    // lands. Memoising the attempt (rather than the success) burned the
+    // session's one chance and left the stale pin in place for the whole run.
+    providerState.accounts = [...ONLINE_DEFAULT];
+    let patches = 0;
+    gatewayRpcMock.mockImplementation(async (method: string) => {
+      if (method !== 'sessions.patch') return undefined;
+      patches += 1;
+      if (patches === 1) throw new Error('RPC timeout: sessions.patch');
+      return { ok: true };
+    });
+    const store = await loadStore();
+
+    await store.getState().sendMessage('one');   // attempt 1 — refused
+    await store.getState().sendMessage('two');   // attempt 2 — accepted
+    await store.getState().sendMessage('three'); // nothing left to do
+
+    expect(patchCalls()).toHaveLength(2);
+  });
+
+  it('gives up after a bounded number of reconcile attempts instead of writing before every send', async () => {
+    // The retry above must not become an unbounded write in front of every send
+    // against a gateway that is never going to accept it.
+    providerState.accounts = [...ONLINE_DEFAULT];
+    gatewayRpcMock.mockImplementation(async (method: string) => {
+      if (method === 'sessions.patch') throw new Error('RPC timeout: sessions.patch');
+      return undefined;
+    });
+    const store = await loadStore();
+
+    for (const text of ['one', 'two', 'three', 'four', 'five']) {
+      await store.getState().sendMessage(text);
+    }
+
+    expect(patchCalls()).toHaveLength(3);
+  });
+
+  it('budgets the pre-send reconcile far shorter than the in-turn cutover', async () => {
+    // The reconcile write sits in FRONT of the first send of the run: a stalled
+    // gateway would hold the principal's message for the full cutover budget
+    // with no spinner and no watchdog in range (30s/90s both fire later). The
+    // cutover keeps the long budget — it runs inside an already-failed turn,
+    // behind a progress notice, and giving up early there means falsely
+    // reporting that the switch failed.
+    providerState.accounts = [...ONLINE_DEFAULT];
+    const store = await loadStore();
+
+    await store.getState().sendMessage('first turn of the run');
+    store.setState({ sending: true, activeRunId: 'run-1', lastSentPayload: { text: 'a turn', targetAgentId: null } });
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(patchBudgets()).toEqual([
+      [null, 3_000],
+      ['ollama/qwen2.5:3b-instruct', 15_000],
+    ]);
+  });
+
   it('does NOT drop the pin while the configured channel is still on-device (mid-outage)', async () => {
     // Clearing here would undo a legitimate failover and send the next turn back
     // out on the dead cloud provider.
@@ -812,5 +1007,40 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
     await settle();
 
     expect(store.getState().runError).toBe('own turn error painted earlier');
+  });
+});
+
+/**
+ * A session model pin outranks the config default on every turn, so ANY surface
+ * that changes the channel or the default provider has to drop it as well —
+ * otherwise that surface writes the four stores, reports success, and changes
+ * nothing the principal can see. Discovered rather than listed: a fourth surface
+ * added later fails this row instead of shipping the same bug again (code-review
+ * lens finding 4, 2026-09-06).
+ */
+describe('every renderer surface that changes the channel drops the session pin (CLWX-95)', () => {
+  const SRC = `${resolve(__dirname, '../../src')}/`;
+
+  function walk(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = `${dir}${entry.name}`;
+      if (entry.isDirectory()) return walk(`${full}/`);
+      return /\.(ts|tsx)$/.test(entry.name) ? [full] : [];
+    });
+  }
+
+  it('leaves no channel writer without a pin clear', () => {
+    const writers = walk(SRC)
+      // The stores DEFINE these actions; the invariant is about their callers.
+      .filter((f) => !f.endsWith('src/stores/providers.ts') && !f.endsWith('src/stores/settings.ts'))
+      .map((f) => [f, readFileSync(f, 'utf8')] as const)
+      .filter(([, src]) => /setPreferredChannel\(|setDefaultAccount\(/.test(src));
+
+    // Sanity: the discovery itself must not silently find nothing.
+    expect(writers.length).toBeGreaterThanOrEqual(3);
+    const missing = writers
+      .filter(([, src]) => !src.includes('clearSessionModelPin'))
+      .map(([file]) => file.slice(file.indexOf('/src/') + 1));
+    expect(missing).toEqual([]);
   });
 });

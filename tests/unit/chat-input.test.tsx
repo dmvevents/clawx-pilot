@@ -14,6 +14,10 @@ const { agentsState, chatState, gatewayState, providersState, artifactPanelMocks
   },
   chatState: {
     currentAgentId: 'main',
+    currentSessionKey: 'agent:main:main',
+    // Set only after a degrade's session cutover is ACKNOWLEDGED: which channel
+    // the runtime is really on, as opposed to which one the principal chose.
+    runtimeChannelPin: null as { sessionKey: string; channel: 'online' | 'on-device' } | null,
     clearSessionModelPin: vi.fn(async () => true),
   },
   gatewayState: {
@@ -117,6 +121,20 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => undefined },
 }));
 
+const CHANNEL_ACCOUNTS = [
+  {
+    id: 'google01', vendorId: 'google', label: 'Online', authMode: 'api_key',
+    model: 'google-google01/gemini-2.5-pro', enabled: true, isDefault: true,
+    createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'ollama01', vendorId: 'ollama', label: 'Local', authMode: 'none',
+    baseUrl: 'http://127.0.0.1:11434', model: 'ollama-ollama01/qwen2.5:3b-instruct',
+    enabled: true, isDefault: false,
+    createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z',
+  },
+];
+
 function renderChatInput(onSend = vi.fn()) {
   return render(
     <TooltipProvider>
@@ -131,6 +149,8 @@ describe('ChatInput agent targeting', () => {
     agentsState.defaultModelRef = null;
     agentsState.updateAgentModel.mockReset();
     chatState.currentAgentId = 'main';
+    chatState.currentSessionKey = 'agent:main:main';
+    chatState.runtimeChannelPin = null;
     chatState.clearSessionModelPin.mockClear();
     agentsState.fetchAgents.mockClear();
     gatewayState.status = { state: 'running', port: 18789 };
@@ -430,6 +450,40 @@ describe('ChatInput agent targeting', () => {
     expect(screen.getByTestId('chat-composer-channel')).toHaveTextContent('Online');
     expect(screen.getByTestId('chat-composer-channel')).toHaveAttribute('data-channel', 'online');
     expect(screen.queryByText(/moe-demo-pro/)).not.toBeInTheDocument();
+  });
+
+  it('pill reads the RUNTIME channel when a degrade pinned this session on-device (CLWX-95)', () => {
+    // The failover moves the runtime without touching `preferredChannel` — that
+    // stays the principal's own choice. Deriving the pill from the preference
+    // alone therefore says "Online" over a thread the gateway is answering from
+    // the local model, and the principal reads the weaker answers as the Online
+    // model having got worse. The pin is a fact about the runtime, so it wins.
+    gatewayState.status = { state: 'running', port: 18789, gatewayReady: true };
+    providersState.accounts = [...CHANNEL_ACCOUNTS];
+    useSettingsStore.setState({ preferredChannel: 'online' });
+    chatState.runtimeChannelPin = { sessionKey: 'agent:main:main', channel: 'on-device' };
+
+    renderChatInput();
+
+    const pill = screen.getByTestId('chat-composer-channel');
+    expect(pill).toHaveTextContent('On this device');
+    expect(pill).toHaveAttribute('data-channel', 'on-device');
+  });
+
+  it('ignores a runtime pin that belongs to a different session (CLWX-95)', () => {
+    // Pins are per-session. A pin left on the letter thread must not relabel a
+    // brand-new chat that is running Online exactly as configured.
+    gatewayState.status = { state: 'running', port: 18789, gatewayReady: true };
+    providersState.accounts = [...CHANNEL_ACCOUNTS];
+    useSettingsStore.setState({ preferredChannel: 'online' });
+    chatState.currentSessionKey = 'agent:main:main';
+    chatState.runtimeChannelPin = { sessionKey: 'agent:main:letters', channel: 'on-device' };
+
+    renderChatInput();
+
+    const pill = screen.getByTestId('chat-composer-channel');
+    expect(pill).toHaveTextContent('Online');
+    expect(pill).toHaveAttribute('data-channel', 'online');
   });
 
   it('clears the session model pin when the principal picks a channel (CLWX-95)', async () => {

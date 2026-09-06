@@ -85,6 +85,11 @@ export function Settings() {
     setPreferredChannel,
   } = useSettingsStore();
 
+  // Where a degrade has actually pinned the runtime, if anywhere (see the
+  // channel block below). Read reactively: dismissing the chat notice must not
+  // change it.
+  const runtimeChannelPin = useChatStore((s) => s.runtimeChannelPin?.channel ?? null);
+
   const { status: gatewayStatus, restart: restartGateway } = useGatewayStore();
   const currentVersion = useUpdateStore((state) => state.currentVersion);
   const updateSetAutoDownload = useUpdateStore((state) => state.setAutoDownload);
@@ -716,6 +721,18 @@ export function Settings() {
                     </Button>
                   ))}
                 </div>
+                {/* The setting above is the PREFERENCE, and a send-time failover
+                    deliberately leaves it alone. So when a chat is running on a
+                    pinned channel that disagrees with it, say so here — a
+                    highlighted "Online" over a runtime answering on this device
+                    reads as the setting being ignored. */}
+                {runtimeChannelPin === 'on-device' && preferredChannel === 'online' && (
+                  <p className="text-meta text-muted-foreground">
+                    Right now your chat is answering on this device: the connection
+                    dropped while a message was running, so the assistant switched
+                    over to finish it. Press Online above to switch back.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-3">

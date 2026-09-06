@@ -176,6 +176,19 @@ export interface ChatState {
       }
     | null;
 
+  /**
+   * Which channel a session's model pin actually puts the RUNTIME on, when that
+   * differs from the principal's `preferredChannel`. Set only after a degrade's
+   * session cutover is acknowledged; cleared when the pin is cleared (an
+   * explicit channel pick, or the stale-pin reconcile).
+   *
+   * Read by the composer pill and Settings so they stop reading "Online" over an
+   * on-device runtime. Distinct from `degradeNotice` on purpose: the notice is
+   * an explanation the principal may dismiss, this is a fact about the runtime,
+   * and dismissing the explanation must not restore the lie.
+   */
+  runtimeChannelPin: { sessionKey: string; channel: 'online' | 'on-device' } | null;
+
   // Sessions
   sessions: ChatSession[];
   currentSessionKey: string;

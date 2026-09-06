@@ -53,6 +53,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { invokeIpc } from '@/lib/api-client';
 import { useSettingsStore } from '@/stores/settings';
+import { useChatStore } from '@/stores/chat';
 import { hostApiFetch } from '@/lib/host-api';
 import { subscribeHostEvent } from '@/lib/host-events';
 
@@ -264,6 +265,12 @@ export function ProvidersSettings() {
   const handleSetDefault = async (providerId: string) => {
     try {
       await setDefaultAccount(providerId);
+      // Third channel-changing surface, same reason as the composer toggle and
+      // the "Where the assistant runs" buttons: a send-time degrade pins the
+      // chat SESSION's model, and a session pin outranks this default on every
+      // turn. Without the clear the toast would report a new default while the
+      // chat kept answering on the old one.
+      await useChatStore.getState().clearSessionModelPin();
       toast.success(t('aiProviders.toast.defaultUpdated'));
     } catch (error) {
       toast.error(`${t('aiProviders.toast.failedDefault')}: ${error}`);
