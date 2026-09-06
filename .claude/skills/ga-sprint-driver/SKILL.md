@@ -14,7 +14,7 @@ them (a cron, a fresh session, a human).
 
 | Param | This project |
 |---|---|
-| Board API | `http://localhost:8090`, workspace `issues-agent`, project `81a2ea23-e060-49b4-a344-1ab0339f46d5`, token via `set -a; . ~/issues-agent-runtime/plane/.agent-token; set +a` (never print) |
+| Board API | `http://localhost:8090`, workspace `issues-agent`, project `81a2ea23-e060-49b4-a344-1ab0339f46d5`, token via `set -a; . ~/issues-agent-runtime/plane/.agent-token; set +a` (never print). **Trap:** the token file ALSO exports `PLANE_PROJECT` — that is the GHIP GitHub-sync project, NOT this board; never build URLs from it (Plane accepts the cross-project create and the comment vanishes from every CLWX read — 2026-09-06 incident). Post comments ONLY via `node scripts/plane-comment-post.mjs --card CLWX-<n> --file <payload>` (readback-verified). |
 | Board mirror | `docs/plane-board/` via `node scripts/plane-board-export.mjs` |
 | State vector | `docs/GA_SPRINT_STATE_VECTOR.md` |
 | Sprint plan | `docs/GA_FINISH_SPRINT_2026-09-03.md` (supersedes GA_SPRINT_PLAN_2026-09-02; GA bar = `docs/wiki/GA_READINESS.md` §4; persona bars = `docs/PERSONA_STATE_VECTOR_2026-09-03.md`) |

@@ -1355,6 +1355,27 @@ the production-integration milestone, not a GA blocker.
   chats AND a gateway restart, clearing only on app relaunch (D0/D1 sharpened).
   RESULT.md matrix complete; VM RUNNING; board-mirror comment lag from tick 1
   still unreconciled (export drops newest comments — tooling defect to file).
+- **Board-mirror "comment lag" ROOT-CAUSED — prior hypothesis falsified; 5 lost
+  comments reconciled (2026-09-06 third tick, CLWX-103).** The "export drops
+  newest comments" theory is WRONG: a full-board audit (live comment lists vs a
+  fresh export, all 102 issues) found **0 mismatches** — `plane-board-export.mjs`
+  and its pagination are faithful. The real defect: the token file
+  (`~/issues-agent-runtime/plane/.agent-token`) also exports
+  `PLANE_PROJECT=c6717c2c…` — the **GHIP** GitHub-sync project — and the tick-1/2
+  posting one-liners built their URL from it. This Plane build **accepts the
+  cross-project create** (201; row persisted with the URL's GHIP project_id
+  while issue_id is CLWX) and every CLWX read path filters by project → the five
+  moe.18-verify evidence comments (CLWX-42/78/83/92/95) existed in Postgres
+  (deleted_at NULL) but were invisible/orphaned; direct GET by id under CLWX =
+  404. Fix landed: `scripts/plane-comment-post.mjs` — the only sanctioned
+  comment path (ignores `PLANE_PROJECT` with a warning, resolves the card under
+  the CLWX project before writing, READBACK-VERIFIES detail+list after POST,
+  exits non-zero "ORPHANED" otherwise; negative paths proven). Reconcile
+  executed: 5 comments re-posted via the new script (readback-verified), 5 GHIP
+  orphans deleted via API under their actual project path (5×204; DB live-row
+  count 0), mirror re-exported and now carries the evidence. SKILL.md board row
+  documents the trap. Filed as **CLWX-103** (In Progress → Ready after the
+  separate-lane review).
 
 ---
 
