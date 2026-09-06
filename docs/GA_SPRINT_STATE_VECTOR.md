@@ -1419,6 +1419,28 @@ the production-integration milestone, not a GA blocker.
   GATE: live re-verify on the next cut's VM matrix. Evidence:
   `docs/evidence/CLWX-104_RUN_ERROR_DEDUP_2026-09-06.md` +
   `CODEX_ADVERSARIAL_REVIEW_2026-09-06_CLWX-104.md`.
+- **CLWX-77 registration-smoke leg landed (2026-09-06 fifth tick) — artifact
+  matrix 18 → 22 rows, full run GREEN.** New `register` child mode: the
+  harness imports the STAGED plugin entry and calls register() with a mock
+  gateway API collecting tool names; fetch is stubbed before the plugin loads
+  (every attempt recorded + rejected — no socket), so the CLWX-86 probe
+  deterministically fails open, listener-independent. Four rows pin the
+  activation contract: full 31-tool inventory (set-equality + duplicate
+  detection), skillAllowlist kill-switch (outlook family suppressed exactly),
+  no-hostapi honest degradation, no-config early-return (BUG-012-adjacent).
+  Commits `91f1c588` + `38fee5c6` (review hardening). 3-lane review: Codex
+  2 MED both reproduced and closed same tick (async-crash-after-verdict
+  graded PASS → foldChildExit discards framed verdicts on nonzero exit;
+  assumed-closed port → fetch stub, re-proven with an ACTIVE listener
+  receiving zero connections); Claude lenses 8 confirmed minors / 0 refuted
+  (duplicate-registration hole, fast-lane inventory drift guard now parses
+  index.mjs literals 31/31 in vitest, killswitch row, honest-coverage
+  wording); graph risk 0.35 / 0 flows. 22 rows: 14 PASS / 7 REFUSED-READABLY
+  / 0 FAIL / 1 NO-TOOL (`docs/evidence/HARNESS_ARTIFACT_2026-09-06.md`).
+  Unit guards 39/39; gate pulse GREEN 7/0/2 at SENSE. Card stays In Progress
+  — remaining trail: packaged-node/electron-env spawn parity,
+  gateway-process transport, package preflight wiring, K-ledger rows,
+  Windows-lane run.
 
 ---
 
