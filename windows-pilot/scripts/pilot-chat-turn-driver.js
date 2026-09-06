@@ -17,6 +17,11 @@
  *     [--turn-timeout 180] [--composer-timeout 180]
  *     [--outdir C:\path\to\evidence] [--new-session]
  *
+ * Exit codes: 0 = ANSWERED, 41 = ANSWERED_WITH_RUN_ERROR (answered, but the
+ * principal also saw a red banner), 40 = any non-answer verdict, 1/2/3 =
+ * infrastructure (fatal / bad args / no playwright-core). Never exit 0 for a
+ * turn the principal would call broken.
+ *
  * --new-session is REQUIRED for any document/tool leg. Without it the turn
  * lands in whatever session was last open, and a session that already holds a
  * failed attempt makes the model echo its own prior apology ("still
@@ -84,7 +89,16 @@ function resolvePlaywrightCore() {
 const SEL = {
   composer: '[data-testid="chat-composer-input"]',
   send: '[data-testid="chat-composer-send"]',
-  message: '[data-testid^="chat-message-"]',
+  // The error chip's testid ALSO starts with "chat-message-"
+  // (src/pages/Chat/ChatMessage.tsx:436) while real message containers are
+  // "chat-message-<idx>" (src/pages/Chat/index.tsx:791). A bare prefix match
+  // therefore counted the chip as an extra message and — because a chip is a
+  // DESCENDANT of the last container, so it sorts after it in document order —
+  // made `.last()` return the chip's own error text. That text is over 40 chars
+  // and stops changing, so a failed turn whose only assistant content was an
+  // inline error chip settled as ANSWERED with the error string recorded as the
+  // answer (found by cross-model adversarial review, 2026-09-06).
+  message: '[data-testid^="chat-message-"]:not([data-testid="chat-message-error-chip"])',
   degrade: '[data-testid="chat-degrade-notice"]',
   runError: '[data-testid="chat-run-error"]',
   newChat: '[data-testid="sidebar-new-chat"]',
@@ -105,9 +119,59 @@ async function findChatPage(browser) {
   return null;
 }
 
+function normalize(text) {
+  return String(text ?? '').replace(/\s+/g, ' ').trim();
+}
+
 function truncate(text, max) {
-  const value = String(text ?? '').replace(/\s+/g, ' ').trim();
+  const value = normalize(text);
   return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+/**
+ * Classify the last rendered message text. Pure so the three ways a non-answer
+ * can masquerade as an answer are unit-testable without a browser:
+ *  - streaming placeholder ("Thinking…") is momentarily stable;
+ *  - the user's own prompt is what remains visible when the assistant bubble is
+ *    empty (silence-on-send);
+ *  - an inline error chip's text is long and stable, and the container's
+ *    innerText includes it.
+ */
+function classifyTurnText({ text, promptNormalized, chipText }) {
+  const value = normalize(text);
+  const isPlaceholder = /Thinking\s*[.…]|^\s*Working\b/i.test(value) || value.length < 40;
+  const isPromptEcho = value.replace(/\s*just now\s*$/i, '').trim() === normalize(promptNormalized)
+    && normalize(promptNormalized).length > 0;
+  const chip = normalize(chipText);
+  const isErrorChipOnly = Boolean(chip)
+    && value.includes(chip)
+    && normalize(value.split(chip).join(' ')).length < 40;
+  return {
+    isPlaceholder,
+    isPromptEcho,
+    isErrorChipOnly,
+    // Only this combination may be recorded as the principal's answer.
+    acceptable: Boolean(value) && !isPlaceholder && !isPromptEcho && !isErrorChipOnly,
+  };
+}
+
+/** The verdict for a completed observation. Pure; mirrors main()'s ladder. */
+function verdictFor(result) {
+  if (result.settled) return result.runErrorSeen ? 'ANSWERED_WITH_RUN_ERROR' : 'ANSWERED';
+  if (result.errorChipOnly) return 'FAILED_ERROR_CHIP_ONLY';
+  if (result.assistantPromptEcho) return 'ASSISTANT_EMPTY_SILENCE_ON_SEND';
+  return result.messagesAfter > result.messagesBefore ? 'TIMED_OUT_MID_TURN' : 'NO_RESPONSE';
+}
+
+/**
+ * Verdict -> process exit code. A caller that only checks $LASTEXITCODE
+ * (pilot-run-chat-turn.ps1 propagates it) must never read a failed or blocked
+ * turn as success.
+ */
+function exitCodeFor(verdict) {
+  if (verdict === 'ANSWERED') return 0;
+  if (verdict === 'ANSWERED_WITH_RUN_ERROR') return 41;
+  return 40;
 }
 
 async function main() {
@@ -128,6 +192,8 @@ async function main() {
     executionSteps: [],
     toolNames: [],
     errorChipSeen: false,
+    errorChipText: null,
+    errorChipOnly: false,
     assistantPromptEcho: false,
     degradeNoticeSeen: false,
     degradeNoticeText: null,
@@ -194,12 +260,21 @@ async function main() {
     // The turn is settled when the message count has grown by >= 2 (user +
     // assistant) and the last message's text stops changing between polls.
     const deadline = Date.now() + args.turnTimeout * 1000;
-    const promptNormalized = args.prompt.replace(/\s+/g, ' ').trim();
+    const promptNormalized = normalize(args.prompt);
     let lastText = '';
     let stableSince = 0;
+    let chipTextRaw = '';
     while (Date.now() < deadline) {
       await page.waitForTimeout(2_000);
       result.messagesAfter = await page.locator(SEL.message).count();
+      // Read the inline chip every poll: the container's innerText INCLUDES its
+      // chip's text, so the chip string is needed to tell "assistant answered"
+      // from "assistant rendered nothing but an error".
+      if (await page.locator(SEL.errorChip).count() > 0) {
+        result.errorChipSeen = true;
+        chipTextRaw = normalize(await page.locator(SEL.errorChip).last().innerText().catch(() => ''));
+        result.errorChipText = truncate(chipTextRaw, 300);
+      }
       if (await page.locator(SEL.degrade).count() > 0) {
         result.degradeNoticeSeen = true;
         result.degradeNoticeText = truncate(await page.locator(SEL.degrade).innerText().catch(() => ''), 300);
@@ -210,18 +285,15 @@ async function main() {
       }
       if (result.messagesAfter >= result.messagesBefore + 2) {
         const raw = await page.locator(SEL.message).last().innerText().catch(() => '');
-        const text = raw.replace(/\s+/g, ' ').trim();
-        // Reject "Thinking…"/"Working" placeholders and sub-40-char fragments:
-        // the streaming placeholder is momentarily stable and would otherwise
-        // false-settle the turn (IF-8). Real answers are longer and non-placeholder.
-        const isPlaceholder = /Thinking\s*[.…]|^\s*Working\b/i.test(text) || text.length < 40;
-        // An empty assistant bubble leaves the USER's own message as the last
-        // rendered text (plus its "just now" stamp). That is silence-on-send,
-        // not an answer — settling on it reports ANSWERED for a failed turn
-        // (observed on the moe.19 VM run, 2026-09-06).
-        const isPromptEcho = text.replace(/\s*just now\s*$/i, '').trim() === promptNormalized;
-        if (isPromptEcho) result.assistantPromptEcho = true;
-        if (text && text === lastText && !isPlaceholder && !isPromptEcho) {
+        const text = normalize(raw);
+        // Placeholders ("Thinking…"), the user's own echoed prompt (empty
+        // assistant bubble = silence-on-send), and an assistant bubble holding
+        // nothing but its inline error chip are all NON-answers that would
+        // otherwise satisfy the stability heuristic. See classifyTurnText.
+        const shape = classifyTurnText({ text, promptNormalized, chipText: chipTextRaw });
+        if (shape.isPromptEcho) result.assistantPromptEcho = true;
+        result.errorChipOnly = shape.isErrorChipOnly;
+        if (text === lastText && shape.acceptable) {
           if (stableSince === 0) stableSince = Date.now();
           // 3 consecutive stable polls (~9s) of real content = streaming finished.
           if (Date.now() - stableSince >= 9_000) {
@@ -235,8 +307,11 @@ async function main() {
         }
       }
     }
-    // Never record the prompt echo as an answer — that is the silence case.
-    if (!result.settled && lastText && !result.assistantPromptEcho) result.answerText = truncate(lastText, 800);
+    // Never record the prompt echo (silence-on-send) or a bare error chip
+    // (failed turn) as an answer.
+    if (!result.settled && lastText && !result.assistantPromptEcho && !result.errorChipOnly) {
+      result.answerText = truncate(lastText, 800);
+    }
 
     // Tool-call evidence: the execution graph is the only renderer-visible
     // proof that the model actually CALLED a tool rather than answering (or
@@ -252,17 +327,9 @@ async function main() {
     } catch {
       // execution graph may be collapsed or absent; leave the arrays empty
     }
-    result.errorChipSeen = await page.locator(SEL.errorChip).count() > 0;
+    if (await page.locator(SEL.errorChip).count() > 0) result.errorChipSeen = true;
 
-    if (result.settled) {
-      result.verdict = result.runErrorSeen ? 'ANSWERED_WITH_RUN_ERROR' : 'ANSWERED';
-    } else if (result.assistantPromptEcho) {
-      // Messages grew but no assistant content ever rendered: the principal
-      // sees their own prompt and nothing else.
-      result.verdict = 'ASSISTANT_EMPTY_SILENCE_ON_SEND';
-    } else {
-      result.verdict = result.messagesAfter > result.messagesBefore ? 'TIMED_OUT_MID_TURN' : 'NO_RESPONSE';
-    }
+    result.verdict = verdictFor(result);
 
     await page.screenshot({ path: path.join(args.outdir, `chat-turn-${stamp}.png`), fullPage: true }).catch(() => {});
     return result;
@@ -273,11 +340,16 @@ async function main() {
     console.log(`RESULT ${result.verdict}`);
     console.log(JSON.stringify(result, null, 2));
     console.log(`WROTE ${outPath}`);
+    process.exitCode = exitCodeFor(result.verdict);
     await browser.close().catch(() => {});
   }
 }
 
-main().catch((error) => {
-  console.error(`FATAL: ${error && error.message ? error.message : error}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(`FATAL: ${error && error.message ? error.message : error}`);
+    process.exit(1);
+  });
+}
+
+module.exports = { classifyTurnText, verdictFor, exitCodeFor, normalize, SEL };
