@@ -1375,7 +1375,23 @@ the production-integration milestone, not a GA blocker.
   orphans deleted via API under their actual project path (5×204; DB live-row
   count 0), mirror re-exported and now carries the evidence. SKILL.md board row
   documents the trap. Filed as **CLWX-103** (In Progress → Ready after the
-  separate-lane review).
+  separate-lane review). Raw probes + ids:
+  `docs/evidence/CLWX-103_BOARD_COMMENT_ORPHAN_2026-09-06.md`. Separate-lane
+  review ran ALL THREE additive lanes: Codex cross-model (gpt-6-astra,
+  needs-attention, 3 findings all mechanically demonstrated — malformed-key
+  credential leak via Headers.append, foreign-prefix cross-post GHIP-83→CLWX-83,
+  stdin multibyte corruption; verdict verbatim in
+  `docs/evidence/CODEX_ADVERSARIAL_REVIEW_2026-09-06_CLWX-103.md`), Claude
+  lenses ×3 with per-finding adversarial verify (18 agents: 12 confirmed /
+  3 refuted-with-evidence — incl. --file-value fallthrough to stdin,
+  ORPHANED-vs-transient readback conflation, JSON.parse payload echo, dead
+  "(!)" marker, docs-falsifiability gaps), and graph lenses (code-review-graph
+  blast radius 0 changed functions/flows; scoped graphify AST graph confirms
+  the poster's helpers have no external dependents). Every confirmed finding
+  fixed same tick and re-proven (synthetic-key leak grep = 0, GHIP-83 refused
+  exit 1, multibyte reassembly PASS, full negative-path battery green); the
+  ORPHANED branch's proof is the Codex mocked-fetch run — recorded as the
+  honest limit (a live re-proof would re-pollute GHIP). No gate loosened.
 
 ---
 
