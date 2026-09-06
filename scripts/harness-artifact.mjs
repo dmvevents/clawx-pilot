@@ -75,7 +75,7 @@
  */
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -370,6 +370,40 @@ export function checkTransportInspect(expectedTools, payload) {
   if (plugin.status !== 'loaded') return `plugin status is "${plugin.status}", expected "loaded"`;
   if (plugin.activated !== true) return `plugin not activated (activationReason: ${plugin.activationReason ?? 'unknown'})`;
   return inventoryDiff(expectedTools, plugin.toolNames);
+}
+
+/**
+ * Verify the gateway loaded the plugin FROM THE STAGE (pure; unit-tested).
+ * Codex lane finding (2026-09-06): without this, an inherited
+ * OPENCLAW_CONFIG_PATH (or any discovery bleed) could satisfy the inventory
+ * check with the DEVELOPER's unstaged plugin — the row would grade the wrong
+ * artifact. Both paths must be pre-resolved (realpath) by the caller.
+ */
+export function checkTransportSource(expectedRootDir, payload) {
+  const rootDir = payload?.plugin?.rootDir;
+  if (typeof rootDir !== 'string' || !rootDir) return 'inspect payload has no plugin.rootDir';
+  if (path.resolve(rootDir) !== path.resolve(expectedRootDir)) {
+    return `plugin loaded from "${rootDir}" — NOT the staged copy at "${expectedRootDir}" (config/discovery bleed; the row would grade the wrong artifact)`;
+  }
+  return true;
+}
+
+/**
+ * Validate a fast-mode selection (pure; unit-tested). Codex lane finding
+ * (2026-09-06): the generic empty-selection check let a renamed row shrink
+ * the fast gate to 6/8 rows with exit 0 — every pinned id must resolve
+ * exactly once BEFORE any child spawns, or the gate refuses to run.
+ */
+export function validateFastSelection(expandedRows, fastIds) {
+  const counts = new Map();
+  for (const row of expandedRows) counts.set(row.id, (counts.get(row.id) ?? 0) + 1);
+  const missing = fastIds.filter((id) => !counts.has(id));
+  const duplicated = fastIds.filter((id) => (counts.get(id) ?? 0) > 1);
+  if (!missing.length && !duplicated.length) return true;
+  const parts = [];
+  if (missing.length) parts.push(`missing from the expanded matrix: ${missing.join(', ')}`);
+  if (duplicated.length) parts.push(`resolve more than once: ${duplicated.join(', ')}`);
+  return `fast subset integrity failure — ${parts.join('; ')}`;
 }
 
 // Written into the stage and passed via NODE_OPTIONS=--require so the
@@ -709,26 +743,39 @@ async function runTransport(row, { pluginDest, gatewayDest, preloadPath }, stage
   const stateDir = path.join(stageDir, 'state', row.id.replace(/[^a-z0-9_.-]/gi, '_'));
   await rm(stateDir, { recursive: true, force: true });
   await mkdir(stateDir, { recursive: true });
+  // realpath both sides of the source assertion up front: mkdtemp stages on
+  // macOS live under symlinked roots (/tmp → /private/tmp) and the gateway
+  // reports resolved paths.
+  const realPluginDest = await realpath(pluginDest);
   await writeFile(path.join(stateDir, 'openclaw.json'), JSON.stringify({
     plugins: {
       load: { paths: [pluginDest] },
       entries: { [TRANSPORT_PLUGIN_ID]: { enabled: true, config: row.transport.pluginConfig } },
     },
   }, null, 2));
+  // ALLOWLISTED env — never spread process.env here. The bundled gateway
+  // honors config/discovery overrides (OPENCLAW_CONFIG_PATH beats
+  // OPENCLAW_STATE_DIR) and provider/key vars; an inherited developer env
+  // could redirect the row at the dev machine's real config and plugins —
+  // Codex lane probe confirmed the override precedence (2026-09-06).
+  // OPENCLAW_NO_RESPAWN mirrors the production launcher AND keeps the
+  // timeout SIGKILL effective — without it the CLI wrapper respawns itself
+  // and the kill only reaps the wrapper (Codex lane finding, 2026-09-06).
   const env = {
-    ...process.env,
+    PATH: process.env.PATH,
+    HOME: process.env.HOME,
+    TMPDIR: process.env.TMPDIR,
+    LANG: process.env.LANG,
     OPENCLAW_STATE_DIR: stateDir,
     CLAWX_APP_RESOURCES: path.dirname(gatewayDest),
     OPENCLAW_DISABLE_BONJOUR: '1',
+    OPENCLAW_NO_RESPAWN: '1',
     NODE_OPTIONS: `--require ${JSON.stringify(preloadPath)}`,
     NODE_PATH: '',
   };
   if (row.transport.hostApi) {
     env.CLAWX_HOST_API_PORT = String(row.transport.hostApi.port);
     env.CLAWX_HOST_API_TOKEN = String(row.transport.hostApi.token);
-  } else {
-    delete env.CLAWX_HOST_API_PORT;
-    delete env.CLAWX_HOST_API_TOKEN;
   }
   return new Promise((resolve) => {
     const child = spawn(
@@ -753,6 +800,14 @@ async function runTransport(row, { pluginDest, gatewayDest, preloadPath }, stage
       const payload = parseInspectJson(stdout);
       if (!payload) {
         resolve({ ok: false, infra: true, message: `gateway CLI produced no parsable inspect JSON; stdout tail: ${stdout.slice(-300)}` });
+        return;
+      }
+      // Stage-integrity gate BEFORE the inventory check: the plugin the
+      // gateway reports must be the STAGED copy, not something an inherited
+      // config/discovery path found elsewhere (Codex lane, 2026-09-06).
+      const sourceVerdict = checkTransportSource(realPluginDest, payload);
+      if (sourceVerdict !== true) {
+        resolve({ ok: false, infra: true, message: sourceVerdict });
         return;
       }
       resolve({ ok: true, result: payload });
@@ -899,6 +954,16 @@ async function main() {
   const docToolsPath = path.join(pluginDest, 'doc-tools.mjs');
 
   const expanded = expandMatrix(MATRIX);
+  if (args.fast) {
+    // Every pinned fast row must resolve exactly once BEFORE anything runs —
+    // a renamed row must refuse the gate, never shrink it (Codex lane
+    // finding, 2026-09-06: 6/8 rows exited 0 under a rename).
+    const fastVerdict = validateFastSelection(expanded, FAST_ROW_IDS);
+    if (fastVerdict !== true) {
+      console.error(`FAIL: ${fastVerdict}`);
+      process.exit(1);
+    }
+  }
   const rows = expanded.filter((r) => {
     if (args.only) return r.id === args.only;
     if (args.fast) return FAST_ROW_IDS.includes(r.id);

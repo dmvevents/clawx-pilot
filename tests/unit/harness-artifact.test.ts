@@ -476,6 +476,34 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
     expect(TRANSPORT_NO_HOSTAPI_EXPECTED).toEqual([...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES]);
   });
 
+  it('checkTransportSource rejects a plugin loaded from anywhere but the stage (Codex HIGH, 2026-09-06)', async () => {
+    const { checkTransportSource } = await load();
+    expect(checkTransportSource('/stage/resources/extensions/moe-principal-assistant', {
+      plugin: { rootDir: '/stage/resources/extensions/moe-principal-assistant' },
+    })).toBe(true);
+    const bleed = checkTransportSource('/stage/resources/extensions/moe-principal-assistant', {
+      plugin: { rootDir: '/Users/dev/repo/extensions/moe-principal-assistant' },
+    });
+    expect(bleed).not.toBe(true);
+    expect(String(bleed)).toContain('/Users/dev/repo');
+    expect(String(bleed)).toContain('NOT the staged copy');
+    expect(String(checkTransportSource('/stage/x', {}))).toContain('no plugin.rootDir');
+    expect(String(checkTransportSource('/stage/x', { plugin: { rootDir: '' } }))).toContain('no plugin.rootDir');
+  });
+
+  it('validateFastSelection refuses a renamed or duplicated fast row (Codex MEDIUM, 2026-09-06)', async () => {
+    const { MATRIX, expandMatrix, validateFastSelection, FAST_ROW_IDS } = await load();
+    const expanded = expandMatrix(MATRIX);
+    expect(validateFastSelection(expanded, FAST_ROW_IDS)).toBe(true);
+    // Codex's exact probe: rename the pdf row → the gate must refuse, not shrink.
+    const renamed = expanded.map((r: { id: string }) => (r.id.startsWith('pdf-text.read_pdf') ? { ...r, id: r.id.replace('pdf-text', 'pdf-body') } : r));
+    const verdict = validateFastSelection(renamed, FAST_ROW_IDS);
+    expect(verdict).not.toBe(true);
+    expect(String(verdict)).toContain('pdf-text.read_pdf');
+    const doubled = [...expanded, { id: 'pdf-text.read_pdf' }];
+    expect(String(validateFastSelection(doubled, FAST_ROW_IDS))).toContain('more than once');
+  });
+
   it('full transport row check FAILs when the outlook family is absent (falsifiability)', async () => {
     const { MATRIX, TRANSPORT_FULL_EXPECTED } = await load();
     const row = MATRIX.find((r: { id: string }) => r.id === 'gateway-transport.full');
