@@ -1573,6 +1573,27 @@ the production-integration milestone, not a GA blocker.
   `--engine transcripts` grade → decision recorded; optional owner ask:
   Trinidadian-accent `source:"real"` rows. Evidence:
   `docs/evidence/CLWX87_WER_2026-09-06.md`.
+- **Stale In Progress pile worked (2026-09-06 ninth tick, owner-directed
+  "last real work was Sept 3"; `b159d13c`).** Classification of all 11
+  In Progress cards: 87/77 active this session; 61/63 Chrome-gated (Sept 5
+  authored); 39 (L4 operator sign-in) / 30 (Ministry values) / 31 (session)
+  / 29 (trim-unhold) / 25 (KR2 acceptance) owner- or Ministry-gated —
+  re-verified, no gate cleared, no comment spam added; 22 = anchor. The
+  ONE agent-executable stale card was **CLWX-43** (last real work Sept 2):
+  `scripts/clwx43-latency-mac-lane.ts` fired 3 demo-shaped REAL in-app
+  turns over the CLWX-65 relay on the running install — routine no-tool
+  **8.8s** (WITHIN the proposed p50 ≤15s), draft+write_docx **17.1s**
+  (near budget) on gemini-2.5-pro, vs the ~103s VM baseline median. THE
+  FIND: the read_pdf turn died silently TWICE — root-caused live as the
+  installed app being **0.4.3-moe.10** (May build): the turn hard-kills
+  the moe.10 gateway ~2min in (boot lines 16:31:46/16:38:20, no crash
+  lines) — the fixed CLWX-72/92 class reproduced on the pre-fix install,
+  silent-death surface = fixed-in-tree CLWX-78/104. No new card;
+  corroborates the Monday-build ask (and this dev Mac needs the new
+  install). Card stays In Progress: laptop-lane repeat now best on the
+  NEXT BUILD, owner budget sign-off (today's numbers suggest the proposal
+  is attainable), GA-packet row after sign-off. Evidence:
+  `docs/evidence/CLWX43_LATENCY_MAC_LANE_2026-09-06.md`.
 
 ---
 
