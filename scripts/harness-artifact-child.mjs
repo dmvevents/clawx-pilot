@@ -28,8 +28,19 @@
  */
 import { pathToFileURL } from 'node:url';
 
+/**
+ * Every verdict carries the OBSERVED env shape so the parent can assert the
+ * electronlike fake actually applied (falsifiability lens, 2026-09-06: a
+ * neutered fake produced byte-identical PASS verdicts while the report still
+ * claimed UtilityProcess coverage). Sampled at emit time — after
+ * applyEnvShape and after the tool ran.
+ */
 function emit(verdict) {
-  console.log(`CLAWX77_VERDICT:${JSON.stringify(verdict)}`);
+  const env = {
+    electron: process.versions.electron ?? null,
+    type: process.type ?? null,
+  };
+  console.log(`CLAWX77_VERDICT:${JSON.stringify({ ...verdict, env })}`);
 }
 
 /**

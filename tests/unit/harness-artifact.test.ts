@@ -253,11 +253,20 @@ describe('inventoryDiff + registration-row contracts (CLWX-77 registration leg)'
     const { MATRIX, DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES, BROWSER_TOOL_NAMES, OUTLOOK_TOOL_NAMES, FORMS_TOOL_NAMES } = await load();
     const row = MATRIX.find((r: { id: string }) => r.id === 'plugin-registration.full');
     const all = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES];
-    expect(row.check({ names: all })).toBe(true);
+    expect(row.check({ names: all, networkAttempts: 1 })).toBe(true);
     const noOutlook = all.filter((n: string) => !n.startsWith('outlook.'));
-    const verdict = row.check({ names: noOutlook });
+    const verdict = row.check({ names: noOutlook, networkAttempts: 1 });
     expect(verdict).not.toBe(true);
     expect(String(verdict)).toContain('outlook.send_email');
+  });
+
+  it('full-registration row check FAILs when the fetch stub recorded zero attempts (stub not in the path)', async () => {
+    const { MATRIX, DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES, BROWSER_TOOL_NAMES, OUTLOOK_TOOL_NAMES, FORMS_TOOL_NAMES } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'plugin-registration.full');
+    const all = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES];
+    const verdict = row.check({ names: all, networkAttempts: 0 });
+    expect(verdict).not.toBe(true);
+    expect(String(verdict)).toContain('network attempt');
   });
 
   it('no-hostapi row check REJECTS any outlook/forms/browser tool sneaking in', async () => {
@@ -402,6 +411,19 @@ describe('foldRepeatVerdicts — K8 intermittence bar (trail 2026-09-06)', () =>
     expect(v.note).toContain('worker crashed');
   });
 
+  it('mixed non-FAIL statuses still carry a meaningful detail — no dangling dash (lens minor, 2026-09-06)', async () => {
+    const { foldRepeatVerdicts } = await load();
+    const v = foldRepeatVerdicts([
+      { status: 'PASS', note: '' },
+      { status: 'REFUSED-READABLY', note: 'file is password-protected' },
+      { status: 'PASS', note: '' },
+    ]);
+    expect(v.status).toBe('FAIL');
+    expect(v.note).toContain('INTERMITTENT');
+    expect(v.note).toContain('file is password-protected');
+    expect(v.note.trim().endsWith('—')).toBe(false);
+  });
+
   it('a consistent FAIL stays a plain FAIL (not mislabeled intermittent)', async () => {
     const { foldRepeatVerdicts } = await load();
     const v = foldRepeatVerdicts([
@@ -514,6 +536,51 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
     const verdict = row.check({ plugin: { status: 'loaded', activated: true, toolNames: noOutlook } });
     expect(verdict).not.toBe(true);
     expect(String(verdict)).toContain('outlook.send_email');
+  });
+});
+
+describe('checkEnvShapeApplied — the electronlike fake must be PROVEN, not assumed (falsifiability lens MAJOR, 2026-09-06)', () => {
+  it('passes an electronlike row whose child echoed the fake', async () => {
+    const { checkEnvShapeApplied } = await load();
+    expect(checkEnvShapeApplied('electronlike', { electron: '35.0.0', type: 'utility' })).toBe(true);
+  });
+
+  it('FAILs an electronlike row that ran as plain node — the neutered-fake false-GREEN', async () => {
+    const { checkEnvShapeApplied } = await load();
+    const v = checkEnvShapeApplied('electronlike', { electron: null, type: null });
+    expect(v).not.toBe(true);
+    expect(String(v)).toContain('NOT applied');
+  });
+
+  it('FAILs an electronlike row with no env echo at all (old child / plumbing break)', async () => {
+    const { checkEnvShapeApplied } = await load();
+    const v = checkEnvShapeApplied('electronlike', undefined);
+    expect(v).not.toBe(true);
+    expect(String(v)).toContain('no env echo');
+  });
+
+  it('does not constrain node-shape rows (the --node-bin electron degeneracy is a warning, not a row failure)', async () => {
+    const { checkEnvShapeApplied } = await load();
+    expect(checkEnvShapeApplied('node', { electron: '35.0.0', type: null })).toBe(true);
+    expect(checkEnvShapeApplied('node', undefined)).toBe(true);
+  });
+});
+
+describe('sanitizeNoteCell (evidence-report hygiene, lens minors 2026-09-06)', () => {
+  it('flattens newlines and escapes pipes — a multi-line stderr note cannot break the table', async () => {
+    const { sanitizeNoteCell } = await load();
+    expect(sanitizeNoteCell('line1\nline2\r\nline3 | pipe')).toBe('line1 line2 line3 \\| pipe');
+  });
+
+  it('redacts the home directory to ~', async () => {
+    const { sanitizeNoteCell } = await load();
+    expect(sanitizeNoteCell('loaded from /Users/dev/repo/x', '/Users/dev')).toBe('loaded from ~/repo/x');
+  });
+
+  it('handles empty and undefined notes', async () => {
+    const { sanitizeNoteCell } = await load();
+    expect(sanitizeNoteCell('')).toBe('');
+    expect(sanitizeNoteCell(undefined)).toBe('');
   });
 });
 

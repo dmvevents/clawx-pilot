@@ -74,7 +74,7 @@
  * node.exe + real utility-env gateway), in-app K10 drag-gesture cell.
  */
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -89,8 +89,11 @@ const PLUGIN_SRC = path.join(REPO_ROOT, 'extensions', 'moe-principal-assistant')
 const CHILD_SCRIPT = path.join(__dirname, 'harness-artifact-child.mjs');
 const ROW_TIMEOUT_MS = 60_000;
 // The gateway CLI loads every discovered stock plugin before answering
-// inspect; give transport rows more headroom than a doc-tools child.
-const TRANSPORT_TIMEOUT_MS = 120_000;
+// inspect; give transport rows more headroom than a doc-tools child. The
+// env override exists for slow build hosts — the fast lane is a release
+// gate and a red-for-CPU-reasons build needs a knob, not a code edit
+// (isolation lens, 2026-09-06).
+const TRANSPORT_TIMEOUT_MS = Number(process.env.CLAWX77_TRANSPORT_TIMEOUT_MS ?? 120_000);
 
 // ── classification (pure; unit-tested in tests/unit/harness-artifact.test.ts)
 
@@ -394,6 +397,37 @@ export function checkTransportSource(expectedRootDir, payload) {
  * the fast gate to 6/8 rows with exit 0 — every pinned id must resolve
  * exactly once BEFORE any child spawns, or the gate refuses to run.
  */
+/**
+ * Assert the child actually ran under the shape its row id claims (pure;
+ * unit-tested). Falsifiability lens (2026-09-06): with applyEnvShape
+ * neutered, @electronlike rows produced byte-identical PASS verdicts and the
+ * report still asserted UtilityProcess coverage — the exact false-GREEN
+ * class this harness exists to eliminate. The child echoes the OBSERVED
+ * process.versions.electron + process.type in every verdict; an
+ * @electronlike row whose echo does not show the fake FAILs.
+ */
+export function checkEnvShapeApplied(envShape, envObserved) {
+  if (envShape !== 'electronlike') return true;
+  if (!envObserved || typeof envObserved !== 'object') {
+    return 'electronlike row returned no env echo — cannot prove the UtilityProcess fake applied (old child or plumbing break)';
+  }
+  if (envObserved.type !== 'utility' || !envObserved.electron) {
+    return `electronlike fake NOT applied (observed electron=${envObserved.electron ?? 'null'}, type=${envObserved.type ?? 'null'}) — the row ran as plain node`;
+  }
+  return true;
+}
+
+/**
+ * Sanitize a note for a markdown table cell (pure; unit-tested): pipes
+ * escaped, newlines flattened, the user's home dir redacted to `~` (report
+ * files are committed evidence; the pilot mirror is public — CLWX-18).
+ */
+export function sanitizeNoteCell(note, home = process.env.HOME) {
+  let out = String(note ?? '').replace(/\r?\n/g, ' ').replace(/\|/g, '\\|');
+  if (home && home !== '/') out = out.split(home).join('~');
+  return out;
+}
+
 export function validateFastSelection(expandedRows, fastIds) {
   const counts = new Map();
   for (const row of expandedRows) counts.set(row.id, (counts.get(row.id) ?? 0) + 1);
@@ -409,7 +443,14 @@ export function validateFastSelection(expandedRows, fastIds) {
 // Written into the stage and passed via NODE_OPTIONS=--require so the
 // gateway CLI process gets the same deterministic network isolation as the
 // register-mode children: every fetch attempt is rejected without a socket.
+// The sentinel write makes the stub FALSIFIABLE: NODE_OPTIONS is silently
+// ignored by some runtimes (packaged Electron), and a transport row must
+// FAIL loudly — not run un-stubbed — when the preload never loaded
+// (falsifiability + isolation lenses, 2026-09-06).
 const TRANSPORT_PRELOAD_SOURCE = `'use strict';
+if (process.env.CLAWX77_NET_STUB_SENTINEL) {
+  try { require('node:fs').writeFileSync(process.env.CLAWX77_NET_STUB_SENTINEL, 'loaded'); } catch {}
+}
 globalThis.fetch = async () => {
   throw new Error('artifact-harness: network disabled in gateway-transport row');
 };
@@ -562,10 +603,20 @@ export const MATRIX = [
     // appears — at which point a bundle gap fails it loudly.
     id: 'plugin-registration.full', mode: 'register', expectation: 'ok',
     register: { pluginConfig: FULL_PLUGIN_CONFIG, hostApi: FAKE_HOST_API },
-    check: (r) => inventoryDiff(
-      [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES],
-      r.names,
-    ),
+    check: (r) => {
+      const diff = inventoryDiff(
+        [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES],
+        r.names,
+      );
+      if (diff !== true) return diff;
+      // The fetch stub must PROVABLY intercept — with host-API env present
+      // the CLWX-86 probe fires, so zero recorded attempts means the stub
+      // was not in the path and the isolation claim is unverified
+      // (falsifiability lens, 2026-09-06: networkAttempts was collected but
+      // never consumed).
+      return (r.networkAttempts ?? 0) >= 1
+        ? true : `expected the stubbed capability probe to record >=1 network attempt, got ${r.networkAttempts}`;
+    },
   },
   {
     // The production email kill-switch, legacy contract: host.skillAllowlist
@@ -662,9 +713,16 @@ export function foldRepeatVerdicts(verdicts) {
   if (verdicts.length === 1) return verdicts[0];
   const statuses = verdicts.map((v) => v.status);
   if (new Set(statuses).size > 1) {
+    // Note fallback chain: a FAIL iteration's note, else the first non-empty
+    // note, else a plain statement — never a dangling dash (lens finding,
+    // 2026-09-06: mixed PASS/REFUSED iterations produced "… — " with nothing
+    // after it).
+    const detail = verdicts.find((v) => v.status === 'FAIL')?.note
+      || verdicts.map((v) => v.note).find(Boolean)
+      || 'iteration statuses disagree';
     return {
       status: 'FAIL',
-      note: `INTERMITTENT across ${verdicts.length} iterations (K8 class): ${statuses.join(', ')} — ${verdicts.find((v) => v.status === 'FAIL')?.note ?? verdicts[0].note}`,
+      note: `INTERMITTENT across ${verdicts.length} iterations (K8 class): ${statuses.join(', ')} — ${detail}`,
     };
   }
   return { ...verdicts[0], note: `${verdicts[0].note ? `${verdicts[0].note} ` : ''}(${verdicts.length}× consistent)`.trim() };
@@ -716,11 +774,19 @@ async function stageArtifact(stageDir, { reuseBundle = false } = {}) {
     // transitive requires would walk up into the repo node_modules and mask
     // exactly the gap class this harness exists to catch.
     if (process.platform === 'darwin') {
-      await new Promise((resolve, reject) => {
+      // clonefile requires a clone-capable same-volume target; a non-APFS or
+      // cross-volume --stage-dir must fall back to a byte copy instead of
+      // aborting every mac package build (lens finding, 2026-09-06).
+      const cloned = await new Promise((resolve) => {
         const child = spawn('cp', ['-Rc', OPENCLAW_DIR, gatewayDest], { stdio: 'inherit' });
-        child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`cp -Rc exited ${code}`))));
-        child.on('error', reject);
+        child.on('exit', (code) => resolve(code === 0));
+        child.on('error', () => resolve(false));
       });
+      if (!cloned) {
+        console.warn('WARNING: cp -Rc (clonefile) failed — falling back to a byte copy (non-APFS or cross-volume stage dir; this is slow).');
+        await rm(gatewayDest, { recursive: true, force: true });
+        await cp(OPENCLAW_DIR, gatewayDest, { recursive: true });
+      }
     } else {
       await cp(OPENCLAW_DIR, gatewayDest, { recursive: true });
     }
@@ -761,9 +827,19 @@ async function runTransport(row, { pluginDest, gatewayDest, preloadPath }, stage
   // OPENCLAW_NO_RESPAWN mirrors the production launcher AND keeps the
   // timeout SIGKILL effective — without it the CLI wrapper respawns itself
   // and the kill only reaps the wrapper (Codex lane finding, 2026-09-06).
+  //
+  // HOME is a STAGE-LOCAL fake home, not the real one: the gateway resolves
+  // its workspace from HOME (~/.openclaw/workspace), ignoring
+  // OPENCLAW_STATE_DIR — with the real HOME, every release build hands the
+  // developer's live ~/.openclaw/workspace into the plugin-load context
+  // (isolation lens probe, 2026-09-06; fix verified same row verdicts with
+  // workspaceDir inside the stage).
+  const fakeHome = path.join(stateDir, 'home');
+  await mkdir(fakeHome, { recursive: true });
+  const netStubSentinel = path.join(stateDir, 'net-stub-loaded');
   const env = {
     PATH: process.env.PATH,
-    HOME: process.env.HOME,
+    HOME: fakeHome,
     TMPDIR: process.env.TMPDIR,
     LANG: process.env.LANG,
     OPENCLAW_STATE_DIR: stateDir,
@@ -771,8 +847,21 @@ async function runTransport(row, { pluginDest, gatewayDest, preloadPath }, stage
     OPENCLAW_DISABLE_BONJOUR: '1',
     OPENCLAW_NO_RESPAWN: '1',
     NODE_OPTIONS: `--require ${JSON.stringify(preloadPath)}`,
+    CLAWX77_NET_STUB_SENTINEL: netStubSentinel,
     NODE_PATH: '',
   };
+  if (process.platform === 'win32') {
+    // Node on Windows needs the system roots (winsock/DNS/crypto) and spawn
+    // plumbing; the profile dirs point at the fake home so isolation holds
+    // (correctness lens, 2026-09-06 — unverified-on-Windows finding closed
+    // by construction; the Windows-lane run re-proves it live).
+    for (const key of ['SystemRoot', 'SystemDrive', 'windir', 'PATHEXT', 'ComSpec', 'TEMP', 'TMP']) {
+      if (process.env[key] !== undefined) env[key] = process.env[key];
+    }
+    env.USERPROFILE = fakeHome;
+    env.APPDATA = path.join(fakeHome, 'AppData', 'Roaming');
+    env.LOCALAPPDATA = path.join(fakeHome, 'AppData', 'Local');
+  }
   if (row.transport.hostApi) {
     env.CLAWX_HOST_API_PORT = String(row.transport.hostApi.port);
     env.CLAWX_HOST_API_TOKEN = String(row.transport.hostApi.token);
@@ -795,6 +884,14 @@ async function runTransport(row, { pluginDest, gatewayDest, preloadPath }, stage
       clearTimeout(timer);
       if (signal || code !== 0) {
         resolve({ ok: false, infra: true, message: `gateway CLI exited ${signal ?? code}; stderr: ${stderr.slice(0, 300)}` });
+        return;
+      }
+      // The net-stub preload must PROVABLY have loaded — NODE_OPTIONS is
+      // silently ignored by some runtimes (packaged Electron via
+      // --node-bin), and an un-stubbed run only "passes" because the fake
+      // port happens to be closed on this machine.
+      if (!existsSync(netStubSentinel)) {
+        resolve({ ok: false, infra: true, message: 'net-stub preload never loaded (NODE_OPTIONS ignored by this runtime?) — refusing to grade an un-stubbed gateway run' });
         return;
       }
       const payload = parseInspectJson(stdout);
@@ -915,6 +1012,26 @@ function runChild(spec, resources, { nodeBin } = {}) {
 
 // ── main
 
+/**
+ * Grade one child outcome for a row: the env-shape assertion runs FIRST
+ * (an @electronlike row whose echo does not show the fake FAILs before any
+ * expectation logic — checkEnvShapeApplied), then classifyRow. Infra
+ * outcomes skip the shape gate (the tool never ran; classifyRow already
+ * FAILs them). A node-shape row observing electron markers means the parity
+ * matrix is degenerate (e.g. --node-bin pointing at an Electron binary) —
+ * loud warning, not a row failure.
+ */
+function gradeOutcome(row, outcome) {
+  if (!outcome.infra) {
+    const shapeVerdict = checkEnvShapeApplied(row.envShape, outcome.env);
+    if (shapeVerdict !== true) return { status: 'FAIL', note: shapeVerdict };
+    if (row.envShape === 'node' && outcome.env?.electron) {
+      console.warn(`WARNING: node-shape row ${row.id} observed electron=${outcome.env.electron} — both shapes are electron; the parity matrix is degenerate under this runtime.`);
+    }
+  }
+  return classifyRow(row.expectation, outcome, row.check, row.refusalCheck);
+}
+
 function parseArgs(argv) {
   const args = { only: null, report: null, stageDir: null, keepStage: false, reuseBundle: false, fast: false, nodeBin: null };
   for (let i = 2; i < argv.length; i += 1) {
@@ -943,7 +1060,10 @@ async function main() {
   const stageDir = args.stageDir
     ? path.resolve(args.stageDir)
     : await mkdtemp(path.join(os.tmpdir(), 'clawx-artifact-'));
-  if (stageDir.startsWith(REPO_ROOT + path.sep)) {
+  // Equality matters as much as containment: `--stage-dir .` from the repo
+  // root passed the old prefix check and would rm -rf tracked resources/
+  // paths before staging 1.4GB INSIDE the repo (lens finding, 2026-09-06).
+  if (path.resolve(stageDir) === REPO_ROOT || stageDir.startsWith(REPO_ROOT + path.sep)) {
     console.error('FAIL: --stage-dir must be OUTSIDE the repo tree (walk-up resolution would mask bundle gaps).');
     process.exit(1);
   }
@@ -990,12 +1110,15 @@ async function main() {
     } else if (row.mode === 'register') {
       const iterVerdicts = [];
       for (let i = 0; i < iterations; i += 1) {
+        // Harness-owned keys AFTER the row spread — a future register.envShape
+        // key must never silently clobber the dispatched shape (lens finding,
+        // 2026-09-06).
         const outcome = await runChild(
-          { mode: 'register', pluginIndexPath: path.join(pluginDest, 'index.mjs'), envShape: row.envShape, ...row.register },
+          { ...row.register, mode: 'register', pluginIndexPath: path.join(pluginDest, 'index.mjs'), envShape: row.envShape },
           resources,
           { nodeBin: args.nodeBin },
         );
-        iterVerdicts.push(classifyRow(row.expectation, outcome, row.check, row.refusalCheck));
+        iterVerdicts.push(gradeOutcome(row, outcome));
       }
       verdict = foldRepeatVerdicts(iterVerdicts);
     } else {
@@ -1013,7 +1136,7 @@ async function main() {
           resources,
           { nodeBin: args.nodeBin },
         );
-        iterVerdicts.push(classifyRow(row.expectation, outcome, row.check, row.refusalCheck));
+        iterVerdicts.push(gradeOutcome(row, outcome));
       }
       verdict = foldRepeatVerdicts(iterVerdicts);
     }
@@ -1038,8 +1161,12 @@ async function main() {
       `register() with a mock gateway API; gateway-transport rows boot the STAGED`,
       `gateway CLI (plugins inspect --json) with a hermetic OPENCLAW_STATE_DIR — the`,
       `plugin loads through the real gateway plugin-host. fetch is stubbed before the`,
-      `plugin loads in both modes, so the CLWX-86 probe is deterministically`,
-      `unreachable (fail-open) and no socket is ever opened.`,
+      `plugin loads in both modes — the full registration row asserts the stub`,
+      `recorded the CLWX-86 probe attempt, and transport rows FAIL unless the`,
+      `preload's load-sentinel exists — so the probe is deterministically`,
+      `unreachable (fail-open) with no socket opened on the plain-node lanes`,
+      `graded here (an Electron --node-bin lane ignores NODE_OPTIONS and would`,
+      `FAIL the sentinel check rather than run un-stubbed).`,
       '',
       `Env shapes: \`@electronlike\` rows ran under the faked Electron UtilityProcess`,
       `shape (process.versions.electron + process.type='utility') — the packaged`,
@@ -1055,7 +1182,10 @@ async function main() {
       '',
       '| Row | Status | K | Note | ms |',
       '|---|---|---|---|---|',
-      ...results.map((r) => `| ${r.id} | ${r.status} | ${r.kLedger} | ${r.note.replace(/\|/g, '\\|')} | ${r.ms} |`),
+      // Note cells: newlines break the markdown table on exactly the failing
+      // runs where the report matters most (multi-line child stderr), and
+      // home paths in infra notes are needless PII in a committed artifact.
+      ...results.map((r) => `| ${r.id} | ${r.status} | ${r.kLedger} | ${sanitizeNoteCell(r.note)} | ${r.ms} |`),
       '',
       `Summary: ${summary}`,
       '',
@@ -1073,7 +1203,24 @@ async function main() {
   process.exit(fails.length ? 1 : 0);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+/**
+ * Direct-invocation check must compare REALPATHS: Node realpath-resolves the
+ * entry module's import.meta.url, so a symlinked invocation path (symlinked
+ * checkout, /tmp → /private/tmp, Windows junction) made the old
+ * `path.resolve(argv[1])` comparison miss and main() silently never ran —
+ * exit 0, no output, while `--fast` sat inside the package chain as a
+ * release gate (isolation lens, 2026-09-06).
+ */
+function isDirectInvocation() {
+  if (!process.argv[1]) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(path.resolve(process.argv[1]))).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectInvocation()) {
   main().catch((err) => {
     console.error(`harness:artifact crashed: ${err instanceof Error ? err.stack : String(err)}`);
     process.exit(1);
