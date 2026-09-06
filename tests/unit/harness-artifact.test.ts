@@ -161,6 +161,7 @@ describe('MATRIX shape', () => {
     const regRows = MATRIX.filter((r: { mode?: string }) => r.mode === 'register');
     expect(regRows.map((r: { id: string }) => r.id).sort()).toEqual([
       'plugin-registration.full',
+      'plugin-registration.killswitch',
       'plugin-registration.no-config',
       'plugin-registration.no-hostapi',
     ]);
@@ -271,5 +272,74 @@ describe('inventoryDiff + registration-row contracts (CLWX-77 registration leg)'
     expect(row.check({ names: [...DOC_TOOL_NAMES], returned: { registered: false, docToolsRegistered: true } })).toBe(true);
     expect(row.check({ names: [...DOC_TOOL_NAMES], returned: null })).not.toBe(true);
     expect(row.check({ names: [...DOC_TOOL_NAMES], returned: { registered: true } })).not.toBe(true);
+  });
+});
+
+describe('foldChildExit (Codex lane 2026-09-06: exit status beats a framed verdict)', () => {
+  it('passes through a framed verdict on clean exit', async () => {
+    const { foldChildExit } = await load();
+    const v = { ok: true, result: { names: [] } };
+    expect(foldChildExit(0, null, v, '')).toBe(v);
+  });
+
+  it('discards a framed SUCCESS when the child exited nonzero (async crash after register())', async () => {
+    const { foldChildExit } = await load();
+    const out = foldChildExit(1, null, { ok: true, result: { names: [] } }, 'async boom');
+    expect(out.ok).toBe(false);
+    expect(out.infra).toBe(true);
+    expect(out.message).toContain('exited 1');
+    expect(out.message).toContain('discarded');
+  });
+
+  it('treats a signal death as infra failure', async () => {
+    const { foldChildExit } = await load();
+    const out = foldChildExit(null, 'SIGSEGV', { ok: true, result: {} }, '');
+    expect(out.ok).toBe(false);
+    expect(out.infra).toBe(true);
+    expect(out.message).toContain('SIGSEGV');
+  });
+
+  it('reports a missing verdict on clean exit as infra failure', async () => {
+    const { foldChildExit } = await load();
+    const out = foldChildExit(0, null, null, 'some stderr');
+    expect(out.infra).toBe(true);
+    expect(out.message).toContain('no framed verdict');
+  });
+});
+
+describe('registration-inventory fast-lane drift guard (Claude lens 2026-09-06)', () => {
+  // The heavy harness run is the authoritative check, but inventory drift
+  // must also fail in the UNIT lane: parse the registerTool name literals
+  // straight out of index.mjs source and set-compare with the exported
+  // constants. Same discipline as the CLWX-86 route-literal drift guard.
+  it('the 31 hardcoded names match the registerTool literals in index.mjs', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const src = await readFile('extensions/moe-principal-assistant/index.mjs', 'utf8');
+    const found = new Set<string>();
+    for (const m of src.matchAll(/name:\s*'((?:document|principal|browser|outlook|forms)\.[a-z_]+)'/g)) {
+      found.add(m[1]);
+    }
+    const { DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES, BROWSER_TOOL_NAMES, OUTLOOK_TOOL_NAMES, FORMS_TOOL_NAMES, inventoryDiff } = await load();
+    const expected = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES];
+    expect(inventoryDiff(expected, [...found])).toBe(true);
+    expect(found.size).toBe(31);
+  });
+
+  it('inventoryDiff flags duplicate registrations — set semantics cannot hide a double register', async () => {
+    const { inventoryDiff } = await load();
+    const note = inventoryDiff(['a', 'b'], ['a', 'b', 'a']);
+    expect(note).toContain('duplicated: a');
+    expect(inventoryDiff(['a', 'b'], ['a', 'b'])).toBe(true);
+  });
+
+  it('killswitch row expects exactly the inventory minus the outlook family', async () => {
+    const { MATRIX, OUTLOOK_TOOL_NAMES, DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES, BROWSER_TOOL_NAMES, FORMS_TOOL_NAMES } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'plugin-registration.killswitch');
+    expect(row.register.host.skillAllowlist).toEqual([]);
+    const withoutOutlook = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...FORMS_TOOL_NAMES];
+    expect(row.check({ names: withoutOutlook })).toBe(true);
+    const leak = row.check({ names: [...withoutOutlook, OUTLOOK_TOOL_NAMES[0]] });
+    expect(leak).not.toBe(true);
+    expect(String(leak)).toContain('outlook.open');
   });
 });

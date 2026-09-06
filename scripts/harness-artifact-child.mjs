@@ -46,6 +46,17 @@ async function runRegisterMode(spec) {
     delete process.env.CLAWX_HOST_API_PORT;
     delete process.env.CLAWX_HOST_API_TOKEN;
   }
+  // Deterministic network isolation (Codex lane finding, 2026-09-06): an
+  // "assumed closed" port is not a guarantee — a local listener answering the
+  // CLWX-86 capability probe could park tool families while the name-only
+  // check stays green. Stub fetch BEFORE the plugin loads: every attempt is
+  // recorded and rejected without opening a socket, so the gate always takes
+  // its unreachable → indeterminate → fail-open path, listener or not.
+  let networkAttempts = 0;
+  globalThis.fetch = async () => {
+    networkAttempts += 1;
+    throw new Error('artifact-harness: network disabled in registration smoke');
+  };
   const plugin = await import(pathToFileURL(spec.pluginIndexPath).href);
   if (typeof plugin.register !== 'function') {
     emit({ ok: false, infra: true, message: 'plugin entry has no register() export' });
@@ -58,11 +69,13 @@ async function runRegisterMode(spec) {
     registerTool: (def) => { names.push(typeof def?.name === 'string' ? def.name : '(unnamed)'); },
     log: quiet,
     logger: quiet,
-    host: {},
+    // spec.host lets rows pin host-contract gates (e.g. the legacy
+    // skillAllowlist outlook kill-switch); JSON-serializable shapes only.
+    host: spec.host ?? {},
   };
   try {
     const returned = await plugin.register(api);
-    emit({ ok: true, result: { names: [...names].sort(), returned: returned ?? null } });
+    emit({ ok: true, result: { names: [...names].sort(), returned: returned ?? null, networkAttempts } });
   } catch (err) {
     emit({ ok: false, message: err instanceof Error ? err.message : String(err) });
   }

@@ -31,6 +31,11 @@
  *   # --stage-dir always refreshes the bundle copy from build/openclaw;
  *   # --reuse-bundle skips the refresh (negative-control probes only —
  *   # a reused copy may be STALE vs a rebuilt bundle).
+ *   # Staged-PLUGIN mutations for falsifiability probes: the plugin copy is
+ *   # re-staged on EVERY harness run, so mutate a kept stage and drive
+ *   # scripts/harness-artifact-child.mjs directly (CLAWX_APP_RESOURCES set),
+ *   # then fold through foldChildExit + classifyRow — the parent path
+ *   # deliberately cannot run against a tampered plugin copy.
  *
  * Covered so far: document.read/write against the staged bundle incl. the
  * password-protected + >10MB pdf rows (2026-09-06), and the plugin
@@ -255,18 +260,23 @@ export const FORMS_TOOL_NAMES = [
 
 /**
  * Set-equality check for a registration row (pure; unit-tested). Returns
- * true or a note naming every missing/unexpected tool — a partial register
- * must never pass by count alone.
+ * true or a note naming every missing/unexpected/duplicated tool — a partial
+ * register must never pass by count alone, and a DOUBLE registration must
+ * never hide behind set semantics (Claude lens finding, 2026-09-06).
  */
 export function inventoryDiff(expected, actual) {
+  const actualList = actual ?? [];
   const exp = new Set(expected);
-  const act = new Set(actual ?? []);
+  const act = new Set(actualList);
   const missing = [...exp].filter((n) => !act.has(n)).sort();
   const unexpected = [...act].filter((n) => !exp.has(n)).sort();
-  if (!missing.length && !unexpected.length) return true;
+  const seen = new Set();
+  const duplicated = [...new Set(actualList.filter((n) => (seen.has(n) ? true : (seen.add(n), false))))].sort();
+  if (!missing.length && !unexpected.length && !duplicated.length) return true;
   const parts = [];
   if (missing.length) parts.push(`missing: ${missing.join(', ')}`);
   if (unexpected.length) parts.push(`unexpected: ${unexpected.join(', ')}`);
+  if (duplicated.length) parts.push(`duplicated: ${duplicated.join(', ')}`);
   return parts.join('; ');
 }
 
@@ -415,13 +425,29 @@ export const MATRIX = [
   },
   {
     // Registration smoke, full activation: complete config + host-API env →
-    // the ENTIRE 31-tool inventory must register from the staged bundle
-    // (outlook 11 + forms 5 + browser 2 + principal 7 + document 6). Catches
-    // bundled-dep breaks in index.mjs's import graph and gate regressions.
+    // the ENTIRE 31-tool inventory must register from the STAGED PLUGIN copy
+    // (outlook 11 + forms 5 + browser 2 + principal 7 + document 6). Pins the
+    // env/config gates and entry-file integrity. Honest coverage note: index
+    // .mjs's static import graph today is builtins + local files (doc deps
+    // load lazily at call time — the doc rows cover those), so this row
+    // exercises staged-BUNDLE resolution only if a future eager npm import
+    // appears — at which point a bundle gap fails it loudly.
     id: 'plugin-registration.full', mode: 'register', expectation: 'ok',
     register: { pluginConfig: FULL_PLUGIN_CONFIG, hostApi: FAKE_HOST_API },
     check: (r) => inventoryDiff(
       [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES],
+      r.names,
+    ),
+  },
+  {
+    // The production email kill-switch, legacy contract: host.skillAllowlist
+    // WITHOUT 'outlook' suppresses exactly the outlook family — forms/
+    // browser/principal/document are deliberately unaffected (asymmetric by
+    // design; `outlook` in PRINCIPAL_SKILL_ALLOWLIST is the kill-switch).
+    id: 'plugin-registration.killswitch', mode: 'register', expectation: 'ok',
+    register: { pluginConfig: FULL_PLUGIN_CONFIG, hostApi: FAKE_HOST_API, host: { skillAllowlist: [] } },
+    check: (r) => inventoryDiff(
+      [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...FORMS_TOOL_NAMES],
       r.names,
     ),
   },
@@ -509,6 +535,31 @@ async function seedRowFixture(row, workDir) {
   throw new Error(`row ${row.id}: unknown fixture kind`);
 }
 
+/**
+ * Fold a child's exit status + framed verdict into the row outcome (pure;
+ * unit-tested). A nonzero exit or a signal is an infrastructure FAIL even
+ * when a success verdict was already framed — a controlled mutation proved
+ * an async crash scheduled inside register() could exit 1 while the row
+ * still graded PASS on the framed verdict (Codex lane finding, 2026-09-06);
+ * the same crash in the real gateway takes the plugin host down.
+ */
+export function foldChildExit(code, signal, verdict, stderrSnippet = '') {
+  if (signal) {
+    return { ok: false, infra: true, message: `child killed by ${signal}${verdict ? ' after framing a verdict (discarded)' : ''}` };
+  }
+  if (code !== 0) {
+    return {
+      ok: false,
+      infra: true,
+      message: `child exited ${code}${verdict ? ' after framing a verdict (discarded — an async crash would kill the real gateway)' : ''}; stderr: ${stderrSnippet}`,
+    };
+  }
+  if (!verdict) {
+    return { ok: false, infra: true, message: `child produced no framed verdict; stderr: ${stderrSnippet}` };
+  }
+  return verdict;
+}
+
 function runChild(spec, resources) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [CHILD_SCRIPT, JSON.stringify(spec)], {
@@ -532,16 +583,18 @@ function runChild(spec, resources) {
       child.kill('SIGKILL');
       resolve({ ok: false, infra: true, message: `row timed out after ${ROW_TIMEOUT_MS}ms` });
     }, ROW_TIMEOUT_MS);
-    child.on('exit', () => {
+    child.on('exit', (code, signal) => {
       clearTimeout(timer);
       // Sentinel-framed verdict: a chatty dep writing to stdout cannot
-      // corrupt the parse (last framed line wins).
+      // corrupt the parse (last framed line wins). Exit status is folded in
+      // AFTER parsing: a framed success from a child that then crashed is
+      // discarded (foldChildExit — Codex lane finding, 2026-09-06).
       const line = stdout.split('\n').filter((l) => l.startsWith('CLAWX77_VERDICT:')).pop();
+      let verdict = null;
       try {
-        resolve(JSON.parse(line.slice('CLAWX77_VERDICT:'.length)));
-      } catch {
-        resolve({ ok: false, infra: true, message: `child produced no framed verdict; stderr: ${stderr.slice(0, 300)}` });
-      }
+        verdict = JSON.parse(line.slice('CLAWX77_VERDICT:'.length));
+      } catch { /* no framed verdict — foldChildExit reports it */ }
+      resolve(foldChildExit(code, signal, verdict, stderr.slice(0, 300)));
     });
     child.on('error', (err) => {
       clearTimeout(timer);
@@ -629,8 +682,9 @@ async function main() {
       '',
       `Staged plugin + gateway bundle outside the repo tree; each row ran in a`,
       `child process resolving deps ONLY from the staged bundle (CLAWX_APP_RESOURCES seam).`,
-      `Registration rows call the staged plugin's register() with a mock gateway API`,
-      `(closed-port host-API env; the CLWX-86 probe fails open; zero HTTP side effects).`,
+      `Registration rows call the staged plugin's register() with a mock gateway API;`,
+      `fetch is stubbed in the child before the plugin loads, so the CLWX-86 probe is`,
+      `deterministically unreachable (fail-open) and no socket is ever opened.`,
       '',
       '| Row | Status | Note | ms |',
       '|---|---|---|---|',
