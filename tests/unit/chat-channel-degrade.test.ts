@@ -479,15 +479,63 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
     // After the first discovery the store nulls lastUserMessageAt; the
     // retained lastSentPayload alone must not repaint a stale banner on the
     // next history reload (moe.18: banner survived a gateway restart and
-    // cleared only on app relaunch).
+    // cleared only on app relaunch). Failover is disabled (online-only) so
+    // this row FAILS on the old unconditional seed instead of passing
+    // vacuously via the auto-resend's own banner clear (Codex lane finding).
     const store = await loadStore();
     store.setState({ sending: false, activeRunId: null, lastUserMessageAt: null, runError: null });
+    providerState.accounts = [BOTH_CHANNELS[0]];
     gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
 
     await store.getState().loadHistory(true);
     await settle();
 
     expect(store.getState().runError).toBeNull();
+  });
+
+  it('paints the banner for an attachment-only own send (empty text, payload present)', async () => {
+    // Ownership for painting is payload PRESENCE; the text gate belongs only
+    // to the replay decision. An attachment-only send whose run dies silently
+    // must still surface (Codex lane finding: it was the only visible
+    // surface — empty-content error messages render nothing in-line).
+    const store = await loadStore();
+    store.setState({
+      lastUserMessageAt: Date.now(),
+      runError: null,
+      lastSentPayload: { text: '', attachments: [{ path: '/tmp/report.pdf' }], targetAgentId: null } as never,
+    });
+    providerState.accounts = [BOTH_CHANNELS[0]];
+    gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
+
+    await store.getState().loadHistory(true);
+    await settle();
+
+    expect(store.getState().runError).toContain('network connection error');
+    // No replayable text → the failover must not have been attempted.
+    expect(degradeCalls().length).toBe(0);
+  });
+
+  it('clears a success-claiming resent notice when the resend itself fails terminally', async () => {
+    // After a cloud→on-device failover the notice says the answer came from
+    // this device. If the resent run then dies, that notice explains nothing
+    // and must not outlive (and thereby suppress) the new failure (Codex
+    // lane finding: the failed resend was invisible behind the stale notice).
+    const store = await loadStore();
+    store.setState({
+      degradeNotice: { reason: 'unreachable', resent: true, to: 'on-device' } as never,
+      degradedThisTurn: true,
+      runError: null,
+    });
+
+    emitError(store, 'Connection error.');
+    await settle();
+
+    // This event shape (no terminal assistant message) surfaces via the
+    // error bar; either red surface satisfies visibility — the point is the
+    // stale notice is gone so nothing suppresses it.
+    expect(store.getState().error).toBe('Connection error.');
+    expect(store.getState().runError).toBeNull();
+    expect(store.getState().degradeNotice).toBeNull();
   });
 
   it('does NOT paint the banner from a historical error on session re-open (nothing sent this window)', async () => {

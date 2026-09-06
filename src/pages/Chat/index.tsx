@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 import { useStickToBottomInstant } from '@/hooks/use-stick-to-bottom-instant';
 import { useMinLoading } from '@/hooks/use-min-loading';
 import { extractGeneratedFiles, generatedFileHasDiffPayload, type GeneratedFile } from '@/lib/generated-files';
-import { principalErrorDisplay, isTransportDisplayKind, type ErrorDisplayKind } from '@/lib/error-display';
+import { principalErrorDisplay, errorBannerVisibility, type ErrorDisplayKind } from '@/lib/error-display';
 import { GeneratedFilesPanel } from '@/components/file-preview/GeneratedFilesPanel';
 import type { FilePreviewTarget } from '@/components/file-preview/types';
 import { buildPreviewTarget } from '@/components/file-preview/build-preview-target';
@@ -146,17 +146,18 @@ export function Chat() {
   // (auth/config) still surface, just in plain language.
   const errorDisplay = useMemo(() => principalErrorDisplay(error), [error]);
   const runErrorDisplay = useMemo(() => principalErrorDisplay(runError), [runError]);
-  // Notice de-dup (moe.18 Findings D0/D1): while the amber degrade notice is
-  // explaining a transport failure in channel-correct language, a red banner
-  // of the same transport class is a duplicate — and in the on-device
-  // direction its online-centric copy actively contradicts the notice.
-  // Suppress only that overlap; auth/config and generic errors always show.
-  // The bottom error bar additionally never duplicates the callout verbatim.
-  const showRunError = !!runError
-    && !(degradeNotice && isTransportDisplayKind(runErrorDisplay.kind));
-  const showErrorBar = !!error
-    && error !== runError
-    && !(degradeNotice && isTransportDisplayKind(errorDisplay.kind));
+  // Notice de-dup (moe.18 Findings D0/D1): rules live in
+  // errorBannerVisibility (unit-tested); this is deliberately a thin call.
+  // The store also clears a success-claiming notice when a newer terminal
+  // error lands; the resent-notice exclusion here is the belt to that
+  // suspender (Codex lane finding: a failed resend must stay visible).
+  const { showRunError, showErrorBar } = errorBannerVisibility({
+    runError,
+    error,
+    runErrorKind: runErrorDisplay.kind,
+    errorKind: errorDisplay.kind,
+    degradeNotice,
+  });
   const fetchAgents = useAgentsStore((s) => s.fetchAgents);
   const agents = useAgentsStore((s) => s.agents);
 

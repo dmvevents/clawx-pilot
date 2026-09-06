@@ -150,11 +150,22 @@ export function createHistoryActions(
           ? getMessageErrorMessage(lastAssistantAfterBoundary)
           : null;
 
+        // Stale-banner guard (moe.18 Finding D0), mirrored from the live
+        // store in src/stores/chat.ts: only an ACTIVE own-send turn in this
+        // window may seed or clear the global run-error banner from history;
+        // idle-window reloads (session re-open, post-gateway-restart) never
+        // repaint it. Ownership is payload PRESENCE so attachment-only sends
+        // still surface.
+        const ownSendThisWindow = !!get().lastSentPayload;
         set({
           messages: finalMessages,
           thinkingLevel,
           loading: false,
-          runError: latestTerminalAssistantErrorMessage,
+          runError: get().lastUserMessageAt
+            ? (latestTerminalAssistantErrorMessage && ownSendThisWindow
+                ? latestTerminalAssistantErrorMessage
+                : null)
+            : get().runError,
         });
 
         // Extract first user message text as a session label for display in the toolbar.

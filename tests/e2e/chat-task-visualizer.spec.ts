@@ -356,7 +356,7 @@ test.describe('ClawX chat execution graph', () => {
     }
   });
 
-  test('surfaces terminal model errors and stops the stale thinking state', async ({ launchElectronApp }) => {
+  test('stops the stale thinking state and does not repaint a stale run-error banner on a fresh window (D0)', async ({ launchElectronApp }) => {
     const app = await launchElectronApp({ skipSetup: true });
 
     try {
@@ -415,15 +415,17 @@ test.describe('ClawX chat execution graph', () => {
       }
 
       await expect(page.getByTestId('main-layout')).toBeVisible();
-      const runErrorCallout = page.getByTestId('chat-run-error');
-      await expect(runErrorCallout).toBeVisible({ timeout: 30_000 });
-      // CLWX-53: the raw provider string sits behind a collapsed
-      // "Technical details" expander; open it before asserting the raw text.
-      await runErrorCallout.locator('summary').first().click();
-      await expect(runErrorCallout).toContainText('404 Resource not found');
+      // moe.18 Finding D0: a FRESH window loading a session whose last turn
+      // errored historically must NOT repaint the red run-error banner (it
+      // used to persist across reloads/gateway restarts until app relaunch).
+      // The stale thinking state must still stop and the composer must be
+      // usable. In-line rendering of the historical error-stopped message is
+      // the recorded follow-up (no banner ≠ hidden active failures: active
+      // own-turn errors still paint, pinned in chat-channel-degrade tests).
       await expect(page.getByTestId('chat-execution-graph')).toHaveCount(0);
       await expect(page.getByTestId('chat-execution-step-thinking-trailing')).toHaveCount(0);
-      await expect(page.getByText('404 Resource not found')).toHaveCount(1);
+      await expect(page.getByTestId('chat-run-error')).toHaveCount(0);
+      await expect(page.getByText('404 Resource not found')).toHaveCount(0);
       await page.getByTestId('chat-composer-input').fill('retry');
       await expect(page.getByTestId('chat-composer-send')).toBeEnabled();
     } finally {

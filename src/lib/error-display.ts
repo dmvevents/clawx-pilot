@@ -58,6 +58,32 @@ export function isTransportDisplayKind(kind: ErrorDisplayKind): boolean {
   return kind === 'unreachable' || kind === 'rate-limited';
 }
 
+/**
+ * The one place the red-banner suppression rules live (moe.18 D0/D1), so the
+ * page wiring stays a thin call and the rules are unit-testable:
+ * - a degrade notice suppresses same-class transport banners ONLY while it is
+ *   explaining a failure; a success-claiming notice (`resent: true`) never
+ *   suppresses anything — a failed resend must stay visible;
+ * - auth/config and generic banners always show;
+ * - the bottom error bar never duplicates the callout verbatim.
+ */
+export function errorBannerVisibility(args: {
+  runError: string | null;
+  error: string | null;
+  runErrorKind: ErrorDisplayKind;
+  errorKind: ErrorDisplayKind;
+  degradeNotice: { resent?: boolean } | null;
+}): { showRunError: boolean; showErrorBar: boolean } {
+  const noticeExplainsFailure = !!args.degradeNotice && args.degradeNotice.resent !== true;
+  return {
+    showRunError: !!args.runError
+      && !(noticeExplainsFailure && isTransportDisplayKind(args.runErrorKind)),
+    showErrorBar: !!args.error
+      && args.error !== args.runError
+      && !(noticeExplainsFailure && isTransportDisplayKind(args.errorKind)),
+  };
+}
+
 export function principalErrorDisplay(raw: string | null | undefined): ErrorDisplay {
   const classified = String(raw ?? '').trim();
   if (!classified) return { kind: 'generic', detail: classified };

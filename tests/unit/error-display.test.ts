@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { principalErrorDisplay, isTransportDisplayKind } from '@/lib/error-display';
+import { principalErrorDisplay, isTransportDisplayKind, errorBannerVisibility } from '@/lib/error-display';
 
 describe('principalErrorDisplay', () => {
   it('classifies the tester-reported raw HTTP strings away from the headline', () => {
@@ -87,6 +87,66 @@ describe('principalErrorDisplay', () => {
   it('never blanks details for classes the degrade notice does not explain', () => {
     expect(principalErrorDisplay('401 Unauthorized').detail).toBe('401 Unauthorized');
     expect(principalErrorDisplay('400 status code (no body)').detail).toBe('400 status code (no body)');
+  });
+});
+
+describe('errorBannerVisibility', () => {
+  const kinds = (runErrorKind: 'unreachable' | 'rate-limited' | 'auth-config' | 'generic', errorKind: typeof runErrorKind = 'generic') => ({ runErrorKind, errorKind });
+
+  it('suppresses transport-class banners only while a notice is explaining a failure', () => {
+    const v = errorBannerVisibility({
+      runError: 'Connection error.', error: null,
+      ...kinds('unreachable'),
+      degradeNotice: { resent: false },
+    });
+    expect(v.showRunError).toBe(false);
+  });
+
+  it('a success-claiming notice (resent) never suppresses a failure (failed resend stays visible)', () => {
+    const v = errorBannerVisibility({
+      runError: 'Connection error.', error: null,
+      ...kinds('unreachable'),
+      degradeNotice: { resent: true },
+    });
+    expect(v.showRunError).toBe(true);
+  });
+
+  it('auth/config and generic banners always show, notice or not', () => {
+    for (const kind of ['auth-config', 'generic'] as const) {
+      const v = errorBannerVisibility({
+        runError: '401 Unauthorized', error: null,
+        ...kinds(kind),
+        degradeNotice: { resent: false },
+      });
+      expect(v.showRunError).toBe(true);
+    }
+  });
+
+  it('shows banners normally with no notice', () => {
+    const v = errorBannerVisibility({
+      runError: 'Connection error.', error: 'other failure',
+      runErrorKind: 'unreachable', errorKind: 'generic',
+      degradeNotice: null,
+    });
+    expect(v.showRunError).toBe(true);
+    expect(v.showErrorBar).toBe(true);
+  });
+
+  it('the error bar never duplicates the callout verbatim but shows a distinct failure', () => {
+    const dup = errorBannerVisibility({
+      runError: 'Connection error.', error: 'Connection error.',
+      runErrorKind: 'unreachable', errorKind: 'unreachable',
+      degradeNotice: null,
+    });
+    expect(dup.showRunError).toBe(true);
+    expect(dup.showErrorBar).toBe(false);
+
+    const distinct = errorBannerVisibility({
+      runError: 'Connection error.', error: '401 Unauthorized',
+      runErrorKind: 'unreachable', errorKind: 'auth-config',
+      degradeNotice: { resent: false },
+    });
+    expect(distinct.showErrorBar).toBe(true);
   });
 });
 

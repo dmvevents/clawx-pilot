@@ -2367,16 +2367,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // window may seed or clear the global run-error banner from history.
       // `lastUserMessageAt` is nulled further down the first time this path
       // surfaces a terminal error, so a post-gateway-restart reload or a
-      // session re-open repaints the in-line error message but never the
-      // banner. While a turn IS active, history stays authoritative both
-      // ways — but only an own-send turn (lastSentPayload, CLWX-93) may paint;
-      // an adopted console turn's error clears rather than paints.
+      // session re-open never repaints the banner. While a turn IS active,
+      // history stays authoritative both ways — but only an own-send turn may
+      // paint, and an adopted console turn's error clears rather than paints.
+      // Ownership for PAINTING is payload PRESENCE (any own send, including
+      // attachment-only ones whose text is empty — Codex lane finding);
+      // ownTurnSurfacedError keeps its stricter text gate because only text
+      // can be REPLAYED by the failover below (CLWX-93).
+      const ownSendThisWindow = !!get().lastSentPayload;
       set({
         messages: finalMessages,
         thinkingLevel,
         loading: false,
         runError: get().lastUserMessageAt
-          ? (ownTurnSurfacedError ? latestTerminalAssistantErrorMessage : null)
+          ? (latestTerminalAssistantErrorMessage && ownSendThisWindow
+              ? latestTerminalAssistantErrorMessage
+              : null)
           : get().runError,
       });
       cacheSessionHistory(currentSessionKey, finalMessages, thinkingLevel);
@@ -3271,9 +3277,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }));
         }
 
-        set({
+        set((s) => ({
           error: terminalAssistantError ? null : errorMsg,
           runError: terminalAssistantError ? errorMsg : null,
+          // A success-claiming notice ("resent on this device") must not
+          // outlive a NEWER terminal failure — it would suppress/contradict
+          // the error it no longer explains (moe.18 D1, Codex lane finding:
+          // a failed on-device resend was invisible behind the stale notice).
+          degradeNotice: s.degradeNotice?.resent ? null : s.degradeNotice,
           sending: false,
           activeRunId: null,
           streamingText: '',
@@ -3282,7 +3293,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           pendingFinal: false,
           lastUserMessageAt: null,
           pendingToolImages: [],
-        });
+        }));
 
         clearHistoryPoll();
         clearErrorRecoveryTimer();
