@@ -1441,6 +1441,37 @@ the production-integration milestone, not a GA blocker.
   — remaining trail: packaged-node/electron-env spawn parity,
   gateway-process transport, package preflight wiring, K-ledger rows,
   Windows-lane run.
+- **CLWX-77 trail: FOUR of five remaining legs landed (2026-09-06 sixth
+  tick) — matrix 22 → 45 rows, full run GREEN 30/14/0/1.** Commits
+  `96da61f1` + `30a3d46f`. (1) ELECTRON-ENV SPAWN PARITY: every doc/register
+  row runs an `@electronlike` twin (child fakes process.versions.electron +
+  process.type='utility' pre-import — the packaged gateway's real
+  utilityProcess shape, the CLWX-92/moe.16 failure env); `--node-bin` wired
+  for packaged-node runs; falsifiability = setWorker fix neutered in a
+  STAGED copy → electronlike row FAILs while plain node passes. (2)
+  GATEWAY-PROCESS TRANSPORT: stage carries the FULL build/openclaw; rows
+  boot the STAGED gateway CLI (plugins inspect --json) with hermetic
+  OPENCLAW_STATE_DIR → the plugin loads through the REAL gateway
+  plugin-host, toolNames pinned (13 no-hostapi / 31 full); staged-rename
+  falsifiability proven. (3) PACKAGE FAST LANE: `--fast` (8 pinned rows)
+  wired into the `package` script after verify-openclaw-bundle — every
+  package/build/release path inherits it (8/8 PASS ~43s). (4) K-LEDGER:
+  K8 intermittence rows (3× fresh children per shape, disagreement = FAIL
+  INTERMITTENT, never averages out) + K10 tags + honest not-here mapping
+  (K1/2/11/12/13 Outlook/VM lanes, K4 ASR, K9/14 in-app). Review lanes:
+  **Codex needs-attention 3-for-3 confirmed + fixed same tick** (HIGH
+  OPENCLAW_CONFIG_PATH bleed → env ALLOWLIST + checkTransportSource
+  realpath stage gate; MED fast-subset silent shrink →
+  validateFastSelection pre-spawn; MED respawn-survives-SIGKILL →
+  OPENCLAW_NO_RESPAWN=1); graph risk 0.50 / 0 flows; graphify scripts/-scope
+  corroborates containment. **Claude lenses IN FLIGHT at tick close** (3
+  deep + 2 bounded spawned, none returned in-window — CLWX-58/70 stall
+  class); no Ready move this tick so the before-Ready lens gate is intact;
+  FOLDING THEIR VERDICTS IS THE NEXT TICK'S FIRST STEP. Gates: guards
+  57/57, full suite 1565/6-skip, typecheck+lint clean. Evidence:
+  `docs/evidence/CLWX-77_TRAIL_TICK_2026-09-06.md`. Card stays In Progress
+  — remaining trail: fold lens verdicts, Windows-lane run (NODE_OPTIONS
+  backslash nuance recorded), in-app K10 drag-gesture cell.
 
 ---
 
