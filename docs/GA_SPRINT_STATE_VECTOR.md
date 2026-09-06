@@ -1466,12 +1466,28 @@ the production-integration milestone, not a GA blocker.
   OPENCLAW_NO_RESPAWN=1); graph risk 0.50 / 0 flows; graphify scripts/-scope
   corroborates containment. **Claude lenses IN FLIGHT at tick close** (3
   deep + 2 bounded spawned, none returned in-window — CLWX-58/70 stall
-  class); no Ready move this tick so the before-Ready lens gate is intact;
-  FOLDING THEIR VERDICTS IS THE NEXT TICK'S FIRST STEP. Gates: guards
-  57/57, full suite 1565/6-skip, typecheck+lint clean. Evidence:
-  `docs/evidence/CLWX-77_TRAIL_TICK_2026-09-06.md`. Card stays In Progress
-  — remaining trail: fold lens verdicts, Windows-lane run (NODE_OPTIONS
-  backslash nuance recorded), in-app K10 drag-gesture cell.
+  class); no Ready move this tick so the before-Ready lens gate is intact.
+  **RESOLVED SAME SESSION:** all three deep lenses returned post-sync —
+  verdicts FAIL/FAIL/FAIL on 96da61f1; every surviving MAJOR fixed in
+  `67543cd1` (falsifiability: the electronlike fake was UNVERIFIED
+  PLUMBING — child now echoes the observed env and checkEnvShapeApplied
+  FAILs an unapplied fake, neutered-fake probe re-proven; isolation: HOME
+  → stage-local fake home so the real ~/.openclaw/workspace can no longer
+  reach the plugin-load context on release builds, and the
+  symlink-sensitive entry guard that silently skipped main() (exit 0, no
+  output — with validateFastSelection trapped inside) is realpath-fixed
+  and proven live; correctness: its config-bleed MAJOR confirmed already
+  closed by 30a3d46f non-vacuously, Windows env allowlist completed).
+  9 minors folded (spread order, stage-dir equality rm -rf hazard,
+  note sanitization + home redaction, dangling fold note,
+  networkAttempts>=1, net-stub load-sentinel REQUIRED, cp -Rc fallback,
+  timeout knob, honest report prose); residuals recorded in the evidence
+  addendum. Post-hardening gates: guards 66/66, full suite 1576/6-skip,
+  typecheck+lint clean, fast 8/8, full matrix 45 rows 30/14/0/1. Evidence:
+  `docs/evidence/CLWX-77_TRAIL_TICK_2026-09-06.md` (+ addendum). Card
+  stays In Progress — remaining trail: Windows-lane run (NODE_OPTIONS
+  backslash nuance recorded; un-stubbed Electron lane now fails loudly via
+  the sentinel), in-app K10 drag-gesture cell.
 
 ---
 
