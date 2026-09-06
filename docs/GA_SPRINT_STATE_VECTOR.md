@@ -605,6 +605,46 @@ same RESULT: moe.17 silent-upgrade install PASS with state preserved and the
 canvas native binding present (CLWX-72 holds on the upgrade path); CLWX-78
 degrade notice rendered at 14.6s, anonymised. Owner asks unchanged._
 
+_**Tick 2026-09-06 (ga-sprint-driver, minimal-time): CLWX-83 test-infra batch
+→ Ready — all three legs landed review-hardened, and the new doctor caught a
+LIVE stale pin on its first run.** SENSE: tree clean at `b6c990ae`; board 200,
+mirror in sync; static gate GREEN (5/0/2-skip, report refreshed twice —
+pre- and post-fix); Chrome :18792 + gcloud/VM lanes owner-gated, not re-probed
+(standing rule). ANALYZE: agent lane P = {77-substeps, 83, 87, 71}; 87 needs
+the TERMINATED Windows VM for System.Speech, 71 is post-GA with live-lane
+acceptance legs; ranked 83 — whole-card retirement, fully local, closes two
+repeat-burn classes. ACT: LEG 1 — the June-era combined-Outlook OOM does NOT
+reproduce (vitest 4.1.1/Node 26.7: 11 suites/199 tests, 12.6s); heap bounded
+via TOP-LEVEL `test.execArgv` after the review's empirical MAJOR proved
+`poolOptions.forks.execArgv` is deprecated-and-IGNORED in Vitest 4 (the first
+green was machine-default luck; a worker-side probe now proves the flag
+reaches forks); named target `pnpm test:outlook`. LEG 2 — `pnpm lint:ps`:
+pwsh 7.6.5 user-local (no sudo) + PSScriptAnalyzer 1.25.0 over the 50-file
+windows-pilot surface, PSUseCompatibleSyntax pinned 5.1+7.0; review MAJORs
+closed — statement-terminating analyzer errors (missing/malformed settings,
+moved dir, zero files) used to print silent GREEN with pwsh exit 0; now
+try/catch + input preflight + analyzed-file-count assertion, every path
+fail-closed and proven live (ternary scratch → FAIL naming 5.1; settings
+hidden → exit 2; malformed → loud fail; restored → GREEN 130/0-gating). The 2
+pre-existing Error findings = scoped suppressions with justification, narrowed
+from script scope to a helper per review. LEG 3 — repo pin audit CLEAN (6
+tomls: no pins; 20 agent mds: all tier aliases); `pnpm doctor:agents` +
+committed allowlist + 10-test guard in every `pnpm test`; the doctor found the
+LIVE `gpt-5.3-codex-spark` pin still in ~/.codex/config.toml (the exact
+finding-#4 model) — removed with backup, codex config re-verified parsing;
+bonus audit fact: codex ≥0.153 refuses legacy [profiles.*] tables outright and
+codex doctor flags none of it (9 dead tables WARN-only, owner fleet call);
+review MAJORs closed — single-quoted/dotted-key/inline-table pins were
+invisible (false-CLEAN on the spark model itself), frontmatter
+trailing-comment/BOM/quoted-alias mis-parses, zero-surface CLEAN, symlink
+no-op — all fixed with fixtures. Separate-lane 3-lens adversarial review
+verdicts: 2 FAIL + 1 PASS-with-MAJOR, 4 demonstrated MAJORs, ALL fixed same
+tick. Evidence: full suite 1506/6-skip (178 files); typecheck + lint 0
+errors; falsifiability proven per gate incl. a bogus pin appended to a REAL
+toml failing exactly 1 guard. Board: CLWX-83 Todo → Ready with evidence.
+Register rows added: VITEST-OOM / PWSH-LINT-GAP / MODEL-PIN-STALE. Owner asks
+unchanged (Chrome :18792 restart remains the highest-value unlock)._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed
