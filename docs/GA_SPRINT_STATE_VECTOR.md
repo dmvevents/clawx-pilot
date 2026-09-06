@@ -1334,6 +1334,27 @@ the production-integration milestone, not a GA blocker.
   (K11 email), 9 (K12 badge), the no-clobber leg, and the full trust sweep were
   **not run this session** — so ALL-GREEN is not achievable and the Karunesh
   handoff does NOT fire; those are the next tick. VM left RUNNING (owner testing).
+- **moe.18 verify matrix COMPLETED + gate pulse caught live pin drift
+  (2026-09-06 second tick).** The tick's SENSE gate run came back **RED**:
+  `doctor:agents` FAILed on a fresh ACTIVE pin `gpt-6-astra` in
+  `~/.codex/config.toml` (changed since yesterday's `gpt-5.6-sol`) — verified
+  live via `codex exec` (returned "ok"), allowlisted, doctor exit 0, 13/13
+  guards, **gate re-run GREEN 7/0/2** (`docs/evidence/GA_GATE_2026-09-06.md`).
+  Second live catch by the CLWX-83 strict default in two days. Then the queued
+  verify legs ran: **K12 PASS** (badge lifecycle truthful through kill→restart:
+  connected pid 1836 → starting pid 3216 +8s, Reconnecting pill, disabled
+  composer → connected pid 3216), **no-clobber PASS** (explicit on-device
+  survived `ClawXApp`-task relaunch; migrationLogLines 1→1), **trust sweep
+  PASS-with-the-one-recorded-exception** (D2). **K11 = new finding:** on-device
+  qwen never reached the email tools' readable refusal — it hallucinated
+  `read {"path":"C:\\openclaw\\workspace\\email\\…\\reply-to-next-meeting.tex"}`
+  and looped it ~15× with no loop-breaker (zero outlook lines in the log; NO
+  sends; K1/K5 tool-cascade class → strengthens the owner's trim-unhold call on
+  7add864b); cloud-path K11 unverifiable on the VM (placeholder gateway) — that
+  bar moves to the Mac live lane. Stale run-error banner persisted across new
+  chats AND a gateway restart, clearing only on app relaunch (D0/D1 sharpened).
+  RESULT.md matrix complete; VM RUNNING; board-mirror comment lag from tick 1
+  still unreconciled (export drops newest comments — tooling defect to file).
 
 ---
 

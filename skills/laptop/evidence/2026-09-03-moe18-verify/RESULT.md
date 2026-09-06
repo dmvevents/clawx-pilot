@@ -1,15 +1,16 @@
 # moe.18 full-matrix VM verify — clawx-win-rc-20260609 (2026-09-03; executed 2026-09-06)
 
-**STATUS: RUN LANDED — NOT ALL-GREEN.** Steps 1–7 + K14 executed live on the
-GCP IAP Windows VM with screenshots + app-log evidence (owner directive:
-"testing in the VM … holistically; connected back to Google Instance"). Core
-install/launch/migration/PDF/degrade paths PASS. **K13 direction 2 does NOT
-fully clear its bar** — a real degrade-UX finding (raw "Connection error."
-reachable + contradictory stacked run-error banners; see Findings). Steps 8
-(K11 email), 9 (K12 badge), the no-clobber leg, and the full trust sweep were
-**not run this session** and remain for the next tick. Per the packet
-contract, ALL-GREEN is therefore not achievable this session and the Karunesh
-handoff does NOT fire.
+**STATUS: MATRIX COMPLETE (2026-09-06, two sessions) — NOT ALL-GREEN.** All
+packet steps executed live on the GCP IAP Windows VM with screenshots +
+app-log + CDP-probe evidence. PASS: sha256/preseed/install/launch/migration
+headline/K10 PDF/K13-dir1 core/K12 badge/no-clobber/end state. NOT clear:
+**K13 dir 2** (correct anonymised prompt fires, but a contradictory run-error
+banner co-renders and leaks raw "Connection error." behind Technical details
+— Findings D0–D2), **K11 on-device** (small-model tool-hallucination loop,
+never reached the email tools' refusal; cloud path unverifiable on this VM),
+**K14** (5/5 answered but NSCC pack absent → content-shallow). Per the packet
+contract the Karunesh handoff does NOT fire on this run; the open items map
+to CLWX-78/95 (degrade UX), the trim-unhold owner decision, and CLWX-42.
 
 Installer (LOCAL — no GCS download needed):
 `/Users/antonalexander/Github/moe-tt/ClawX/release/Ministry of Education-0.4.3-moe.18-win-x64.exe`
@@ -29,12 +30,12 @@ Packet: /tmp/moe18-vm-verify-packet.md · Scripts: /tmp/moe18/ · Evidence pulle
 | 5 | K10 PDF regression (fresh session, real summary, read_pdf toolCall, no workerSrc) | **PASS** — fresh-session retry (first boot auto-loaded a Sep-3 session; NOT counted per moe.17 protocol); real ICT-audit summary; `read_pdf` toolCall 2026-09-06T05:36; workerSrc NONE |
 | 6 | K13 dir 1 cloud→on-device (notice + switch + attempt) | **PASS core + FINDING** — correct amber degrade notice ("No internet connection — this answer came from the model on this device. Online will be used again automatically once it's available."); log "Degraded channel without persisting preference" (preference preserved); provider switch to ollama; on-device resend timed out (CPU-VM allowance). Post-restore auto-recovery ABSENT (runtime stuck on qwen while UI said online) — reassert-online repaired. **FINDING D0**: two run-error banners STACKED under the correct degrade notice (see Findings) |
 | 7 | K13 dir 2 on-device outage → anonymised switch-to-Online prompt; NOT raw "Connection error." | **PARTIAL FAIL** — the correct amber prompt DID fire ("The model on this device isn't responding. Switch to Online to continue, or wait for the model on this device to come back."), anonymised, correct direction, Dismiss present, backend `rawError=Connection error.` stayed in gateway stderr. BUT a co-rendered `chat-run-error` banner shows online-centric copy ("The online assistant could not be reached … switch to 'On this device'") contradicting it, AND its "Technical details" expander surfaces raw "Connection error." — so the "NOT raw Connection error." clause is NOT met. First clean run (no mid-turn switch) `degradeNoticeFirstSeenMs=23353 channelAtDegrade=on-device`. NOTE: a mid-turn channel switch during the outage raced the gateway reload and dropped the send (NO_RESPONSE) — test artifact, but a real "silence-on-send on switch-during-outage" shape |
-| 8 | K11 email chain readable degrade (no-creds, no-session box; NO sends) | **NOT RUN this session** |
-| 9 | K12 badge tracks real gateway state (healthy → kill → restart) | **NOT RUN this session** |
+| 8 | K11 email chain readable degrade (no-creds, no-session box; NO sends) | **FINDING (on-device) / UNVERIFIABLE (cloud)** — ran 2026-09-06 07:00Z tick. On-device (qwen2.5:3b): the model NEVER reached the email tools or their readable refusal — it hallucinated a filesystem read (`read {"path":"C:\\openclaw\\workspace\\email\\inbox\\latest\\reply-to-next-meeting.tex"}`) and LOOPED it ~15× with no loop-breaker until the K12 gateway kill interrupted it (screenshot `k12badge/badge-01-18562ms.png`); zero `outlook` lines in the app log for the window. NO sends occurred (two-gate never approached). This is the K1/K5 small-model tool-cascade class — strengthens the owner's pending trim-unhold decision (7add864b HOLD). Cloud path unverifiable on this VM (placeholder `moe-demo-pro` gateway times out) — the readable-refusal bar moves to the Mac/live lane |
+| 9 | K12 badge tracks real gateway state (healthy → kill → restart) | **PASS** — badge lifecycle tracked truthfully via CDP probe (`k12-badge-probe.js`, 100s watch): `gateway connected \| pid 1836` → kill (07:01:09Z) → `gateway starting \| pid 3216` at +8s with header pill "Reconnecting" + composer disabled ("Gateway not connected…") → `gateway connected \| pid 3216` confirmed post-recovery. App auto-restarted the gateway; no stale "connected" claim at any sample |
 | 10 | K14 five prompts (NSCC set) — answers, no raw errors | **ANSWERED 5/5, 0 raw errors — BUT content-shallow**: NSCC knowledge pack proven ABSENT from the installed moe.18 tree (moe18-nscc-probe.ps1 → NONE; no `nscc_lookup`). Answers are generic, not grounded in the National School Code. CLWX-42 / GA gap P12 named |
-| 11 | Trust sweep — no model IDs / cost / raw HTTP in any evidence | **PARTIAL** — all pulled screenshots clean on model IDs / cost / raw HTTP EXCEPT the single leak in step 7 (raw "Connection error." behind run-error "Technical details"). Full sweep of every job's frames not completed this session |
-| + | No-clobber leg: post-migration explicit On-device toggle survives relaunch | **NOT RUN this session** |
-| 12 | End state: hosts clean, ollama running, app on Online, VM RUNNING | **PASS** — hosts clean; ollama RUNNING (OLLAMA_READY); channel reasserted Online via host-API (`success:true modelRef=custom-moecloud/moe-demo-pro`); recovery turn cleared the stacked banners (`freshSessionClicked=true`, `runErrorSeen=false`, `channelFinal=online`) — app sits clean on Online with NO error banner. Turn itself `TIMED_OUT_MID_TURN` only because the placeholder `moe-demo-pro` cloud gateway is unverifiable on this VM (known, not a defect). VM left RUNNING per owner (actively testing) |
+| 11 | Trust sweep — no model IDs / cost / raw HTTP in any evidence | **PASS with the one recorded exception** — sampled every job's key frames (k10pdf, k13out, k13out-clean, w10deg, k11email, k12badge, k14a): no model IDs, no cost, no raw HTTP anywhere; K12 mid-restart frames are truthful (Reconnecting pill, disabled composer, "gateway starting" footer); the working-pane tool trace shows the agent workspace path (by design). The single leak remains step 7's raw "Connection error." behind the run-error "Technical details" expander (Finding D2). The stale run-error banner PERSISTS across new chats and a gateway restart (Finding D0/D1 — seen again in k11email + k12badge frames); it cleared only on app relaunch |
+| + | No-clobber leg: post-migration explicit On-device toggle survives relaunch | **PASS** — `no-clobber.ps1` (2026-09-06 07:0xZ): BEFORE `preferredChannel=on-device channelDefaultMigrated=True migrationLogLines=1` → app stopped (procs 0) → visible relaunch via `ClawXApp` scheduled task → cdp+gateway up → AFTER identical (`on-device / True / 1`) — migration did NOT re-fire, explicit choice preserved. `NOCLOBBER=PASS` |
+| 12 | End state: hosts clean, ollama running, app on Online, VM RUNNING | **PASS** — hosts clean; ollama RUNNING; channel reasserted Online via host-API (`success:true modelRef=custom-moecloud/moe-demo-pro`) after the no-clobber leg; all four ports up (hostapi/cdp/ollama/gateway True, ME_procs=5); VM left RUNNING per owner (actively testing) |
 
 ## Findings (degrade-UX — CLWX-78 / CLWX-95 family)
 
