@@ -573,6 +573,38 @@ caused by this fix (failing cards render with data loaded); filed as
 Todo → Ready with evidence. Owner asks unchanged (Chrome :18792 restart
 remains the highest-value unlock)._
 
+_**Tick 2026-09-06 (ga-sprint-driver, minimal-time): CLWX-92 In Progress →
+Ready — the COMPLETED moe.17 VM verify evidence was on disk, untracked and
+never synced.** SENSE: tree clean at `b639df65` (6 known untracked); board
+re-exported, mirror in sync; Chrome :18792 + gcloud/VM lanes unchanged
+(owner-gated, not re-probed per standing rule). ANALYZE: probing the
+untracked evidence dirs caught a serial promotion — the 2026-09-03 entry
+"moe.17 VM verify agent DIED mid-run" was superseded the SAME day by a
+completed run (RESULT.md 15:07 + an independent same-day re-run addendum)
+that nobody synced; CLWX-92's only remainder (in-app K10 PDF turn on an
+installed build) is met by it. ACT (evidence promotion, no code): committed
+`skills/laptop/evidence/2026-09-03-moe17-verify/` (RESULT.md + turn-evidence,
+matching the moe16-verify convention; `logs/` stays local per the repo-wide
+logs ignore — the decisive differential-repro lines are quoted verbatim in
+RESULT.md) + the moe18-verify staged prep record (gcloud-block documentation)
++ the four pilot driver scripts that produced them; CLWX-92 → Ready with the
+evidence comment — K10/A
+fresh-session PASS (document.read_pdf toolCall + real 5-bullet summary,
+verdict ANSWERED, zero workerSrc failures) confirmed TWICE (original +
+independent re-run), ELECTRONLIKE differential repro PASS on the INSTALLED
+moe.17 tree (`ELECTRONLIKE_VERIFY=PASS pages=1 chars=835` — the exact
+moe.16 FAIL shape), guard wired inside verify-openclaw-bundle since
+9619a920. Honesty notes carried onto the card: path-prompt + attachment-chip
+mechanism (a literal drag-gesture variant stays a CLWX-77 K10 matrix cell);
+the contaminated-session first attempt NOT counted; intermittent LEG A
+hallucination caveat (fix itself holds); phantom-replay = CLWX-94 (fixed
+2b21d2a8, VM re-proof pending); LEG B degrade addendum findings = CLWX-78/95;
+the moe.18 full-matrix K10 row stays gcloud-gated (release verify, not this
+card's remainder — moe.18 carries the same fix). Bonus facts mined from the
+same RESULT: moe.17 silent-upgrade install PASS with state preserved and the
+canvas native binding present (CLWX-72 holds on the upgrade path); CLWX-78
+degrade notice rendered at 14.6s, anonymised. Owner asks unchanged._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed

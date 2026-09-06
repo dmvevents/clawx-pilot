@@ -1,0 +1,55 @@
+{
+  "prompt": "Draft a short letter to parents about a school open day next Friday.",
+  "startedAt": "2026-09-03T10:38:47.071Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.17 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 207,
+  "channelBefore": "online",
+  "channelAfter": "online",
+  "channelSwitched": false,
+  "messagesBefore": 0,
+  "messagesAfter": 3,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": "Here is a draft of the letter. I can save this as a Word document for you if you'd like. Unconfigured School Ministry of Education, Trinidad & Tobago 2026-09-03 Parents Re: School Open Day Dear Parents, We would like to invite you to our upcoming School Open Day next Friday. The event will take place from 9:00 AM to 12:00 PM. This is a wonderful opportunity for you to meet your child's teachers, view their work, and take a tour of the school. Should you require any further information, please do not hesitate to contact the school office. Yours sincerely, Unconfigured Principal Principal Unconfigured School just now",
+  "settled": true,
+  "abortedOnError": false,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 4544,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 20908,
+      "classification": "still-thinking",
+      "shot": "state-02-still-thinking.png"
+    },
+    {
+      "seq": 3,
+      "elapsedMs": 37258,
+      "classification": "still-thinking",
+      "shot": "state-03-still-thinking.png"
+    },
+    {
+      "seq": 4,
+      "elapsedMs": 53639,
+      "classification": "still-thinking",
+      "shot": "state-04-still-thinking.png"
+    },
+    {
+      "seq": 5,
+      "elapsedMs": 69923,
+      "classification": "still-thinking",
+      "shot": "state-05-still-thinking.png"
+    }
+  ],
+  "verdict": "ANSWERED",
+  "freshSessionClicked": true,
+  "channelFinal": "online",
+  "finishedAt": "2026-09-03T10:40:11.477Z"
+}

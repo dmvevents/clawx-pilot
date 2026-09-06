@@ -1,0 +1,53 @@
+{
+  "prompt": "Please summarise the PDF file at C:\\Users\\clawxtest\\Downloads\\fixture.pdf",
+  "startedAt": "2026-09-03T09:51:19.631Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.17 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 128857,
+  "channelBefore": "online",
+  "channelAfter": "online",
+  "channelSwitched": false,
+  "messagesBefore": 0,
+  "messagesAfter": 31,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": null,
+  "settled": false,
+  "abortedOnError": false,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 131062,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 147325,
+      "classification": "still-thinking",
+      "shot": "state-02-still-thinking.png"
+    },
+    {
+      "seq": 3,
+      "elapsedMs": 163607,
+      "classification": "still-thinking",
+      "shot": "state-03-still-thinking.png"
+    },
+    {
+      "seq": 4,
+      "elapsedMs": 179872,
+      "classification": "still-thinking",
+      "shot": "state-04-still-thinking.png"
+    },
+    {
+      "seq": 5,
+      "elapsedMs": 196138,
+      "classification": "still-thinking",
+      "shot": "state-05-still-thinking.png"
+    }
+  ],
+  "verdict": "INCOMPLETE",
+  "finishedAt": "2026-09-03T09:54:40.136Z"
+}

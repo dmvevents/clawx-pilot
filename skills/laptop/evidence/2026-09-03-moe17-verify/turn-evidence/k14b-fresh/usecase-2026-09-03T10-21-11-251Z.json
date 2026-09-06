@@ -1,0 +1,36 @@
+{
+  "prompt": "Draft a short letter to parents about a school open day next Friday.",
+  "startedAt": "2026-09-03T10:21:11.252Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.17 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 208,
+  "channelBefore": "online",
+  "channelAfter": "online",
+  "channelSwitched": false,
+  "messagesBefore": 0,
+  "messagesAfter": 1,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": null,
+  "settled": false,
+  "abortedOnError": false,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 4480,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 20807,
+      "classification": "still-thinking",
+      "shot": "state-02-still-thinking.png"
+    }
+  ],
+  "verdict": "INCOMPLETE",
+  "freshSessionClicked": true,
+  "finishedAt": "2026-09-03T10:21:40.958Z"
+}

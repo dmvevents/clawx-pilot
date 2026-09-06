@@ -1,0 +1,177 @@
+{
+  "prompt": "What are three things you can help a school principal with?",
+  "startedAt": "2026-09-03T10:06:31.972Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.17 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 171,
+  "channelBefore": "online",
+  "channelAfter": "online",
+  "channelSwitched": false,
+  "messagesBefore": 0,
+  "messagesAfter": 3,
+  "degradeNoticeSeen": true,
+  "degradeNoticeText": "No internet connection — this answer came from the model on this device. Online will be used again automatically once it's available. Dismiss",
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": null,
+  "settled": false,
+  "abortedOnError": false,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 4442,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 20745,
+      "classification": "still-thinking",
+      "shot": "state-02-still-thinking.png"
+    },
+    {
+      "seq": 3,
+      "elapsedMs": 37078,
+      "classification": "still-thinking",
+      "shot": "state-03-still-thinking.png"
+    },
+    {
+      "seq": 4,
+      "elapsedMs": 53436,
+      "classification": "still-thinking",
+      "shot": "state-04-still-thinking.png"
+    },
+    {
+      "seq": 5,
+      "elapsedMs": 69745,
+      "classification": "still-thinking",
+      "shot": "state-05-still-thinking.png"
+    },
+    {
+      "seq": 6,
+      "elapsedMs": 86063,
+      "classification": "still-thinking",
+      "shot": "state-06-still-thinking.png"
+    },
+    {
+      "seq": 7,
+      "elapsedMs": 102362,
+      "classification": "still-thinking",
+      "shot": "state-07-still-thinking.png"
+    },
+    {
+      "seq": 8,
+      "elapsedMs": 118684,
+      "classification": "still-thinking",
+      "shot": "state-08-still-thinking.png"
+    },
+    {
+      "seq": 9,
+      "elapsedMs": 134997,
+      "classification": "still-thinking",
+      "shot": "state-09-still-thinking.png"
+    },
+    {
+      "seq": 10,
+      "elapsedMs": 151303,
+      "classification": "still-thinking",
+      "shot": "state-10-still-thinking.png"
+    },
+    {
+      "seq": 11,
+      "elapsedMs": 167611,
+      "classification": "still-thinking",
+      "shot": "state-11-still-thinking.png"
+    },
+    {
+      "seq": 12,
+      "elapsedMs": 183903,
+      "classification": "still-thinking",
+      "shot": "state-12-still-thinking.png"
+    },
+    {
+      "seq": 13,
+      "elapsedMs": 206447,
+      "classification": "still-thinking",
+      "shot": "state-13-still-thinking.png"
+    },
+    {
+      "seq": 14,
+      "elapsedMs": 222685,
+      "classification": "still-thinking",
+      "shot": "state-14-still-thinking.png"
+    },
+    {
+      "seq": 15,
+      "elapsedMs": 238916,
+      "classification": "still-thinking",
+      "shot": "state-15-still-thinking.png"
+    },
+    {
+      "seq": 16,
+      "elapsedMs": 254615,
+      "classification": "still-thinking",
+      "shot": "state-16-still-thinking.png"
+    },
+    {
+      "seq": 17,
+      "elapsedMs": 271399,
+      "classification": "still-thinking",
+      "shot": "state-17-still-thinking.png"
+    },
+    {
+      "seq": 18,
+      "elapsedMs": 287431,
+      "classification": "still-thinking",
+      "shot": "state-18-still-thinking.png"
+    },
+    {
+      "seq": 19,
+      "elapsedMs": 316977,
+      "classification": "still-thinking",
+      "shot": "state-19-still-thinking.png"
+    },
+    {
+      "seq": 20,
+      "elapsedMs": 333932,
+      "classification": "still-thinking",
+      "shot": "state-20-still-thinking.png"
+    },
+    {
+      "seq": 21,
+      "elapsedMs": 350997,
+      "classification": "still-thinking",
+      "shot": "state-21-still-thinking.png"
+    },
+    {
+      "seq": 22,
+      "elapsedMs": 367246,
+      "classification": "still-thinking",
+      "shot": "state-22-still-thinking.png"
+    },
+    {
+      "seq": 23,
+      "elapsedMs": 383231,
+      "classification": "still-thinking",
+      "shot": "state-23-still-thinking.png"
+    },
+    {
+      "seq": 24,
+      "elapsedMs": 400229,
+      "classification": "still-thinking",
+      "shot": "state-24-still-thinking.png"
+    },
+    {
+      "seq": 25,
+      "elapsedMs": 416734,
+      "classification": "still-thinking",
+      "shot": "state-25-still-thinking.png"
+    }
+  ],
+  "verdict": "TIMED_OUT_MID_TURN",
+  "freshSessionClicked": true,
+  "degradeNoticeFirstSeenMs": 14651,
+  "channelAtDegrade": "online",
+  "channelFinal": "online",
+  "finishedAt": "2026-09-03T10:13:35.775Z"
+}

@@ -1,0 +1,36 @@
+{
+  "prompt": "Please summarise the PDF file at C:\\Users\\clawxtest\\Downloads\\fixture.pdf",
+  "startedAt": "2026-09-03T10:01:05.296Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.17 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 152,
+  "channelBefore": "online",
+  "channelAfter": "online",
+  "channelSwitched": false,
+  "messagesBefore": 32,
+  "messagesAfter": 34,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": "I am sorry, but I am still encountering the same technical error when trying to access that PDF file. This prevents me from reading its content. If you can copy and paste the text from the document, I would be happy to summarize it for you. fixture.pdf 1.5 KB just now",
+  "settled": true,
+  "abortedOnError": false,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 2349,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 18710,
+      "classification": "reply-rendered",
+      "shot": "state-02-reply-rendered.png"
+    }
+  ],
+  "verdict": "ANSWERED",
+  "channelFinal": "online",
+  "finishedAt": "2026-09-03T10:01:34.352Z"
+}

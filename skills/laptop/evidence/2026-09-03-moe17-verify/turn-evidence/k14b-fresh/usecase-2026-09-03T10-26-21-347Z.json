@@ -1,0 +1,73 @@
+{
+  "prompt": "Draft a short letter to parents about a school open day next Friday.",
+  "startedAt": "2026-09-03T10:26:21.348Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.17 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "composerEnabledAfterMs": 163,
+  "channelBefore": "online",
+  "channelAfter": "online",
+  "channelSwitched": false,
+  "messagesBefore": 0,
+  "messagesAfter": 0,
+  "degradeNoticeSeen": false,
+  "degradeNoticeText": null,
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": null,
+  "settled": false,
+  "abortedOnError": false,
+  "stateSamples": [
+    {
+      "seq": 1,
+      "elapsedMs": 4470,
+      "classification": "still-thinking",
+      "shot": "state-01-still-thinking.png"
+    },
+    {
+      "seq": 2,
+      "elapsedMs": 36626,
+      "classification": "still-thinking",
+      "shot": "state-02-still-thinking.png"
+    },
+    {
+      "seq": 3,
+      "elapsedMs": 68767,
+      "classification": "still-thinking",
+      "shot": "state-03-still-thinking.png"
+    },
+    {
+      "seq": 4,
+      "elapsedMs": 100926,
+      "classification": "still-thinking",
+      "shot": "state-04-still-thinking.png"
+    },
+    {
+      "seq": 5,
+      "elapsedMs": 133067,
+      "classification": "still-thinking",
+      "shot": "state-05-still-thinking.png"
+    },
+    {
+      "seq": 6,
+      "elapsedMs": 165207,
+      "classification": "still-thinking",
+      "shot": "state-06-still-thinking.png"
+    },
+    {
+      "seq": 7,
+      "elapsedMs": 197346,
+      "classification": "still-thinking",
+      "shot": "state-07-still-thinking.png"
+    },
+    {
+      "seq": 8,
+      "elapsedMs": 229534,
+      "classification": "still-thinking",
+      "shot": "state-08-still-thinking.png"
+    }
+  ],
+  "verdict": "NO_RESPONSE",
+  "freshSessionClicked": true,
+  "channelFinal": "online",
+  "finishedAt": "2026-09-03T10:30:41.243Z"
+}
