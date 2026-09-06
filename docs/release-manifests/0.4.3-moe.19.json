@@ -1,24 +1,24 @@
 {
   "version": "0.4.3-moe.19",
-  "generatedAt": "2026-09-06T17:59:32.788Z",
+  "generatedAt": "2026-09-06T18:22:48.133Z",
   "published": false,
   "artifacts": [
     {
       "name": "Ministry of Education-0.4.3-moe.19-win-x64.exe",
       "path": "Ministry of Education-0.4.3-moe.19-win-x64.exe",
       "kind": "installer",
-      "sha256": "42bf769c9fc71d7c59fbeb666cf7caf3b5cdefc35b88b07e98a80ec5f8fae340",
-      "bytes": 433617169,
-      "mtimeMs": 1788717569159.748
+      "sha256": "3a533a0fa1733fac6243fba19e4f1bc21d70c57eb498e1121a969b025bc48888",
+      "bytes": 433622791,
+      "mtimeMs": 1788718964452.6663
     },
     {
       "name": "win:app.asar",
       "path": "win-unpacked/resources/app.asar",
       "kind": "asar",
       "asarVersion": "0.4.3-moe.19",
-      "sha256": "a9b45fbff6e24f2b35ff01a5c1549ef2fcfec44de6e427ddb099bc6549a2a4ae",
-      "bytes": 252679805,
-      "mtimeMs": 1788717328429.402
+      "sha256": "4efd6002165711a1d4268a36156aed8dd809f518c72fdef0024ee45ed068ba1b",
+      "bytes": 252680676,
+      "mtimeMs": 1788718724775.1995
     },
     {
       "name": "win:extensions",
@@ -26,7 +26,7 @@
       "kind": "bundle-dir",
       "sha256": "e5b846b29c64c4bc8d669b3c46fecf93041f14ec69ff5aa3f7608b801be4284c",
       "fileCount": 29,
-      "mtimeMs": 1788717331755.958
+      "mtimeMs": 1788718728102.1978
     },
     {
       "name": "win:openclaw-plugins",
@@ -34,10 +34,33 @@
       "kind": "bundle-dir",
       "sha256": "b3f380f4fbe6742959b020e98aa084f192843dd5d50683de0436bd2747600e66",
       "fileCount": 4678,
-      "mtimeMs": 1788717349962.8462
+      "mtimeMs": 1788718747026.2368
     }
   ],
-  "supersededBuilds": [],
+  "supersededBuilds": [
+    {
+      "generatedAt": "2026-09-06T17:59:32.788Z",
+      "artifacts": [
+        {
+          "name": "Ministry of Education-0.4.3-moe.19-win-x64.exe",
+          "path": "Ministry of Education-0.4.3-moe.19-win-x64.exe",
+          "kind": "installer",
+          "sha256": "42bf769c9fc71d7c59fbeb666cf7caf3b5cdefc35b88b07e98a80ec5f8fae340",
+          "bytes": 433617169,
+          "mtimeMs": 1788717569159.748
+        },
+        {
+          "name": "win:app.asar",
+          "path": "win-unpacked/resources/app.asar",
+          "kind": "asar",
+          "asarVersion": "0.4.3-moe.19",
+          "sha256": "a9b45fbff6e24f2b35ff01a5c1549ef2fcfec44de6e427ddb099bc6549a2a4ae",
+          "bytes": 252679805,
+          "mtimeMs": 1788717328429.402
+        }
+      ]
+    }
+  ],
   "warnings": [
     "mac-arm64/Ministry of Education.app/Contents/Resources/app.asar carries version 0.4.3-moe.10, not 0.4.3-moe.19 — tree skipped (stale build leftovers are never recorded under the wrong version)",
     "mac/Ministry of Education.app/Contents/Resources/app.asar carries version 0.4.3-moe.10, not 0.4.3-moe.19 — tree skipped (stale build leftovers are never recorded under the wrong version)"
