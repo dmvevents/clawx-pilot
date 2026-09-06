@@ -33,6 +33,13 @@
  *                    extraction path, see DEFAULT_TEXT_PATHS)
  *   NSCC_PDF_PATH  — alternatively, the NSCC-2026.pdf; extracted via the
  *                    repo's own document.read_pdf path (doc-tools.mjs)
+ *   NSCC_EVAL_LANE — 'context' (default: full text in-context, the original
+ *                    lane) or 'tool': each question's context is the REAL
+ *                    principal.nscc_lookup retrieval output
+ *                    (extensions/moe-principal-assistant/nscc-lookup.mjs,
+ *                    searchNscc over the SHIPPED data file) — proves the
+ *                    in-app retrieval lane end-to-end against the same
+ *                    stakeholder bar (CLWX-42 knowledge-pack acceptance)
  *   CLAWX_AGENT_EVAL_MODEL / AWS_REGION — model routing (same as v2 scripts)
  *   NSCC_EVAL_OUT  — optional path for a full JSON report (per-row answers)
  *
@@ -249,6 +256,27 @@ async function callWithRetry(
   console.log(`fixture:   ${FIXTURE_PATH} (${fixture.cases.length} rows, source: ${fixture.source_doc})`);
   console.log(`knowledge: ${nscc.source} (${nscc.text.length} chars)\n`);
 
+  // Tool lane (CLWX-42 acceptance): context per question = the REAL
+  // principal.nscc_lookup retrieval output over the SHIPPED plugin data file
+  // — not the full text. Import the exact module the registered tool calls.
+  const lane = process.env.NSCC_EVAL_LANE === 'tool' ? 'tool' : 'context';
+  let lookup: ((q: string) => string) | null = null;
+  if (lane === 'tool') {
+    const nsccMod = (await import(
+      path.join(REPO_ROOT, 'extensions', 'moe-principal-assistant', 'nscc-lookup.mjs')
+    )) as {
+      searchNscc: (text: string, query: string) => { passages: Array<{ rank: number; excerpt: string }>; note: string };
+      loadNsccText: (root: string) => string;
+    };
+    const shipped = nsccMod.loadNsccText(path.join(REPO_ROOT, 'extensions', 'moe-principal-assistant'));
+    assertNscc2026(shipped);
+    lookup = (q: string) => {
+      const r = nsccMod.searchNscc(shipped, q);
+      return `${r.note}\n\n${r.passages.map((p) => `[Passage ${p.rank}]\n${p.excerpt}`).join('\n\n')}`;
+    };
+    console.log(`lane:      tool (context = principal.nscc_lookup retrieval over the shipped data file)\n`);
+  }
+
   const client = new BedrockRuntimeClient({ region: REGION });
   const results: RowResult[] = [];
 
@@ -257,9 +285,12 @@ async function callWithRetry(
     let text = '';
     let latencyMs = 0;
     try {
+      const context = lane === 'tool' && lookup
+        ? `NSCC 2026 PASSAGES (retrieved by principal.nscc_lookup for this question):\n\n${lookup(row.question)}`
+        : `NSCC 2026 DOCUMENT TEXT:\n\n${nscc.text}`;
       const turn = await callWithRetry(
         client,
-        `NSCC 2026 DOCUMENT TEXT:\n\n${nscc.text}\n\n---\n\nQUESTION: ${row.question}`,
+        `${context}\n\n---\n\nQUESTION: ${row.question}`,
       );
       text = turn.text;
       latencyMs = turn.latencyMs;
@@ -331,6 +362,7 @@ async function callWithRetry(
           ranAt: new Date().toISOString(),
           model: MODEL_ID,
           region: REGION,
+          lane,
           fixture: FIXTURE_PATH,
           knowledgeSource: nscc.source,
           knowledgeChars: nscc.text.length,
@@ -348,9 +380,10 @@ async function callWithRetry(
   }
 
   const ok = passRate >= PASS_RATE_FLOOR;
+  const laneLabel = lane === 'tool' ? 'principal.nscc_lookup retrieval lane' : 'context-provided lane';
   console.log(ok
-    ? 'CLWX-42 VERDICT: PASS — stakeholder Q&A answered correctly with NSCC citations (context-provided lane).'
-    : 'CLWX-42 VERDICT: FAIL — pass rate below floor on the stakeholder Q&A set.');
+    ? `CLWX-42 VERDICT: PASS — stakeholder Q&A answered correctly with NSCC citations (${laneLabel}).`
+    : `CLWX-42 VERDICT: FAIL — pass rate below floor on the stakeholder Q&A set (${laneLabel}).`);
   process.exit(ok ? 0 : 1);
 })().catch((e) => {
   console.error('FATAL:', e instanceof Error ? e.message : String(e));

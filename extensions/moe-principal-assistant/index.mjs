@@ -41,6 +41,7 @@ import {
   gateHostApiFacade,
   hostApiSkewMessage,
 } from './capability-gate.mjs';
+import { loadNsccText, searchNscc } from './nscc-lookup.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = __dirname;
@@ -1420,6 +1421,27 @@ export function register(api) {
         .filter((s) => typeof s?.name === 'string' && s.name.toLowerCase().includes(q))
         .slice(0, 10);
       return { matches, total: matches.length, queriedAgainst: all.length };
+    },
+  });
+
+  registerTool({
+    name: 'principal.nscc_lookup',
+    description:
+      'Search the National School Code of Conduct (NSCC), Revised Edition (2026) — the Ministry\'s statutory discipline and conduct policy. Args: { query }. Returns the most relevant NSCC passages for the query. Use this for ANY question about the Code of Conduct: discipline, infractions and consequence levels, suspension and expulsion procedure, corporal punishment, attendance, core values and principles, child protection and abuse reporting, roles and responsibilities. Ground the answer in the returned passages and cite the NSCC as the source. The document ships with the app — no file from the principal is needed.',
+    parameters: toolParameters(
+      {
+        query: stringSchema,
+      },
+      ['query'],
+    ),
+    execute: async (_toolCallId, args = {}) => {
+      const { query } = args;
+      requireString('query', query);
+      // CLWX-42 design decision: retrieval tool, NOT a workspace bootstrap
+      // doc — the full NSCC is ~55k tokens/turn against the KR6 floor; the
+      // top passages are a few KB and carry the citation instruction.
+      const text = loadNsccText(PKG_ROOT);
+      return searchNscc(text, query);
     },
   });
 

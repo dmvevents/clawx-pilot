@@ -127,6 +127,34 @@ describe('moe-principal-assistant plugin registration', () => {
     expect(prompt).toMatch(/searches Downloads, Documents, Desktop, and the OneDrive-redirected/i);
   });
 
+  it('registers principal.nscc_lookup and its execute returns grounded NSCC passages (CLWX-42)', async () => {
+    const { register } = await loadPlugin();
+    const tools: RegisteredTool[] = [];
+    register({
+      pluginConfig,
+      registerTool: (tool: RegisteredTool) => tools.push(tool),
+      log: { info() {}, warn() {} },
+    });
+    const lookup = tools.find((t) => t.name === 'principal.nscc_lookup');
+    expect(lookup).toBeTruthy();
+    expect(String(lookup!.description)).toMatch(/National School Code of Conduct/);
+    const result = await lookup!.execute!('t1', { query: 'Is corporal punishment allowed in schools?' });
+    expect(result.passages.length).toBeGreaterThan(0);
+    expect(result.passages.map((p: { excerpt: string }) => p.excerpt).join('\n')).toMatch(/physical punishment|corporal punishment/i);
+    expect(result.note).toMatch(/cite the NSCC/i);
+  });
+
+  it('steers Code-of-Conduct questions to principal.nscc_lookup with an NSCC citation (CLWX-42)', async () => {
+    const { SYSTEM_PROMPT } = await loadPersona();
+    const prompt = String(SYSTEM_PROMPT);
+    expect(prompt).toMatch(/principal\.nscc_lookup/);
+    expect(prompt).toMatch(/cite the NSCC/i);
+    // The pack ships in-app — the model must never send the principal
+    // hunting for the document (the K14 substance gap this closes).
+    expect(prompt).toMatch(/never ask the principal to attach or upload/i);
+    expect(prompt).toMatch(/does not appear to cover/i);
+  });
+
   it('keeps Outlook/Forms model-facing guidance on the ClawX repair path', async () => {
     const previousPort = process.env.CLAWX_HOST_API_PORT;
     const previousToken = process.env.CLAWX_HOST_API_TOKEN;
