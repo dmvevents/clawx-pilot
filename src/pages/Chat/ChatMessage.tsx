@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { invokeIpc, statFile } from '@/lib/api-client';
 import { useTranslation } from 'react-i18next';
-import { principalErrorDisplay, ERROR_DISPLAY_KEY } from '@/lib/error-display';
+import { principalErrorDisplay, ERROR_DISPLAY_INLINE_KEY } from '@/lib/error-display';
 import type { RawMessage, AttachedFileMeta } from '@/stores/chat';
 import { extractText, extractImages, extractToolUse, formatTimestamp } from './message-utils';
 
@@ -24,6 +24,14 @@ interface ChatMessageProps {
   textOverride?: string;
   suppressToolCards?: boolean;
   suppressProcessAttachments?: boolean;
+  /**
+   * CLWX-105 coordination (Codex review, 2026-09-06): when the ACTIVE
+   * failure already owns a surface (global error banner, run-error callout,
+   * or degrade notice), the newest error-stopped message must NOT also
+   * chip — that would reintroduce the CLWX-104 D1 stacking class. Chat
+   * passes true for that one message; historical failures always chip.
+   */
+  suppressErrorChip?: boolean;
   /**
    * When true, hides the assistant text bubble (and any thinking block that
    * would be shown above it). Used when the message's text is being folded
@@ -204,6 +212,7 @@ export const ChatMessage = memo(function ChatMessage({
   suppressToolCards = false,
   suppressProcessAttachments = false,
   suppressAssistantText = false,
+  suppressErrorChip = false,
   isStreaming = false,
   streamingTools = [],
   onOpenFile,
@@ -314,7 +323,7 @@ export const ChatMessage = memo(function ChatMessage({
     && typeof rawStopReason === 'string'
     && rawStopReason.trim().toLowerCase() === 'error';
   const rawErrorMessage = msgRecord.errorMessage ?? msgRecord.error_message;
-  const terminalErrorDisplay = errorStopped
+  const terminalErrorDisplay = errorStopped && !suppressErrorChip
     ? principalErrorDisplay(typeof rawErrorMessage === 'string' ? rawErrorMessage : '')
     : null;
 
@@ -429,7 +438,7 @@ export const ChatMessage = memo(function ChatMessage({
           >
             <p className="text-sm text-destructive flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              {t(ERROR_DISPLAY_KEY[terminalErrorDisplay.kind])}
+              {t(ERROR_DISPLAY_INLINE_KEY[terminalErrorDisplay.kind])}
             </p>
             {terminalErrorDisplay.detail && (
               <details className="mt-1">

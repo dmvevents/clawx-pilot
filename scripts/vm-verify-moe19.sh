@@ -1,22 +1,27 @@
 #!/usr/bin/env bash
 # vm-verify-moe19.sh — THE single command for the moe.19 Windows VM verify.
 #
-# Replicates the moe.18 full-matrix method (skills/laptop/evidence/
-# 2026-09-03-moe18-verify/RESULT.md) for the moe.19 fix train, plus the
-# post-moe.18 checks: CLWX-104 D0/D1/D2 (run-error dedup), CLWX-42 (NSCC
-# pack PRESENT + grounded K14), CLWX-105 (in-line error chip), CLWX-99/100
-# (cron tz + cosmetics), CLWX-87 (System.Speech WER row), send-gate subject
-# fix (unit-verified; in-app send stays sandbox/manual).
+# v2 (Codex-hardened + VLM-desktop directive, 2026-09-06):
+#  - HIGH fix: installer exit is ENFORCED (Start-Process -Wait -PassThru);
+#    the app is stopped pre-install and the RUNNING process binary is
+#    attested post-launch (path + FileVersion of the live process, not the
+#    disk label) — a rerun over an existing install can no longer false-
+#    green a failed install/launch.
+#  - MED fix: the ASR chain fails LOUDLY (no || true), transcripts use a
+#    unique per-run filename (stale JSON cannot regrade), and missing
+#    prerequisites mark the run BLOCKED (exit 3), never green.
+#  - NEW: install-artifact + no-excluded-packages proof
+#    (pilot-check-install-artifacts.ps1 + EXTRA_BUNDLED_PACKAGES presence),
+#    and VLM grading of the REAL desktop screen (~2000px — Bedrock caps
+#    images near 2000px; larger frames grade falsely) via
+#    pilot-desktop-screenshot.ps1 + scripts/clwx-vlm-grade-screens.mjs.
 #
-# HARD RULES: never starts or stops the VM (owner spend call — exits 3 loud
-# with the exact command); never publishes the release manifest; never
-# touches the running Mac app. Guest launches are VISIBLE scheduled tasks,
-# never -WindowStyle Hidden (atlas §16).
+# HARD RULES: never starts/stops the VM (exit 3 with the owner command);
+# never runs release:manifest:publish; never touches the running Mac app;
+# guest launches are VISIBLE scheduled tasks, never Hidden (atlas §16).
 #
 # Usage: bash scripts/vm-verify-moe19.sh
-# Exit: 0 scripted phases green (interactive checklist printed for the
-# in-app visual legs); 3 blocked (VM not RUNNING / artifact missing);
-# 1 a scripted phase failed.
+# Exit: 0 scripted phases green; 3 BLOCKED (VM/artifact/prereq); 1 FAIL.
 set -euo pipefail
 
 VM="clawx-win-rc-20260609"
@@ -27,99 +32,142 @@ GUEST_USER="${CLAWX_VM_USER:-clawxtest}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 EXE="$REPO_ROOT/release/Ministry of Education-0.4.3-moe.19-win-x64.exe"
 GCS_DEST="gs://clawx-rc-artifacts-622687731621/moe19/"
+RUN_TAG="$(date +%Y%m%d-%H%M%S)"
 EVIDENCE_DIR="$REPO_ROOT/skills/laptop/evidence/$(date +%F)-moe19-verify"
 GUEST_DL='C:\Users\'"$GUEST_USER"'\Downloads'
+GUEST_APP='C:\Users\'"$GUEST_USER"'\AppData\Local\Programs\Ministry of Education'
+BLOCKED=0
 
 log() { printf '[vm-verify-moe19 %s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 guest() { ssh -o ConnectTimeout=10 -p "$SSH_PORT" "$GUEST_USER@localhost" "$@"; }
+gpwsh() { guest "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$1\""; }
+
+mkdir -p "$EVIDENCE_DIR"
 
 # ── Phase 0 — Mac-side artifact + hash + GCS (idempotent) ────────────────────
-[ -f "$EXE" ] || { log "BLOCKED: installer not found: $EXE — run: PATH=\"\$HOME/.dotnet:\$PATH\" pnpm build:win"; exit 3; }
+[ -f "$EXE" ] || { log "BLOCKED: installer not found: $EXE"; exit 3; }
 SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
-BYTES=$(stat -f%z "$EXE")
-log "artifact: $(basename "$EXE") bytes=$BYTES sha256=$SHA"
-if ! gsutil ls "${GCS_DEST}$(basename "$EXE" | sed 's/ /%20/g')" >/dev/null 2>&1 \
-  && ! gsutil ls "${GCS_DEST}" 2>/dev/null | grep -q "moe.19-win-x64.exe"; then
-  log "uploading to $GCS_DEST (idempotent) ..."
+log "artifact: $(basename "$EXE") bytes=$(stat -f%z "$EXE") sha256=$SHA"
+if ! gsutil ls "${GCS_DEST}" 2>/dev/null | grep -q "moe.19-win-x64.exe"; then
+  log "uploading to $GCS_DEST ..."
   gsutil cp "$EXE" "$GCS_DEST"
 fi
-log "GCS: $(gsutil ls -l "${GCS_DEST}" 2>/dev/null | grep -c exe || true) exe object(s) present"
 
 # ── Phase 1 — VM status gate (NEVER starts it) ──────────────────────────────
 STATUS=$(gcloud compute instances list --project "$PROJECT" --filter="name=$VM" --format='value(status)' 2>/dev/null || true)
 if [ "$STATUS" != "RUNNING" ]; then
-  log "BLOCKED: VM $VM is '${STATUS:-unknown}'. Starting it is the OWNER's spend call:"
+  log "BLOCKED: VM $VM is '${STATUS:-unknown}'. Owner spend call:"
   log "  gcloud compute instances start $VM --zone $ZONE --project $PROJECT"
-  log "Then re-run this one command."
   exit 3
 fi
 log "VM RUNNING"
 
-# ── Phase 2 — tunnel (PF-3: control leg mandatory) ──────────────────────────
+# ── Phase 2 — tunnel (PF-3 control leg mandatory) ───────────────────────────
 if ! nc -z -w3 localhost "$SSH_PORT" 2>/dev/null; then
-  log "opening IAP sshd tunnel -> localhost:$SSH_PORT (background)"
+  log "opening IAP sshd tunnel -> localhost:$SSH_PORT"
   nohup gcloud compute start-iap-tunnel "$VM" 22 \
     --local-host-port="localhost:$SSH_PORT" --zone "$ZONE" --project "$PROJECT" \
     >/tmp/moe19-tunnel.log 2>&1 & disown
   for i in $(seq 1 20); do nc -z -w2 localhost "$SSH_PORT" 2>/dev/null && break; sleep 2; done
 fi
-# Control leg: a port that MUST fail — a listener that answers everything is a lie.
-if nc -z -w2 localhost 9999 2>/dev/null; then log "FAIL: control leg port 9999 unexpectedly open"; exit 1; fi
-guest 'echo GUEST_SSH_OK' | grep -q GUEST_SSH_OK || { log "FAIL: guest ssh banner"; exit 1; }
+if nc -z -w2 localhost 9999 2>/dev/null; then log "FAIL: control-leg port 9999 unexpectedly open"; exit 1; fi
+guest 'echo GUEST_SSH_OK' | grep -q GUEST_SSH_OK || { log "FAIL: guest ssh"; exit 1; }
 log "tunnel + guest ssh OK (control leg held)"
 
 # ── Phase 3 — installer to guest + both-hop hash ────────────────────────────
-if ! guest "powershell -NoProfile -c \"(Get-FileHash '$GUEST_DL\\moe19.exe' -ErrorAction SilentlyContinue).Hash\"" | grep -qi "$SHA"; then
+if ! gpwsh "(Get-FileHash '$GUEST_DL\\moe19.exe' -ErrorAction SilentlyContinue).Hash" | tr -d '\r' | grep -qi "$SHA"; then
   log "copying installer to guest (430MB over IAP — minutes) ..."
   scp -P "$SSH_PORT" "$EXE" "$GUEST_USER@localhost:Downloads/moe19.exe"
 fi
-GUEST_SHA=$(guest "powershell -NoProfile -c \"(Get-FileHash '$GUEST_DL\\moe19.exe').Hash\"" | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+GUEST_SHA=$(gpwsh "(Get-FileHash '$GUEST_DL\\moe19.exe').Hash" | tr -d '\r' | tr '[:upper:]' '[:lower:]')
 [ "$GUEST_SHA" = "$SHA" ] || { log "FAIL: guest sha mismatch ($GUEST_SHA)"; exit 1; }
 log "sha256 verified BOTH hops"
 
-# ── Phase 4 — pre-state, silent install, visible relaunch, port probes ──────
-mkdir -p "$EVIDENCE_DIR"
-guest "powershell -NoProfile -c \"(Get-Item 'C:\\Users\\$GUEST_USER\\AppData\\Local\\Programs\\Ministry of Education\\Ministry of Education.exe' -ErrorAction SilentlyContinue).VersionInfo.FileVersion\"" | tr -d '\r' | tee "$EVIDENCE_DIR/pre-version.txt"
-log "silent install /S /CURRENTUSER (state preserved by design) ..."
-guest "cmd /c \"$GUEST_DL\\moe19.exe\" /S /CURRENTUSER" || true
-sleep 20
-POST_V=$(guest "powershell -NoProfile -c \"(Get-Item 'C:\\Users\\$GUEST_USER\\AppData\\Local\\Programs\\Ministry of Education\\Ministry of Education.exe').VersionInfo.FileVersion\"" | tr -d '\r')
-echo "$POST_V" | tee "$EVIDENCE_DIR/post-version.txt"
-echo "$POST_V" | grep -q "moe.19" || { log "FAIL: FileVersion after install = $POST_V"; exit 1; }
-log "visible relaunch via scheduled task (never Hidden — atlas §16)"
-guest "schtasks /run /tn ClawXApp" || guest "powershell -NoProfile -File \"$GUEST_DL\\clawx-e2e-runner\\pilot-launch-and-run-cdp-smoke.ps1\"" || true
+# ── Phase 4 — stop app, ENFORCED install, fresh launch, RUNNING-binary attest ─
+gpwsh "(Get-Item '$GUEST_APP\\Ministry of Education.exe' -ErrorAction SilentlyContinue).VersionInfo.FileVersion" | tr -d '\r' | tee "$EVIDENCE_DIR/pre-version.txt" || true
+log "stopping app + gateway processes for a genuinely fresh install/launch"
+gpwsh "Get-Process | Where-Object { \$_.ProcessName -match 'Ministry|openclaw' } | Stop-Process -Force -ErrorAction SilentlyContinue; 'stopped'" | tr -d '\r'
+sleep 5
+log "silent install /S /CURRENTUSER — exit code ENFORCED (Codex HIGH)"
+INSTALL_EXIT=$(gpwsh "\$p = Start-Process -FilePath '$GUEST_DL\\moe19.exe' -ArgumentList '/S','/CURRENTUSER' -Wait -PassThru; \$p.ExitCode" | tr -d '\r' | tail -1)
+[ "$INSTALL_EXIT" = "0" ] || { log "FAIL: installer exit=$INSTALL_EXIT"; exit 1; }
+log "installer exit 0"
+gpwsh "(Get-Item '$GUEST_APP\\Ministry of Education.exe').VersionInfo.FileVersion" | tr -d '\r' | tee "$EVIDENCE_DIR/post-version.txt" | grep -q "moe.19" || { log "FAIL: on-disk FileVersion not moe.19"; exit 1; }
+
+log "visible relaunch (scheduled task; never Hidden)"
+guest "schtasks /run /tn ClawXApp" || { log "FAIL: ClawXApp scheduled task could not run (create it per WINDOWS_INSTALL_RUNBOOK)"; exit 1; }
 sleep 45
+# Attest the RUNNING process binary, not the disk label (Codex HIGH).
+RUN_ATTEST=$(gpwsh "\$p = Get-Process 'Ministry of Education' -ErrorAction SilentlyContinue | Select-Object -First 1; if (\$p) { (Get-Item \$p.Path).VersionInfo.FileVersion + '|' + \$p.Path } else { 'NOT_RUNNING' }" | tr -d '\r' | tail -1)
+echo "$RUN_ATTEST" | tee "$EVIDENCE_DIR/running-binary-attest.txt"
+echo "$RUN_ATTEST" | grep -q "moe.19" || { log "FAIL: running binary attest = $RUN_ATTEST"; exit 1; }
 for probe in "18789 gateway" "13210 hostapi"; do
   set -- $probe
-  guest "powershell -NoProfile -c \"(Test-NetConnection -ComputerName localhost -Port $1 -WarningAction SilentlyContinue).TcpTestSucceeded\"" | tr -d '\r' | grep -qi true \
-    && log "port $2($1): UP" || { log "FAIL: port $2($1) not up after relaunch"; exit 1; }
+  gpwsh "(Test-NetConnection -ComputerName localhost -Port $1 -WarningAction SilentlyContinue).TcpTestSucceeded" | tr -d '\r' | grep -qi true \
+    && log "port $2($1): UP" || { log "FAIL: port $2($1) not up"; exit 1; }
 done
 
-# ── Phase 5 — scripted fix-train probes (guest) ─────────────────────────────
-log "NSCC pack present in installed tree (CLWX-42 — moe.18 probe expected NONE, moe.19 expects PRESENT)"
-guest "powershell -NoProfile -c \"Get-ChildItem -Recurse 'C:\\Users\\$GUEST_USER\\AppData\\Local\\Programs\\Ministry of Education\\resources\\extensions' -Filter '*nscc*' | Select-Object -ExpandProperty FullName\"" | tr -d '\r' | tee "$EVIDENCE_DIR/nscc-probe.txt"
-grep -qi "nscc-2026.txt" "$EVIDENCE_DIR/nscc-probe.txt" || { log "FAIL: nscc-2026.txt ABSENT from installed tree"; exit 1; }
-log "System.Speech WER row (CLWX-87) — needs the repo scripts dir on guest"
-if guest "powershell -NoProfile -c \"Test-Path '$GUEST_DL\\clawx-pilot\\windows-pilot\\scripts\\pilot-asr-wer.ps1'\"" | tr -d '\r' | grep -qi true; then
-  guest "powershell -NoProfile -ExecutionPolicy Bypass -File \"$GUEST_DL\\clawx-pilot\\windows-pilot\\scripts\\pilot-asr-wer.ps1\" -ManifestPath \"$GUEST_DL\\clawx-pilot\\eval\\fixtures\\clwx87-asr-manifest.json\" -OutPath \"$GUEST_DL\\clwx87-sysspeech-transcripts.json\"" | tee "$EVIDENCE_DIR/asr-wer-run.log" || true
-  scp -P "$SSH_PORT" "$GUEST_USER@localhost:Downloads/clwx87-sysspeech-transcripts.json" "$EVIDENCE_DIR/" 2>/dev/null \
-    && node "$REPO_ROOT/scripts/clwx87-wer-bench.mjs" --engine transcripts --file "$EVIDENCE_DIR/clwx87-sysspeech-transcripts.json" --report "$REPO_ROOT/docs/evidence/CLWX87_WER_2026-09-06.md" | tee "$EVIDENCE_DIR/asr-wer-grade.log" || true
+# ── Phase 5 — install completeness: artifacts + NO excluded packages ────────
+log "install-artifact evidence (pilot-check-install-artifacts.ps1)"
+scp -P "$SSH_PORT" "$REPO_ROOT/skills/laptop/scripts/pilot-check-install-artifacts.ps1" "$GUEST_USER@localhost:Downloads/" >/dev/null
+guest "powershell -NoProfile -ExecutionPolicy Bypass -File \"$GUEST_DL\\pilot-check-install-artifacts.ps1\"" | tr -d '\r' | tee "$EVIDENCE_DIR/install-artifacts.txt"
+log "no-excluded-packages proof: every EXTRA_BUNDLED_PACKAGES entry present in the installed bundle"
+PKGS=$(node -e "const s=require('fs').readFileSync('$REPO_ROOT/scripts/verify-openclaw-bundle.mjs','utf8');const m=s.match(/EXTRA_BUNDLED_PACKAGES\s*=\s*\[([^\]]*)\]/s);if(!m)process.exit(1);console.log([...m[1].matchAll(/'([^']+)'/g)].map(x=>x[1]).join(' '))")
+MISSING=""
+for pkg in $PKGS; do
+  gpwsh "Test-Path '$GUEST_APP\\resources\\openclaw\\node_modules\\$(echo "$pkg" | sed 's|/|\\\\|g')'" | tr -d '\r' | grep -qi true || MISSING="$MISSING $pkg"
+done
+if [ -n "$MISSING" ]; then log "FAIL: excluded/missing bundled packages:$MISSING"; exit 1; fi
+log "bundled packages all present ($(echo "$PKGS" | wc -w | tr -d ' ') checked)"
+log "NSCC pack present (CLWX-42 — moe.18 probed NONE, moe.19 must be PRESENT)"
+gpwsh "Test-Path '$GUEST_APP\\resources\\extensions\\moe-principal-assistant\\data\\nscc-2026.txt'" | tr -d '\r' | grep -qi true || { log "FAIL: nscc-2026.txt ABSENT"; exit 1; }
+
+# ── Phase 6 — REAL desktop screenshots + VLM grading (owner directive) ──────
+log "desktop capture (interactive session; ~2000px — Bedrock cap)"
+scp -P "$SSH_PORT" "$REPO_ROOT/windows-pilot/scripts/pilot-desktop-screenshot.ps1" "$GUEST_USER@localhost:Downloads/" >/dev/null
+SHOT="$GUEST_DL\\moe19-desktop-$RUN_TAG.png"
+if guest "schtasks /create /f /tn ClawXShot /sc once /st 23:59 /it /tr \"powershell -NoProfile -ExecutionPolicy Bypass -File $GUEST_DL\\pilot-desktop-screenshot.ps1 -OutPath $SHOT\"" >/dev/null 2>&1 \
+  && guest "schtasks /run /tn ClawXShot" >/dev/null 2>&1; then
+  sleep 15
+  if gpwsh "Test-Path '$SHOT'" | tr -d '\r' | grep -qi true; then
+    scp -P "$SSH_PORT" "$GUEST_USER@localhost:Downloads/moe19-desktop-$RUN_TAG.png" "$EVIDENCE_DIR/"
+    cat > "$EVIDENCE_DIR/vlm-shots.json" <<SHOTS
+{ "shots": [ { "id": "post-install-desktop", "imagePath": "$EVIDENCE_DIR/moe19-desktop-$RUN_TAG.png", "check": "The Ministry of Education desktop app is visible on the Windows desktop as a stakeholder would see it: real app shell (sidebar + chat composer), NOT a setup wizard, NOT a blank/white window, no crash or error dialog anywhere on the desktop; the header/channel pill reads Online or On this device (never a raw model id); overall the machine looks like a working pilot laptop." } ] }
+SHOTS
+    node "$REPO_ROOT/scripts/clwx-vlm-grade-screens.mjs" --manifest "$EVIDENCE_DIR/vlm-shots.json" --report "$EVIDENCE_DIR/vlm-grading.md" || { log "FAIL: VLM desktop grading failed"; exit 1; }
+  else
+    log "BLOCKED: desktop shot did not appear — is an interactive (RDP) session logged in? Capture needs the interactive desktop."
+    BLOCKED=1
+  fi
 else
-  log "SKIP (loud): repo checkout not on guest — clone/copy windows-pilot+eval to $GUEST_DL\\clawx-pilot for the WER row"
+  log "BLOCKED: interactive scheduled task could not be created/run (no logged-in session?) — open an RDP session and re-run."
+  BLOCKED=1
 fi
 
-# ── Phase 6 — interactive checklist (the in-app visual legs) ────────────────
+# ── Phase 7 — System.Speech WER row (CLWX-87) — fail-loud, unique output ────
+if guest "powershell -NoProfile -c \"Test-Path '$GUEST_DL\\clawx-pilot\\windows-pilot\\scripts\\pilot-asr-wer.ps1'\"" | tr -d '\r' | grep -qi true; then
+  TRANS="clwx87-sysspeech-$RUN_TAG.json"
+  guest "powershell -NoProfile -ExecutionPolicy Bypass -File \"$GUEST_DL\\clawx-pilot\\windows-pilot\\scripts\\pilot-asr-wer.ps1\" -ManifestPath \"$GUEST_DL\\clawx-pilot\\eval\\fixtures\\clwx87-asr-manifest.json\" -OutPath \"$GUEST_DL\\$TRANS\"" | tee "$EVIDENCE_DIR/asr-wer-run.log" | grep -q "STATE: WER_TRANSCRIPTS_OK" || { log "FAIL: System.Speech transcript generation"; exit 1; }
+  scp -P "$SSH_PORT" "$GUEST_USER@localhost:Downloads/$TRANS" "$EVIDENCE_DIR/" || { log "FAIL: transcript pull-back"; exit 1; }
+  node "$REPO_ROOT/scripts/clwx87-wer-bench.mjs" --engine transcripts --file "$EVIDENCE_DIR/$TRANS" --report "$REPO_ROOT/docs/evidence/CLWX87_WER_2026-09-06.md" | tee "$EVIDENCE_DIR/asr-wer-grade.log" || { log "FAIL: WER grading"; exit 1; }
+else
+  log "BLOCKED: repo checkout not on guest ($GUEST_DL\\clawx-pilot) — the CLWX-87 System.Speech row needs windows-pilot/scripts + eval/fixtures there."
+  BLOCKED=1
+fi
+
+# ── Phase 8 — interactive checklist for the in-app visual legs ──────────────
 cat <<CHECKLIST | tee "$EVIDENCE_DIR/INTERACTIVE_CHECKLIST.md"
-# moe.19 interactive verify checklist (RDP session; the scripted phases above are green)
-Authoritative acceptance criteria: docs/STAKEHOLDER_GAP_ANALYSIS_2026-09-06.md §4.
-- [ ] K10 pdf: fresh session, drag/attach a pdf, real summary, read_pdf toolCall, no workerSrc errors
-- [ ] K13 dir1+dir2 degrade: correct anonymised notice; CLWX-104 bar — NO stacked run-error banners, NO stale banner across new chats/restart, NO raw "Connection error." anywhere incl. expanders
-- [ ] CLWX-105: after an induced error turn, re-open the session — the in-line error chip renders on the error-stopped message (anonymised line; raw only in collapsed expander)
-- [ ] K14 NSCC five prompts: answers GROUNDED in the Code with NSCC citations (pack verified present above)
-- [ ] K12 badge: kill gateway -> Reconnecting pill + disabled composer -> reconnected; no stale connected
-- [ ] CLWX-99/100 cron: reminder fires at the PRINCIPAL's wall clock; no [cron:uuid] plumbing in the user bubble
-- [ ] Trust sweep on every frame: no model IDs, no cost, no raw HTTP
-- [ ] CLWX-77 Windows lane: from the guest repo checkout run: node scripts/harness-artifact.mjs --fast --node-bin <packaged node.exe>
-NOT closable on this VM (owners noted): K11 cloud path, send-gate in-app send (sandbox/manual), KR2 assisted recording acceptance.
+# moe.19 interactive verify checklist (scripted phases above must be green first)
+Acceptance criteria source: docs/STAKEHOLDER_GAP_ANALYSIS_2026-09-06.md §4.
+- [ ] K10 pdf: fresh session, attach a pdf, real summary, read_pdf toolCall, no workerSrc errors
+- [ ] K13 dir1+dir2 degrade: anonymised notice; CLWX-104 bar — no stacked/stale banners, no raw "Connection error." incl. expanders
+- [ ] CLWX-105 chip: induce an error turn, re-open the session — in-line chip on the error-stopped message; tense-neutral wording; NO chip+banner double-surface on the active turn
+- [ ] K14 NSCC five prompts: GROUNDED answers citing the Code (pack presence proven scripted)
+- [ ] K12 badge lifecycle; CLWX-99/100 cron wall-clock + clean bubble
+- [ ] Trust sweep every frame: no model IDs / cost / raw HTTP
+- [ ] CLWX-77 Windows lane: node scripts/harness-artifact.mjs --fast --node-bin <packaged node.exe> from the guest checkout
+NOT closable here: K11 cloud path, in-app confirmed send (sandbox/manual), KR2 recording acceptance.
 CHECKLIST
-log "DONE: scripted phases green. Evidence: $EVIDENCE_DIR — work the interactive checklist over RDP, then write RESULT.md (moe.18 conventions)."
+
+if [ "$BLOCKED" = "1" ]; then log "DONE WITH BLOCKS: scripted phases green EXCEPT the loudly-marked BLOCKED items above. Evidence: $EVIDENCE_DIR"; exit 3; fi
+log "DONE: all scripted phases green. Evidence: $EVIDENCE_DIR — work the interactive checklist, then RESULT.md (moe.18 conventions)."

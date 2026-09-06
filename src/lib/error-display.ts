@@ -115,3 +115,17 @@ export const ERROR_DISPLAY_KEY: Record<ErrorDisplayKind, string> = {
   'auth-config': 'errorDisplay.authConfig',
   generic: 'errorDisplay.generic',
 };
+
+/**
+ * Tense-neutral variants for the IN-LINE chip (CLWX-105, principal-proxy
+ * lens MAJOR 2026-09-06): the chip appears on HISTORICAL failures when a
+ * session is re-opened days later, where the banner's imperative "try
+ * again in a moment" reads as broken. These describe what happened to
+ * THAT request without telling the principal to act now.
+ */
+export const ERROR_DISPLAY_INLINE_KEY: Record<ErrorDisplayKind, string> = {
+  unreachable: 'errorDisplayInline.unreachable',
+  'rate-limited': 'errorDisplayInline.rateLimited',
+  'auth-config': 'errorDisplayInline.authConfig',
+  generic: 'errorDisplayInline.generic',
+};

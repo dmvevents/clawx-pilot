@@ -36,7 +36,7 @@ describe('CLWX-105 in-line error chip', () => {
     const chip = screen.getByTestId('chat-message-error-chip');
     expect(chip).toBeTruthy();
     // Anonymised class wording, not the raw string, is the visible line.
-    expect(chip.textContent).toContain('errorDisplay.');
+    expect(chip.textContent).toContain('errorDisplayInline.');
   });
 
   it('accepts the snake_case field variants the gateway history emits', () => {
@@ -47,7 +47,7 @@ describe('CLWX-105 in-line error chip', () => {
   it('classifies through principalErrorDisplay — a rate-limit raw string gets the rate-limited wording', () => {
     render(<ChatMessage message={assistantMessage({ stopReason: 'error', errorMessage: 'HTTP 429: rate limit exceeded' })} />);
     const chip = screen.getByTestId('chat-message-error-chip');
-    expect(chip.textContent).toContain('errorDisplay.rateLimited');
+    expect(chip.textContent).toContain('errorDisplayInline.rateLimited');
   });
 
   it('keeps the raw detail behind the collapsed expander — never inline (trust rule)', () => {
@@ -84,6 +84,31 @@ describe('CLWX-105 in-line error chip', () => {
     render(<ChatMessage message={assistantMessage({ stopReason: 'error', errorMessage: 'model gemini-2.5-pro failed via google provider, cost $0.0023' })} />);
     const visibleLine = screen.getByTestId('chat-message-error-chip').querySelector('p');
     expect(visibleLine!.textContent).not.toMatch(/gemini|google|\$0\.0023/);
-    expect(visibleLine!.textContent).toContain('errorDisplay.');
+    expect(visibleLine!.textContent).toContain('errorDisplayInline.');
+  });
+});
+
+describe('CLWX-105 review-lane hardening (Codex MED + trust-lens MAJOR, 2026-09-06)', () => {
+  it('suppressErrorChip hides the chip — the active failure keeps ONE surface (D1 rule)', () => {
+    const { container } = render(
+      <ChatMessage
+        message={assistantMessage({ stopReason: 'error', errorMessage: 'Connection error.' })}
+        suppressErrorChip
+      />,
+    );
+    expect(container.querySelector('[data-testid="chat-message-error-chip"]')).toBeNull();
+  });
+
+  it('the inline strings are tense-neutral — no imperative "try again" on historical failures (trust lens)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const path = await import('node:path');
+    const strings = JSON.parse(
+      readFileSync(path.resolve(__dirname, '../../src/i18n/locales/en/chat.json'), 'utf8'),
+    ) as { errorDisplayInline: Record<string, string> };
+    const inline = strings.errorDisplayInline;
+    expect(Object.keys(inline).sort()).toEqual(['authConfig', 'generic', 'rateLimited', 'unreachable']);
+    for (const [key, value] of Object.entries(inline)) {
+      expect(value, `errorDisplayInline.${key} must not tell the principal to act NOW`).not.toMatch(/try again|right now|in a moment/i);
+    }
   });
 });

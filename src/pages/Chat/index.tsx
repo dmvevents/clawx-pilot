@@ -142,6 +142,16 @@ export function Chat() {
   // into a collapsed details expander; the classes that must stay visible
   // (auth/config) still surface, just in plain language.
   const errorDisplay = useMemo(() => principalErrorDisplay(error), [error]);
+  // Newest error-stopped assistant message — the one whose in-line chip is
+  // suppressed while the ACTIVE failure surface is showing (CLWX-105).
+  const lastErrorStoppedIdx = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i] as unknown as Record<string, unknown>;
+      const sr = m.stopReason ?? m.stop_reason;
+      if (m.role === 'assistant' && typeof sr === 'string' && sr.trim().toLowerCase() === 'error') return i;
+    }
+    return -1;
+  }, [messages]);
   const runErrorDisplay = useMemo(() => principalErrorDisplay(runError), [runError]);
   // Notice de-dup (moe.18 Findings D0/D1): rules live in
   // errorBannerVisibility (unit-tested); this is deliberately a thin call.
@@ -766,6 +776,13 @@ export function Chat() {
                     const suppressToolCards = userRunCards.some((card) =>
                       idx > card.triggerIndex && idx <= card.segmentEnd,
                     );
+                    // CLWX-105 coordination: while the ACTIVE failure owns a
+                    // surface (banner / run-error callout / degrade notice),
+                    // the NEWEST error-stopped message must not also chip —
+                    // one surface per active failure (CLWX-104 D1 rule).
+                    // Historical error-stopped messages always chip.
+                    const suppressErrorChip = idx === lastErrorStoppedIdx
+                      && (showErrorBar || showRunError || Boolean(degradeNotice));
                     return (
                     <div
                       key={msg.id || `msg-${idx}`}
@@ -778,6 +795,7 @@ export function Chat() {
                         textOverride={replyTextOverrides.get(idx)}
                         suppressToolCards={suppressToolCards}
                         suppressProcessAttachments={suppressToolCards}
+                        suppressErrorChip={suppressErrorChip}
                         onOpenFile={handleOpenAttachedFile}
                       />
                       {userRunCards
