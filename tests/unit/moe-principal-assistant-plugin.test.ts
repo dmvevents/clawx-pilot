@@ -152,7 +152,10 @@ describe('moe-principal-assistant plugin registration', () => {
     // The pack ships in-app — the model must never send the principal
     // hunting for the document (the K14 substance gap this closes).
     expect(prompt).toMatch(/never ask the principal to attach or upload/i);
-    expect(prompt).toMatch(/does not appear to cover/i);
+    // A retrieval miss must surface as a retrieval failure, never as
+    // "the Code lacks a policy" (Codex MED, 2026-09-06).
+    expect(prompt).toMatch(/never claim the Code does not cover it/i);
+    expect(prompt).toMatch(/retry it once with formal policy wording/i);
   });
 
   it('keeps Outlook/Forms model-facing guidance on the ClawX repair path', async () => {

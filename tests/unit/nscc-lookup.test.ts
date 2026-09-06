@@ -74,12 +74,51 @@ describe('searchNscc — the five K14 prompts retrieve the real passages (substa
   });
 });
 
+describe('Codex-lane regressions (2026-09-06): truncation, page-break stitching, colloquial queries', () => {
+  it('excerpts are NEVER truncated — the parent-notification requirement deep in its passage is returned (Codex HIGH)', async () => {
+    const { searchNscc } = await load();
+    const r = searchNscc(nsccText, 'Must parents be notified before teachers require social media for learning projects?');
+    const joined = r.passages.map((p: { excerpt: string }) => p.excerpt).join('\n');
+    expect(joined).toMatch(/notified beforehand|notified before/i);
+    for (const p of r.passages) expect(p.excerpt.endsWith(' …')).toBe(false);
+  });
+
+  it('page-break continuations are stitched — all four Q03 suspension/expulsion safeguards retrieve together (Codex HIGH)', async () => {
+    const { searchNscc } = await load();
+    const r = searchNscc(nsccText, 'What principles must apply when the NSCC refers to suspension, expulsion, police referral, or zero tolerance?');
+    const joined = r.passages.map((p: { excerpt: string }) => p.excerpt).join('\n');
+    expect(joined).toMatch(/due process and procedural fairness/i);
+    expect(joined).toMatch(/proportionate to the offence/i);
+    expect(joined).toMatch(/best interests of the child/i);
+    expect(joined).toMatch(/minister of education/i);
+  });
+
+  it('colloquial phrasing bridges to policy vocabulary — "is it okay to smack pupils?" retrieves the punishment passages (Codex MED)', async () => {
+    const { searchNscc } = await load();
+    const r = searchNscc(nsccText, 'Is it okay to smack pupils?');
+    expect(r.passages.length).toBeGreaterThan(0);
+    const joined = r.passages.map((p: { excerpt: string }) => p.excerpt).join('\n');
+    expect(joined).toMatch(/physical punishment|corporal punishment/i);
+  });
+
+  it('startsAsContinuation: lowercase-opening blocks stitch, headings and bullets do not', async () => {
+    const { startsAsContinuation } = await load();
+    expect(startsAsContinuation('student;\n(c) consistent with the best interests')).toBe(true);
+    expect(startsAsContinuation('(c) consistent with the best interests of the child')).toBe(true);
+    expect(startsAsContinuation('Context: Triggers for Revision')).toBe(false);
+    expect(startsAsContinuation('• The Imperative for Zero-Tolerance')).toBe(false);
+    expect(startsAsContinuation('42')).toBe(false);
+  });
+});
+
 describe('searchNscc — honesty and edge cases (falsifiability)', () => {
-  it('an absent topic returns no passages plus the honest not-covered note', async () => {
+  it('an absent topic returns no passages plus the retry-then-report note — never a "Code lacks it" claim (Codex MED)', async () => {
     const { searchNscc } = await load();
     const r = searchNscc(nsccText, 'zorbulon quixotic frangipani blockchain');
     expect(r.passages.length).toBe(0);
-    expect(r.note).toMatch(/does not appear to cover/i);
+    expect(r.note).toMatch(/search found nothing/i);
+    expect(r.note).toMatch(/could not retrieve/i);
+    expect(r.note).toMatch(/do not claim the Code does not cover/i);
   });
 
   it('a stopword-only query is refused readably, not crashed', async () => {

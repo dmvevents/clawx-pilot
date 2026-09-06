@@ -1,22 +1,22 @@
 {
-  "ranAt": "2026-09-06T15:02:40.791Z",
+  "ranAt": "2026-09-06T15:20:15.839Z",
   "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
   "region": "us-east-2",
   "lane": "tool",
   "fixture": "/Users/antonalexander/Github/moe-tt/ClawX/eval/fixtures/nscc-qna.json",
   "knowledgeSource": "/Users/antonalexander/Github/moe-tt/ClawX/extensions/moe-principal-assistant/data/nscc-2026.txt",
   "knowledgeChars": 218347,
-  "passRate": 0.8,
-  "passed": 16,
+  "passRate": 0.85,
+  "passed": 17,
   "total": 20,
-  "pageCitationHits": 3,
+  "pageCitationHits": 1,
   "results": [
     {
       "id": "NSCC-Q01",
       "question": "Is the NSCC a law, or is it a guideline?",
       "expected_page": "p. 11",
       "answer": "The NSCC is **a guideline, not a law**. According to the National School Code of Conduct (NSCC) 2026, \"The NSCC is a guideline and does not in itself create legal rights or obligations, nor does it establish any criminal liability and does not override or modify any law, regulation, or contractual obligation\" (page 10). It is intended to provide guidance and serve as a benchmark of best practice, while school personnel retain full discretion in exercising disciplinary powers subject to applicable law.",
-      "latencyMs": 4785,
+      "latencyMs": 5620,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -26,8 +26,8 @@
       "id": "NSCC-Q02",
       "question": "Can a school depart from the guidance in the NSCC?",
       "expected_page": "p. 11",
-      "answer": "Yes, a school may depart from the guidance in the NSCC where circumstances justify it. According to the National School Code of Conduct (2026), \"School authorities may depart from the guidance where circumstances justify it, provided decisions remain reasonable, fair, and consistent with law.\" The NSCC states that school personnel retain full discretion in exercising disciplinary and administrative powers, and the guidance is intended to assist—not prescribe mandatory action. However, any departure must still be reasonable, fair, and legally compliant.",
-      "latencyMs": 5799,
+      "answer": "Yes, a school can depart from the guidance in the NSCC. According to the National School Code of Conduct (2026), \"School authorities may depart from the guidance where circumstances justify it, provided decisions remain reasonable, fair, and consistent with law.\" The document explicitly states that school personnel, including principals and teachers, \"retain full discretion in the exercise of disciplinary and administrative powers, subject to applicable law,\" and that the NSCC guidance is \"intended to assist in the exercise of this discretion, not to prescribe mandatory action.\"",
+      "latencyMs": 5349,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -37,39 +37,30 @@
       "id": "NSCC-Q03",
       "question": "What principles must apply when the NSCC refers to suspension, expulsion, police referral, or zero tolerance?",
       "expected_page": "pp. 11–12",
-      "answer": "According to the **National School Code of Conduct (NSCC) 2026**, all references to zero-tolerance, suspension, expulsion, police referral, or other serious disciplinary measures must be interpreted as: **(a) subject to due process and procedural fairness; and (b) proportionate to the offence and the age, developmental stage, and circumstances of the student.** The document emphasizes that while maintaining a zero-tolerance approach to violence and serious infractions, disciplinary actions must remain \"proportionate, legally compliant, and consistent with both the rights of the child and the broader objective of public safety\" (Passage 2).",
-      "latencyMs": 4814,
-      "missedGroups": [
-        [
-          "best interests of the child",
-          "best interest of the child"
-        ],
-        [
-          "minister of education",
-          "education act"
-        ]
-      ],
+      "answer": "According to the **National School Code of Conduct (NSCC) 2026**, all references to zero-tolerance, suspension, expulsion, police referral, or other serious disciplinary measures must be interpreted as:\n\n(a) **subject to due process and procedural fairness**;  \n(b) **proportionate to the offence** and the age, developmental stage, and circumstances of the student;  \n(c) **consistent with the best interests of the child**; and  \n(d) where applicable, **requiring referral to and decision by the Minister of Education** in accordance with the Education Act.\n\nThese principles ensure that disciplinary actions are legally compliant, fair, and developmentally appropriate while maintaining public safety (NSCC 2026, Passage 1).",
+      "latencyMs": 4053,
+      "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
-      "pass": false
+      "pass": true
     },
     {
       "id": "NSCC-Q04",
       "question": "What are the six core values in the NSCC?",
       "expected_page": "p. 17",
-      "answer": "According to the **National School Code of Conduct (NSCC) 2026**, the six core values are:\n\n1. **Respect** – Demonstrating consideration for the rights, property, and safety of oneself and others\n2. **Responsibility** – Accepting personal accountability for one's actions and their impact\n3. **Rights** – Upholding the fundamental rights of all members of the school community\n4. **Integrity** – Acting with honesty, fairness, and adherence to ethical standards\n5. **Courtesy** – Engaging with others politely and civilly\n6. **Productivity and Performance** – Striving for excellence in all areas of work and learning\n\nThese values apply equally to all Ministry of Education and School Personnel, as well as other members of the school community (NSCC 2026, pages 13–17).",
-      "latencyMs": 5193,
+      "answer": "According to the National School Code of Conduct (NSCC) 2026, the six core values are:\n\n1. **Respect** – Demonstrating consideration for the rights, property, and safety of oneself and others\n2. **Responsibility** – Accepting personal accountability for one's actions and their impact on the school environment\n3. **Rights** – Upholding the fundamental rights of all members of the school community\n4. **Integrity** – Acting with honesty, fairness, and adherence to ethical standards\n5. **Courtesy** – Engaging with others politely and civilly\n6. **Productivity and Performance** – Striving for excellence in all areas of work and learning\n\nThese values apply equally to all Ministry of Education and School Personnel and other members of the school community (NSCC 2026, Passage 1 and Passage 2).",
+      "latencyMs": 3910,
       "missedGroups": [],
       "citationOk": true,
-      "pageCited": true,
+      "pageCited": false,
       "pass": true
     },
     {
       "id": "NSCC-Q05",
       "question": "Is corporal punishment allowed under the NSCC?",
       "expected_page": "p. 17",
-      "answer": "No, corporal punishment is strictly prohibited under the NSCC. The National School Code of Conduct (NSCC) 2026 explicitly states that \"Corporal punishment is strictly prohibited\" as part of its overarching principle of Human Dignity, which requires that discipline be administered respectfully and consistently with the United Nations Convention on the Rights of the Child. The document further emphasizes that \"Children must be treated with respect and not subjected to physical punishment or other harmful or humiliating treatment.\"",
-      "latencyMs": 6056,
+      "answer": "No, corporal punishment is strictly prohibited under the National School Code of Conduct (NSCC) 2026. The document explicitly lists corporal punishment among the \"Consequences specifically forbidden\" and states in the Overarching Principles that \"Corporal punishment is strictly prohibited\" as part of ensuring that discipline is administered respectfully and consistent with the United Nations Convention on the Rights of the Child.",
+      "latencyMs": 3478,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -79,8 +70,8 @@
       "id": "NSCC-Q06",
       "question": "What disciplinary approach focuses on repairing harm and restoring relationships?",
       "expected_page": "p. 21",
-      "answer": "The **Restorative Practices (RP)** approach focuses on repairing harm, restoring relationships, and reintegrating students into the school community after incidents of wrongdoing. According to the National School Code of Conduct (NSCC) 2026, this approach engages all affected parties—especially those harmed—in identifying needs, responsibilities, and solutions. Restorative interventions are prioritized when misconduct does not threaten physical safety and when the student demonstrates willingness to accept responsibility and participate in repairing harm.",
-      "latencyMs": 5718,
+      "answer": "The **Restorative Practices (RP)** approach focuses on repairing harm, restoring relationships, and reintegrating students into the school community after incidents of wrongdoing. According to the **National School Code of Conduct (NSCC) 2026**, this approach engages all affected parties—especially those harmed—in identifying needs, responsibilities, and solutions. Positive outcomes depend on visible leadership commitment and ongoing staff training.",
+      "latencyMs": 6856,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -90,19 +81,32 @@
       "id": "NSCC-Q07",
       "question": "When should suspension or expulsion be applied?",
       "expected_page": "p. 22",
-      "answer": "According to the **National School Code of Conduct (NSCC) 2026**, suspension or expulsion should be applied when:\n\n- The offence falls under the **zero-tolerance category** (e.g., possession of weapons, violent assault, sexual misconduct, or trafficking of illicit substances)\n- There is a **clear and present danger** to school community safety\n- The behaviour constitutes a **criminal act** under Trinidad and Tobago law\n- The student has engaged in **repeated severe infractions** despite prior restorative or supportive interventions, showing unwillingness or inability to comply with behavioural expectations\n\nThe NSCC emphasizes that while all acts should involve some form of restoration, the **severity of the incident** determines whether suspension or expulsion is appropriate (page 21).",
-      "latencyMs": 7012,
-      "missedGroups": [],
+      "answer": "According to the National School Code of Conduct (NSCC) 2026, suspension or expulsion should be applied as part of a **retributive justice approach** for serious infractions, and the specific consequences depend on the severity and frequency of the offense. The NSCC outlines detailed progressive discipline measures: for example, a first offense of physical bullying results in a 5-7 day suspension, while serious violations like assault on staff, weapon possession, gang-related activity, or hate speech/terrorist threats can lead to 7-day suspensions and possible expulsion even on first offense. Retributive justice measures like suspension and expulsion \"should be applied selectively, in alignment with child protection principles and proportionality\" rather than as the default response to all misconduct.\n\n**Source:** National School Code of Conduct (NSCC) 2026, as cited in the discipline tables (Passages 1-4, 7) and Appendix B on Retributive Justice (Passage 8).",
+      "latencyMs": 6964,
+      "missedGroups": [
+        [
+          "zero-tolerance",
+          "zero tolerance"
+        ],
+        [
+          "violent assault",
+          "sexual misconduct",
+          "trafficking",
+          "criminal",
+          "repeated severe infractions",
+          "danger"
+        ]
+      ],
       "citationOk": true,
       "pageCited": false,
-      "pass": true
+      "pass": false
     },
     {
       "id": "NSCC-Q08",
       "question": "What is the definition of irregular attendance?",
       "expected_page": "p. 28",
-      "answer": "According to the National School Code of Conduct (NSCC) 2026, **irregular attendance for students is defined as being absent for more than five (5) days without reasonable excuse within a four-week period (20 days) of the school term**. This standard emphasizes that punctuality and regularity in attendance are integral to fostering an effective teaching and learning environment and are directly related to student success.\n\n**Source:** National School Code of Conduct (NSCC), Revised Edition (2026), Attendance section.",
-      "latencyMs": 6174,
+      "answer": "According to the National School Code of Conduct (NSCC) 2026, irregular attendance for students is defined as **being absent for more than five (5) days without reasonable excuse within a four-week period (20 days) of the school term**. This definition emphasizes that absences must be without reasonable excuse to be considered irregular.\n\n**Source:** NSCC 2026, Attendance section (page number not specified in the provided passage).",
+      "latencyMs": 3395,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -112,8 +116,8 @@
       "id": "NSCC-Q09",
       "question": "Are locs, twists, plaits, afros, and cornrows allowed?",
       "expected_page": "p. 29",
-      "answer": "Yes, locs, twists, plaits, afros, and cornrows are allowed for all students according to the National School Code of Conduct (NSCC) 2026. The document specifically states under the National School Hair Code that \"Styles like locs, twists, plaits, afros, and cornrows are allowed for all students,\" though these styles must follow the specific hair rules of the individual school.",
-      "latencyMs": 5413,
+      "answer": "Yes, locs, twists, plaits, afros, and cornrows are allowed for all students according to the National School Code of Conduct (NSCC) 2026. The NSCC specifically states under the National School Hair Code that \"Styles like locs, twists, plaits, afros, and cornrows are allowed for all students,\" though these styles must follow the specific hair rules of the individual school.",
+      "latencyMs": 2997,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -123,8 +127,8 @@
       "id": "NSCC-Q10",
       "question": "Are wigs and dyed hair allowed?",
       "expected_page": "p. 29",
-      "answer": "According to the National School Code of Conduct (NSCC), **wigs and dyed or coloured hair are generally not allowed**. However, in very special circumstances, the school principal may grant approval for these hairstyles. This guideline is part of the National School Hair Code outlined in the NSCC.",
-      "latencyMs": 5483,
+      "answer": "According to the National School Code of Conduct (NSCC) 2026, wigs and dyed or coloured hair are **generally not allowed**. However, in very special circumstances, the school principal may grant approval for their use. Students are expected to maintain neat, clean, and appropriate hairstyles that align with both the National School Hair Code and their individual school's hair rules.",
+      "latencyMs": 4553,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -134,8 +138,8 @@
       "id": "NSCC-Q11",
       "question": "If a student cheats in an internal exam, what sanction may apply?",
       "expected_page": "p. 29",
-      "answer": "According to the **National School Code of Conduct (NSCC) 2026**, a student found guilty of cheating in an internal examination may face sanctions that escalate with repeated offences. For a **first offence**, the sanction includes a student and parent conference, behaviour contract (BC), referral to Guidance & Counselling for counselling and academic guidance. A **second offence** results in 3–5 day suspension, further counselling intervention, and **cancellation of the exam paper(s)** related to the cheating incident. A **third offence** leads to a 5-day suspension and a warning letter stating the incident will be recorded on the student's permanent record for any subsequent infractions of this type (NSCC 2026, page 29/Discipline Matrix).",
-      "latencyMs": 7862,
+      "answer": "According to the **National School Code of Conduct (NSCC) 2026**, if a student cheats in an internal exam, the sanctions escalate with each offense. For a **first offense**, the student and parent will have a conference, a behavior contract, and referral to guidance and counseling for academic guidance. For a **second offense**, the student faces a 3–5 day suspension, another parent conference, behavior contract, counseling referral, and **cancellation of the exam paper(s)** related to the cheating incident. A **third offense** results in a 5-day suspension, counseling, and a warning letter stating the incident will be recorded on the student's permanent record for any subsequent infractions of this type.",
+      "latencyMs": 5580,
       "missedGroups": [
         [
           "marks deducted",
@@ -145,15 +149,15 @@
         ]
       ],
       "citationOk": true,
-      "pageCited": true,
+      "pageCited": false,
       "pass": false
     },
     {
       "id": "NSCC-Q12",
       "question": "Who adjudicates matters related to internal examinations?",
       "expected_page": "p. 30",
-      "answer": "According to the NSCC (National School Code of Conduct) 2026, an **Examination Committee** is established to adjudicate matters related to internal examinations. The Committee considers the purpose of assessment at the school level and ensures that decisions reflect valid and reliable judgements of student achievement, in accordance with principles of natural justice, reasonable action, and academic integrity (page 29).",
-      "latencyMs": 5370,
+      "answer": "According to the National School Code of Conduct (NSCC) 2026, an **Examination Committee** is established to adjudicate matters related to internal examinations. The Committee considers the purpose of assessment at the school level, including analyzing student performance data to inform curriculum, and ensures decisions reflect valid and reliable judgements of student achievement in accordance with principles of natural justice, reasonable action, and academic integrity.",
+      "latencyMs": 2865,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -163,8 +167,8 @@
       "id": "NSCC-Q13",
       "question": "What is bullying according to the NSCC?",
       "expected_page": "p. 31",
-      "answer": "According to the National School Code of Conduct (NSCC) 2026, bullying is defined as \"repeated verbal, physical, social, or emotional behaviour intended to harm, intimidate, humiliate, or exert power and control over another person\" (page 30). The NSCC clearly states that \"bullying in any form is unacceptable and will not be tolerated.\"",
-      "latencyMs": 7405,
+      "answer": "According to the National School Code of Conduct (NSCC) 2026, bullying is defined as \"repeated verbal, physical, social, or emotional behaviour intended to harm, intimidate, humiliate, or exert power and control over another person.\" The NSCC makes clear that \"bullying in any form is unacceptable and will not be tolerated.\"\n\n**Source:** National School Code of Conduct (NSCC), Revised Edition (2026), Passage 1.",
+      "latencyMs": 4115,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -174,8 +178,8 @@
       "id": "NSCC-Q14",
       "question": "What is cyberbullying?",
       "expected_page": "p. 31",
-      "answer": "According to the **National School Code of Conduct (NSCC) 2026**, cyberbullying is defined as the use of electronic communication to intimidate, torment, threaten, harass, humiliate, embarrass, or target someone. This includes spreading rumours, sending unwanted messages, sharing embarrassing content, making threats, and sharing private information. The NSCC also identifies specific behaviours such as cyberstalking and \"trolling\" (deliberately posting provocative content to upset others) as forms of cyberbullying that must be reported immediately to the principal.",
-      "latencyMs": 5556,
+      "answer": "According to the National School Code of Conduct (NSCC) 2026, cyberbullying is defined as the use of electronic communication to intimidate, torment, threaten, harass, humiliate, embarrass, or target someone. This includes spreading rumours, sending unwanted messages, sharing embarrassing content, making threats, and sharing private information. The Ministry of Education has a zero-tolerance policy for cyberbullying in all its forms, and it is condemned as being against the laws of Trinidad and Tobago (NSCC 2026, Passage 1).",
+      "latencyMs": 3958,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -185,8 +189,8 @@
       "id": "NSCC-Q15",
       "question": "What does the NSCC say about assault on staff?",
       "expected_page": "p. 34",
-      "answer": "According to the **National School Code of Conduct (NSCC) 2026**, assault on staff is treated with utmost seriousness under a zero-tolerance policy. Any form of assault upon a member of staff or school personnel will lead to an **automatic recommendation for suspension and potential expulsion** (page 33). The disciplinary matrix specifies that a first offence results in a 7-day suspension, police (TTPS) report, request for expulsion (ES request), and possible expulsion, while a second or third offence makes **expulsion mandatory** (disciplinary matrix table). This includes intentionally hitting, shoving, or throwing objects at school staff.",
-      "latencyMs": 7058,
+      "answer": "According to the **National School Code of Conduct (NSCC) 2026**, assault on staff is treated with utmost seriousness under a zero-tolerance policy. Any form of assault upon a member of staff or other school personnel will lead to an **automatic recommendation for suspension and potential expulsion**. The Discipline Matrix specifies that a first offence results in a 7-day suspension, a police (TTPS) report, an expulsion request to the Education Supervisor, and possible expulsion, while a **second offence makes expulsion mandatory**. This reflects the NSCC's firm stance that violence against school personnel will not be tolerated under any circumstances.",
+      "latencyMs": 5275,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -196,8 +200,8 @@
       "id": "NSCC-Q16",
       "question": "Are dangerous objects or look-alike weapons allowed in school?",
       "expected_page": "p. 33",
-      "answer": "No, dangerous objects and look-alike weapons are strictly prohibited in school. According to the **National School Code of Conduct (NSCC)**, bringing, having, using, or even pretending to use weapons, dangerous objects (such as knives, box cutters, mace, ammunition, fireworks), or \"look-alike\" weapons (like toy guns, cap guns, or comb knives) on school property, at school events, or on school transportation is forbidden. The only exception is for authorized objects like mathematical instruments or tools for technology classes when used for their intended educational purpose—misusing these items is treated as a serious violation.\n\n**Source:** National School Code of Conduct (NSCC), Revised Edition (2026), page 33.",
-      "latencyMs": 6550,
+      "answer": "No, dangerous objects and look-alike weapons are strictly prohibited in school. According to the **National School Code of Conduct (NSCC)**, bringing, having, using, or even pretending to use weapons, dangerous objects (such as knives, fireworks, or ammunition), or \"look-alike\" weapons (like toy pistols or squirt guns) is forbidden on school property, at school events, or on school transportation (**NSCC, page 33**). The only exception is for authorized objects like mathematical instruments or tools for technology classes when used for their intended educational purpose.",
+      "latencyMs": 6393,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": true,
@@ -207,8 +211,8 @@
       "id": "NSCC-Q17",
       "question": "Are students bound by the school mobile phone policy when outside school but in uniform?",
       "expected_page": "p. 43",
-      "answer": "Yes, according to the National School Code of Conduct (NSCC) 2026, students are bound by the school's Mobile Phone policy even when they are off school grounds, as long as they are wearing their school uniform (NSCC, page 42). This ensures that students represent the school appropriately whenever they are identifiable as students through their uniform.",
-      "latencyMs": 6807,
+      "answer": "Yes, students are bound by the school's mobile phone policy even when they are outside school grounds if they are wearing their school uniform. According to the **National School Code of Conduct (NSCC)**, \"Even off school grounds, if in school uniform, students are bound by the Mobile Phone policy of the school.\" This ensures that students maintain appropriate conduct and represent their school responsibly whenever they are identifiable as members of the school community.",
+      "latencyMs": 3362,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -218,8 +222,8 @@
       "id": "NSCC-Q18",
       "question": "Can a school force a student to disclose a device password during a search?",
       "expected_page": "p. 43",
-      "answer": "According to the National School Code of Conduct (NSCC) 2026, the provided passages do not directly address whether a school can force a student to disclose a device password during a search. The NSCC outlines rules for technology use, such as prohibitions on bypassing network security and requirements for responsible use of school-assigned and personal devices, but it does not explicitly discuss password disclosure during searches. For a definitive answer on this specific matter, you would need to consult additional sections of the NSCC or seek guidance from the Ministry of Education.",
-      "latencyMs": 7410,
+      "answer": "No, a school cannot force a student to disclose a device password during a search. According to the **National School Code of Conduct (NSCC) 2026**, any search or confiscation of electronic devices \"shall not compel disclosure of passwords.\" The NSCC further specifies that forensic access to devices shall only be undertaken by the Trinidad and Tobago Police Service where legally required.",
+      "latencyMs": 3297,
       "missedGroups": [
         [
           "reasonable suspicion",
@@ -236,8 +240,8 @@
       "id": "NSCC-Q19",
       "question": "Can students use AI for assignments without permission?",
       "expected_page": "p. 47",
-      "answer": "No, students cannot use AI for assignments without permission. According to the **National School Code of Conduct (NSCC) 2026**, students may use AI tools for assignments or assessments **only after discussion with, and permission from, the teacher**, and they must acknowledge such use. Unauthorized AI-generated work may constitute academic dishonesty and will be addressed under existing school disciplinary policies relating to plagiarism, cheating, and academic misconduct.",
-      "latencyMs": 6334,
+      "answer": "No, students cannot use AI for assignments without permission. According to the **National School Code of Conduct (NSCC)**, students may use AI tools for assignments or assessments **only after discussion with, and permission from, the teacher**, and must acknowledge such use. Unauthorized AI-generated work may constitute academic dishonesty and will be addressed under existing school disciplinary policies relating to plagiarism, cheating, and academic misconduct.\n\n**Source:** NSCC 2026, Passage 1 (page number not specified in the provided text).",
+      "latencyMs": 3543,
       "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
@@ -247,21 +251,12 @@
       "id": "NSCC-Q20",
       "question": "What must principals do if child abuse or neglect is suspected?",
       "expected_page": "p. 62",
-      "answer": "According to the National School Code of Conduct (NSCC) 2026, principals have a **mandated reporting responsibility** if child abuse or neglect is suspected. They must report any suspected child abuse or neglect situation in accordance with the Children Act (2012), the Sexual Offences Act (Chapter 11:28, Section 31(1), as amended by Act No. 19 of 2019), and the Domestic Violence Act (Chapter 45:56, as amended by Act No. 8 of 2020). This reporting obligation applies to all forms of abuse, including physical, sexual, emotional, psychological, or financial abuse (NSCC, page 51 and related sections).",
-      "latencyMs": 7605,
-      "missedGroups": [
-        [
-          "police"
-        ],
-        [
-          "children's authority",
-          "childrens authority",
-          "children authority"
-        ]
-      ],
+      "answer": "According to the **National School Code of Conduct (NSCC) 2026**, principals have a **mandated reporting obligation** if child abuse or neglect is suspected. They must report any suspected child abuse or neglect—including physical, sexual, emotional, psychological, or financial abuse—in accordance with the **Children Act (2012)**, the **Sexual Offences Act (Chapter 11:28, as amended)**, and the **Domestic Violence Act (Chapter 45:56, as amended)**. The NSCC specifies that principals must follow **clear, step-by-step procedures for reporting to the police and the Children's Authority**. This duty applies to all forms of suspected abuse or neglect situations encountered in the school environment.",
+      "latencyMs": 5517,
+      "missedGroups": [],
       "citationOk": true,
       "pageCited": false,
-      "pass": false
+      "pass": true
     }
   ]
 }
