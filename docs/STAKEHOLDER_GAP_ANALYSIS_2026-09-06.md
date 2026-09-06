@@ -372,6 +372,37 @@ Cross-checked against docs/plane-board/CLWX-board.md (mirror @105 cards, 2026-09
 11. **Minister / 2000-laptop ask disposition (MISS-9).** Acceptance: an explicit on-record disposition — a card (in-scope/post-GA) or a one-line closeout note classifying the 2026-04-29 ask (video-project side or superseded). Why new: dated inbound ask with no card, no disposition, absent from the closeout pack.
 12. **Recorded-evidence integrity: frame-gate the chat-turn driver (companion to CLWX-49/56 — only if those stay Backlog past the demo).** Acceptance: zero-frame runs exit non-zero; only frame-gate-passing runs may register clips. Why conditional: CLWX-49 and CLWX-56 DO exist (Backlog) — this is a pull-forward flag, not a new gap; listed here so §5 is honest that the demo-week evidence risk is already carded but unscheduled.
 
+### 5b. Fold status (ga-sprint-driver, 2026-09-06)
+
+All eleven unconditional proposals are now on the board as agent-filed **Backlog**
+cards, created with `node scripts/plane-card-create.mjs` (title de-duplicated
+against the live board, each create readback-verified under the CLWX project).
+Scope and priority remain the owner's call — filing is not scheduling.
+
+| §5 item | Card | Priority filed |
+|---|---|---|
+| 1. ga:gate skip-fail semantics + release enforcement | CLWX-106 | high |
+| 2. Monday demo dress rehearsal + runbook | CLWX-107 | high |
+| 3. Mac RC cut + install + manifest publish | CLWX-108 | high |
+| 4. AI Tool Usage Agreement conformance review | CLWX-109 | high |
+| 5. 20-principal rollout plan + schedule answer to Raj | CLWX-110 | medium |
+| 6. Forms corpus inventory + source-PDF vault | CLWX-111 | medium |
+| 7. Email roadmap review of AI_Email_Management_ideas.docx | CLWX-112 | medium |
+| 8. KR3 offline lane-G re-run on a current build | CLWX-113 | medium |
+| 9. DOCSEARCH repro-or-disposition | CLWX-114 | medium |
+| 10. RAJ-2 content-fidelity fixture in the gate | CLWX-115 | medium |
+| 11. Minister / 2000-laptop ask disposition | CLWX-116 | low |
+| 12. Recorded-evidence frame gate (conditional) | no new card — pull-forward flag on the existing CLWX-49 / CLWX-56 | — |
+
+Item 3 (Mac RC) and item 4 (contractual review) both contain owner-only steps:
+installing over the running Mac app and `release:manifest:publish` for the first,
+a contractual reading for the second. They are filed so the gap is visible, not
+so an agent can execute them.
+
+Two of these cards are worth reading together with the gate work already Ready:
+CLWX-106 says the gate can score GREEN while a required tier is entirely skipped,
+which means CLWX-90's Ready status describes the harness, not the coverage.
+
 ---
 *Compiled 2026-09-06 by the stakeholder-gap synthesizer (4 chronological mappers + GPT-6 codex-exec adversary + completeness critic). Ledger: 90 rows (§1). Adversary findings: 16 (§2). Critic rows: 9 + declared blind spots (§3). Sources as cited inline; nothing invented.*
 

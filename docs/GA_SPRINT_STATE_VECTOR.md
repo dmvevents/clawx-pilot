@@ -1638,6 +1638,72 @@ the production-integration milestone, not a GA blocker.
   1627/6-skip; typecheck+lint clean. Remaining for Ready: sandbox positive
   legs + Claude-Code client leg + full lenses (Chrome/build/operator-
   gated). NEXT QUEUED: CLWX-105 (in-line error chip).
+- **CLWX-95 review lane CLOSED — both remaining Claude lenses triaged, every
+  confirmed finding fixed and mutation-proven (2026-09-06 eleventh tick;
+  `c46b141e`); card deliberately stays In Progress.** Verdicts: lens-code
+  **FAIL** (2 HIGH / 3 MEDIUM / 2 LOW), lens-refute **SURVIVED with gaps**.
+  Neither lens disputed the cutover mechanism — the acknowledged
+  `sessions.patch` is genuine post-write re-resolution and the confirmation
+  gate fails closed. Every confirmed finding was about the pin's **scope**:
+  HIGH-1 an explicit channel pick cleared only the current session while the
+  once-per-run memo blocked every OTHER session from repairing itself (fix:
+  `clearSessionModelPin` resets the whole memo); HIGH-2/refute-C the pre-send
+  reconcile could delete the pin the degrade had just installed and replay onto
+  the provider that just failed under a notice saying otherwise (fix:
+  `_degradeResendInFlight` fence + post-cutover provider-snapshot refresh);
+  refute-E a pre-write memo burned the session's one attempt against a merely
+  restarting gateway (fix: success-only memo, `RECONCILE_MAX_ATTEMPTS=3`,
+  in-flight guard); MEDIUM-3 composer pill and Settings read "Online" over an
+  on-device runtime (fix: new `runtimeChannelPin` — a FACT about the runtime,
+  set only on a proven cutover, deliberately NOT the dismissible degradeNotice
+  and never written to `preferredChannel`); MEDIUM-4 Providers "Set as default"
+  didn't clear the pin (fix + a **source-discovered contract row** that walks
+  `src/` and fails if any future `setPreferredChannel`/`setDefaultAccount`
+  caller omits the clear); MEDIUM-5 a 15s blocking write in front of the run's
+  first send, invisible to the 30s and 90s watchdogs (fix:
+  `RECONCILE_PATCH_TIMEOUT_MS=3s`, cutover keeps 15s, both budgets asserted);
+  LOW-6 pin/resend targets resolved independently; refute-B `restoreHint`
+  promised an automatic Online return that nothing implements (copy now says
+  what is true). **Carried openly on the card:** LOW-7 (fixture ref shape —
+  cosmetic, the gate compares ack to request) and refute-A (the gate is blind
+  to an allowlist rewrite mapping a ref onto itself — inert today, re-arms if
+  an allowlist is added). Falsifiability: **9 code mutations + 1 contract
+  mutation, applied one at a time against pristine copies, each caught,
+  sources restored byte-identical**; the harness ack now ECHOES the requested
+  ref, so M7 (swap provider/model inside `cutoverSessionModel`) fails 9 rows
+  where it previously failed none — closing refute-D's vacuous-ack gap. Rows
+  37→48 (degrade) and 16→18 (chat-input); full suite **1697 pass / 6 skipped /
+  186 files**; typecheck + eslint clean. **Not Ready, for two unchanged
+  reasons:** the proof is unit-level only (a runtime-cutover defect needs a new
+  Windows build on the VM, parked behind owner-only `gcloud auth login`), and
+  the main-process host-API channel routes (`electron/api/routes/settings.ts`)
+  still change the channel without clearing session pins — all *renderer*
+  surfaces are covered as of this commit.
+- **Stakeholder-gap fold: 11 cards filed, and the board grew a sanctioned card
+  creator (2026-09-06 eleventh tick).** `docs/STAKEHOLDER_GAP_ANALYSIS_2026-09-06.md`
+  §5 proposed 12 cards; the 11 unconditional ones are now agent-filed
+  **Backlog** rows — **CLWX-106** ga:gate skip-fail semantics (high),
+  **CLWX-107** Monday demo dress rehearsal (high, time-sensitive),
+  **CLWX-108** Mac RC cut (high, owner-only steps inside), **CLWX-109** AI Tool
+  Usage Agreement conformance (high), **CLWX-110** 20-principal rollout answer
+  to Raj, **CLWX-111** forms corpus inventory, **CLWX-112** email-roadmap
+  review, **CLWX-113** KR3 offline re-run, **CLWX-114** DOCSEARCH
+  repro-or-disposition, **CLWX-115** RAJ-2 fidelity fixture, **CLWX-116**
+  Minister/2000-laptop disposition (low). Item 12 was deliberately NOT filed —
+  it is conditional and already carded as CLWX-49/56, so it is recorded there
+  as a pull-forward flag instead of a duplicate. Fold status table appended to
+  the gap doc §5b. **New tooling:** `scripts/plane-card-create.mjs`, sibling of
+  `plane-comment-post.mjs` and carrying the identical safety contract —
+  `PLANE_PROJECT` IGNORED (the GHIP cross-project trap that swallowed five
+  comments), key-format validation + output scrubbing, 429 backoff,
+  pagination, **title de-dup against the live board (SKIP and name, never
+  merge)**, refusal to create into a completed/cancelled state so a fold cannot
+  fabricate closed work, and a per-card readback verify (fetch by id AND
+  present in the list) that reports an orphan rather than assuming success.
+  Dry-run first, then 11 created / 0 duplicates, every one readback-verified.
+  **Note for the owner:** CLWX-106 says the gate can score GREEN while a
+  required tier SKIPs entirely — so CLWX-90's Ready describes the harness, not
+  the coverage.
 
 ---
 
