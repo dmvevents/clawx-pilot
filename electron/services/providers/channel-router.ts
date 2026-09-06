@@ -113,6 +113,24 @@ export interface ApplyChannelChangeResult {
   switched: boolean;
 }
 
+export interface ApplyChannelChangeOptions {
+  /**
+   * Write the four stores but leave the running Gateway alone.
+   *
+   * Set by the send-time degrade path only. That caller degrades *during* a
+   * failed turn and resends immediately, so bouncing the runtime here races
+   * the resend: on Windows a reload falls through to a full restart
+   * (manager.ts), and the restart loses the port race — measured on the moe.19
+   * VM (evidence 2026-09-06), the first cloud-unreachable send took the Gateway
+   * down for 3 minutes and the turn died with an empty assistant bubble. The
+   * config write still lands, so the next run resolves the new channel.
+   *
+   * The toggle and the boot preflight must NOT set this: they are not inside a
+   * turn, and the runtime should pick the change up at once.
+   */
+  skipGatewayRefresh?: boolean;
+}
+
 /**
  * Run the channel-change transaction. If the requested channel has no
  * configured account, throws — callers should surface a "configure a model
@@ -121,6 +139,7 @@ export interface ApplyChannelChangeResult {
 export async function applyChannelChange(
   channel: ProviderChannel,
   gatewayManager?: GatewayManager,
+  options?: ApplyChannelChangeOptions,
 ): Promise<ApplyChannelChangeResult> {
   const picked = await pickAccountForChannel(channel);
   if (!picked) {
@@ -153,7 +172,9 @@ export async function applyChannelChange(
   if (switched) {
     await setDefaultProvider(picked.accountId);
   }
-  await syncDefaultProviderToRuntime(picked.accountId, gatewayManager);
+  await syncDefaultProviderToRuntime(picked.accountId, gatewayManager, {
+    skipGatewayRefresh: options?.skipGatewayRefresh === true,
+  });
 
   // 3. Pin every agent's effective model so the runtime can't fall back to
   // some stale entry sitting first in agents/<id>/agent/models.json.
@@ -164,6 +185,7 @@ export async function applyChannelChange(
     accountId: picked.accountId,
     modelRef,
     previousDefault,
+    gatewayRefreshSuppressed: options?.skipGatewayRefresh === true,
   });
 
   return {

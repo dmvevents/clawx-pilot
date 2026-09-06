@@ -107,7 +107,7 @@ describe('channel-router applyChannelChange', () => {
     expect(result.switched).toBe(true);
 
     expect(mocks.setDefaultProvider).toHaveBeenCalledWith('gemini-1');
-    expect(mocks.syncDefaultProviderToRuntime).toHaveBeenCalledWith('gemini-1', undefined);
+    expect(mocks.syncDefaultProviderToRuntime).toHaveBeenCalledWith('gemini-1', undefined, { skipGatewayRefresh: false });
     expect(mocks.setAllAgentsModel).toHaveBeenCalledWith('google-gemini-1/gemini-2.5-pro');
   });
 
@@ -189,8 +189,30 @@ describe('channel-router applyChannelChange', () => {
 
     expect(result.switched).toBe(false);
     expect(mocks.setDefaultProvider).not.toHaveBeenCalled();
-    expect(mocks.syncDefaultProviderToRuntime).toHaveBeenCalledWith('gemini-1', undefined);
+    expect(mocks.syncDefaultProviderToRuntime).toHaveBeenCalledWith('gemini-1', undefined, { skipGatewayRefresh: false });
     expect(mocks.setAllAgentsModel).toHaveBeenCalled();
+  });
+
+  it('forwards skipGatewayRefresh so the send-time degrade cannot bounce the runtime', async () => {
+    // The degrade runs inside a failed turn and the renderer resends at once.
+    // On Windows a reload becomes a restart and the restart loses the port
+    // race, so the config write must land WITHOUT touching the live gateway
+    // (moe.19 VM, 2026-09-06: three minutes of downtime, empty assistant
+    // bubble). The four-store write itself must still happen — assert both.
+    const gateway = {} as never;
+    mocks.listProviderAccounts.mockResolvedValue([
+      makeAccount({ id: 'ollama-local', vendorId: 'ollama', baseUrl: 'http://localhost:11434/v1', model: 'hermes3:8b' }),
+    ]);
+    mocks.getProvider.mockResolvedValue(
+      makeProvider({ id: 'ollama-local', type: 'ollama', model: 'hermes3:8b', baseUrl: 'http://localhost:11434/v1' }),
+    );
+    mocks.getDefaultProvider.mockResolvedValue('gemini-1');
+
+    await applyChannelChange('on-device', gateway, { skipGatewayRefresh: true });
+
+    expect(mocks.syncDefaultProviderToRuntime).toHaveBeenCalledWith('ollama-local', gateway, { skipGatewayRefresh: true });
+    expect(mocks.setDefaultProvider).toHaveBeenCalledWith('ollama-local');
+    expect(mocks.setAllAgentsModel).toHaveBeenCalledWith('ollama-ollama-local/hermes3:8b');
   });
 });
 

@@ -116,12 +116,21 @@ export async function handleSettingsRoutes(
         return true;
       }
       const persisted = await getSetting('preferredChannel');
-      const result = await applyChannelChange(body.channel, ctx.gatewayManager);
+      // skipGatewayRefresh: this runs INSIDE a failed turn and the renderer
+      // resends immediately. A reload here becomes a full restart on Windows
+      // and the restart loses the port race, so the runtime disappears under
+      // the resend (moe.19 VM, 2026-09-06: Gateway down 3 minutes, empty
+      // assistant bubble, three fresh sessions in a row). The four-store write
+      // still lands, so the resend and every later turn resolve on-device.
+      const result = await applyChannelChange(body.channel, ctx.gatewayManager, {
+        skipGatewayRefresh: true,
+      });
       logger.info('[settings] Degraded channel without persisting preference', {
         channel: body.channel,
         reason: typeof body.reason === 'string' ? body.reason : 'unspecified',
         persistedPreferenceLeftAt: persisted,
         modelRef: result.modelRef,
+        gatewayRefreshSuppressed: true,
       });
       sendJson(res, 200, {
         success: true,
