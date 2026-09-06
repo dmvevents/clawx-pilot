@@ -561,6 +561,36 @@ function ensurePdfjsWorkerConfigured(mod) {
   }
 }
 
+/**
+ * CLWX-77 (password/large-pdf rows; mirrors the CLWX-101 docx approach):
+ * pdfjs exception NAMES are stable API (PasswordException,
+ * InvalidPDFException) but their MESSAGES are parser language — "No password
+ * given", "Invalid PDF structure." — which reached the harness bar only by
+ * accident of being URL-free. Map them to principal language that names the
+ * cause and the way out; anything else the parser throws falls back to the
+ * damaged wording, never a rethrow.
+ */
+const PDF_REEXPORT_HINT =
+  'Re-download it or re-export it as a PDF, then try again — or ask the sender to re-send it.';
+
+function mapPdfParseError(err, filePath) {
+  const name = displayName(filePath);
+  if (err?.name === 'PasswordException') {
+    return new Error(
+      `"${name}" is password-protected, and this reader cannot open protected PDFs. Open it with its password in your PDF app, save an unprotected copy, then try again.`,
+    );
+  }
+  // InvalidPDFException and everything else past the empty-file sniff is
+  // some flavour of unreadable file. Only the error CLASS is logged — parser
+  // messages can quote document content, and content never goes to logs.
+  console.warn(
+    `readPdf: unreadable pdf mapped to damaged-file refusal (${err?.name ?? err?.constructor?.name ?? typeof err})`,
+  );
+  return new Error(
+    `"${name}" could not be read as a PDF — it may be damaged, incomplete, or not actually a PDF file. ${PDF_REEXPORT_HINT}`,
+  );
+}
+
 export async function readPdf({ path: inputPath, maxChars = 200_000 } = {}) {
   const filePath = resolveReadablePath(inputPath);
   // Must precede the pdf-parse load: pdfjs-dist references DOMMatrix at
@@ -580,23 +610,42 @@ export async function readPdf({ path: inputPath, maxChars = 200_000 } = {}) {
   }
   const PDFParse = mod.PDFParse ?? mod.default?.PDFParse ?? null;
   const buf = await readFile(filePath);
+  // Sniffed before the parser sees it: pdfjs's own zero-byte message is
+  // library phrasing, and the failed-download cause is ours to name.
+  if (buf.length === 0) {
+    throw new Error(
+      `"${displayName(filePath)}" is empty (0 bytes) — the download or sync may not have completed. Re-download or re-sync the file and try again.`,
+    );
+  }
   let text = '';
   let numPages = 0;
   let info = {};
   if (PDFParse) {
     // pdf-parse v2 class API
     const parser = new PDFParse({ data: new Uint8Array(buf) });
-    const result = await parser.getText();
+    let result;
+    try {
+      result = await parser.getText();
+    } catch (err) {
+      throw mapPdfParseError(err, filePath);
+    } finally {
+      // destroy() in finally: a throwing parse must not leak the worker.
+      if (typeof parser.destroy === 'function') {
+        try { await parser.destroy(); } catch { /* ignore */ }
+      }
+    }
     text = String(result?.text ?? '');
     numPages = Number(result?.numpages ?? result?.pages?.length ?? 0);
     info = result?.info ?? {};
-    if (typeof parser.destroy === 'function') {
-      try { await parser.destroy(); } catch { /* ignore */ }
-    }
   } else if (typeof mod === 'function' || typeof mod.default === 'function') {
     // pdf-parse v1 callable API (kept for forward-compat if we ever downgrade)
     const fn = typeof mod === 'function' ? mod : mod.default;
-    const result = await fn(buf);
+    let result;
+    try {
+      result = await fn(buf);
+    } catch (err) {
+      throw mapPdfParseError(err, filePath);
+    }
     text = String(result?.text ?? '');
     numPages = Number(result?.numpages ?? 0);
     info = result?.info ?? {};

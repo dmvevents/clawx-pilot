@@ -32,10 +32,11 @@
  *   # --reuse-bundle skips the refresh (negative-control probes only —
  *   # a reused copy may be STALE vs a rebuilt bundle).
  *
- * Slice 1 covers document.read/write against the staged bundle. Later
+ * Slice 1 covers document.read/write against the staged bundle, including
+ * the password-protected + >10MB pdf rows (landed 2026-09-06). Later
  * sub-steps (tracked on CLWX-77): packaged-node/electron-env spawn parity,
- * password-protected + >10MB pdf rows, outlook/forms registration smoke,
- * gateway-process transport, package preflight wiring, K-ledger rows.
+ * outlook/forms registration smoke, gateway-process transport, package
+ * preflight wiring, K-ledger rows.
  */
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -123,16 +124,39 @@ export function classifyRow(expectation, outcome, contentCheck, refusalCheck) {
 // ── fixtures (raw-byte ones inline; docx/xlsx via workspace deps in seed())
 
 const PDF_MARKER = 'ARTIFACT HARNESS PDF: ICT audit circular fixture.';
-function pdfWithText(marker) {
+function pdfWithText(marker, { padBytes = 0 } = {}) {
   const stream = `BT /F1 12 Tf 72 720 Td (${marker}) Tj ET`;
-  return [
+  const objects = [
     '%PDF-1.4',
     '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
     '2 0 obj<</Type/Pages/Count 1/Kids [3 0 R]>>endobj',
     '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox [0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj',
     `4 0 obj<</Length ${stream.length}>>stream\n${stream}\nendstream endobj`,
     '5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj',
-    'trailer<</Size 6/Root 1 0 R>>',
+  ];
+  if (padBytes > 0) {
+    // An unused padding stream pushes the file over a size bar (the >10MB
+    // CLWX-77 row) while keeping the parse surface identical to pdf-text.
+    const pad = 'x'.repeat(padBytes);
+    objects.push(`6 0 obj<</Length ${pad.length}>>stream\n${pad}\nendstream endobj`);
+  }
+  objects.push(`trailer<</Size ${padBytes > 0 ? 7 : 6}/Root 1 0 R>>`, '%%EOF');
+  return objects.join('\n');
+}
+/**
+ * An /Encrypt entry in the trailer makes pdfjs throw PasswordException
+ * ("No password given") before any decryption attempt — no real cryptography
+ * needed for the fixture (verified against pdf-parse 2026-09-06).
+ */
+function pdfEncrypted() {
+  const key = `<${'68656c6c6f'.repeat(6)}6f6f>`; // 32 arbitrary bytes, hex form
+  return [
+    '%PDF-1.4',
+    '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+    '2 0 obj<</Type/Pages/Count 1/Kids [3 0 R]>>endobj',
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox [0 0 612 792]>>endobj',
+    `4 0 obj<</Filter/Standard/V 1/R 2/O ${key} /U ${key} /P -44>>endobj`,
+    'trailer<</Size 5/Root 1 0 R/Encrypt 4 0 R>>',
     '%%EOF',
   ].join('\n');
 }
@@ -222,6 +246,28 @@ export const MATRIX = [
   {
     id: 'pdf-corrupt.read_pdf', fn: 'readPdf', expectation: 'refusal',
     fixture: { name: 'broken.pdf', bytes: () => `%PDF-1.4\n${'garbage '.repeat(64)}` },
+    // CLWX-77: pdfjs's "Invalid PDF structure." passed the generic bar only
+    // by being URL-free — it is parser language with no way out named.
+    refusalCheck: (m) => (/could not be read as a PDF/.test(m) && /damaged/.test(m) && !/Invalid PDF structure/.test(m)
+      ? true : 'must use the damaged-or-not-a-PDF wording, never pdfjs internals'),
+  },
+  {
+    // Password-protected PDF: pdfjs throws PasswordException ("No password
+    // given") — the refusal must name the password and the way out, mirroring
+    // the docx-password row (CLWX-77 password row).
+    id: 'pdf-password.read_pdf', fn: 'readPdf', expectation: 'refusal',
+    fixture: { name: 'protected.pdf', bytes: () => pdfEncrypted() },
+    refusalCheck: (m) => (/password-protected/.test(m) && !/No password given/.test(m)
+      ? true : 'must name password protection, not the raw pdfjs message'),
+  },
+  {
+    // >10MB pdf must parse fine and keep its text extraction (CLWX-77 large
+    // row): guards against size caps or buffer-handling regressions in the
+    // staged runtime that a 1KB fixture can never catch.
+    id: 'pdf-large.read_pdf', fn: 'readPdf', expectation: 'ok',
+    fixture: { name: 'yearbook.pdf', bytes: () => pdfWithText(PDF_MARKER, { padBytes: 10_500_000 }) },
+    check: (r) => (r.bytes > 10_000_000 && String(r.text ?? '').includes('ICT audit circular')
+      ? true : `expected >10MB parsed with marker (bytes=${r.bytes}, totalChars=${r.totalChars})`),
   },
   {
     id: 'docx.read_docx', fn: 'readDocx', expectation: 'ok',

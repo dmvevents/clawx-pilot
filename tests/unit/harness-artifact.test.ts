@@ -156,9 +156,30 @@ describe('MATRIX shape', () => {
   it('covers every slice-1 doc type from the card scope', async () => {
     const { MATRIX } = await load();
     const ids = MATRIX.map((r: { id: string }) => r.id).join(' ');
-    for (const type of ['pdf-text', 'pdf-corrupt', 'docx', 'doc-legacy', 'rtf', 'odt', 'docx-badxml', 'docx-password', 'xlsx', 'csv', 'png', 'png-sharp-binding', 'pptx']) {
+    for (const type of ['pdf-text', 'pdf-corrupt', 'pdf-password', 'pdf-large', 'docx', 'doc-legacy', 'rtf', 'odt', 'docx-badxml', 'docx-password', 'xlsx', 'csv', 'png', 'png-sharp-binding', 'pptx']) {
       expect(ids).toContain(type);
     }
+  });
+
+  it('pins the CLWX-77 wording bar on the pdf refusal rows: the raw pdfjs messages must fail them', async () => {
+    const { MATRIX } = await load();
+    const rawByRow: Record<string, string> = {
+      'pdf-corrupt.read_pdf': 'Invalid PDF structure.',
+      'pdf-password.read_pdf': 'No password given',
+    };
+    for (const [id, rawMessage] of Object.entries(rawByRow)) {
+      const row = MATRIX.find((r: { id: string }) => r.id === id);
+      expect(typeof row.refusalCheck).toBe('function');
+      expect(row.refusalCheck(rawMessage)).not.toBe(true);
+    }
+  });
+
+  it('pins the >10MB bar on the pdf-large row: a small parse result must fail its content check', async () => {
+    const { MATRIX } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'pdf-large.read_pdf');
+    expect(row.expectation).toBe('ok');
+    expect(row.check({ bytes: 1024, text: 'ICT audit circular', totalChars: 50 })).not.toBe(true);
+    expect(row.check({ bytes: 10_500_487, text: 'ARTIFACT HARNESS PDF: ICT audit circular fixture.', totalChars: 50 })).toBe(true);
   });
 
   it('pins the CLWX-101 wording bar on the legacy-doc and rtf rows: the old jszip text must fail them', async () => {

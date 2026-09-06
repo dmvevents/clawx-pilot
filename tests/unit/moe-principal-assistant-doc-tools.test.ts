@@ -208,6 +208,76 @@ describe('readDocx refuses non-docx containers in principal language (CLWX-101)'
   });
 });
 
+describe('readPdf refuses unreadable PDFs in principal language (CLWX-77)', () => {
+  // The regression this closes: pdfjs exception messages ("No password
+  // given", "Invalid PDF structure.") reached the refusal surface verbatim —
+  // parser language with no way out named, passing the generic readable bar
+  // only by being URL- and stack-free.
+  const PDFJS_INTERNALS = /No password given|Invalid PDF structure|PasswordException|InvalidPDFException/i;
+
+  async function readPdfError(name: string, bytes: Buffer | string): Promise<string> {
+    const { readPdf } = await loadDocTools();
+    const p = path.join(workDir, name);
+    writeFileSync(p, bytes);
+    try {
+      await readPdf({ path: p });
+    } catch (e) {
+      return String((e as Error).message);
+    }
+    return '';
+  }
+
+  it('names password protection and the way out for an encrypted PDF, never the raw pdfjs message', async () => {
+    // An /Encrypt trailer entry triggers PasswordException without any real
+    // cryptography in the fixture.
+    const key = `<${'68656c6c6f'.repeat(6)}6f6f>`;
+    const msg = await readPdfError('protected.pdf', [
+      '%PDF-1.4',
+      '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+      '2 0 obj<</Type/Pages/Count 1/Kids [3 0 R]>>endobj',
+      '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox [0 0 612 792]>>endobj',
+      `4 0 obj<</Filter/Standard/V 1/R 2/O ${key} /U ${key} /P -44>>endobj`,
+      'trailer<</Size 5/Root 1 0 R/Encrypt 4 0 R>>',
+      '%%EOF',
+    ].join('\n'));
+    expect(msg).toMatch(/password-protected/);
+    expect(msg).toMatch(/save an unprotected copy/i);
+    expect(msg).not.toMatch(PDFJS_INTERNALS);
+  });
+
+  it('maps a corrupt PDF to the damaged-or-not-a-PDF wording, never "Invalid PDF structure."', async () => {
+    const msg = await readPdfError('broken.pdf', `%PDF-1.4\n${'garbage '.repeat(64)}`);
+    expect(msg).toMatch(/could not be read as a PDF/);
+    expect(msg).toMatch(/damaged/);
+    expect(msg).not.toMatch(PDFJS_INTERNALS);
+  });
+
+  it('names the empty-file cause for a zero-byte pdf (failed download/sync)', async () => {
+    const msg = await readPdfError('empty.pdf', Buffer.alloc(0));
+    expect(msg).toMatch(/empty \(0 bytes\)/);
+    expect(msg).toMatch(/download or sync/);
+    expect(msg).not.toMatch(PDFJS_INTERNALS);
+  });
+
+  it('still reads a genuine pdf after the mapping (no false refusal)', async () => {
+    const { readPdf } = await loadDocTools();
+    const p = path.join(workDir, 'genuine.pdf');
+    const stream = 'BT /F1 12 Tf 72 720 Td (Mapping must not block real files.) Tj ET';
+    writeFileSync(p, [
+      '%PDF-1.4',
+      '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+      '2 0 obj<</Type/Pages/Count 1/Kids [3 0 R]>>endobj',
+      '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox [0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj',
+      `4 0 obj<</Length ${stream.length}>>stream\n${stream}\nendstream endobj`,
+      '5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj',
+      'trailer<</Size 6/Root 1 0 R>>',
+      '%%EOF',
+    ].join('\n'));
+    const result = (await readPdf({ path: p })) as { text: string };
+    expect(result.text).toContain('Mapping must not block real files');
+  });
+});
+
 describe('parser dep loading is truthful: notFound vs loadError (CLWX-76)', () => {
   // The regression this closes: every doc-tool used to funnel a failed
   // require through a masking wrapper that returned null on ANY failure, then
