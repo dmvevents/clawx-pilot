@@ -31,7 +31,7 @@ its mitigation and current status. Nothing here is unsourced.
 | G7 | 2026-07-20 | Ansari: "only thing I absolutely need is the redirect URIs" — sat unanswered ~6wk (LIAISON_LOG §B) | **Answered 2026-09-01:** redirect = app-server callback (keys off hostname) + dev loopback offered now | 🟡 SENT — awaiting Raj (B4) |
 | G8 | 2026-08-18 | Ministry handoff: 4 design conflicts (app-server vs desktop, secret vs PKCE, redirect URI, read-only scopes); all 20 values placeholders (`MINISTRY_INFRA_HANDOFF_2026-08-18.md`) | **Condensed reply SENT by WhatsApp 2026-09-01** (owner-authorized; bridge 200 + log proof; sent-ledger at `~/openclaw-agent/outbound-sent/`). Full written reply still to follow. Session + reissued link requested. | 🟡 SENT — awaiting Raj (B4) |
 | G9 | 2026-08-20 | Token-budget ceiling: ~7,550-tok fixed floor = ~71% of every turn; fleet 429 at ~20 schools (SCALE_ANALYSIS) | Trim branch `fix/tool-catalog-trim` (~2,000 floor) exists, ON HOLD; per-user caps designed, not built | 🔴 OPEN — B3 owner unlock of trim + KR7 identity |
-| G10 | 2026-08-20 | Offline gaps: no send-time channel fallback, no outbox (lane G work, OFFLINE_ARCHITECTURE) | KR4 degrade **landed** (bde78d94); KR5 outbox designed, not built | 🟡 PARTIAL — KR4 ✅, KR5 🔴 |
+| G10 | 2026-08-20 | Offline gaps: no send-time channel fallback, no outbox (lane G work, OFFLINE_ARCHITECTURE) | KR4 degrade **landed** (bde78d94); KR5 outbox **landed + wired** (`ebc4be75`: audit-first writes in the outlook/forms routes, boot drain in main; `G-outbox` 9/9 incl. the stubbed-persistence negative control, re-run green 2026-09-06) | ✅ CLOSED — KR4 ✅, KR5 ✅ (CLWX-28 Ready) |
 | G11 | 2026-08-2x | On-device tool-cascade blocker (memory) | Trim verified live on Windows moe.11 (6/6→0/6); residual `exec` self-recovers | ✅ CLOSED (cosmetic residual) |
 | G12 | 2026-09-01 | **CLWX-18**: public repo hosts full source + plaintext test password in 3 files | Working tree scrubbed (0 literals); password now local-only by owner decision; public-branch scrub + source/releases split pending | 🟡 PARTIAL — owner-gated public-side fix |
 | G13 | 2026-09-01 | **CLWX-19**: `sk-clawx` key shared over WhatsApp, un-rotated (not leaked in repo) | Rotate | 🔴 OPEN — owner action |
@@ -51,6 +51,7 @@ its mitigation and current status. Nothing here is unsourced.
 | 2026-08-25 | Self-test cron last green | overall **pass** | `~/.openclaw/selftest/` |
 | 2026-09-01 | Full re-run at HEAD `f99f2c1f` | typecheck 0 err; unit **1197/6skip/0fail**; eval **61/0/9**; harness **5/5** | TEST_PLAN.md + CLWX-1 comment |
 | 2026-09-01 | Read-only lane probe | KR3/KR4 GREEN; KR1/KR2 gated only by gcloud (B2); KR5–8 owner/Ministry-gated | TEST_PLAN.md |
+| 2026-09-06 | KR5 `G-outbox` re-run + scorecard reconcile vs board (owner-directed) | `tests/unit/outbox.test.ts` **9/9** (durable + stubbed-persistence negative control, idempotent, drain incl. bounded-retry/backoff/concurrent-drain); wiring verified in source (outlook/forms audit-first, boot drain); boxes KR1/KR5/ExtVal-A/GA-packet checked from Ready-card evidence | this file §4 + CLWX-28 comment |
 
 ## 4. The GA gate — evaluation criteria (GO/NO-GO checklist)
 
@@ -68,32 +69,32 @@ Owner/Ministry boxes below remain human calls — the gate reports them as
 named asks.
 
 **Product KRs**
-- [ ] **KR1** — In the shipped app on Windows, a live-LLM turn picks doc-tooling for P1–P6 and `resolveReadablePath` resolves a file on `%USERPROFILE%\OneDrive\Desktop`. _Evidence: in-app trace showing `document.*` tool-calls 6/6._ (Harness/eval green already — necessary, not sufficient.)
+- [x] **KR1** — In the shipped app on Windows, a live-LLM turn picks doc-tooling for P1–P6 and `resolveReadablePath` resolves a file on `%USERPROFILE%\OneDrive\Desktop`. _Evidence: full in-app PASS on shipped moe.12 (tool-select + OneDrive-KFM resolve + parse + faithful summary; CLWX-24 → Ready 2026-09-02), re-proven in-app on the INSTALLED moe.17 (K10/A: `document.read_pdf` toolCall + real summary, confirmed twice — `skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md`). Checked in the 2026-09-06 owner-directed reconcile._
 - [x] **KR3** — On-device model + local docs answer with egress blocked. _Evidence: lane G 5/5._
 - [x] **KR4** — Cloud turn degrades to on-device instead of going silent. _Evidence: bde78d94 + 25 units + `G-degrade-classify`._ (Optional hardening: kill-egress-mid-turn e2e.)
 - [ ] **KR2** — Fresh-VM install (assisted GUI, recorded) boots gateway + green on-device turn, zero manual steps. _Evidence: recording + install log._
-- [ ] **KR5** — Offline action persists to an outbox, survives `kill -9` + restart, flushes idempotently on reconnect. _Evidence: `G-outbox-{durable,idempotent,drain}` green._
+- [x] **KR5** — Offline action persists to an outbox, survives `kill -9` + restart, flushes idempotently on reconnect. _Evidence: `G-outbox-{durable,idempotent,drain}` green — `tests/unit/outbox.test.ts` 9/9 re-run 2026-09-06 (durable incl. the stubbed-persistence NEGATIVE CONTROL required by OFFLINE_ARCHITECTURE §5.4; idempotent replay = one send; drain oldest-first + bounded retry + backoff + concurrent-drain-no-double-send); wired to real actions since `ebc4be75` (audit-first writes in `electron/api/routes/{outlook,forms}.ts`, boot drain in `electron/main/index.ts:603`; CLWX-28 → Ready 2026-09-02 with the restart test). Checked in the 2026-09-06 owner-directed reconcile._
 - [ ] **KR6** — Per-turn floor ≤2,500 tok (trim merged) AND per-user caps unit-tested behind a flag; fleet-verified when KR7 lands. _Evidence: floor measurement + cap tests._
 - [ ] **KR7** — Real Entra sign-in yields a stable per-principal `UserId` carried in the APIM header. _Evidence: App Insights shows per-user attribution._
 - [ ] **KR8** — Ministry reply sent, working session held, real APIM/Entra values received. _Evidence: sent artifact + received values._
 
 **External validation**
-- [ ] Raj's 4 June-21 defects reproduced-or-refuted on moe.11; any confirmed one fixed. _Evidence: per-defect trace (CLWX-bug card)._
-- [ ] One tester completes the download→install→first-turn path from the public Release with no help. _Evidence: tester report (board card seq11)._
+- [x] Raj's 4 June-21 defects reproduced-or-refuted on moe.11; any confirmed one fixed. _Evidence: all four dispositions complete (CLWX-34 → Ready 2026-09-03): RAJ-1 fixed-verified, RAJ-2 refuted at the model layer (live fidelity check, `skills/laptop/evidence/2026-09-03-raj2-fidelity/`), RAJ-3 refuted + re-refuted under fresh evidence, RAJ-4 fixed-verified (`a8322ad9`); the RAJ-2 run also surfaced + led to fixing CLWX-46 stale-read. Checked in the 2026-09-06 owner-directed reconcile._
+- [ ] One tester completes the download→install→first-turn path from the public Release with no help. _Evidence: tester report (board card seq11 — **Cancelled/superseded** in the 2026-09-02 triage). Nearest evidence: Karunesh's moe.15 tester run (install via GCS signed URL + quickstart guide → K3 first-turn baseline PASS, matrix 4/5; `docs/KARUNESH_ERROR_LEDGER.md`) — the "public Release" and "no help" qualifiers were not met as written, so this box stays an OWNER acceptance call (accept the Karunesh run as satisfying intent, or name a new tester)._
 
 **Security floor**
 - [ ] Plaintext test password absent from all PUBLIC branches + history (CLWX-18 split executed). _Working tree already clean._
 - [ ] `sk-clawx` key rotated (CLWX-19).
 
 **Release hygiene**
-- [ ] `pnpm typecheck` + unit + eval:ci + harness green at the GA tag. _(Green today at f99f2c1f.)_
-- [ ] GA evidence packet assembled (board card seq10).
+- [ ] `pnpm typecheck` + unit + eval:ci + harness green at the GA tag. _(At-the-tag condition by definition — cannot pre-check. Current: static gate GREEN 7/0/2 on 2026-09-06, full suite 1608/6-skip.)_
+- [x] GA evidence packet assembled (board card seq10). _Evidence: `docs/GA_EVIDENCE_PACKET.md` assembled 2026-09-02 (CLWX-10 → Ready), refreshed `003999d2` 2026-09-03. Checked in the 2026-09-06 owner-directed reconcile._
 
 ## 5. Critical path from here (ordered)
 
-1. **You: `! gcloud auth login`** (interactive, ~1 min). gcloud is installed; token is stale.
-2. **Agent: IAP VM run** → KR1 in-app (P1–P6 + KFM) + KR2 assisted-screen recording + G4 defect triage. This flips the two biggest unchecked boxes and the external-validation row in one VM session.
-3. **Agent: build KR5 outbox** (design exists, OFFLINE_ARCHITECTURE §5) + the three `G-outbox-*` tests. Independent of everything else.
+1. ~~You: `gcloud auth login`~~ **DONE — auth restored (verified 2026-09-06); the VM itself is TERMINATED and starting it is the owner's spend call.**
+2. **Agent: IAP VM run** → ~~KR1 in-app~~ (**DONE — box checked**) + KR2 assisted-screen recording (owner acceptance options on CLWX-25) + G4 defect triage (**DONE — CLWX-34 Ready, box checked**).
+3. ~~Agent: build KR5 outbox + the three `G-outbox-*` tests~~ **DONE — landed `ebc4be75`, 9/9 green re-run 2026-09-06, box checked.**
 4. **You: two owner sends/decisions** — (a) send the Ministry reply (unlocks KR8→KR7→KR6-fleet), (b) unhold the trim branch (KR6 floor). Plus the two security actions: public-branch password scrub / repo split, key rotation.
 5. **Agent: KR6/KR7 built behind a flag now**, verified the day the real values arrive.
 6. **Assemble the GA evidence packet** (seq10) and hand the checklist above to a human for the GA call.
