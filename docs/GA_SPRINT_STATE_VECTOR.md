@@ -1522,6 +1522,22 @@ the production-integration milestone, not a GA blocker.
   NEW OWNER ASK: start `clawx-win-rc-20260609` (spend, ~$0.13/hr) when
   ready to unlock CLWX-87 System.Speech + the CLWX-77 Windows-lane run —
   gcloud auth is no longer the blocker.
+  **SAME-SESSION FOLD:** the Claude correctness lens returned FAIL on
+  ae4779c5 (4 MAJOR) — all closed/corrected in `b547601b`: (1) the
+  eval-only integrity assertion moved to the PRODUCTION path (broken data
+  file → readable update/reinstall message, never "the Code doesn't cover
+  it", never ENOENT/paths); (2) RECORD CORRECTION — Q20's police (39×) AND
+  children's-authority (curly apostrophe, offset 89,320) key points are
+  both IN the text; every straight-quote grep missed the curly form; Q20
+  was a retrieval-ranking miss, now retrieving both halves and passing
+  live; (3) 1-3-char terms word-boundary matched ("pe" noise); (4) the
+  tool lane got its own honest system prompt (excerpts-may-be-incomplete —
+  never "the NSCC lacks it"). Minors: TOC dot-leaders dropped, tiny
+  fragments folded back, stale 31-tool doc pin → 32. Post-hardening: tool
+  lane 17/20 = 85% SUSTAINED live, fixture coverage 20/20, guards 110/110,
+  suite 1599/6-skip, typecheck+lint clean. Ready move still held on the
+  principal-proxy trust-lens fold (review complete, report not yet
+  relayed) + the next-build/restart in-app gate.
 
 ---
 
