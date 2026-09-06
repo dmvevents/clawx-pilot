@@ -151,7 +151,8 @@ describe('MATRIX shape', () => {
     const { MATRIX } = await load();
     const known = new Set(['readPdf', 'readDocx', 'writeDocx', 'readXlsx', 'writeXlsx', 'readImage', null]);
     for (const row of MATRIX) {
-      if (row.mode === 'register') continue; // registration rows call register(), not a doc-tools fn
+      // registration rows call register(), transport rows boot the gateway CLI — neither uses a doc-tools fn
+      if (row.mode === 'register' || row.mode === 'transport') continue;
       expect(known.has(row.fn)).toBe(true);
     }
   });
@@ -217,9 +218,12 @@ describe('MATRIX shape', () => {
     for (const row of MATRIX) {
       expect(['ok', 'refusal', 'no-tool']).toContain(row.expectation);
       if (row.expectation !== 'no-tool') {
-        // Doc rows need an input (fixture or args); registration rows need
-        // their register spec instead.
-        expect(row.mode === 'register' ? row.register : (row.fixture || row.args)).toBeTruthy();
+        // Doc rows need an input (fixture or args); registration/transport
+        // rows need their mode spec instead.
+        const input = row.mode === 'register' ? row.register
+          : row.mode === 'transport' ? row.transport
+            : (row.fixture || row.args);
+        expect(input).toBeTruthy();
       }
     }
   });
@@ -341,5 +345,174 @@ describe('registration-inventory fast-lane drift guard (Claude lens 2026-09-06)'
     const leak = row.check({ names: [...withoutOutlook, OUTLOOK_TOOL_NAMES[0]] });
     expect(leak).not.toBe(true);
     expect(String(leak)).toContain('outlook.open');
+  });
+});
+
+describe('expandMatrix — electron-env spawn parity (CLWX-92 shape, trail 2026-09-06)', () => {
+  it('gives every doc and register row an @electronlike twin', async () => {
+    const { MATRIX, expandMatrix } = await load();
+    const expanded = expandMatrix(MATRIX);
+    for (const row of MATRIX) {
+      if (row.expectation === 'no-tool' || row.mode === 'transport') continue;
+      expect(expanded.some((r: { id: string; envShape: string }) => r.id === row.id && r.envShape === 'node')).toBe(true);
+      expect(expanded.some((r: { id: string; envShape: string }) => r.id === `${row.id}@electronlike` && r.envShape === 'electronlike')).toBe(true);
+    }
+  });
+
+  it('does NOT expand no-tool or transport rows (a faked electron shape around the real gateway dist is untruthful)', async () => {
+    const { MATRIX, expandMatrix } = await load();
+    const expanded = expandMatrix(MATRIX);
+    const electronlikeIds = expanded.filter((r: { envShape: string }) => r.envShape === 'electronlike').map((r: { id: string }) => r.id);
+    expect(electronlikeIds.some((id: string) => id.startsWith('gateway-transport'))).toBe(false);
+    expect(electronlikeIds.some((id: string) => id.startsWith('pptx'))).toBe(false);
+    const noTool = MATRIX.filter((r: { expectation: string }) => r.expectation === 'no-tool').length;
+    const transport = MATRIX.filter((r: { mode?: string }) => r.mode === 'transport').length;
+    expect(expanded.length).toBe((MATRIX.length - noTool - transport) * 2 + noTool + transport);
+  });
+
+  it('expanded ids stay unique', async () => {
+    const { MATRIX, expandMatrix } = await load();
+    const ids = expandMatrix(MATRIX).map((r: { id: string }) => r.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('foldRepeatVerdicts — K8 intermittence bar (trail 2026-09-06)', () => {
+  it('folds agreeing iterations into one verdict marked consistent', async () => {
+    const { foldRepeatVerdicts } = await load();
+    const v = foldRepeatVerdicts([
+      { status: 'PASS', note: '' },
+      { status: 'PASS', note: '' },
+      { status: 'PASS', note: '' },
+    ]);
+    expect(v.status).toBe('PASS');
+    expect(v.note).toContain('3× consistent');
+  });
+
+  it('FAILs on ANY disagreement — intermittence can never average out to a pass (K8)', async () => {
+    const { foldRepeatVerdicts } = await load();
+    const v = foldRepeatVerdicts([
+      { status: 'PASS', note: '' },
+      { status: 'FAIL', note: 'expected ok, threw: worker crashed' },
+      { status: 'PASS', note: '' },
+    ]);
+    expect(v.status).toBe('FAIL');
+    expect(v.note).toContain('INTERMITTENT');
+    expect(v.note).toContain('K8');
+    expect(v.note).toContain('worker crashed');
+  });
+
+  it('a consistent FAIL stays a plain FAIL (not mislabeled intermittent)', async () => {
+    const { foldRepeatVerdicts } = await load();
+    const v = foldRepeatVerdicts([
+      { status: 'FAIL', note: 'boom' },
+      { status: 'FAIL', note: 'boom' },
+      { status: 'FAIL', note: 'boom' },
+    ]);
+    expect(v.status).toBe('FAIL');
+    expect(v.note).not.toContain('INTERMITTENT');
+  });
+
+  it('single-iteration rows pass through untouched; zero iterations is a harness FAIL', async () => {
+    const { foldRepeatVerdicts } = await load();
+    const single = { status: 'REFUSED-READABLY', note: 'readable' };
+    expect(foldRepeatVerdicts([single])).toBe(single);
+    expect(foldRepeatVerdicts([]).status).toBe('FAIL');
+  });
+
+  it('the K8-tagged matrix rows all carry repeat >= 3 (the ledger criterion is >=3x)', async () => {
+    const { MATRIX } = await load();
+    const k8 = MATRIX.filter((r: { kLedger?: string }) => r.kLedger === 'K8');
+    expect(k8.length).toBeGreaterThanOrEqual(5);
+    for (const row of k8) expect(row.repeat).toBeGreaterThanOrEqual(3);
+    // and they cover read AND write on the K8 families (pdf read, docx r/w, xlsx r/w)
+    const fns = new Set(k8.map((r: { fn: string }) => r.fn));
+    for (const fn of ['readPdf', 'readDocx', 'writeDocx', 'readXlsx', 'writeXlsx']) {
+      expect(fns.has(fn)).toBe(true);
+    }
+  });
+});
+
+describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
+  it('parseInspectJson extracts the JSON block after interleaved register log lines', async () => {
+    const { parseInspectJson } = await load();
+    const stdout = [
+      'Config warnings:',
+      '- plugins.entries.x: something',
+      'moe-principal-assistant: document.* tools registered (read_pdf)',
+      '{',
+      '  "workspaceDir": "/x",',
+      '  "plugin": { "id": "moe-principal-assistant", "status": "loaded", "toolNames": ["document.read_pdf"] }',
+      '}',
+    ].join('\n');
+    const parsed = parseInspectJson(stdout);
+    expect(parsed?.plugin?.status).toBe('loaded');
+  });
+
+  it('parseInspectJson returns null on no JSON and on garbage', async () => {
+    const { parseInspectJson } = await load();
+    expect(parseInspectJson('plugin exploded before printing')).toBe(null);
+    expect(parseInspectJson('')).toBe(null);
+    expect(parseInspectJson(undefined)).toBe(null);
+  });
+
+  it('checkTransportInspect demands loaded + activated + exact inventory', async () => {
+    const { checkTransportInspect, TRANSPORT_NO_HOSTAPI_EXPECTED } = await load();
+    const good = {
+      plugin: { status: 'loaded', activated: true, toolNames: [...TRANSPORT_NO_HOSTAPI_EXPECTED] },
+    };
+    expect(checkTransportInspect(TRANSPORT_NO_HOSTAPI_EXPECTED, good)).toBe(true);
+    expect(String(checkTransportInspect(TRANSPORT_NO_HOSTAPI_EXPECTED, { plugin: { ...good.plugin, status: 'error' } }))).toContain('status');
+    expect(String(checkTransportInspect(TRANSPORT_NO_HOSTAPI_EXPECTED, { plugin: { ...good.plugin, activated: false } }))).toContain('not activated');
+    expect(String(checkTransportInspect(TRANSPORT_NO_HOSTAPI_EXPECTED, {}))).toContain('no plugin object');
+    const missingTool = { plugin: { ...good.plugin, toolNames: good.plugin.toolNames.slice(1) } };
+    expect(String(checkTransportInspect(TRANSPORT_NO_HOSTAPI_EXPECTED, missingTool))).toContain('missing:');
+  });
+
+  it('transport contract inventories: 13 tools without host-API, 31 with (matches the register-mode rows)', async () => {
+    const { TRANSPORT_NO_HOSTAPI_EXPECTED, TRANSPORT_FULL_EXPECTED, DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES } = await load();
+    expect(TRANSPORT_NO_HOSTAPI_EXPECTED.length).toBe(13);
+    expect(TRANSPORT_FULL_EXPECTED.length).toBe(31);
+    expect(TRANSPORT_NO_HOSTAPI_EXPECTED).toEqual([...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES]);
+  });
+
+  it('full transport row check FAILs when the outlook family is absent (falsifiability)', async () => {
+    const { MATRIX, TRANSPORT_FULL_EXPECTED } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'gateway-transport.full');
+    expect(row.mode).toBe('transport');
+    const ok = row.check({ plugin: { status: 'loaded', activated: true, toolNames: [...TRANSPORT_FULL_EXPECTED] } });
+    expect(ok).toBe(true);
+    const noOutlook = TRANSPORT_FULL_EXPECTED.filter((n: string) => !n.startsWith('outlook.'));
+    const verdict = row.check({ plugin: { status: 'loaded', activated: true, toolNames: noOutlook } });
+    expect(verdict).not.toBe(true);
+    expect(String(verdict)).toContain('outlook.send_email');
+  });
+});
+
+describe('FAST_ROW_IDS drift guard (package preflight wiring, trail 2026-09-06)', () => {
+  it('every fast row id exists in the expanded matrix — a renamed row cannot silently drop out of the preflight', async () => {
+    const { MATRIX, expandMatrix, FAST_ROW_IDS } = await load();
+    const ids = new Set(expandMatrix(MATRIX).map((r: { id: string }) => r.id));
+    for (const id of FAST_ROW_IDS) expect(ids.has(id)).toBe(true);
+  });
+
+  it('the fast subset covers each regression family: electron-env pdf, docx r/w, xlsx, sharp binding, registration, transport', async () => {
+    const { FAST_ROW_IDS } = await load();
+    expect(FAST_ROW_IDS).toContain('pdf-text.read_pdf@electronlike'); // CLWX-92 class
+    expect(FAST_ROW_IDS).toContain('pdf-text.read_pdf');
+    expect(FAST_ROW_IDS.some((id: string) => id.includes('read_docx'))).toBe(true);
+    expect(FAST_ROW_IDS.some((id: string) => id.includes('write_docx'))).toBe(true);
+    expect(FAST_ROW_IDS.some((id: string) => id.includes('read_xlsx'))).toBe(true);
+    expect(FAST_ROW_IDS).toContain('png-sharp-binding.read_image'); // moe.15 canvas class
+    expect(FAST_ROW_IDS).toContain('plugin-registration.full');
+    expect(FAST_ROW_IDS.some((id: string) => id.startsWith('gateway-transport'))).toBe(true);
+  });
+
+  it('the package script actually runs the fast subset after bundle verify (wiring, not just capability)', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const pkg = JSON.parse(await readFile('package.json', 'utf8'));
+    const script = String(pkg.scripts.package);
+    expect(script).toContain('harness-artifact.mjs --fast');
+    expect(script.indexOf('verify-openclaw-bundle.mjs')).toBeLessThan(script.indexOf('harness-artifact.mjs --fast'));
   });
 });

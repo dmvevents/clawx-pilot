@@ -9,8 +9,13 @@
  * (NODE_PATH augmentation onto <resources>/openclaw/node_modules) exactly
  * as the installed app does.
  *
- * argv[2]: JSON { docToolsPath, fn, args }
- *       or JSON { mode: 'register', pluginIndexPath, pluginConfig, hostApi? }
+ * argv[2]: JSON { docToolsPath, fn, args, envShape? }
+ *       or JSON { mode: 'register', pluginIndexPath, pluginConfig, hostApi?, envShape? }
+ * envShape 'electronlike' fakes the Electron UtilityProcess environment
+ * (process.versions.electron + process.type='utility') BEFORE any import —
+ * the exact shape the packaged gateway runs under (utilityProcess.fork) and
+ * the one that broke moe.16 PDF reads (CLWX-92). Generalized from
+ * scripts/clwx92-workerenv-check.mjs to every matrix row.
  * stdout: one line "CLAWX77_VERDICT:" + JSON
  *   { ok: true, result } | { ok: false, message } | { ok: false, infra: true, message }
  * The sentinel prefix keeps a chatty dep writing to stdout from corrupting
@@ -25,6 +30,22 @@ import { pathToFileURL } from 'node:url';
 
 function emit(verdict) {
   console.log(`CLAWX77_VERDICT:${JSON.stringify(verdict)}`);
+}
+
+/**
+ * Fake the Electron UtilityProcess env shape (CLWX-92). Must run before the
+ * doc-tools / plugin import so module-level env detection (pdfjs isNodeJS)
+ * sees it — identical technique to clwx92-workerenv-check.mjs, which proved
+ * this reproduces the moe.16 in-app failure exactly.
+ */
+function applyEnvShape(envShape) {
+  if (envShape !== 'electronlike') return;
+  process.versions.electron = process.versions.electron || '35.0.0';
+  try {
+    Object.defineProperty(process, 'type', { value: 'utility', configurable: true });
+  } catch {
+    process.type = 'utility';
+  }
 }
 
 /**
@@ -83,6 +104,7 @@ async function runRegisterMode(spec) {
 
 async function main() {
   const spec = JSON.parse(process.argv[2] ?? '{}');
+  applyEnvShape(spec.envShape);
   if (spec.mode === 'register') {
     await runRegisterMode(spec);
     return;

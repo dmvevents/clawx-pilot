@@ -25,10 +25,14 @@
  *
  * Usage:
  *   pnpm harness:artifact                 # full slice, temp stage, cleanup
- *   pnpm harness:artifact --only pdf-text.read_pdf
+ *   pnpm harness:artifact --fast          # pinned fast subset (package preflight)
+ *   pnpm harness:artifact --only pdf-text.read_pdf@electronlike
  *   pnpm harness:artifact --report docs/evidence/HARNESS_ARTIFACT.md
  *   pnpm harness:artifact --stage-dir /tmp/clawx-stage --keep-stage
- *   # --stage-dir always refreshes the bundle copy from build/openclaw;
+ *   pnpm harness:artifact --node-bin /path/to/packaged/node   # spawn rows
+ *   #   under a REAL packaged node binary (Windows-lane / ELECTRON_RUN_AS_NODE
+ *   #   parity runs); default is the dev process.execPath.
+ *   # --stage-dir always refreshes the gateway copy from build/openclaw;
  *   # --reuse-bundle skips the refresh (negative-control probes only —
  *   # a reused copy may be STALE vs a rebuilt bundle).
  *   # Staged-PLUGIN mutations for falsifiability probes: the plugin copy is
@@ -38,11 +42,36 @@
  *   # deliberately cannot run against a tampered plugin copy.
  *
  * Covered so far: document.read/write against the staged bundle incl. the
- * password-protected + >10MB pdf rows (2026-09-06), and the plugin
- * REGISTRATION smoke (outlook/forms/browser/principal/document inventory per
- * activation mode, 2026-09-06). Later sub-steps (tracked on CLWX-77):
- * packaged-node/electron-env spawn parity, gateway-process transport,
- * package preflight wiring, K-ledger rows, Windows-lane run.
+ * password-protected + >10MB pdf rows (2026-09-06), the plugin REGISTRATION
+ * smoke (tool inventory per activation mode, 2026-09-06), and — landed
+ * 2026-09-06 (trail tick):
+ *   - ELECTRON-ENV SPAWN PARITY: every doc/register row also runs under the
+ *     Electron UtilityProcess env shape (process.versions.electron +
+ *     process.type='utility' — the packaged gateway's actual shape via
+ *     utilityProcess.fork, and the CLWX-92/moe.16 failure env), as
+ *     `<id>@electronlike` rows. Transport rows are deliberately EXCLUDED
+ *     from the fake shape: the real gateway dist under a faked electron env
+ *     without real electron modules would test an untruthful combination —
+ *     the true utility-env gateway run is the Windows/VM lane.
+ *   - GATEWAY-PROCESS TRANSPORT: rows boot the STAGED gateway CLI
+ *     (openclaw.mjs plugins inspect --json) with a hermetic
+ *     OPENCLAW_STATE_DIR whose config points plugins.load.paths at the
+ *     staged plugin — the plugin loads through the REAL gateway plugin-host
+ *     (not the harness mock) and the reported toolNames must match the
+ *     contract inventory.
+ *   - K-LEDGER ROWS (K8 intermittence): kLedger-tagged doc read/write rows
+ *     run 3× per shape in FRESH children; iterations that disagree FAIL the
+ *     row naming the K8 class ("sometimes reads well, other times errors").
+ *     K10 variants (scanned/password/large pdf) are tagged where they live.
+ *     Honest mapping: K1/K2/K11/K12/K13 live in the Outlook/VM lanes
+ *     (v2-eval, VM matrix), K4 in the ASR lane (CLWX-87), K9/K14 are in-app
+ *     fixtures — none of those can be graded by this harness.
+ *   - PACKAGE PREFLIGHT WIRING: `--fast` runs the pinned FAST_ROW_IDS subset
+ *     and is wired into the `package` script right after
+ *     verify-openclaw-bundle, so package:mac / build:win cannot ship a bundle
+ *     that fails the fast lane.
+ * Remaining sub-steps (tracked on CLWX-77): Windows-lane run (true packaged
+ * node.exe + real utility-env gateway), in-app K10 drag-gesture cell.
  */
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -54,10 +83,14 @@ import { crc32 } from 'node:zlib';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(__dirname, '..');
-const BUNDLE_NM = path.join(REPO_ROOT, 'build', 'openclaw', 'node_modules');
+const OPENCLAW_DIR = path.join(REPO_ROOT, 'build', 'openclaw');
+const BUNDLE_NM = path.join(OPENCLAW_DIR, 'node_modules');
 const PLUGIN_SRC = path.join(REPO_ROOT, 'extensions', 'moe-principal-assistant');
 const CHILD_SCRIPT = path.join(__dirname, 'harness-artifact-child.mjs');
 const ROW_TIMEOUT_MS = 60_000;
+// The gateway CLI loads every discovered stock plugin before answering
+// inspect; give transport rows more headroom than a doc-tools child.
+const TRANSPORT_TIMEOUT_MS = 120_000;
 
 // ── classification (pure; unit-tested in tests/unit/harness-artifact.test.ts)
 
@@ -290,6 +323,64 @@ const FULL_PLUGIN_CONFIG = {
   schoolType: 'Government',
 };
 
+// ── gateway-process transport (CLWX-77 trail leg, 2026-09-06)
+//
+// The register-mode rows prove the plugin against a MOCK gateway API; these
+// prove it through the REAL gateway plugin-host: the staged openclaw.mjs
+// (`plugins inspect <id> --json`) loads the plugin exactly like the shipped
+// gateway process does (same loader, same registerTool surface) and reports
+// the registered toolNames. State is hermetic (OPENCLAW_STATE_DIR inside the
+// stage); network is stubbed via a --require preload (fetch records+rejects,
+// no socket) so the CLWX-86 capability probe deterministically fails open.
+export const TRANSPORT_PLUGIN_ID = 'moe-principal-assistant';
+export const TRANSPORT_NO_HOSTAPI_EXPECTED = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES];
+export const TRANSPORT_FULL_EXPECTED = [
+  ...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES,
+  ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES,
+];
+
+/**
+ * Extract the top-level JSON object from `plugins inspect --json` stdout,
+ * which interleaves plugin register log lines and config warnings before the
+ * JSON block (pure; unit-tested). Returns the parsed object or null.
+ */
+export function parseInspectJson(stdout) {
+  if (typeof stdout !== 'string' || !stdout.trim()) return null;
+  const lines = stdout.split('\n');
+  let offset = 0;
+  for (const line of lines) {
+    if (line.trimEnd() === '{') {
+      try {
+        return JSON.parse(stdout.slice(offset));
+      } catch { /* a log line that was just "{" — keep scanning */ }
+    }
+    offset += line.length + 1;
+  }
+  return null;
+}
+
+/**
+ * Grade a transport-row inspect payload (pure; unit-tested): the plugin must
+ * be loaded + activated through the real gateway host and its toolNames must
+ * match the contract inventory exactly (inventoryDiff semantics).
+ */
+export function checkTransportInspect(expectedTools, payload) {
+  const plugin = payload?.plugin;
+  if (!plugin) return 'inspect payload has no plugin object';
+  if (plugin.status !== 'loaded') return `plugin status is "${plugin.status}", expected "loaded"`;
+  if (plugin.activated !== true) return `plugin not activated (activationReason: ${plugin.activationReason ?? 'unknown'})`;
+  return inventoryDiff(expectedTools, plugin.toolNames);
+}
+
+// Written into the stage and passed via NODE_OPTIONS=--require so the
+// gateway CLI process gets the same deterministic network isolation as the
+// register-mode children: every fetch attempt is rejected without a socket.
+const TRANSPORT_PRELOAD_SOURCE = `'use strict';
+globalThis.fetch = async () => {
+  throw new Error('artifact-harness: network disabled in gateway-transport row');
+};
+`;
+
 /**
  * The slice-1 matrix. `fixture` seeds a file in the row's work dir (string |
  * Buffer | async fn(workDir) => filePath); `args` may reference the seeded
@@ -297,12 +388,15 @@ const FULL_PLUGIN_CONFIG = {
  */
 export const MATRIX = [
   {
-    id: 'pdf-text.read_pdf', fn: 'readPdf', expectation: 'ok',
+    // kLedger K8: "SOMETIMES the agent reads the pdf documents well and other
+    // times it gives an error" — repeat 3× in fresh children per shape; any
+    // iteration disagreeing fails the row as intermittence.
+    id: 'pdf-text.read_pdf', fn: 'readPdf', expectation: 'ok', kLedger: 'K8', repeat: 3,
     fixture: { name: 'circular.pdf', bytes: () => pdfWithText(PDF_MARKER) },
     check: (r) => (String(r.text ?? '').includes('ICT audit circular') ? true : `marker missing from extracted text (totalChars=${r.totalChars})`),
   },
   {
-    id: 'pdf-scanned-notext.read_pdf', fn: 'readPdf', expectation: 'ok',
+    id: 'pdf-scanned-notext.read_pdf', fn: 'readPdf', expectation: 'ok', kLedger: 'K10',
     fixture: { name: 'scan.pdf', bytes: () => pdfNoText() },
     // A scanned/image-only pdf must not crash; principal-facing empty-text
     // handling is a persona concern recorded via the note.
@@ -320,7 +414,7 @@ export const MATRIX = [
     // Password-protected PDF: pdfjs throws PasswordException ("No password
     // given") — the refusal must name the password and the way out, mirroring
     // the docx-password row (CLWX-77 password row).
-    id: 'pdf-password.read_pdf', fn: 'readPdf', expectation: 'refusal',
+    id: 'pdf-password.read_pdf', fn: 'readPdf', expectation: 'refusal', kLedger: 'K10',
     fixture: { name: 'protected.pdf', bytes: () => pdfEncrypted() },
     refusalCheck: (m) => (/password-protected/.test(m) && !/No password given/.test(m)
       ? true : 'must name password protection, not the raw pdfjs message'),
@@ -329,13 +423,13 @@ export const MATRIX = [
     // >10MB pdf must parse fine and keep its text extraction (CLWX-77 large
     // row): guards against size caps or buffer-handling regressions in the
     // staged runtime that a 1KB fixture can never catch.
-    id: 'pdf-large.read_pdf', fn: 'readPdf', expectation: 'ok',
+    id: 'pdf-large.read_pdf', fn: 'readPdf', expectation: 'ok', kLedger: 'K10',
     fixture: { name: 'yearbook.pdf', bytes: () => pdfWithText(PDF_MARKER, { padBytes: 10_500_000 }) },
     check: (r) => (r.bytes > 10_000_000 && String(r.text ?? '').includes('ICT audit circular')
       ? true : `expected >10MB parsed with marker (bytes=${r.bytes}, totalChars=${r.totalChars})`),
   },
   {
-    id: 'docx.read_docx', fn: 'readDocx', expectation: 'ok',
+    id: 'docx.read_docx', fn: 'readDocx', expectation: 'ok', kLedger: 'K8', repeat: 3,
     fixture: { name: 'letter.docx', seed: 'docx', paragraphs: ['Dear parent, the ICT audit is Friday.'] },
     check: (r) => (String(r.markdown ?? '').includes('ICT audit') ? true : 'seed paragraph missing from markdown'),
   },
@@ -384,12 +478,12 @@ export const MATRIX = [
       ? true : 'must name password protection, not legacy Word'),
   },
   {
-    id: 'docx-out.write_docx', fn: 'writeDocx', expectation: 'ok',
+    id: 'docx-out.write_docx', fn: 'writeDocx', expectation: 'ok', kLedger: 'K8', repeat: 3,
     args: (workDir) => ({ path: path.join(workDir, 'out.docx'), title: 'Minutes', paragraphs: ['Meeting opened at 9am.'] }),
     check: (r) => (r.bytes > 0 && existsSync(r.path) ? true : 'no bytes written'),
   },
   {
-    id: 'xlsx.read_xlsx', fn: 'readXlsx', expectation: 'ok',
+    id: 'xlsx.read_xlsx', fn: 'readXlsx', expectation: 'ok', kLedger: 'K8', repeat: 3,
     fixture: { name: 'marks.xlsx', seed: 'xlsx', rows: [['student', 'marks'], ['A. Charran', 87]] },
     check: (r) => (JSON.stringify(r.rows ?? []).includes('Charran') ? true : 'seed row missing'),
   },
@@ -399,7 +493,7 @@ export const MATRIX = [
     check: (r) => (JSON.stringify(r.rows ?? []).includes('Mohammed') ? true : 'csv row missing'),
   },
   {
-    id: 'xlsx-out.write_xlsx', fn: 'writeXlsx', expectation: 'ok',
+    id: 'xlsx-out.write_xlsx', fn: 'writeXlsx', expectation: 'ok', kLedger: 'K8', repeat: 3,
     args: (workDir) => ({ path: path.join(workDir, 'out.xlsx'), sheets: [{ name: 'Daily', rows: [['present', 412]] }] }),
     check: (r) => (r.bytes > 0 && existsSync(r.path) ? true : 'no bytes written'),
   },
@@ -473,6 +567,93 @@ export const MATRIX = [
         ? true : `expected returned {registered:false, docToolsRegistered:true}, got ${JSON.stringify(r.returned)}`;
     },
   },
+  {
+    // Gateway-process transport, no host-API env: the staged gateway CLI
+    // loads the staged plugin through the REAL plugin-host; without the
+    // host-API env exactly doc + principal register (the honest-degradation
+    // contract, mirrored from plugin-registration.no-hostapi but through the
+    // production loader instead of the harness mock).
+    id: 'gateway-transport.no-hostapi', mode: 'transport', expectation: 'ok',
+    transport: { pluginConfig: FULL_PLUGIN_CONFIG },
+    check: (r) => checkTransportInspect(TRANSPORT_NO_HOSTAPI_EXPECTED, r),
+  },
+  {
+    // Gateway-process transport, full activation: with host-API env present
+    // (fake port/token; fetch stubbed via preload so the CLWX-86 probe fails
+    // open without a socket) the ENTIRE 31-tool inventory must register
+    // through the real gateway host.
+    id: 'gateway-transport.full', mode: 'transport', expectation: 'ok',
+    transport: { pluginConfig: FULL_PLUGIN_CONFIG, hostApi: FAKE_HOST_API },
+    check: (r) => checkTransportInspect(TRANSPORT_FULL_EXPECTED, r),
+  },
+];
+
+// ── matrix expansion: electron-env spawn parity + K8 repeat (CLWX-77 trail)
+
+export const ENV_SHAPES = ['node', 'electronlike'];
+
+/**
+ * Expand the authored matrix into runnable rows (pure; unit-tested): every
+ * doc/register row gains an `@electronlike` twin running under the faked
+ * UtilityProcess env shape (the packaged gateway's real shape — CLWX-92).
+ * NO-TOOL rows are not expanded (nothing runs). Transport rows are not
+ * expanded either: faking the electron shape around the REAL gateway dist
+ * without real electron modules would grade an untruthful combination — the
+ * genuine utility-env gateway run is the Windows/VM lane (trail item).
+ */
+export function expandMatrix(matrix) {
+  const rows = [];
+  for (const row of matrix) {
+    if (row.expectation === 'no-tool' || row.mode === 'transport') {
+      rows.push({ ...row, envShape: 'node' });
+      continue;
+    }
+    rows.push({ ...row, envShape: 'node' });
+    rows.push({ ...row, id: `${row.id}@electronlike`, envShape: 'electronlike' });
+  }
+  return rows;
+}
+
+/**
+ * Fold repeated-iteration verdicts into one row verdict (pure; unit-tested).
+ * All iterations agreeing → that verdict, note marked consistent. ANY
+ * disagreement → FAIL naming the per-iteration statuses — this is exactly
+ * the K8 signal ("sometimes it works, sometimes it errors") and must never
+ * average out to a pass.
+ */
+export function foldRepeatVerdicts(verdicts) {
+  if (!Array.isArray(verdicts) || verdicts.length === 0) {
+    return { status: 'FAIL', note: 'repeat fold received no iteration verdicts (harness bug)' };
+  }
+  if (verdicts.length === 1) return verdicts[0];
+  const statuses = verdicts.map((v) => v.status);
+  if (new Set(statuses).size > 1) {
+    return {
+      status: 'FAIL',
+      note: `INTERMITTENT across ${verdicts.length} iterations (K8 class): ${statuses.join(', ')} — ${verdicts.find((v) => v.status === 'FAIL')?.note ?? verdicts[0].note}`,
+    };
+  }
+  return { ...verdicts[0], note: `${verdicts[0].note ? `${verdicts[0].note} ` : ''}(${verdicts.length}× consistent)`.trim() };
+}
+
+// ── fast subset (package preflight wiring, CLWX-77 trail)
+//
+// One row per regression family, kept fast enough for every package build:
+// the CLWX-92 electron-env pdf class, docx/xlsx read+write, the sharp native
+// binding (moe.15 canvas class, image edition), the full registration
+// inventory, and the real-gateway transport load. Expanded-row ids; the
+// drift guard in tests/unit/harness-artifact.test.ts pins subset ⊆ matrix
+// and family coverage. Repeats are skipped in fast mode (K8 depth belongs to
+// the full run).
+export const FAST_ROW_IDS = [
+  'pdf-text.read_pdf',
+  'pdf-text.read_pdf@electronlike',
+  'docx.read_docx',
+  'docx-out.write_docx',
+  'xlsx.read_xlsx',
+  'png-sharp-binding.read_image',
+  'plugin-registration.full',
+  'gateway-transport.no-hostapi',
 ];
 
 // ── staging
@@ -480,33 +661,107 @@ export const MATRIX = [
 async function stageArtifact(stageDir, { reuseBundle = false } = {}) {
   const resources = path.join(stageDir, 'resources');
   const pluginDest = path.join(resources, 'extensions', 'moe-principal-assistant');
-  const bundleDest = path.join(resources, 'openclaw', 'node_modules');
+  // The FULL gateway dir (openclaw.mjs + dist + node_modules), mirroring the
+  // shipped resources/openclaw layout: the node_modules seam the doc rows
+  // resolve through is unchanged, and the transport rows get the real
+  // gateway entry to boot.
+  const gatewayDest = path.join(resources, 'openclaw');
   await mkdir(path.dirname(pluginDest), { recursive: true });
   await rm(pluginDest, { recursive: true, force: true });
   await cp(PLUGIN_SRC, pluginDest, { recursive: true });
-  if (reuseBundle && existsSync(bundleDest)) {
+  if (reuseBundle && existsSync(path.join(gatewayDest, 'node_modules'))) {
     // Explicit opt-in only (negative-control probes mutate the stage). A
     // silently reused stage after a bundle rebuild would test a STALE bundle
     // and report GREEN for a broken artifact (review finding, 2026-09-05).
-    console.warn('WARNING: --reuse-bundle set — testing the EXISTING staged bundle, which may be stale vs build/openclaw.');
+    console.warn('WARNING: --reuse-bundle set — testing the EXISTING staged gateway, which may be stale vs build/openclaw.');
   } else {
-    await rm(bundleDest, { recursive: true, force: true });
-    await mkdir(path.dirname(bundleDest), { recursive: true });
-    // APFS clonefile makes the 500MB bundle copy near-instant on darwin; a
-    // symlink would be WRONG here — Node resolves modules at their realpath,
-    // so transitive requires would walk up into the repo node_modules and
-    // mask exactly the gap class this harness exists to catch.
+    await rm(gatewayDest, { recursive: true, force: true });
+    await mkdir(path.dirname(gatewayDest), { recursive: true });
+    // APFS clonefile makes the 500MB copy near-instant on darwin; a symlink
+    // would be WRONG here — Node resolves modules at their realpath, so
+    // transitive requires would walk up into the repo node_modules and mask
+    // exactly the gap class this harness exists to catch.
     if (process.platform === 'darwin') {
       await new Promise((resolve, reject) => {
-        const child = spawn('cp', ['-Rc', BUNDLE_NM, bundleDest], { stdio: 'inherit' });
+        const child = spawn('cp', ['-Rc', OPENCLAW_DIR, gatewayDest], { stdio: 'inherit' });
         child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`cp -Rc exited ${code}`))));
         child.on('error', reject);
       });
     } else {
-      await cp(BUNDLE_NM, bundleDest, { recursive: true });
+      await cp(OPENCLAW_DIR, gatewayDest, { recursive: true });
     }
   }
-  return { resources, pluginDest };
+  const preloadPath = path.join(stageDir, 'transport-net-stub.cjs');
+  await writeFile(preloadPath, TRANSPORT_PRELOAD_SOURCE);
+  return { resources, pluginDest, gatewayDest, preloadPath };
+}
+
+/**
+ * Run a gateway-transport row: seed a hermetic OPENCLAW_STATE_DIR whose
+ * config points plugins.load.paths at the STAGED plugin, then spawn the
+ * STAGED gateway CLI (`plugins inspect <id> --json`) and grade the reported
+ * plugin state. The gateway process gets the fetch-stub preload via
+ * NODE_OPTIONS (plain-node CLI — NODE_OPTIONS is honored here, unlike the
+ * packaged Electron utilityProcess), so the CLWX-86 capability probe fails
+ * open deterministically and no socket is ever opened.
+ */
+async function runTransport(row, { pluginDest, gatewayDest, preloadPath }, stageDir, { nodeBin } = {}) {
+  const stateDir = path.join(stageDir, 'state', row.id.replace(/[^a-z0-9_.-]/gi, '_'));
+  await rm(stateDir, { recursive: true, force: true });
+  await mkdir(stateDir, { recursive: true });
+  await writeFile(path.join(stateDir, 'openclaw.json'), JSON.stringify({
+    plugins: {
+      load: { paths: [pluginDest] },
+      entries: { [TRANSPORT_PLUGIN_ID]: { enabled: true, config: row.transport.pluginConfig } },
+    },
+  }, null, 2));
+  const env = {
+    ...process.env,
+    OPENCLAW_STATE_DIR: stateDir,
+    CLAWX_APP_RESOURCES: path.dirname(gatewayDest),
+    OPENCLAW_DISABLE_BONJOUR: '1',
+    NODE_OPTIONS: `--require ${JSON.stringify(preloadPath)}`,
+    NODE_PATH: '',
+  };
+  if (row.transport.hostApi) {
+    env.CLAWX_HOST_API_PORT = String(row.transport.hostApi.port);
+    env.CLAWX_HOST_API_TOKEN = String(row.transport.hostApi.token);
+  } else {
+    delete env.CLAWX_HOST_API_PORT;
+    delete env.CLAWX_HOST_API_TOKEN;
+  }
+  return new Promise((resolve) => {
+    const child = spawn(
+      nodeBin ?? process.execPath,
+      [path.join(gatewayDest, 'openclaw.mjs'), 'plugins', 'inspect', TRANSPORT_PLUGIN_ID, '--json'],
+      { cwd: gatewayDest, env, stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d; });
+    child.stderr.on('data', (d) => { stderr += d; });
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      resolve({ ok: false, infra: true, message: `transport row timed out after ${TRANSPORT_TIMEOUT_MS}ms` });
+    }, TRANSPORT_TIMEOUT_MS);
+    child.on('exit', (code, signal) => {
+      clearTimeout(timer);
+      if (signal || code !== 0) {
+        resolve({ ok: false, infra: true, message: `gateway CLI exited ${signal ?? code}; stderr: ${stderr.slice(0, 300)}` });
+        return;
+      }
+      const payload = parseInspectJson(stdout);
+      if (!payload) {
+        resolve({ ok: false, infra: true, message: `gateway CLI produced no parsable inspect JSON; stdout tail: ${stdout.slice(-300)}` });
+        return;
+      }
+      resolve({ ok: true, result: payload });
+    });
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      resolve({ ok: false, infra: true, message: `gateway CLI spawn failed: ${err.message}` });
+    });
+  });
 }
 
 async function seedRowFixture(row, workDir) {
@@ -560,9 +815,9 @@ export function foldChildExit(code, signal, verdict, stderrSnippet = '') {
   return verdict;
 }
 
-function runChild(spec, resources) {
+function runChild(spec, resources, { nodeBin } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [CHILD_SCRIPT, JSON.stringify(spec)], {
+    const child = spawn(nodeBin ?? process.execPath, [CHILD_SCRIPT, JSON.stringify(spec)], {
       cwd: path.dirname(CHILD_SCRIPT),
       env: {
         ...process.env,
@@ -606,7 +861,7 @@ function runChild(spec, resources) {
 // ── main
 
 function parseArgs(argv) {
-  const args = { only: null, report: null, stageDir: null, keepStage: false, reuseBundle: false };
+  const args = { only: null, report: null, stageDir: null, keepStage: false, reuseBundle: false, fast: false, nodeBin: null };
   for (let i = 2; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === '--only') args.only = argv[++i];
@@ -617,6 +872,9 @@ function parseArgs(argv) {
     else if (a.startsWith('--stage-dir=')) args.stageDir = a.slice(12);
     else if (a === '--keep-stage') args.keepStage = true;
     else if (a === '--reuse-bundle') args.reuseBundle = true;
+    else if (a === '--fast') args.fast = true;
+    else if (a === '--node-bin') args.nodeBin = argv[++i];
+    else if (a.startsWith('--node-bin=')) args.nodeBin = a.slice(11);
   }
   return args;
 }
@@ -636,37 +894,66 @@ async function main() {
   }
   console.log(`Staging artifact runtime in ${stageDir} …`);
   const t0 = Date.now();
-  const { resources, pluginDest } = await stageArtifact(stageDir, { reuseBundle: args.reuseBundle });
+  const staged = await stageArtifact(stageDir, { reuseBundle: args.reuseBundle });
+  const { resources, pluginDest } = staged;
   const docToolsPath = path.join(pluginDest, 'doc-tools.mjs');
-  console.log(`Staged in ${((Date.now() - t0) / 1000).toFixed(1)}s. Running ${MATRIX.length} rows …\n`);
 
-  const rows = MATRIX.filter((r) => !args.only || r.id === args.only);
+  const expanded = expandMatrix(MATRIX);
+  const rows = expanded.filter((r) => {
+    if (args.only) return r.id === args.only;
+    if (args.fast) return FAST_ROW_IDS.includes(r.id);
+    return true;
+  });
   if (!rows.length) {
-    console.error(`FAIL: --only ${args.only} matches no row. Rows: ${MATRIX.map((r) => r.id).join(', ')}`);
+    console.error(`FAIL: --only ${args.only} matches no row. Rows: ${expanded.map((r) => r.id).join(', ')}`);
     process.exit(1);
   }
+  console.log(`Staged in ${((Date.now() - t0) / 1000).toFixed(1)}s. Running ${rows.length}${args.fast ? ' (fast subset)' : ''} of ${expanded.length} rows …\n`);
+
   const results = [];
   for (const row of rows) {
     const started = Date.now();
+    // Fast mode runs each row once (speed); the full run honors the K8
+    // repeat tag — 3 FRESH children per shape, disagreement = intermittence.
+    const iterations = args.fast ? 1 : (row.repeat ?? 1);
     let verdict;
     if (row.expectation === 'no-tool') {
       verdict = classifyRow('no-tool', { ok: false, message: '' });
+    } else if (row.mode === 'transport') {
+      const outcome = await runTransport(row, staged, stageDir, { nodeBin: args.nodeBin });
+      verdict = classifyRow(row.expectation, outcome, row.check, row.refusalCheck);
     } else if (row.mode === 'register') {
-      const outcome = await runChild(
-        { mode: 'register', pluginIndexPath: path.join(pluginDest, 'index.mjs'), ...row.register },
-        resources,
-      );
-      verdict = classifyRow(row.expectation, outcome, row.check, row.refusalCheck);
+      const iterVerdicts = [];
+      for (let i = 0; i < iterations; i += 1) {
+        const outcome = await runChild(
+          { mode: 'register', pluginIndexPath: path.join(pluginDest, 'index.mjs'), envShape: row.envShape, ...row.register },
+          resources,
+          { nodeBin: args.nodeBin },
+        );
+        iterVerdicts.push(classifyRow(row.expectation, outcome, row.check, row.refusalCheck));
+      }
+      verdict = foldRepeatVerdicts(iterVerdicts);
     } else {
-      const workDir = path.join(stageDir, 'work', row.id.replace(/[^a-z0-9_.-]/gi, '_'));
-      await mkdir(workDir, { recursive: true });
-      const fixturePath = await seedRowFixture(row, workDir);
-      const callArgs = row.args ? row.args(workDir) : { path: fixturePath };
-      const outcome = await runChild({ docToolsPath, fn: row.fn, args: callArgs }, resources);
-      verdict = classifyRow(row.expectation, outcome, row.check, row.refusalCheck);
+      const iterVerdicts = [];
+      for (let i = 0; i < iterations; i += 1) {
+        // Per-iteration work dirs keep write rows independent — a leftover
+        // output file must never make iteration 2 vacuously green.
+        const dirName = `${row.id.replace(/[^a-z0-9_.-]/gi, '_')}${iterations > 1 ? `-i${i + 1}` : ''}`;
+        const workDir = path.join(stageDir, 'work', dirName);
+        await mkdir(workDir, { recursive: true });
+        const fixturePath = await seedRowFixture(row, workDir);
+        const callArgs = row.args ? row.args(workDir) : { path: fixturePath };
+        const outcome = await runChild(
+          { docToolsPath, fn: row.fn, args: callArgs, envShape: row.envShape },
+          resources,
+          { nodeBin: args.nodeBin },
+        );
+        iterVerdicts.push(classifyRow(row.expectation, outcome, row.check, row.refusalCheck));
+      }
+      verdict = foldRepeatVerdicts(iterVerdicts);
     }
     const ms = Date.now() - started;
-    results.push({ id: row.id, ...verdict, ms });
+    results.push({ id: row.id, kLedger: row.kLedger ?? '', ...verdict, ms });
     console.log(`  ${verdict.status.padEnd(17)} ${row.id} (${ms}ms)${verdict.note ? ` — ${verdict.note}` : ''}`);
   }
 
@@ -680,15 +967,30 @@ async function main() {
     const lines = [
       `# Artifact harness matrix (CLWX-77)`,
       '',
-      `Staged plugin + gateway bundle outside the repo tree; each row ran in a`,
-      `child process resolving deps ONLY from the staged bundle (CLAWX_APP_RESOURCES seam).`,
-      `Registration rows call the staged plugin's register() with a mock gateway API;`,
-      `fetch is stubbed in the child before the plugin loads, so the CLWX-86 probe is`,
-      `deterministically unreachable (fail-open) and no socket is ever opened.`,
+      `Staged plugin + FULL gateway (build/openclaw) outside the repo tree; each row`,
+      `ran in a child process resolving deps ONLY from the staged copy`,
+      `(CLAWX_APP_RESOURCES seam). Registration rows call the staged plugin's`,
+      `register() with a mock gateway API; gateway-transport rows boot the STAGED`,
+      `gateway CLI (plugins inspect --json) with a hermetic OPENCLAW_STATE_DIR — the`,
+      `plugin loads through the real gateway plugin-host. fetch is stubbed before the`,
+      `plugin loads in both modes, so the CLWX-86 probe is deterministically`,
+      `unreachable (fail-open) and no socket is ever opened.`,
       '',
-      '| Row | Status | Note | ms |',
-      '|---|---|---|---|',
-      ...results.map((r) => `| ${r.id} | ${r.status} | ${r.note.replace(/\|/g, '\\|')} | ${r.ms} |`),
+      `Env shapes: \`@electronlike\` rows ran under the faked Electron UtilityProcess`,
+      `shape (process.versions.electron + process.type='utility') — the packaged`,
+      `gateway's real env (utilityProcess.fork) and the CLWX-92/moe.16 failure shape.`,
+      `Transport rows run plain-node only by design (a faked electron shape around`,
+      `the real gateway dist would grade an untruthful combination); the true`,
+      `utility-env gateway run is the Windows/VM lane.`,
+      '',
+      `K-ledger mapping: K8 rows repeat 3× per shape in fresh children (disagreement`,
+      `= FAIL, intermittence named); K10 tags mark the pdf variants. K1/K2/K11/K12/`,
+      `K13 live in the Outlook/VM lanes, K4 in the ASR lane (CLWX-87), K9/K14 are`,
+      `in-app fixtures — this harness does not grade those.`,
+      '',
+      '| Row | Status | K | Note | ms |',
+      '|---|---|---|---|---|',
+      ...results.map((r) => `| ${r.id} | ${r.status} | ${r.kLedger} | ${r.note.replace(/\|/g, '\\|')} | ${r.ms} |`),
       '',
       `Summary: ${summary}`,
       '',

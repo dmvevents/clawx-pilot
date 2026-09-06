@@ -77,7 +77,7 @@
         "prep:win-binaries": "pnpm run uv:download:win && pnpm run node:download:win && pnpm run win-asr:build:x64",
         "icons": "zx scripts/generate-icons.mjs",
         "preflight": "pnpm run typecheck && pnpm run lint:check && pnpm run lint:ps && pnpm run doctor:agents && pnpm exec vitest run && pnpm run harness:doc-tooling-e2e",
-        "package": "node scripts/generate-ext-bridge.mjs && pnpm run build:vite && zx scripts/bundle-openclaw.mjs && node scripts/verify-openclaw-bundle.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs",
+        "package": "node scripts/generate-ext-bridge.mjs && pnpm run build:vite && zx scripts/bundle-openclaw.mjs && node scripts/verify-openclaw-bundle.mjs && node scripts/harness-artifact.mjs --fast && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs",
         "package:mac": "pnpm run preflight && pnpm run package && node scripts/run-electron-builder.mjs --mac --publish never",
         "package:mac:local": "SKIP_PREINSTALLED_SKILLS=1 pnpm run package && node scripts/run-electron-builder.mjs --mac --publish never",
         "package:win": "pnpm run preflight && pnpm run prep:win-binaries && pnpm run package && node scripts/run-electron-builder.mjs --win --publish never",
