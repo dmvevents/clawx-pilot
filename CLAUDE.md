@@ -285,6 +285,9 @@ Package manager is **pnpm** (locked to `pnpm@10.33.4` via `packageManager` field
 | Lint (CI / no fix) | `pnpm lint:check` |
 | Unit tests (all) | `pnpm test` (vitest run) |
 | Single unit test | `pnpm exec vitest run <path/to/file.test.ts>` (add `-t "<name pattern>"` to filter) |
+| Outlook suites (combined) | `pnpm test:outlook` (all 11 Outlook/Graph suites; worker heap bounded per CLWX-83) |
+| PowerShell lint (windows-pilot) | `pnpm lint:ps` (needs pwsh + PSScriptAnalyzer — setup in `windows-pilot/README.md`; gates on Error/ParseError/5.1-incompatible syntax) |
+| Agent model-pin doctor | `pnpm doctor:agents` (audits `.codex`/`.claude` agent pins + `~/.codex/config.toml` against `scripts/agent-model-allowlist.json`) |
 | Playwright e2e (all) | `pnpm test:e2e` (headed: `pnpm test:e2e:headed`) |
 | Single e2e test | `pnpm exec playwright test <path/to/spec.ts>` (add `-g "<title>"` to filter) |
 | Live Outlook smoke | `pnpm exec tsx scripts/v2-chatbot-e2e.ts` (3-turn LLM + browser smoke) |

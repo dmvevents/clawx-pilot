@@ -144,4 +144,27 @@ The handoff to the other (active dev) session is: **here are the gaps I confirme
 
 ---
 
+## Linting the PowerShell surface from the Mac (CLWX-83)
+
+PS 5.1-class bugs (quoting, BOM, PS7-only syntax) used to surface only live on
+the pilot. `pnpm lint:ps` runs PSScriptAnalyzer over this directory with
+`PSScriptAnalyzerSettings.psd1`, which enables `PSUseCompatibleSyntax` pinned
+to the fleet's two runtimes (5.1 on the pilot, 7.x on dev boxes).
+
+Setup (one-time):
+
+- pwsh, either: `brew install --cask powershell` (needs sudo for the pkg), or
+  user-local with no sudo — download the `osx-arm64.tar.gz` from
+  <https://github.com/PowerShell/PowerShell/releases>, extract to
+  `~/tools/powershell-7`, `chmod +x ~/tools/powershell-7/pwsh` (the lint
+  script finds it there; or set `CLAWX_PWSH`).
+- Analyzer: `pwsh -NoProfile -Command 'Install-Module PSScriptAnalyzer -Scope CurrentUser -Force'`
+
+Gate semantics: FAILS on any `Error`, `ParseError`, or `PSUseCompatibleSyntax`
+finding; `Warning`/`Information` are reported as counts only (pre-existing
+advisory baseline ~117/13 as of 2026-09-06). Exit 2 means tooling missing —
+the script prints the install steps above.
+
+---
+
 *Created 2026-05-26 11:40am AST. Owner: this Claude session. Active dev session in another window owns app code + builds.*

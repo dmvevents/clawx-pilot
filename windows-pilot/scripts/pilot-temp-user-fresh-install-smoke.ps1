@@ -36,6 +36,17 @@ function Test-Port($port) {
   }
 }
 
+function ConvertTo-TempUserSecureString {
+  # CLWX-83: the password is a RANDOM throwaway for a disposable local
+  # smoke-test account (removed by default at the end of the run) - never a
+  # real credential. New-LocalUser requires a SecureString built from the
+  # generated plaintext. Suppression is scoped to THIS helper so any future
+  # ConvertTo-SecureString use elsewhere in the file still gets flagged.
+  [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', '')]
+  param([string] $PlainPassword)
+  return (ConvertTo-SecureString $PlainPassword -AsPlainText -Force)
+}
+
 function New-RandomPassword {
   $chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@$%*-_"
   $bytes = New-Object byte[] 24
@@ -185,7 +196,15 @@ function Restore-UserRightsPolicy($artifactDir) {
   }
 }
 
-function Invoke-ScheduledPowerShellTask($taskName, $userName, $plainPassword, $scriptPath, $timeoutSeconds) {
+function Invoke-ScheduledPowerShellTask {
+  # CLWX-83: throwaway random password for the temp smoke account; schtasks
+  # /RU + /RP require the plaintext pair, so PSCredential does not fit here.
+  # Residual (accepted): /RP puts the password on schtasks.exe's command line
+  # for the seconds it runs - visible to a local process-lister. Throwaway
+  # account, removed with its tasks by default on every exit path.
+  [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingUsernameAndPasswordParams', '')]
+  [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', '')]
+  param($taskName, $userName, $plainPassword, $scriptPath, $timeoutSeconds)
   $taskUser = "$env:COMPUTERNAME\$userName"
   $startAt = (Get-Date).AddMinutes(1).ToString("HH:mm")
   $taskCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
@@ -286,7 +305,7 @@ Write-State "INSTALLER" ("{0}|{1:n1}MB|{2}" -f $installer.FullName, ($installer.
 Write-State "INSTALLER_COPY" $installerCopy
 
 $plainPassword = New-RandomPassword
-$securePassword = ConvertTo-SecureString $plainPassword -AsPlainText -Force
+$securePassword = ConvertTo-TempUserSecureString $plainPassword
 
 try {
   New-LocalUser -Name $userName -Password $securePassword -FullName "ClawX Fresh Install Smoke" -Description "Temporary ClawX fresh install smoke account" -ErrorAction Stop | Out-Null
