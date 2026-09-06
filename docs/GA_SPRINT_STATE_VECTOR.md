@@ -1638,6 +1638,38 @@ the production-integration milestone, not a GA blocker.
   1627/6-skip; typecheck+lint clean. Remaining for Ready: sandbox positive
   legs + Claude-Code client leg + full lenses (Chrome/build/operator-
   gated). NEXT QUEUED: CLWX-105 (in-line error chip).
+- 2026-09-06 twelfth tick (late lens fold, CLWX-95): four lens verdicts arrived
+  AFTER the first fold was committed, so they were triaged separately. ONE was a
+  real hole and is fixed @ `f136dc01`: `runChannelPreflight`
+  (`channel-router.ts:287`) passes no options to `applyChannelChange` — correct
+  behaviour, nothing pinning it. The degrade route deliberately passes
+  `{ skipGatewayRefresh: true }` (`settings.ts:129`) because it runs inside a
+  failed turn the renderer resends at once; boot preflight is the OPPOSITE case
+  (nothing refreshes the gateway after it), so a refactor copying that call site
+  into the boot path would have left the four stores right on disk and the live
+  gateway serving the old model — the silence-on-send shape itself — and shipped
+  green. One row added; mutation proof: `{ skipGatewayRefresh: true }` at :287 →
+  exactly that row failed (1/14), source restored byte-identical → 15 passed;
+  four related suites 39 passed; typecheck + eslint clean; no product code
+  touched. The other three closed without new code, each with a reason rather
+  than a pass: trust-lens HIGH (15s silent wait) was ALREADY fixed @ `a4282f1a`
+  and that lens reviewed `ce7d7ba2..HEAD`, a range predating it (stale window);
+  its MEDIUM (two error surfaces) REFUTED against `errorBannerVisibility`
+  (`src/lib/error-display.ts:70-85`, tested in `error-display.test.ts`) which
+  suppresses transport-class banners behind a notice that does not claim
+  success, auth-config deliberately excepted; its ask to shorten the 15s cutover
+  budget DECLINED with evidence — the silence was the defect, not the duration,
+  and the moe.19 VM needed minutes for the gateway's first post-restart RPC on 4
+  vCPUs, which is why background reconcile already runs the short 3s budget
+  (`RECONCILE_PATCH_TIMEOUT_MS`) against the 15s foreground one
+  (`SESSION_PATCH_TIMEOUT_MS`); its LOW (both notices advise retrying) accepted
+  as open copy judgement for the CLWX-105 pass. Coherence lens ACCEPT/YELLOW
+  with its race largely superseded by the acknowledged-cutover readback — watch
+  item carried: re-check Windows port-race recurrence on moe.20+. The CLWX-105
+  trust FAIL was already folded (tense-neutral `errorDisplayInline.*`). CLWX-95
+  STAYS In Progress for the same two unchanged reasons: unit-level proof only,
+  and `electron/api/routes/settings.ts` (~:86-88, :182-184) still does not clear
+  session pins.
 - **CLWX-95 review lane CLOSED — both remaining Claude lenses triaged, every
   confirmed finding fixed and mutation-proven (2026-09-06 eleventh tick;
   `c46b141e`); card deliberately stays In Progress.** Verdicts: lens-code
