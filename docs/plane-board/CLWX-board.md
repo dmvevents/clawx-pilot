@@ -1,6 +1,6 @@
 # CLWX Plane board — snapshot
 
-Exported 2026-09-05 from `http://localhost:8090` (workspace `issues-agent`, project `ClawX — Windows installer + agent`).
+Exported 2026-09-06 from `http://localhost:8090` (workspace `issues-agent`, project `ClawX — Windows installer + agent`).
 Restore-grade JSON: [`CLWX-board-export.json`](./CLWX-board-export.json). This markdown is the human-readable mirror; the JSON is authoritative.
 
 > The live board is source of truth for *what to work on*. This file is a
@@ -192,6 +192,29 @@ Acceptance: after connectivity returns, the next Online turn succeeds without an
 **Comments (1):**
 
 - Related to the CLWX-95 seam (2b21d2a8) - NOT moving. The run-ownership token and terminal-error lastSentPayload handling landed for CLWX-94 reduce the orphan/replay surface, but the post-degrade recovery wedge (stale offline banner + silent sends until full relaunch) depends on the same restart-vs-per-run refresh decision tracked in CLWX-95. Kept open pending that wiring + live probe.
+
+### CLWX-102 — [bug/ui] e2e suite baseline debt: 13 specs red from fork-decision drift (deleted locales, anonymised provider labels, channels copy)
+
+- **State:** Backlog  |  **Priority:** medium
+
+Area: ui   Severity: medium (priority medium)
+
+Steps to reproduce
+pnpm test:e2e (full suite, renderer built). Or GA_GATE_E2E=1 pnpm ga:gate once CLWX-91 lands.
+
+Expected
+Full renderer e2e suite green so the ga:gate opt-in tier (GA_GATE_E2E=1, wired by CLWX-91) can flip formally green
+
+Actual
+Baseline 2026-09-06: 32 pass / 13 fail / 2 skip (6.2m). Red classes: (a) language-russian x4 + chat-skill-trigger-i18n Chinese label x1 — specs test locales the fork DELETED (English-only hard rule); disposition = delete or fork-skip with reason. (b) provider-lifecycle x3 — spec expects upstream label copy (Moonshot E2E) but the fork anonymises provider identity; card renders, data loads, text assertion stale. (c) channels-* x4 + app-smoke persist-setup x1 — unverified, likely same fork-copy class; each needs a 10-min disposition (fix expectation vs real defect). NOT caused by CLWX-91 provider normalization: failing cards render with data loaded; the normalization only alters non-array payload handling.
+
+Evidence
+Playwright line-reporter run 2026-09-06 (session task bb5mnels0); CLWX-91 evidence comment
+
+Environment
+fix/doc-tooling-steering @ 4854e8f3 + CLWX-91 fix, Mac dev lane, moe.18-era tree
+
+Regression class? fork-decision drift vs upstream specs, not a runtime regression class
 
 ## Unstarted
 
@@ -1272,7 +1295,7 @@ Owner-only boxes (CLWX-18/19 security sitting, KR2 assisted recording, external 
 
 ### CLWX-91 — [test-infra] chat-task-visualizer e2e: 3 mocked-IPC specs fail at baseline (main-layout never renders)
 
-- **State:** Todo  |  **Priority:** medium
+- **State:** Ready  |  **Priority:** medium
 
 Area: e2e / renderer harness   Severity: medium (e2e coverage hole; production checklist row 6.4 assumes green)
 
@@ -1289,6 +1312,10 @@ Acceptance
 
 Source
 ga:gate follow-through, e2e run /tmp/e2e-ui.log + worktree baseline; error contexts in test-results/.
+
+**Comments (1):**
+
+- All three acceptance legs landed (ga-sprint-driver tick 2026-09-06). 1 — Root cause (CONFIRMED live, not theorised): under installIpcMocks the fixture answers every unmocked hostapi route with json: {}. fetchProviderSnapshot trusted the payload shape — accounts = accountsResult ?? [] keeps a truthy {} — so the provider store held a non-array; ChatInput's pickAccountForChannel(providerAccounts, ...) useMemo then threw TypeError: e.filter is not a function during render, the app-level ErrorBoundary swallowed it and rendered the 'Something went wrong' page — main-layout never mounts. Captured via a console/pageerror probe spec (page snapshot showed the boundary page + full stack). Production-relevant, not test-only: any Host API answering 200 with a non-array body (version skew — CLWX-86 class) blanked the whole window the same way. 2 — Fix + three specs green: boundary normalization in src/lib/provider-accounts.ts (asArrayPayload — coerces non-array list payloads to [] with a loud console.warn; applied to /api/provider-accounts + /api/provider-vendors; keyInfo path already guarded). All 3 chat-task-visualizer specs PASS (10.5s). New falsifiable unit suite tests/unit/provider-snapshot-normalization.test.ts (3 tests; 2 fail with the fix stashed, proven). Full unit suite 1496 pass / 6 skip; typecheck + lint green. 3 — ga:gate opt-in tier wired: GA_GATE_E2E=1 pnpm ga:gate runs pnpm test:e2e as a T0 row (default = loud SKIP naming the baseline). HONEST CAVEAT: full-suite baseline is 32 green / 13 red / 2 skip — the reds are pre-existing fork-decision drift (4x language-russian + 1x Chinese skill label test locales the fork deleted per the English-only hard rule; 3x provider-lifecycle expect upstream label copy the fork anonymises; 4x channels + 1x app-smoke undispositioned). Filed as CLWX-102; the gate row flips formally green when 102 lands. Verified NOT caused by this fix: failing cards render with data loaded — the normalization only changes non-array payload handling.
 
 ### CLWX-93 — fix(chat): gate history-path failover on lastSentPayload, not sending
 

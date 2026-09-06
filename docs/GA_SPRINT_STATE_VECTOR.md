@@ -542,6 +542,37 @@ Ready with evidence. Residuals on the card: live-form run of the gate is
 Chrome-restart-gated; prefix-40 blind spot documented (no mis-map
 follows); NEXT-BUILD GATE as usual. Owner asks unchanged._
 
+_**Tick 2026-09-06 (ga-sprint-driver, minimal-time): CLWX-91 blank-window
+e2e class root-caused + fixed → Ready; e2e tier wired into the gate;
+baseline debt filed as CLWX-102.** SENSE: tree clean at `4854e8f3` (6
+untracked pilot scripts/evidence dirs, known); static gate GREEN (5/0/1,
+report `docs/evidence/GA_GATE_2026-09-06.md`); board reachable, mirror
+delta = timestamp only; :12222 listener up but VM remains TERMINATED
+(stale listener, not a lane); Chrome :18792 wedge not re-probed
+(owner-gated, pings are not evidence). ANALYZE: agent-lane P = {83, 91,
+77-substeps, 71}; ranked 91 (whole card + it feeds the CLWX-90 master
+gate — the e2e tier was absent, which is why this debt class was
+invisible). ACT: root cause CONFIRMED live via a console/pageerror probe —
+the e2e ipc-mock fallback answers unmocked hostapi routes with `json: {}`;
+`fetchProviderSnapshot` kept the truthy non-array (`?? []` can't catch
+`{}`), and ChatInput's `pickAccountForChannel` useMemo threw
+`e.filter is not a function` at render; the app ErrorBoundary swallowed it
+into 'Something went wrong' — `main-layout` never mounts. Fix =
+`asArrayPayload` boundary normalization in `src/lib/provider-accounts.ts`
+(accounts + vendors; loud warn, never crash) — production-relevant (a
+version-skewed Host API answering 200 with a non-array body blanked the
+whole window the same way; CLWX-86 family). Evidence: 3/3 target specs
+PASS (10.5s); new falsifiable unit suite (3 tests; 2 fail with fix
+stashed, proven); units 1496/6 skipped; typecheck + lint green. Gate:
+`GA_GATE_E2E=1` now runs `pnpm test:e2e` as a T0 row (default = loud SKIP
+naming the baseline). Full-suite baseline run honestly: 32 green / 13 red
+/ 2 skip — reds are PRE-EXISTING fork-decision drift (deleted locales ×5,
+anonymised provider labels ×3, channels/app-smoke copy ×5), verified not
+caused by this fix (failing cards render with data loaded); filed as
+**CLWX-102** (Backlog) with per-class disposition notes. Board: CLWX-91
+Todo → Ready with evidence. Owner asks unchanged (Chrome :18792 restart
+remains the highest-value unlock)._
+
 _Finish-vector execution log: 2026-09-02 audit tick — CLWX-10/41/23/45 to
 Ready (GA packet assembled; stakeholder report complete; timeline current;
 7 closeout drafts staged draft-and-hold). **moe.15 built + signed

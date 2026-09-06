@@ -10,6 +10,8 @@
  *
  *   node scripts/ga-gate.mjs                 # T0 static + T1 live Mac lane
  *   GA_GATE_STATIC=1 node scripts/ga-gate.mjs  # T0 only (CI-safe)
+ *   GA_GATE_E2E=1 node scripts/ga-gate.mjs     # + renderer e2e (Playwright
+ *                                              #   + Electron boots, ~min)
  *   GA_GATE_FULL=1 node scripts/ga-gate.mjs    # + NSCC eval (Bedrock, ~5min)
  *   GA_GATE_SEND=1 node scripts/ga-gate.mjs    # + live 2-gate SEND proof
  *                                              #   (test.fac sandbox ONLY)
@@ -60,6 +62,15 @@ run('lint', 'T0', 'hygiene', 'pnpm lint:check');
 run('unit-suite', 'T0', 'hygiene', 'pnpm exec vitest run tests/unit --silent');
 run('bundle-verify (CLWX-72 gate)', 'T0', 'hygiene+KR1', 'pnpm exec zx scripts/bundle-openclaw.mjs >/dev/null 2>&1 && node scripts/verify-openclaw-bundle.mjs');
 run('doc-tooling harness (KR1 proxy)', 'T0', 'KR1', 'pnpm run harness:doc-tooling-e2e');
+// Renderer e2e (Playwright + Electron). Opt-in: each spec boots a real
+// Electron app, so this row costs minutes — but it is the ONLY tier that
+// exercises renderer boot under mocked IPC (the CLWX-91 blank-window class
+// was invisible to the gate precisely because this row did not exist).
+if (process.env.GA_GATE_E2E === '1') {
+  run('renderer-e2e (Playwright, CLWX-91)', 'T0', 'hygiene', 'pnpm test:e2e', { timeout: 1_800_000 });
+} else {
+  skip('renderer-e2e (Playwright)', 'T0', 'hygiene', 'GA_GATE_E2E!=1 (opt-in; ~6min. Baseline 2026-09-06: 32 green / 13 red — the reds are fork-decision drift (deleted locales, anonymised provider labels), dispositioned under CLWX-102)');
+}
 
 // ── T1: live Mac lane (user Chrome CDP + test.fac sandbox) ───────────────
 if (STATIC_ONLY) {
