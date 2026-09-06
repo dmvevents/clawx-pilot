@@ -291,4 +291,29 @@ describe('channel-router runChannelPreflight', () => {
     expect(result.applied).toBe('on-device');
     expect(result.modelRef).toBe('ollama-ollama-local/hermes3:8b');
   });
+
+  it('never suppresses the gateway refresh on the boot path', async () => {
+    // The send-time degrade route deliberately passes { skipGatewayRefresh: true }
+    // (settings.ts:129) because it runs inside a failed turn that the renderer
+    // resends immediately, and on Windows a refresh becomes a restart that loses
+    // the port race. Boot preflight is the opposite case: nothing runs after it
+    // to refresh the gateway, so suppressing here would leave the four stores
+    // correct on disk while the live gateway kept serving the previous model —
+    // the exact silence-on-send shape CLWX-95 closed.
+    //
+    // channel-router.ts:287 passes NO options today, which is correct. This row
+    // pins it, so a refactor that copies the degrade call site into the boot
+    // path fails here instead of shipping.
+    const gateway = {} as never;
+    mocks.listProviderAccounts.mockResolvedValue([
+      makeAccount({ id: 'gemini-1', vendorId: 'google', model: 'gemini-2.5-pro' }),
+    ]);
+    mocks.getProvider.mockResolvedValue(makeProvider({ id: 'gemini-1', type: 'google', model: 'gemini-2.5-pro' }));
+
+    await runChannelPreflight('online', gateway);
+
+    expect(mocks.syncDefaultProviderToRuntime).toHaveBeenCalledWith('gemini-1', gateway, {
+      skipGatewayRefresh: false,
+    });
+  });
 });
