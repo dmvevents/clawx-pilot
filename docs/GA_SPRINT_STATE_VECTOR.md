@@ -1392,6 +1392,33 @@ the production-integration milestone, not a GA blocker.
   exit 1, multibyte reassembly PASS, full negative-path battery green); the
   ORPHANED branch's proof is the Codex mocked-fetch run — recorded as the
   honest limit (a live re-proof would re-pollute GHIP). No gate loosened.
+- **Run-error-dedup fast-follow LANDED as CLWX-104 → Ready (2026-09-06 fourth
+  tick, owner-directed).** The moe.18 D0/D1/D2 degrade-UX findings are fixed
+  at the display layer (degrade/failover logic untouched): D0 — loadHistory
+  seeds/clears the red banner only for an ACTIVE own-send turn in this window
+  (payload presence; idle-window reloads/session re-opens never repaint;
+  mirrored into the dormant modular store copy); D1 —
+  `errorBannerVisibility()` suppresses same-class transport banners only
+  while the amber notice is EXPLAINING a failure (a success-claiming
+  `resent:true` notice never suppresses and is cleared by a newer terminal
+  error; auth-config/generic always show; error bar never duplicates the
+  callout); D2 — transport-wrapper "Connection error." blanked from the
+  Technical-details expander, `rawError=` fragments stripped, channel-neutral
+  unreachable/rate-limited copy. Commits `f37ec9a6` + `4bdc2dcd`. The 3-lane
+  review EARNED ITS KEEP: Codex (gpt-6-astra) reproduced 2 HIGHs on round 1
+  (attachment-only own send's silent death became invisible — no in-line
+  surface exists for empty-content error messages; a failed on-device resend
+  hid behind the stale success notice) and the Claude lenses (18 agents)
+  independently converged on both, plus the vacuous K12 row, the dormant-copy
+  D0, untested D1 wiring, and an e2e pinning the forbidden behavior — ALL
+  fixed same tick, mutation-probed (reverted seed-gate fails exactly the 4
+  guard rows), e2e re-pinned and run live (1 passed). Full suite 1535/6-skip;
+  gate pulse GREEN 7/0/2 at SENSE. Gap card filed: **CLWX-105** (in-line
+  error chip for error-stopped messages — historical failures on re-open
+  currently surface nowhere; active-turn failures always do). NEXT-BUILD
+  GATE: live re-verify on the next cut's VM matrix. Evidence:
+  `docs/evidence/CLWX-104_RUN_ERROR_DEDUP_2026-09-06.md` +
+  `CODEX_ADVERSARIAL_REVIEW_2026-09-06_CLWX-104.md`.
 
 ---
 
