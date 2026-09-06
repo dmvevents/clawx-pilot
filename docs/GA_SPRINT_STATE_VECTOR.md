@@ -1704,6 +1704,49 @@ the production-integration milestone, not a GA blocker.
   **Note for the owner:** CLWX-106 says the gate can score GREEN while a
   required tier SKIPs entirely — so CLWX-90's Ready describes the harness, not
   the coverage.
+- **moe.19 verify findings carded and registered (2026-09-06 eleventh tick,
+  same sync).** The RED row from the moe.19 VM run that had no card is now
+  **CLWX-117** (Backlog, high): an on-device turn **parks forever** on a
+  top-level `sessions_yield` — bubble appears, one execution step, then
+  `answerText: null` / `settled: false` / no notice / no error; the 300s verdict
+  came from the *driver's* budget, not from the product terminating. Model ruled
+  out (direct ollama generate on the same guest and model answered in 8.2s with
+  0.1s decode; the process held 58 CPU-**seconds** of lifetime CPU). Cause:
+  `sessions_yield` is sub-session plumbing that hands control to a *parent* —
+  the renderer models it that way at `src/pages/Chat/task-visualization.ts:147`
+  — and at top level there is no parent, so the loop never terminates. This is
+  the **non-self-recovering** variant of the tool-cascade class (the earlier
+  residual was a spurious `exec`, which self-recovers and was triaged
+  cosmetic). Fix layers named, none executed: trim session-control tools from
+  the on-device catalog (that work already sits on the owner-held
+  `fix/tool-catalog-trim` @ `7add864b` — commented on CLWX-29, **not**
+  unheld), a **terminal** turn watchdog (recommended into CLWX-47: 30s
+  reassurance is this card's existing scope, but an unterminated turn needs a
+  hard bound, and a reassurance notice on an unbounded turn makes the app look
+  *more* broken), and a persona instruction as defence in depth.
+  **The transferable finding is the harness one:**
+  `windows-pilot/scripts/pilot-electron-cdp-probe.js:342` instructs the model
+  not to use `sessions_yield`/`sessions_spawn`/subagents — steering that lives
+  ONLY in a test probe, not in the product persona. Every eval through that
+  probe was steering the model *away* from this defect instead of measuring it,
+  while a principal typing an ordinary question is unprotected; the stall
+  surfaced only because this run's driver carries no such instruction. Same
+  shape as the `skipGatewayRefresh` dead-code lesson. Register updated with
+  four delta rows + one group-A row (A: 11 → 12, and CLWX-117 is the only one
+  of the twelve that is a plain product defect with no owner/Ministry gate in
+  front of it): ONDEVICE-YIELD-STALL, PROBE-STEERS-PAST-DEFECT, **K10
+  re-classified FAIL-as-seen but INVALID as an *Online* test** (both runs had
+  already auto-degraded to on-device, so the run does not test the path the K10
+  fix targets — and the earlier CDP-viewport legs had scored the same turn
+  `ANSWERED`, which is precisely why the desktop-screen VLM leg exists), and
+  VERIFY-VACUOUS-PACKAGES (our own verify scraped the package list by regex
+  from a file that only *imports* the constant → `all present (0 checked)`
+  logged as a PASS; fixed @ `30f97164`, verified in-tree at
+  `scripts/vm-verify-moe19.sh:168-175`, an empty list now FAILS). Also
+  commented: CLWX-42 (the NSCC pack is present on the *installed* moe.19
+  tree — ship leg has installed-binary evidence; Windows retrieval turn still
+  owed, and the caveat above is recorded on the card), CLWX-49 + CLWX-56
+  (pull-forward flag for gap item 12 instead of a duplicate card).
 
 ---
 
