@@ -101,11 +101,36 @@ if (STATIC_ONLY) {
 }
 
 // ── T2: packaged/VM lane — status probe only (the batch runs via V-batch) ─
-if (probe('nc -z -w3 localhost 12222')) {
-  results.push({ id: 'vm-lane', tier: 'T2', box: 'KR2+W-matrix', status: 'INFO', secs: 0, optional: true, tail: 'IAP tunnel up — run the V-batch workflow for install-verify + W-matrix surfaces' });
-  console.log('[T2] vm-lane ... INFO (tunnel up; V-batch owns these surfaces)');
+//
+// `nc -z` proves ONLY that a local listener is bound. An IAP tunnel whose
+// credentials have died keeps that listener up and resets every connection
+// ("kex_exchange_identification: read: Connection reset by peer"), so nc
+// false-POSITIVES — the inverse of the known Windows-Firewall false negative.
+// This gate reported "IAP tunnel up — run the V-batch workflow" against a
+// tunnel that could not authenticate (2026-09-06: nc said open, ssh reset at
+// key exchange, `gcloud compute instances list` demanded reauth). A reader
+// takes that row as "the VM lane is available" and it is not. The lane script
+// already got this right (vm-verify-moe19.sh:100-116, control leg) and the
+// state vector records three separate stale-:12222 incidents; the gate was the
+// one place still trusting the socket. Same false-green class as the vacuous
+// bundled-package check (VERIFY-VACUOUS-PACKAGES, fixed @ 30f97164).
+//
+// Three states, kept distinguishable — "bound but dead" must never read as up.
+const VM_PORT = process.env.CLAWX_SSH_PORT || '12222';
+const VM_USER = process.env.CLAWX_VM_USER || 'clawxtest';
+const vmBound = probe(`nc -z -w3 localhost ${VM_PORT}`);
+// Negative control: if a port nothing listens on also answers, the probe
+// method itself is untrustworthy and no verdict from it may be believed (PF-3).
+const vmProbeSane = !probe('nc -z -w2 localhost 9999');
+if (!vmProbeSane) {
+  skip('vm-lane (KR2 + W-matrix)', 'T2', 'KR2', `probe method UNTRUSTWORTHY — control-leg port 9999 answered, so the :${VM_PORT} result proves nothing; investigate before believing any tunnel state`);
+} else if (!vmBound) {
+  skip('vm-lane (KR2 + W-matrix)', 'T2', 'KR2', 'IAP tunnel down (no local listener) — VM surfaces evidenced by the last V-batch (see state vector); start VM + rerun batch to refresh');
+} else if (probe(`ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=no -p ${VM_PORT} ${VM_USER}@localhost 'echo GUEST_SSH_OK' 2>/dev/null | grep -q GUEST_SSH_OK`)) {
+  results.push({ id: 'vm-lane', tier: 'T2', box: 'KR2+W-matrix', status: 'INFO', secs: 0, optional: true, tail: `IAP tunnel up AND guest ssh handshake verified on :${VM_PORT} — run the V-batch workflow for install-verify + W-matrix surfaces` });
+  console.log('[T2] vm-lane ... INFO (tunnel up, handshake verified; V-batch owns these surfaces)');
 } else {
-  skip('vm-lane (KR2 + W-matrix)', 'T2', 'KR2', 'IAP tunnel down — VM surfaces evidenced by the last V-batch (see state vector); start VM + rerun batch to refresh');
+  skip('vm-lane (KR2 + W-matrix)', 'T2', 'KR2', `IAP tunnel NOT USABLE — :${VM_PORT} is bound but the guest ssh handshake failed, which is a live tunnel with dead credentials. This lane is BLOCKED, not available. Owner (interactive): gcloud auth login; if auth is already good: pkill -f start-iap-tunnel, then re-run`);
 }
 
 // ── Scorecard ─────────────────────────────────────────────────────────────
