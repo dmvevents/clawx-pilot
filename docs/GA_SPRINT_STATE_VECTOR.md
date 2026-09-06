@@ -1602,6 +1602,21 @@ the production-integration milestone, not a GA blocker.
   Falsifiability: a lossy splitter dropping 111 "suspension" body lines
   lands at ratio exactly 0.850 — the old floor passed it silently; both
   new guards catch it. Guards 46/46.
+- **KR5 CHECKED + scorecard reconciled against the board (2026-09-06,
+  owner-directed "KR5 ahead of any more cards"; `7d9fca04`).** The three
+  G-outbox tests re-run **9/9** (durable + stubbed-persistence negative
+  control, idempotent, drain incl. bounded-retry/backoff/concurrency);
+  wiring re-verified in source (audit-first outlook/forms writes, boot
+  drain main:603; landed `ebc4be75`, CLWX-28 Ready since 09-02). The
+  GA_READINESS G10 row still said "designed, not built" — 4 days stale;
+  fixed. Reconcile: KR1 (CLWX-24 Ready + moe.12/moe.17 in-app proofs),
+  Ext-val A (CLWX-34 Ready) and the GA packet (CLWX-10 Ready) checked
+  with inline evidence; Ext-val B annotated honestly (seq11 Cancelled;
+  Karunesh moe.15 run = nearest evidence; qualifiers unmet → owner
+  acceptance call); tag-time hygiene box annotated (cannot pre-check).
+  **Product KRs 2/8 → 4/8; scorecard 6 checked; every remaining unchecked
+  box is an owner/Ministry call or at-the-tag** — no agent-executable
+  scorecard box remains.
 
 ---
 
