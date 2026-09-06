@@ -1551,6 +1551,28 @@ the production-integration milestone, not a GA blocker.
   fresh-session no-file K14 question on the first build/restart carrying
   these commits. NOTEs on the card: ~+12KB per Code question (CLWX-43
   ledger), tool-lane page citations informational-only.
+- **CLWX-87 WER bench built + Mac legs measured (2026-09-06 eighth tick,
+  `610779dd`) — card Todo → In Progress.** Gate pulse GREEN 7/0/2; VM
+  still TERMINATED (owner start = the unlock). WHAT SHIPPED:
+  `scripts/clwx87-wer-bench.mjs` (pure word-level WER, 8 unit guards;
+  deterministic `say` fixtures from `eval/fixtures/clwx87-asr-manifest.json`
+  — 8 MoE/Trinidad-vocabulary clips, no committed audio; engines: whisper
+  local / transcripts-file for the Windows leg / azure loud-skip exit 3
+  proven) + `windows-pilot/scripts/pilot-asr-wer.ps1` (System.Speech
+  synthesis + SHIPPED recognition, BOM-less JSON, STATE line, lint:ps
+  GREEN). MEASURED: whisper tiny 13.5% / base 13.5% aggregate clean-audio
+  floor; Trinidadian place names are the visible weakness ("Tuna Pune" →
+  Tunapuna 30.8%); number-format artifacts recorded (fair between
+  engines). Transcripts-lane wiring proven both directions (perfect stub
+  0.0%, corrupted clip caught). Bundling-cost groundwork on the evidence
+  (whisper.cpp tiny ≈75MB / base ≈142MB vs System.Speech 0MB). Suite
+  1608/6-skip; typecheck+lint+lint:ps clean. Honest scope: review = unit
+  guards + falsifiability probes only (test-infra, no production code, no
+  Ready move) — the multi-lens lane runs at the Ready move after the
+  System.Speech row. TRAIL: owner starts the VM → `pilot-asr-wer.ps1` →
+  `--engine transcripts` grade → decision recorded; optional owner ask:
+  Trinidadian-accent `source:"real"` rows. Evidence:
+  `docs/evidence/CLWX87_WER_2026-09-06.md`.
 
 ---
 
