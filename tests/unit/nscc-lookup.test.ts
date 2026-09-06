@@ -111,6 +111,56 @@ describe('Codex-lane regressions (2026-09-06): truncation, page-break stitching,
   });
 });
 
+describe('correctness-lens regressions (2026-09-06): load integrity + short-term boundaries', () => {
+  it('a missing data file surfaces principal-readable prose — never ENOENT or a filesystem path (lens MAJOR 1)', async () => {
+    const { loadNsccText } = await load();
+    let message = '';
+    try {
+      loadNsccText('/tmp/no-such-plugin-root-clwx42');
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(message).toMatch(/could not be loaded/i);
+    expect(message).toMatch(/update or reinstall/i);
+    expect(message).not.toMatch(/ENOENT/);
+    expect(message).not.toMatch(/\//); // no filesystem paths
+  });
+
+  it('assertNsccIntegrity rejects empty, truncated, and 2018-edition text with the same readable message (lens MAJOR 1)', async () => {
+    const { assertNsccIntegrity } = await load();
+    for (const bad of [
+      '',
+      'National School Code of Conduct 2026', // truncated far below the length floor
+      `${'x'.repeat(120_000)} National School Code of Conduct Revised May 25, 2018`, // wrong edition
+      `${'x'.repeat(120_000)} National School Code of Conduct`, // no 2026 marker
+    ]) {
+      expect(() => assertNsccIntegrity(bad)).toThrow(/could not be loaded/i);
+    }
+    expect(() => assertNsccIntegrity(nsccText)).not.toThrow();
+  });
+
+  it('termHits: short terms match word-boundaries only — "pe" no longer matches people/operate/type (lens MAJOR 3)', async () => {
+    const { termHits } = await load();
+    expect(termHits('people operate this type of thing', 'pe')).toBe(0);
+    expect(termHits('the pe class runs on friday; pe kits required', 'pe')).toBe(2);
+    // longer terms keep substring semantics (plurals still match)
+    expect(termHits('suspensions are recorded', 'suspension')).toBe(1);
+  });
+
+  it('TOC dot-leader lines are dropped from passages (lens minor 6)', async () => {
+    const { splitNsccPassages } = await load();
+    const passages = splitNsccPassages(nsccText);
+    const withLeaders = passages.filter((p: string) => /\.{5,}\s*\d+\s*$/m.test(p));
+    expect(withLeaders.length).toBe(0);
+  });
+
+  it('no passage is a sub-100-char fragment occupying a rank slot (lens minor 12)', async () => {
+    const { splitNsccPassages } = await load();
+    const passages = splitNsccPassages(nsccText);
+    expect(passages.filter((p: string) => p.length < 100).length).toBe(0);
+  });
+});
+
 describe('searchNscc — honesty and edge cases (falsifiability)', () => {
   it('an absent topic returns no passages plus the retry-then-report note — never a "Code lacks it" claim (Codex MED)', async () => {
     const { searchNscc } = await load();
@@ -141,9 +191,13 @@ describe('searchNscc — honesty and edge cases (falsifiability)', () => {
     const { splitNsccPassages } = await load();
     const passages = splitNsccPassages(nsccText);
     expect(passages.length).toBeGreaterThan(50);
-    for (const p of passages) expect(p.length).toBeLessThanOrEqual(1800);
+    // Cap 1800 + up to 99 chars when a sub-100 trailing fragment folds back
+    // into its predecessor (lens minor 12 fix) — still firmly bounded.
+    for (const p of passages) expect(p.length).toBeLessThanOrEqual(1900);
     const total = passages.reduce((n: number, p: string) => n + p.length, 0);
-    // Split loses only inter-block whitespace, never content.
-    expect(total).toBeGreaterThan(nsccText.length * 0.9);
+    // Split loses only inter-block whitespace, page-number artifacts, and
+    // TOC dot-leader lines (intended noise removal; measured ratio 0.897 on
+    // the shipped file) — never body content.
+    expect(total).toBeGreaterThan(nsccText.length * 0.85);
   });
 });

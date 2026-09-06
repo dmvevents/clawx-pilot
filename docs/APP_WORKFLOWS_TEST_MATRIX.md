@@ -15,7 +15,7 @@ is the checklist that proves it.
 
 Two layers expose functionality:
 
-- **Agent tools** — 31 tools the on-device/cloud LLM can call directly in chat.
+- **Agent tools** — 32 tools the on-device/cloud LLM can call directly in chat (31 + `principal.nscc_lookup`, CLWX-42).
 - **Host-API routes** (`127.0.0.1:13210`) — the HTTP surface the session calls
   "the Outlook MCP"; the agent tools for Outlook/Forms are thin wrappers over these.
 - **Skills** — bundled document/utility packs (the legacy Python doc skills are

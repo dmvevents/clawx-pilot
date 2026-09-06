@@ -132,8 +132,12 @@ export function startsAsContinuation(block) {
 export function splitNsccPassages(text) {
   // Page artifacts (a line holding only a page number) sit INSIDE logical
   // paragraphs at every page break; they carry no content and their blank
-  // lines caused the mid-list splits above.
-  const cleaned = String(text ?? '').replace(/^[ \t]*\d{1,3}[ \t]*$/gm, '');
+  // lines caused the mid-list splits above. Table-of-contents dot-leader
+  // lines ("Understanding Suspensions ..... 106") are rank-slot noise for
+  // exactly the queries that matter (lens minor, 2026-09-06).
+  const cleaned = String(text ?? '')
+    .replace(/^[ \t]*\d{1,3}[ \t]*$/gm, '')
+    .replace(/^.*\.{5,}\s*\d+\s*$/gm, '');
   const rawBlocks = cleaned
     .split(/\r?\n\s*\r?\n/)
     .map((b) => b.trim())
@@ -165,7 +169,39 @@ export function splitNsccPassages(text) {
     }
   }
   if (current) passages.push(current);
+  // A sub-100-char trailing remainder (hard-split leftovers) is not worth a
+  // rank slot — fold it back into its predecessor (lens minor, 2026-09-06).
+  for (let i = passages.length - 1; i > 0; i -= 1) {
+    if (passages[i].length < 100) {
+      passages[i - 1] = `${passages[i - 1]}\n${passages[i]}`;
+      passages.splice(i, 1);
+    }
+  }
   return passages;
+}
+
+/**
+ * Count term hits (capped at 5). Terms of 1-3 characters match only on
+ * word boundaries — "pe" as a substring matched 256/324 passages via
+ * people/operate/type and noise outvoted signal (correctness lens MAJOR,
+ * 2026-09-06); longer terms keep substring matching so "suspension" still
+ * catches "suspensions". Pure; unit-tested.
+ */
+export function termHits(normText, term) {
+  if (!term) return 0;
+  if (term.length <= 3) {
+    const re = new RegExp(`(?<![a-z0-9])${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z0-9])`, 'g');
+    let hits = 0;
+    while (hits < 5 && re.exec(normText) !== null) hits += 1;
+    return hits;
+  }
+  let hits = 0;
+  let idx = normText.indexOf(term);
+  while (idx !== -1 && hits < 5) {
+    hits += 1;
+    idx = normText.indexOf(term, idx + term.length);
+  }
+  return hits;
 }
 
 /**
@@ -185,21 +221,16 @@ export function scorePassage(normPassage, firstLine, terms, normQuery, bigrams =
     if (firstLine.includes(bigram)) score += 2;
   }
   for (const term of terms) {
-    let idx = normPassage.indexOf(term);
-    if (idx === -1) continue;
+    const hits = termHits(normPassage, term);
+    if (hits === 0) continue;
     // Corpus-frequent terms carry a reduced weight (searchNscc computes
     // document frequencies): in THIS corpus "national/school/code/conduct"
     // appear in nearly every passage, and at full weight any generic
     // passage naming the document outranked the actual core-values list
     // (rank 9, 2026-09-06).
     const weight = weights[term] ?? 1;
-    let hits = 0;
-    while (idx !== -1 && hits < 5) {
-      hits += 1;
-      idx = normPassage.indexOf(term, idx + term.length);
-    }
     score += (1 + (hits - 1) * 0.25) * weight;
-    if (firstLine.includes(term)) score += 0.5 * weight;
+    if (termHits(firstLine, term) > 0) score += 0.5 * weight;
     // Definition nudge: "<term> is defined as …" / "definition of <term>" is
     // almost always THE passage a "what is <term>" question wants, but it
     // has no term-frequency advantage over consequence-matrix rows that
@@ -286,11 +317,43 @@ export function searchNscc(text, query, { maxPassages = DEFAULT_MAX_PASSAGES } =
 let cachedText = null;
 let cachedFrom = null;
 
-/** Load (and cache) the shipped NSCC text from the plugin package root. */
+// Principal-readable load failure: no file paths, no ENOENT, and NEVER the
+// no-match note — a zero-byte or half-copied data file must surface as a
+// load problem, not as "the Code doesn't cover it" (correctness lens MAJOR,
+// 2026-09-06: the integrity assertion existed only on the EVAL lane).
+const LOAD_FAILURE_MESSAGE =
+  'The Code of Conduct document that ships with the app could not be loaded — '
+  + 'it appears missing, damaged, or incomplete on this install. The principal should '
+  + 'update or reinstall the app; do not answer the Code-of-Conduct question from memory.';
+
+/**
+ * The same edition/integrity bar the eval lane enforces (assertNscc2026),
+ * now on the PRODUCTION path (pure; unit-tested). Throws the readable
+ * message above — never internals.
+ */
+export function assertNsccIntegrity(text) {
+  const ok =
+    typeof text === 'string'
+    && text.length > 100_000
+    && /national school code of conduct/i.test(text)
+    && /2026/.test(text)
+    && !(/revised may 25, 2018/i.test(text) && !/revised edition \(2026\)/i.test(text));
+  if (!ok) throw new Error(LOAD_FAILURE_MESSAGE);
+}
+
+/** Load (and cache) the shipped NSCC text from the plugin package root;
+ * throws principal-readable prose on any read or integrity failure. */
 export function loadNsccText(pkgRoot) {
   const p = path.join(pkgRoot, NSCC_DATA_RELPATH);
   if (cachedText === null || cachedFrom !== p) {
-    cachedText = readFileSync(p, 'utf8');
+    let text;
+    try {
+      text = readFileSync(p, 'utf8');
+    } catch {
+      throw new Error(LOAD_FAILURE_MESSAGE);
+    }
+    assertNsccIntegrity(text);
+    cachedText = text;
     cachedFrom = p;
   }
   return cachedText;

@@ -189,15 +189,26 @@ The user provides the full text of the National School Code of Conduct (NSCC) 20
 Answer the question using ONLY the provided NSCC document — do not add outside knowledge or assumptions.
 Be brief: 2-5 sentences. Always name the NSCC (National School Code of Conduct) as your source, and cite the page number when it is identifiable from the provided text. If the document does not contain the answer, say so plainly.`;
 
+// The tool lane provides RETRIEVED EXCERPTS, not the full document. Telling
+// the model it holds the full text makes it attribute retrieval misses to
+// the DOCUMENT ("the NSCC does not contain...") — exactly the artifact that
+// produced a wrong Q20 explanation in the recorded evidence (correctness
+// lens MAJOR, 2026-09-06). The excerpt lane must own its incompleteness.
+const SYSTEM_PROMPT_TOOL_LANE = `You are a digital administrative assistant for a primary-school principal in Trinidad & Tobago.
+The user provides EXCERPTS retrieved from the National School Code of Conduct (NSCC) 2026 by a search tool, plus one question. The excerpts are the best matches for the question but may be incomplete — they are NOT the whole document.
+Answer the question using ONLY the provided excerpts — do not add outside knowledge or assumptions.
+Be brief: 2-5 sentences. Always name the NSCC (National School Code of Conduct) as your source, and cite the page number when it is identifiable from the provided text. If the excerpts do not contain the answer, say the retrieved sections do not answer it — never claim the NSCC itself lacks the answer.`;
+
 async function callBedrock(
   client: BedrockRuntimeClient,
   userText: string,
+  system: string,
 ): Promise<{ text: string; latencyMs: number }> {
   const t0 = Date.now();
   const body = {
     anthropic_version: 'bedrock-2023-05-31',
     max_tokens: MAX_TOKENS,
-    system: SYSTEM_PROMPT,
+    system,
     messages: [{ role: 'user', content: [{ type: 'text', text: userText }] }],
   };
   const cmd = new InvokeModelCommand({
@@ -218,11 +229,12 @@ const THROTTLE_RE = /throttl|too ?many ?requests|rate ?limit|429/i;
 async function callWithRetry(
   client: BedrockRuntimeClient,
   userText: string,
+  system: string,
 ): Promise<{ text: string; latencyMs: number }> {
   const backoffsMs = [5_000, 15_000];
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await callBedrock(client, userText);
+      return await callBedrock(client, userText, system);
     } catch (err) {
       const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
       if (attempt < backoffsMs.length && THROTTLE_RE.test(msg)) {
@@ -291,6 +303,7 @@ async function callWithRetry(
       const turn = await callWithRetry(
         client,
         `${context}\n\n---\n\nQUESTION: ${row.question}`,
+        lane === 'tool' ? SYSTEM_PROMPT_TOOL_LANE : SYSTEM_PROMPT,
       );
       text = turn.text;
       latencyMs = turn.latencyMs;
