@@ -1594,6 +1594,14 @@ the production-integration milestone, not a GA blocker.
   NEXT BUILD, owner budget sign-off (today's numbers suggest the proposal
   is attainable), GA-packet row after sign-off. Evidence:
   `docs/evidence/CLWX43_LATENCY_MAC_LANE_2026-09-06.md`.
+- **Owner gate flag folded (2026-09-06, `995ae457`):** the CLWX-42
+  content-retention guard's 0.9→0.85 loosening left 4.7 points of slack
+  (measured 0.897) — tightened to 0.89 AND replaced-in-spirit with a
+  structural drop-only-noise assertion (every non-noise source line must
+  survive into some passage; a dropped body line fails BY NAME).
+  Falsifiability: a lossy splitter dropping 111 "suspension" body lines
+  lands at ratio exactly 0.850 — the old floor passed it silently; both
+  new guards catch it. Guards 46/46.
 
 ---
 
