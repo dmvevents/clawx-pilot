@@ -155,6 +155,14 @@ export interface ChatState {
         reason: 'unreachable' | 'rate-limited';
         resent: boolean;
         to: 'online' | 'on-device';
+        /**
+         * On-device direction only, and only ever set to `false`: the four
+         * config stores moved but the gateway did not acknowledge the session
+         * cutover, so the next send may still run on the channel that just
+         * failed. The copy then says the switch could not be made rather than
+         * claiming one that did not happen. Absent means "confirmed".
+         */
+        cutoverConfirmed?: boolean;
       }
     | null;
 
@@ -196,6 +204,15 @@ export interface ChatState {
   clearError: () => void;
   /** Dismiss the "moved to on-device" notice. */
   clearDegradeNotice: () => void;
+  /**
+   * Drop any session-level model pin so this session follows the configured
+   * channel again. Call it whenever the principal picks a channel explicitly:
+   * a send-time degrade pins the session (that is how the cutover is made to
+   * take effect immediately), and a session pin OUTRANKS the config default, so
+   * without this the toggle would move the four stores and change nothing the
+   * principal can see. Resolves false when the gateway did not accept the clear.
+   */
+  clearSessionModelPin: (sessionKey?: string) => Promise<boolean>;
 }
 
 export const DEFAULT_CANONICAL_PREFIX = 'agent:main';

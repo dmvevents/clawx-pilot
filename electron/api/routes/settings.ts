@@ -121,7 +121,11 @@ export async function handleSettingsRoutes(
       // and the restart loses the port race, so the runtime disappears under
       // the resend (moe.19 VM, 2026-09-06: Gateway down 3 minutes, empty
       // assistant bubble, three fresh sessions in a row). The four-store write
-      // still lands, so the resend and every later turn resolve on-device.
+      // still lands, but it does not by itself move the running Gateway (it
+      // resolves turns from a boot-pinned snapshot). `modelRef` below is
+      // returned so the caller can pin the session onto that model over the RPC
+      // and WAIT for the acknowledgement — that is what makes the degrade take
+      // effect on the resend.
       const result = await applyChannelChange(body.channel, ctx.gatewayManager, {
         skipGatewayRefresh: true,
       });

@@ -122,8 +122,17 @@ export interface ApplyChannelChangeOptions {
    * the resend: on Windows a reload falls through to a full restart
    * (manager.ts), and the restart loses the port race — measured on the moe.19
    * VM (evidence 2026-09-06), the first cloud-unreachable send took the Gateway
-   * down for 3 minutes and the turn died with an empty assistant bubble. The
-   * config write still lands, so the next run resolves the new channel.
+   * down for 3 minutes and the turn died with an empty assistant bubble.
+   *
+   * The four-store write still lands — but do NOT read that as "the next turn
+   * runs on the new channel". The Gateway resolves turns against a config
+   * snapshot it pinned at boot; external edits reach it only through a file
+   * watcher that debounces, batches, and can be disabled outright
+   * (`gateway.reload.mode: "off"`). Making the change take effect *now* is the
+   * caller's job, and the renderer does it by pinning the session's model over
+   * the RPC (`cutoverSessionModel` in src/stores/chat.ts) — session overrides are
+   * re-read from disk every turn and outrank config defaults. Skipping the
+   * refresh is therefore safe, not merely tolerable.
    *
    * The toggle and the boot preflight must NOT set this: they are not inside a
    * turn, and the runtime should pick the change up at once.

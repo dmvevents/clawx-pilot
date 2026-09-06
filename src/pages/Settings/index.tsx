@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { useSettingsStore } from '@/stores/settings';
+import { useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
 import { useUpdateStore } from '@/stores/update';
 import { UpdateSettings } from '@/components/settings/UpdateSettings';
@@ -694,7 +695,15 @@ export function Settings() {
                     <Button
                       key={value}
                       variant={preferredChannel === value ? 'secondary' : 'outline'}
-                      onClick={() => setPreferredChannel(value)}
+                      onClick={async () => {
+                        await setPreferredChannel(value);
+                        // Same reason as the composer toggle: a send-time
+                        // degrade pins the chat session's model, and a session
+                        // pin outranks these four-store defaults on every turn.
+                        // Without the clear, picking a channel here would look
+                        // applied and change nothing.
+                        await useChatStore.getState().clearSessionModelPin();
+                      }}
                       className={cn(
                         'rounded-full px-5 h-10 border-black/10 dark:border-white/10',
                         preferredChannel === value

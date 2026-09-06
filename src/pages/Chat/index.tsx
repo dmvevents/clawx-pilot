@@ -909,12 +909,21 @@ export function Chat() {
         // data to the cloud stays the principal's choice — so the copy is an
         // actionable prompt to switch to Online.
         const toOnline = degradeNotice.to === 'online';
+        // The config stores moved but the gateway never acknowledged the
+        // cutover, so we cannot claim the switch happened — the next send might
+        // still go out on the channel that just failed. Say so plainly instead
+        // of "switched to this device", which would be a promise we cannot keep.
+        const cutoverFailed = degradeNotice.cutoverConfirmed === false;
         const titleKey = toOnline
           ? 'degradeNotice.onlineSwitchNeeded'
-          : (degradeNotice.resent
-              ? (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.resentRateLimited' : 'degradeNotice.resentUnreachable')
-              : (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.switchedRateLimited' : 'degradeNotice.switchedUnreachable'));
-        const hintKey = toOnline ? 'degradeNotice.onlineSwitchHint' : 'degradeNotice.restoreHint';
+          : (cutoverFailed
+              ? (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.cutoverFailedRateLimited' : 'degradeNotice.cutoverFailedUnreachable')
+              : (degradeNotice.resent
+                  ? (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.resentRateLimited' : 'degradeNotice.resentUnreachable')
+                  : (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.switchedRateLimited' : 'degradeNotice.switchedUnreachable')));
+        const hintKey = toOnline
+          ? 'degradeNotice.onlineSwitchHint'
+          : (cutoverFailed ? 'degradeNotice.cutoverFailedHint' : 'degradeNotice.restoreHint');
         const Icon = toOnline ? Cloud : Laptop;
         return (
         <div className="px-4 pt-2" data-testid="chat-degrade-notice">

@@ -47,8 +47,36 @@ const BOTH_CHANNELS = [
   { id: 'ollama', type: 'ollama', vendorId: 'ollama', baseUrl: 'http://127.0.0.1:11434', model: 'qwen2.5:3b-instruct' },
 ];
 
+/**
+ * A `sessions.patch` acknowledgement proving the session now resolves to the
+ * on-device model. `resolved` is the gateway's readback of the EFFECTIVE model
+ * after the write — the only honest evidence the cutover took, which is why the
+ * store checks it instead of treating "the RPC returned" as success.
+ */
+const PATCH_ACK = {
+  ok: true,
+  key: 'agent:main:main',
+  resolved: { modelProvider: 'ollama', model: 'qwen2.5:3b-instruct' },
+};
+
+/**
+ * Install a method-keyed rpc mock: `sessions.patch` confirms the cutover, every
+ * other method (chat.history, chat.send) gets `rest`. The degrade path awaits a
+ * session patch AND a history/send RPC on the same mock, so a bare
+ * mockResolvedValue would answer the patch with a history payload and read as a
+ * failed cutover.
+ */
+function mockHistory(rest: unknown) {
+  gatewayRpcMock.mockImplementation(async (method: string) =>
+    (method === 'sessions.patch' ? PATCH_ACK : rest));
+}
+
 /** Paths POSTed/PUT to the host API, in order. */
 const calledPaths = () => hostApiFetchMock.mock.calls.map((c) => String(c[0]));
+/** `sessions.patch` calls, in order: [{ key, model }]. */
+const patchCalls = () => gatewayRpcMock.mock.calls
+  .filter((c) => c[0] === 'sessions.patch')
+  .map((c) => c[1] as { key?: string; model?: string | null });
 const degradeCalls = () => hostApiFetchMock.mock.calls.filter((c) => String(c[0]) === '/api/settings/degradeChannel');
 const preferenceWrites = () => hostApiFetchMock.mock.calls.filter((c) => String(c[0]).includes('preferredChannel'));
 
@@ -87,6 +115,7 @@ describe('chat store: send-time channel degradation', () => {
     vi.resetModules();
     window.localStorage.clear();
     gatewayRpcMock.mockReset();
+    mockHistory(undefined);
     hostApiFetchMock.mockReset();
     hostApiFetchMock.mockResolvedValue({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
     agentsState.agents = [];
@@ -102,7 +131,7 @@ describe('chat store: send-time channel degradation', () => {
     // and never called maybeDegradeChannel — banner shown, channel stayed
     // Online, warm on-device model unused. This pins the catch-all wiring.
     const store = await loadStore();
-    gatewayRpcMock.mockResolvedValue({
+    mockHistory({
       messages: [
         { role: 'user', id: 'u1', content: [{ type: 'text', text: 'summarise my last 5 emails' }] },
         {
@@ -129,7 +158,7 @@ describe('chat store: send-time channel degradation', () => {
     // signal we gate on (CLWX-93), not `sending`.
     const store = await loadStore();
     store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
-    gatewayRpcMock.mockResolvedValue({
+    mockHistory({
       messages: [
         {
           role: 'assistant',
@@ -155,7 +184,7 @@ describe('chat store: send-time channel degradation', () => {
     // terminal error surfaced by the poll must NOT fail over here.
     const store = await loadStore();
     store.setState({ sending: true, activeRunId: 'run-console', lastSentPayload: null });
-    gatewayRpcMock.mockResolvedValue({
+    mockHistory({
       messages: [
         {
           role: 'assistant',
@@ -419,6 +448,141 @@ describe('chat store: send-time channel degradation', () => {
 
     expect(store.getState().lastSentPayload).toBeNull();
   });
+
+  // ── Runtime cutover (cross-model adversarial review, 2026-09-06). Writing the
+  //    four config stores does NOT move the running gateway: it resolves each
+  //    turn from a snapshot pinned at boot, and the only external-write pickup is
+  //    a watcher that debounces, batches, and can be switched off. So the degrade
+  //    pins the SESSION model over the RPC and waits for the acknowledgement.
+  //    Without that, the "failover" resends on the provider that just failed. ──
+  it('pins the session onto the on-device model and only resends AFTER the gateway acknowledges', async () => {
+    const store = await loadStore();
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' }]);
+    // Order is the whole point: a resend dispatched before the cutover lands
+    // runs on the failed cloud provider. (chat.history from the recovery poll
+    // is unrelated traffic on the same mock.)
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0]).filter((m) => m !== 'chat.history'))
+      .toEqual(['sessions.patch', 'chat.send']);
+    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: true, to: 'on-device' });
+  });
+
+  it('does NOT resend when the gateway acknowledges a DIFFERENT model than requested', async () => {
+    // The patch can succeed and still land elsewhere (alias, allowlist rewrite,
+    // a ref the model catalogue does not carry). The ack's `resolved` block is
+    // the effective model, so a mismatch means the turn would still run online.
+    const store = await loadStore();
+    gatewayRpcMock.mockImplementation(async (method: string) => (method === 'sessions.patch'
+      ? { ok: true, resolved: { modelProvider: 'google', model: 'gemini-2.5-pro' } }
+      : undefined));
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(degradeCalls()).toHaveLength(1);
+    expect(patchCalls()).toHaveLength(1);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    // Honest copy: the switch could not be completed, and the real error stays.
+    expect(store.getState().degradeNotice)
+      .toEqual({ reason: 'unreachable', resent: false, to: 'on-device', cutoverConfirmed: false });
+    expect(store.getState().error).toContain('fetch failed');
+  });
+
+  it('does NOT resend when the session patch itself fails', async () => {
+    const store = await loadStore();
+    gatewayRpcMock.mockImplementation(async (method: string) => {
+      if (method === 'sessions.patch') throw new Error('RPC timeout: sessions.patch');
+      return undefined;
+    });
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    expect(store.getState().degradeNotice)
+      .toEqual({ reason: 'unreachable', resent: false, to: 'on-device', cutoverConfirmed: false });
+  });
+
+  it('does NOT resend when the degrade route returns no model ref to pin', async () => {
+    // Nothing to patch means nothing can be proven; claiming the switch anyway
+    // is the failure this path exists to prevent.
+    hostApiFetchMock.mockResolvedValue({ success: true });
+    const store = await loadStore();
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(patchCalls()).toEqual([]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    expect(store.getState().degradeNotice?.cutoverConfirmed).toBe(false);
+  });
+
+  it('pins the session even when the turn is NOT replayed (tools already ran)', async () => {
+    // The principal's own retry must land on-device too, so the cutover is not
+    // conditional on the replay.
+    const store = await loadStore();
+    store.setState({
+      streamingTools: [{ name: 'outlook.read_inbox', status: 'completed', updatedAt: Date.now() }],
+    });
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' }]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: false, to: 'on-device' });
+  });
+
+  it('clears the session pin when the principal picks a channel explicitly', async () => {
+    // A pin outranks the config default on every turn, so a toggle that only
+    // rewrote the four stores would look applied and change nothing.
+    const store = await loadStore();
+
+    await expect(store.getState().clearSessionModelPin()).resolves.toBe(true);
+
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+  });
+
+  it('reports a failed pin clear rather than assuming it worked', async () => {
+    const store = await loadStore();
+    gatewayRpcMock.mockImplementation(async () => { throw new Error('gateway not connected'); });
+
+    await expect(store.getState().clearSessionModelPin()).resolves.toBe(false);
+  });
+
+  it('drops a pin left by an earlier app run on the first send, once, and only when the default is Online', async () => {
+    // A pin lives on disk and survives quitting the app, and the boot preflight
+    // that re-applies preferredChannel cannot see it. Without this a school that
+    // lost the network on Monday would answer from the on-device model all week
+    // with the composer still reading Online.
+    providerState.accounts = [
+      { id: 'google', type: 'google', vendorId: 'google', model: 'gemini-2.5-pro', isDefault: true },
+      { id: 'ollama', type: 'ollama', vendorId: 'ollama', baseUrl: 'http://127.0.0.1:11434', model: 'qwen2.5:3b-instruct' },
+    ];
+    const store = await loadStore();
+
+    await store.getState().sendMessage('first turn');
+    await store.getState().sendMessage('second turn');
+
+    // One reconcile for the session, not one per send.
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+  });
+
+  it('does NOT drop the pin while the configured channel is still on-device (mid-outage)', async () => {
+    // Clearing here would undo a legitimate failover and send the next turn back
+    // out on the dead cloud provider.
+    providerState.accounts = [
+      { id: 'google', type: 'google', vendorId: 'google', model: 'gemini-2.5-pro' },
+      { id: 'ollama', type: 'ollama', vendorId: 'ollama', baseUrl: 'http://127.0.0.1:11434', model: 'qwen2.5:3b-instruct', isDefault: true },
+    ];
+    const store = await loadStore();
+
+    await store.getState().sendMessage('a turn during the outage');
+
+    expect(patchCalls()).toEqual([]);
+  });
 });
 
 describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0)', () => {
@@ -426,6 +590,7 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
     vi.resetModules();
     window.localStorage.clear();
     gatewayRpcMock.mockReset();
+    mockHistory(undefined);
     hostApiFetchMock.mockReset();
     hostApiFetchMock.mockResolvedValue({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
     agentsState.agents = [];
@@ -451,7 +616,7 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
     const store = await loadStore();
     store.setState({ lastUserMessageAt: Date.now(), runError: null });
     providerState.accounts = [BOTH_CHANNELS[0]]; // online only — nothing to fail over to
-    gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
+    mockHistory(ERRORED_HISTORY);
 
     await store.getState().loadHistory(true);
     await settle();
@@ -465,7 +630,7 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
     // notice takes over — a red banner alongside it is exactly the D1 stack.
     const store = await loadStore();
     store.setState({ lastUserMessageAt: Date.now(), runError: null });
-    gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
+    mockHistory(ERRORED_HISTORY);
 
     await store.getState().loadHistory(true);
     await settle();
@@ -485,7 +650,7 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
     const store = await loadStore();
     store.setState({ sending: false, activeRunId: null, lastUserMessageAt: null, runError: null });
     providerState.accounts = [BOTH_CHANNELS[0]];
-    gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
+    mockHistory(ERRORED_HISTORY);
 
     await store.getState().loadHistory(true);
     await settle();
@@ -505,7 +670,7 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
       lastSentPayload: { text: '', attachments: [{ path: '/tmp/report.pdf' }], targetAgentId: null } as never,
     });
     providerState.accounts = [BOTH_CHANNELS[0]];
-    gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
+    mockHistory(ERRORED_HISTORY);
 
     await store.getState().loadHistory(true);
     await settle();
@@ -541,7 +706,7 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
   it('does NOT paint the banner from a historical error on session re-open (nothing sent this window)', async () => {
     const store = await loadStore();
     store.setState({ sending: false, activeRunId: null, lastSentPayload: null, lastUserMessageAt: null, runError: null });
-    gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
+    mockHistory(ERRORED_HISTORY);
 
     await store.getState().loadHistory(true);
     await settle();
@@ -554,7 +719,7 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
     // never typed here; without lastSentPayload the banner must not paint.
     const store = await loadStore();
     store.setState({ sending: true, activeRunId: 'run-console', lastSentPayload: null, lastUserMessageAt: Date.now(), runError: 'stale from a previous own turn' });
-    gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
+    mockHistory(ERRORED_HISTORY);
 
     await store.getState().loadHistory(true);
     await settle();
@@ -567,7 +732,7 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
     // neither re-seeds nor wipes it. New chat / next send / dismiss clear it.
     const store = await loadStore();
     store.setState({ sending: false, activeRunId: null, lastUserMessageAt: null, runError: 'own turn error painted earlier' });
-    gatewayRpcMock.mockResolvedValue({ messages: [] });
+    mockHistory({ messages: [] });
 
     await store.getState().loadHistory(true);
     await settle();

@@ -10,9 +10,11 @@ const { agentsState, chatState, gatewayState, providersState, artifactPanelMocks
     agents: [] as Array<Record<string, unknown>>,
     defaultModelRef: null as string | null,
     updateAgentModel: vi.fn(),
+    fetchAgents: vi.fn(async () => undefined),
   },
   chatState: {
     currentAgentId: 'main',
+    clearSessionModelPin: vi.fn(async () => true),
   },
   gatewayState: {
     status: { state: 'running', port: 18789 },
@@ -33,7 +35,14 @@ vi.mock('@/stores/agents', () => ({
 }));
 
 vi.mock('@/stores/chat', () => ({
-  useChatStore: (selector: (state: typeof chatState) => unknown) => selector(chatState),
+  // getState() is part of the surface the composer uses: the channel pick calls
+  // useChatStore.getState().clearSessionModelPin(). A selector-only mock would
+  // make that call throw into the handler's catch and turn a silent regression
+  // into a passing test.
+  useChatStore: Object.assign(
+    (selector: (state: typeof chatState) => unknown) => selector(chatState),
+    { getState: () => chatState },
+  ),
 }));
 
 vi.mock('@/stores/gateway', () => ({
@@ -122,6 +131,8 @@ describe('ChatInput agent targeting', () => {
     agentsState.defaultModelRef = null;
     agentsState.updateAgentModel.mockReset();
     chatState.currentAgentId = 'main';
+    chatState.clearSessionModelPin.mockClear();
+    agentsState.fetchAgents.mockClear();
     gatewayState.status = { state: 'running', port: 18789 };
     providersState.accounts = [];
     providersState.statuses = [];
@@ -419,6 +430,56 @@ describe('ChatInput agent targeting', () => {
     expect(screen.getByTestId('chat-composer-channel')).toHaveTextContent('Online');
     expect(screen.getByTestId('chat-composer-channel')).toHaveAttribute('data-channel', 'online');
     expect(screen.queryByText(/moe-demo-pro/)).not.toBeInTheDocument();
+  });
+
+  it('clears the session model pin when the principal picks a channel (CLWX-95)', async () => {
+    // A send-time degrade pins the SESSION onto the on-device model, and a
+    // session pin outranks the config default on every turn. So the four-store
+    // write this toggle performs is not enough on its own: without the pin
+    // clear, a principal who degraded on Monday morning is stuck on-device all
+    // week while the composer cheerfully reads "Online". The clear is the only
+    // thing that makes their own pick take effect, so pin it here.
+    gatewayState.status = { state: 'running', port: 18789, gatewayReady: true };
+    const now = '2025-01-01T00:00:00.000Z';
+    providersState.accounts = [
+      {
+        id: 'demopro1',
+        vendorId: 'custom',
+        label: 'MoE Demo Pro',
+        authMode: 'api_key',
+        baseUrl: 'https://demo.example.com/v1',
+        model: 'custom-demopro1/moe-demo-pro',
+        enabled: true,
+        isDefault: false,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'ollama01',
+        vendorId: 'ollama',
+        label: 'Local',
+        authMode: 'none',
+        baseUrl: 'http://127.0.0.1:11434',
+        model: 'ollama-ollama01/qwen2.5:3b-instruct',
+        enabled: true,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+    providersState.defaultAccountId = 'ollama01';
+    useSettingsStore.setState({ preferredChannel: 'on-device' });
+    vi.mocked(hostApiFetch).mockResolvedValue({ success: true } as never);
+
+    renderChatInput();
+    expect(chatState.clearSessionModelPin).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('chat-composer-channel'));
+    });
+
+    expect(useSettingsStore.getState().preferredChannel).toBe('online');
+    expect(chatState.clearSessionModelPin).toHaveBeenCalledTimes(1);
   });
 
   it('shows the raw model id in the picker when dev mode is unlocked', () => {

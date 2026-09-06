@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   classifyFailure,
+  isSessionModelCutoverConfirmed,
+  parseModelRef,
   shouldDegradeToOnDevice,
   shouldPromptSwitchToOnline,
   type DegradeContext,
@@ -267,5 +269,90 @@ describe('shouldPromptSwitchToOnline', () => {
   it('does not prompt twice in one turn', () => {
     const d = shouldPromptSwitchToOnline('fetch failed', { ...onDeviceOutage, alreadyDegraded: true });
     expect(d.promptSwitchToOnline).toBe(false);
+  });
+});
+
+describe('parseModelRef', () => {
+  it('splits a provider/model ref', () => {
+    expect(parseModelRef('ollama/qwen2.5:3b-instruct'))
+      .toEqual({ provider: 'ollama', model: 'qwen2.5:3b-instruct' });
+  });
+
+  it('splits on the FIRST slash so a model id containing one survives', () => {
+    // OpenRouter-style refs reach us as provider/vendor/model. Splitting on the
+    // last slash would ask the gateway for the model "gemini-2.5-pro" under the
+    // provider "openrouter/google", which resolves to nothing.
+    expect(parseModelRef('openrouter/google/gemini-2.5-pro'))
+      .toEqual({ provider: 'openrouter', model: 'google/gemini-2.5-pro' });
+  });
+
+  it('returns null for anything it cannot split into two halves', () => {
+    for (const raw of ['', '   ', 'ollama', '/qwen2.5', 'ollama/', null, undefined]) {
+      expect(parseModelRef(raw)).toBeNull();
+    }
+  });
+});
+
+describe('isSessionModelCutoverConfirmed', () => {
+  const ack = (resolved: unknown) => ({ ok: true, key: 'agent:main:main', resolved });
+
+  it('confirms when the gateway echoes back the requested provider and model', () => {
+    expect(isSessionModelCutoverConfirmed(
+      ack({ modelProvider: 'ollama', model: 'qwen2.5:3b-instruct' }),
+      'ollama/qwen2.5:3b-instruct',
+    )).toBe(true);
+  });
+
+  it('confirms when the readback carries the full provider/model ref', () => {
+    // Tolerated so a gateway that echoes the qualified ref does not read as a
+    // failed cutover and suppress every future failover.
+    expect(isSessionModelCutoverConfirmed(
+      ack({ modelProvider: 'ollama', model: 'ollama/qwen2.5:3b-instruct' }),
+      'ollama/qwen2.5:3b-instruct',
+    )).toBe(true);
+  });
+
+  it('is case-insensitive on both halves', () => {
+    expect(isSessionModelCutoverConfirmed(
+      ack({ modelProvider: 'Ollama', model: 'Qwen2.5:3B-Instruct' }),
+      'ollama/qwen2.5:3b-instruct',
+    )).toBe(true);
+  });
+
+  it('refuses a patch that landed on a different model', () => {
+    // The exact silent failure: the patch succeeded, the turn still runs online.
+    expect(isSessionModelCutoverConfirmed(
+      ack({ modelProvider: 'google', model: 'gemini-2.5-pro' }),
+      'ollama/qwen2.5:3b-instruct',
+    )).toBe(false);
+  });
+
+  it('refuses a patch that landed on the right model under another provider', () => {
+    expect(isSessionModelCutoverConfirmed(
+      ack({ modelProvider: 'openrouter', model: 'qwen2.5:3b-instruct' }),
+      'ollama/qwen2.5:3b-instruct',
+    )).toBe(false);
+  });
+
+  it('fails closed on any acknowledgement it cannot read as a match', () => {
+    // "The RPC did not throw" is not evidence. Every shape here must count as
+    // unproven, because claiming a switch that did not happen sends the resend
+    // straight back out on the provider that just failed.
+    const modelRef = 'ollama/qwen2.5:3b-instruct';
+    expect(isSessionModelCutoverConfirmed(undefined, modelRef)).toBe(false);
+    expect(isSessionModelCutoverConfirmed(null, modelRef)).toBe(false);
+    expect(isSessionModelCutoverConfirmed('ok', modelRef)).toBe(false);
+    expect(isSessionModelCutoverConfirmed({ ok: true }, modelRef)).toBe(false);
+    expect(isSessionModelCutoverConfirmed(ack(null), modelRef)).toBe(false);
+    expect(isSessionModelCutoverConfirmed(ack({}), modelRef)).toBe(false);
+    expect(isSessionModelCutoverConfirmed(ack({ modelProvider: 'ollama' }), modelRef)).toBe(false);
+    expect(isSessionModelCutoverConfirmed(ack({ modelProvider: 'ollama', model: '' }), modelRef)).toBe(false);
+  });
+
+  it('refuses an unusable requested ref even when the ack looks fine', () => {
+    expect(isSessionModelCutoverConfirmed(
+      ack({ modelProvider: 'ollama', model: 'qwen2.5:3b-instruct' }),
+      'qwen2.5:3b-instruct',
+    )).toBe(false);
   });
 });

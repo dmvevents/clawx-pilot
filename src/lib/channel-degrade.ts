@@ -227,6 +227,55 @@ export function shouldDegradeToOnDevice(
   };
 }
 
+/**
+ * Split a gateway model ref ("ollama/qwen2.5:3b-instruct") into its parts.
+ *
+ * Splits on the FIRST slash only: provider ids never contain one, model ids
+ * sometimes do (`google/gemini-2.5-pro` reaches us through OpenRouter-style
+ * refs). Returns null when either half is missing, so callers can treat an
+ * unusable ref as "cannot prove anything" rather than guessing.
+ */
+export function parseModelRef(raw: string | null | undefined): { provider: string; model: string } | null {
+  const trimmed = String(raw ?? '').trim();
+  const slash = trimmed.indexOf('/');
+  if (slash <= 0 || slash === trimmed.length - 1) return null;
+  return {
+    provider: trimmed.slice(0, slash).trim(),
+    model: trimmed.slice(slash + 1).trim(),
+  };
+}
+
+/**
+ * Whether a `sessions.patch` acknowledgement proves the session now resolves to
+ * `modelRef`.
+ *
+ * Why a readback and not just "the RPC didn't throw": the gateway resolves a
+ * turn's model through a chain (session override → agent default → config
+ * default) and the patch can succeed while landing on something else — an
+ * allowlist rewrite, an alias, or a ref the model catalogue does not carry. The
+ * handler answers with `resolved: { modelProvider, model }`, which is the
+ * effective identity after the write, so comparing against it is the only way
+ * to know the cutover took. Anything we cannot read as a match counts as NOT
+ * proven: claiming a channel switch that did not happen is the failure this
+ * whole path exists to prevent.
+ */
+export function isSessionModelCutoverConfirmed(ack: unknown, modelRef: string): boolean {
+  const want = parseModelRef(modelRef);
+  if (!want) return false;
+  if (!ack || typeof ack !== 'object') return false;
+  const resolved = (ack as { resolved?: unknown }).resolved;
+  if (!resolved || typeof resolved !== 'object') return false;
+  const got = resolved as { modelProvider?: unknown; model?: unknown };
+  const provider = String(got.modelProvider ?? '').trim().toLowerCase();
+  const model = String(got.model ?? '').trim().toLowerCase();
+  if (!model) return false;
+  if (provider !== want.provider.toLowerCase()) return false;
+  // The handler returns the bare model id; accept the full ref too so a future
+  // gateway that echoes `provider/model` does not read as a failed cutover.
+  return model === want.model.toLowerCase()
+    || model === `${want.provider}/${want.model}`.toLowerCase();
+}
+
 export interface OnDeviceOutageContext {
   /** The channel the failed turn ran on. */
   activeChannel: 'online' | 'on-device';

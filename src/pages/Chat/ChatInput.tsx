@@ -523,6 +523,14 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
       // server-side (preferredChannel, defaultProvider, agents.list[*],
       // agents.defaults). No more piecemeal updateAgentModel writes.
       await setPreferredChannel(targetClass);
+      // A send-time degrade pins the SESSION onto the on-device model, because
+      // the four config stores alone do not move the running gateway (see
+      // cutoverSessionModel in stores/chat.ts). A session pin outranks the
+      // config default on every turn, so without this clear an explicit pick
+      // here would rewrite all four stores and change nothing the principal can
+      // see — their own toggle silently ignored, which is worse than the outage
+      // it followed.
+      await useChatStore.getState().clearSessionModelPin();
       // Refresh dependent stores so the model picker, default model ref,
       // and provider snapshot reflect the new pinning.
       await Promise.all([

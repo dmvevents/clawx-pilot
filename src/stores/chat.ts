@@ -9,7 +9,12 @@ import { useGatewayStore } from './gateway';
 import { useAgentsStore } from './agents';
 import { useSettingsStore } from './settings';
 import { useProviderStore } from './providers';
-import { classifyFailure, shouldDegradeToOnDevice, shouldPromptSwitchToOnline } from '@/lib/channel-degrade';
+import {
+  classifyFailure,
+  isSessionModelCutoverConfirmed,
+  shouldDegradeToOnDevice,
+  shouldPromptSwitchToOnline,
+} from '@/lib/channel-degrade';
 import { classifyProvider, pickAccountForChannel, type ProviderClass } from '@/lib/provider-display';
 import { buildBaselineRunKey, captureBaseline, clearBaselines } from './baseline-cache';
 import { buildCronSessionHistoryPath, isCronSessionKey } from './chat/cron-session-utils';
@@ -1673,6 +1678,105 @@ function isRecoverableChatSendTimeout(error: string): boolean {
   return error.includes('RPC timeout: chat.send');
 }
 
+/** A session patch is a small JSON-store write; it should never take long. */
+const SESSION_PATCH_TIMEOUT_MS = 15_000;
+
+/**
+ * Sessions whose model pin has already been reconciled with the configured
+ * channel during this app run. Module-level (not store state) so it resets with
+ * the process, which is exactly the lifetime we want: a pin written on disk by
+ * yesterday's outage must be reconciled once after each launch.
+ */
+const _pinReconciledSessions = new Set<string>();
+
+/**
+ * Move ONE session onto `modelRef` and wait for the gateway to acknowledge it.
+ *
+ * Why this exists at all — the four-store config write is NOT a runtime cutover.
+ * The bundled gateway resolves each turn against a config snapshot it pinned at
+ * boot (`loadPinnedRuntimeConfig`; its `clearConfigCache` is a no-op). External
+ * edits are picked up only by a file watcher that debounces ~500ms, can be
+ * turned off entirely (`gateway.reload.mode: "off"`), and can drop a batched
+ * change. So after a degrade writes the stores, an immediate resend can still
+ * run on the provider that just failed — the send-time failover would report
+ * success having changed nothing the turn could see (found by cross-model
+ * adversarial review, 2026-09-06).
+ *
+ * A session-level model pin is the one path that is immune to all of that: the
+ * gateway re-reads session overrides from disk on every turn and they OUTRANK
+ * both the agent and the config default. `sessions.patch` is synchronous,
+ * acknowledged, and does not restart the runtime — so it is safe to use inside a
+ * failed turn, unlike a reload (see `skipGatewayRefresh` in channel-router.ts).
+ *
+ * Returns true only when the gateway echoes the requested model back.
+ */
+async function cutoverSessionModel(sessionKey: string, modelRef: string): Promise<boolean> {
+  if (!sessionKey || !modelRef) return false;
+  try {
+    const ack = await useGatewayStore.getState().rpc<unknown>(
+      'sessions.patch',
+      { key: sessionKey, model: modelRef },
+      SESSION_PATCH_TIMEOUT_MS,
+    );
+    const confirmed = isSessionModelCutoverConfirmed(ack, modelRef);
+    if (!confirmed) {
+      console.warn('[chat] sessions.patch did not confirm the channel cutover; not claiming it happened');
+    }
+    return confirmed;
+  } catch (error) {
+    console.warn('[chat] sessions.patch failed, cannot prove the channel cutover:', error);
+    return false;
+  }
+}
+
+/**
+ * Clear a session's model pin so it follows the configured channel again.
+ * `model: null` deletes the override AND the stale last-run model identity, so
+ * the next turn resolves from config. Idempotent: a session with no pin is
+ * unaffected.
+ */
+async function clearSessionModelPinRpc(sessionKey: string): Promise<boolean> {
+  if (!sessionKey) return false;
+  try {
+    await useGatewayStore.getState().rpc<unknown>(
+      'sessions.patch',
+      { key: sessionKey, model: null },
+      SESSION_PATCH_TIMEOUT_MS,
+    );
+    return true;
+  } catch (error) {
+    console.warn('[chat] could not clear the session model pin:', error);
+    return false;
+  }
+}
+
+/**
+ * Once per session per app run, drop a pin left behind by an earlier degrade
+ * when the configured channel is provably Online again.
+ *
+ * A pin is written on disk and outranks config, so it survives quitting the app
+ * — and the boot preflight, which re-applies the principal's `preferredChannel`
+ * to the four stores, cannot see it. Without this a school that lost the network
+ * on Monday afternoon would keep answering from the on-device model all week
+ * with the composer still reading "Online" and nothing to indicate why the
+ * answers changed.
+ *
+ * Only acts on a PROVEN online default (an account flagged `isDefault`). With no
+ * default marked we cannot tell Online from a completed degrade, and clearing on
+ * a guess would undo a legitimate failover mid-outage — the same
+ * "null means unproven, never assume" rule the runtime-vs-preference derivation
+ * follows (CLWX-94/96).
+ */
+async function reconcileSessionModelPin(sessionKey: string): Promise<void> {
+  if (!sessionKey || _pinReconciledSessions.has(sessionKey)) return;
+  const defaultAccount = (useProviderStore.getState().accounts ?? []).find((a) => a.isDefault === true);
+  if (!defaultAccount || classifyProvider(defaultAccount) !== 'online') return;
+  // Mark before awaiting: one attempt per session per run, so a gateway that is
+  // refusing patches cannot add an RPC to every send.
+  _pinReconciledSessions.add(sessionKey);
+  await clearSessionModelPinRpc(sessionKey);
+}
+
 /**
  * Send-time cloud → on-device failover.
  *
@@ -1770,6 +1874,7 @@ async function maybeDegradeChannel(
   // cannot both start a failover.
   set({ degradedThisTurn: true });
 
+  let modelRef = '';
   try {
     const res = await hostApiFetch('/api/settings/degradeChannel', {
       method: 'POST',
@@ -1778,11 +1883,31 @@ async function maybeDegradeChannel(
     if (res && typeof res === 'object' && (res as { success?: boolean }).success === false) {
       throw new Error(String((res as { error?: unknown }).error ?? 'degradeChannel failed'));
     }
+    // The route answers with the on-device model it made default. That ref is
+    // what the session has to be pinned to below; without it we can move the
+    // config but cannot prove the runtime followed.
+    if (res && typeof res === 'object') {
+      modelRef = String((res as { modelRef?: unknown }).modelRef ?? '').trim();
+    }
   } catch (error) {
     // Failover itself failed. Leave the original error on screen — it is the
     // more actionable of the two — and do not resend.
     console.warn('[chat] channel degrade failed, leaving original error visible:', error);
     set({ degradeNotice: null });
+    return;
+  }
+
+  // The config stores now say on-device. That is NOT yet true of the running
+  // gateway (see cutoverSessionModel), so pin this session and WAIT for the
+  // acknowledgement before doing anything that depends on the new channel.
+  const cutover = await cutoverSessionModel(get().currentSessionKey, modelRef);
+  if (!cutover) {
+    // Unproven cutover: an immediate resend could go straight back out on the
+    // provider that just failed, and the principal would see the same error
+    // twice under a banner claiming we had switched. Say what is actually true —
+    // the switch could not be completed — and leave the original error visible
+    // so it stays the actionable thing on screen.
+    set({ degradeNotice: { reason, resent: false, to: 'on-device', cutoverConfirmed: false } });
     return;
   }
 
@@ -2796,6 +2921,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     setTimeout(checkStuck, 30_000);
 
     try {
+      // Drop a model pin left behind by a degrade in an earlier app run, before
+      // the turn resolves its model. No-op on all but the first send per session
+      // per run, and never acts while the configured channel is still on-device.
+      await reconcileSessionModelPin(currentSessionKey);
+
       const idempotencyKey = crypto.randomUUID();
       const hasMedia = attachments && attachments.length > 0;
       if (hasMedia) {
@@ -3359,4 +3489,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   clearError: () => set({ error: null, runError: null }),
   clearDegradeNotice: () => set({ degradeNotice: null }),
+
+  clearSessionModelPin: async (sessionKey?: string) => {
+    const key = sessionKey ?? get().currentSessionKey;
+    const cleared = await clearSessionModelPinRpc(key);
+    // A cleared pin means the boot-time safety net has nothing left to do for
+    // this session, and a failed clear should not be retried on the next send
+    // (the reconciler would fire against a gateway that just refused).
+    if (cleared) _pinReconciledSessions.add(key);
+    return cleared;
+  },
 }));
