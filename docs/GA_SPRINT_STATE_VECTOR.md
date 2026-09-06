@@ -1638,6 +1638,39 @@ the production-integration milestone, not a GA blocker.
   1627/6-skip; typecheck+lint clean. Remaining for Ready: sandbox positive
   legs + Claude-Code client leg + full lenses (Chrome/build/operator-
   gated). NEXT QUEUED: CLWX-105 (in-line error chip).
+- 2026-09-06 thirteenth tick (gate probe honesty, CLWX-90): the health pulse
+  itself was the finding. `GA_GATE_STATIC=1 pnpm ga:gate` came back GREEN (7
+  pass / 0 fail / 2 skip) with T2 reading "IAP tunnel up - run the V-batch
+  workflow" - while the same tick's SENSE probes showed `gcloud compute
+  instances list` demanding reauth. Control leg: `nc -z localhost 12222`
+  succeeded, real ssh returned `kex_exchange_identification: read: Connection
+  reset by peer`. So the gate's VM row was a FALSE-GREEN: `nc -z` proves only
+  that a LOCAL listener is bound, and a tunnel with dead credentials keeps that
+  listener up while resetting every connection - nc false-POSITIVES, the inverse
+  of the known Windows-Firewall false negative. A GO/NO-GO reader takes that row
+  as "VM surfaces are runnable"; they are owner-blocked. FIXED @ `578b23de`:
+  three distinguishable states (handshake verified -> INFO; bound but handshake
+  fails -> SKIP "NOT USABLE ... BLOCKED, not available" naming `gcloud auth
+  login`; no listener -> SKIP tunnel down) plus a PF-3 negative control that
+  voids the verdict if port 9999 also answers. Falsifiability both ways: leg A
+  (handshake pointed at a succeeding command) -> row flips to INFO "tunnel up,
+  handshake verified", proving the BLOCKED reading is a real measurement and not
+  a hard-wired skip; leg B (listener on 9999) -> row becomes "probe method
+  UNTRUSTWORTHY"; script restored identical to the pre-mutation fix, diff vs
+  HEAD removes only the old nc-only block, eslint clean. Gate after fix: GREEN 7
+  pass / 0 fail / 3 skip - the extra skip is the VM row telling the truth.
+  Register row GATE-TUNNEL-FALSE-GREEN added: this is the THIRD
+  harness-integrity finding after VERIFY-VACUOUS-PACKAGES and
+  PROBE-STEERS-PAST-DEFECT, and the pattern is now explicit - the harness, not
+  the product, and each one made a GO/NO-GO row read greener than the truth. The
+  repo already carried the right answer (`vm-verify-moe19.sh:100-116` control
+  leg, three stale-`:12222` incidents in this file, PF-3); the gate was the one
+  place never taught it, so the lesson was documented but unenforced where it
+  decided a release. Also this tick: CLWX-95's carried residual re-examined and
+  NOT closed - the main-process host-API routes cannot clear a session pin
+  because the pin is keyed by a renderer-held session key the main process never
+  sees, so that residual is architectural, not an oversight; recorded here rather
+  than left implying an agent could just fix it.
 - 2026-09-06 twelfth tick (late lens fold, CLWX-95): four lens verdicts arrived
   AFTER the first fold was committed, so they were triaged separately. ONE was a
   real hole and is fixed @ `f136dc01`: `runChannelPreflight`
