@@ -1538,6 +1538,19 @@ the production-integration milestone, not a GA blocker.
   suite 1599/6-skip, typecheck+lint clean. Ready move still held on the
   principal-proxy trust-lens fold (review complete, report not yet
   relayed) + the next-build/restart in-app gate.
+  **TRUST LENS FOLDED → CLWX-42 In Progress → READY (`ebe73bea`).** Its
+  VETO (raw ENOENT + bundle path on a missing data file) was already
+  closed by b547601b; its ADJACENT catch (find_school's unwrapped roster
+  read — same class) fixed with the same readable message; its MAJOR (the
+  NSCC steering could override the not-a-lawyer boundary on suspension/
+  corporal-punishment questions) fixed in the persona — boundary applies
+  unchanged, live-case/statutory questions get passages AND the
+  district-office referral, persona guard added. All four review lanes
+  complete (Codex 3, correctness 4, trust 2, graph 0-flows) — every
+  finding fixed and re-proven. NEXT-BUILD GATE for the human close: one
+  fresh-session no-file K14 question on the first build/restart carrying
+  these commits. NOTEs on the card: ~+12KB per Code question (CLWX-43
+  ledger), tool-lane page citations informational-only.
 
 ---
 
