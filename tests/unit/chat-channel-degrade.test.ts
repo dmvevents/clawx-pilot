@@ -469,6 +469,80 @@ describe('chat store: send-time channel degradation', () => {
     expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: true, to: 'on-device' });
   });
 
+  // ── The switch is not instantaneous, and the wait used to be invisible. The
+  //    config transaction plus the acknowledged cutover (15s budget) are both
+  //    awaited inside the failed turn, behind a frozen error with nothing on
+  //    screen moving. At 3:40pm against a 3:45pm deadline that reads as a hung
+  //    app (principal-proxy trust lens, 2026-09-06). Both rows below fail if the
+  //    notice is set after the awaits instead of before them. ──
+  it('puts a progress notice up BEFORE the config transaction returns', async () => {
+    const store = await loadStore();
+    let releaseDegrade: (value: unknown) => void = () => {};
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/settings/degradeChannel'
+      ? new Promise((resolve) => { releaseDegrade = resolve; })
+      : Promise.resolve({ success: true })));
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    // Mid-flight: nothing is proven yet, so the notice claims nothing — it only
+    // says a switch is happening, and `inProgress` is what makes the UI spin.
+    expect(store.getState().degradeNotice)
+      .toEqual({ reason: 'unreachable', resent: false, to: 'on-device', inProgress: true });
+
+    releaseDegrade({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
+    await settle();
+
+    // Replaced by the outcome, never left spinning.
+    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: true, to: 'on-device' });
+  });
+
+  it('keeps the progress notice up for the whole acknowledgement wait, then replaces it', async () => {
+    const store = await loadStore();
+    let releasePatch: (value: unknown) => void = () => {};
+    gatewayRpcMock.mockImplementation((method: string) => (method === 'sessions.patch'
+      ? new Promise((resolve) => { releasePatch = resolve; })
+      : Promise.resolve(undefined)));
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    // The config write has landed and the cutover RPC is outstanding — the part
+    // of the window that can legitimately last seconds.
+    expect(store.getState().degradeNotice?.inProgress).toBe(true);
+    expect(patchCalls()).toHaveLength(1);
+
+    releasePatch(PATCH_ACK);
+    await settle();
+
+    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: true, to: 'on-device' });
+  });
+
+  it('never leaves the progress notice spinning when the host API never answers', async () => {
+    // The notice is deliberately not dismissible while it claims to be working,
+    // and the host-API transport has no timeout of its own, so an unbounded wait
+    // would strand the principal behind a permanent spinner — worse than the
+    // frozen error this fix replaced. The failover bounds itself and falls back
+    // to the honest outcome: no notice, real error, nothing resent.
+    vi.useFakeTimers();
+    try {
+      const store = await loadStore();
+      hostApiFetchMock.mockImplementation(() => new Promise(() => { /* never settles */ }));
+
+      emitError(store, 'fetch failed');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(store.getState().degradeNotice?.inProgress).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(20_000);
+
+      expect(store.getState().degradeNotice).toBeNull();
+      expect(store.getState().error).toContain('fetch failed');
+      expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does NOT resend when the gateway acknowledges a DIFFERENT model than requested', async () => {
     // The patch can succeed and still land elsewhere (alias, allowlist rewrite,
     // a ref the model catalogue does not carry). The ack's `resolved` block is

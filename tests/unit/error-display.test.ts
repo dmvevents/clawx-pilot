@@ -111,6 +111,21 @@ describe('errorBannerVisibility', () => {
     expect(v.showRunError).toBe(true);
   });
 
+  it('an in-progress switch suppresses the duplicate transport banner (one surface, not two)', () => {
+    // The progress notice added for the silent-cutover-wait fix carries the root
+    // cause itself ("no internet — switching to the model on this device"), so a
+    // red "could not be reached" banner beneath it is the same failure told
+    // twice. It reads as two problems to a principal, which was the trust-lens
+    // MEDIUM alongside the silent wait (principal-proxy, 2026-09-06).
+    const v = errorBannerVisibility({
+      runError: 'Connection error.', error: 'fetch failed',
+      runErrorKind: 'unreachable', errorKind: 'unreachable',
+      degradeNotice: { resent: false, inProgress: true } as never,
+    });
+    expect(v.showRunError).toBe(false);
+    expect(v.showErrorBar).toBe(false);
+  });
+
   it('auth/config and generic banners always show, notice or not', () => {
     for (const kind of ['auth-config', 'generic'] as const) {
       const v = errorBannerVisibility({

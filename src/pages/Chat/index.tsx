@@ -29,6 +29,7 @@ import { useStickToBottomInstant } from '@/hooks/use-stick-to-bottom-instant';
 import { useMinLoading } from '@/hooks/use-min-loading';
 import { extractGeneratedFiles, generatedFileHasDiffPayload, type GeneratedFile } from '@/lib/generated-files';
 import { principalErrorDisplay, errorBannerVisibility, ERROR_DISPLAY_KEY } from '@/lib/error-display';
+import { degradeNoticeCopy } from '@/lib/degrade-notice';
 import { GeneratedFilesPanel } from '@/components/file-preview/GeneratedFilesPanel';
 import type { FilePreviewTarget } from '@/components/file-preview/types';
 import { buildPreviewTarget } from '@/components/file-preview/build-preview-target';
@@ -902,47 +903,31 @@ export function Chat() {
           already completed on this device or is ready to be resent there.
           Deliberately anonymised — channel vocabulary only, never a model id. */}
       {degradeNotice && (() => {
-        // Two directions share this notice. `to === 'on-device'` is the
-        // cloud-outage failover (laptop icon): the turn already moved to this
-        // device, `resent` says whether it was replayed. `to === 'online'` is a
-        // dead on-device turn (cloud icon): nothing moved — sending on-device
-        // data to the cloud stays the principal's choice — so the copy is an
-        // actionable prompt to switch to Online.
-        const toOnline = degradeNotice.to === 'online';
-        // The config stores moved but the gateway never acknowledged the
-        // cutover, so we cannot claim the switch happened — the next send might
-        // still go out on the channel that just failed. Say so plainly instead
-        // of "switched to this device", which would be a promise we cannot keep.
-        const cutoverFailed = degradeNotice.cutoverConfirmed === false;
-        const titleKey = toOnline
-          ? 'degradeNotice.onlineSwitchNeeded'
-          : (cutoverFailed
-              ? (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.cutoverFailedRateLimited' : 'degradeNotice.cutoverFailedUnreachable')
-              : (degradeNotice.resent
-                  ? (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.resentRateLimited' : 'degradeNotice.resentUnreachable')
-                  : (degradeNotice.reason === 'rate-limited' ? 'degradeNotice.switchedRateLimited' : 'degradeNotice.switchedUnreachable')));
-        const hintKey = toOnline
-          ? 'degradeNotice.onlineSwitchHint'
-          : (cutoverFailed ? 'degradeNotice.cutoverFailedHint' : 'degradeNotice.restoreHint');
-        const Icon = toOnline ? Cloud : Laptop;
+        // Copy precedence lives in degradeNoticeCopy (pure, unit-tested), so
+        // this stays a thin call — same split as errorBannerVisibility.
+        const copy = degradeNoticeCopy(degradeNotice);
+        const Icon = copy.icon === 'spinner' ? Loader2 : (copy.icon === 'cloud' ? Cloud : Laptop);
+        const spinning = copy.icon === 'spinner';
         return (
-        <div className="px-4 pt-2" data-testid="chat-degrade-notice">
+        <div className="px-4 pt-2" data-testid="chat-degrade-notice" data-in-progress={spinning ? 'true' : undefined}>
           <div className="max-w-4xl mx-auto rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 flex items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                <Icon className="h-4 w-4" />
-                {t(titleKey)}
+                <Icon className={spinning ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+                {t(copy.titleKey)}
               </p>
               <p className="mt-1 text-xs text-amber-600/80 dark:text-amber-400/80">
-                {t(hintKey)}
+                {t(copy.hintKey)}
               </p>
             </div>
-            <button
-              onClick={clearDegradeNotice}
-              className="shrink-0 text-xs text-amber-600/70 hover:text-amber-600 underline"
-            >
-              {t('common:actions.dismiss')}
-            </button>
+            {copy.dismissible && (
+              <button
+                onClick={clearDegradeNotice}
+                className="shrink-0 text-xs text-amber-600/70 hover:text-amber-600 underline"
+              >
+                {t('common:actions.dismiss')}
+              </button>
+            )}
           </div>
         </div>
         );

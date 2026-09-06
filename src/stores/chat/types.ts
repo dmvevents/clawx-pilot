@@ -163,6 +163,16 @@ export interface ChatState {
          * claiming one that did not happen. Absent means "confirmed".
          */
         cutoverConfirmed?: boolean;
+        /**
+         * The failover is still running: the config transaction and the
+         * acknowledged session cutover are both in flight. Set BEFORE those
+         * awaits so the wait is never silent — the acknowledgement has a 15s
+         * budget, and a principal staring at a frozen error at 3:40pm reads
+         * dead air as a broken app (principal-proxy trust lens, 2026-09-06).
+         * Replaced by the terminal notice (switched / resent / cutover-failed)
+         * or cleared when the failover itself fails.
+         */
+        inProgress?: boolean;
       }
     | null;
 

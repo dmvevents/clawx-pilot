@@ -1682,6 +1682,21 @@ function isRecoverableChatSendTimeout(error: string): boolean {
 const SESSION_PATCH_TIMEOUT_MS = 15_000;
 
 /**
+ * Upper bound on the degrade route, so the "switching…" notice can never outlive
+ * the switch it describes.
+ *
+ * The host-API transport has no timeout of its own — neither the IPC proxy nor
+ * the browser fallback — so a main process wedged mid-transaction would leave a
+ * spinner the principal cannot dismiss up forever, which is a worse state than
+ * the frozen error it replaced. On expiry we take the same path as an outright
+ * failure: drop the notice, leave the real error on screen, do not resend. The
+ * route runs a four-store transaction that is idempotent, so abandoning the wait
+ * is safe even if it lands later. The cutover RPC is bounded separately by
+ * SESSION_PATCH_TIMEOUT_MS.
+ */
+const DEGRADE_ROUTE_TIMEOUT_MS = 20_000;
+
+/**
  * Sessions whose model pin has already been reconciled with the configured
  * channel during this app run. Module-level (not store state) so it resets with
  * the process, which is exactly the lifetime we want: a pin written on disk by
@@ -1872,14 +1887,27 @@ async function maybeDegradeChannel(
 
   // Claim the flag before any await so two error events for the same run
   // cannot both start a failover.
-  set({ degradedThisTurn: true });
+  //
+  // The notice goes up NOW, before the config transaction and the acknowledged
+  // cutover (15s budget) are awaited. Those awaits used to happen behind a
+  // frozen error with nothing on screen moving, so at 3:40pm the principal read
+  // the recovery attempt as a hung app and started retrying into it
+  // (principal-proxy trust lens, 2026-09-06). It carries the root cause too, so
+  // suppressing the red transport banner underneath loses nothing.
+  set({
+    degradedThisTurn: true,
+    degradeNotice: { reason, resent: false, to: 'on-device', inProgress: true },
+  });
 
   let modelRef = '';
   try {
-    const res = await hostApiFetch('/api/settings/degradeChannel', {
-      method: 'POST',
-      body: JSON.stringify({ channel: 'on-device', reason }),
-    });
+    const res = await withTimeout(
+      hostApiFetch('/api/settings/degradeChannel', {
+        method: 'POST',
+        body: JSON.stringify({ channel: 'on-device', reason }),
+      }),
+      DEGRADE_ROUTE_TIMEOUT_MS,
+    );
     if (res && typeof res === 'object' && (res as { success?: boolean }).success === false) {
       throw new Error(String((res as { error?: unknown }).error ?? 'degradeChannel failed'));
     }
