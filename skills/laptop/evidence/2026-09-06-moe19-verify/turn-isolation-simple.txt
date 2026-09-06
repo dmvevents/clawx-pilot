@@ -1,0 +1,28 @@
+STATE: CDP_READY True
+STATE: GATEWAY_READY True
+STATE: HOSTAPI_READY True
+STATE: NODE C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\bin\node.exe
+RESULT TIMED_OUT_MID_TURN
+{
+  "prompt": "Reply with exactly this sentence: The Ministry assistant is ready for the demo.",
+  "startedAt": "2026-09-06T19:32:12.156Z",
+  "cdpPort": 9223,
+  "appVersion": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) MinistryofEducation/0.4.3-moe.19 Chrome/144.0.7559.236 Electron/40.8.4 Safari/537.36",
+  "requestedNewSession": true,
+  "freshSession": true,
+  "messagesBefore": 0,
+  "messagesAfter": 1,
+  "executionSteps": [],
+  "toolNames": [],
+  "errorChipSeen": false,
+  "assistantPromptEcho": false,
+  "degradeNoticeSeen": true,
+  "degradeNoticeText": "No internet connection — this answer came from the model on this device. Online will be used again automatically once it's available. Dismiss",
+  "runErrorSeen": false,
+  "runErrorText": null,
+  "answerText": null,
+  "settled": false,
+  "verdict": "TIMED_OUT_MID_TURN",
+  "finishedAt": "2026-09-06T19:37:16.785Z"
+}
+WROTE C:\Users\clawxtest\Downloads\clawx-chat-turn-evidence\chat-turn-2026-09-06T19-32-12-154Z.json
