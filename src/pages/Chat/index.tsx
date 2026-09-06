@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 import { useStickToBottomInstant } from '@/hooks/use-stick-to-bottom-instant';
 import { useMinLoading } from '@/hooks/use-min-loading';
 import { extractGeneratedFiles, generatedFileHasDiffPayload, type GeneratedFile } from '@/lib/generated-files';
-import { principalErrorDisplay, type ErrorDisplayKind } from '@/lib/error-display';
+import { principalErrorDisplay, isTransportDisplayKind, type ErrorDisplayKind } from '@/lib/error-display';
 import { GeneratedFilesPanel } from '@/components/file-preview/GeneratedFilesPanel';
 import type { FilePreviewTarget } from '@/components/file-preview/types';
 import { buildPreviewTarget } from '@/components/file-preview/build-preview-target';
@@ -146,6 +146,17 @@ export function Chat() {
   // (auth/config) still surface, just in plain language.
   const errorDisplay = useMemo(() => principalErrorDisplay(error), [error]);
   const runErrorDisplay = useMemo(() => principalErrorDisplay(runError), [runError]);
+  // Notice de-dup (moe.18 Findings D0/D1): while the amber degrade notice is
+  // explaining a transport failure in channel-correct language, a red banner
+  // of the same transport class is a duplicate — and in the on-device
+  // direction its online-centric copy actively contradicts the notice.
+  // Suppress only that overlap; auth/config and generic errors always show.
+  // The bottom error bar additionally never duplicates the callout verbatim.
+  const showRunError = !!runError
+    && !(degradeNotice && isTransportDisplayKind(runErrorDisplay.kind));
+  const showErrorBar = !!error
+    && error !== runError
+    && !(degradeNotice && isTransportDisplayKind(errorDisplay.kind));
   const fetchAgents = useAgentsStore((s) => s.fetchAgents);
   const agents = useAgentsStore((s) => s.agents);
 
@@ -914,8 +925,9 @@ export function Chat() {
 
       {/* Run error callout. Plain-language primary line; the raw provider
           string stays available behind a collapsed technical-details
-          expander instead of being the headline. */}
-      {runError && (
+          expander instead of being the headline. Suppressed while the amber
+          degrade notice explains the same transport failure (D0/D1). */}
+      {showRunError && (
         <div className="px-4 pt-2" data-testid="chat-run-error">
           <div className="max-w-4xl mx-auto rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3">
             <p className="text-sm font-medium text-destructive flex items-center gap-2">
@@ -937,8 +949,10 @@ export function Chat() {
       )}
 
       {/* Error bar. Same principal-facing wording rules as the run error
-          callout above: plain message first, raw string collapsed. */}
-      {error && (
+          callout above: plain message first, raw string collapsed; never a
+          verbatim duplicate of the callout, and suppressed while the degrade
+          notice explains the same transport failure (D0/D1). */}
+      {showErrorBar && (
         <div className="px-4 py-2 bg-destructive/10 border-t border-destructive/20">
           <div className="max-w-4xl mx-auto flex items-start justify-between gap-3">
             <div className="min-w-0">

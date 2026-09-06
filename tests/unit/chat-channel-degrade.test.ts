@@ -420,3 +420,110 @@ describe('chat store: send-time channel degradation', () => {
     expect(store.getState().lastSentPayload).toBeNull();
   });
 });
+
+describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0)', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    window.localStorage.clear();
+    gatewayRpcMock.mockReset();
+    hostApiFetchMock.mockReset();
+    hostApiFetchMock.mockResolvedValue({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
+    agentsState.agents = [];
+    settingsState.preferredChannel = 'online';
+    settingsState.setPreferredChannel.mockReset();
+    providerState.accounts = [...BOTH_CHANNELS];
+  });
+
+  const ERRORED_HISTORY = {
+    messages: [
+      { role: 'user', id: 'u1', content: [{ type: 'text', text: 'summarise my last 5 emails' }] },
+      {
+        role: 'assistant',
+        id: 'a1',
+        stopReason: 'error',
+        errorMessage: 'LLM request failed: network connection error. rawError=Connection error.',
+        content: [],
+      },
+    ],
+  };
+
+  it('paints the banner when an ACTIVE own turn dies silently and no on-device fallback exists', async () => {
+    const store = await loadStore();
+    store.setState({ lastUserMessageAt: Date.now(), runError: null });
+    providerState.accounts = [BOTH_CHANNELS[0]]; // online only — nothing to fail over to
+    gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
+
+    await store.getState().loadHistory(true);
+    await settle();
+
+    expect(store.getState().runError).toContain('network connection error');
+    expect(degradeCalls().length).toBe(0);
+  });
+
+  it('clears the banner when the same discovery successfully resends on-device (notice replaces it)', async () => {
+    // With a warm on-device model the failover replays the turn and the amber
+    // notice takes over — a red banner alongside it is exactly the D1 stack.
+    const store = await loadStore();
+    store.setState({ lastUserMessageAt: Date.now(), runError: null });
+    gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
+
+    await store.getState().loadHistory(true);
+    await settle();
+
+    expect(degradeCalls().length).toBe(1);
+    expect(store.getState().runError).toBeNull();
+    expect(store.getState().degradeNotice?.resent).toBe(true);
+  });
+
+  it('does NOT re-seed the banner on a later reload of the same window (post-gateway-restart / K12 shape)', async () => {
+    // After the first discovery the store nulls lastUserMessageAt; the
+    // retained lastSentPayload alone must not repaint a stale banner on the
+    // next history reload (moe.18: banner survived a gateway restart and
+    // cleared only on app relaunch).
+    const store = await loadStore();
+    store.setState({ sending: false, activeRunId: null, lastUserMessageAt: null, runError: null });
+    gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
+
+    await store.getState().loadHistory(true);
+    await settle();
+
+    expect(store.getState().runError).toBeNull();
+  });
+
+  it('does NOT paint the banner from a historical error on session re-open (nothing sent this window)', async () => {
+    const store = await loadStore();
+    store.setState({ sending: false, activeRunId: null, lastSentPayload: null, lastUserMessageAt: null, runError: null });
+    gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
+
+    await store.getState().loadHistory(true);
+    await settle();
+
+    expect(store.getState().runError).toBeNull();
+  });
+
+  it('clears rather than paints for an adopted console turn (CLWX-93 discipline)', async () => {
+    // Adoption can flip sending/lastUserMessageAt for a turn the principal
+    // never typed here; without lastSentPayload the banner must not paint.
+    const store = await loadStore();
+    store.setState({ sending: true, activeRunId: 'run-console', lastSentPayload: null, lastUserMessageAt: Date.now(), runError: 'stale from a previous own turn' });
+    gatewayRpcMock.mockResolvedValue(ERRORED_HISTORY);
+
+    await store.getState().loadHistory(true);
+    await settle();
+
+    expect(store.getState().runError).toBeNull();
+  });
+
+  it('preserves an existing banner while no turn is active (history stays non-authoritative)', async () => {
+    // The banner's owner is the turn that raised it; an idle-window reload
+    // neither re-seeds nor wipes it. New chat / next send / dismiss clear it.
+    const store = await loadStore();
+    store.setState({ sending: false, activeRunId: null, lastUserMessageAt: null, runError: 'own turn error painted earlier' });
+    gatewayRpcMock.mockResolvedValue({ messages: [] });
+
+    await store.getState().loadHistory(true);
+    await settle();
+
+    expect(store.getState().runError).toBe('own turn error painted earlier');
+  });
+});

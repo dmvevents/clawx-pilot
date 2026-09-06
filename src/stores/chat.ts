@@ -2363,11 +2363,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const ownTurnSurfacedError = latestTerminalAssistantErrorMessage !== null
         && !!get().lastSentPayload?.text?.trim();
 
+      // Stale-banner guard (moe.18 Finding D0): only an ACTIVE turn in this
+      // window may seed or clear the global run-error banner from history.
+      // `lastUserMessageAt` is nulled further down the first time this path
+      // surfaces a terminal error, so a post-gateway-restart reload or a
+      // session re-open repaints the in-line error message but never the
+      // banner. While a turn IS active, history stays authoritative both
+      // ways — but only an own-send turn (lastSentPayload, CLWX-93) may paint;
+      // an adopted console turn's error clears rather than paints.
       set({
         messages: finalMessages,
         thinkingLevel,
         loading: false,
-        runError: latestTerminalAssistantErrorMessage,
+        runError: get().lastUserMessageAt
+          ? (ownTurnSurfacedError ? latestTerminalAssistantErrorMessage : null)
+          : get().runError,
       });
       cacheSessionHistory(currentSessionKey, finalMessages, thinkingLevel);
 

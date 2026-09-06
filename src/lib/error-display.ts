@@ -37,15 +37,41 @@ export interface ErrorDisplay {
   detail: string;
 }
 
-export function principalErrorDisplay(raw: string | null | undefined): ErrorDisplay {
-  const detail = String(raw ?? '').trim();
-  if (!detail) return { kind: 'generic', detail };
+/**
+ * The SDK's transport wrapper ("Connection error.", optionally prefixed with
+ * "Model call failed") carries zero diagnostic value beyond the classified
+ * kind, and the moe.18 trust bar explicitly forbids surfacing it raw — even
+ * behind the collapsed expander (Finding D2). Blank it so the expander does
+ * not render; genuinely informative details are kept.
+ */
+const TRANSPORT_WRAPPER = /^(?:model call failed[.:]?\s*)?connection error\.?$/i;
+const RAW_ERROR_FRAGMENT = /\s*rawError=connection error\.?/gi;
 
-  if (AUTH_CONFIG_PATTERNS.some((pattern) => pattern.test(detail))) {
+/**
+ * Transport-class kinds are the ones the amber channel-degrade notice already
+ * explains with channel-correct wording. When that notice is visible, a red
+ * banner of one of these kinds is a duplicate telling of the SAME failure —
+ * suppress it (moe.18 Findings D0/D1: three stacked banners read as "the app
+ * is broken"). Auth/config and generic errors always surface.
+ */
+export function isTransportDisplayKind(kind: ErrorDisplayKind): boolean {
+  return kind === 'unreachable' || kind === 'rate-limited';
+}
+
+export function principalErrorDisplay(raw: string | null | undefined): ErrorDisplay {
+  const classified = String(raw ?? '').trim();
+  if (!classified) return { kind: 'generic', detail: classified };
+
+  // Classify on the full string; display a scrubbed detail.
+  const detail = TRANSPORT_WRAPPER.test(classified)
+    ? ''
+    : classified.replace(RAW_ERROR_FRAGMENT, '').trim();
+
+  if (AUTH_CONFIG_PATTERNS.some((pattern) => pattern.test(classified))) {
     return { kind: 'auth-config', detail };
   }
 
-  const failureClass = classifyFailure(detail);
+  const failureClass = classifyFailure(classified);
   if (failureClass === 'unreachable') return { kind: 'unreachable', detail };
   if (failureClass === 'rate-limited') return { kind: 'rate-limited', detail };
   return { kind: 'generic', detail };

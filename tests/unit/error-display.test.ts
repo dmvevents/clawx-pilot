@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { principalErrorDisplay } from '@/lib/error-display';
+import { principalErrorDisplay, isTransportDisplayKind } from '@/lib/error-display';
 
 describe('principalErrorDisplay', () => {
   it('classifies the tester-reported raw HTTP strings away from the headline', () => {
@@ -51,8 +51,53 @@ describe('principalErrorDisplay', () => {
     expect(principalErrorDisplay(undefined)).toEqual({ kind: 'generic', detail: '' });
   });
 
-  it('always preserves the raw string as detail', () => {
-    const raw = 'Model call failed Connection error.';
+  it('preserves an informative raw string as detail', () => {
+    const raw = 'getaddrinfo ENOTFOUND generativelanguage.googleapis.com';
     expect(principalErrorDisplay(raw).detail).toBe(raw);
+  });
+
+  // moe.18 Finding D2: the packet's trust bar forbids the raw SDK transport
+  // wrapper "Connection error." from reaching the UI even behind the
+  // collapsed "Technical details" expander. The wrapper carries zero
+  // diagnostic value beyond the classified kind, so display blanks it (the
+  // expander then does not render); classification is unchanged.
+  it('blanks the zero-information transport wrapper from the expander detail (D2)', () => {
+    for (const raw of [
+      'Connection error.',
+      'Connection error',
+      'connection error.',
+      'Model call failed Connection error.',
+      'Model call failed. Connection error.',
+      'Model call failed: Connection error.',
+    ]) {
+      const display = principalErrorDisplay(raw);
+      expect(display.kind).toBe('unreachable');
+      expect(display.detail).toBe('');
+    }
+  });
+
+  it('strips a rawError=Connection error fragment but keeps the informative remainder (D2)', () => {
+    const display = principalErrorDisplay(
+      'LLM request failed: network connection error. rawError=Connection error.',
+    );
+    expect(display.kind).toBe('unreachable');
+    expect(display.detail).toBe('LLM request failed: network connection error.');
+  });
+
+  it('never blanks details for classes the degrade notice does not explain', () => {
+    expect(principalErrorDisplay('401 Unauthorized').detail).toBe('401 Unauthorized');
+    expect(principalErrorDisplay('400 status code (no body)').detail).toBe('400 status code (no body)');
+  });
+});
+
+describe('isTransportDisplayKind', () => {
+  // D0/D1 suppression contract: while the amber degrade notice explains a
+  // transport failure, only these kinds may be suppressed as duplicates.
+  // Auth/config and generic errors must always surface.
+  it('marks exactly the two transport classes', () => {
+    expect(isTransportDisplayKind('unreachable')).toBe(true);
+    expect(isTransportDisplayKind('rate-limited')).toBe(true);
+    expect(isTransportDisplayKind('auth-config')).toBe(false);
+    expect(isTransportDisplayKind('generic')).toBe(false);
   });
 });
