@@ -40,7 +40,15 @@ BLOCKED=0
 
 log() { printf '[vm-verify-moe19 %s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 guest() { ssh -o ConnectTimeout=10 -p "$SSH_PORT" "$GUEST_USER@localhost" "$@"; }
-gpwsh() { guest "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$1\""; }
+# PowerShell via -EncodedCommand: the bash -> ssh -> Windows-OpenSSH -> cmd
+# quoting stack eats `$` variables in inline -Command strings (live failure
+# 2026-09-06: `$p = Start-Process ...` arrived as `= Start-Process`).
+# Base64 UTF-16LE is immune to every layer.
+gpwsh() {
+  local b64
+  b64=$(printf '%s' "$1" | iconv -f utf-8 -t utf-16le | base64 | tr -d '\n')
+  guest "powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $b64"
+}
 
 mkdir -p "$EVIDENCE_DIR"
 
@@ -86,25 +94,31 @@ log "sha256 verified BOTH hops"
 # ── Phase 4 — stop app, ENFORCED install, fresh launch, RUNNING-binary attest ─
 gpwsh "(Get-Item '$GUEST_APP\\Ministry of Education.exe' -ErrorAction SilentlyContinue).VersionInfo.FileVersion" | tr -d '\r' | tee "$EVIDENCE_DIR/pre-version.txt" || true
 log "stopping app + gateway processes for a genuinely fresh install/launch"
-gpwsh "Get-Process | Where-Object { \$_.ProcessName -match 'Ministry|openclaw' } | Stop-Process -Force -ErrorAction SilentlyContinue; 'stopped'" | tr -d '\r'
+gpwsh 'Get-Process | Where-Object { $_.ProcessName -match "Ministry|openclaw" } | Stop-Process -Force -ErrorAction SilentlyContinue; "stopped"' | tr -d '\r'
 sleep 5
 log "silent install /S /CURRENTUSER — exit code ENFORCED (Codex HIGH)"
-INSTALL_EXIT=$(gpwsh "\$p = Start-Process -FilePath '$GUEST_DL\\moe19.exe' -ArgumentList '/S','/CURRENTUSER' -Wait -PassThru; \$p.ExitCode" | tr -d '\r' | tail -1)
+INSTALL_EXIT=$(gpwsh '$p = Start-Process -FilePath "C:\Users\'"$GUEST_USER"'\Downloads\moe19.exe" -ArgumentList "/S","/CURRENTUSER" -Wait -PassThru; $p.ExitCode' | tr -d '\r' | tail -1)
 [ "$INSTALL_EXIT" = "0" ] || { log "FAIL: installer exit=$INSTALL_EXIT"; exit 1; }
 log "installer exit 0"
 gpwsh "(Get-Item '$GUEST_APP\\Ministry of Education.exe').VersionInfo.FileVersion" | tr -d '\r' | tee "$EVIDENCE_DIR/post-version.txt" | grep -q "moe.19" || { log "FAIL: on-disk FileVersion not moe.19"; exit 1; }
 
 log "visible relaunch (scheduled task; never Hidden)"
 guest "schtasks /run /tn ClawXApp" || { log "FAIL: ClawXApp scheduled task could not run (create it per WINDOWS_INSTALL_RUNBOOK)"; exit 1; }
-sleep 45
+# Gateway boot takes minutes on the CPU-bound VM (moe.18 measured 51s+ on
+# fresh state; live failure 2026-09-06 at a fixed 45s): retry loop, not a
+# fixed sleep.
 # Attest the RUNNING process binary, not the disk label (Codex HIGH).
-RUN_ATTEST=$(gpwsh "\$p = Get-Process 'Ministry of Education' -ErrorAction SilentlyContinue | Select-Object -First 1; if (\$p) { (Get-Item \$p.Path).VersionInfo.FileVersion + '|' + \$p.Path } else { 'NOT_RUNNING' }" | tr -d '\r' | tail -1)
+RUN_ATTEST=$(gpwsh '$p = Get-Process "Ministry of Education" -ErrorAction SilentlyContinue | Select-Object -First 1; if ($p) { (Get-Item $p.Path).VersionInfo.FileVersion + "|" + $p.Path } else { "NOT_RUNNING" }' | tr -d '\r' | tail -1)
 echo "$RUN_ATTEST" | tee "$EVIDENCE_DIR/running-binary-attest.txt"
 echo "$RUN_ATTEST" | grep -q "moe.19" || { log "FAIL: running binary attest = $RUN_ATTEST"; exit 1; }
 for probe in "18789 gateway" "13210 hostapi"; do
   set -- $probe
-  gpwsh "(Test-NetConnection -ComputerName localhost -Port $1 -WarningAction SilentlyContinue).TcpTestSucceeded" | tr -d '\r' | grep -qi true \
-    && log "port $2($1): UP" || { log "FAIL: port $2($1) not up"; exit 1; }
+  PORT_UP=0
+  for i in $(seq 1 24); do
+    if gpwsh "(Test-NetConnection -ComputerName localhost -Port $1 -WarningAction SilentlyContinue).TcpTestSucceeded" | tr -d '\r' | grep -qi true; then PORT_UP=1; break; fi
+    sleep 10
+  done
+  [ "$PORT_UP" = "1" ] && log "port $2($1): UP" || { log "FAIL: port $2($1) not up after 240s"; exit 1; }
 done
 
 # ── Phase 5 — install completeness: artifacts + NO excluded packages ────────

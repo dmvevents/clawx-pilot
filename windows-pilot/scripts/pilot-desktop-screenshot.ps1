@@ -12,12 +12,20 @@
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)] [string] $OutPath,
-  [int] $MaxWidth = 2000
+  [int] $MaxWidth = 2000,
+  # Bring this window to the foreground before capturing so the STAKEHOLDER
+  # view (the app, not whatever console launched us) is what gets graded.
+  [string] $ActivateWindow = ''
 )
 $ErrorActionPreference = 'Stop'
 try {
   Add-Type -AssemblyName System.Windows.Forms
   Add-Type -AssemblyName System.Drawing
+  if ($ActivateWindow) {
+    $shell = New-Object -ComObject WScript.Shell
+    [void]$shell.AppActivate($ActivateWindow)
+    Start-Sleep -Seconds 2
+  }
   $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
   $bmp = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
   $gfx = [System.Drawing.Graphics]::FromImage($bmp)

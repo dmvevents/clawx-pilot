@@ -12,7 +12,17 @@ param(
     [int]$CdpPort = 9223,
     [int]$StartupTimeoutSeconds = 120,
     [int]$TurnTimeoutSeconds = 180,
-    [string]$OutDir = "$env:USERPROFILE\Downloads\clawx-chat-turn-evidence"
+    [string]$OutDir = "$env:USERPROFILE\Downloads\clawx-chat-turn-evidence",
+    # Start the turn in a FRESH chat session. Mandatory in practice for any
+    # document/tool leg: a session holding a previous failure makes the model
+    # echo its own refusal without calling the tool.
+    [switch]$NewSession,
+    # Refuse to relaunch the app. The WMI relaunch below lands the app in the
+    # CALLER's session, so an SSH-driven relaunch takes it off the interactive
+    # desktop and breaks real-desktop screenshot grading. Use this when the app
+    # must stay in the interactive session (relaunch it there via a
+    # `schtasks /it` task carrying --remote-debugging-port instead).
+    [switch]$NoRelaunch
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,6 +44,10 @@ if (-not (Test-Path $appExe)) {
 }
 
 $cdpUp = Test-HttpOk "http://127.0.0.1:$CdpPort/json/version"
+if ((-not $cdpUp) -and $NoRelaunch) {
+    "STATE: CDP_DOWN_NO_RELAUNCH port=$CdpPort"
+    exit 33
+}
 if (-not $cdpUp) {
     # A running app without the CDP flag cannot be attached to; restart it.
     $existing = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq "Ministry of Education.exe" }
@@ -67,5 +81,7 @@ $node = @(
 
 $driver = Join-Path $PSScriptRoot "pilot-chat-turn-driver.js"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
-& $node $driver --prompt $Prompt --port $CdpPort --turn-timeout $TurnTimeoutSeconds --outdir $OutDir
+$driverArgs = @('--prompt', $Prompt, '--port', $CdpPort, '--turn-timeout', $TurnTimeoutSeconds, '--outdir', $OutDir)
+if ($NewSession) { $driverArgs += '--new-session' }
+& $node $driver @driverArgs
 exit $LASTEXITCODE
