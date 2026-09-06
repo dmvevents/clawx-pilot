@@ -1,0 +1,40 @@
+[2026-09-06T19:17:51.227Z] [INFO ] Scheduling Gateway reload after provider switch to "ollama-ollamalo"
+[2026-09-06T19:17:51.241Z] [INFO ] Pinned every agent model.primary {
+[2026-09-06T19:17:51.251Z] [INFO ] [channel-router] Applied channel change {
+[2026-09-06T19:17:51.251Z] [INFO ] [settings] Degraded channel without persisting preference {
+[2026-09-06T19:17:52.428Z] [WARN ] [gateway-refresh] mode=reload result=fallback_restart cause=windows
+[2026-09-06T19:17:53.075Z] [INFO ] Starting Gateway process (mode=packaged, port=18789, entry="C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\openclaw\openclaw.mjs", args="gateway --port 18789 --token [redacted] --allow-unconfigured", cwd="C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\openclaw", bundledBin=yes, providerKeys=0, channels=skipped(no configured channels), proxy=disabled)
+[2026-09-06T19:17:54.258Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:17:58.261Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:18:02.262Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:18:06.264Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:18:10.265Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:18:14.266Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:18:15.359Z] [WARN ] [Gateway stderr] 2026-09-06T19:18:15.358+00:00 [ws] closed before connect conn=2e9b9b5b-af1b-470e-bfe6-325c43c8019c peer=[::1]:52125->[::1]:18789 remote=::1 fwd=n/a origin=n/a host=localhost:18789 ua=n/a code=1006 reason=n/a
+[2026-09-06T19:18:15.401Z] [WARN ] [Gateway stderr] 2026-09-06T19:18:15.400+00:00 [gateway] removed stale session lock: C:\Users\clawxtest\.openclaw\agents\main\sessions\e03de97b-d6e3-4b12-b2c3-ee1009e01602.jsonl.lock (dead-pid)
+[2026-09-06T19:18:15.678Z] [WARN ] [Gateway stderr] 2026-09-06T19:18:15.677+00:00 [plugins] embedded acpx runtime backend probe failed: embedded ACP runtime probe failed (agent=codex; command=npx @zed-industries/codex-acp@^0.11.1; cwd=C:\Users\clawxtest\.openclaw\workspace; Failed to spawn agent command: npx @zed-industries/codex-acp@^0.11.1)
+[2026-09-06T19:18:17.288Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-06T19:18:22.296Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+[2026-09-06T19:18:22.297Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=293489)
+[2026-09-06T19:18:25.298Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-06T19:18:30.299Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+[2026-09-06T19:18:30.299Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=285487)
+[2026-09-06T19:18:35.299Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-06T19:18:40.299Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+[2026-09-06T19:18:40.300Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=275486)
+[2026-09-06T19:18:48.273Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: RPC timeout: chat.history
+[2026-09-06T19:18:48.304Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-06T19:18:53.304Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+[2026-09-06T19:18:53.304Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=262482)
+[2026-09-06T19:19:05.304Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-06T19:19:10.305Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+[2026-09-06T19:19:10.305Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=245481)
+[2026-09-06T19:19:20.280Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: RPC timeout: chat.history
+[2026-09-06T19:19:40.309Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-06T19:19:45.309Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+[2026-09-06T19:19:45.309Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=210477)
+[2026-09-06T19:20:15.314Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-06T19:20:20.315Z] [WARN ] Gateway ready fallback RPC router probe failed; waiting for gateway.ready event or heartbeat recovery: RPC timeout: system-presence
+[2026-09-06T19:20:20.316Z] [WARN ] Gateway initial-ready recovery deferred (ready-fallback-rpc-timeout); waiting for gateway.ready (retryAfterMs=175470)
+[2026-09-06T19:20:50.317Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready
+[2026-09-06T19:20:50.319Z] [INFO ] Gateway ready fallback RPC router probe succeeded

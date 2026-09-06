@@ -1,0 +1,15 @@
+DUMP {
+  "count": 2,
+  "msgs": [
+    {
+      "testid": "chat-message-0",
+      "text": "Please summarise the PDF file at C:\\Users\\clawxtest\\Downloads\\fixture.pdf in five bullet points.just now"
+    },
+    {
+      "testid": "chat-message-1",
+      "text": "Please summarise the PDF file at C:\\Users\\clawxtest\\Downloads\\fixture.pdf in five bullet points.just now"
+    }
+  ],
+  "graph": null,
+  "channel": "online"
+}

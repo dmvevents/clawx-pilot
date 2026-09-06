@@ -1,0 +1,98 @@
+[
+    {
+        "Path":  "C:\\Users\\clawxtest\\AppData\\Local\\Programs\\Ministry of Education\\Ministry of Education.exe",
+        "Exists":  true,
+        "Length":  214315008,
+        "Modified":  "2026-09-06T18:22:32.0000000+00:00",
+        "Sha256":  "5A44CCB141E8944E5B316F0E54298737574D019A1729575AC97B5B9481F9EA78",
+        "SecretMetadataOnly":  false
+    },
+    {
+        "Path":  "C:\\Users\\clawxtest\\AppData\\Local\\Programs\\Ministry of Education\\resources\\app.asar",
+        "Exists":  true,
+        "Length":  252680676,
+        "Modified":  "2026-09-06T18:22:32.0000000+00:00",
+        "Sha256":  "4EFD6002165711A1D4268A36156AED8DD809F518C72FDEF0024EE45ED068BA1B",
+        "SecretMetadataOnly":  false
+    },
+    {
+        "Path":  "C:\\Users\\clawxtest\\AppData\\Local\\Programs\\Ministry of Education\\resources\\openclaw\\node_modules\\playwright-core\\package.json",
+        "Exists":  true,
+        "Length":  1778,
+        "Modified":  "2026-09-06T18:22:32.0000000+00:00",
+        "Sha256":  "D4B8727C495FF2632084E922EE1C7F19A608ED23D86E8F3B0BA0FF317EEA58EC",
+        "SecretMetadataOnly":  false
+    },
+    {
+        "Path":  "C:\\Users\\clawxtest\\AppData\\Local\\Programs\\Ministry of Education\\resources\\bin\\ffmpeg.exe",
+        "Exists":  true,
+        "Length":  101457920,
+        "Modified":  "2026-09-06T18:22:32.0000000+00:00",
+        "Sha256":  "228D7A8556258DE907FDB55F36850078EBC7680B84EC30D84EA02E99BEC1D1EB",
+        "SecretMetadataOnly":  false
+    },
+    {
+        "Path":  "C:\\Users\\clawxtest\\AppData\\Local\\Programs\\Ministry of Education\\resources\\bin\\WinSpeechRecognize.exe",
+        "Exists":  true,
+        "Length":  12288,
+        "Modified":  "2026-09-06T18:22:32.0000000+00:00",
+        "Sha256":  "9A355C96AAD82B79B1A4C1187CFFA11F08D87D719B1761B7C53481FAE56F8072",
+        "SecretMetadataOnly":  false
+    },
+    {
+        "Path":  "C:\\Users\\clawxtest\\AppData\\Local\\Programs\\Ministry of Education\\resources\\resources\\cloud-gateway.json",
+        "Exists":  true,
+        "Length":  416,
+        "Modified":  "2026-09-06T18:22:32.0000000+00:00",
+        "Sha256":  "906C1D033B494FD473540782CB2DB7912BEA1CD931B332EBC5A945362EE6D017",
+        "SecretMetadataOnly":  false
+    },
+    {
+        "Path":  "C:\\Users\\clawxtest\\AppData\\Local\\Programs\\Ministry of Education\\resources\\resources\\cloud-gateway.key",
+        "Exists":  true,
+        "Length":  73,
+        "Modified":  "2026-09-06T18:22:32.0000000+00:00",
+        "Sha256":  null,
+        "SecretMetadataOnly":  true
+    },
+    {
+        "Path":  "C:\\Users\\clawxtest\\AppData\\Local\\Programs\\Ministry of Education\\resources\\resources\\azure-speech.example.json",
+        "Exists":  true,
+        "Length":  101,
+        "Modified":  "2026-09-06T18:22:32.0000000+00:00",
+        "Sha256":  "8CE217E831D18B0661F143CF256C091E8B19986AB7635E863B79CC4CFFBC064E",
+        "SecretMetadataOnly":  false
+    },
+    {
+        "Path":  "C:\\Users\\clawxtest\\AppData\\Local\\Programs\\Ministry of Education\\resources\\resources\\azure-speech.json",
+        "Exists":  false,
+        "Length":  null,
+        "Modified":  null,
+        "Sha256":  null,
+        "SecretMetadataOnly":  false
+    },
+    {
+        "Path":  "C:\\Users\\clawxtest\\AppData\\Local\\Programs\\Ministry of Education\\resources\\resources\\azure-speech.key",
+        "Exists":  false,
+        "Length":  null,
+        "Modified":  null,
+        "Sha256":  null,
+        "SecretMetadataOnly":  true
+    },
+    {
+        "Path":  "C:\\Users\\clawxtest\\Desktop\\Ministry of Education.lnk",
+        "Exists":  true,
+        "Length":  2705,
+        "Modified":  "2026-09-06T18:54:42.1408395+00:00",
+        "Sha256":  "0D63119004733FE48E4564540C902B606B6A3357D884DCF6AC43A35919786AFE",
+        "SecretMetadataOnly":  false
+    },
+    {
+        "Path":  "C:\\Users\\clawxtest\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Ministry of Education.lnk",
+        "Exists":  true,
+        "Length":  2713,
+        "Modified":  "2026-09-06T18:54:42.0783444+00:00",
+        "Sha256":  "0CBF2B01AF9DAE24461AC1215C5A597EC29251B03FA70CBFA6357E12C86043D0",
+        "SecretMetadataOnly":  false
+    }
+]

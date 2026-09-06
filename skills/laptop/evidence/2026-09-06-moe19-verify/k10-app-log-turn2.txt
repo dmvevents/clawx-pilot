@@ -1,0 +1,40 @@
+[2026-09-06T19:28:04.276Z] [WARN ] Gateway WebSocket closed (code=1006, reason=unknown, handshake=ok)
+[2026-09-06T19:28:06.239Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:28:09.070Z] [WARN ] Gateway did not exit in time, force-killing (pid=4712)
+[2026-09-06T19:28:09.071Z] [INFO ] Gateway start requested (port=18789)
+[2026-09-06T19:28:14.407Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:28:22.473Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:28:25.215Z] [INFO ] Waiting for port 18789 to become available (Windows TCP TIME_WAIT)...
+[2026-09-06T19:28:26.473Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:28:36.637Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:28:44.578Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:28:48.637Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:28:52.309Z] [WARN ] [Gateway stderr] 2026-09-06T19:28:52.292+00:00 [ws] closed before connect conn=86e9dc1b-2c14-49ff-81c0-53273da35a5c peer=[::1]:52235->[::1]:18789 remote=::1 fwd=n/a origin=n/a host=localhost:18789 ua=n/a code=1006 reason=n/a
+[2026-09-06T19:28:52.652Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:28:55.479Z] [ERROR] Port 18789 still occupied after 30000ms; aborting startup to avoid port conflict
+[2026-09-06T19:28:55.481Z] [WARN ] Transient start error: Error: Port 18789 still occupied after 30000ms. Retrying... (1/3)
+[2026-09-06T19:28:56.793Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:29:04.890Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:29:07.657Z] [INFO ] Waiting for port 18789 to become available (Windows TCP TIME_WAIT)...
+[2026-09-06T19:29:12.938Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:29:16.980Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:29:20.981Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:29:25.037Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:29:33.129Z] [WARN ] [gateway:rpc] chat.history failed (timeoutMs=30000): Error: Gateway not connected
+[2026-09-06T19:29:38.099Z] [ERROR] Port 18789 still occupied after 30000ms; aborting startup to avoid port conflict
+[2026-09-06T19:29:38.100Z] [WARN ] Transient start error: Error: Port 18789 still occupied after 30000ms. Retrying... (2/3)
+[2026-09-06T19:29:40.000Z] [WARN ] [Gateway stderr] 2026-09-06T19:29:39.987+00:00 [ws] closed before connect conn=8363232b-e7b5-47c5-95e7-f9b401411275 peer=[::1]:52240->[::1]:18789 remote=::1 fwd=n/a origin=n/a host=localhost:18789 ua=n/a code=1006 reason=n/a
+[2026-09-06T19:29:40.094Z] [INFO ] Found orphaned process listening on port 18789 (PIDs: 4712), attempting to kill...
+[2026-09-06T19:29:40.650Z] [WARN ] Gateway process exited (code=1, expected=no)
+[2026-09-06T19:29:40.652Z] [WARN ] Scheduling Gateway reconnect attempt 1/10 in 1000ms
+[2026-09-06T19:29:41.653Z] [INFO ] [metric] gateway.reconnect {
+[2026-09-06T19:29:42.860Z] [INFO ] [metric] gateway.prelaunch {
+[2026-09-06T19:29:42.860Z] [INFO ] Starting Gateway process (mode=packaged, port=18789, entry="C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\openclaw\openclaw.mjs", args="gateway --port 18789 --token [redacted] --allow-unconfigured", cwd="C:\Users\clawxtest\AppData\Local\Programs\Ministry of Education\resources\openclaw", bundledBin=yes, providerKeys=0, channels=skipped(no configured channels), proxy=disabled)
+[2026-09-06T19:29:42.881Z] [INFO ] Gateway process started (pid=5012)
+[2026-09-06T19:30:04.397Z] [WARN ] [Gateway stderr] 2026-09-06T19:30:04.399+00:00 [ws] closed before connect conn=0d9fa30b-fc6c-4b23-88d4-a102c55fd27d peer=[::1]:52458->[::1]:18789 remote=::1 fwd=n/a origin=n/a host=localhost:18789 ua=n/a code=1006 reason=n/a
+[2026-09-06T19:30:04.427Z] [WARN ] [Gateway stderr] 2026-09-06T19:30:04.429+00:00 [gateway] removed stale session lock: C:\Users\clawxtest\.openclaw\agents\main\sessions\e03de97b-d6e3-4b12-b2c3-ee1009e01602.jsonl.lock (dead-pid)
+[2026-09-06T19:30:04.637Z] [WARN ] [Gateway stderr] 2026-09-06T19:30:04.639+00:00 [plugins] embedded acpx runtime backend probe failed: embedded ACP runtime probe failed (agent=codex; command=npx @zed-industries/codex-acp@^0.11.1; cwd=C:\Users\clawxtest\.openclaw\workspace; Failed to spawn agent command: npx @zed-industries/codex-acp@^0.11.1)
+[2026-09-06T19:30:04.788Z] [INFO ] [metric] gateway.startup {
+[2026-09-06T19:30:04.788Z] [INFO ] [metric] gateway.restart.executed {
+[2026-09-06T19:30:04.789Z] [INFO ] [gateway-refresh] mode=restart result=applied pidBefore=4712 pidAfter=5012 suppressed=0 executed=3 circuitOpenUntil=0
+[2026-09-06T19:30:06.291Z] [INFO ] Gateway ready fallback triggered; probing RPC router before marking ready

@@ -1,0 +1,8 @@
+{ "shots": [
+  { "id": "moe19-desktop-app-shell",
+    "imagePath": "/Users/antonalexander/Github/moe-tt/ClawX/skills/laptop/evidence/2026-09-06-moe19-verify/moe19-desktop-20260906-230618.png",
+    "check": "The Ministry of Education desktop app is visible and looks like a working pilot laptop as a stakeholder would see it: real app shell with sidebar (New Chat, Models, Agents, Channels, Skills, Cron Tasks, Settings) and a chat composer; NOT a setup wizard, NOT a blank window, no crash dialog; the footer shows a connected gateway; the channel indicator reads Online or On this device and NEVER a raw model identifier; no dollar costs and no raw HTTP error text anywhere on screen." },
+  { "id": "moe19-desktop-chat-content",
+    "imagePath": "/Users/antonalexander/Github/moe-tt/ClawX/skills/laptop/evidence/2026-09-06-moe19-verify/moe19-desktop-20260906-230618.png",
+    "check": "Read the visible chat transcript. Report whether any assistant reply says it cannot read or access a PDF/document, or shows a technical error. Answer PASS only if NO such failure text is visible; answer FAIL and quote the failure text if the assistant reports being unable to read a document." }
+] }
