@@ -546,13 +546,56 @@ describe('OutlookActions safety gates', () => {
   it('sends the current reviewed draft without asking the model to repeat recipient fields', async () => {
     const { actions } = createActions();
 
-    const result = await actions.sendEmail({ confirm: true });
+    // Recipients/body need not be repeated — but the SUBJECT is the second
+    // send gate and is mandatory on every confirmed send (2026-09-06).
+    const result = await actions.sendEmail({ confirm: true, subject: 'Demo subject' });
 
     expect(result).toEqual({ status: 'sent', message: 'Email sent via Outlook Web.' });
     expect(actions.readOpenDraftProbe).toHaveBeenCalledTimes(1);
-    expect(actions.clickSendInCurrentReviewedDraft).toHaveBeenCalledWith(expect.anything(), { confirm: true });
+    expect(actions.clickSendInCurrentReviewedDraft).toHaveBeenCalledWith(expect.anything(), { confirm: true, subject: 'Demo subject' });
     expect(actions.clickSendInCurrentReviewedDraft).toHaveBeenCalledTimes(1);
     expect(actions.clickSendInVerifiedDraft).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES a bare {confirm:true} send — the subject assertion is mandatory (Codex probe, 2026-09-06)', async () => {
+    const { actions } = createActions();
+
+    const result = await actions.sendEmail({ confirm: true } as never);
+
+    expect(result).toMatchObject({ status: 'refused' });
+    expect(result.reason).toMatch(/subject assertion is required/i);
+    // The gate fires before any Outlook interaction.
+    expect(actions.readOpenDraftProbe).not.toHaveBeenCalled();
+    expect(actions.clickSendInCurrentReviewedDraft).not.toHaveBeenCalled();
+    expect(actions.clickSendInVerifiedDraft).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES subject-only confirmed send when the open pane subject differs — second gate on the current-reviewed path (Codex probe, 2026-09-06)', async () => {
+    const { actions } = createActions();
+
+    const result = await actions.sendEmail({ confirm: true, subject: 'A DIFFERENT subject' });
+
+    expect(result).toMatchObject({ status: 'refused' });
+    expect(result.reason).toMatch(/open draft subject does not match/i);
+    expect(actions.clickSendInCurrentReviewedDraft).not.toHaveBeenCalled();
+    expect(actions.clickSendInVerifiedDraft).not.toHaveBeenCalled();
+  });
+
+  it('threads the confirmed subject into the click-time DOM probe (current-reviewed path)', async () => {
+    const { actions } = createActions();
+    const seen: unknown[] = [];
+    actions.evaluateOpenDraftDom = vi.fn(async (_page: unknown, expected: unknown) => {
+      seen.push(expected);
+      return { snapshot: matchingDraft, clickedSend: true, draftCount: 1, sendableDraftCount: 1 };
+    }) as never;
+    // Call the REAL click helper (not the createActions stub).
+    const real = Object.getPrototypeOf(Object.getPrototypeOf(actions)) as Record<string, unknown>;
+    void real;
+    const clicked = await (OutlookActions.prototype as unknown as {
+      clickSendInCurrentReviewedDraft: (this: unknown, page: unknown, args: unknown) => Promise<boolean>;
+    }).clickSendInCurrentReviewedDraft.call(actions, {}, { confirm: true, subject: 'Demo subject' });
+    expect(clicked).toBe(true);
+    expect(seen[0]).toMatchObject({ mode: 'current-reviewed', subject: 'Demo subject' });
   });
 
   it('refuses confirmed send when multiple reviewed drafts are open', async () => {
@@ -565,7 +608,7 @@ describe('OutlookActions safety gates', () => {
     }));
     actions.clickSendInCurrentReviewedDraft = vi.fn(async () => false);
 
-    const result = await actions.sendEmail({ confirm: true });
+    const result = await actions.sendEmail({ confirm: true, subject: 'Demo subject' });
 
     expect(result).toMatchObject({ status: 'refused' });
     expect(result.reason).toMatch(/multiple open drafts/i);

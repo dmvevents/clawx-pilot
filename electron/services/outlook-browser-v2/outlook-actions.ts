@@ -78,6 +78,10 @@ type CurrentReviewedDraftForSend = {
   to?: string[];
   cc?: string[];
   bcc?: string[];
+  /** The second send gate travels to the CLICK: the pane whose Send is
+   * pressed must carry this subject (CLAUDE.md hard rule; Codex adversarial
+   * review 2026-09-06 — this path used to drop the subject entirely). */
+  subject?: string;
 };
 
 type DraftSendProbeInput = ExpectedDraftForSend | CurrentReviewedDraftForSend | null;
@@ -239,8 +243,14 @@ function validateConfirmedSendArgs(args: SendEmailArgs): string | null {
   if (recipientError) {
     return `Send blocked: supplied ${recipientError.charAt(0).toLowerCase()}${recipientError.slice(1)}`;
   }
-  if (hasProvidedValue(args.subject) && !normalizeComparableText(args.subject)) {
-    return 'Send blocked: supplied subject assertion is empty.';
+  // The subject assertion is MANDATORY on every confirmed send: it is the
+  // second send gate (CLAUDE.md hard rule). Before 2026-09-06 a bare
+  // {confirm:true} — or any call without complete to/subject/body — reached
+  // the click path with NO subject verification at all (Codex adversarial
+  // review via the CLWX-71 MCP surface; reachable from the in-app agent
+  // identically).
+  if (!hasProvidedValue(args.subject) || !normalizeComparableText(args.subject)) {
+    return 'Send blocked: a subject assertion is required. Pass the reviewed draft\'s exact subject so the open compose pane can be verified before sending.';
   }
   if (hasProvidedValue(args.body) && !normalizeComparableText(args.body)) {
     return 'Send blocked: supplied body assertion is empty.';
@@ -643,6 +653,19 @@ export class OutlookActions {
         };
       }
     } else {
+      // The second send gate is UNCONDITIONAL: even without complete
+      // to/body assertions, the open pane's subject must match
+      // args.subject (validateConfirmedSendArgs guarantees it is present).
+      // This branch used to skip the check entirely — {confirm:true,
+      // subject:'anything'} sent whatever single draft was open (Codex
+      // adversarial review, 2026-09-06).
+      if (normalizeComparableText(snapshot.subject) !== normalizeComparableText(args.subject ?? '')) {
+        logger.warn('[outlook-v2] Send refused: open draft subject does not match the confirmed subject (second gate, current-reviewed path)');
+        return {
+          status: 'refused',
+          reason: 'Send blocked: the open draft subject does not match the requested subject. Review the visible draft and re-confirm with its exact subject.',
+        };
+      }
       clicked = await this.clickSendInCurrentReviewedDraft(page, args);
     }
 
@@ -3787,6 +3810,10 @@ export class OutlookActions {
     if (hasProvidedValue(args.to)) expected.to = asArray(args.to);
     if (hasProvidedValue(args.cc)) expected.cc = asArray(args.cc);
     if (hasProvidedValue(args.bcc)) expected.bcc = asArray(args.bcc);
+    // Second gate at click time: the pane whose Send is pressed must carry
+    // the confirmed subject (Codex adversarial review, 2026-09-06 — the
+    // subject was previously dropped on this path).
+    if (hasProvidedValue(args.subject)) expected.subject = args.subject;
     const probe = await this.evaluateOpenDraftDom(page, expected);
     return probe.clickedSend;
   }
@@ -4178,6 +4205,8 @@ export class OutlookActions {
       }
       if (expectedDraft && 'mode' in expectedDraft && expectedDraft.mode === 'current-reviewed') {
         const candidateRoots = sendableRoots.filter(({ snapshot }) => {
+          if (expectedDraft.subject !== undefined
+            && normalize(snapshot.subject) !== normalize(expectedDraft.subject)) return false;
           if (expectedDraft.to && !recipientBucketMatches(expectedDraft.to, snapshot.to)) return false;
           if (expectedDraft.cc && !recipientBucketMatches(expectedDraft.cc, snapshot.cc)) return false;
           if (expectedDraft.bcc && !recipientBucketMatches(expectedDraft.bcc, snapshot.bcc)) return false;
