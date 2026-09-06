@@ -1413,8 +1413,15 @@ export function register(api) {
     execute: async (_toolCallId, args = {}) => {
       const { query } = args;
       requireString('query', query);
-      const raw = await readFile(path.join(PKG_ROOT, 'data', 'schools.json'), 'utf8');
-      const parsed = JSON.parse(raw);
+      // Same raw-ENOENT class as the NSCC data file (trust lens, 2026-09-06):
+      // a missing/corrupt roster must reach the principal as readable prose,
+      // never a Node error code with an app-bundle path.
+      let parsed;
+      try {
+        parsed = JSON.parse(await readFile(path.join(PKG_ROOT, 'data', 'schools.json'), 'utf8'));
+      } catch {
+        throw new Error('The school roster that ships with the app could not be loaded — it appears missing or damaged on this install. The principal should update or reinstall the app.');
+      }
       const all = Array.isArray(parsed.schools) ? parsed.schools : [];
       const q = query.trim().toLowerCase();
       const matches = all

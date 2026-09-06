@@ -158,6 +158,17 @@ describe('moe-principal-assistant plugin registration', () => {
     expect(prompt).toMatch(/retry it once with formal policy wording/i);
   });
 
+  it('preserves the not-a-lawyer boundary on Code-of-Conduct topics (trust lens MAJOR, CLWX-42)', async () => {
+    const { SYSTEM_PROMPT } = await loadPersona();
+    const prompt = String(SYSTEM_PROMPT);
+    // The NSCC steering must never let "ANY such question -> ground in the
+    // Code" override the legal-defer boundary: live-case/statutory
+    // questions get the passages AND the district-office referral.
+    expect(prompt).toMatch(/not-a-lawyer boundary applies unchanged to Code-of-Conduct topics/i);
+    expect(prompt).toMatch(/confirm the procedure with the district office or MoE legal services/i);
+    expect(prompt).toMatch(/the Code is not the only law that applies/i);
+  });
+
   it('keeps Outlook/Forms model-facing guidance on the ClawX repair path', async () => {
     const previousPort = process.env.CLAWX_HOST_API_PORT;
     const previousToken = process.env.CLAWX_HOST_API_TOKEN;
