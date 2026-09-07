@@ -135,3 +135,16 @@ The completed lifecycle repair separates the user’s global channel choice, an 
 Final source checks passed: **201 test files, 1,989 tests passed and 6 skipped**; typecheck passed; lint has **0 errors and 52 existing warnings**. Communication replay and comparison passed with no baseline regression. Harness CI passed its 16 harness, 5 direct Office and 61 eval checks; 9 eval skips remain explicit. Task validation and selected-flow dry run passed against the task-start commit. The frontend build and focused Electron test for held clear followed by a new send passed. The actual local OpenClaw bundle verifier passed, including the synthetic PDF and pricing patch guards.
 
 These results freeze the source for the next Windows build. They do not establish GA readiness: no moe.21 installer exists at this checkpoint, and installed chat, representative Windows, tenant and full release acceptance remain outstanding.
+
+
+## Outlook compose boundary verification — September 7
+
+CLWX-123 now has a measured root cause and a bounded source repair. The live Outlook editor preserved the requested multiline body, but `textContent` concatenated adjacent HTML blocks. Body verification and draft readback now use rendered text, with the original native keyboard entry preserved. Recipient proof is restricted to the exact active-compose To/Cc/Bcc bucket and excludes suggestion/chrome decoys. Repeated exact metadata for one bucket is accepted; conflicting bucket labels refuse.
+
+The focused 99-test Outlook safety suite, typecheck and targeted lint pass. A signed-in local product-path diagnostic created one owned synthetic draft with the original multiline input; recipient, subject and normalized body readback matched and Send was not clicked. Raw mailbox evidence remains private. Saved-draft reopen activation was not established by that diagnostic and is not claimed as passed. The three README files were reviewed; this restores the documented draft behavior without introducing a new user flow or interface.
+
+The next native Windows build includes this source correction and the bounded integration-test budgets recorded in the native preflight evidence. No moe.21 installer or installed Windows Outlook proof exists at this checkpoint. CLWX-123 remains In Progress, and the release verdict remains RED.
+
+Final reviewed public source preflight passed: **201 files, 1,994 tests passed and 6 skipped**; typecheck, lint (0 errors, 51 warnings), PowerShell checks (0 gating findings), agent configuration checks and 5 direct Office checks passed. The scoped harness diff validation/dry run and communication comparison also passed.
+
+**Post-release feature:** owner-requested CLWX-124 tracks durable action history, interruption reconciliation and cleanup of proven agent-owned drafts. It is in Backlog, linked to CLWX-70/28/94, and is excluded from this release scope. Intentionally prepared drafts awaiting review must remain distinguishable from abandoned residuals.
