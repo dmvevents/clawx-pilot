@@ -139,6 +139,41 @@ describe('document.* native tools (Lane A — Windows-safe)', () => {
     ]);
   });
 
+  it('applies the document.find entry budget globally across default roots', async () => {
+    const { findDocuments } = await loadDocTools();
+    const previousHome = process.env.HOME;
+    const previousUserProfile = process.env.USERPROFILE;
+    const fakeHome = path.join(workDir, `global-budget-home-${process.pid}`);
+    const downloads = path.join(fakeHome, 'Downloads');
+    const documents = path.join(fakeHome, 'Documents');
+    mkdirSync(downloads, { recursive: true });
+    mkdirSync(documents, { recursive: true });
+    writeFileSync(path.join(downloads, 'A_Unique_Target_Audit.pdf'), 'match');
+    for (let i = 0; i < 2000; i += 1) {
+      writeFileSync(path.join(downloads, `downloads-filler-${String(i).padStart(4, '0')}.pdf`), 'x');
+    }
+    for (let i = 0; i < 2500; i += 1) {
+      writeFileSync(path.join(documents, `documents-filler-${String(i).padStart(4, '0')}.pdf`), 'x');
+    }
+
+    process.env.HOME = fakeHome;
+    process.env.USERPROFILE = fakeHome;
+    try {
+      const result = await findDocuments({ query: 'Unique Target Audit', extensions: ['pdf'] });
+      expect(result.scanned.entries).toBe(4000);
+      expect(result.incomplete).toBe(true);
+      expect(result.status).toBe('incomplete');
+      expect(result.safeUnique).toBe(false);
+      expect(result.uniquePath).toBeNull();
+      expect(result.matches.map((m) => m.name)).toContain('A_Unique_Target_Audit.pdf');
+    } finally {
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
+      if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = previousUserProfile;
+    }
+  });
+
   it('marks result-limit truncation incomplete instead of claiming a safe unique match', async () => {
     const { findDocuments } = await loadDocTools();
     const folder = path.join(workDir, `truncated-${process.pid}`);

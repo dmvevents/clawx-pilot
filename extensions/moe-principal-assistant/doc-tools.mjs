@@ -740,7 +740,7 @@ function discoveryRoots(folder) {
   return uniqueStrings(roots);
 }
 
-function scanDocumentRoot(root, { query, extensions, maxResults }) {
+function scanDocumentRoot(root, { query, extensions, maxResults, maxEntries = DOCUMENT_FIND_MAX_ENTRIES }) {
   let entriesScanned = 0;
   let incomplete = false;
   let refused = 0;
@@ -759,7 +759,7 @@ function scanDocumentRoot(root, { query, extensions, maxResults }) {
       continue;
     }
     for (const entry of entries) {
-      if (entriesScanned >= DOCUMENT_FIND_MAX_ENTRIES) {
+      if (entriesScanned >= maxEntries) {
         incomplete = true;
         queue = [];
         break;
@@ -828,7 +828,17 @@ export function findDocuments({ query = '', folder, extensions, maxResults = DOC
   const seen = new Set();
 
   for (const root of roots) {
-    const result = scanDocumentRoot(root, { query, extensions: extList, maxResults: limit });
+    const remainingEntries = DOCUMENT_FIND_MAX_ENTRIES - entriesScanned;
+    if (remainingEntries <= 0) {
+      incomplete = true;
+      break;
+    }
+    const result = scanDocumentRoot(root, {
+      query,
+      extensions: extList,
+      maxResults: limit,
+      maxEntries: remainingEntries,
+    });
     entriesScanned += result.entriesScanned;
     incomplete = incomplete || result.incomplete;
     refused += result.refused;
