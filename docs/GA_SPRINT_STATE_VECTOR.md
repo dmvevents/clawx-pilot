@@ -1650,6 +1650,64 @@ the production-integration milestone, not a GA blocker.
   1627/6-skip; typecheck+lint clean. Remaining for Ready: sandbox positive
   legs + Claude-Code client leg + full lenses (Chrome/build/operator-
   gated). NEXT QUEUED: CLWX-105 (in-line error chip).
+- 2026-09-07 sixteenth tick (CLWX-119: re-measured, and the card's premise is
+  REFUTED - the flake was the grading, not the lane; the residual is a real
+  product defect, new CLWX-123): last tick's named residual was that W3.2's
+  grading had no unit row because `v2-eval.ts` has no importable seam. Closing
+  that gap found the same fail-open one level up: **the eval decided "lane not
+  ready" by regex-matching its own notes** - `failing.filter((r) =>
+  /needs_signin/i.test(r.notes))` - the identical mechanism as the CLWX-90 HIGH-1
+  gate fail-open, in the same file family, and untestable for the same reason
+  (CDP browser + `process.exit` at module scope). Wrong in BOTH directions:
+  fail-OPEN when any unrelated row emits the token, fail-CLOSED when a genuine
+  sign-in wall's notes are richer than the token. Fix: judgement extracted to
+  `scripts/eval-verdict.ts` as the shipped script's SINGLE decision point (same
+  remedy and same reason as `ga-gate-verdict.mjs` - pinning a copy verifies a
+  surface that is not the shipped one): `laneVerdict()` on a typed `laneNotReady`
+  flag set by the row that OBSERVED the wall; `gradeAttachmentLocate()` carrying
+  CLWX-120's refusal/absence distinction with the validated array returned
+  alongside the verdict so the caller never re-derives the rule; latency
+  thresholds taken from the product's own commitments rather than invented (30s =
+  CLWX-47/TB-3 "still working" notice, 90s = CLWX-94 watchdog failover, inclusive
+  lower bounds, unmeasured is never a verdict - the GA latency BUDGET remains an
+  open owner ask and was deliberately not invented); per-run artifacts so two
+  runs leave two comparable files. Also: `ga-gate.mjs` labelled this suite
+  `outlook-eval 15-row` when it has **18** - an authored count in a report label
+  is a coverage claim that decays silently, so it is now derived and the eval
+  prints `coverage:` last where the gate's 3-line tail captures it. **The
+  re-measure is the finding.** Four consecutive live runs on
+  `outlook.cloud.microsoft`: all 16 pass / 1 fail / 1 skip of 18, `verdict flips:
+  NONE - the two runs agree on every row`, same failing row and same skip each
+  time, no row even over the 30s SLOW line. So EVAL-NONDETERMINISM does not
+  reproduce at n=4, and what it was hiding is a **reproducible product defect**:
+  W4.1 `draft_email` fails 4/4 with `status=failed leftOpen=true`, and once the
+  row stopped discarding the driver's message the cause was plain - *"the open
+  draft does not contain all requested To recipients"*
+  (`outlook-actions.ts:3790`). The recipient in that draft was put there by our
+  own `fillField`/`commitRecipientField` at :503-504, so **the write and read
+  halves of the same driver disagree about the same field**, and a safety
+  assertion is refusing correctly-filled drafts. Ruled out with evidence, so it
+  is not re-walked: not a wedged draft (new `outlook-compose-state-probe.ts`
+  reports `hasCompose=false` at rest), not CLWX-58 regressing (its check passes,
+  exit 0), not the grading. Two candidate mechanisms named on the card (chip
+  display-name defeats an email-string needle; or `[aria-label*="To" i]`
+  substring race picks the wrong element) plus the zero-leak probe that
+  discriminates them. Filed **CLWX-123** (Backlog/high) - explicitly NOT fixed
+  this tick, and explicitly not to be "fixed" by loosening the assertion, which
+  is shared with the confirmed-dispatch path. **Method note worth keeping:** my
+  own test's source-guards failed first, firing on the COMMENTS that deliberately
+  quote the deleted defect - a raw-source grep guard pressures the next reader to
+  delete the explanation, so it is now comment-aware and treats ambiguity as
+  code. Fourth consecutive tick where the harness, not the product, was the
+  hidden defect. 29 new rows; 6/6 mutation legs REAL each failing only its named
+  row, control 29/29 either side, source byte-identical; typecheck 0, lint 0
+  errors (52 pre-existing warnings), **full unit suite 1770 passed / 6 skipped
+  (189 files)**. Health pulse: `pnpm ga:gate` GA_GATE_STATIC=1 GREEN 7/0/3 with
+  T2 correctly SKIP/BLOCKED (IAP tunnel bound, guest ssh handshake failed;
+  `gcloud auth login` is owner-interactive). Commit `2005b13c`. CLWX-119 **NOT
+  moved to Ready**: it changed code and the separate review lane has not run.
+  Board: CLWX-119 comment `28f68a56` (readback-verified), CLWX-123 created
+  (readback-verified).
 - 2026-09-07 fifteenth tick (CLWX-120: the "grading bug" was a PRODUCT defect,
   and the same lie was in my own test harness): the card said W3.2 grades a
   healthy safe refusal as a product FAIL. Reading the chain showed the eval
