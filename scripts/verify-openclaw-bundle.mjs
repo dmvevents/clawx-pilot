@@ -20,6 +20,7 @@
  * Run: node scripts/verify-openclaw-bundle.mjs   (wired into the package chain)
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -98,20 +99,30 @@ try {
 // makes pdfjs demand GlobalWorkerOptions.workerSrc). Run the shipped
 // doc-tools against the BUNDLE's pdf-parse in a child process with the
 // faked env — this is the exact failure that reached the external tester
-// on moe.16 despite every presence check passing.
+// on moe.16 despite every presence check passing. The parser sandbox allows
+// user-home and OS-temp reads only, so copy the public repo fixture into a
+// unique temp directory for this probe instead of widening allowed roots.
 {
-  if (!fs.existsSync(CLWX92_PDF_FIXTURE)) {
-    failures.push(`UTILITY-ENV(pdf): public fixture missing at ${CLWX92_PDF_FIXTURE}`);
-  } else {
-    const child = spawnSync(process.execPath, ['scripts/clwx92-workerenv-check.mjs'], {
-      cwd: ROOT,
-      encoding: 'utf8',
-      timeout: 120_000,
-      env: { ...process.env, CLWX92_BUNDLE_NM: BUNDLE_NM },
-    });
-    if (child.status !== 0) {
-      failures.push(`UTILITY-ENV(pdf): ${String(child.stdout + child.stderr).split('\n').filter(Boolean).pop() ?? 'check failed'}`);
+  let tempDir = null;
+  try {
+    if (!fs.existsSync(CLWX92_PDF_FIXTURE)) {
+      failures.push(`UTILITY-ENV(pdf): public fixture missing at ${CLWX92_PDF_FIXTURE}`);
+    } else {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clwx92-bundle-pdf-'));
+      const tempFixture = path.join(tempDir, 'clwx92-public-pdf-fixture.pdf');
+      fs.copyFileSync(CLWX92_PDF_FIXTURE, tempFixture);
+      const child = spawnSync(process.execPath, ['scripts/clwx92-workerenv-check.mjs'], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        timeout: 120_000,
+        env: { ...process.env, CLWX92_BUNDLE_NM: BUNDLE_NM, CLWX92_PDF_FIXTURE: tempFixture },
+      });
+      if (child.status !== 0) {
+        failures.push(`UTILITY-ENV(pdf): ${String(child.stdout + child.stderr).split('\n').filter(Boolean).pop() ?? 'check failed'}`);
+      }
     }
+  } finally {
+    if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
