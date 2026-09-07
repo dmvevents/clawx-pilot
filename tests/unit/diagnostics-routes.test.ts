@@ -8,6 +8,7 @@ const buildChannelAccountsViewMock = vi.fn();
 const getChannelStatusDiagnosticsMock = vi.fn();
 const sendJsonMock = vi.fn();
 const readLogFileMock = vi.fn();
+const diagnoseChromeCdpMock = vi.fn();
 
 const testOpenClawConfigDir = join(tmpdir(), 'clawx-tests', 'diagnostics-routes-openclaw');
 
@@ -28,6 +29,10 @@ vi.mock('@electron/utils/logger', () => ({
 
 vi.mock('@electron/utils/paths', () => ({
   getOpenClawConfigDir: () => testOpenClawConfigDir,
+}));
+
+vi.mock('@electron/services/chrome-cdp', () => ({
+  diagnoseChromeCdp: (...args: unknown[]) => diagnoseChromeCdpMock(...args),
 }));
 
 describe('handleDiagnosticsRoutes', () => {
@@ -64,6 +69,12 @@ describe('handleDiagnosticsRoutes', () => {
       lastChannelsStatusFailureAt: 200,
     });
     readLogFileMock.mockResolvedValue('clawx-log-tail');
+    diagnoseChromeCdpMock.mockResolvedValue({
+      state: 'cdp_ready',
+      action: 'none',
+      browser: 'Chrome/136.0.0.0',
+      chromeProcessCount: 1,
+    });
   });
 
   afterAll(() => {
@@ -99,6 +110,7 @@ describe('handleDiagnosticsRoutes', () => {
       gatewayLogTail?: string;
       gatewayErrLogTail?: string;
       gateway?: { state?: string; reasons?: string[] };
+      browserAutomation?: { state?: string; action?: string; browser?: string; chromeProcessCount?: number };
     };
     expect(payload.platform).toBe(process.platform);
     expect(payload.channels).toEqual([
@@ -112,6 +124,43 @@ describe('handleDiagnosticsRoutes', () => {
     expect(payload.gatewayErrLogTail).toBe('');
     expect(payload.gateway?.state).toBe('degraded');
     expect(payload.gateway?.reasons).toEqual(expect.arrayContaining(['gateway_degraded']));
+    expect(payload.browserAutomation).toEqual({
+      state: 'cdp_ready',
+      action: 'none',
+      browser: 'Chrome/136.0.0.0',
+      chromeProcessCount: 1,
+    });
+    expect(diagnoseChromeCdpMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns a route error when browser diagnostics fails', async () => {
+    diagnoseChromeCdpMock.mockRejectedValueOnce(new Error('diagnostic probe failed'));
+
+    const { handleDiagnosticsRoutes } = await import('@electron/api/routes/diagnostics');
+    const handled = await handleDiagnosticsRoutes(
+      { method: 'GET' } as IncomingMessage,
+      {} as ServerResponse,
+      new URL('http://127.0.0.1:13210/api/diagnostics/gateway-snapshot'),
+      {
+        gatewayManager: {
+          getStatus: () => ({ state: 'running', port: 18789 }),
+          getDiagnostics: () => ({
+            consecutiveHeartbeatMisses: 0,
+            consecutiveRpcFailures: 0,
+          }),
+        },
+      } as never,
+    );
+
+    expect(handled).toBe(true);
+    expect(sendJsonMock).toHaveBeenCalledWith(
+      expect.anything(),
+      500,
+      expect.objectContaining({
+        success: false,
+        error: expect.stringContaining('diagnostic probe failed'),
+      }),
+    );
   });
 
   it('returns empty gateway log tails when log files are missing', async () => {
