@@ -3620,7 +3620,8 @@ export class OutlookActions {
         const valueText = (el: Element | null) => {
           if (!el) return '';
           const value = 'value' in el && typeof el.value === 'string' ? el.value : '';
-          const text = el.textContent || '';
+          const renderedText = el instanceof HTMLElement && typeof el.innerText === 'string' ? el.innerText : '';
+          const text = renderedText || el.textContent || '';
           return normalize([value, text].filter(Boolean).join(' '));
         };
         const fieldNameText = (el: Element | null) => {
@@ -3996,7 +3997,8 @@ export class OutlookActions {
       const valueText = (el: Element | null) => {
         if (!el) return '';
         const value = 'value' in el && typeof el.value === 'string' ? el.value : '';
-        const text = (el.textContent || '').trim();
+        const renderedText = el instanceof HTMLElement && typeof el.innerText === 'string' ? el.innerText : '';
+        const text = (renderedText || el.textContent || '').trim();
         return normalize([value, text].filter(Boolean).join(' '));
       };
       const fieldNameText = (el: Element | null) => {
@@ -4101,19 +4103,45 @@ export class OutlookActions {
         }
         return actualEmails.every((email) => expectedEmails.has(email));
       };
+      const exactRecipientLabel = (el: Element | null): 'To' | 'Cc' | 'Bcc' | null => {
+        if (!el) return null;
+        const labels = [
+          el.getAttribute('aria-label') || '',
+          el.getAttribute('placeholder') || '',
+          el.getAttribute('name') || '',
+          el.getAttribute('title') || '',
+          el.getAttribute('data-automation-id') || '',
+          el.getAttribute('data-automationid') || '',
+        ].map((value) => normalize(value).toLowerCase()).filter(Boolean);
+        const buckets = new Set<'To' | 'Cc' | 'Bcc'>();
+        for (const label of labels) {
+          if (label === 'to') buckets.add('To');
+          if (label === 'cc') buckets.add('Cc');
+          if (label === 'bcc') buckets.add('Bcc');
+        }
+        return buckets.size === 1 ? Array.from(buckets)[0] : null;
+      };
+      const isRecipientSuggestion = (el: Element) => Boolean(el.closest([
+        '[role="listbox"]',
+        '[aria-label*="suggestion" i]',
+        '[data-testid*="suggestion" i]',
+        '[data-automation-id*="suggestion" i]',
+        '[data-automationid*="suggestion" i]',
+      ].join(',')));
       const hasSubjectField = (root: Element) => Boolean(root.querySelector(
         '[aria-label="Subject"], [aria-label*="Subject" i], [placeholder="Add a subject"], [placeholder*="subject" i]',
       ));
-      const hasRecipientField = (root: Element) => Boolean(root.querySelector([
+      const hasRecipientField = (root: Element) => Array.from(root.querySelectorAll([
         '[aria-label="To"]',
         '[aria-label="Cc"]',
         '[aria-label="Bcc"]',
-        '[aria-label*="recipient" i]',
-        '[role="textbox"][aria-label*="To" i]',
-        '[role="textbox"][aria-label*="Cc" i]',
-        '[role="textbox"][aria-label*="Bcc" i]',
-        '[contenteditable="true"][aria-label*="recipient" i]',
-      ].join(',')));
+        '[placeholder="To"]',
+        '[placeholder="Cc"]',
+        '[placeholder="Bcc"]',
+        '[name="To"]',
+        '[name="Cc"]',
+        '[name="Bcc"]',
+      ].join(','))).some((el) => isVisible(el) && !isRecipientSuggestion(el) && exactRecipientLabel(el) !== null);
       const sendButton = (root: Element) => Array.from(
         root.querySelectorAll('button, [role="button"], [aria-label], [title]'),
       ).find((el) => {
@@ -4142,20 +4170,21 @@ export class OutlookActions {
         .map((part) => normalize(part))
         .filter((part) => part && !/^(to|cc|bcc)$/i.test(part));
       const recipientFieldText = (root: Element, label: 'To' | 'Cc' | 'Bcc') => {
-        const selectors = [
+        const candidates = Array.from(root.querySelectorAll([
+          'input',
+          'textarea',
+          '[role="textbox"]',
+          '[role="combobox"]',
+          '[contenteditable="true"]',
           `[aria-label="${label}"]`,
-          `[aria-label*="${label}" i]`,
           `[placeholder="${label}"]`,
-          `[placeholder*="${label}" i]`,
-          `[role="textbox"][aria-label*="${label}" i]`,
-          `[contenteditable="true"][aria-label*="${label}" i]`,
-        ];
-        for (const selector of selectors) {
-          for (const el of Array.from(root.querySelectorAll(selector))) {
-            if (!isVisible(el)) continue;
-            const text = valueText(el);
-            if (text && text.toLowerCase() !== label.toLowerCase()) return text;
-          }
+          `[name="${label}"]`,
+        ].join(','))).filter((el) => isVisible(el)
+          && !isRecipientSuggestion(el)
+          && exactRecipientLabel(el) === label);
+        for (const el of candidates) {
+          const text = valueText(el);
+          if (text && text.toLowerCase() !== label.toLowerCase()) return text;
         }
         return '';
       };

@@ -1848,6 +1848,102 @@ describe('OutlookActions verified draft DOM probe', () => {
     expect(clicks).toEqual([]);
   });
 
+  it('does not let broad non-recipient aria labels satisfy the To bucket', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <div role="dialog">
+        <button aria-label="Send" data-click-id="send-1">Send</button>
+        <button aria-label="Forward to automation contact">recipient@example.invalid</button>
+        <input aria-label="Subject" value="Demo subject" />
+        <div aria-label="Message body" contenteditable="true">Body is not logged by this test.</div>
+      </div>
+    `);
+
+    const result = await actions.evaluateOpenDraftDom(page, expectedDraft);
+
+    expect(result.clickedSend).toBe(false);
+    expect(clicks).toEqual([]);
+  });
+
+  it('uses the exact active compose To field when broad Outlook chrome also contains email text', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <div role="dialog">
+        <button aria-label="Send" data-click-id="send-1">Send</button>
+        <button aria-label="Forward to automation contact">other@example.invalid</button>
+        <div aria-label="To" contenteditable="true">recipient@example.invalid</div>
+        <input aria-label="Subject" value="Demo subject" />
+        <div aria-label="Message body" contenteditable="true">Body is not logged by this test.</div>
+      </div>
+    `);
+
+    const result = await actions.evaluateOpenDraftDom(page, expectedDraft);
+
+    expect(result.clickedSend).toBe(true);
+    expect(result.snapshot?.to).toEqual(['recipient@example.invalid']);
+    expect(clicks).toEqual(['send-1']);
+  });
+
+  it('accepts repeated exact labels for the same active compose recipient bucket', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <div role="dialog">
+        <button aria-label="Send" data-click-id="send-1">Send</button>
+        <input aria-label="To" placeholder="To" value="recipient@example.invalid" />
+        <input aria-label="Subject" value="Demo subject" />
+        <div aria-label="Message body" contenteditable="true">Body is not logged by this test.</div>
+      </div>
+    `);
+
+    const result = await actions.evaluateOpenDraftDom(page, expectedDraft);
+
+    expect(result.clickedSend).toBe(true);
+    expect(result.snapshot?.to).toEqual(['recipient@example.invalid']);
+    expect(clicks).toEqual(['send-1']);
+  });
+
+  it('rejects conflicting exact labels on the same active compose recipient field', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <div role="dialog">
+        <button aria-label="Send" data-click-id="send-1">Send</button>
+        <input aria-label="To" placeholder="Cc" value="recipient@example.invalid" />
+        <input aria-label="Subject" value="Demo subject" />
+        <div aria-label="Message body" contenteditable="true">Body is not logged by this test.</div>
+      </div>
+    `);
+
+    const result = await actions.evaluateOpenDraftDom(page, expectedDraft);
+
+    expect(result.clickedSend).toBe(false);
+    expect(result.snapshot?.to).toEqual([]);
+    expect(clicks).toEqual([]);
+  });
+
+
+  it('uses rendered body text when Outlook block markup concatenates textContent', async () => {
+    const { actions } = createActions();
+    const { clicks, page } = createDomPage(`
+      <div role="dialog">
+        <button aria-label="Send" data-click-id="send-1">Send</button>
+        <div aria-label="To" contenteditable="true">recipient@example.invalid</div>
+        <input aria-label="Subject" value="Demo subject" />
+        <div aria-label="Message body" contenteditable="true"><div>First line</div><div>Second line</div></div>
+      </div>
+    `);
+    const body = document.querySelector<HTMLElement>('[aria-label="Message body"]');
+    Object.defineProperty(body, 'innerText', { configurable: true, value: 'First line\nSecond line' });
+
+    const result = await actions.evaluateOpenDraftDom(page, {
+      ...expectedDraft,
+      body: 'First line\nSecond line',
+    });
+
+    expect(result.clickedSend).toBe(true);
+    expect(result.snapshot?.body).toBe('First line Second line');
+    expect(clicks).toEqual(['send-1']);
+  });
+
   it('uses the real message body instead of a generic To contenteditable textbox', async () => {
     const { actions } = createActions();
     const { page } = createDomPage(`
