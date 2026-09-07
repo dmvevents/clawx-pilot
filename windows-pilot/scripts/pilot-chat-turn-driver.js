@@ -190,6 +190,143 @@ function terminalLatestText(surface) {
   return normalize(surface?.lastMessageTextFull || surface?.lastMessageText || '');
 }
 
+function extractExecutionGraphEvidenceFromDocument(doc, options) {
+  const selectors = options?.selectors || SEL;
+  const normalizeText = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
+  const promptNormalized = normalizeText(options?.promptNormalized || options?.prompt || '');
+  const preSendMessageTestIds = new Set(Array.isArray(options?.preSendMessageTestIds) ? options.preSendMessageTestIds : []);
+  const fallbackPromptMessageIndex = Number(options?.promptMessageIndex);
+  const diagnostics = [];
+  const textOf = (node) => (typeof node?.innerText === 'string' ? node.innerText : (node?.textContent || '')).replace(/\s+/g, ' ').trim();
+  const semanticText = (el) => {
+    const assistantBody = el?.querySelector?.('.prose');
+    if (assistantBody) return textOf(assistantBody);
+    const userBody = el?.querySelector?.('p.whitespace-pre-wrap');
+    if (userBody) return textOf(userBody);
+    const clone = el?.cloneNode?.(true);
+    if (!clone) return textOf(el);
+    clone.querySelectorAll?.('[data-testid="chat-message-error-chip"], .opacity-0, button, [role="button"]').forEach((node) => node.remove());
+    return textOf(clone);
+  };
+  const labelFromStep = (step) => {
+    // ExecutionGraphCard gives tool/system labels a font-medium paragraph.
+    // Narration is a separate plain paragraph and may itself be a tool name.
+    const label = step.querySelector('p.font-medium');
+    return label ? textOf(label) : '';
+  };
+  const stepToRecord = (step, index) => ({
+    index,
+    label: labelFromStep(step),
+    text: textOf(step),
+  });
+  const labelLooksLikeTool = (label) => {
+    const value = normalizeText(label);
+    if (!value || /\s/.test(value)) return false;
+    if (/^(thinking|completed|running|error|failed|pending)$/i.test(value)) return false;
+    return /^[a-z][a-z0-9-]*(?:[._][a-z0-9-]+)*$/i.test(value);
+  };
+  const numericIndexFromTestId = (testId) => {
+    const match = /^chat-message-(\d+)$/.exec(String(testId || ''));
+    return match ? Number(match[1]) : null;
+  };
+
+  const messages = Array.from(doc.querySelectorAll(selectors.message)).map((el, domOrdinal) => {
+    const testId = el.getAttribute('data-testid') || '';
+    return {
+      el,
+      domOrdinal,
+      testId,
+      numericIndex: numericIndexFromTestId(testId),
+      text: semanticText(el),
+    };
+  });
+  const matchingPrompts = messages.filter((entry) => promptNormalized && normalizeText(entry.text) === promptNormalized);
+  const newPromptMatches = matchingPrompts.filter((entry) => entry.testId && !preSendMessageTestIds.has(entry.testId));
+  let selected = null;
+  if (newPromptMatches.length === 1) {
+    selected = newPromptMatches[0];
+  } else if (newPromptMatches.length > 1) {
+    diagnostics.push(`AMBIGUOUS_NEW_PROMPT_MATCHES:${newPromptMatches.map((entry) => entry.testId || entry.domOrdinal).join(',')}`);
+  } else if (preSendMessageTestIds.size > 0) {
+    diagnostics.push('NEW_PROMPT_MATCH_NOT_FOUND');
+  } else if (Number.isInteger(fallbackPromptMessageIndex) && fallbackPromptMessageIndex >= 0 && fallbackPromptMessageIndex < messages.length) {
+    selected = messages[fallbackPromptMessageIndex];
+    diagnostics.push('PROMPT_SELECTION_FELL_BACK_TO_DOM_ORDINAL');
+  }
+
+  if (!selected) {
+    return {
+      source: 'chat-execution-graph',
+      promptMessageIndex: Number.isInteger(fallbackPromptMessageIndex) ? fallbackPromptMessageIndex : null,
+      promptMessageTestId: null,
+      promptDomOrdinal: null,
+      messageCount: messages.length,
+      currentPromptMatched: false,
+      graphPresent: false,
+      graphCollapsed: null,
+      steps: [],
+      toolNames: [],
+      diagnostics,
+    };
+  }
+
+  const currentPromptMatched = Boolean(promptNormalized) && normalizeText(selected.text) === promptNormalized;
+  if (!currentPromptMatched) diagnostics.push('CURRENT_PROMPT_CONTAINER_MISMATCH');
+
+  const graph = selected.el.querySelector(selectors.executionGraph);
+  if (!graph) diagnostics.push('CURRENT_PROMPT_GRAPH_MISSING');
+  const graphCollapsed = graph ? graph.getAttribute('data-collapsed') === 'true' : null;
+  if (!currentPromptMatched) {
+    return {
+      source: 'chat-execution-graph',
+      promptMessageIndex: selected.numericIndex,
+      promptMessageTestId: selected.testId || null,
+      promptDomOrdinal: selected.domOrdinal,
+      messageCount: messages.length,
+      currentPromptMatched,
+      promptTextLength: selected.text.length,
+      graphPresent: Boolean(graph),
+      graphCollapsed,
+      steps: [],
+      toolNames: [],
+      diagnostics,
+    };
+  }
+  const stepElements = graph ? Array.from(graph.querySelectorAll(selectors.executionStep)) : [];
+  const steps = stepElements.map(stepToRecord);
+  const toolNames = [...new Set(steps.map((step) => step.label).filter(labelLooksLikeTool))];
+  if (graph && !graphCollapsed && steps.length === 0) diagnostics.push('CURRENT_PROMPT_GRAPH_HAS_NO_STEPS');
+
+  return {
+    source: 'chat-execution-graph',
+    promptMessageIndex: selected.numericIndex,
+    promptMessageTestId: selected.testId || null,
+    promptDomOrdinal: selected.domOrdinal,
+    messageCount: messages.length,
+    currentPromptMatched,
+    promptTextLength: selected.text.length,
+    graphPresent: Boolean(graph),
+    graphCollapsed,
+    steps,
+    toolNames,
+    diagnostics,
+  };
+}
+
+function redactExecutionGraphEvidence(evidence) {
+  if (!evidence || typeof evidence !== 'object') return evidence;
+  return {
+    ...evidence,
+    steps: Array.isArray(evidence.steps)
+      ? evidence.steps.map((step) => ({
+        index: step.index,
+        label: step.label,
+        text: truncate(step.text, 200),
+      }))
+      : [],
+  };
+}
+
 function redactTerminalSurface(surface) {
   if (!surface || typeof surface !== 'object') return surface;
   const full = typeof surface.lastMessageTextFull === 'string' ? surface.lastMessageTextFull : '';
@@ -405,6 +542,53 @@ async function waitForTerminalAcceptance(page, args, answerText) {
   };
 }
 
+async function captureMessageTestIds(page) {
+  return page.evaluate((selector) => Array.from(document.querySelectorAll(selector))
+    .map((el) => el.getAttribute('data-testid') || '')
+    .filter(Boolean), SEL.message);
+}
+
+async function collectExecutionGraphEvidence(page, { prompt, preSendMessageTestIds }) {
+  const promptNormalized = normalize(prompt);
+  const evaluate = () => page.evaluate(({ selectors, extractorSource, promptNormalized: expectedPrompt, preSendMessageTestIds: beforeIds }) => {
+    const extract = (0, eval)(`(${extractorSource})`);
+    return extract(document, {
+      selectors,
+      promptNormalized: expectedPrompt,
+      preSendMessageTestIds: beforeIds,
+    });
+  }, {
+    selectors: SEL,
+    extractorSource: extractExecutionGraphEvidenceFromDocument.toString(),
+    promptNormalized,
+    preSendMessageTestIds,
+  });
+
+  const first = await evaluate();
+  const evidence = { ...first, expandedForCapture: false, restoredCollapsed: false };
+  if (!first.currentPromptMatched || !first.graphPresent || !first.promptMessageTestId) return redactExecutionGraphEvidence(evidence);
+
+  const promptContainer = page.locator(`[data-testid="${first.promptMessageTestId}"]`).first();
+  if (first.graphCollapsed) {
+    const graph = promptContainer.locator(SEL.executionGraph).first();
+    await graph.click();
+    await page.waitForFunction(({ selectors, testId }) => {
+      const container = document.querySelector(`[data-testid="${testId}"]`);
+      const currentGraph = container?.querySelector?.(selectors.executionGraph);
+      return currentGraph?.getAttribute('data-collapsed') === 'false';
+    }, { selectors: SEL, testId: first.promptMessageTestId }, { timeout: 10_000 }).catch(() => undefined);
+  }
+
+  const afterExpand = await evaluate();
+  const next = { ...afterExpand, expandedForCapture: first.graphCollapsed === true, restoredCollapsed: false };
+  if (first.graphCollapsed === true && afterExpand.graphCollapsed === false) {
+    await promptContainer.locator('[data-testid="chat-execution-graph-collapse"]').first().click().catch(() => undefined);
+    const restored = await evaluate().catch(() => null);
+    next.restoredCollapsed = restored?.graphCollapsed === true;
+  }
+  return redactExecutionGraphEvidence(next);
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   const { chromium } = resolvePlaywrightCore();
@@ -423,9 +607,11 @@ async function main() {
     freshSession: null,
     composerPlaceholder: null,
     messagesBefore: 0,
+    messageTestIdsBefore: [],
     messagesAfter: 0,
     executionSteps: [],
     toolNames: [],
+    executionEvidence: null,
     errorChipSeen: false,
     errorChipText: null,
     errorChipOnly: false,
@@ -474,7 +660,8 @@ async function main() {
         return result;
       }
     }
-    result.messagesBefore = await page.locator(SEL.message).count();
+    result.messageTestIdsBefore = await captureMessageTestIds(page);
+    result.messagesBefore = result.messageTestIdsBefore.length;
 
     // Wait for the composer to be ENABLED, not just present. A listening port
     // 18789 is NOT readiness: the renderer disables the composer (placeholder
@@ -570,17 +757,24 @@ async function main() {
 
     // Tool-call evidence: the execution graph is the only renderer-visible
     // proof that the model actually CALLED a tool rather than answering (or
-    // refusing) from its own context.
+    // refusing) from its own context. The graph belongs under the user prompt
+    // container that triggered this turn; never read a prior turn's graph.
     try {
-      const steps = await page.locator(SEL.executionStep).allInnerTexts();
-      result.executionSteps = steps.map((s) => truncate(s, 200));
-      const names = new Set();
-      for (const step of result.executionSteps) {
-        for (const m of step.matchAll(/\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g)) names.add(m[1]);
-      }
-      result.toolNames = [...names];
-    } catch {
-      // execution graph may be collapsed or absent; leave the arrays empty
+      const evidence = await collectExecutionGraphEvidence(page, {
+        prompt: args.prompt,
+        preSendMessageTestIds: result.messageTestIdsBefore,
+      });
+      result.executionEvidence = evidence;
+      result.executionSteps = Array.isArray(evidence.steps)
+        ? evidence.steps.map((step) => truncate(step.text, 200))
+        : [];
+      result.toolNames = Array.isArray(evidence.toolNames) ? evidence.toolNames : [];
+    } catch (error) {
+      result.executionEvidence = {
+        source: 'chat-execution-graph',
+        preSendMessageTestIds: result.messageTestIdsBefore,
+        diagnostics: [`CAPTURE_FAILED:${error && error.message ? error.message : error}`],
+      };
     }
     if (await page.locator(SEL.errorChip).count() > 0) result.errorChipSeen = true;
 
@@ -618,6 +812,9 @@ module.exports = {
   semanticMessageTextFromElement,
   semanticAnswerStillLatest,
   terminalLatestText,
+  extractExecutionGraphEvidenceFromDocument,
+  collectExecutionGraphEvidence,
+  captureMessageTestIds,
   redactTerminalSurface,
   captureTerminalSurface,
 };

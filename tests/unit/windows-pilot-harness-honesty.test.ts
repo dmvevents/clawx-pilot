@@ -330,6 +330,214 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
   });
 });
 
+describe('pilot-chat-turn-driver: execution graph evidence is scoped to the current prompt', () => {
+  const selectors = driver.SEL;
+  const prompt = 'Read the PDF and summarize the attendance anomalies.';
+
+  function extract(html: string, preSendMessageTestIds: string[] = [], promptNormalized = prompt) {
+    const dom = new JSDOM(html);
+    return driver.extractExecutionGraphEvidenceFromDocument(dom.window.document, {
+      selectors,
+      promptNormalized,
+      preSendMessageTestIds,
+    });
+  }
+
+  function message(index: number, text: string, graph = '') {
+    return `
+      <div data-testid="chat-message-${index}">
+        <p class="whitespace-pre-wrap">${text}</p>
+        ${graph}
+      </div>
+    `;
+  }
+
+  function expandedGraph(labels: string[]) {
+    return `
+      <div data-testid="chat-execution-graph" data-collapsed="false">
+        ${labels.map((label) => `
+          <div data-testid="chat-execution-step">
+            <button><div><p class="font-medium">${label}</p><span>completed</span></div></button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  it('does not borrow a prior expanded graph when the current prompt graph is collapsed', () => {
+    const html = `
+      <main data-testid="chat-page">
+        ${message(0, 'Older document prompt', expandedGraph(['document.read_pdf']))}
+        <div data-testid="chat-message-1"><div class="prose"><p>Old answer.</p></div></div>
+        ${message(2, prompt, '<button data-testid="chat-execution-graph" data-collapsed="true">2 tool calls · 1 process messages</button>')}
+        <div data-testid="chat-message-3"><div class="prose"><p>Fresh answer.</p></div></div>
+      </main>
+    `;
+
+    const evidence = extract(html, ['chat-message-0', 'chat-message-1']);
+
+    expect(evidence.currentPromptMatched).toBe(true);
+    expect(evidence.graphPresent).toBe(true);
+    expect(evidence.graphCollapsed).toBe(true);
+    expect(evidence.steps).toEqual([]);
+    expect(evidence.toolNames).toEqual([]);
+  });
+
+  it('uses post-send data-testid identity, not visible count or numeric index, with non-contiguous reused sessions', () => {
+    const html = `
+      <main data-testid="chat-page">
+        ${message(0, 'Earlier prompt', expandedGraph(['exec']))}
+        ${message(4, prompt, expandedGraph(['old_tool']))}
+        <div data-testid="chat-message-7"><div class="prose"><p>Prior identical answer.</p></div></div>
+        ${message(9, prompt, expandedGraph(['document.read_docx']))}
+        <div data-testid="chat-message-10"><div class="prose"><p>Fresh answer.</p></div></div>
+      </main>
+    `;
+
+    const evidence = extract(html, ['chat-message-0', 'chat-message-4', 'chat-message-7']);
+
+    expect(evidence.currentPromptMatched).toBe(true);
+    expect(evidence.promptMessageTestId).toBe('chat-message-9');
+    expect(evidence.promptMessageIndex).toBe(9);
+    expect(evidence.promptDomOrdinal).toBe(3);
+    expect(evidence.toolNames).toEqual(['document.read_docx']);
+    expect(evidence.toolNames).not.toContain('old_tool');
+  });
+
+  it('extracts simple and dotted tool labels from the exact current graph', () => {
+    const html = `
+      <main data-testid="chat-page">
+        ${message(0, 'Prior prompt', expandedGraph(['old_tool']))}
+        <div data-testid="chat-message-1"><div class="prose"><p>Old answer.</p></div></div>
+        ${message(2, prompt, expandedGraph(['exec', 'read', 'document.read_docx']))}
+        <div data-testid="chat-message-3"><div class="prose"><p>Fresh answer.</p></div></div>
+      </main>
+    `;
+
+    const evidence = extract(html, ['chat-message-0', 'chat-message-1']);
+
+    expect(evidence.currentPromptMatched).toBe(true);
+    expect(evidence.graphCollapsed).toBe(false);
+    expect(evidence.steps.map((step) => step.label)).toEqual(['exec', 'read', 'document.read_docx']);
+    expect(evidence.toolNames).toEqual(['exec', 'read', 'document.read_docx']);
+  });
+
+  it('fails closed when the indexed current prompt does not match, even if that container has graph rows', () => {
+    const html = `
+      <main data-testid="chat-page">
+        ${message(0, 'Different prompt', expandedGraph(['document.read_docx']))}
+        <div data-testid="chat-message-1"><div class="prose"><p>Answer.</p></div></div>
+      </main>
+    `;
+
+    const evidence = driver.extractExecutionGraphEvidenceFromDocument(new JSDOM(html).window.document, {
+      selectors,
+      promptNormalized: prompt,
+      promptMessageIndex: 0,
+    });
+
+    expect(evidence.currentPromptMatched).toBe(false);
+    expect(evidence.diagnostics).toContain('CURRENT_PROMPT_CONTAINER_MISMATCH');
+    expect(evidence.steps).toEqual([]);
+    expect(evidence.toolNames).toEqual([]);
+  });
+
+  it('reports no graph on the current prompt instead of reading later prose or prior rows', () => {
+    const html = `
+      <main data-testid="chat-page">
+        ${message(0, 'Prior prompt', expandedGraph(['document.read_pdf']))}
+        ${message(1, prompt)}
+        <div data-testid="chat-message-2"><div class="prose"><p>I used document.read_docx to answer.</p></div></div>
+      </main>
+    `;
+
+    const evidence = extract(html, ['chat-message-0']);
+
+    expect(evidence.currentPromptMatched).toBe(true);
+    expect(evidence.graphPresent).toBe(false);
+    expect(evidence.diagnostics).toContain('CURRENT_PROMPT_GRAPH_MISSING');
+    expect(evidence.toolNames).toEqual([]);
+  });
+
+  it('does not turn process narration rows into tool names', () => {
+    const html = `
+      <main data-testid="chat-page">
+        ${message(0, prompt, `
+          <div data-testid="chat-execution-graph" data-collapsed="false">
+            <div data-testid="chat-execution-step">
+              <button><div><p class="text-meta">exec</p></div></button>
+            </div>
+          </div>
+        `)}
+      </main>
+    `;
+
+    const evidence = extract(html);
+
+    expect(evidence.steps).toHaveLength(1);
+    expect(evidence.steps[0].label).toBe('');
+    expect(evidence.toolNames).toEqual([]);
+  });
+
+  it('expands the current collapsed graph via UI and restores it after capture', async () => {
+    let expanded = false;
+    let restored = false;
+    const collapsedEvidence = {
+      currentPromptMatched: true,
+      graphPresent: true,
+      graphCollapsed: true,
+      promptMessageTestId: 'chat-message-9',
+      promptMessageIndex: 9,
+      promptDomOrdinal: 2,
+      steps: [],
+      toolNames: [],
+      diagnostics: [],
+    };
+    const expandedEvidence = {
+      currentPromptMatched: true,
+      graphPresent: true,
+      graphCollapsed: false,
+      promptMessageTestId: 'chat-message-9',
+      promptMessageIndex: 9,
+      promptDomOrdinal: 2,
+      steps: [{ index: 0, label: 'document.read_docx', text: 'document.read_docx completed' }],
+      toolNames: ['document.read_docx'],
+      diagnostics: [],
+    };
+    const fakeClick = async () => {
+      if (!expanded) {
+        expanded = true;
+      } else {
+        restored = true;
+        expanded = false;
+      }
+    };
+    const page = {
+      evaluate: async () => (expanded ? expandedEvidence : collapsedEvidence),
+      locator: (selector: string) => {
+        expect(selector).toBe('[data-testid="chat-message-9"]');
+        return {
+          first: () => ({
+            locator: () => ({ first: () => ({ click: fakeClick }) }),
+          }),
+        };
+      },
+      waitForFunction: async () => undefined,
+    };
+
+    const evidence = await driver.collectExecutionGraphEvidence(page, {
+      prompt,
+      preSendMessageTestIds: ['chat-message-0', 'chat-message-4', 'chat-message-7'],
+    });
+
+    expect(evidence.expandedForCapture).toBe(true);
+    expect(evidence.restoredCollapsed).toBe(true);
+    expect(restored).toBe(true);
+    expect(evidence.toolNames).toEqual(['document.read_docx']);
+    expect(evidence.steps?.[0].label).toBe('document.read_docx');
+  });
+});
+
 describe('pilot-set-channel: the runtime is the truth, not the pill', () => {
   it('classifies a local ollama account as on-device and a cloud one as online', () => {
     expect(channel.classifyAccount({ vendorId: 'ollama' })).toBe('on-device');
