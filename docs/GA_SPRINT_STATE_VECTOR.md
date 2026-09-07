@@ -1650,6 +1650,51 @@ the production-integration milestone, not a GA blocker.
   1627/6-skip; typecheck+lint clean. Remaining for Ready: sandbox positive
   legs + Claude-Code client leg + full lenses (Chrome/build/operator-
   gated). NEXT QUEUED: CLWX-105 (in-line error chip).
+- 2026-09-07 fifteenth tick (CLWX-120: the "grading bug" was a PRODUCT defect,
+  and the same lie was in my own test harness): the card said W3.2 grades a
+  healthy safe refusal as a product FAIL. Reading the chain showed the eval
+  COULD NOT have graded it right - `openMessageById` returned a bare `boolean`,
+  so a CLWX-46 reading-pane refusal (row found, clicked, pane unconfirmable) and
+  a genuine absence (row never reachable) reached every caller as one
+  undifferentiated `not_found`. The consequence outside the eval is why this is a
+  product row and not a grader patch: **the principal was told "Could not locate
+  message ..." about a message sitting visibly in their own inbox** - a false
+  statement emitted BY a safety feature working correctly, the worst combination
+  for trust, because honest behaviour looks like a bug and sends them hunting for
+  mail that never moved. Fix: typed `MessageLocateFailure = 'not_in_list' |
+  'stale_read_guard'` (`outlook-browser/types.ts`) surfaced as `notFoundReason`
+  on all six id-scoped result types, differentiated copy at all five call sites,
+  documented in the `outlook.read_email` description with an explicit instruction
+  never to tell the principal the message is missing on `stale_read_guard`.
+  Deliberately NOT a substring of `message` - that is exactly last tick's
+  GATE-VERDICT-FAIL-OPEN mistake (any row can emit the token, so a consumer that
+  greps for it eventually greps a lie); W3.2 is now fail-CLOSED (only positive
+  evidence earns UNEXERCISED; absent field FAILs; data-returned-but-WRONG is
+  always a FAIL, never a skip). **Two method notes worth more than the fix.**
+  (1) The wrapper returns an OBJECT `{outcome, reason?}`, not a widened string
+  union: a new union member would have slipped past all five `=== 'not_found'`
+  checks into the SUCCESS path - a fresh fail-open introduced by the fix for a
+  fail-open - whereas the object made the compiler enumerate every caller
+  (exactly 10 TS2367 errors across 5 sites), so completeness is a compiler fact,
+  not a grep I trusted. (2) `TestActions` still cast `openMessageById` as
+  `Promise<boolean>`, so TS could not flag the `vi.fn(async () => true)` stubs,
+  and under the new contract `true !== 'opened'` would have quietly routed ~4
+  existing CLWX-81 rows down the not_found path while still passing green - **a
+  cast that lies about a private signature disables the very
+  compiler-enumeration the fix depends on.** Third consecutive tick in which the
+  harness, not the product, was the hidden defect. 7 new rows (94 in the safety
+  suite); 3 mutation legs REAL, each failing only its named row, control 94/94
+  either side, source byte-identical; typecheck 0, lint 0 errors (52 pre-existing
+  warnings), **full unit suite 1741 passed / 6 skipped (188 files)**. Named
+  residual: the W3.2 grading logic has no unit row (`v2-eval.ts` has no
+  importable seam), so the guard THERE is a comment, not a test - the identical
+  gap that let a fail-open ship inside `ga-gate`, same remedy (extract to a pure
+  module). CLWX-120 **NOT moved to Ready**: it changed code and the separate
+  review lane has not run. Board: CLWX-120 comment
+  `a0afae97` (readback-verified). Register: new row
+  RESULT-CONFLATES-REFUSAL-WITH-ABSENCE; EVAL-NONDETERMINISM re-scoped (its
+  (a)/(b)/(c) must be re-measured now that W3.2's verdict is meaningful; CLWX-119
+  stays OPEN).
 - 2026-09-07 fourteenth tick (T1 honesty -> a PRODUCT defect, CLWX-90 + new
   CLWX-118): fixing the gate's second false-attribution found a real bug in
   shipped code. Chain: T1 was gated behind ONE CDP-reachability probe, but a

@@ -14,7 +14,9 @@ type OpenDraftSnapshot = {
 type TestActions = OutlookActions & {
   looksLikeSignin: () => Promise<boolean>;
   ensureInboxFolder: (page: unknown) => Promise<void>;
-  openMessageById: (page: unknown, id: string) => Promise<boolean>;
+  openMessageById: (page: unknown, id: string) => Promise<'opened' | 'not_in_list' | 'stale_read_guard'>;
+  resetInboxListScroll: (page: unknown) => Promise<void>;
+  waitForReadingPaneSettle: (page: unknown, id: string, timeoutMs?: number) => Promise<boolean>;
   dismissBlockingDialog: (page: unknown) => Promise<void>;
   waitForComposePane: (page: unknown) => Promise<void>;
   waitForComposeBodyReady: (page: unknown) => Promise<void>;
@@ -109,7 +111,7 @@ function createActions() {
   const actions = new OutlookActions(driver as never, grounder as never) as unknown as TestActions;
   actions.looksLikeSignin = vi.fn(async () => false);
   actions.ensureInboxFolder = vi.fn(async () => undefined);
-  actions.openMessageById = vi.fn(async () => true);
+  actions.openMessageById = vi.fn(async () => 'opened' as const);
   actions.dismissBlockingDialog = vi.fn(async () => undefined);
   actions.waitForComposePane = vi.fn(async () => undefined);
   actions.waitForComposeBodyReady = vi.fn(async () => undefined);
@@ -1174,7 +1176,7 @@ describe('OutlookActions safety gates', () => {
 
   it('refuses forward with an invalid recipient before opening a forward draft', async () => {
     const { actions, driver } = createActions();
-    actions.openMessageById = vi.fn(async () => true);
+    actions.openMessageById = vi.fn(async () => 'opened' as const);
     actions.openMessageComposeViaShortcut = vi.fn(async () => true);
 
     const result = await actions.forward({
@@ -1375,7 +1377,7 @@ describe('OutlookActions safety gates', () => {
     const { actions } = createActions();
     const order: string[] = [];
     actions.ensureInboxFolder = vi.fn(async () => { order.push('inbox'); });
-    actions.openMessageById = vi.fn(async () => { order.push('open'); return true; });
+    actions.openMessageById = vi.fn(async () => { order.push('open'); return 'opened' as const; });
     actions.clickOpenMessageToolbarButton = vi.fn(async () => true);
     actions.fillBody = vi.fn(async () => undefined);
     actions.readOpenDraftProbe = vi.fn(async () => ({
@@ -1403,7 +1405,7 @@ describe('OutlookActions safety gates', () => {
     const { actions } = createActions();
     const order: string[] = [];
     actions.ensureInboxFolder = vi.fn(async () => { order.push('inbox'); });
-    actions.openMessageById = vi.fn(async () => { order.push('open'); return true; });
+    actions.openMessageById = vi.fn(async () => { order.push('open'); return 'opened' as const; });
 
     const result = await actions.markRead({ id: 'message-1', read: true });
 
@@ -1421,7 +1423,7 @@ describe('OutlookActions safety gates', () => {
     actions.openMessageById = vi.fn(async () => {
       opens += 1;
       order.push(`open-${opens}`);
-      return opens > 1; // miss in the Archive view, hit after the Inbox reset
+      return opens > 1 ? ('opened' as const) : ('not_in_list' as const); // miss in Archive, hit after the Inbox reset
     });
 
     const result = await actions.markRead({ id: 'message-1', read: true });
@@ -1434,7 +1436,7 @@ describe('OutlookActions safety gates', () => {
     const { actions } = createActions();
     const order: string[] = [];
     actions.ensureInboxFolder = vi.fn(async () => { order.push('inbox'); });
-    actions.openMessageById = vi.fn(async () => { order.push('open'); return false; });
+    actions.openMessageById = vi.fn(async () => { order.push('open'); return 'not_in_list' as const; });
 
     const result = await actions.downloadAttachment({
       id: 'message-1',
@@ -1665,6 +1667,143 @@ describe('OutlookActions safety gates', () => {
 
     await expect(actions.fillBody(page, 'Testing the reply feature')).rejects.toThrow(/recipient field/i);
     expect(driver.typeText).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * CLWX-120. Before this, openMessageById returned a bare boolean and every
+ * failure collapsed into `not_found`, so a CLWX-46 reading-pane REFUSAL was
+ * indistinguishable from a message that genuinely is not there. Two consumers
+ * were harmed by that: the principal was told a message did not exist while it
+ * sat in the list, and the W3.2 eval row charged a healthy safety refusal to the
+ * product as a FAIL.
+ *
+ * These rows pin the discriminator itself. Each one FAILS against the pre-fix
+ * driver, because pre-fix there was no notFoundReason field to assert at all --
+ * stated explicitly so no future reader mistakes them for boundary rows the way
+ * two CLWX-118 rows had to be re-labelled.
+ */
+describe('OutlookActions stale-read-guard vs absence discrimination (CLWX-120)', () => {
+
+  // The rows below stub openMessageById, so they pin PROPAGATION. This one pins
+  // the ORIGIN: that a false from the CLWX-46 pane guard becomes stale_read_guard
+  // and not the not_in_list every other failure path returns. Without it, the
+  // conflation could be restored inside openMessageById and every other row here
+  // would still pass.
+  it('maps a pane-settle refusal at its origin to stale_read_guard, not to absence', async () => {
+    // createBareActions, NOT createActions: the latter stubs openMessageById, so
+    // this row would have called the stub and asserted nothing about the code it
+    // is named for.
+    const { actions } = createBareActions();
+    actions.resetInboxListScroll = vi.fn(async () => undefined);
+    const clicked = vi.fn(async () => undefined);
+    const page = {
+      // Row for the wanted id is found at index 0, so it gets clicked.
+      evaluate: vi.fn(async () => 0),
+      locator: vi.fn(() => ({ nth: () => ({ click: clicked }) })),
+    };
+
+    actions.waitForReadingPaneSettle = vi.fn(async () => false);
+    await expect(actions.openMessageById(page, 'message-1')).resolves.toBe('stale_read_guard');
+    // Proof the refusal came from the guard and not from a failure to reach the
+    // row: we did click it.
+    expect(clicked).toHaveBeenCalled();
+
+    actions.waitForReadingPaneSettle = vi.fn(async () => true);
+    await expect(actions.openMessageById(page, 'message-1')).resolves.toBe('opened');
+  });
+  it('reports a pane-guard refusal as a refusal, not as an absent message', async () => {
+    const { actions } = createActions();
+    actions.openMessageById = vi.fn(async () => 'stale_read_guard' as const);
+
+    const result = await actions.readEmail({ id: 'message-1' });
+
+    expect(result.status).toBe('not_found');
+    expect(result.notFoundReason).toBe('stale_read_guard');
+    // The copy must not tell the principal to go hunting for a message that is
+    // sitting right there in the list.
+    expect(result.message).toMatch(/could not confirm the reading pane/i);
+    expect(result.message).not.toMatch(/could not locate/i);
+  });
+
+  it('reports a genuinely unreachable message as not_in_list', async () => {
+    const { actions } = createActions();
+    actions.openMessageById = vi.fn(async () => 'not_in_list' as const);
+
+    const result = await actions.readEmail({ id: 'message-1' });
+
+    expect(result.status).toBe('not_found');
+    expect(result.notFoundReason).toBe('not_in_list');
+    expect(result.message).toMatch(/could not locate/i);
+  });
+
+  // Asserted on markRead rather than readEmail because markRead's success path
+  // needs no reading-pane DOM, so this row stays about the discriminator instead
+  // of about extraction scaffolding. Weak by design: it only pins that a success
+  // never carries a failure reason.
+  it('never labels a successful action with a failure reason', async () => {
+    const { actions } = createActions();
+
+    const result = await actions.markRead({ id: 'message-1', read: true });
+
+    expect(result.status).toBe('ok');
+    expect(result.notFoundReason).toBeUndefined();
+  });
+
+  it('prefers the SECOND attempt reason, so a transient stale pane cannot mask genuine absence', async () => {
+    const { actions, driver } = createActions();
+    // Principal is on Archive, so a miss triggers the one Inbox-reset retry.
+    driver.ensureOutlookTab.mockResolvedValue({ url: () => 'https://outlook.office.com/mail/archive' });
+    let attempts = 0;
+    actions.openMessageById = vi.fn(async () => {
+      attempts += 1;
+      // Attempt 1 hits the guard; attempt 2 proves the row is not there at all.
+      return attempts === 1 ? ('stale_read_guard' as const) : ('not_in_list' as const);
+    });
+
+    const result = await actions.readEmail({ id: 'message-1' });
+
+    expect(attempts).toBe(2);
+    // Reporting the first attempt here would downgrade a real failure into a
+    // refusal, which the eval then skips instead of failing -- fail-open.
+    expect(result.notFoundReason).toBe('not_in_list');
+  });
+
+  it('carries the refusal through every id-scoped action that can return not_found', async () => {
+    // Each of these must be able to say "I refused" rather than "it is gone",
+    // otherwise the same defect just moves to a different surface.
+    for (const surface of ['reply', 'fwd', 'markRead', 'listAttachments'] as const) {
+      const { actions } = createActions();
+      actions.openMessageById = vi.fn(async () => 'stale_read_guard' as const);
+
+      const result = surface === 'reply'
+        ? await actions.reply({ id: 'message-1', body: 'x' })
+        : surface === 'fwd'
+          ? await actions.forward({ id: 'message-1', to: 'someone@example.invalid' })
+          : surface === 'markRead'
+            ? await actions.markRead({ id: 'message-1', read: true })
+            : await actions.listAttachments({ id: 'message-1' });
+
+      expect(result.status, surface).toBe('not_found');
+      expect(result.notFoundReason, surface).toBe('stale_read_guard');
+    }
+  });
+
+  it('refuses a confirmed attachment download on a guard refusal without saving a file', async () => {
+    const { actions } = createActions();
+    actions.openMessageById = vi.fn(async () => 'stale_read_guard' as const);
+
+    const result = await actions.downloadAttachment({
+      id: 'message-1',
+      filename: 'report.pdf',
+      confirm: true,
+    });
+
+    // A confirmed download is the highest-consequence id-scoped action: an
+    // unconfirmed pane could list a DIFFERENT message's attachments.
+    expect(result.status).toBe('not_found');
+    expect(result.notFoundReason).toBe('stale_read_guard');
+    expect(result.savedPath).toBeUndefined();
   });
 });
 

@@ -20,7 +20,7 @@ type TestActions = OutlookActions & {
   looksLikeSignin: (page: unknown) => Promise<boolean>;
   ensureInboxFolder: (page: unknown) => Promise<void>;
   ensureInboxFolderOrSignin: (page: unknown) => Promise<boolean>;
-  openMessageById: (page: unknown, id: string) => Promise<boolean>;
+  openMessageById: (page: unknown, id: string) => Promise<'opened' | 'not_in_list' | 'stale_read_guard'>;
   dismissBlockingDialog: (page: unknown) => Promise<void>;
   waitForComposePane: (page: unknown) => Promise<void>;
   readOpenDraftProbe: (page?: unknown) => Promise<{
@@ -79,7 +79,7 @@ function createActions() {
   actions.looksLikeSignin = vi.fn(async () => false);
   actions.ensureInboxFolder = vi.fn(async () => undefined);
   actions.ensureInboxFolderOrSignin = vi.fn(async () => true);
-  actions.openMessageById = vi.fn(async () => true);
+  actions.openMessageById = vi.fn(async () => 'opened' as const);
   actions.dismissBlockingDialog = vi.fn(async () => undefined);
   actions.waitForComposePane = vi.fn(async () => undefined);
   actions.readOpenSubject = vi.fn(async () => 'Re: Meeting');

@@ -229,8 +229,26 @@ async function main() {
   // proved the array existed, which stayed green even if the parser dropped
   // every metadata field). Fetch a fresh id and retry ONCE on a safe
   // not_found (stale-id race + transient pane-settle refusal both resolve on
-  // a re-fetch); a persistent not_found across two fresh attempts still
-  // fails the row.
+  // a re-fetch).
+  //
+  // CLWX-120 — what this row is allowed to blame the product for. After the
+  // retry, a not_found is one of two things, and only now can we tell them
+  // apart (notFoundReason, a typed field, NOT a substring of the message):
+  //
+  //   stale_read_guard -> the CLWX-46 guard declined to confirm the pane
+  //                       settled on the clicked message. That is the product
+  //                       working: it refused to hand us content it could not
+  //                       attribute. A refusal makes no claim about
+  //                       attachments, so the row is UNEXERCISED, not failed.
+  //   not_in_list      -> we could not reach the message at all across two
+  //                       fresh ids. That IS a product failure and still FAILs.
+  //
+  // Fail-closed on purpose: only POSITIVE evidence of a refusal earns the skip.
+  // An absent notFoundReason falls through to FAIL, so an older/leaner
+  // transport that never sets the field cannot buy itself a green — the same
+  // rule as W8.4's honest skip. Note the asymmetry that keeps this row from
+  // going soft: a skip requires a refusal, but data returned and WRONG (missing
+  // metadata below) is always a FAIL, never a skip.
   await runRow('W3.2', 'read_email', 'read_email({id}) returns attachments: array; metadata (filename/size/mime) non-empty where attachments exist', async () => {
     let id = await freshTopId();
     if (!id) return { skip: true, ok: false, notes: 'inbox empty' };
@@ -239,8 +257,18 @@ async function main() {
       id = (await freshTopId()) ?? id;
       r = await actions.readEmail({ id });
     }
+    if (r.status === 'not_found' && r.notFoundReason === 'stale_read_guard') {
+      return {
+        skip: true,
+        ok: false,
+        notes: 'UNEXERCISED — the CLWX-46 stale-read guard refused to confirm the reading pane settled on the clicked message, across two fresh ids. The guard firing is correct behaviour and makes no claim about attachment metadata, so this row proved nothing either way. Not a product failure (CLWX-120).',
+      };
+    }
     if (r.status !== 'ok' || !Array.isArray(r.attachments)) {
-      return { ok: false, notes: `status=${r.status} attachments=${r.attachments?.length ?? 'undefined'}` };
+      return {
+        ok: false,
+        notes: `status=${r.status} attachments=${r.attachments?.length ?? 'undefined'} notFoundReason=${r.notFoundReason ?? 'none'}`,
+      };
     }
     // Metadata leg: the top message usually has no attachments, so hunt for
     // an attachment-bearing one (the CLWX-61 seeded mail is the intended

@@ -37,6 +37,7 @@ import type {
   SearchInboxResult,
   ReadEmailArgs,
   ReadEmailResult,
+  MessageLocateFailure,
   EmailAttachmentInfo,
   ReplyArgs,
   ReplyResult,
@@ -757,18 +758,24 @@ export class OutlookActions {
     // CLWX-81: try the message in the current view first; only fall back to an
     // Inbox reset when it is not in view and we are not already on the Inbox.
     const located = await this.openMessageByIdInCurrentViewOrInbox(page, args.id);
-    if (located === 'needs_signin') {
+    if (located.outcome === 'needs_signin') {
       return {
         status: 'needs_signin',
         id: args.id,
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    if (located === 'not_found') {
+    if (located.outcome === 'not_found') {
       return {
         status: 'not_found',
         id: args.id,
-        message: `Could not locate message with id "${args.id}". Re-call read_inbox first.`,
+        notFoundReason: located.reason,
+        // CLWX-120: say which of the two it was. "Could not locate" is a lie when
+        // the row was clicked and the pane guard refused — the principal would
+        // hunt for a message that is sitting right there.
+        message: located.reason === 'stale_read_guard'
+          ? `Found message "${args.id}" and opened it, but could not confirm the reading pane settled on that message, so nothing was read (stale-read guard, CLWX-46). The message is still there — retry.`
+          : `Could not locate message with id "${args.id}". Re-call read_inbox first.`,
       };
     }
 
@@ -881,19 +888,21 @@ export class OutlookActions {
     await this.dismissBlockingDialog(page);
     // CLWX-81: try the current view first, then fall back to the Inbox reset.
     const located = await this.openMessageByIdInCurrentViewOrInbox(page, args.id);
-    if (located === 'needs_signin') {
+    if (located.outcome === 'needs_signin') {
       return {
         status: 'needs_signin',
         draftLeftOpen: false,
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    if (located === 'not_found') {
+    if (located.outcome === 'not_found') {
       return {
         status: 'not_found',
         draftLeftOpen: false,
-        message:
-          `Could not locate message with id "${args.id}" in the current view or Inbox. No reply was drafted; the message may have moved to Archive, Sent, Drafts, or another folder. Open or search the intended message and retry.`,
+        notFoundReason: located.reason,
+        message: located.reason === 'stale_read_guard'
+          ? `Found message "${args.id}" and opened it, but could not confirm the reading pane settled on it (stale-read guard, CLWX-46). No reply was drafted — replying to an unconfirmed message risks answering the wrong one. The message is still there; retry.`
+          : `Could not locate message with id "${args.id}" in the current view or Inbox. No reply was drafted; the message may have moved to Archive, Sent, Drafts, or another folder. Open or search the intended message and retry.`,
       };
     }
     if (await this.hasAnyVisibleOpenDraft(page)) {
@@ -993,19 +1002,21 @@ export class OutlookActions {
     await this.dismissBlockingDialog(page);
     // CLWX-81: try the current view first, then fall back to the Inbox reset.
     const located = await this.openMessageByIdInCurrentViewOrInbox(page, args.id);
-    if (located === 'needs_signin') {
+    if (located.outcome === 'needs_signin') {
       return {
         status: 'needs_signin',
         draftLeftOpen: false,
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    if (located === 'not_found') {
+    if (located.outcome === 'not_found') {
       return {
         status: 'not_found',
         draftLeftOpen: false,
-        message:
-          `Could not locate message with id "${args.id}" in the current view or Inbox. No forward was drafted; the message may have moved to Archive, Sent, Drafts, or another folder. Open or search the intended message and retry.`,
+        notFoundReason: located.reason,
+        message: located.reason === 'stale_read_guard'
+          ? `Found message "${args.id}" and opened it, but could not confirm the reading pane settled on it (stale-read guard, CLWX-46). No forward was drafted — forwarding an unconfirmed message risks sending the wrong one onward. The message is still there; retry.`
+          : `Could not locate message with id "${args.id}" in the current view or Inbox. No forward was drafted; the message may have moved to Archive, Sent, Drafts, or another folder. Open or search the intended message and retry.`,
       };
     }
     if (await this.hasAnyVisibleOpenDraft(page)) {
@@ -1070,10 +1081,18 @@ export class OutlookActions {
     }
     // CLWX-81: try the current view first, then fall back to the Inbox reset.
     const located = await this.openMessageByIdInCurrentViewOrInbox(page, args.id);
-    if (located === 'needs_signin') {
+    if (located.outcome === 'needs_signin') {
       return { status: 'needs_signin', message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.' };
     }
-    if (located === 'not_found') return { status: 'not_found', message: `Could not locate message with id "${args.id}".` };
+    if (located.outcome === 'not_found') {
+      return {
+        status: 'not_found',
+        notFoundReason: located.reason,
+        message: located.reason === 'stale_read_guard'
+          ? `Found message "${args.id}" and opened it, but could not confirm the reading pane settled on it (stale-read guard, CLWX-46). Read state was NOT changed — the q/u shortcut would have hit whichever message the pane was actually showing.`
+          : `Could not locate message with id "${args.id}".`,
+      };
+    }
 
     // Right-click on the row would be more reliable but harder to drive
     // cross-theme. Use Outlook's keyboard shortcut: Q = mark read, U = mark unread.
@@ -1090,6 +1109,10 @@ export class OutlookActions {
         status: detail.status,
         id: args.id,
         attachments: [],
+        // CLWX-120: propagate, do not drop. An empty attachment list means
+        // something different when the pane guard refused than when the message
+        // is absent, and this wrapper is what the attachment eval rows call.
+        notFoundReason: detail.notFoundReason,
         message: detail.message,
       };
     }
@@ -1141,18 +1164,21 @@ export class OutlookActions {
     // The hard confirm gate above is unchanged; this only affects locating the
     // already-confirmed message.
     const located = await this.openMessageByIdInCurrentViewOrInbox(page, args.id);
-    if (located === 'needs_signin') {
+    if (located.outcome === 'needs_signin') {
       return {
         status: 'needs_signin',
         filename: args.filename,
         message: 'Outlook is on the sign-in page. Sign in in Chrome and retry.',
       };
     }
-    if (located === 'not_found') {
+    if (located.outcome === 'not_found') {
       return {
         status: 'not_found',
         filename: args.filename,
-        reason: `Could not locate message with id "${args.id}".`,
+        notFoundReason: located.reason,
+        reason: located.reason === 'stale_read_guard'
+          ? `Found message "${args.id}" and opened it, but could not confirm the reading pane settled on it (stale-read guard, CLWX-46). Nothing was downloaded — the attachment list on an unconfirmed pane could belong to a different message.`
+          : `Could not locate message with id "${args.id}".`,
       };
     }
 
@@ -1613,20 +1639,45 @@ export class OutlookActions {
    * reset when the id is not in view AND we are not already on the Inbox.
    * Returns a tri-state so callers keep their existing needs_signin /
    * not_found surfaces. This touches NO send/download gate.
+   *
+   * CLWX-120: the outcome now carries a typed `reason` on not_found, because a
+   * CLWX-46 reading-pane refusal and a genuinely absent message used to be
+   * indistinguishable here. Returning an OBJECT rather than widening the string
+   * union is deliberate: a new union member would have slipped past every
+   * `located === 'not_found'` check and fallen through to the success path,
+   * whereas an object shape fails typecheck at all five call sites until each
+   * one is updated. The compiler enumerates the callers instead of me.
    */
   private async openMessageByIdInCurrentViewOrInbox(
     page: Page,
     id: string,
-  ): Promise<'opened' | 'needs_signin' | 'not_found'> {
-    if (await this.openMessageById(page, id)) return 'opened';
+  ): Promise<{ outcome: 'opened' | 'needs_signin' | 'not_found'; reason?: MessageLocateFailure }> {
+    const first = await this.openMessageById(page, id);
+    if (first === 'opened') return { outcome: 'opened' };
     // Not in the current view. If we are already on the Inbox there is no
     // other folder to reset to — report honestly instead of re-navigating.
-    if (isOutlookInboxUrl(page.url())) return 'not_found';
-    if (!(await this.ensureInboxFolderOrSignin(page))) return 'needs_signin';
-    return (await this.openMessageById(page, id)) ? 'opened' : 'not_found';
+    if (isOutlookInboxUrl(page.url())) return { outcome: 'not_found', reason: first };
+    if (!(await this.ensureInboxFolderOrSignin(page))) return { outcome: 'needs_signin' };
+    const second = await this.openMessageById(page, id);
+    if (second === 'opened') return { outcome: 'opened' };
+    // Report the SECOND attempt's reason, not the first: the second produced the
+    // final verdict. Preferring the first would let a transient stale pane on
+    // attempt 1 mask genuine absence on attempt 2, downgrading a real failure
+    // into a refusal — the fail-open direction.
+    return { outcome: 'not_found', reason: second };
   }
 
-  private async openMessageById(page: Page, id: string): Promise<boolean> {
+  /**
+   * CLWX-120: was `Promise<boolean>`, where `false` conflated "the row is not
+   * reachable" with "the row was clicked and the CLWX-46 pane guard refused to
+   * confirm it". Only `stale_read_guard` is a refusal; everything else — row not
+   * in the list, click failure, list stopped scrolling — is a failure to reach
+   * the message and stays `not_in_list`. A click failure is grouped with absence
+   * deliberately: both mean we never got the message open, and the click error
+   * itself is already logged, so splitting it out would add a union member that
+   * no caller decides anything different on.
+   */
+  private async openMessageById(page: Page, id: string): Promise<'opened' | MessageLocateFailure> {
     await this.resetInboxListScroll(page);
     const maxPasses = 40;
     let stalePasses = 0;
@@ -1683,9 +1734,12 @@ export class OutlookActions {
           logger.warn?.(
             `[outlook-v2] openMessageById click failed for id "${id}": ${err instanceof Error ? err.message : String(err)}`,
           );
-          return false;
+          return 'not_in_list';
         }
-        return await this.waitForReadingPaneSettle(page, id);
+        // The ONLY site that can produce a refusal: the row was found and
+        // clicked, so a false here is the CLWX-46 guard declining to confirm the
+        // pane settled — never evidence that the message is absent.
+        return (await this.waitForReadingPaneSettle(page, id)) ? 'opened' : 'stale_read_guard';
       }
 
       const visibleFingerprint = await this.visibleInboxFingerprint(page);
@@ -1693,13 +1747,13 @@ export class OutlookActions {
         ? stalePasses + 1
         : 0;
       previousVisibleFingerprint = visibleFingerprint;
-      if (stalePasses >= 2) return false;
+      if (stalePasses >= 2) return 'not_in_list';
 
       const moved = await this.scrollInboxList(page);
-      if (!moved) return false;
+      if (!moved) return 'not_in_list';
       await this.driver.sleep(250);
     }
-    return false;
+    return 'not_in_list';
   }
 
   /**

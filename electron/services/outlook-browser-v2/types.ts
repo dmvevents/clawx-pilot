@@ -22,6 +22,7 @@ export type {
   SearchInboxResult,
   ReadEmailArgs,
   ReadEmailResult,
+  MessageLocateFailure,
   EmailAttachmentInfo,
   ReplyArgs,
   ReplyResult,
