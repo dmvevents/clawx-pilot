@@ -307,6 +307,8 @@ For this Ministry fork, start with the [shared project contract](docs/PROJECT_CO
 
 Hosted Windows builds on a public repository must use `cloudGatewaySeedProfile=keyless-public`; this profile excludes cloud and speech credentials and requires post-install provisioning. Build the reviewed exact source commit. Publication checks reject evidence older than 24 hours, including old observations inside a newly generated report.
 
+Windows packaging runs the complete preflight on Windows. Preserve `.gitattributes`: executable source uses LF, `.cmd`/`.bat` use CRLF, and PDFs retain their binary bytes.
+
 Windows environment profiling, IAP access and app-window recording are documented in the [Windows testing guide](windows-pilot/vm-testing/README.md). Server VM smoke and principal-laptop acceptance have separate coverage requirements.
 
 ### Prerequisites

@@ -307,6 +307,8 @@ ClawX 采用 **双进程 + Host API 统一接入架构**。渲染进程只调用
 
 公共仓库的 Windows 托管构建必须使用 `cloudGatewaySeedProfile=keyless-public`，不打包云端或语音服务凭据，安装后需要另行配置。请构建已审查的确切源码提交。发布检查拒绝超过 24 小时的证据，包括新报告中沿用的旧观测结果。
 
+Windows 打包会在 Windows 上运行完整预检。请保留 `.gitattributes`：可执行源码使用 LF，`.cmd`/`.bat` 使用 CRLF，PDF 保持原始二进制字节。
+
 Windows 环境信息采集、IAP 连接和应用窗口录制请参阅 [Windows 测试指南](windows-pilot/vm-testing/README.md)。服务器虚拟机检查与校长笔记本验收的覆盖范围分别记录。
 
 ### 前置要求

@@ -17,3 +17,10 @@ Maintain current priorities in `docs/COMPLETION_PLAN.md` and shared instructions
 Installed chat acceptance requires observable terminal send/run/recovery state and rejects missing signals, later errors and unintended channel changes. A rendered answer or a quiet interval alone is insufficient. Use an explicit expected channel for channel-specific acceptance and corroborate provider provenance from the installed runtime. A terminal cloud result cancels stale replay and reconciles any temporary routing change without overwriting newer user intent.
 
 Publication requires report, required execution and installed observation timestamps within 24 hours. A fresh wrapper cannot renew old measurements. Public hosted builds use the explicit keyless profile, omit credential-bearing seeds, verify seed absence before artifact upload, and bind that profile to the same clean source and compiled-output receipts as the installer.
+
+Native Windows preflight is required for Windows packaging. A Mac unit pass does
+not establish Windows loader or process-spawn behavior. Preserve the repository
+line-ending contract and binary artifact bytes; invoke portable Node CLIs through
+Node rather than assuming POSIX `.bin` launchers work on Windows. Scope inherently
+POSIX controller tests explicitly while keeping native Windows/PowerShell checks
+enabled. A failed native preflight cannot be bypassed to produce release evidence.

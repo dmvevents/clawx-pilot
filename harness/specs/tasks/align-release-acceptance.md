@@ -5,6 +5,8 @@ scenario: gateway-backend-communication
 taskType: runtime-bridge
 intent: Bind strict release evidence and staged publication to the tested source and installed artifacts while preserving development health checks.
 touchedAreas:
+  - ".gitattributes"
+  - "tests/unit/harness-windows-e2e.test.ts"
   - ".agents/skills/ga-e2e-regression/SKILL.md"
   - ".agents/skills/ga-release-readiness/SKILL.md"
   - ".agents/skills/windows-demo-resume/SKILL.md"
@@ -157,6 +159,7 @@ requiredTests:
   - "tests/unit/gcp-iap-lane.test.ts"
   - "tests/unit/windows-app-recording.test.ts"
 acceptance:
+  - "Windows checkout preserves LF source and embedded scripts while retaining binary PDF bytes; native Windows preflight executes portable subprocess fixtures without POSIX executable assumptions."
   - "`node scripts/ga-gate.mjs --release` and `GA_GATE_RELEASE=1 node scripts/ga-gate.mjs` select strict release scoring without enabling live send or form submit actions."
   - "Strict release scoring uses explicit criterion identifiers on rows, not row-label or log regexes."
   - "Strict release scoring fails closed on missing required criteria and required rows with SKIP, BLOCKED, NOT_RUN, INFO, FAIL, or an unexpected status."

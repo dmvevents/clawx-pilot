@@ -14,6 +14,7 @@ Current plan: [COMPLETION_PLAN.md](COMPLETION_PLAN.md). Current artifact: [CURRE
 
 | Evidence | Scope and remaining gap |
 |---|---|
+| [Native moe.21 build attempt](https://github.com/dmvevents/clawx-pilot/actions/runs/34115779033) | Reviewed public source `7cfad9bd`; Windows preflight failed in 16 files before packaging. CRLF shebang failure reproduced independently; checkout/subprocess repairs require a successful native rerun. No moe.21 installer exists |
 | [Windows runtime recovery](evidence/WINDOWS_RUNTIME_RECOVERY_2026-09-07.md) | moe.20 installed hashes match; deferred restart absent, first ready after 233.6s, warm ready after 191.1s, Office helpers pass. CPU profile attributes about 143s to pricing-catalog plugin resolution. Chat FAIL: late duplicate recovery after cloud success; driver false green retained as defect evidence |
 | [September 7 gate run 5](evidence/GA_GATE_2026-09-07_run5.md) | Static development health: 7 pass / 0 fail / 3 skip; renderer, live and VM proof missing |
 | [September 7 gate run 2](evidence/GA_GATE_2026-09-07_run2.md) | Live gate RED; later fixes and eval remeasurements do not establish installed-build acceptance |
