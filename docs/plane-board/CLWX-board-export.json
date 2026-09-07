@@ -68,8 +68,8 @@
       "sequence_id": 120,
       "name": "Eval row W3.2 counts a persistent safe refusal as a product FAIL while its sibling W8.4 skips honestly",
       "priority": "medium",
-      "state": "Todo",
-      "state_id": "3f84da09-69dd-4585-a97c-5bba3daef9c3",
+      "state": "In Progress",
+      "state_id": "0dfb489a-0c57-4c6d-a466-a5e371b401f7",
       "description": "In the 2026-09-07 round-2 gate run, outlook-eval went RED on W3.2 with status=not_found attachments=undefined. The per-check log shows the real cause: reading-pane settle FAILED: pane stayed on a different message — i.e. the CLWX-46 stale-read guard doing its job and refusing to report a message it could not confirm was the right one.\nThat refusal is the SAFE behaviour. The dedicated guard row for exactly this (stale-read check (CLWX-46 guard)) PASSED in the same run. So the suite has two rows observing the same mechanism and grading it in opposite directions.\nSibling precedent inside the same file: W8.4 skips honestly when its precondition is absent instead of scoring a FAIL. W3.2 does not, so a healthy safe-refusal is charged to the product and the gate's headline verdict flips to RED for a non-defect.\nNot a request to loosen the guard. The guard stays; the grading is what is wrong. Options: (a) W3.2 declares its precondition (a settleable reading pane on the seeded message) and SKIPs when it is unmet, exactly as W8.4 does; or (b) W3.2 asserts the refusal itself as the expected outcome, which turns it into a second positive test of CLWX-46 rather than a flaky read test.\nInteracts with the eval-determinism card: W3.2 is one of the two rows that swap between runs, so fixing the grading may also remove half the observed flake. Fix the grading first and re-measure before attributing the rest of the flake elsewhere.",
       "comments": [
         {
