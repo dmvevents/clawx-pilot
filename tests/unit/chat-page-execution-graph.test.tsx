@@ -154,8 +154,77 @@ describe('Chat execution graph lifecycle', () => {
       expect(screen.getByTestId('chat-execution-graph')).toHaveAttribute('data-collapsed', 'false');
     });
 
+    expect(screen.getByTestId('chat-page')).toHaveAttribute('data-sending', 'true');
+    expect(screen.getByTestId('chat-page')).toHaveAttribute('data-pending-final', 'true');
+    expect(screen.getByTestId('chat-page')).toHaveAttribute('data-active-run-id-present', 'true');
+    expect(screen.getByTestId('chat-page')).toHaveAttribute('data-active-execution-graph', 'true');
+    expect(screen.getByTestId('chat-page')).toHaveAttribute('data-degrade-in-progress', 'false');
+    expect(screen.getByTestId('chat-page')).toHaveAttribute('data-run-error-present', 'false');
+    expect(screen.getByTestId('chat-page')).toHaveAttribute('data-error-present', 'false');
     expect(screen.getByText('Here is the summary.')).toBeInTheDocument();
     expect(screen.queryByText('Checked X. Here is the summary.')).not.toBeInTheDocument();
+  });
+
+  it('exports degrade-in-progress as exact terminal state on the chat root', async () => {
+    const { useChatStore } = await import('@/stores/chat');
+    useChatStore.setState({
+      degradeNotice: {
+        reason: 'unreachable',
+        resent: false,
+        to: 'on-device',
+        inProgress: true,
+      },
+    });
+    const { Chat } = await import('@/pages/Chat/index');
+
+    render(<Chat />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chat-page')).toHaveAttribute('data-degrade-in-progress', 'true');
+    });
+    expect(screen.getByTestId('chat-degrade-notice')).toHaveAttribute('data-in-progress', 'true');
+  });
+
+  it('shows generic channel recovery progress when the replaceable degrade notice was reset', async () => {
+    const { useChatStore } = await import('@/stores/chat');
+    useChatStore.setState({
+      degradeNotice: null,
+      pendingChannelRecoveryBySession: { 'agent:main:main': 1 },
+    });
+    const { Chat } = await import('@/pages/Chat/index');
+
+    render(<Chat />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chat-page')).toHaveAttribute('data-degrade-in-progress', 'true');
+    });
+    expect(screen.getByTestId('chat-channel-recovery-notice')).toHaveAttribute('data-in-progress', 'true');
+    expect(screen.getByText('Restoring this chat to your selected channel…')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-channel-recovery-notice')).not.toHaveTextContent('common:actions.dismiss');
+  });
+
+
+
+  it('shows generic channel recovery progress beside a non-progress channel notice', async () => {
+    const { useChatStore } = await import('@/stores/chat');
+    useChatStore.setState({
+      degradeNotice: {
+        reason: 'unreachable',
+        resent: false,
+        to: 'on-device',
+      },
+      pendingChannelRecoveryBySession: { 'agent:main:main': 1 },
+    });
+    const { Chat } = await import('@/pages/Chat/index');
+
+    render(<Chat />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('chat-page')).toHaveAttribute('data-degrade-in-progress', 'true');
+    });
+    expect(screen.getByTestId('chat-degrade-notice')).not.toHaveAttribute('data-in-progress', 'true');
+    expect(screen.getByTestId('chat-channel-recovery-notice')).toHaveAttribute('data-in-progress', 'true');
+    expect(screen.getByText('Restoring this chat to your selected channel…')).toBeInTheDocument();
   });
 
   it('renders the execution graph immediately for an active run before any stream content arrives', async () => {
@@ -304,6 +373,11 @@ describe('Chat execution graph lifecycle', () => {
     });
 
     expect(screen.queryByTestId('chat-execution-step-thinking-trailing')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-page')).toHaveAttribute('data-sending', 'false');
+    expect(screen.getByTestId('chat-page')).toHaveAttribute('data-pending-final', 'false');
+    expect(screen.getByTestId('chat-page')).toHaveAttribute('data-active-run-id-present', 'false');
+    expect(screen.getByTestId('chat-page')).toHaveAttribute('data-run-error-present', 'true');
+    expect(screen.getByTestId('chat-page')).toHaveAttribute('data-error-present', 'true');
     expect(screen.getAllByText('404 Resource not found').length).toBeGreaterThan(0);
   });
 });

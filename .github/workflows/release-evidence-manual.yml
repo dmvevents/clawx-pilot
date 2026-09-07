@@ -1,0 +1,112 @@
+name: Collect Release Evidence (Manual)
+
+# The controller runs the existing Mac live-account gate and consumes measured
+# Windows VM output. It is not a substitute for installing/testing on Windows.
+# Registering this dedicated trusted runner is an operator prerequisite.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Exact reviewed source commit used by the Windows build.'
+        required: true
+      buildRunId:
+        description: 'Package Windows (Manual) run providing installer and build-provenance artifacts.'
+        required: true
+      installedEvidenceDir:
+        description: 'Absolute private directory on the acceptance controller containing the completed Windows VM producer evidence.'
+        required: true
+      authorizedSendProof:
+        description: 'Run the existing test.fac sandbox SEND proof only after its exact sends have been authorized for this run. False leaves acceptance incomplete.'
+        type: boolean
+        default: false
+      runNsccEval:
+        description: 'Run the provider-backed NSCC evaluation. False leaves acceptance incomplete.'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ministry-acceptance-controller
+  cancel-in-progress: false
+
+jobs:
+  collect-evidence:
+    runs-on: [self-hosted, macOS, clawx-acceptance]
+    timeout-minutes: 90
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download recorded Windows build
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.buildRunId }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: windows-installer-x64
+          path: ${{ runner.temp }}/acceptance-installer
+
+      - name: Download build provenance
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.buildRunId }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: build-provenance
+          path: ${{ runner.temp }}/acceptance-build
+
+      - name: Run strict acceptance with measured Windows evidence
+        shell: bash
+        env:
+          GA_GATE_RELEASE: '1'
+          GA_GATE_STATIC: '0'
+          GA_GATE_E2E: '1'
+          GA_GATE_SEND: ${{ inputs.authorizedSendProof && '1' || '0' }}
+          GA_GATE_FULL: ${{ inputs.runNsccEval && '1' || '0' }}
+          GA_GATE_INSTALLED_EVIDENCE: ${{ inputs.installedEvidenceDir }}
+          GA_GATE_ARTIFACT_DIR: ${{ runner.temp }}/acceptance-installer
+          BUILD_PROVENANCE_DIR: ${{ runner.temp }}/acceptance-build
+        run: |
+          set -euo pipefail
+          # A dedicated controller must already have the approved live test
+          # account, Chrome CDP, PowerShell analyzer and model prerequisites.
+          VERSION="$(node -p 'require("./package.json").version')"
+          export GA_GATE_MANIFEST="$BUILD_PROVENANCE_DIR/docs/release-manifests/$VERSION.json"
+          export GA_GATE_OUTPUT_DIR="$RUNNER_TEMP/release-evidence-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test -f "$GA_GATE_MANIFEST"
+          test -d "$GA_GATE_INSTALLED_EVIDENCE"
+          node scripts/ga-gate.mjs --release
+
+          # The run-specific parent contains exactly one complete gate bundle.
+          bundles=("$GA_GATE_OUTPUT_DIR"/*/release-evidence.json)
+          test "${#bundles[@]}" -eq 1
+          test -f "${bundles[0]}"
+          BUNDLE_DIR="$(dirname "${bundles[0]}")"
+          node scripts/release-evidence.mjs check \
+            --report "$BUNDLE_DIR/release-evidence.json" \
+            --manifest "$BUNDLE_DIR/manifest.json" \
+            --dir "$GA_GATE_ARTIFACT_DIR"
+          printf 'ACCEPTANCE_BUNDLE=%s\n' "$BUNDLE_DIR" >> "$GITHUB_ENV"
+
+      - name: Retain complete evidence for release review
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga-release-evidence
+          path: ${{ env.ACCEPTANCE_BUNDLE }}/
+          if-no-files-found: error
+          retention-days: 7

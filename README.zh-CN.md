@@ -131,6 +131,7 @@ Skills 页面可展示来自多个 OpenClaw 来源的技能（托管目录、wor
 连接多个 AI 供应商（OpenAI、Anthropic 等），凭证安全存储在系统原生密钥链中。OpenAI 同时支持 API Key 与浏览器 OAuth（Codex 订阅）登录。
 如果你通过 **自定义（Custom）Provider** 对接 OpenAI-compatible 网关，可以在 **设置 → AI Providers → 编辑 Provider** 中配置自定义 `User-Agent`，以提高兼容性。
 如果兼容网关的 `/models` 因非鉴权原因不可用，ClawX 会在校验 API Key 时自动降级为轻量的 `/chat/completions` 或 `/responses` 探测。
+托管部署也可以在首次启动时通过 `cloud-gateway.json` 或 `CLAWX_CLOUD_GATEWAY_*` 环境变量预置 Custom OpenAI-compatible 网关；桌面端只保存网关客户端 key，上游供应商 key 保留在服务端。
 
 ### 🌙 自适应主题
 支持浅色模式、深色模式或跟随系统主题。ClawX 自动适应你的偏好设置。
@@ -302,10 +303,16 @@ ClawX 采用 **双进程 + Host API 统一接入架构**。渲染进程只调用
 
 ## 开发指南
 
+此 Ministry 分支的开发请先阅读[共享项目约定](docs/PROJECT_CONTRACT.md)和[完成计划](docs/COMPLETION_PLAN.md)。`GA_GATE_STATIC=1 pnpm ga:gate` 用于开发健康检查。普通 `pnpm ga:gate` 在必需 T1 检查受阻时返回非零退出码；未显式启用的发送检查仍会跳过。`GA_GATE_RELEASE=1 pnpm ga:gate` 使用严格发布判定，必需证据缺失、跳过或仅为信息性结果时均判定失败。将 `GA_GATE_INSTALLED_EVIDENCE` 指向 Windows VM 的运行证据目录，以验证实际安装和运行结果；仅能连接测试环境并不足够。`pnpm release` 只生成待发布文件。获准发布前，运行 `pnpm release:evidence:check --report <bundle>/release-evidence.json --manifest <bundle>/manifest.json --dir <staged>`，重新核对源码、原始证据和安装包。初始发布流程仅支持一个 Windows x64 安装包，证据格式见完成计划。实际邮件发送检查仍需显式启用。请使用 `package.json` 固定的 pnpm 版本。
+
+公共仓库的 Windows 托管构建必须使用 `cloudGatewaySeedProfile=keyless-public`，不打包云端或语音服务凭据，安装后需要另行配置。请构建已审查的确切源码提交。发布检查拒绝超过 24 小时的证据，包括新报告中沿用的旧观测结果。
+
+Windows 环境信息采集、IAP 连接和应用窗口录制请参阅 [Windows 测试指南](windows-pilot/vm-testing/README.md)。服务器虚拟机检查与校长笔记本验收的覆盖范围分别记录。
+
 ### 前置要求
 
 - **Node.js**：22+（推荐 LTS 版本）
-- **包管理器**：pnpm 9+（推荐）或 npm
+- **包管理器**：使用 `package.json` 固定版本的 pnpm
 
 ### 项目结构
 

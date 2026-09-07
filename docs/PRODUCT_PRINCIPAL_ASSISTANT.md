@@ -4,7 +4,11 @@
 
 **Form factor:** Native desktop application (Mac and Windows), branded **Ministry of Education**, runs locally on the principal's machine. Uses on-device AI for routine work, escalates to managed cloud (Gemini, Bedrock Claude) only when the task requires it.
 
-**Status as of moe.10 (2026-05-25):** Mac build is live and end-to-end verified against a real Outlook session. Windows .exe builds on every push via GitHub Actions and is awaiting installation on the pilot laptop when the network link returns.
+**Status as of 2026-06-10:** Windows RC is demo-ready after Microsoft sign-in.
+External tester evidence confirms install, online-agent default, local file
+scan, Outlook email check, and compose/send. GA remains blocked on repeat
+clean-install evidence, signed-in Forms preview/prefill proof, and final
+branding/security evidence.
 
 ---
 
@@ -18,9 +22,14 @@
 
 ---
 
-## 1. Email — ● Live
+## 1. Email — ● Live / ◐ GA hardening
 
-**Outlook integration via the principal's existing Chrome session.** The application attaches to the principal's already-signed-in Outlook tab over the Chrome DevTools Protocol on `127.0.0.1:18792`. We never log in for them, never store passwords, never replay session cookies. Conditional Access on the `@moe.gov.tt` tenant is honoured by riding the user's own SSO.
+**Outlook integration is Graph-first.** Principals sign in on Microsoft's own
+page through delegated Microsoft Graph OAuth. The app never asks for or stores
+their Microsoft password. Tenant/client defaults should be packaged by IT so
+principals see a normal Sign in button rather than Chrome troubleshooting.
+The existing signed-in Chrome/Outlook browser path remains a fallback for UI
+automation and diagnostics.
 
 Eleven Outlook tools are registered with the agent:
 
@@ -31,7 +40,7 @@ Eleven Outlook tools are registered with the agent:
 | `outlook.search_inbox` | Filter by `from`, `subjectContains`, `dateGte`, `dateLt`, `unread`, `hasAttachment` | — |
 | `outlook.read_email` | Reads a specific email's full body and attachments list | — |
 | `outlook.draft_email` | Opens a new compose pane with To/Subject/Body filled, **left open for review** | Always leaves draft open — principal must click Send themselves OR explicitly authorise via send_email |
-| `outlook.send_email` | Clicks Send | **Refuses** unless `confirm:true` AND the open compose pane's subject matches `args.subject`. Two locks. |
+| `outlook.send_email` | Sends the single visible reviewed draft | **Refuses** unless `confirm:true` and exactly one sendable reviewed draft is open. Optional recipient/subject/body arguments are safety assertions for advanced flows; the normal reviewed-draft path sends with `{ confirm: true }` only. |
 | `outlook.reply` | Opens reply pane on a specific message with body filled | Same draft-left-open pattern |
 | `outlook.forward` | Opens forward pane | Same |
 | `outlook.mark_read` | Marks a message read/unread | — |
@@ -40,7 +49,11 @@ Eleven Outlook tools are registered with the agent:
 
 **Verified today:** the agent picked the right tool from natural language ("Open my inbox", "Show me my 5 most recent emails", "Draft an email to test.fac@fac.edu.tt"), the action executed against the live Outlook Web session, and the live send-test successfully sent a real message to `test.fac@fac.edu.tt`.
 
-**Implementation:** `electron/services/outlook-browser-v2/` (PlaywrightDriver + VlmGrounder + OutlookActions). Exposed by `extensions/moe-principal-assistant/index.mjs` as gateway plugin tools. Frontend route allowlisted via `outlook` capability flag.
+**Implementation:** Microsoft Graph routes and store cover the programmatic
+mail path; `electron/services/outlook-browser-v2/` remains available for
+browser fallback (PlaywrightDriver + VlmGrounder + OutlookActions). Exposed by
+`extensions/moe-principal-assistant/index.mjs` as gateway plugin tools.
+Frontend route allowlisted via `outlook` capability flag.
 
 ---
 
@@ -50,15 +63,23 @@ Eleven Outlook tools are registered with the agent:
 
 Research is canonical at `docs/MSFORMS_AUTOMATION.md`. The decisive finding is that **Microsoft Graph has no Forms write endpoint** — submission goes through one of three paths, ranked:
 
-1. **Power Automate webhook → SharePoint List that backs the form.** ClawX POSTs JSON to a flow URL that IT (Raj) creates with the "When an HTTP request is received" trigger. This is the recommended path. Paste the flow URL into Settings → MoE Forms once IT issues it. Tracked in **task #109**.
+1. **Power Automate webhook → SharePoint List that backs the form.** The app
+   POSTs JSON to a flow URL that IT creates with the "When an HTTP request is
+   received" trigger. This is the recommended future path. Paste the flow URL
+   into Settings once IT issues it.
 
-2. **Browser-attach via the same Outlook v2 pattern.** Open form, fill fields, preview, submit on the principal's authenticated tab. Wraps the existing PlaywrightDriver. Brittle to form UI changes but works without IT involvement.
+2. **Browser-attach through the saved Microsoft Forms response links.** Open
+   the configured form, fill fields, preview, and submit on the principal's
+   authenticated Microsoft session. Settings > Principal setup now stores the
+   Daily Report and Student Suspensions response links locally.
 
 3. **Avoid:** managed Chromium (Conditional Access blocks it with AADSTS53003) and reverse-engineered Forms REST (broken since Jan 2026).
 
 **Already built:** form-payload schemas, daily-report and suspension form-payload builders in `extensions/moe-principal-assistant/`. The persona prompt enforces "no auto-submit without explicit confirmation". A 3:45pm cron reminder rides the existing `agentTurn` payload kind in the Cron system.
 
-**Awaiting:** the Power Automate flow URL from IT (one per form).
+**Awaiting:** signed-in Forms preview/prefill evidence and the production
+decision on whether MoE IT will provide Power Automate endpoints or keep the
+browser Forms path for GA.
 
 ---
 
@@ -78,7 +99,7 @@ The principal reviews and edits before anything leaves the machine. No content i
 
 **Verified today:** the chat composer can read `~/Downloads/improving-gemini-for-education_v7.pdf` via the bundled `pdf` skill (subject to the path-allowlist gate). Excel + email compound queries through the `xlsx` skill route to Gemini 2.5 Pro (the default).
 
-**Awaiting:** the `templates/` directory inside `moe-principal-assistant` is currently empty — letter/memo templates need to be authored. Tracked as a follow-up.
+**Status (corrected 2026-09-03):** the `templates/` directory now contains `letter.md`, `memo.md`, `daily_report_brief.md`, and `meeting_minutes.md`. The remaining gap is a live in-app drafting proof plus the classification e2e — tracked as CLWX-65 and CLWX-66.
 
 ---
 
@@ -118,7 +139,7 @@ The persona is shaped by `extensions/moe-principal-assistant/PERSONA.md` — Tri
 
 **Drafting path is built but un-templated:**
 - The agent can take a transcript + meeting metadata (date, attendees, agenda) and produce minutes/memo output.
-- Templates land in `extensions/moe-principal-assistant/templates/` (currently empty).
+- Templates live in `extensions/moe-principal-assistant/templates/` (`letter.md`, `memo.md`, `daily_report_brief.md`, `meeting_minutes.md` all authored; classification e2e still owed — CLWX-66).
 
 **Recommendation:** in the first principal-feedback session, capture three real meeting examples (PTA, staff, Board) so we author templates that match how Trinidad principals actually structure minutes — generic templates won't earn trust.
 
@@ -185,7 +206,7 @@ LLM routing: on-device Hermes 3 8B via Ollama for routine work; managed cloud (G
 - ✓ Live LLM → tool-pick → `outlook.open` (1.6s round-trip)
 - ✓ Live LLM → `outlook.read_inbox` 5 rows (1.9s)
 - ✓ Live LLM → `outlook.draft_email` to test.fac@fac.edu.tt (1.9s, draft left open for review)
-- ✓ Hard-confirm gate refuses send when subject doesn't match args
+- ✓ Hard-confirm gate refuses send when optional assertions do not match the visible draft
 - ✓ Hard-confirm gate refuses send without `confirm:true`
 - ✓ Live `outlook.send_email` actually delivered to `test.fac@fac.edu.tt`
 - ✓ Windows .exe builds clean on GitHub Actions runner (run 26413522998)

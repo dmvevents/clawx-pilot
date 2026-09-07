@@ -1,0 +1,15 @@
+{
+  "id": "P4-xlsx-grade",
+  "tool_called": "document.write_xlsx",
+  "result_schema": {
+    "path": "string",
+    "bytes": "number",
+    "sheets": "number"
+  },
+  "assertions": {
+    "bytes_min": 200,
+    "sheets_min": 1,
+    "path_matches": "Marks_Updated\\.xlsx$",
+    "file_exists_at_path": true
+  }
+}

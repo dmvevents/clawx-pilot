@@ -130,6 +130,26 @@ describe('OutlookBrowserManager.open', () => {
     expect(state.openCalls[0].profile).toBe('user');
     expect(state.openCalls[0].url).toBe('https://outlook.office.com/mail/');
   });
+
+  it('does not tell principals to enable Chrome remote debugging manually when attach is unavailable', async () => {
+    const client = createMockClient(freshState());
+    vi.mocked(client.status).mockResolvedValue({
+      running: false,
+      cdpReady: false,
+      transport: 'cdp',
+    });
+    vi.mocked(client.start).mockResolvedValue({ ok: false });
+    const mgr = new OutlookBrowserManager(client);
+
+    const result = await mgr.open();
+
+    expect(result.status).toBe('needs_signin');
+    expect(result.message).toMatch(/browser\.diagnose/);
+    expect(result.message).toMatch(/browser\.repair_chrome_cdp/);
+    expect(result.message).not.toMatch(/enable Chrome remote debugging/i);
+    expect(result.message).not.toMatch(/chrome:\/\/flags/i);
+    expect(result.message).not.toMatch(/chrome\.exe/i);
+  });
 });
 
 describe('OutlookBrowserManager.readInbox', () => {

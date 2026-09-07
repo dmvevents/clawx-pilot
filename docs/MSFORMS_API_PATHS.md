@@ -1,16 +1,24 @@
 # Microsoft Forms — programmatic submission paths
 
-**TL;DR:** Once we have a Graph token from MoE IT (Entra app registration + admin consent), there is a fully-supported, GA Microsoft Graph endpoint we can POST to and bypass the Forms UI entirely. This is the production path for submitting MoE forms (Suspensions, Daily Report, etc).
+**TL;DR:** Microsoft Graph is the supported production path only when the
+official form destination is represented as an IT-owned SharePoint list or an
+IT-owned Power Automate flow. Microsoft Forms itself does not expose a stable
+Graph endpoint for "submit this form response." For production, ask MoE IT to
+make the data target explicit; for the demo, keep the browser/CDP response-page
+filler as the fallback.
 
 ---
 
 ## Three working paths, ranked
 
-### Path A — Microsoft Graph → SharePoint List ✅ **RECOMMENDED**
+### Path A — Microsoft Graph → SharePoint List ✅ **RECOMMENDED WHEN IT OWNS THE LIST**
 
-**Status:** GA in `graph.microsoft.com/v1.0`, last updated 2025-07-23 per Microsoft Learn.
+**Status:** Microsoft Graph list-item creation is GA in `graph.microsoft.com/v1.0`.
 
-**Why it works:** Microsoft Forms doesn't store data in Forms — it writes responses to a backing **SharePoint List**. We POST straight to that list, the form's submission flow becomes irrelevant.
+**Why it works:** We stop treating Microsoft Forms as the write surface. IT
+creates or identifies the SharePoint list that should receive the principal's
+submission, and ClawX creates a list item there through Graph. The form's UI
+submission flow becomes irrelevant.
 
 **Endpoint:**
 
@@ -51,10 +59,13 @@ Content-Type: application/json
 - Add `Sites.ReadWrite.All` (or `Sites.Selected` for the specific sites) to the scope list in the existing Entra packet
 - Tell us the SharePoint hostname (e.g. `moegovtt.sharepoint.com`) and site path (e.g. `/sites/SchoolReports`)
 - Tell us the list display name for each form (e.g. `"Primary School Suspensions T3 25-26"`)
+- Confirm this list is the official destination for the form workflow, or create
+  one that is.
 
 ### Path B — Power Automate webhook ✅ **FALLBACK** (no scope changes)
 
-IT creates one Power Automate flow per form. Trigger: "When an HTTP request is received". Action: "Create item in SharePoint list" (or "Submit form response").
+IT creates one Power Automate flow per form. Trigger: "When an HTTP request is
+received". Action: validate payload and create the official item/record.
 
 The trigger generates a SAS-signed URL. We POST our 32-field JSON to it.
 

@@ -736,6 +736,101 @@ export async function setAllAgentsModel(modelRef: string): Promise<AgentsSnapsho
   });
 }
 
+export interface EnsureBootableAgentsResult {
+  ensured: boolean;
+  /** true when this call had to create the agents block (it was missing). */
+  created: boolean;
+  /** the model.primary the block carries, if any. */
+  modelRef?: string;
+}
+
+/**
+ * Boot-path safety net for BUG-012.
+ *
+ * On a truly fresh install where NO provider account resolves at launch time
+ * (cloud seed skipped AND Ollama not yet registered), runChannelPreflight
+ * early-returns without pinning any model, so `~/.openclaw/openclaw.json` is
+ * written with providers/plugins but NO `agents` block at all. The gateway
+ * then boots with `configuredChannelCount: 0`, its RPC router never comes up,
+ * and the renderer's initial `chat.history` request times out (UI hangs on a
+ * spinner instead of showing a "configure a model" state).
+ *
+ * This function guarantees the on-disk config always carries a structurally
+ * valid `agents` block so the gateway can start and reach a coherent (even if
+ * unconfigured) state. It is deliberately conservative:
+ *
+ *   - It NEVER overwrites an existing agents block that already carries a
+ *     model (idempotent: running twice yields identical state).
+ *   - It NEVER clobbers a populated `agents.list` (the canonical writer's
+ *     regression guard would reject that anyway).
+ *   - When a bindable model is known (preflight resolved one), pass it and the
+ *     block is seeded with `defaults.model.primary`. When none is known, it
+ *     seeds an empty `defaults` object — enough for the gateway to bind an
+ *     implicit main agent and start, so the renderer can show setup UI rather
+ *     than hang.
+ *
+ * Call this on the boot path AFTER runChannelPreflight, regardless of the
+ * preflight outcome.
+ */
+export async function ensureBootableAgentsConfig(
+  modelRef?: string,
+): Promise<EnsureBootableAgentsResult> {
+  return withConfigLock(async () => {
+    const config = await readOpenClawConfig() as AgentConfigDocument;
+    const existing = (config.agents && typeof config.agents === 'object'
+      ? (config.agents as AgentsConfig)
+      : undefined);
+
+    const existingDefaults = existing?.defaults;
+    const existingDefaultsModel = typeof existingDefaults?.model === 'object'
+      ? (existingDefaults.model as AgentModelConfig).primary
+      : undefined;
+    const existingList = Array.isArray(existing?.list) ? existing?.list : undefined;
+    const existingListModel = existingList?.find((e) => (
+      typeof e.model === 'object' && (e.model as AgentModelConfig).primary
+    ));
+    const alreadyHasModel = existingDefaultsModel !== undefined || existingListModel !== undefined;
+
+    const trimmedModelRef = typeof modelRef === 'string' ? modelRef.trim() : '';
+    const useModel = trimmedModelRef && isValidModelRef(trimmedModelRef) ? trimmedModelRef : undefined;
+
+    // Already bootable AND nothing to improve. Keep idempotent when either:
+    //   - a bindable model already exists (defaults.model or a list entry), or
+    //   - a (possibly empty) defaults block exists and we have no valid model to
+    //     upgrade it with.
+    // The one case we must NOT short-circuit: a present-but-model-less defaults
+    // block (seeded by a prior boot when preflight resolved no model) while THIS
+    // boot has a valid modelRef. That block boots the gateway but carries no
+    // bindable channel, so the composer stays disabled until the gateway's slow
+    // ready-fallback loop; upgrading it in place makes the channel bindable at
+    // boot. Idempotent: the next run sees the model and short-circuits here.
+    if (existing && (alreadyHasModel || (existingDefaults !== undefined && !useModel))) {
+      return {
+        ensured: true,
+        created: false,
+        modelRef: existingDefaultsModel ?? (existingListModel?.model as AgentModelConfig | undefined)?.primary,
+      };
+    }
+
+    const nextDefaults: AgentDefaultsConfig = {
+      ...(existing?.defaults ?? {}),
+      ...(useModel ? { model: { primary: useModel } } : {}),
+    };
+
+    config.agents = {
+      ...(existing ?? {}),
+      defaults: nextDefaults,
+    } as AgentsConfig;
+
+    await writeOpenClawConfig(config);
+    logger.info('Ensured bootable agents block', {
+      created: true,
+      modelRef: useModel ?? null,
+    });
+    return { ensured: true, created: true, modelRef: useModel };
+  });
+}
+
 export async function deleteAgentConfig(agentId: string): Promise<{ snapshot: AgentsSnapshot; removedEntry: AgentListEntry }> {
   return withConfigLock(async () => {
     if (agentId === MAIN_AGENT_ID) {

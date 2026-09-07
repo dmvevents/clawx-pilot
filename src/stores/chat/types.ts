@@ -109,6 +109,92 @@ export interface ChatState {
   /** Images collected from tool results, attached to the next assistant message */
   pendingToolImages: AttachedFileMeta[];
 
+  // ── Send-time channel degradation ──────────────────────────────
+  // See `src/lib/channel-degrade.ts` and `docs/OFFLINE_ARCHITECTURE.md` §3.1.
+  /**
+   * Text + attachments of the in-flight turn, kept only so a turn that failed
+   * for network reasons can be replayed on-device. Cleared on success.
+   */
+  lastSentPayload: {
+    text: string;
+    attachments?: Array<{
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
+      stagedPath: string;
+      preview: string | null;
+    }>;
+    targetAgentId?: string | null;
+    /**
+     * Run-ownership token (CLWX-94). The monotonic send-generation that created
+     * this payload. A terminal event only clears the payload when it belongs to
+     * the generation that still owns it, so a superseded run cannot wipe a newer
+     * send's replayable payload.
+     */
+    generation?: number;
+  } | null;
+  /**
+   * Set once we have already moved this turn onto the on-device channel.
+   * Prevents a failing cloud and a failing local runtime from ping-ponging.
+   */
+  degradedThisTurn: boolean;
+  /**
+   * User-facing notice that the turn moved channels, or null. Anonymised per
+   * the hard rules: channel vocabulary only, never a model id.
+   *
+   * `to` is which direction the notice concerns:
+   *  - 'on-device': the runtime auto-degraded a failed cloud turn onto the
+   *    on-device channel (data stays local — always safe). `resent` says
+   *    whether the turn was replayed.
+   *  - 'online': a dead on-device turn. Nothing moved — sending on-device data
+   *    to the cloud stays the principal's explicit choice — so the notice is an
+   *    actionable prompt to switch to Online. `resent` is always false here.
+   */
+  degradeNotice:
+    | {
+        reason: 'unreachable' | 'rate-limited';
+        resent: boolean;
+        to: 'online' | 'on-device';
+        /**
+         * On-device direction only, and only ever set to `false`: the four
+         * config stores moved but the gateway did not acknowledge the session
+         * cutover, so the next send may still run on the channel that just
+         * failed. The copy then says the switch could not be made rather than
+         * claiming one that did not happen. Absent means "confirmed".
+         */
+        cutoverConfirmed?: boolean;
+        /**
+         * The failover is still running: the config transaction and the
+         * acknowledged session cutover are both in flight. Set BEFORE those
+         * awaits so the wait is never silent — the acknowledgement has a 15s
+         * budget, and a principal staring at a frozen error at 3:40pm reads
+         * dead air as a broken app (principal-proxy trust lens, 2026-09-06).
+         * Replaced by the terminal notice (switched / resent / cutover-failed)
+         * or cleared when the failover itself fails.
+         */
+        inProgress?: boolean;
+      }
+    | null;
+
+  /**
+   * Which channel a session's model pin actually puts the RUNTIME on, when that
+   * differs from the principal's `preferredChannel`. Set only after a degrade's
+   * session cutover is acknowledged; cleared when the pin is cleared (an
+   * explicit channel pick, or the stale-pin reconcile).
+   *
+   * Read by the composer pill and Settings so they stop reading "Online" over an
+   * on-device runtime. Distinct from `degradeNotice` on purpose: the notice is
+   * an explanation the principal may dismiss, this is a fact about the runtime,
+   * and dismissing the explanation must not restore the lie.
+   */
+  runtimeChannelPin: { sessionKey: string; channel: 'online' | 'on-device' } | null;
+  /**
+   * Background session-pin recovery operations currently clearing stale
+   * session model overrides. Counted per session so overlapping clears cannot
+   * hide a newer operation when an older one finishes.
+   */
+  pendingChannelRecoveryBySession: Record<string, number>;
+
   // Sessions
   sessions: ChatSession[];
   currentSessionKey: string;
@@ -145,6 +231,17 @@ export interface ChatState {
   handleChatEvent: (event: Record<string, unknown>) => void;
   refresh: () => Promise<void>;
   clearError: () => void;
+  /** Dismiss the "moved to on-device" notice. */
+  clearDegradeNotice: () => void;
+  /**
+   * Drop any session-level model pin so this session follows the configured
+   * channel again. Call it whenever the principal picks a channel explicitly:
+   * a send-time degrade pins the session (that is how the cutover is made to
+   * take effect immediately), and a session pin OUTRANKS the config default, so
+   * without this the toggle would move the four stores and change nothing the
+   * principal can see. Resolves false when the gateway did not accept the clear.
+   */
+  clearSessionModelPin: (sessionKey?: string) => Promise<boolean>;
 }
 
 export const DEFAULT_CANONICAL_PREFIX = 'agent:main';

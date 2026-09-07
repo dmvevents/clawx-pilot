@@ -13,6 +13,17 @@ async function git(cwd: string, args: string[]): Promise<void> {
   await execFileAsync('git', args, { cwd });
 }
 
+// Best-effort cleanup that tolerates Windows holding pack/idx handles open
+// briefly after `git` exits. We never let temp-dir cleanup fail the test;
+// the assertion above is the contract under test, the temp dir is housekeeping.
+async function cleanupRepo(dir: string): Promise<void> {
+  try {
+    await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  } catch (err) {
+    console.warn(`harness-git test: temp dir cleanup failed (non-fatal): ${dir}`, err);
+  }
+}
+
 describe('harness git changed files', () => {
   it('includes staged tracked files when collecting changed paths', async () => {
     const repo = await mkdtemp(path.join(tmpdir(), 'clawx-harness-git-'));
@@ -34,7 +45,7 @@ describe('harness git changed files', () => {
 
       expect(changed).toContain('tracked.txt');
     } finally {
-      await rm(repo, { recursive: true, force: true });
+      await cleanupRepo(repo);
     }
-  });
+  }, 30_000);
 });

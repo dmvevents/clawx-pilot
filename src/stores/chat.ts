@@ -7,6 +7,15 @@ import { create } from 'zustand';
 import { hostApiFetch } from '@/lib/host-api';
 import { useGatewayStore } from './gateway';
 import { useAgentsStore } from './agents';
+import { useSettingsStore } from './settings';
+import { useProviderStore } from './providers';
+import {
+  classifyFailure,
+  isSessionModelCutoverConfirmed,
+  shouldDegradeToOnDevice,
+  shouldPromptSwitchToOnline,
+} from '@/lib/channel-degrade';
+import { classifyProvider, pickAccountForChannel, type ProviderClass } from '@/lib/provider-display';
 import { buildBaselineRunKey, captureBaseline, clearBaselines } from './baseline-cache';
 import { buildCronSessionHistoryPath, isCronSessionKey } from './chat/cron-session-utils';
 import {
@@ -51,6 +60,139 @@ export type {
 // during tool-use conversations where streamingMessage is temporarily cleared
 // between tool-result finals and the next delta.
 let _lastChatEventAt = 0;
+
+// Whether ANY streaming event (delta/final/error/aborted) has arrived for the
+// in-flight send. Reset in `sendMessage`; set in `handleChatEvent` when a
+// useful event lands. The safety-timeout watchdog uses this as the CLWX-78
+// "no bytes / no stream event" unreachability signal: if 90s elapse with the
+// composer still spinning and NOTHING ever streamed, the provider was
+// unreachable (degrade), whereas a turn that streamed and then went quiet is
+// merely slow (surface the generic error, do not false-degrade mid-work).
+let _streamEventSeenThisSend = false;
+
+// Monotonic run-ownership token (CLWX-94). Each `sendMessage` bumps this and
+// stamps `lastSentPayload.generation` with it, so a terminal event from a run
+// that a degrade resend has already superseded cannot clear the newer send's
+// payload (which its own failover may still need to resend). `_runGenerationById`
+// maps a gateway runId back to the generation that issued it, so `final`/`error`
+// can tell whether they own the payload currently in the store.
+let _sendGeneration = 0;
+const _runGenerationById = new Map<string, number>();
+
+type DegradeTurnToken = {
+  sessionKey: string;
+  generation: number;
+  text: string;
+  targetAgentId: string | null;
+};
+
+function captureDegradeTurnToken(state: ChatState): DegradeTurnToken | null {
+  const payload = state.lastSentPayload;
+  if (!payload?.text?.trim()) return null;
+  return {
+    sessionKey: state.currentSessionKey,
+    generation: payload.generation ?? -1,
+    text: payload.text,
+    targetAgentId: payload.targetAgentId ?? null,
+  };
+}
+
+function stillOwnsDegradeTurn(get: ChatGet, token: DegradeTurnToken): boolean {
+  const state = get();
+  const payload = state.lastSentPayload;
+  return state.currentSessionKey === token.sessionKey
+    && !!payload?.text?.trim()
+    && (payload.generation ?? -1) === token.generation
+    && payload.text === token.text
+    && (payload.targetAgentId ?? null) === token.targetAgentId;
+}
+
+function cancelStaleDegradeNotice(set: ChatSet, get: ChatGet, token: DegradeTurnToken): boolean {
+  if (stillOwnsDegradeTurn(get, token)) return false;
+  set((state) => (state.degradeNotice?.inProgress ? { degradeNotice: null } : {}));
+  return true;
+}
+
+function beginPendingChannelRecovery(set: ChatSet, sessionKey: string): void {
+  if (!sessionKey) return;
+  set((state) => {
+    const pending = state.pendingChannelRecoveryBySession ?? {};
+    return {
+      pendingChannelRecoveryBySession: {
+        ...pending,
+        [sessionKey]: (pending[sessionKey] ?? 0) + 1,
+      },
+    };
+  });
+}
+
+function finishPendingChannelRecovery(set: ChatSet, sessionKey: string): void {
+  if (!sessionKey) return;
+  set((state) => {
+    const pending = state.pendingChannelRecoveryBySession ?? {};
+    const current = pending[sessionKey] ?? 0;
+    if (current <= 0) return {};
+    const next = { ...pending };
+    if (current === 1) {
+      delete next[sessionKey];
+    } else {
+      next[sessionKey] = current - 1;
+    }
+    return { pendingChannelRecoveryBySession: next };
+  });
+}
+
+async function cleanupStaleDegradeAfterSessionPin(
+  set: ChatSet,
+  get: ChatGet,
+  token: DegradeTurnToken,
+  pinSessionKey: string,
+  reason: 'unreachable' | 'rate-limited',
+): Promise<boolean> {
+  if (stillOwnsDegradeTurn(get, token)) return false;
+
+  const stateBeforeNotice = get();
+  const ownedPin = stateBeforeNotice.runtimeChannelPin;
+  if (ownedPin?.sessionKey !== pinSessionKey || ownedPin.channel !== 'on-device') {
+    set((state) => (state.degradeNotice === stateBeforeNotice.degradeNotice ? { degradeNotice: null } : {}));
+    return true;
+  }
+
+  const ownedNotice = stateBeforeNotice.degradeNotice?.inProgress
+    ? stateBeforeNotice.degradeNotice
+    : { reason, resent: false, to: 'on-device' as const, inProgress: true };
+  if (stateBeforeNotice.degradeNotice !== ownedNotice) {
+    set((state) => (
+      state.degradeNotice === stateBeforeNotice.degradeNotice
+      && state.runtimeChannelPin === ownedPin
+        ? { degradeNotice: ownedNotice }
+        : {}
+    ));
+  }
+
+  beginPendingChannelRecovery(set, pinSessionKey);
+  try {
+    const cleared = await clearSessionModelPinRpc(pinSessionKey);
+    set((state) => {
+      const ownsPin = state.runtimeChannelPin === ownedPin;
+      const ownsNotice = state.degradeNotice === ownedNotice;
+      if (!ownsPin && !ownsNotice) return {};
+      const next: Partial<ChatState> = {};
+      if (cleared && ownsPin) {
+        next.runtimeChannelPin = null;
+      }
+      if (ownsNotice) {
+        next.degradeNotice = cleared
+          ? null
+          : { reason: ownedNotice.reason, resent: false, to: 'on-device' };
+      }
+      return next;
+    });
+  } finally {
+    finishPendingChannelRecovery(set, pinSessionKey);
+  }
+  return true;
+}
 
 /** Normalize a timestamp to milliseconds. Handles both seconds and ms. */
 function toMs(ts: number): number {
@@ -1651,6 +1793,413 @@ function isRecoverableChatSendTimeout(error: string): boolean {
   return error.includes('RPC timeout: chat.send');
 }
 
+/** A session patch is a small JSON-store write; it should never take long. */
+const SESSION_PATCH_TIMEOUT_MS = 15_000;
+
+/**
+ * Upper bound on the degrade route, so the "switching…" notice can never outlive
+ * the switch it describes.
+ *
+ * The host-API transport has no timeout of its own — neither the IPC proxy nor
+ * the browser fallback — so a main process wedged preparing provider runtime
+ * state would leave a spinner the principal cannot dismiss up forever, which is
+ * a worse state than the frozen error it replaced. On expiry we take the same
+ * path as an outright failure: drop the notice, leave the real error on screen,
+ * do not resend. The cutover RPC is bounded separately by
+ * SESSION_PATCH_TIMEOUT_MS.
+ */
+const DEGRADE_ROUTE_TIMEOUT_MS = 20_000;
+
+/**
+ * The reconcile below is a store WRITE sitting in front of the first send of a
+ * session, so it gets a much smaller budget than a cutover: a session-store
+ * patch is milliseconds of work, and on Windows (`%APPDATA%` under folder sync
+ * or AV) a wedged gateway would otherwise hold the principal's first message for
+ * the full 15s with nothing on screen moving, before the turn is even
+ * dispatched — the 30s/90s watchdogs cannot see a stall that happens before
+ * them. On expiry we count the attempt and send anyway.
+ */
+const RECONCILE_PATCH_TIMEOUT_MS = 3_000;
+
+/**
+ * How many times a session may try to drop a stale pin per app run. Bounded
+ * because the clear is retried on subsequent sends now (see
+ * `_pinReconciledSessions`), and an unbounded retry against a gateway that is
+ * refusing patches would add an RPC to every message.
+ */
+const RECONCILE_MAX_ATTEMPTS = 3;
+
+/**
+ * Sessions whose model pin has already been reconciled with the configured
+ * channel during this app run. Module-level (not store state) so it resets with
+ * the process, which is exactly the lifetime we want: a pin written on disk by
+ * yesterday's outage must be reconciled once after each launch.
+ *
+ * A session is added only on a SUCCESSFUL clear. Marking before the await (as
+ * this did originally) turns "one attempt per session" into a burn: the one
+ * attempt lands while the gateway is restarting — precisely the condition around
+ * an outage — the RPC fails, and the session is then skipped for the rest of the
+ * run, leaving the principal on-device with the composer reading Online. That is
+ * the trap this reconcile exists to prevent.
+ */
+const _pinReconciledSessions = new Set<string>();
+
+/** Attempts spent per session this run (see RECONCILE_MAX_ATTEMPTS). */
+const _pinReconcileAttempts = new Map<string, number>();
+
+/** Sessions with a reconcile RPC in flight, so concurrent sends do not stampede. */
+const _pinReconcileInFlight = new Set<string>();
+
+/**
+ * True while a degrade is installing a session pin and replaying the turn onto
+ * it. The replay goes through `sendMessage`, which reconciles pins at the top —
+ * so without this the reconciler can delete the pin the degrade just proved and
+ * hand the resend straight back to the provider that failed, under a notice
+ * claiming the turn was answered on this device. The memo set alone does NOT
+ * protect that window: a session the principal switched to mid-turn (or any
+ * session after a renderer reload) has never been reconciled, and the renderer's
+ * provider snapshot still shows the cloud account as default, so the reconcile
+ * fires. Found by the code-review lens, 2026-09-06.
+ */
+let _degradeResendInFlight = false;
+
+/**
+ * Move ONE session onto `modelRef` and wait for the gateway to acknowledge it.
+ *
+ * Why this exists at all — changing global config is the wrong owner for a
+ * transient send-time failover. The bundled gateway re-reads session overrides
+ * from disk on every turn, and those overrides outrank agent/default config, so
+ * an acknowledged patch is the smallest runtime move that this one failed turn
+ * can honestly depend on.
+ *
+ * A session-level model pin is the one path that is immune to all of that: the
+ * gateway re-reads session overrides from disk on every turn and they OUTRANK
+ * both the agent and the config default. `sessions.patch` is synchronous,
+ * acknowledged, and does not restart the runtime — so it is safe to use inside a
+ * failed turn.
+ *
+ * Returns true only when the gateway echoes the requested model back.
+ */
+async function cutoverSessionModel(sessionKey: string, modelRef: string): Promise<boolean> {
+  if (!sessionKey || !modelRef) return false;
+  try {
+    const ack = await useGatewayStore.getState().rpc<unknown>(
+      'sessions.patch',
+      { key: sessionKey, model: modelRef },
+      SESSION_PATCH_TIMEOUT_MS,
+    );
+    const confirmed = isSessionModelCutoverConfirmed(ack, modelRef);
+    if (!confirmed) {
+      console.warn('[chat] sessions.patch did not confirm the channel cutover; not claiming it happened');
+    }
+    return confirmed;
+  } catch (error) {
+    console.warn('[chat] sessions.patch failed, cannot prove the channel cutover:', error);
+    return false;
+  }
+}
+
+/**
+ * Clear a session's model pin so it follows the configured channel again.
+ * `model: null` deletes the override AND the stale last-run model identity, so
+ * the next turn resolves from config. Idempotent: a session with no pin is
+ * unaffected.
+ */
+
+function hasNonEmptyStringField(value: unknown, field: string): boolean {
+  if (!value || typeof value !== 'object' || !(field in value)) return false;
+  return String((value as Record<string, unknown>)[field] ?? '').trim().length > 0;
+}
+
+function isSessionModelClearConfirmed(ack: unknown, sessionKey: string): boolean {
+  if (!ack || typeof ack !== 'object') return false;
+  const top = ack as { key?: unknown; ok?: unknown; entry?: unknown };
+  if (top.ok !== true) return false;
+  if ('key' in top && String(top.key ?? '').trim() !== sessionKey) return false;
+  if (!top.entry || typeof top.entry !== 'object') return false;
+
+  return !hasNonEmptyStringField(top.entry, 'modelOverride')
+    && !hasNonEmptyStringField(top.entry, 'providerOverride')
+    && !hasNonEmptyStringField(top.entry, 'model')
+    && !hasNonEmptyStringField(top.entry, 'modelProvider');
+}
+
+async function clearSessionModelPinRpc(
+  sessionKey: string,
+  timeoutMs: number = SESSION_PATCH_TIMEOUT_MS,
+): Promise<boolean> {
+  if (!sessionKey) return false;
+  try {
+    const ack = await useGatewayStore.getState().rpc<unknown>(
+      'sessions.patch',
+      { key: sessionKey, model: null },
+      timeoutMs,
+    );
+    const confirmed = isSessionModelClearConfirmed(ack, sessionKey);
+    if (!confirmed) {
+      console.warn('[chat] sessions.patch did not confirm the session model pin clear; keeping the recorded pin');
+    }
+    return confirmed;
+  } catch (error) {
+    console.warn('[chat] could not clear the session model pin:', error);
+    return false;
+  }
+}
+
+/**
+ * Once per session per app run, drop a pin left behind by an earlier degrade
+ * when the configured channel is provably Online again.
+ *
+ * A pin is written on disk and outranks config, so it survives quitting the app
+ * — and the boot preflight, which re-applies the principal's `preferredChannel`
+ * to the four stores, cannot see it. Without this a school that lost the network
+ * on Monday afternoon would keep answering from the on-device model all week
+ * with the composer still reading "Online" and nothing to indicate why the
+ * answers changed.
+ *
+ * Only acts on a PROVEN online default (an account flagged `isDefault`). With no
+ * default marked we cannot tell Online from a completed degrade, and clearing on
+ * a guess would undo a legitimate failover mid-outage — the same
+ * "null means unproven, never assume" rule the runtime-vs-preference derivation
+ * follows (CLWX-94/96).
+ */
+async function reconcileSessionModelPin(sessionKey: string, set: ChatSet): Promise<void> {
+  if (!sessionKey || _pinReconciledSessions.has(sessionKey)) return;
+  if (_pinReconcileInFlight.has(sessionKey)) return;
+  const runtimePin = useChatStore.getState().runtimeChannelPin;
+  if (runtimePin?.sessionKey === sessionKey && runtimePin.channel === 'on-device') {
+    return;
+  }
+  // A degrade is installing (or has just proved) a pin for this turn. Its replay
+  // comes back through sendMessage, and undoing that pin here would send the
+  // turn out on the provider that just failed.
+  if (_degradeResendInFlight) return;
+  if ((_pinReconcileAttempts.get(sessionKey) ?? 0) >= RECONCILE_MAX_ATTEMPTS) return;
+  const defaultAccount = (useProviderStore.getState().accounts ?? []).find((a) => a.isDefault === true);
+  if (!defaultAccount || classifyProvider(defaultAccount) !== 'online') return;
+  _pinReconcileInFlight.add(sessionKey);
+  _pinReconcileAttempts.set(sessionKey, (_pinReconcileAttempts.get(sessionKey) ?? 0) + 1);
+  beginPendingChannelRecovery(set, sessionKey);
+  try {
+    // Only a confirmed clear closes this session out for the run.
+    if (await clearSessionModelPinRpc(sessionKey, RECONCILE_PATCH_TIMEOUT_MS)) {
+      _pinReconciledSessions.add(sessionKey);
+      set((s) => (s.runtimeChannelPin?.sessionKey === sessionKey ? { runtimeChannelPin: null } : {}));
+    }
+  } finally {
+    finishPendingChannelRecovery(set, sessionKey);
+    _pinReconcileInFlight.delete(sessionKey);
+  }
+}
+
+/**
+ * Send-time cloud → on-device failover.
+ *
+ * Called from the terminal `error` event when a turn failed while sending.
+ * Policy lives in `src/lib/channel-degrade.ts` (pure, unit-tested); this
+ * function is only the plumbing: read the current channel and what's
+ * configured, ask the classifier, then move the runtime and optionally replay.
+ *
+ * Two things it must never do:
+ *
+ *   - **Rewrite `preferredChannel` or the global provider default.** It POSTs
+ *     `/api/settings/degradeChannel`, which only prepares the target provider
+ *     runtime entry and returns a model ref. The principal's explicit global
+ *     choice stays authoritative; this function moves only the failed session.
+ *   - **Clobber the visible error before it knows the failover worked.** The
+ *     error state is already set by the caller; we only clear `runError` after
+ *     a resend has actually been dispatched.
+ */
+async function maybeDegradeChannel(
+  set: ChatSet,
+  get: ChatGet,
+  errorMsg: string,
+  toolsRan: boolean,
+): Promise<void> {
+  const state = get();
+  if (state.degradedThisTurn) return;
+
+  // Cheap string check first — avoids reading provider state for the common
+  // case of an ordinary model error.
+  if (classifyFailure(errorMsg) === 'other') return;
+
+  const settings = useSettingsStore.getState();
+  const accounts = useProviderStore.getState().accounts ?? [];
+  const onDevice = pickAccountForChannel(accounts, 'on-device');
+  const online = pickAccountForChannel(accounts, 'online');
+
+  // What the runtime is ACTUALLY on, not merely what was preferred. A fresh
+  // session pin is the strongest proof because it outranks the global provider
+  // default for this session. Without checking it first, a manual retry after a
+  // tool-safe degrade can be misclassified as Online while the session is still
+  // pinned on-device, causing another automatic local replay instead of the
+  // on-device outage prompt. Fall back to the provider default only when this
+  // session has no in-memory runtime pin.
+  const sessionPin = state.runtimeChannelPin?.sessionKey === state.currentSessionKey
+    ? state.runtimeChannelPin
+    : null;
+  const defaultAccount = accounts.find((a) => a.isDefault === true);
+  const runtimeChannel: ProviderClass | null = sessionPin?.channel
+    ?? (defaultAccount ? classifyProvider(defaultAccount) : null);
+  const activeChannel: ProviderClass = runtimeChannel
+    ?? (online && settings.preferredChannel === 'online'
+      ? 'online'
+      : (onDevice ? 'on-device' : 'online'));
+
+  // A dead on-device turn does NOT auto-fail-over. This is what the external
+  // tester actually hit (K13): a local model that stopped answering surfaced
+  // six raw "Connection error." lines with no way forward. Unlike the cloud ->
+  // on-device direction below (which keeps data on the box and is always safe),
+  // an on-device -> online move would send the turn to the cloud, so it stays
+  // the principal's explicit choice. We surface an actionable "switch to
+  // Online" notice and let them make the call — never a silent cross of that
+  // trust line.
+  if (activeChannel === 'on-device') {
+    const outage = shouldPromptSwitchToOnline(errorMsg, {
+      activeChannel,
+      onlineAvailable: online !== null && !!online.model,
+      alreadyDegraded: state.degradedThisTurn,
+    });
+    if (outage.promptSwitchToOnline) {
+      const onlineReason: 'unreachable' | 'rate-limited' =
+        outage.reason === 'rate-limited' ? 'rate-limited' : 'unreachable';
+      // Claim the per-turn flag so a second terminal error for the same run
+      // (K13 emitted six) does not re-raise the notice after a dismiss.
+      set({ degradedThisTurn: true, degradeNotice: { reason: onlineReason, resent: false, to: 'online' } });
+    }
+    // When no online account exists (or the error is not network-class), fall
+    // through with no notice: the now-readable error stays on screen.
+    return;
+  }
+
+  const decision = shouldDegradeToOnDevice(errorMsg, {
+    activeChannel,
+    onDeviceAvailable: onDevice !== null && !!onDevice.model,
+    alreadyDegraded: state.degradedThisTurn,
+    toolsRan,
+    haveMessageText: !!state.lastSentPayload?.text?.trim(),
+  });
+  if (!decision.degrade) return;
+
+  const reason = decision.reason === 'rate-limited' ? 'rate-limited' : 'unreachable';
+  const turnToken = captureDegradeTurnToken(state);
+  if (!turnToken) return;
+  // Claim the flag before any await so two error events for the same run
+  // cannot both start a failover.
+  //
+  // The notice goes up NOW, before the config transaction and the acknowledged
+  // cutover (15s budget) are awaited. Those awaits used to happen behind a
+  // frozen error with nothing on screen moving, so at 3:40pm the principal read
+  // the recovery attempt as a hung app and started retrying into it
+  // (principal-proxy trust lens, 2026-09-06). It carries the root cause too, so
+  // suppressing the red transport banner underneath loses nothing.
+  set({
+    degradedThisTurn: true,
+    degradeNotice: { reason, resent: false, to: 'on-device', inProgress: true },
+  });
+
+  let modelRef = '';
+  try {
+    const res = await withTimeout(
+      hostApiFetch('/api/settings/degradeChannel', {
+        method: 'POST',
+        body: JSON.stringify({ channel: 'on-device', reason }),
+      }),
+      DEGRADE_ROUTE_TIMEOUT_MS,
+    );
+    if (res && typeof res === 'object' && (res as { success?: boolean }).success === false) {
+      throw new Error(String((res as { error?: unknown }).error ?? 'degradeChannel failed'));
+    }
+    // The route answers with the prepared on-device model. That ref is what the
+    // session has to be pinned to below; without it we cannot prove the runtime
+    // moved for this turn.
+    if (res && typeof res === 'object') {
+      modelRef = String((res as { modelRef?: unknown }).modelRef ?? '').trim();
+    }
+  } catch (error) {
+    // Failover itself failed. Leave the original error on screen — it is the
+    // more actionable of the two — and do not resend.
+    console.warn('[chat] channel degrade failed, leaving original error visible:', error);
+    set({ degradeNotice: null });
+    return;
+  }
+  if (cancelStaleDegradeNotice(set, get, turnToken)) return;
+
+  // The provider runtime entry is prepared, but this session is NOT yet on the
+  // on-device model. Pin it and WAIT for the acknowledgement before doing
+  // anything that depends on the new channel.
+  //
+  // Pin the key the REPLAY will run on, not merely the current one: sendMessage
+  // re-derives its session from `targetAgentId` against a live agents snapshot,
+  // so resolving the two independently can pin one session and run the turn on
+  // another, unpinned one.
+  const pinSessionKey = resolveMainSessionKeyForAgent(turnToken.targetAgentId) ?? turnToken.sessionKey;
+  // Fence everything from here on. The pin reconcile at the top of sendMessage is
+  // free to delete exactly the pin we are installing — via this function's own
+  // replay, or via a message the principal sends while the switch is running —
+  // and the turn would then run on the provider that just failed under a notice
+  // saying it had been answered on this device.
+  _degradeResendInFlight = true;
+  try {
+    const cutover = await cutoverSessionModel(pinSessionKey, modelRef);
+    if (!cutover) {
+      // Unproven cutover: an immediate resend could go straight back out on the
+      // provider that just failed, and the principal would see the same error
+      // twice under a banner claiming we had switched. Say what is actually
+      // true — the switch could not be completed — and leave the original error
+      // visible so it stays the actionable thing on screen.
+      set({ degradeNotice: { reason, resent: false, to: 'on-device', cutoverConfirmed: false } });
+      return;
+    }
+
+    // The runtime really is on this device now, for THIS session. Record that so
+    // the composer pill and Settings stop reading "Online" over an on-device
+    // runtime: before the cutover existed the pill was equally stale but the
+    // runtime had not moved either, so they agreed; now a stale pill contradicts
+    // both the runtime and the notice directly above it, and the principal reads
+    // the weaker draft as "the Online model got worse" (code-review lens,
+    // 2026-09-06). Deliberately NOT tied to the dismissible notice — dismissing
+    // an explanation must not restore the lie — and NOT written to
+    // `preferredChannel`, which stays the principal's own choice.
+    set({ runtimeChannelPin: { sessionKey: pinSessionKey, channel: 'on-device' } });
+    // The renderer's provider snapshot still shows the cloud account as default
+    // until it is re-read, and the failover classifies the runtime channel from
+    // that snapshot. Refresh it (fire-and-forget: the host API has no timeout of
+    // its own and the replay must not wait on it) so a second failure this turn
+    // is judged against what the runtime actually is.
+    void useProviderStore.getState().refreshProviderSnapshot();
+
+    if (await cleanupStaleDegradeAfterSessionPin(
+      set,
+      get,
+      turnToken,
+      pinSessionKey,
+      reason,
+    )) return;
+
+    const payload = get().lastSentPayload;
+    if (!decision.resend || !payload?.text?.trim()) {
+      // Channel moved but we are not replaying. The principal's own retry will
+      // now run on-device.
+      set({ degradeNotice: { reason, resent: false, to: 'on-device' } });
+      return;
+    }
+
+    set({ degradeNotice: { reason, resent: true, to: 'on-device' }, runError: null, error: null });
+    try {
+      await get().sendMessage(payload.text, payload.attachments, payload.targetAgentId);
+      // sendMessage resets degradedThisTurn for the new turn; re-assert it so a
+      // second failure (now on-device) surfaces instead of looping.
+      set({ degradedThisTurn: true, degradeNotice: { reason, resent: true, to: 'on-device' } });
+    } catch (error) {
+      console.warn('[chat] on-device resend failed:', error);
+      set({ degradeNotice: { reason, resent: false, to: 'on-device' } });
+    }
+  } finally {
+    _degradeResendInFlight = false;
+  }
+}
+
 function collectToolUpdates(message: unknown, eventState: string): ToolStatus[] {
   const updates: ToolStatus[] = [];
   const toolResultUpdate = extractToolResultUpdate(message, eventState);
@@ -1697,6 +2246,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   pendingFinal: false,
   lastUserMessageAt: null,
   pendingToolImages: [],
+
+  lastSentPayload: null,
+  degradedThisTurn: false,
+  degradeNotice: null,
+  runtimeChannelPin: null,
+  pendingChannelRecoveryBySession: {},
 
   sessions: [],
   currentSessionKey: DEFAULT_SESSION_KEY,
@@ -2185,13 +2740,54 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ? getMessageErrorMessage(lastAssistantAfterBoundary)
         : null;
 
+      // CLWX-78 plumbing gap (moe.16 VM verify): a cloud run can die with NO
+      // terminal stream event at all — the gateway ends the embedded run and
+      // only the history poll discovers the error-stopped assistant message.
+      // The 'error'/'final' event paths call maybeDegradeChannel; this path
+      // set the banner and stopped, so send-time failover never ran despite
+      // a warm on-device model. Give this path the same failover chance.
+      //
+      // Gate on lastSentPayload, NOT `sending` (CLWX-93): in this path `sending`
+      // is contaminated by run-adoption — it is flipped true for a turn started
+      // on the gateway console, so gating on it would resend a message the
+      // principal never typed in this window. `lastSentPayload` is only ever
+      // set by this client's own sendMessage, matching the "don't replay a
+      // console-typed turn" discipline the streaming path enforces via its
+      // pre-adoption `hadLocalSendInFlight` read. maybeDegradeChannel claims
+      // `degradedThisTurn` synchronously before any await, so the 4s poll
+      // cannot double-fire. Computed BEFORE the set() below.
+      const ownTurnSurfacedError = latestTerminalAssistantErrorMessage !== null
+        && !!get().lastSentPayload?.text?.trim();
+
+      // Stale-banner guard (moe.18 Finding D0): only an ACTIVE turn in this
+      // window may seed or clear the global run-error banner from history.
+      // `lastUserMessageAt` is nulled further down the first time this path
+      // surfaces a terminal error, so a post-gateway-restart reload or a
+      // session re-open never repaints the banner. While a turn IS active,
+      // history stays authoritative both ways — but only an own-send turn may
+      // paint, and an adopted console turn's error clears rather than paints.
+      // Ownership for PAINTING is payload PRESENCE (any own send, including
+      // attachment-only ones whose text is empty — Codex lane finding);
+      // ownTurnSurfacedError keeps its stricter text gate because only text
+      // can be REPLAYED by the failover below (CLWX-93).
+      const ownSendThisWindow = !!get().lastSentPayload;
       set({
         messages: finalMessages,
         thinkingLevel,
         loading: false,
-        runError: latestTerminalAssistantErrorMessage,
+        runError: get().lastUserMessageAt
+          ? (latestTerminalAssistantErrorMessage && ownSendThisWindow
+              ? latestTerminalAssistantErrorMessage
+              : null)
+          : get().runError,
       });
       cacheSessionHistory(currentSessionKey, finalMessages, thinkingLevel);
+
+      if (ownTurnSurfacedError && latestTerminalAssistantErrorMessage) {
+        const toolsRan = postBoundaryMessages.some((msg) => Array.isArray(msg.content)
+          && (msg.content as Array<{ type?: string }>).some((block) => block.type === 'toolCall' || block.type === 'tool_use'));
+        void maybeDegradeChannel(set, get, latestTerminalAssistantErrorMessage, toolsRan);
+      }
 
       // Seed a missing label from immutable history only. Once a label exists
       // for a session, do not rewrite it during later history refreshes; users
@@ -2233,12 +2829,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       if (latestTerminalAssistantErrorMessage) {
         clearHistoryPoll();
-        set({
+        set((s) => ({
           sending: false,
           activeRunId: null,
           pendingFinal: false,
           lastUserMessageAt: null,
-        });
+          degradeNotice: s.degradeNotice?.resent ? null : s.degradeNotice,
+        }));
         return true;
       }
 
@@ -2261,7 +2858,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         });
         if (recentAssistant) {
           clearHistoryPoll();
-          set({ sending: false, activeRunId: null, pendingFinal: false });
+          set((s) => ({
+            sending: false,
+            activeRunId: null,
+            pendingFinal: false,
+            lastSentPayload: null,
+            degradeNotice: s.degradeNotice?.inProgress ? null : s.degradeNotice,
+          }));
         }
       }
       return true;
@@ -2487,6 +3090,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         filePath: a.stagedPath,
       })),
     };
+    // Claim a fresh run-ownership token for this turn (CLWX-94). Stamped onto
+    // lastSentPayload so a terminal event from a run a degrade resend has
+    // already superseded cannot clear the payload this newer send may still
+    // need to replay.
+    const sendGeneration = ++_sendGeneration;
     set((s) => ({
       messages: [...s.messages, userMsg],
       sending: true,
@@ -2497,6 +3105,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       streamingTools: [],
       pendingFinal: false,
       lastUserMessageAt: nowMs,
+      // Retain the payload so a network-class failure can be replayed on the
+      // on-device channel (see `src/lib/channel-degrade.ts`). Cleared on
+      // `final` (guarded by the generation token). `degradedThisTurn` resets
+      // here because this is a fresh turn — the degrade resend path re-sets it
+      // to true immediately after calling in.
+      lastSentPayload: { text, attachments, targetAgentId, generation: sendGeneration },
+      degradedThisTurn: false,
+      degradeNotice: null,
     }));
 
     // Update session label with first user message text as soon as it's sent
@@ -2516,6 +3132,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // RPC await) because the gateway's chat.send RPC may block until the
     // entire agentic conversation finishes — the poll must run in parallel.
     _lastChatEventAt = Date.now();
+    // Fresh turn: no stream event has arrived yet. The watchdog reads this to
+    // tell an unreachable provider (nothing ever streamed) from a merely slow
+    // one (streamed, then went quiet) — CLWX-78.
+    _streamEventSeenThisSend = false;
     clearHistoryPoll();
     clearErrorRecoveryTimer();
 
@@ -2538,6 +3158,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     _historyPollTimer = setTimeout(pollHistory, POLL_START_DELAY);
 
     const SAFETY_TIMEOUT_MS = 90_000;
+    const NO_RESPONSE_ERROR = 'No response received from the model. The provider may be unavailable or the API key may have insufficient quota. Please check your provider settings.';
     const checkStuck = () => {
       const state = get();
       if (!state.sending) return;
@@ -2550,17 +3171,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
         setTimeout(checkStuck, 10_000);
         return;
       }
+      // Terminal watchdog (CLWX-95): 90s of silence with nothing streaming and
+      // no pending final — the composer can never be left spinning forever.
       clearHistoryPoll();
+
+      // CLWX-78 residual: route a stall through the same send-time failover as
+      // the `error`/`final` paths, but ONLY when it is genuine unreachability
+      // evidence — nothing ever streamed for this send (no bytes, no stream
+      // event). A turn that streamed and then went quiet is merely slow; degrading
+      // it mid-work would false-positive and abandon partial progress, so that
+      // case keeps the plain "no response" error. Set the error first so that if
+      // the failover itself cannot even reach the local host API the principal is
+      // left looking at an honest error rather than a dead spinner.
       set({
-        error: 'No response received from the model. The provider may be unavailable or the API key may have insufficient quota. Please check your provider settings.',
+        error: NO_RESPONSE_ERROR,
         sending: false,
         activeRunId: null,
         lastUserMessageAt: null,
       });
+      if (!_streamEventSeenThisSend) {
+        const toolsRan = get().streamingTools.length > 0 || get().pendingToolImages.length > 0;
+        // Synthetic error string chosen to classify as `unreachable` (matches
+        // UNREACHABLE_PATTERNS: "provider unreachable" / "no response from model").
+        void maybeDegradeChannel(set, get, 'provider unreachable: no response from model', toolsRan);
+      }
     };
     setTimeout(checkStuck, 30_000);
 
     try {
+      // Drop a model pin left behind by a degrade in an earlier app run, before
+      // the turn resolves its model. No-op on all but the first send per session
+      // per run, and never acts while the configured channel is still on-device.
+      await reconcileSessionModelPin(currentSessionKey, set);
+
       const idempotencyKey = crypto.randomUUID();
       const hasMedia = attachments && attachments.length > 0;
       if (hasMedia) {
@@ -2630,6 +3273,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           set({ error: errorMsg, sending: false });
         }
       } else if (result.result?.runId) {
+        // Bind this run to the generation that issued it so a terminal event
+        // can tell whether it still owns lastSentPayload (CLWX-94).
+        _runGenerationById.set(result.result.runId, sendGeneration);
         set({ activeRunId: result.result.runId });
       }
     } catch (err) {
@@ -2706,12 +3352,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // way to track progress when the gateway doesn't stream intermediate turns.
     const hasUsefulData = resolvedState === 'delta' || resolvedState === 'final'
       || resolvedState === 'error' || resolvedState === 'aborted';
+    // Whether THIS client had a send in flight, read before the adoption block
+    // below can set `sending` for a run we never started. The `error` case uses
+    // this to decide whether a channel failover is ours to perform: replaying a
+    // turn typed in another client (the console at 127.0.0.1:18789) would resend
+    // whatever stale payload we happen to be holding.
+    const hadLocalSendInFlight = get().sending;
     if (hasUsefulData) {
+      // A real stream event arrived, so the provider was reachable this send.
+      // The stall watchdog reads this to avoid false-degrading a merely-slow
+      // turn that streamed and then went quiet (CLWX-78).
+      _streamEventSeenThisSend = true;
       clearHistoryPoll();
       // Adopt run started from another client (e.g. console at 127.0.0.1:18789):
       // show loading/streaming in the app when this session has an active run.
-      const { sending } = get();
-      if (!sending && runId) {
+      if (!hadLocalSendInFlight && runId) {
           set({ sending: true, activeRunId: runId, error: null, runError: null });
       }
     }
@@ -2755,6 +3410,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
       case 'final': {
         clearErrorRecoveryTimer();
         if (get().error || get().runError) set({ error: null, runError: null });
+        // The turn produced a real answer, so the retained resend payload is no
+        // longer needed. `degradeNotice` is deliberately left alone — if this
+        // final came from an on-device resend, the principal should still see
+        // that their turn was answered on this device rather than online.
+        //
+        // CLWX-94: clear the payload ONLY when this `final` is a genuine answer
+        // AND belongs to the run that still owns the payload.
+        //   - A `final` that actually carries a terminal assistant error
+        //     re-dispatches to the `error` case below, whose degrade path must
+        //     still consume the payload to resend on-device — nulling it here
+        //     would defeat auto-resend (the exact trap flagged for this fix).
+        //   - Run-ownership token: a late `final` from a run that a degrade
+        //     resend has already superseded (older generation than the payload
+        //     now in the store) must not wipe the newer send's replayable payload.
+        //     An unknown runId falls back to clearing, which is safe — an adopted
+        //     run never set lastSentPayload in this client.
+        {
+          const finalMsgForClear = event.message as RawMessage | undefined;
+          const finalIsTerminalError = finalMsgForClear
+            ? isTerminalAssistantErrorMessage(normalizeStreamingMessage(finalMsgForClear) as RawMessage)
+            : false;
+          const ownedPayload = get().lastSentPayload;
+          if (!finalIsTerminalError && ownedPayload) {
+            const finalGen = runId ? _runGenerationById.get(runId) : undefined;
+            if (finalGen === undefined || finalGen >= (ownedPayload.generation ?? 0)) {
+              set((s) => ({
+                lastSentPayload: null,
+                degradeNotice: s.degradeNotice?.inProgress ? null : s.degradeNotice,
+              }));
+              if (runId) _runGenerationById.delete(runId);
+            }
+          }
+        }
         // Message complete - add to history and clear streaming
         const finalMsg = event.message as RawMessage | undefined;
         if (finalMsg) {
@@ -2980,6 +3668,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         );
         const terminalAssistantError = isTerminalAssistantErrorMessage(event.message);
         const wasSending = get().sending;
+        // Capture before the state reset below wipes `streamingTools`. A turn
+        // that already invoked a tool must not be replayed automatically.
+        const toolsRanThisTurn = get().streamingTools.length > 0
+          || get().pendingToolImages.length > 0;
 
         // Snapshot the current streaming message into messages[] so partial
         // content ("Let me get that written down...") is preserved in the UI
@@ -2996,9 +3688,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }));
         }
 
-        set({
+        set((s) => ({
           error: terminalAssistantError ? null : errorMsg,
           runError: terminalAssistantError ? errorMsg : null,
+          // A success-claiming notice ("resent on this device") must not
+          // outlive a NEWER terminal failure — it would suppress/contradict
+          // the error it no longer explains (moe.18 D1, Codex lane finding:
+          // a failed on-device resend was invisible behind the stale notice).
+          degradeNotice: s.degradeNotice?.resent ? null : s.degradeNotice,
           sending: false,
           activeRunId: null,
           streamingText: '',
@@ -3007,12 +3704,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
           pendingFinal: false,
           lastUserMessageAt: null,
           pendingToolImages: [],
-        });
+        }));
 
         clearHistoryPoll();
         clearErrorRecoveryTimer();
         if (wasSending) {
           void get().loadHistory(true);
+        }
+
+        // Send-time channel degradation. A cloud turn that died because the
+        // provider was unreachable, or because the Ministry's shared token
+        // budget returned 429, should continue on the on-device model rather
+        // than leaving the principal with a dead composer at 3:40pm.
+        //
+        // Deliberately runs AFTER the error state is set, so if any step of the
+        // failover itself fails the user is still looking at the real error.
+        //
+        // Gated on `hadLocalSendInFlight`, not `wasSending`: `wasSending` is
+        // true for runs adopted from another client too, and failing over one of
+        // those would replay a payload the principal never typed here.
+        if (hadLocalSendInFlight) {
+          void maybeDegradeChannel(set, get, errorMsg, toolsRanThisTurn);
         }
         break;
       }
@@ -3057,4 +3769,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   clearError: () => set({ error: null, runError: null }),
+  clearDegradeNotice: () => set({ degradeNotice: null }),
+
+  clearSessionModelPin: async (sessionKey?: string) => {
+    const key = sessionKey ?? get().currentSessionKey;
+    // An explicit channel pick is a statement about the whole app, but a pin is
+    // per-SESSION and only this session's can be cleared from here. Re-open the
+    // once-per-run reconcile for every other session so their next send drops
+    // their own stale pin: without this, a principal who degrades in the letter
+    // thread, opens a new chat, and presses "Online" there gets that thread
+    // fixed and the letter thread left answering on this device for the rest of
+    // the run with the composer reading Online — the same dishonesty this pin
+    // machinery exists to prevent, scoped to a session instead of a run
+    // (code-review lens, 2026-09-06). Also covers the channel surfaces that
+    // cannot reach a pin at all (Settings default-provider card, host-API
+    // callers such as the pilot channel script).
+    _pinReconciledSessions.clear();
+    _pinReconcileAttempts.clear();
+    const cleared = await clearSessionModelPinRpc(key);
+    // A cleared pin means the boot-time safety net has nothing left to do for
+    // this session.
+    if (cleared) {
+      _pinReconciledSessions.add(key);
+      set((s) => (s.runtimeChannelPin?.sessionKey === key ? { runtimeChannelPin: null } : {}));
+    }
+    return cleared;
+  },
 }));

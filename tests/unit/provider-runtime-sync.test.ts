@@ -71,6 +71,7 @@ vi.mock('@electron/utils/logger', () => ({
 }));
 
 import {
+  ensureProviderAccountRuntime,
   syncAgentModelOverrideToRuntime,
   syncDefaultProviderToRuntime,
   syncDeletedProviderApiKeyToRuntime,
@@ -186,6 +187,37 @@ describe('provider-runtime-sync refresh strategy', () => {
     expect(gateway.debouncedRestart).not.toHaveBeenCalled();
   });
 
+  it('writes the config but skips the gateway refresh when skipGatewayRefresh is set before gateway start', async () => {
+    const gateway = createGateway('running');
+    await syncDefaultProviderToRuntime('moonshot', gateway as GatewayManager, { skipGatewayRefresh: true });
+
+    expect(mocks.setOpenClawDefaultModel).toHaveBeenCalledTimes(1);
+    expect(gateway.debouncedReload).not.toHaveBeenCalled();
+    expect(gateway.debouncedRestart).not.toHaveBeenCalled();
+  });
+
+  it('ensures a transient provider runtime entry without writing default model state', async () => {
+    mocks.getProvider.mockResolvedValue(createProvider({
+      id: 'ollama-local',
+      type: 'ollama',
+      model: 'qwen2.5:3b-instruct',
+      baseUrl: 'http://127.0.0.1:11434/v1',
+    }));
+
+    await ensureProviderAccountRuntime('ollama-local');
+
+    expect(mocks.syncProviderConfigToOpenClaw).toHaveBeenCalledWith(
+      'ollama-ollamalo',
+      'qwen2.5:3b-instruct',
+      expect.objectContaining({
+        baseUrl: 'http://127.0.0.1:11434/v1',
+        api: 'openai-completions',
+      }),
+    );
+    expect(mocks.setOpenClawDefaultModel).not.toHaveBeenCalled();
+    expect(mocks.setOpenClawDefaultModelWithOverride).not.toHaveBeenCalled();
+  });
+
   it('uses gpt-5.4 as the browser OAuth default model for OpenAI', async () => {
     mocks.getProvider.mockResolvedValue(
       createProvider({
@@ -284,6 +316,48 @@ describe('provider-runtime-sync refresh strategy', () => {
     expect(gateway.debouncedReload).toHaveBeenCalledTimes(1);
   });
 
+  it('syncs custom OpenAI-compatible provider config with bearer auth header semantics', async () => {
+    const cloudProvider = createProvider({
+      id: 'moe-cloud-gateway',
+      type: 'custom',
+      name: 'MOE Cloud Gateway',
+      model: 'moe-demo-pro',
+      fallbackModels: ['moe-demo'],
+      baseUrl: 'https://gateway.example.run.app/v1',
+      apiProtocol: 'openai-completions',
+    });
+
+    mocks.getProviderConfig.mockReturnValue(undefined);
+    mocks.getApiKey.mockResolvedValue('sk-clawx-client');
+
+    const gateway = createGateway('running');
+    await syncSavedProviderToRuntime(cloudProvider, 'sk-clawx-client', gateway as GatewayManager);
+
+    expect(mocks.syncProviderConfigToOpenClaw).toHaveBeenCalledWith(
+      'custom-moecloud',
+      'moe-demo-pro',
+      expect.objectContaining({
+        baseUrl: 'https://gateway.example.run.app/v1',
+        api: 'openai-completions',
+        authHeader: true,
+      }),
+    );
+    expect(mocks.updateAgentModelProvider).toHaveBeenCalledWith(
+      'custom-moecloud',
+      expect.objectContaining({
+        baseUrl: 'https://gateway.example.run.app/v1',
+        api: 'openai-completions',
+        apiKey: 'sk-clawx-client',
+        authHeader: true,
+        models: expect.arrayContaining([
+          expect.objectContaining({ id: 'moe-demo-pro' }),
+          expect.objectContaining({ id: 'moe-demo' }),
+        ]),
+      }),
+    );
+    expect(gateway.debouncedReload).toHaveBeenCalledTimes(1);
+  });
+
   it('syncs Ollama as default provider with correct baseUrl and api protocol', async () => {
     const ollamaProvider = createProvider({
       id: 'ollamafd',
@@ -372,6 +446,39 @@ describe('provider-runtime-sync refresh strategy', () => {
     );
     // Should NOT call the non-override path
     expect(mocks.setOpenClawDefaultModel).not.toHaveBeenCalled();
+    expect(gateway.debouncedReload).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves bearer auth header when a custom OpenAI-compatible provider becomes default', async () => {
+    const cloudProvider = createProvider({
+      id: 'moe-cloud-gateway',
+      type: 'custom',
+      name: 'MOE Cloud Gateway',
+      model: 'moe-demo-pro',
+      fallbackModels: ['moe-demo'],
+      baseUrl: 'https://gateway.example.run.app/v1',
+      apiProtocol: 'openai-completions',
+    });
+
+    mocks.getProvider.mockResolvedValue(cloudProvider);
+    mocks.getDefaultProvider.mockResolvedValue('moe-cloud-gateway');
+    mocks.getProviderConfig.mockReturnValue(undefined);
+    mocks.getApiKey.mockResolvedValue('sk-clawx-client');
+
+    const gateway = createGateway('running');
+    await syncDefaultProviderToRuntime('moe-cloud-gateway', gateway as GatewayManager);
+
+    expect(mocks.setOpenClawDefaultModelWithOverride).toHaveBeenCalledWith(
+      'custom-moecloud',
+      'custom-moecloud/moe-demo-pro',
+      expect.objectContaining({
+        baseUrl: 'https://gateway.example.run.app/v1',
+        api: 'openai-completions',
+        authHeader: true,
+      }),
+      ['custom-moecloud/moe-demo'],
+    );
+    expect(mocks.saveProviderKeyToOpenClaw).toHaveBeenCalledWith('custom-moecloud', 'sk-clawx-client');
     expect(gateway.debouncedReload).toHaveBeenCalledTimes(1);
   });
 

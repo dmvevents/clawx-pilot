@@ -52,11 +52,13 @@ import { deviceOAuthManager } from '../utils/device-oauth';
 import { browserOAuthManager } from '../utils/browser-oauth';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
 import { syncAllProviderAuthToRuntime } from '../services/providers/provider-runtime-sync';
+import { seedCloudGatewayProvider } from './cloud-gateway-provider-seed';
 import { seedDefaultLocalProvider } from './local-provider-seed';
 import { seedGatewayPluginConfig } from './gateway-plugin-config-seed';
-import { runChannelPreflight } from '../services/providers/channel-router';
+import { runChannelPreflight, ensureBootableAgentsConfig } from '../services/providers/channel-router';
+import { startOutboxDrain, stopOutboxDrain } from '../services/outbox-service';
 
-const WINDOWS_APP_USER_MODEL_ID = 'app.clawx.desktop';
+const WINDOWS_APP_USER_MODEL_ID = 'tt.gov.moe.assistant';
 const isE2EMode = process.env.CLAWX_E2E === '1';
 const requestedUserDataDir = process.env.CLAWX_USER_DATA_DIR?.trim();
 
@@ -81,11 +83,15 @@ if (isE2EMode && requestedUserDataDir) {
 app.disableHardwareAcceleration();
 
 // On Linux, set CHROME_DESKTOP so Chromium can find the correct .desktop file.
-// On Wayland this maps the running window to clawx.desktop (→ icon + app grouping);
+// On Wayland this maps the running window to the Ministry desktop entry
+// (icon + app grouping);
 // on X11 it supplements the StartupWMClass matching.
 // Must be called before app.whenReady() / before any window is created.
 if (process.platform === 'linux') {
-  app.setDesktopName('clawx.desktop');
+  // app.setDesktopName exists at runtime (verified on Electron 40.8.4) but is
+  // missing from electron.d.ts, so call it through a narrow structural type.
+  (app as unknown as { setDesktopName(name: string): void })
+    .setDesktopName('ministry-of-education.desktop');
 }
 
 // Prevent multiple instances of the app from running simultaneously.
@@ -95,7 +101,7 @@ if (process.platform === 'linux') {
 // The losing process must exit immediately so it never reaches Gateway startup.
 const gotElectronLock = isE2EMode ? true : app.requestSingleInstanceLock();
 if (!gotElectronLock) {
-  console.info('[ClawX] Another instance already holds the single-instance lock; exiting duplicate process');
+  console.info('[Ministry of Education] Another instance already holds the single-instance lock; exiting duplicate process');
   app.exit(0);
 }
 let releaseProcessInstanceFileLock: () => void = () => {};
@@ -116,12 +122,12 @@ if (gotElectronLock && !isE2EMode) {
           ? 'unknown lock format/content'
           : 'unknown owner';
       console.info(
-        `[ClawX] Another instance already holds process lock (${fileLock.lockPath}, ${ownerDescriptor}); exiting duplicate process`,
+        `[Ministry of Education] Another instance already holds process lock (${fileLock.lockPath}, ${ownerDescriptor}); exiting duplicate process`,
       );
       app.exit(0);
     }
   } catch (error) {
-    console.warn('[ClawX] Failed to acquire process instance file lock; continuing with Electron single-instance lock only', error);
+    console.warn('[Ministry of Education] Failed to acquire process instance file lock; continuing with Electron single-instance lock only', error);
   }
 }
 const gotTheLock = gotElectronLock && gotFileLock;
@@ -291,7 +297,7 @@ function createMainWindow(): BrowserWindow {
 async function initialize(): Promise<void> {
   // Initialize logger first
   logger.init();
-  logger.info('=== ClawX Application Starting ===');
+  logger.info('=== Ministry of Education Application Starting ===');
   logger.debug(
     `Runtime: platform=${process.platform}/${process.arch}, electron=${process.versions.electron}, node=${process.versions.node}, packaged=${app.isPackaged}, pid=${process.pid}, ppid=${process.ppid}`
   );
@@ -374,10 +380,10 @@ async function initialize(): Promise<void> {
   // so it respects the user's "Auto-check for updates" setting.
 
   // Seed a stable default IDENTITY.md before the Gateway initializes the
-  // workspace so ClawX desktop sessions skip OpenClaw's chat-first bootstrap.
+  // workspace so desktop sessions skip the runtime's chat-first bootstrap.
   if (!isE2EMode) {
     void ensureClawXDefaultIdentity().catch((error) => {
-      logger.warn('Failed to seed default ClawX identity:', error);
+      logger.warn('Failed to seed default Ministry identity:', error);
     });
   }
 
@@ -426,7 +432,7 @@ async function initialize(): Promise<void> {
     hostEventBus.emit('gateway:status', status);
     if (status.state === 'running' && !isE2EMode) {
       void ensureClawXContext().catch((error) => {
-        logger.warn('Failed to re-merge ClawX context after gateway reconnect:', error);
+        logger.warn('Failed to re-merge Ministry context after gateway reconnect:', error);
       });
     }
   });
@@ -503,14 +509,29 @@ async function initialize(): Promise<void> {
     hostEventBus.emit('channel:whatsapp-error', error);
   });
 
-  // Seed a local OpenAI-compatible provider (Ollama / nora:4b-v3.2) so fresh
-  // installs without cloud keys still get a working chat reply. Idempotent:
-  // skips when any account already targets the local Ollama endpoint, and
-  // only becomes default if no other default exists. Disable via env var
-  // CLAWX_SEED_LOCAL_LLM_PROVIDER=0.
+  // The next three convergence steps run before the first Gateway start. Let
+  // the first process read the converged files directly instead of queueing a
+  // deferred Windows refresh/restart that fires immediately after startup.
+  const bootConvergenceOptions = { skipGatewayRefresh: true } as const;
+
+  // Seed the managed online gateway first when a bundled/user/env config is
+  // available. The local seed below remains the no-cloud fallback.
   if (!isE2EMode) {
     try {
-      await seedDefaultLocalProvider(gatewayManager);
+      await seedCloudGatewayProvider(gatewayManager, bootConvergenceOptions);
+    } catch (error) {
+      logger.warn('Cloud gateway provider seed failed (non-fatal):', error);
+    }
+  }
+
+  // Seed a local OpenAI-compatible provider (Ollama / Qwen 2.5 3B) so fresh
+  // installs without cloud gateway config still get a working chat reply.
+  // Idempotent: skips when any account already targets the local Ollama
+  // endpoint, and only becomes default if no other default exists. Disable via
+  // env var CLAWX_SEED_LOCAL_LLM_PROVIDER=0.
+  if (!isE2EMode) {
+    try {
+      await seedDefaultLocalProvider(gatewayManager, bootConvergenceOptions);
     } catch (error) {
       logger.warn('Local provider seed failed (non-fatal):', error);
     }
@@ -549,8 +570,22 @@ async function initialize(): Promise<void> {
   if (!isE2EMode) {
     try {
       const desired = (await getSetting('preferredChannel')) ?? 'on-device';
-      const result = await runChannelPreflight(desired as 'online' | 'on-device', gatewayManager);
+      const result = await runChannelPreflight(
+        desired as 'online' | 'on-device',
+        gatewayManager,
+        bootConvergenceOptions,
+      );
       logger.info('[main] Channel preflight result', result);
+
+      // BUG-012 boot-path safety net: preflight early-returns without writing
+      // an agents block when no provider account resolves (truly fresh install,
+      // cloud seed skipped + Ollama not yet registered). Without an agents
+      // block the gateway boots with configuredChannelCount:0 and its RPC
+      // router never comes up, hanging the renderer on a chat.history timeout.
+      // Guarantee a bootable agents block regardless of preflight outcome;
+      // idempotent, never clobbers a populated list.
+      const ensured = await ensureBootableAgentsConfig(result.modelRef);
+      logger.info('[main] Ensured bootable agents config', ensured);
     } catch (error) {
       logger.warn('Channel preflight failed (non-fatal):', error);
     }
@@ -574,12 +609,19 @@ async function initialize(): Promise<void> {
     logger.info('Gateway auto-start disabled in settings');
   }
 
-  // Merge ClawX context snippets into the workspace bootstrap files.
+  // Store-and-forward outbox (OFFLINE_ARCHITECTURE §5): background drain of
+  // audit/form records. With no app server configured it only surfaces the
+  // pending count; records accumulate durably until KR8 provides real values.
+  if (!isE2EMode) {
+    startOutboxDrain();
+  }
+
+  // Merge Ministry context snippets into the workspace bootstrap files.
   // The gateway seeds workspace files asynchronously after its HTTP server
   // is ready, so ensureClawXContext will retry until the target files appear.
   if (!isE2EMode) {
     void ensureClawXContext().catch((error) => {
-      logger.warn('Failed to merge ClawX context into workspace:', error);
+      logger.warn('Failed to merge Ministry context into workspace:', error);
     });
   }
 
@@ -610,6 +652,7 @@ if (gotTheLock) {
   process.once('SIGTERM', () => requestQuitOnSignal('SIGTERM'));
 
   app.on('will-quit', () => {
+    stopOutboxDrain();
     releaseProcessInstanceFileLock();
   });
 
@@ -630,7 +673,7 @@ if (gotTheLock) {
 
   // When a second instance is launched, focus the existing window instead.
   app.on('second-instance', () => {
-    logger.info('Second ClawX instance detected; redirecting to the existing window');
+    logger.info('Second Ministry of Education instance detected; redirecting to the existing window');
 
     const focusRequest = requestSecondInstanceFocus(
       mainWindowFocusState,

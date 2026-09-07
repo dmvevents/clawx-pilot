@@ -3,7 +3,11 @@ import { applyProxySettings } from '../../main/proxy';
 import { syncLaunchAtStartupSettingFromStore } from '../../main/launch-at-startup';
 import { syncProxyConfigToOpenClaw } from '../../utils/openclaw-proxy';
 import { getAllSettings, getSetting, resetSettings, setSetting, type AppSettings } from '../../utils/store';
-import { applyChannelChange, type ProviderChannel } from '../../services/providers/channel-router';
+import {
+  applyChannelChange,
+  prepareTransientChannelChange,
+  type ProviderChannel,
+} from '../../services/providers/channel-router';
 import { logger } from '../../utils/logger';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
@@ -88,6 +92,51 @@ export async function handleSettingsRoutes(
       }
       sendJson(res, 200, { success: true, channel: channelResult });
     } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  /**
+   * Degrade the runtime onto a channel WITHOUT persisting `preferredChannel`.
+   *
+   * This is the send-time failover path (`docs/OFFLINE_ARCHITECTURE.md` §3.1):
+   * a cloud turn failed because the provider was unreachable or the fleet token
+   * budget returned 429, and we want the next turn to run on-device instead of
+   * failing. Crucially it must NOT rewrite the principal's stored preference —
+   * their explicit toggle stays authoritative so the app returns to Online on
+   * its own once connectivity or budget recovers.
+   *
+   * That is why this is a separate route rather than a flag on the
+   * `preferredChannel` PUT: the only difference is the `setSetting` call, and
+   * making it conditional there is exactly the kind of subtlety that later
+   * silently starts persisting again.
+   */
+  if (url.pathname === '/api/settings/degradeChannel' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody<{ channel?: unknown; reason?: unknown }>(req);
+      if (!isProviderChannel(body.channel)) {
+        sendJson(res, 400, { success: false, error: `Invalid channel: ${String(body.channel)}` });
+        return true;
+      }
+      // This route runs INSIDE a failed turn. It prepares the target provider
+      // entry/auth and returns the model ref so the renderer can pin only the
+      // current session. It deliberately does not change preferredChannel,
+      // defaultProvider, all-agent defaults, or the running gateway default.
+      const result = await prepareTransientChannelChange(body.channel);
+      logger.info('[settings] Prepared transient channel degrade', {
+        channel: body.channel,
+        reason: typeof body.reason === 'string' ? body.reason : 'unspecified',
+        modelRef: result.modelRef,
+      });
+      sendJson(res, 200, {
+        success: true,
+        channel: result.channel,
+        modelRef: result.modelRef,
+        accountId: result.accountId,
+      });
+    } catch (error) {
+      logger.warn('[settings] degradeChannel failed:', error);
       sendJson(res, 500, { success: false, error: String(error) });
     }
     return true;

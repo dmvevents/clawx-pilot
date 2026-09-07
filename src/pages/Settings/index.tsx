@@ -17,12 +17,14 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { MicrosoftGraphSection } from './MicrosoftGraphSection';
+import { MoePrincipalSetupSection } from './MoePrincipalSetupSection';
 import { OutlookBrowserSection } from './OutlookBrowserSection';
 import { AzureSpeechSection } from './AzureSpeechSection';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { useSettingsStore } from '@/stores/settings';
+import { useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
 import { useUpdateStore } from '@/stores/update';
 import { UpdateSettings } from '@/components/settings/UpdateSettings';
@@ -82,6 +84,11 @@ export function Settings() {
     preferredChannel,
     setPreferredChannel,
   } = useSettingsStore();
+
+  // Where a degrade has actually pinned the runtime, if anywhere (see the
+  // channel block below). Read reactively: dismissing the chat notice must not
+  // change it.
+  const runtimeChannelPin = useChatStore((s) => s.runtimeChannelPin?.channel ?? null);
 
   const { status: gatewayStatus, restart: restartGateway } = useGatewayStore();
   const currentVersion = useUpdateStore((state) => state.currentVersion);
@@ -655,6 +662,10 @@ export function Settings() {
 
           <Separator className="bg-black/5 dark:bg-white/5" />
 
+          <MoePrincipalSetupSection />
+
+          <Separator className="bg-black/5 dark:bg-white/5" />
+
           <OutlookBrowserSection />
 
           <Separator className="bg-black/5 dark:bg-white/5" />
@@ -689,7 +700,15 @@ export function Settings() {
                     <Button
                       key={value}
                       variant={preferredChannel === value ? 'secondary' : 'outline'}
-                      onClick={() => setPreferredChannel(value)}
+                      onClick={async () => {
+                        await setPreferredChannel(value);
+                        // Same reason as the composer toggle: a send-time
+                        // degrade pins the chat session's model, and a session
+                        // pin outranks these four-store defaults on every turn.
+                        // Without the clear, picking a channel here would look
+                        // applied and change nothing.
+                        await useChatStore.getState().clearSessionModelPin();
+                      }}
                       className={cn(
                         'rounded-full px-5 h-10 border-black/10 dark:border-white/10',
                         preferredChannel === value
@@ -702,6 +721,18 @@ export function Settings() {
                     </Button>
                   ))}
                 </div>
+                {/* The setting above is the PREFERENCE, and a send-time failover
+                    deliberately leaves it alone. So when a chat is running on a
+                    pinned channel that disagrees with it, say so here — a
+                    highlighted "Online" over a runtime answering on this device
+                    reads as the setting being ignored. */}
+                {runtimeChannelPin === 'on-device' && preferredChannel === 'online' && (
+                  <p className="text-meta text-muted-foreground">
+                    Right now your chat is answering on this device: the connection
+                    dropped while a message was running, so the assistant switched
+                    over to finish it. Press Online above to switch back.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-3">
@@ -1183,14 +1214,14 @@ export function Settings() {
                 <Button
                   variant="link"
                   className="h-auto p-0 text-sm text-blue-500 hover:text-blue-600 font-medium"
-                  onClick={() => window.electron.openExternal('https://claw-x.com')}
+                  onClick={() => window.electron.openExternal('https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260610-bbc4eb1')}
                 >
                   {t('about.docs')}
                 </Button>
                 <Button
                   variant="link"
                   className="h-auto p-0 text-sm text-blue-500 hover:text-blue-600 font-medium"
-                  onClick={() => window.electron.openExternal('https://github.com/ValueCell-ai/ClawX')}
+                  onClick={() => window.electron.openExternal('https://github.com/dmvevents/clawx-pilot')}
                 >
                   {t('about.github')}
                 </Button>

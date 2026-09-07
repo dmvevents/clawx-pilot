@@ -1,0 +1,14 @@
+<Configuration>
+  <VGpu>Disable</VGpu>
+  <Networking>Enable</Networking>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>C:\clawx-installer</HostFolder>
+      <SandboxFolder>C:\Users\WDAGUtilityAccount\Desktop\clawx-installer</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds 5; $installer = Get-ChildItem 'C:\Users\WDAGUtilityAccount\Desktop\clawx-installer' -Filter '*.exe' | Select-Object -First 1; if ($installer) { Start-Process -FilePath $installer.FullName -ArgumentList '/S','/log=C:\Users\WDAGUtilityAccount\Desktop\install.log' -Wait; Start-Process 'notepad.exe' 'C:\Users\WDAGUtilityAccount\Desktop\install.log' } else { [System.Windows.Forms.MessageBox]::Show('No .exe found in mapped folder') }"</Command>
+  </LogonCommand>
+</Configuration>

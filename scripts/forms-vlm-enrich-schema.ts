@@ -33,7 +33,9 @@ async function pdfPagesToImages(pdf: string): Promise<string[]> {
   }
   const tmpPrefix = '/tmp/suspensions-page';
   // Clean previous
-  try { execSync(`rm -f ${tmpPrefix}-*.png`); } catch {}
+  try { execSync(`rm -f ${tmpPrefix}-*.png`); } catch {
+    // nothing to clean
+  }
   // -r 100 gives ~850x1100 PNGs which is fine for VLM
   execSync(`pdftoppm -png -r 110 "${pdf}" "${tmpPrefix}"`, { stdio: 'inherit' });
   // Collect generated paths

@@ -164,9 +164,11 @@ async function runDoctorCommandWithArgs(
       stderrTruncated = next.truncated;
     });
 
-    child.on('error', (error) => {
+    // Electron's UtilityProcess 'error' event delivers (type, location,
+    // report) strings, not an Error object.
+    child.on('error', (type, location) => {
       clearTimeout(timeout);
-      logger.error('Failed to spawn OpenClaw doctor process:', error);
+      logger.error('Failed to spawn OpenClaw doctor process:', type, location);
       finish({
         mode,
         success: false,
@@ -175,7 +177,7 @@ async function runDoctorCommandWithArgs(
         stderr,
         command,
         cwd: openclawDir,
-        error: error instanceof Error ? error.message : String(error),
+        error: `${type} at ${location}`,
       });
     });
 

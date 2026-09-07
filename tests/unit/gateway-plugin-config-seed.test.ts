@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { promises as fs } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 vi.mock('../../electron/utils/logger', () => ({
@@ -56,6 +55,39 @@ afterEach(async () => {
 });
 
 describe('seedGatewayPluginConfig', () => {
+  it('disables implicit ACP harness startup on a principal install without an ACP adapter', async () => {
+    await seedGatewayPluginConfig();
+    const cfg = await readCfg();
+    expect(cfg.acp).toEqual({ enabled: false });
+    expect((cfg as { plugins: { entries: Record<string, unknown> } }).plugins.entries.acpx).toEqual({ enabled: false });
+  });
+
+  it.each([
+    { acp: { enabled: true, backend: 'acpx' } },
+    { acp: { backend: 'acpx' } },
+    { acp: { enabled: false } },
+    { acp: {} },
+    { plugins: { entries: { acpx: { enabled: true } } } },
+    { plugins: { entries: { acpx: { enabled: false } } } },
+    { plugins: { entries: { acpx: { config: { probeAgent: 'claude' } } } } },
+    { plugins: { entries: { acpx: {} } } },
+  ])('preserves an existing ACP policy or ACPX entry: %j', async (original) => {
+    await writeCfg(original);
+    await seedGatewayPluginConfig();
+    const cfg = await readCfg();
+    expect(cfg.acp).toEqual((original as Record<string, unknown>).acp);
+    const initialEntry = (original as { plugins?: { entries: Record<string, unknown> } }).plugins?.entries.acpx;
+    expect((cfg as { plugins: { entries: Record<string, unknown> } }).plugins.entries.acpx).toEqual(initialEntry);
+  });
+
+  it.each([true, false])('preserves the bundled browser plugin with enabled=%s', async (enabled) => {
+    const browser = { enabled, config: { defaultProfile: 'user' } };
+    await writeCfg({ plugins: { entries: { browser } } });
+    await seedGatewayPluginConfig();
+    const cfg = await readCfg();
+    expect((cfg as { plugins: { entries: Record<string, unknown> } }).plugins.entries.browser).toEqual(browser);
+  });
+
   it('writes first-run skeleton when openclaw.json is missing so gateway boots cleanly', async () => {
     await expect(seedGatewayPluginConfig()).resolves.toBeUndefined();
     const cfg = await readCfg();
@@ -75,7 +107,8 @@ describe('seedGatewayPluginConfig', () => {
     expect(mg.config.tenantId).toBe('pending-entra-registration');
     expect(mg.config.clientId).toBe('pending-entra-registration');
     expect(mg.config.authFlow).toBe('auth-code-pkce');
-    expect(mg.config.scopes).toEqual(['User.Read', 'Mail.Send', 'Files.ReadWrite']);
+    // Read-only baseline: no Mail.Send / write scopes in the seeded placeholder.
+    expect(mg.config.scopes).toEqual(['offline_access', 'User.Read', 'Mail.Read']);
   });
 
   it('seeds moe-principal-assistant with enabled + Unconfigured placeholders in valid enums', async () => {
@@ -100,7 +133,7 @@ describe('seedGatewayPluginConfig', () => {
     ]).toContain(ma.config.educationDistrict);
   });
 
-  it('does NOT overwrite real values once configured', async () => {
+  it('does NOT overwrite real config values, but pins the microsoft-graph plugin disabled', async () => {
     await writeCfg({
       plugins: {
         entries: {
@@ -129,12 +162,34 @@ describe('seedGatewayPluginConfig', () => {
     await seedGatewayPluginConfig();
     const cfg = await readCfg();
     expect((cfg as any).plugins.entries['microsoft-graph'].config.tenantId).toBe('real-tenant-uuid');
+    // Deliberate policy exception to never-overwrite: the gateway stub is
+    // not the Graph lane (the host-API adapter is) and crashes gateway boot
+    // when enabled without host wiring, so enabled is forced back to false.
+    expect((cfg as any).plugins.entries['microsoft-graph'].enabled).toBe(false);
+    // Configured scopes are real values and stay untouched.
+    expect((cfg as any).plugins.entries['microsoft-graph'].config.scopes).toEqual(['User.Read']);
     expect((cfg as any).plugins.entries['moe-principal-assistant'].config.principalName).toBe(
       'Mrs. Bartholomew',
     );
     expect((cfg as any).plugins.entries['moe-principal-assistant'].config.schoolName).toBe(
       'Diego Martin Govt Primary',
     );
+  });
+
+  it('is idempotent about the enabled=false pin (no rewrite when already disabled)', async () => {
+    await writeCfg({
+      plugins: {
+        entries: {
+          'microsoft-graph': { enabled: true, config: { tenantId: 't', clientId: 'c' } },
+        },
+      },
+    });
+    await seedGatewayPluginConfig();
+    const after1 = await fs.readFile(CFG_PATH, 'utf-8');
+    expect(JSON.parse(after1).plugins.entries['microsoft-graph'].enabled).toBe(false);
+    await seedGatewayPluginConfig();
+    const after2 = await fs.readFile(CFG_PATH, 'utf-8');
+    expect(after2).toBe(after1);
   });
 
   it('drift-fixes legacy authFlow="pkce" to "auth-code-pkce"', async () => {

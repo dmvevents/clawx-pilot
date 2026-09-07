@@ -14,6 +14,8 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { invokeIpc, statFile } from '@/lib/api-client';
+import { useTranslation } from 'react-i18next';
+import { principalErrorDisplay, ERROR_DISPLAY_INLINE_KEY } from '@/lib/error-display';
 import type { RawMessage, AttachedFileMeta } from '@/stores/chat';
 import { extractText, extractImages, extractToolUse, formatTimestamp } from './message-utils';
 
@@ -22,6 +24,14 @@ interface ChatMessageProps {
   textOverride?: string;
   suppressToolCards?: boolean;
   suppressProcessAttachments?: boolean;
+  /**
+   * CLWX-105 coordination (Codex review, 2026-09-06): when the ACTIVE
+   * failure already owns a surface (global error banner, run-error callout,
+   * or degrade notice), the newest error-stopped message must NOT also
+   * chip — that would reintroduce the CLWX-104 D1 stacking class. Chat
+   * passes true for that one message; historical failures always chip.
+   */
+  suppressErrorChip?: boolean;
   /**
    * When true, hides the assistant text bubble (and any thinking block that
    * would be shown above it). Used when the message's text is being folded
@@ -202,6 +212,7 @@ export const ChatMessage = memo(function ChatMessage({
   suppressToolCards = false,
   suppressProcessAttachments = false,
   suppressAssistantText = false,
+  suppressErrorChip = false,
   isStreaming = false,
   streamingTools = [],
   onOpenFile,
@@ -295,12 +306,29 @@ export const ChatMessage = memo(function ChatMessage({
     ? processVisibleAttachments
     : existingDerivedAttachedFiles;
   const [lightboxImg, setLightboxImg] = useState<{ src: string; fileName: string; filePath?: string; base64?: string; mimeType?: string } | null>(null);
+  const { t } = useTranslation('chat');
 
   // Never render tool result messages in chat UI
   if (isToolResult) return null;
 
+  // CLWX-105: an error-stopped assistant message must render an in-line
+  // error chip even when its content is EMPTY — before this, a historical
+  // failure had NO surface on session re-open (the stale global banner used
+  // to stand in for it until the CLWX-104 D0 fix removed the stale repaint).
+  // Wording rules are the banner's: anonymised principal language first
+  // (principalErrorDisplay), raw string only behind the collapsed expander.
+  const msgRecord = message as unknown as Record<string, unknown>;
+  const rawStopReason = msgRecord.stopReason ?? msgRecord.stop_reason;
+  const errorStopped = !isUser
+    && typeof rawStopReason === 'string'
+    && rawStopReason.trim().toLowerCase() === 'error';
+  const rawErrorMessage = msgRecord.errorMessage ?? msgRecord.error_message;
+  const terminalErrorDisplay = errorStopped && !suppressErrorChip
+    ? principalErrorDisplay(typeof rawErrorMessage === 'string' ? rawErrorMessage : '')
+    : null;
+
   const hasStreamingToolStatus = isStreaming && streamingTools.length > 0;
-  if (!hasText && images.length === 0 && visibleTools.length === 0 && attachedFiles.length === 0 && !hasStreamingToolStatus) return null;
+  if (!hasText && images.length === 0 && visibleTools.length === 0 && attachedFiles.length === 0 && !hasStreamingToolStatus && !terminalErrorDisplay) return null;
 
   return (
     <div
@@ -396,6 +424,33 @@ export const ChatMessage = memo(function ChatMessage({
             isUser={isUser}
             isStreaming={isStreaming}
           />
+        )}
+
+        {/* In-line error chip for error-stopped assistant messages
+            (CLWX-105): the ONLY surface a historical failure has after
+            session re-open. Same wording rules as the global banner —
+            anonymised class message, raw detail behind the collapsed
+            expander; never model IDs, providers, or cost. */}
+        {terminalErrorDisplay && (
+          <div
+            data-testid="chat-message-error-chip"
+            className="rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 max-w-full"
+          >
+            <p className="text-sm text-destructive flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {t(ERROR_DISPLAY_INLINE_KEY[terminalErrorDisplay.kind])}
+            </p>
+            {terminalErrorDisplay.detail && (
+              <details className="mt-1">
+                <summary className="cursor-pointer text-xs text-destructive/60 hover:text-destructive/80">
+                  {t('errorDisplay.detailsLabel')}
+                </summary>
+                <p className="mt-1 text-xs text-destructive/80 break-words">
+                  {terminalErrorDisplay.detail}
+                </p>
+              </details>
+            )}
+          </div>
         )}
 
         {/* Images from content blocks — assistant messages (below text) */}

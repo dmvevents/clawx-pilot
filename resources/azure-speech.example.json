@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "region": "eastus",
+  "apiKeyFile": "azure-speech.key",
+  "locale": "en-TT"
+}

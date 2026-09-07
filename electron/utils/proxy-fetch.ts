@@ -11,7 +11,8 @@ export async function proxyAwareFetch(
   if (process.versions.electron) {
     try {
       const { net } = await import('electron');
-      return await net.fetch(input, init);
+      // Electron's net.fetch is typed string | Request; pass URL as href.
+      return await net.fetch(input instanceof URL ? input.href : input, init);
     } catch {
       // Fall through to the global fetch.
     }

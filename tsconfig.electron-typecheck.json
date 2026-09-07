@@ -1,0 +1,17 @@
+{
+  // Typecheck-only view of the electron/main-process project (CLWX-82).
+  //
+  // `tsc --noEmit` on the root tsconfig never checks the referenced
+  // tsconfig.node.json project, so electron/** was invisible to
+  // `pnpm typecheck`. Checking tsconfig.node.json directly is not an option
+  // either: it is `composite`, which (a) requires every transitive file such
+  // as shared/*.ts to be listed and (b) once listed, makes the root project
+  // redirect those imports to unbuilt dist-electron declaration outputs
+  // (TS6305). Dropping `composite` here removes both constraints without
+  // touching how the real projects build.
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true
+  }
+}

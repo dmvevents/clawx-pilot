@@ -15,13 +15,20 @@
  * On a fresh install (or after a wipe of ~/.openclaw/openclaw.json) those
  * blocks are absent, the doctor refuses, and the gateway never comes up.
  * This seeder writes schema-valid placeholder config that:
- *   - keeps microsoft-graph DISABLED until the Entra app-registration packet
- *     comes back from MoE IT (see /tmp/moe-entra-app-registration-request.md);
+ *   - keeps microsoft-graph DISABLED — always. The host-API adapter
+ *     (electron/services/microsoft-graph) is the sole Graph lane; the
+ *     gateway plugin stub crashes gateway boot when enabled without host
+ *     wiring, so enabled=false is forced even over a hand edit;
  *   - leaves moe-principal-assistant ENABLED but with "Unconfigured *"
  *     defaults so it's effectively a no-op until first onboarding writes
  *     real values.
+ *   - disables implicit ACP/ACPX harness startup on principal installs;
+ *     existing ACP policy and ACPX entries are preserved. Native Ministry
+ *     plugin tools do not require an external coding-agent adapter.
  *
- * Idempotent: only fills missing keys, never overwrites real values.
+ * Idempotent: only fills missing keys, never overwrites real values — with
+ * the one deliberate policy exception above (microsoft-graph.enabled is
+ * pinned to false).
  *
  * Disable via env: `CLAWX_SEED_GATEWAY_PLUGIN_CONFIG=0`.
  */
@@ -32,10 +39,6 @@ import { logger } from '../utils/logger';
 import { withConfigLock } from '../utils/config-mutex';
 import { readOpenClawConfig, writeOpenClawConfig } from '../utils/channel-config';
 
-function getConfigPath(): string {
-  return join(homedir(), '.openclaw', 'openclaw.json');
-}
-
 // Placeholder values chosen to satisfy each plugin's JSON schema while
 // remaining obviously-not-real so the onboarding flow can detect them.
 const MS_GRAPH_PLACEHOLDER = {
@@ -43,7 +46,9 @@ const MS_GRAPH_PLACEHOLDER = {
   clientId: 'pending-entra-registration',
   redirectUri: 'http://localhost:18789/oauth/callback',
   authFlow: 'auth-code-pkce' as const,
-  scopes: ['User.Read', 'Mail.Send', 'Files.ReadWrite'],
+  // Read-only baseline. Mail.Send and write scopes are requested through the
+  // host-API sign-in flow when compose is enabled, never seeded here.
+  scopes: ['offline_access', 'User.Read', 'Mail.Read'],
 };
 
 const MOE_ASSISTANT_PLACEHOLDER = {
@@ -134,9 +139,23 @@ export async function seedGatewayPluginConfig(): Promise<void> {
 
     let changed = false;
 
-    // microsoft-graph: stub config, keep disabled until Entra packet returns.
+    // The bundled ACPX default probes a Codex adapter through npx, which a
+    // normal Windows principal install does not supply. ACP harness sessions
+    // are opt-in; native MoE tools use the Gateway/Host API directly. Preserve
+    // any existing policy or entry, including empty objects and disabled
+    // choices, so seeding cannot reinterpret an administrator's ACP setup.
+    if (cfg.acp === undefined && entries.acpx === undefined) {
+      cfg.acp = { enabled: false };
+      entries.acpx = { enabled: false };
+      changed = true;
+    }
+
+    // microsoft-graph: stub config, forced disabled ALWAYS. The host-API
+    // adapter is the sole Graph lane; the gateway stub crashes gateway boot
+    // when enabled without host wiring, so this is pinned rather than
+    // fill-if-missing like everything else in this seeder.
     const mg: PluginEntry = entries['microsoft-graph'] ?? {};
-    if (mg.enabled === undefined) {
+    if (mg.enabled !== false) {
       mg.enabled = false;
       changed = true;
     }
@@ -214,7 +233,6 @@ export async function seedGatewayPluginConfig(): Promise<void> {
       'synology-chat',
       'irc',
       'bluebubbles',
-      'browser',
       'google',
       'dingtalk',
     ];

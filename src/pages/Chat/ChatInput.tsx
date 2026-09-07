@@ -25,7 +25,7 @@ import { useChatStore } from '@/stores/chat';
 import { useArtifactPanel } from '@/stores/artifact-panel';
 import { buildPreviewTarget } from '@/components/file-preview/build-preview-target';
 import { useProviderStore } from '@/stores/providers';
-import { buildConfiguredModelOptions, formatModelRefLabel } from '@/lib/model-options';
+import { buildConfiguredModelOptions, channelLabelForModelRef, formatModelRefLabel } from '@/lib/model-options';
 import type { AgentSummary } from '@/types/agent';
 import type { QuickAccessSkill } from '@/types/skill';
 import { useTranslation } from 'react-i18next';
@@ -244,6 +244,14 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
   const providerDefaultAccountId = useProviderStore((s) => s.defaultAccountId);
   const refreshProviderSnapshot = useProviderStore((s) => s.refreshProviderSnapshot);
   const currentAgentId = useChatStore((s) => s.currentAgentId);
+  // Where the runtime actually is for THIS session (a proven degrade cutover),
+  // or null. Per-session because the pin is: another thread may still be on the
+  // configured channel.
+  const runtimeChannelPin = useChatStore((s) => (
+    s.runtimeChannelPin && s.runtimeChannelPin.sessionKey === s.currentSessionKey
+      ? s.runtimeChannelPin.channel
+      : null
+  ));
   const currentAgent = useMemo(
     () => (agents ?? []).find((agent) => agent.id === currentAgentId) ?? null,
     [agents, currentAgentId],
@@ -257,7 +265,12 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
     [providerAccounts, providerDefaultAccountId, providerStatuses],
   );
   const effectiveModelRef = optimisticModelRef || currentAgent?.modelRef || defaultModelRef || modelOptions[0]?.modelRef || null;
-  const currentModelLabel = formatModelRefLabel(effectiveModelRef);
+  // Hard rule: chat-facing surfaces never show a raw model id. Principals see
+  // the channel label; the raw ref stays behind the dev-mode unlock.
+  const devModeUnlocked = useSettingsStore((s) => s.devModeUnlocked);
+  const currentModelLabel = devModeUnlocked
+    ? formatModelRefLabel(effectiveModelRef)
+    : channelLabelForModelRef(effectiveModelRef, providerAccounts);
 
   // Channel routing — derive what's actually possible from the configured
   // accounts, then resolve the effective channel for this session.
@@ -274,14 +287,22 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
     'on-device': onDeviceAccount !== null,
   }), [onlineAccount, onDeviceAccount]);
   const showChannelToggle = channelsAvailable.online && channelsAvailable['on-device'];
-  // Effective channel: session override → user setting (if available) →
+  // Effective channel: what the RUNTIME is pinned to for this session (a proven
+  // degrade cutover) → session override → user setting (if available) →
   // whichever channel is actually configured (graceful degrade).
+  //
+  // The runtime pin comes first because everything after it is a PREFERENCE, and
+  // after a degrade the preference is deliberately left alone. Showing it here
+  // would put "Online" on the pill over a runtime that is answering on this
+  // device — contradicting the notice directly above the composer, and inviting
+  // the principal to read the weaker draft as the Online model getting worse.
   const effectiveChannel: ProviderClass = useMemo(() => {
+    if (runtimeChannelPin) return runtimeChannelPin;
     if (sessionChannelOverride) return sessionChannelOverride;
     if (channelsAvailable[userPreferredChannel]) return userPreferredChannel;
     if (channelsAvailable['on-device']) return 'on-device';
     return 'online';
-  }, [sessionChannelOverride, userPreferredChannel, channelsAvailable]);
+  }, [runtimeChannelPin, sessionChannelOverride, userPreferredChannel, channelsAvailable]);
   const mentionableAgents = useMemo(
     () => (agents ?? []).filter((agent) => agent.id !== currentAgentId),
     [agents, currentAgentId],
@@ -300,7 +321,10 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
     );
   }, [quickSkills, skillQuery]);
   const showAgentPicker = mentionableAgents.length > 0;
-  const showModelPicker = modelOptions.length > 1;
+  // The dropdown lists raw model ids, so it is a diagnostic surface: dev-mode
+  // only. Principals switch via the ChannelToggle ("Online" / "On this
+  // device") instead.
+  const showModelPicker = modelOptions.length > 1 && devModeUnlocked;
   const chatComposerStatusComponents = rendererExtensionRegistry.getChatComposerStatusComponents();
   const isGatewayUsable = gatewayStatus.state === 'running' && gatewayStatus.gatewayReady !== false;
   const inputDisabled = disabled || !isGatewayUsable;
@@ -515,6 +539,14 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
       // server-side (preferredChannel, defaultProvider, agents.list[*],
       // agents.defaults). No more piecemeal updateAgentModel writes.
       await setPreferredChannel(targetClass);
+      // A send-time degrade pins the SESSION onto the on-device model, because
+      // the four config stores alone do not move the running gateway (see
+      // cutoverSessionModel in stores/chat.ts). A session pin outranks the
+      // config default on every turn, so without this clear an explicit pick
+      // here would rewrite all four stores and change nothing the principal can
+      // see — their own toggle silently ignored, which is worse than the outage
+      // it followed.
+      await useChatStore.getState().clearSessionModelPin();
       // Refresh dependent stores so the model picker, default model ref,
       // and provider snapshot reflect the new pinning.
       await Promise.all([
@@ -1041,6 +1073,9 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
                         <AgentPickerItem
                           key={agent.id}
                           agent={agent}
+                          modelLabel={devModeUnlocked
+                            ? agent.modelDisplay
+                            : channelLabelForModelRef(agent.modelRef || defaultModelRef, providerAccounts)}
                           selected={agent.id === targetAgentId}
                           onSelect={() => {
                             setTargetAgentId(agent.id);
@@ -1315,10 +1350,12 @@ function AttachmentPreview({
 
 function AgentPickerItem({
   agent,
+  modelLabel,
   selected,
   onSelect,
 }: {
   agent: AgentSummary;
+  modelLabel: string;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -1333,7 +1370,7 @@ function AgentPickerItem({
     >
       <span className="text-sm font-medium text-foreground">{agent.name}</span>
       <span className="text-tiny text-muted-foreground">
-        {agent.modelDisplay}
+        {modelLabel}
       </span>
     </button>
   );

@@ -2,19 +2,20 @@
  * Settings tile for Microsoft 365 / Outlook (Microsoft Graph) sign-in.
  *
  * Three states:
- *   - not configured  → tenant + clientId form
- *   - configured but signed-out → Sign in button
+ *   - not configured  → administrator tenant + clientId form
+ *   - configured but signed-out → Microsoft sign-in button
  *   - signed in → account info + Sign out
  *
  * If the loopback redirect on :53682 is unavailable (port-in-use) or the user
  * doesn't complete sign-in in time, the main process emits `msgraph:code` with
  * the authorize URL — the modal here lets the user paste the redirected URL
- * back. Same UX pattern as ClawX's existing OpenAI/Google OAuth flows.
+ * back. Same UX pattern as the existing OpenAI/Google OAuth flows.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import {
   microsoftGraph,
@@ -46,6 +47,8 @@ export function MicrosoftGraphSection() {
             clientId: persistedConfig.clientId,
             scopes: persistedConfig.scopes,
             redirectUri: persistedConfig.redirectUri,
+            graphOutlookRead: persistedConfig.graphOutlookRead,
+            graphOutlookCompose: persistedConfig.graphOutlookCompose,
           });
         }
       } catch (err) {
@@ -84,12 +87,33 @@ export function MicrosoftGraphSection() {
       return;
     }
     try {
-      await microsoftGraph.setConfig({ tenantId, clientId });
+      // Spread the current state so scopes/redirectUri and the transport
+      // toggles survive an administrator re-save of tenant + client id.
+      await microsoftGraph.setConfig({ ...config, tenantId, clientId });
       setEditingConfig(false);
       await refresh();
       toast.success('Microsoft 365 configuration saved');
     } catch (err) {
       toast.error(`Save failed: ${(err as Error).message}`);
+    }
+  };
+
+  const setGraphTransportFlag = async (
+    flag: 'graphOutlookRead' | 'graphOutlookCompose',
+    enabled: boolean,
+  ) => {
+    try {
+      // Re-read the persisted config so a toggle never clobbers fields the
+      // component state hasn't loaded yet.
+      const persisted = await microsoftGraph.getConfig();
+      if (!persisted) {
+        toast.error('Save the Microsoft 365 configuration first');
+        return;
+      }
+      await microsoftGraph.setConfig({ ...persisted, [flag]: enabled });
+      await refresh();
+    } catch (err) {
+      toast.error(`Toggle failed: ${(err as Error).message}`);
     }
   };
 
@@ -133,17 +157,21 @@ export function MicrosoftGraphSection() {
   return (
     <div data-testid="settings-msgraph-section">
       <h2 className="text-3xl font-serif text-foreground mb-2 font-normal tracking-tight">
-        Microsoft 365 (Outlook)
+        Microsoft 365 sign-in
       </h2>
       <p className="text-meta text-muted-foreground mb-6 max-w-prose">
-        Connect a Microsoft 365 mailbox so the agent can read, draft, and send
-        Outlook mail. Requires an Entra ID (Azure AD) app registration in your
-        organisation's tenant — your IT administrator provides the Tenant and
-        Client (Application) ID.
+        Connect the principal's Outlook mailbox through Microsoft sign-in. This
+        app never asks for or stores the Microsoft password; credentials are
+        entered only on Microsoft's sign-in page.
       </p>
 
       {showConfigForm && (
         <div className="space-y-4 mb-6">
+          <p className="text-meta text-muted-foreground max-w-prose">
+            Administrator setup is needed only when tenant defaults were not
+            packaged with the installer. Your IT administrator provides the
+            Tenant and Client ID.
+          </p>
           <div className="space-y-2">
             <Label className="text-sm font-medium text-foreground/80">
               Tenant (domain or GUID)
@@ -269,6 +297,38 @@ export function MicrosoftGraphSection() {
             >
               {status.mockMailbox ? 'On' : 'Off'}
             </Button>
+          </div>
+
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-medium">Read email via Microsoft cloud</span>
+              <span className="text-meta text-muted-foreground">
+                Fetch inbox messages directly from Microsoft 365 instead of the
+                Outlook window in Chrome. Turn this on only when your IT
+                administrator has enabled it for this school.
+              </span>
+            </div>
+            <Switch
+              data-testid="msgraph-outlook-read-switch"
+              checked={config.graphOutlookRead === true}
+              onCheckedChange={(checked) => void setGraphTransportFlag('graphOutlookRead', checked)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-medium">Compose email via Microsoft cloud</span>
+              <span className="text-meta text-muted-foreground">
+                Draft and send email directly through Microsoft 365. Sending
+                still asks for your confirmation first, and requires a
+                connection that is allowed to send email.
+              </span>
+            </div>
+            <Switch
+              data-testid="msgraph-outlook-compose-switch"
+              checked={config.graphOutlookCompose === true}
+              onCheckedChange={(checked) => void setGraphTransportFlag('graphOutlookCompose', checked)}
+            />
           </div>
         </div>
       )}

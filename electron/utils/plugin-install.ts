@@ -10,11 +10,12 @@
  */
 import { app } from 'electron';
 import path from 'node:path';
-import { existsSync, cpSync, copyFileSync, statSync, mkdirSync, rmSync, readFileSync, writeFileSync, readdirSync, realpathSync } from 'node:fs';
+import { existsSync, cpSync, copyFileSync, statSync, mkdirSync, readFileSync, writeFileSync, readdirSync, realpathSync } from 'node:fs';
 import { readdir, stat, copyFile, mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { logger } from './logger';
+import { safeRmSync } from './safe-fs';
 
 function normalizeFsPathForWindows(filePath: string): string {
   if (process.platform !== 'win32') return filePath;
@@ -298,7 +299,7 @@ export function copyPluginFromNodeModules(npmPkgPath: string, targetDir: string,
   }
 
   // 1. Copy plugin package itself
-  rmSync(fsPath(targetDir), { recursive: true, force: true });
+  safeRmSync(fsPath(targetDir));
   mkdirSync(fsPath(targetDir), { recursive: true });
   cpSyncSafe(realPath, targetDir);
 
@@ -394,7 +395,7 @@ export function ensurePluginInstalled(
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         mkdirSync(fsPath(extensionsRoot), { recursive: true });
-        rmSync(fsPath(targetDir), { recursive: true, force: true });
+        safeRmSync(fsPath(targetDir));
         cpSyncSafe(sourceDir, targetDir);
         if (!existsSync(fsPath(join(targetDir, 'openclaw.plugin.json')))) {
           return { installed: false, warning: `Failed to install ${pluginLabel} plugin mirror (manifest missing).` };
@@ -407,7 +408,7 @@ export function ensurePluginInstalled(
         attempts.push({ attempt, ...diagnostic });
         if (attempt < maxAttempts) {
           try {
-            rmSync(fsPath(targetDir), { recursive: true, force: true });
+            safeRmSync(fsPath(targetDir));
           } catch {
             // Ignore cleanup failures before retry.
           }

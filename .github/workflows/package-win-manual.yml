@@ -7,12 +7,202 @@ on:
         description: 'Git ref to build (branch, tag, or SHA). Leave empty for current default ref.'
         required: false
         default: ''
+      cloudGatewaySeedProfile:
+        description: 'Hosted Windows seed profile. keyless-public never injects credential-bearing seeds; seeded-private requires a private repository verified by GitHub API.'
+        required: true
+        type: choice
+        default: keyless-public
+        options:
+          - keyless-public
+          - seeded-private
+      requireCloudGatewaySeed:
+        description: 'seeded-private only: fail the build unless CLAWX_CLOUD_GATEWAY_CONFIG_JSON and CLAWX_CLOUD_GATEWAY_KEY secrets are available.'
+        required: true
+        type: boolean
+        default: false
+      requireMicrosoftGraphSeed:
+        description: 'Fail the build unless CLAWX_MICROSOFT_GRAPH_CONFIG_JSON secret or variable is available.'
+        required: true
+        type: boolean
+        default: false
+      requireAzureSpeechSeed:
+        description: 'seeded-private only: fail the build unless CLAWX_AZURE_SPEECH_CONFIG_JSON and CLAWX_AZURE_SPEECH_KEY are available.'
+        required: true
+        type: boolean
+        default: false
+      publishFromRunId:
+        description: 'Optional completed workflow run ID whose Windows artifacts should be published to a release instead of building.'
+        required: false
+        default: ''
+      evidenceRunId:
+        description: 'Completed workflow run ID carrying the ga-release-evidence artifact required before publishing Windows artifacts.'
+        required: false
+        default: ''
+      publishReleaseTag:
+        description: 'Release tag to receive the Windows artifacts when publishFromRunId is set.'
+        required: false
+        default: ''
+      publishReleaseTitle:
+        description: 'Optional release title to apply when publishing existing artifacts.'
+        required: false
+        default: ''
 
 permissions:
-  contents: read
+  actions: read
+  contents: write
 
 jobs:
+  publish-existing-windows-run:
+    if: ${{ inputs.publishFromRunId != '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Require publication inputs
+        shell: bash
+        env:
+          EVIDENCE_RUN_ID: ${{ inputs.evidenceRunId }}
+          RELEASE_TAG: ${{ inputs.publishReleaseTag }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$EVIDENCE_RUN_ID" ]]; then
+            echo "::error::evidenceRunId is required when publishFromRunId is set."
+            exit 1
+          fi
+          if [[ -z "$RELEASE_TAG" ]]; then
+            echo "::error::publishReleaseTag is required when publishFromRunId is set."
+            exit 1
+          fi
+
+      - name: Download GA release evidence
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.evidenceRunId }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/release-proof
+          name: ga-release-evidence
+
+      - name: Download Windows artifacts from completed run
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.publishFromRunId }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/release-artifacts
+          pattern: windows-*
+
+      - name: Download build provenance from completed run
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.publishFromRunId }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/build-provenance
+          name: build-provenance
+
+      - name: Validate release evidence and tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.publishReleaseTag }}
+          RELEASE_PROOF: ${{ runner.temp }}/release-proof
+          RELEASE_ARTIFACTS: ${{ runner.temp }}/release-artifacts
+          BUILD_PROVENANCE: ${{ runner.temp }}/build-provenance
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f "$RELEASE_PROOF/release-evidence.json" || ! -f "$RELEASE_PROOF/manifest.json" ]]; then
+            echo "::error::ga-release-evidence must contain release-evidence.json and manifest.json."
+            exit 1
+          fi
+          if [[ ! -f "$BUILD_PROVENANCE/.tmp/release-build-profile.json" || ! -f "$BUILD_PROVENANCE/.release-build-source.json" || ! -f "$BUILD_PROVENANCE/.tmp/release-build-output.json" ]]; then
+            echo "::error::build-provenance must contain release-build-profile, release-build-source and release-build-output records from the selected Windows build run."
+            exit 1
+          fi
+
+          node scripts/release-build-profile.mjs check-public-release \
+            --profile "$BUILD_PROVENANCE/.tmp/release-build-profile.json" \
+            --source "$BUILD_PROVENANCE/.release-build-source.json" \
+            --receipt "$BUILD_PROVENANCE/.tmp/release-build-output.json" \
+            --manifest "$RELEASE_PROOF/manifest.json"
+
+          VERSION="$(node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.env.RELEASE_PROOF + '/manifest.json','utf8')); process.stdout.write(m.version || '')")"
+          if [[ "$RELEASE_TAG" != "v$VERSION" ]]; then
+            echo "::error::publishReleaseTag must be exactly v${VERSION}; got ${RELEASE_TAG}."
+            exit 1
+          fi
+
+          node scripts/release-evidence.mjs check \
+            --report "$RELEASE_PROOF/release-evidence.json" \
+            --manifest "$RELEASE_PROOF/manifest.json" \
+            --dir "$RELEASE_ARTIFACTS" \
+            --tag "$RELEASE_TAG"
+
+      - name: Publish checked Windows artifact to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.publishReleaseTag }}
+          RELEASE_TITLE: ${{ inputs.publishReleaseTitle }}
+          PUBLISH_RUN_ID: ${{ inputs.publishFromRunId }}
+          RELEASE_ARTIFACTS: ${{ runner.temp }}/release-artifacts
+        run: |
+          set -euo pipefail
+
+          echo "Downloaded Windows artifacts:"
+          find "$RELEASE_ARTIFACTS" -maxdepth 3 -type f -print -exec ls -lh {} \;
+
+          mapfile -t release_assets < <(
+            find "$RELEASE_ARTIFACTS" -type f -name '*.exe' | sort
+          )
+
+          if [[ "${#release_assets[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one checked Windows .exe in run ${PUBLISH_RUN_ID}; found ${#release_assets[@]}."
+            exit 1
+          fi
+
+          docs=(
+            docs/CURRENT_WINDOWS_RC.md
+            docs/GA_RELEASE_EVIDENCE_MANIFEST.md
+            docs/COMPLETION_PLAN.md
+          )
+          for doc in "${docs[@]}"; do
+            if [[ ! -f "$doc" ]]; then
+              echo "::error::Required release document is missing: $doc"
+              exit 1
+            fi
+          done
+
+          echo "SHA256 checksums to publish:"
+          sha256sum "${release_assets[0]}" "${docs[@]}"
+
+          gh release upload "$RELEASE_TAG" \
+            "${release_assets[0]}" \
+            "${docs[@]}" \
+            --repo "$GITHUB_REPOSITORY"
+
+          if [[ -n "$RELEASE_TITLE" ]]; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$RELEASE_TITLE"
+          fi
+
+          echo "Published assets:"
+          gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json assets \
+            --jq '.assets[] | [.name,.size,.digest,.updatedAt] | @tsv'
+
   package-windows:
+    if: ${{ inputs.publishFromRunId == '' }}
     runs-on: windows-latest
 
     steps:
@@ -26,6 +216,15 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '24'
+
+      - name: Setup .NET SDK for Windows ASR helper
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.424'
+
+      - name: Verify .NET SDK
+        shell: pwsh
+        run: dotnet --info
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -49,10 +248,272 @@ jobs:
       - name: Download uv binaries for Windows
         run: pnpm run uv:download:win
 
+      - name: Resolve hosted build profile
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUD_GATEWAY_SEED_PROFILE: ${{ inputs.cloudGatewaySeedProfile }}
+          REQUIRE_CLOUD_GATEWAY_SEED: ${{ inputs.requireCloudGatewaySeed }}
+          REQUIRE_AZURE_SPEECH_SEED: ${{ inputs.requireAzureSpeechSeed }}
+          GITHUB_CONTEXT_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $profile = $env:CLOUD_GATEWAY_SEED_PROFILE
+          if ($profile -notin @('keyless-public', 'seeded-private')) {
+            throw "Unsupported cloudGatewaySeedProfile: $profile"
+          }
+
+          $event = Get-Content -Raw -Path $env:GITHUB_EVENT_PATH | ConvertFrom-Json
+          $eventRepositoryPrivate = [bool]$event.repository.private
+          $contextRepositoryPrivate = $env:GITHUB_CONTEXT_REPOSITORY_PRIVATE -eq 'true'
+          if ($eventRepositoryPrivate -ne $contextRepositoryPrivate) {
+            throw 'GitHub repository visibility context disagrees with workflow event payload.'
+          }
+
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $apiRepository = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY"
+          $apiRepositoryPrivate = [bool]$apiRepository.private
+          if ($apiRepositoryPrivate -ne $eventRepositoryPrivate) {
+            throw 'GitHub repository visibility API disagrees with workflow event payload.'
+          }
+          if ($profile -eq 'seeded-private' -and -not $apiRepositoryPrivate) {
+            throw 'seeded-private hosted Windows builds are refused for public repositories.'
+          }
+          if ($profile -eq 'keyless-public') {
+            if ($env:REQUIRE_CLOUD_GATEWAY_SEED -eq 'true') {
+              throw 'requireCloudGatewaySeed=true contradicts cloudGatewaySeedProfile=keyless-public.'
+            }
+            if ($env:REQUIRE_AZURE_SPEECH_SEED -eq 'true') {
+              throw 'requireAzureSpeechSeed=true contradicts cloudGatewaySeedProfile=keyless-public.'
+            }
+            $blocked = @(
+              'resources/cloud-gateway.json',
+              'resources/cloud-gateway.key',
+              'resources/azure-speech.json',
+              'resources/azure-speech.key'
+            )
+            $present = @($blocked | Where-Object { Test-Path (Join-Path $PWD $_) })
+            if ($present.Count -gt 0) {
+              throw "keyless-public build source contains credential-bearing seed files: $($present -join ', ')"
+            }
+          }
+
+          "CLAWX_HOSTED_BUILD_PROFILE=$profile" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "CLAWX_REPOSITORY_PRIVATE=$($apiRepositoryPrivate.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Hosted Windows build profile resolved: profile=$profile repositoryPrivate=$apiRepositoryPrivate"
+
+      - name: Prepare cloud gateway seed
+        if: ${{ inputs.cloudGatewaySeedProfile == 'seeded-private' }}
+        shell: pwsh
+        env:
+          CLOUD_GATEWAY_CONFIG_JSON: ${{ secrets.CLAWX_CLOUD_GATEWAY_CONFIG_JSON }}
+          CLOUD_GATEWAY_KEY: ${{ secrets.CLAWX_CLOUD_GATEWAY_KEY }}
+          REQUIRE_CLOUD_GATEWAY_SEED: ${{ inputs.requireCloudGatewaySeed }}
+        run: |
+          $resourcesDir = Join-Path $PWD 'resources'
+          New-Item -ItemType Directory -Force -Path $resourcesDir | Out-Null
+
+          $hasConfig = -not [string]::IsNullOrWhiteSpace($env:CLOUD_GATEWAY_CONFIG_JSON)
+          $hasKey = -not [string]::IsNullOrWhiteSpace($env:CLOUD_GATEWAY_KEY)
+          if (-not ($hasConfig -and $hasKey)) {
+            $message = 'Cloud gateway seed secrets are incomplete. Set CLAWX_CLOUD_GATEWAY_CONFIG_JSON and CLAWX_CLOUD_GATEWAY_KEY before building a seeded-private release installer.'
+            if ($env:REQUIRE_CLOUD_GATEWAY_SEED -eq 'true') {
+              throw $message
+            }
+            Write-Warning $message
+            exit 0
+          }
+
+          $configPath = Join-Path $resourcesDir 'cloud-gateway.json'
+          $keyPath = Join-Path $resourcesDir 'cloud-gateway.key'
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+          [System.IO.File]::WriteAllText($configPath, $env:CLOUD_GATEWAY_CONFIG_JSON.Trim(), $utf8NoBom)
+          [System.IO.File]::WriteAllText($keyPath, ($env:CLOUD_GATEWAY_KEY.Trim() + [Environment]::NewLine), $utf8NoBom)
+
+          $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$config.baseUrl)) {
+            throw 'CLAWX_CLOUD_GATEWAY_CONFIG_JSON is missing baseUrl.'
+          }
+          if ([string]::IsNullOrWhiteSpace([string]$config.apiKeyFile)) {
+            throw 'CLAWX_CLOUD_GATEWAY_CONFIG_JSON is missing apiKeyFile.'
+          }
+          if ($config.apiKeyFile -ne 'cloud-gateway.key') {
+            throw 'CLAWX_CLOUD_GATEWAY_CONFIG_JSON apiKeyFile must be cloud-gateway.key for packaged release builds.'
+          }
+          if ((Get-Item $keyPath).Length -lt 8) {
+            throw 'CLAWX_CLOUD_GATEWAY_KEY is too short to be a usable gateway client key.'
+          }
+
+          Write-Host "Cloud gateway seed prepared for seeded-private packaged release (providerId=$($config.providerId), model=$($config.model), key redacted)."
+
+      - name: Prepare Microsoft Graph seed
+        shell: pwsh
+        env:
+          MICROSOFT_GRAPH_CONFIG_JSON: ${{ secrets.CLAWX_MICROSOFT_GRAPH_CONFIG_JSON || vars.CLAWX_MICROSOFT_GRAPH_CONFIG_JSON }}
+          REQUIRE_MICROSOFT_GRAPH_SEED: ${{ inputs.requireMicrosoftGraphSeed }}
+        run: |
+          $resourcesDir = Join-Path $PWD 'resources'
+          New-Item -ItemType Directory -Force -Path $resourcesDir | Out-Null
+
+          $hasConfig = -not [string]::IsNullOrWhiteSpace($env:MICROSOFT_GRAPH_CONFIG_JSON)
+          if (-not $hasConfig) {
+            $message = 'Microsoft Graph seed config is missing. Set CLAWX_MICROSOFT_GRAPH_CONFIG_JSON to package Outlook Graph defaults.'
+            if ($env:REQUIRE_MICROSOFT_GRAPH_SEED -eq 'true') {
+              throw $message
+            }
+            Write-Warning $message
+            exit 0
+          }
+
+          $configPath = Join-Path $resourcesDir 'microsoft-graph.json'
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+          [System.IO.File]::WriteAllText($configPath, $env:MICROSOFT_GRAPH_CONFIG_JSON.Trim(), $utf8NoBom)
+
+          $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$config.tenantId)) {
+            throw 'CLAWX_MICROSOFT_GRAPH_CONFIG_JSON is missing tenantId.'
+          }
+          if ([string]::IsNullOrWhiteSpace([string]$config.clientId)) {
+            throw 'CLAWX_MICROSOFT_GRAPH_CONFIG_JSON is missing clientId.'
+          }
+          foreach ($blocked in @('clientSecret', 'client_secret', 'apiKey', 'password', 'refreshToken')) {
+            if ($null -ne $config.PSObject.Properties[$blocked]) {
+              throw "CLAWX_MICROSOFT_GRAPH_CONFIG_JSON must not contain secret field: $blocked."
+            }
+          }
+
+          Write-Host "Microsoft Graph seed prepared for packaged release (tenant=$($config.tenantId), clientId=$($config.clientId), no secrets)."
+
+      - name: Prepare Azure Speech seed
+        if: ${{ inputs.cloudGatewaySeedProfile == 'seeded-private' }}
+        shell: pwsh
+        env:
+          AZURE_SPEECH_CONFIG_JSON: ${{ secrets.CLAWX_AZURE_SPEECH_CONFIG_JSON || vars.CLAWX_AZURE_SPEECH_CONFIG_JSON }}
+          AZURE_SPEECH_KEY: ${{ secrets.CLAWX_AZURE_SPEECH_KEY }}
+          REQUIRE_AZURE_SPEECH_SEED: ${{ inputs.requireAzureSpeechSeed }}
+        run: |
+          $resourcesDir = Join-Path $PWD 'resources'
+          New-Item -ItemType Directory -Force -Path $resourcesDir | Out-Null
+
+          $hasConfig = -not [string]::IsNullOrWhiteSpace($env:AZURE_SPEECH_CONFIG_JSON)
+          $hasKey = -not [string]::IsNullOrWhiteSpace($env:AZURE_SPEECH_KEY)
+          if (-not ($hasConfig -and $hasKey)) {
+            $message = 'Azure Speech seed secrets are incomplete. Set CLAWX_AZURE_SPEECH_CONFIG_JSON and CLAWX_AZURE_SPEECH_KEY before building a seeded-private high-quality ASR release installer.'
+            if ($env:REQUIRE_AZURE_SPEECH_SEED -eq 'true') {
+              throw $message
+            }
+            Write-Warning $message
+            exit 0
+          }
+
+          $configPath = Join-Path $resourcesDir 'azure-speech.json'
+          $keyPath = Join-Path $resourcesDir 'azure-speech.key'
+          $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+          [System.IO.File]::WriteAllText($configPath, $env:AZURE_SPEECH_CONFIG_JSON.Trim(), $utf8NoBom)
+          [System.IO.File]::WriteAllText($keyPath, ($env:AZURE_SPEECH_KEY.Trim() + [Environment]::NewLine), $utf8NoBom)
+
+          $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string]$config.region)) {
+            throw 'CLAWX_AZURE_SPEECH_CONFIG_JSON is missing region.'
+          }
+          if ([string]::IsNullOrWhiteSpace([string]$config.apiKeyFile)) {
+            throw 'CLAWX_AZURE_SPEECH_CONFIG_JSON is missing apiKeyFile.'
+          }
+          if ($config.apiKeyFile -ne 'azure-speech.key') {
+            throw 'CLAWX_AZURE_SPEECH_CONFIG_JSON apiKeyFile must be azure-speech.key for packaged release builds.'
+          }
+          foreach ($blocked in @('apiKey', 'key', 'subscriptionKey', 'password', 'token')) {
+            if ($null -ne $config.PSObject.Properties[$blocked]) {
+              throw "CLAWX_AZURE_SPEECH_CONFIG_JSON must not contain secret field: $blocked. Use CLAWX_AZURE_SPEECH_KEY instead."
+            }
+          }
+          if ((Get-Item $keyPath).Length -lt 8) {
+            throw 'CLAWX_AZURE_SPEECH_KEY is too short to be a usable Speech resource key.'
+          }
+
+          $locale = if ([string]::IsNullOrWhiteSpace([string]$config.locale)) { 'en-TT' } else { [string]$config.locale }
+          Write-Host "Azure Speech seed prepared for packaged release (region=$($config.region), locale=$locale, key redacted)."
+
+      - name: Record hosted build profile provenance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tmpDir = Join-Path $PWD '.tmp'
+          New-Item -ItemType Directory -Force -Path $tmpDir | Out-Null
+          $resourcesDir = Join-Path $PWD 'resources'
+          $sourceGitCommit = (git rev-parse HEAD).Trim()
+
+          function Test-Pair($name, $configName, $keyName) {
+            $configPath = Join-Path $resourcesDir $configName
+            $keyPath = Join-Path $resourcesDir $keyName
+            $hasConfig = Test-Path $configPath
+            $hasKey = Test-Path $keyPath
+            if ($hasConfig -xor $hasKey) {
+              throw "Incomplete $name seed in resources: expected both $configName and $keyName or neither."
+            }
+            return ($hasConfig -and $hasKey)
+          }
+
+          $cloudGatewaySeedIncluded = Test-Pair 'cloud gateway' 'cloud-gateway.json' 'cloud-gateway.key'
+          $azureSpeechSeedIncluded = Test-Pair 'Azure Speech' 'azure-speech.json' 'azure-speech.key'
+          $microsoftGraphSeedIncluded = Test-Path (Join-Path $resourcesDir 'microsoft-graph.json')
+          $credentialSeedIncluded = $cloudGatewaySeedIncluded -or $azureSpeechSeedIncluded
+          if ($env:CLAWX_HOSTED_BUILD_PROFILE -eq 'keyless-public' -and $credentialSeedIncluded) {
+            throw 'keyless-public build profile cannot include cloud gateway or Azure Speech credential-bearing seeds.'
+          }
+
+          $profile = [ordered]@{
+            schemaVersion = 1
+            producer = '.github/workflows/package-win-manual.yml'
+            cloudGatewaySeedProfile = $env:CLAWX_HOSTED_BUILD_PROFILE
+            repositoryPrivate = ($env:CLAWX_REPOSITORY_PRIVATE -eq 'true')
+            repositoryVisibility = $(if ($env:CLAWX_REPOSITORY_PRIVATE -eq 'true') { 'private' } else { 'public' })
+            sourceGitCommit = $sourceGitCommit
+            cloudGatewaySeedIncluded = $cloudGatewaySeedIncluded
+            azureSpeechSeedIncluded = $azureSpeechSeedIncluded
+            credentialSeedIncluded = $credentialSeedIncluded
+            microsoftGraphSeedIncluded = $microsoftGraphSeedIncluded
+            limitations = $(if ($env:CLAWX_HOSTED_BUILD_PROFILE -eq 'keyless-public') {
+              @(
+                'Cloud gateway and Azure Speech are not preconfigured in this installer.',
+                'Cloud/on-device activation must be provisioned after install by an accepted userData/drop-in/activation path.'
+              )
+            } else { @() })
+          }
+          $profilePath = Join-Path $tmpDir 'release-build-profile.json'
+          $profile | ConvertTo-Json -Depth 5 | Set-Content -Path $profilePath -Encoding utf8
+          Write-Host "Hosted build profile provenance written: $profilePath"
+
       - name: Build Windows package (no publish)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm run package:win
+
+      - name: Verify keyless staged package seeds
+        if: ${{ inputs.cloudGatewaySeedProfile == 'keyless-public' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $blockedNames = @(
+            'cloud-gateway.json',
+            'cloud-gateway.key',
+            'azure-speech.json',
+            'azure-speech.key'
+          )
+          $matches = @()
+          if (Test-Path (Join-Path $PWD 'release')) {
+            $matches = @(Get-ChildItem -Path (Join-Path $PWD 'release') -Recurse -File | Where-Object { $blockedNames -contains $_.Name } | ForEach-Object { $_.FullName })
+          }
+          if ($matches.Count -gt 0) {
+            throw "keyless-public staged package contains credential-bearing seed files: $($matches -join ', ')"
+          }
+          Write-Host 'Verified keyless-public staged package has no loose cloud gateway or Azure Speech seed files.'
 
       - name: Upload Windows Installer (x64)
         uses: actions/upload-artifact@v4
@@ -86,4 +547,17 @@ jobs:
             release/*.yml
             !release/builder-debug.yml
           if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload build provenance manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-provenance
+          include-hidden-files: true
+          path: |
+            .release-build-source.json
+            .tmp/release-build-output.json
+            .tmp/release-build-profile.json
+            docs/release-manifests/*.json
+          if-no-files-found: error
           retention-days: 7

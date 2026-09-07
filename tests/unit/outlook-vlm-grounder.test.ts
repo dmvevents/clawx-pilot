@@ -203,6 +203,79 @@ describe('VlmGrounder', () => {
     expect(result.reasoning).toMatch(/both primary and fallback/i);
   });
 
+  it('flags unavailable (not a plain miss) when the only caller has no cloud credentials (CLWX-74)', async () => {
+    // Karunesh's box: no local AWS creds, no GEMINI_API_KEY, so the single
+    // caller throws the Bedrock credential-chain error. ground() must NOT
+    // throw and must mark the result unavailable so the action layer can
+    // refuse READABLY instead of dead-ending the email flow.
+    const caller = vi.fn().mockRejectedValue(
+      new Error('Could not load credentials from any providers'),
+    );
+    const grounder = new VlmGrounder({ caller });
+    const r = await grounder.ground({
+      screenshotPng: PNG,
+      imageWidth: 100,
+      imageHeight: 100,
+      question: 'New mail button',
+    });
+    expect(r.found).toBe(false);
+    expect(r.confidence).toBe(0);
+    expect(r.unavailable).toBe(true);
+    expect(r.reasoning).toMatch(/unavailable/i);
+    expect(r.reasoning).not.toMatch(/credentials from any providers/);
+  });
+
+  it('does NOT flag unavailable for a transient (rate-limit) failure', async () => {
+    const caller = vi.fn().mockRejectedValue(new Error('429 rate limit'));
+    const grounder = new VlmGrounder({ caller });
+    const r = await grounder.ground({
+      screenshotPng: PNG,
+      imageWidth: 100,
+      imageHeight: 100,
+      question: 'x',
+    });
+    expect(r.found).toBe(false);
+    expect(r.unavailable).toBeFalsy();
+  });
+
+  it('flags unavailable when BOTH primary and fallback lack credentials (CLWX-74)', async () => {
+    const primary = vi.fn().mockRejectedValue(
+      new Error('Could not load credentials from any providers'),
+    );
+    const fallback = vi.fn().mockRejectedValue(new Error('Missing GEMINI api key'));
+    const grounder = new VlmGrounder({ caller: primary });
+    (grounder as unknown as { fallbackCaller: typeof fallback }).fallbackCaller = fallback;
+
+    const r = await grounder.ground({
+      screenshotPng: PNG,
+      imageWidth: 200,
+      imageHeight: 200,
+      question: 'both no-creds',
+    });
+    expect(r.found).toBe(false);
+    expect(r.unavailable).toBe(true);
+    expect(r.reasoning).toMatch(/unavailable/i);
+  });
+
+  it('does NOT flag unavailable when only ONE of primary/fallback is a credential error', async () => {
+    // One transient + one credential error is not a clean "provider
+    // unavailable" signal, so treat it as an ordinary miss (still no throw).
+    const primary = vi.fn().mockRejectedValue(new Error('Bedrock 503'));
+    const fallback = vi.fn().mockRejectedValue(new Error('Could not load credentials'));
+    const grounder = new VlmGrounder({ caller: primary });
+    (grounder as unknown as { fallbackCaller: typeof fallback }).fallbackCaller = fallback;
+
+    const r = await grounder.ground({
+      screenshotPng: PNG,
+      imageWidth: 200,
+      imageHeight: 200,
+      question: 'mixed failure',
+    });
+    expect(r.found).toBe(false);
+    expect(r.unavailable).toBeFalsy();
+    expect(r.reasoning).toMatch(/both primary and fallback/i);
+  });
+
   it('bboxCentre rounds to integer pixel coords', () => {
     expect(bboxCentre({ x: 100, y: 50, width: 80, height: 32 })).toEqual({ x: 140, y: 66 });
     expect(bboxCentre({ x: 0, y: 0, width: 1, height: 1 })).toEqual({ x: 1, y: 1 });

@@ -1,4 +1,5 @@
 import type { ProviderAccount, ProviderVendorInfo, ProviderWithKeyInfo } from '@/lib/providers';
+import { classifyProvider, publicLabel } from '@/lib/provider-display';
 
 export interface ConfiguredModelOption {
   modelRef: string;
@@ -47,6 +48,28 @@ export function splitModelRef(modelRef: string | null | undefined): { providerKe
 export function formatModelRefLabel(modelRef: string | null | undefined): string {
   const parsed = splitModelRef(modelRef);
   return parsed?.modelId || (modelRef || '').trim() || 'Model';
+}
+
+/**
+ * Anonymised label for a model reference in principal-facing surfaces.
+ * Maps the account behind the ref to "Online" / "On this device" — raw model
+ * ids stay confined to dev-unlocked surfaces (Settings, diagnostics).
+ */
+export function channelLabelForModelRef(
+  modelRef: string | null | undefined,
+  accounts: ProviderAccount[],
+): string {
+  const split = splitModelRef(modelRef);
+  const safeAccounts = Array.isArray(accounts) ? accounts : [];
+  const account = split
+    ? safeAccounts.find((entry) => resolveRuntimeProviderKey(entry) === split.providerKey) ?? null
+    : null;
+  if (account) return publicLabel(classifyProvider(account));
+  // No account resolved: classify by the provider key alone. Ollama-backed
+  // refs are the only local shape the runtime produces today.
+  const providerKey = (split?.providerKey || '').toLowerCase();
+  if (providerKey.startsWith('ollama')) return publicLabel('on-device');
+  return publicLabel('online');
 }
 
 export function toModelOptionTestId(label: string): string {

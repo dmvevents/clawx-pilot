@@ -95,6 +95,43 @@ export const HIDE_COST_IN_UI = flagFromEnv('CLAWX_HIDE_COST_IN_UI', PILOT_MODE);
 export const SEED_LOCAL_LLM_PROVIDER = flagFromEnv('CLAWX_SEED_LOCAL_LLM_PROVIDER', true);
 
 /**
+ * Trim the tool catalog exposed to the on-device (local Ollama) model.
+ *
+ * The default on-device model (qwen2.5:3b-instruct) has weak tool-calling
+ * discipline: when the full built-in tool catalog is injected it emits its
+ * answer as a spurious tool_call instead of replying, and cascades into an
+ * infinite `process -> sessions_list -> subagents` loop or hangs on a `tts`
+ * call with no provider — the chat turn never terminates. Evidence:
+ * skills/laptop/evidence/2026-08-03-windows-install-ui-flows/REPORT.md.
+ *
+ * When enabled, the local-provider seed writes a top-level
+ * `tools.byProvider[<local-provider-key>].deny` policy so the gateway strips
+ * the orchestration/media/web tools a principal chat turn never needs, ONLY
+ * for the on-device provider. Cloud providers keep the full catalog because
+ * their models (Gemini/Sonnet) call tools correctly.
+ *
+ * The `agents.defaults.tools.sandbox.tools.deny` path does NOT work for this
+ * (proven live 2026-08-03): tool-policy resolution reads top-level
+ * `config.tools` and per-list-entry `tools`, never `agents.defaults.tools`,
+ * and the `sandbox.tools` sub-path only binds when a sandbox backend is
+ * active — the desktop app has none.
+ *
+ * Override with `CLAWX_TRIM_ONDEVICE_TOOLS=0` to expose the full catalog to
+ * the on-device model (e.g. when validating a stronger local model).
+ */
+export const TRIM_ONDEVICE_TOOL_CATALOG = flagFromEnv('CLAWX_TRIM_ONDEVICE_TOOLS', true);
+
+/**
+ * One-shot seed for the managed online model gateway. When enabled, ClawX can
+ * read a bundled/user/env cloud-gateway config on launch and create a custom
+ * OpenAI-compatible provider account that points at our LiteLLM gateway.
+ *
+ * The config must provide a gateway base URL and a LiteLLM client key. Provider
+ * API keys stay server-side behind the gateway.
+ */
+export const SEED_CLOUD_GATEWAY_PROVIDER = flagFromEnv('CLAWX_SEED_CLOUD_GATEWAY_PROVIDER', PILOT_MODE);
+
+/**
  * Auto-update is OFF by default in the MoE pilot. Reasons:
  *   1. The publish target in electron-builder.yml still points at the
  *      upstream Chinese OSS server (oss.intelli-spectrum.com) and the
@@ -112,17 +149,20 @@ export const SEED_LOCAL_LLM_PROVIDER = flagFromEnv('CLAWX_SEED_LOCAL_LLM_PROVIDE
 export const ENABLE_AUTO_UPDATE = flagFromEnv('CLAWX_ENABLE_AUTO_UPDATE', !PILOT_MODE);
 
 /**
- * Use the v2 Outlook integration (Playwright + Claude Sonnet 4.5 vision
- * grounding) instead of the v1 hand-rolled DOM selectors. v1 had several
- * critical issues catalogued in /tmp/outlook-deep-audit.md, including a
- * wrong-email-sent risk on confirm. v2 reuses the same public manager
- * surface so IPC handlers and host-API routes don't change.
+ * Use the v2 Outlook integration (Playwright + CDP + vision grounding)
+ * instead of the v1 hand-rolled DOM selectors through the OpenClaw browser
+ * plugin. v1 had several critical issues catalogued in
+ * /tmp/outlook-deep-audit.md, including a wrong-email-sent risk on confirm;
+ * in clean Windows installs it also depends on the browser plugin/MCP being
+ * available before the agent can even open Outlook.
  *
- * Default is OFF — v2 needs ANTHROPIC_API_KEY in env, and we want a
- * deliberate dev-side test before flipping for pilots. Set
- * CLAWX_OUTLOOK_V2=1 in your shell to enable.
+ * Pilot builds default to v2 because the product now owns Chrome CDP
+ * diagnosis/repair through the Host API (`browser.diagnose` and
+ * `browser.repair_chrome_cdp`) instead of asking non-technical principals to
+ * enable remote debugging manually. Override with CLAWX_OUTLOOK_V2=0 to force
+ * the legacy browser-plugin path for regression comparison.
  */
-export const OUTLOOK_BROWSER_V2 = flagFromEnv('CLAWX_OUTLOOK_V2', false);
+export const OUTLOOK_BROWSER_V2 = flagFromEnv('CLAWX_OUTLOOK_V2', PILOT_MODE);
 
 /**
  * Agents and Cron stay visible by request — principals may need to manage

@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   formatFormsDateInput,
   matchesExpectedQuestionFingerprint,
@@ -121,8 +123,22 @@ describe('suspensions live required-field validation', () => {
   };
 
   it('reports conditional fields that remain visible and required on the live form', async () => {
+    // CLWX-64: the fill path now runs a schema-drift gate first — serve a
+    // live question list that matches the captured schema so this test keeps
+    // exercising the showWhen/inspectField path beyond the gate.
+    const schema = JSON.parse(
+      readFileSync(
+        path.resolve(__dirname, '../../extensions/moe-principal-assistant/forms/suspensions-schema.json'),
+        'utf8',
+      ),
+    ) as { sections: Array<{ fields: Array<{ id: string; label: string }> }> };
+    const liveTexts = schema.sections
+      .flatMap((s) => s.fields)
+      .filter((f) => f.id !== 'respondent_name')
+      .map((f, i) => `${i + 1}\n${f.label}\nEnter your answer`);
     const driver = {
       fillField: async () => ({ ok: true }),
+      listQuestionItemTexts: async () => liveTexts,
       inspectField: async (label: string) => ({
         visible: /Additional infractions|victim was/i.test(label),
         hasValue: false,

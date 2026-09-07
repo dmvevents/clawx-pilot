@@ -9,8 +9,8 @@
  * Responding" hangs.
  */
 import { access, mkdir, readFile, readdir, writeFile } from 'fs/promises';
-import { constants, readdirSync, readFileSync, existsSync } from 'fs';
-import { dirname, join } from 'path';
+import { constants, readdirSync, readFileSync, existsSync, type Dirent } from 'fs';
+import { dirname, isAbsolute, join } from 'path';
 import { homedir } from 'os';
 import { listConfiguredAgentIds } from './agent-config';
 import { getOpenClawResolvedDir } from './paths';
@@ -721,7 +721,7 @@ async function discoverInstalledExtensionPluginIds(): Promise<Set<string>> {
   const ids = new Set<string>();
   const extensionRoot = join(homedir(), '.openclaw', 'extensions');
 
-  let entries: Awaited<ReturnType<typeof readdir>>;
+  let entries: Dirent[];
   try {
     entries = await readdir(extensionRoot, { withFileTypes: true });
   } catch {
@@ -1221,6 +1221,38 @@ function mergeProviderModels(
   return merged;
 }
 
+/**
+ * Google's OpenAI-compat endpoint (generativelanguage.googleapis.com) rejects
+ * requests that carry the OpenAI-only `store` field with a bodyless HTTP 400
+ * ("Unknown name \"store\""), which the chat surfaces as "Model call failed /
+ * 400 status code (no body)". The bundled gateway only sends `store` when a
+ * model's compat marks it supported, so every model entry written for that
+ * endpoint must carry `supportsStore: false`. Applied at both writer choke
+ * points (openclaw.json models.providers and per-agent models.json) so every
+ * rebuild path — channel toggle, provider save, agent-model sync — converges
+ * to the same safe state instead of stripping the flag.
+ */
+function baseUrlTargetsGoogleGenerativeLanguage(baseUrl: unknown): boolean {
+  if (typeof baseUrl !== 'string' || !baseUrl) return false;
+  try {
+    return new URL(baseUrl).hostname.toLowerCase() === 'generativelanguage.googleapis.com';
+  } catch {
+    return false;
+  }
+}
+
+function applyEndpointModelCompatDefaults(
+  baseUrl: unknown,
+  models: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  if (!baseUrlTargetsGoogleGenerativeLanguage(baseUrl)) return models;
+  return models.map((model) => {
+    const compat = isPlainRecord(model.compat) ? model.compat : {};
+    if (compat.supportsStore === false) return model;
+    return { ...model, compat: { ...compat, supportsStore: false } };
+  });
+}
+
 function upsertOpenClawProviderEntry(
   config: Record<string, unknown>,
   provider: string,
@@ -1247,7 +1279,10 @@ function upsertOpenClawProviderEntry(
     ...existingProvider,
     baseUrl: options.baseUrl,
     api: options.api,
-    models: mergeProviderModels(registryModels, existingModels, runtimeModels),
+    models: applyEndpointModelCompatDefaults(
+      options.baseUrl,
+      mergeProviderModels(registryModels, existingModels, runtimeModels),
+    ),
   };
   if (options.apiKeyEnv) nextProvider.apiKey = options.apiKeyEnv;
   if (options.headers !== undefined) {
@@ -1287,7 +1322,7 @@ function removeLegacyMoonshotKimiSearchConfig(config: Record<string, unknown>): 
   const tools = isPlainRecord(config.tools) ? config.tools : null;
   const web = tools && isPlainRecord(tools.web) ? tools.web : null;
   const search = web && isPlainRecord(web.search) ? web.search : null;
-  if (!search || !('kimi' in search)) return false;
+  if (!tools || !web || !search || !('kimi' in search)) return false;
 
   delete search.kimi;
   if (Object.keys(search).length === 0) {
@@ -2101,7 +2136,9 @@ async function updateModelsJsonProviderEntriesForAgents(
 
     if (entry.baseUrl !== undefined) existing.baseUrl = entry.baseUrl;
     if (entry.api !== undefined) existing.api = entry.api;
-    if (mergedModels.length > 0) existing.models = mergedModels;
+    if (mergedModels.length > 0) {
+      existing.models = applyEndpointModelCompatDefaults(existing.baseUrl, mergedModels);
+    }
     if (entry.apiKey !== undefined) existing.apiKey = entry.apiKey;
     if (entry.authHeader !== undefined) existing.authHeader = entry.authHeader;
 
@@ -2203,7 +2240,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
       if (Array.isArray(plugins)) {
         const validPlugins: unknown[] = [];
         for (const p of plugins) {
-          if (typeof p === 'string' && p.startsWith('/')) {
+          if (typeof p === 'string' && isAbsolute(p)) {
             if (isBundledOpenClawPluginPath(p) || !(await fileExists(p))) {
               console.log(`[sanitize] Removing stale/bundled plugin path "${p}" from openclaw.json`);
               modified = true;
@@ -2220,7 +2257,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
         if (Array.isArray(pluginsObj.load)) {
           const validLoad: unknown[] = [];
           for (const p of pluginsObj.load) {
-            if (typeof p === 'string' && p.startsWith('/')) {
+            if (typeof p === 'string' && isAbsolute(p)) {
               if (isBundledOpenClawPluginPath(p) || !(await fileExists(p))) {
                 console.log(`[sanitize] Removing stale/bundled plugin path "${p}" from openclaw.json`);
                 modified = true;
@@ -2239,7 +2276,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
             const validPaths: unknown[] = [];
             const countBefore = loadObj.paths.length;
             for (const p of loadObj.paths) {
-              if (typeof p === 'string' && p.startsWith('/')) {
+              if (typeof p === 'string' && isAbsolute(p)) {
                 if (isBundledOpenClawPluginPath(p) || !(await fileExists(p))) {
                   console.log(`[sanitize] Removing stale/bundled plugin path "${p}" from plugins.load.paths`);
                   modified = true;
@@ -2429,7 +2466,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
 
       const installs = isPlainRecord(pluginsObj.installs) ? pluginsObj.installs as Record<string, unknown> : null;
       const acpxInstall = installs && isPlainRecord(installs.acpx) ? installs.acpx as Record<string, unknown> : null;
-      if (acpxInstall) {
+      if (installs && acpxInstall) {
         const currentBundledAcpxDir = join(getOpenClawResolvedDir(), 'dist', 'extensions', 'acpx').replace(/\\/g, '/');
         const sourcePath = typeof acpxInstall.sourcePath === 'string' ? acpxInstall.sourcePath : '';
         const installPath = typeof acpxInstall.installPath === 'string' ? acpxInstall.installPath : '';

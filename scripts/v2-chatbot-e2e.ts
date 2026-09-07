@@ -103,25 +103,25 @@ async function runTool(actions: OutlookActions, picked: Picked): Promise<{ ok: b
         result = await actions.readEmail({ id: picked.args!.id as string });
         break;
       case 'outlook.draft_email':
-        result = await actions.draftEmail(picked.args as Parameters<OutlookActions['draftEmail']>[0]);
+        result = await actions.draftEmail(picked.args as unknown as Parameters<OutlookActions['draftEmail']>[0]);
         break;
       case 'outlook.send_email':
-        result = await actions.sendEmail(picked.args as Parameters<OutlookActions['sendEmail']>[0]);
+        result = await actions.sendEmail(picked.args as unknown as Parameters<OutlookActions['sendEmail']>[0]);
         break;
       case 'outlook.reply':
-        result = await actions.reply(picked.args as Parameters<OutlookActions['reply']>[0]);
+        result = await actions.reply(picked.args as unknown as Parameters<OutlookActions['reply']>[0]);
         break;
       case 'outlook.forward':
-        result = await actions.forward(picked.args as Parameters<OutlookActions['forward']>[0]);
+        result = await actions.forward(picked.args as unknown as Parameters<OutlookActions['forward']>[0]);
         break;
       case 'outlook.mark_read':
-        result = await actions.markRead(picked.args as Parameters<OutlookActions['markRead']>[0]);
+        result = await actions.markRead(picked.args as unknown as Parameters<OutlookActions['markRead']>[0]);
         break;
       case 'outlook.list_attachments':
         result = await actions.listAttachments({ id: picked.args!.id as string });
         break;
       case 'outlook.download_attachment':
-        result = await actions.downloadAttachment(picked.args as Parameters<OutlookActions['downloadAttachment']>[0]);
+        result = await actions.downloadAttachment(picked.args as unknown as Parameters<OutlookActions['downloadAttachment']>[0]);
         break;
       default:
         return { ok: false, result: null, latencyMs: Date.now() - t0, error: `unknown tool: ${picked.tool}` };

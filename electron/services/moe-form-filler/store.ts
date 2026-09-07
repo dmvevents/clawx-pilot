@@ -9,8 +9,9 @@ interface FormFillerStoreShape {
   schemaVersion: number;
   ledger: IdempotencyLedgerEntry[];
   /**
-   * Hard-coded form URLs per deployment. Populated from openclaw.json plugin
-   * config when the user enables the moe-principal-assistant skill.
+   * Ministry form response links for the signed-in principal profile. These may
+   * be admin-provisioned per deployment or saved from Settings; never log them
+   * because Forms links can expose tenant-specific workflow details.
    */
   formUrls: {
     dailyReport?: string;

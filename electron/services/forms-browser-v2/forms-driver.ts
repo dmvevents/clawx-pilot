@@ -15,8 +15,9 @@
  */
 import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright-core';
 import { logger } from '../../utils/logger';
+import { CHROME_CDP_ENDPOINT, ensureChromeCdpReady } from '../chrome-cdp';
 
-const CDP_DEFAULT = 'http://127.0.0.1:18792';
+const CDP_DEFAULT = CHROME_CDP_ENDPOINT;
 
 const RESPONSE_HOST_PATTERNS = [
   /^https:\/\/forms\.office\.com\/.*ResponsePage/i,
@@ -74,6 +75,10 @@ async function waitForResponseQuestions(page: Page): Promise<void> {
     await page.waitForSelector(questionSelector, { state: 'visible', timeout: 30_000 });
     await page.waitForTimeout(500);
   } catch (err) {
+    const pageDiagnosis = await diagnoseFormsLoadPage(page);
+    if (pageDiagnosis) {
+      throw new Error(pageDiagnosis, { cause: err });
+    }
     throw new Error(
       `Microsoft Forms response page did not render question items within 30s: ${
         err instanceof Error ? err.message : String(err)
@@ -81,6 +86,33 @@ async function waitForResponseQuestions(page: Page): Promise<void> {
       { cause: err },
     );
   }
+}
+
+function summarizePageLocation(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    return `${parsed.host}${parsed.pathname}`;
+  } catch {
+    return 'unknown page';
+  }
+}
+
+async function diagnoseFormsLoadPage(page: Page): Promise<string | null> {
+  const url = page.url();
+  const location = summarizePageLocation(url);
+  const title = (await page.title().catch(() => '')).trim();
+  const body = (await page.locator('body').innerText({ timeout: 1_500 }).catch(() => '')).replace(/\s+/g, ' ').trim();
+  const visibleText = `${title}\n${body}`;
+
+  if (/login\.microsoftonline\.com/i.test(url) || /sign in to your account|can't access your account|sign-in options/i.test(visibleText)) {
+    return `Microsoft Forms sign-in required before questions can render. Chrome landed on ${location} with title "${title || 'unknown'}". Sign in to Microsoft in the Chrome profile that Ministry of Education opened, then retry the form preview.`;
+  }
+
+  if (/you don't have permission|access denied|request access|account doesn't have access|not authorized/i.test(visibleText)) {
+    return `Microsoft Forms access blocked before questions could render. Chrome landed on ${location} with title "${title || 'unknown'}". Confirm the signed-in Microsoft account has permission to respond to this form.`;
+  }
+
+  return null;
 }
 
 export interface FormsDriverOptions {
@@ -159,7 +191,21 @@ export class FormsDriver {
       this.page = null;
     }
     logger.info(`[forms-v2] Connecting via CDP at ${this.cdp}`);
-    this.browser = await chromium.connectOverCDP(this.cdp);
+    try {
+      this.browser = await chromium.connectOverCDP(this.cdp);
+    } catch (err) {
+      logger.warn(
+        `[forms-v2] CDP attach failed (${err instanceof Error ? err.message : String(err)}) — attempting Chrome CDP repair`,
+      );
+      const status = await ensureChromeCdpReady({
+        cdpEndpoint: this.cdp,
+        allowManagedProfileFallback: true,
+      });
+      if (status.state !== 'cdp_ready') {
+        throw new Error(`[${status.state}] ${status.message}`, { cause: err });
+      }
+      this.browser = await chromium.connectOverCDP(this.cdp);
+    }
   }
 
   /** Find an existing Forms response tab, or open one at the given URL. */
@@ -172,8 +218,11 @@ export class FormsDriver {
       this.browser = null;
       this.page = null;
       await this.ensureBrowser();
-      if (!this.browser) throw new Error('CDP attach failed');
-      contexts = this.browser.contexts();
+      // ensureBrowser() reassigns this.browser as a side effect, which the
+      // compiler's narrowing (null after the assignment above) cannot see.
+      const reattached = this.browser as Browser | null;
+      if (!reattached) throw new Error('CDP attach failed');
+      contexts = reattached.contexts();
     }
     const allPages = contexts.flatMap((c) => c.pages());
     let page = allPages.find((p) => responsePageMatchesFormUrl(p.url(), formUrl));
@@ -326,15 +375,51 @@ export class FormsDriver {
     return '';
   }
 
-  async getVisibleQuestionText(): Promise<string> {
+  /**
+   * Question-item locator, tiered (CLWX-64, dom-selector-regression-tester).
+   *
+   * Selector classification, verified against the recorded live traces
+   * (skills/laptop/evidence/2026-09-03-*-recorded): the response page renders
+   * `[data-automation-id="questionItem"]` (vendor-ROTATED — this family
+   * rotated once already, moe.5 editor pivot) and NO explicit role attribute,
+   * so the CSS `[role="listitem"]` alternative matches nothing there today —
+   * it is an explicit-attribute fallback only. The real fallback tiers:
+   *   1. CSS union: rotated data-automation-id + explicit role attribute.
+   *   2. Playwright role engine `getByRole('listitem')` — resolves IMPLICIT
+   *      ARIA roles (li elements, aria mappings) that CSS cannot see.
+   *   3. Prefix variant `[data-automation-id^="question"]` — survives suffix
+   *      renames of the automation id.
+   */
+  private async questionItemsLocator(): Promise<Locator> {
     if (!this.page) throw new Error('no page; call ensureFormsTab first');
-    const items = this.page.locator('[data-automation-id="questionItem"], [role="listitem"]');
+    const tiers: Locator[] = [
+      this.page.locator('[data-automation-id="questionItem"], [role="listitem"]'),
+      this.page.getByRole('listitem'),
+      this.page.locator('[data-automation-id^="question"]'),
+    ];
+    for (const tier of tiers) {
+      if ((await tier.count().catch(() => 0)) > 0) return tier;
+    }
+    return tiers[0];
+  }
+
+  /**
+   * List the rendered question items' innerText in DOM order — the live
+   * side of the CLWX-64 schema-drift check (schema-fingerprint.ts).
+   */
+  async listQuestionItemTexts(maxItems = 80): Promise<string[]> {
+    const items = await this.questionItemsLocator();
     const count = await items.count().catch(() => 0);
     const texts: string[] = [];
-    for (let i = 0; i < Math.min(count, 40); i += 1) {
+    for (let i = 0; i < Math.min(count, maxItems); i += 1) {
       const text = await items.nth(i).innerText({ timeout: 1_000 }).catch(() => '');
       if (text.trim()) texts.push(text.trim());
     }
+    return texts;
+  }
+
+  async getVisibleQuestionText(): Promise<string> {
+    const texts = await this.listQuestionItemTexts(40);
     return texts.join('\n');
   }
 
@@ -402,6 +487,15 @@ export class FormsDriver {
             if ((await cb.count()) > 0) {
               await cb.click({ timeout: this.fieldTimeoutMs });
               any = true;
+              continue;
+            }
+            // CLWX-64: aria fallback mirroring the single_choice path — some
+            // Forms renders expose choices as role="checkbox" without a
+            // clickable <label> wrapper.
+            const aria = item.locator(`[role="checkbox"][aria-label="${t}"]`).first();
+            if ((await aria.count()) > 0) {
+              await aria.click({ timeout: this.fieldTimeoutMs });
+              any = true;
             }
           }
           return any ? { ok: true } : { ok: false, reason: `no checkbox options matched: ${targets.join(', ')}` };
@@ -415,7 +509,7 @@ export class FormsDriver {
 
   private async findQuestionItem(label: string): Promise<Locator | null> {
     if (!this.page) return null;
-    const questionItems = this.page.locator('[data-automation-id="questionItem"], [role="listitem"]');
+    const questionItems = await this.questionItemsLocator();
     const needles = labelNeedles(label);
     for (const needle of needles) {
       const item = questionItems.filter({ hasText: new RegExp(escapeRegex(needle), 'i') }).first();
@@ -434,13 +528,13 @@ export class FormsDriver {
     expectedTitle: string;
     expectedQuestionLabels?: string[];
   }): Promise<SubmitResult> {
-    if (!this.page) return { status: 'error', reason: 'no page' };
     if (!confirm) {
       return {
         status: 'refused',
         reason: 'Submit blocked: confirm:true required. Re-call with confirm:true after the principal has reviewed the filled form.',
       };
     }
+    if (!this.page) return { status: 'error', reason: 'no page' };
     const visibleTitle = await this.getVisibleTitle();
     let matchedByFingerprint = false;
     let fingerprint = { ok: false, matched: 0, required: 0 };

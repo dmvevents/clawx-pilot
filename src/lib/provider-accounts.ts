@@ -135,20 +135,36 @@ async function fetchAllowingMissingRoute<T>(path: string): Promise<T | null> {
   }
 }
 
+/**
+ * Coerce a list endpoint's payload to an array. A Host API answering 200
+ * with a non-array body (version skew, error object, or an e2e mock
+ * fallback) must degrade to an empty list — NOT poison the store, where the
+ * first `accounts.filter(...)` in a render-path useMemo throws and the
+ * app-level error boundary blanks the whole window (CLWX-91).
+ */
+function asArrayPayload<T>(value: unknown, path: string): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value != null) {
+    console.warn(`[provider-accounts] ${path} returned a non-array payload; treating as empty.`, value);
+  }
+  return [];
+}
+
 export async function fetchProviderSnapshot(): Promise<ProviderSnapshot> {
   // Primary path: read everything from the new /api/provider-accounts surface.
   // Only the key-info call tolerates a missing route (older Host API builds
   // predate it). All other endpoints have shipped for a while; if they fail,
   // the snapshot fails and the store surfaces the error to the UI rather
   // than presenting an empty/inconsistent provider list.
-  const [accountsResult, keyInfoResult, vendors, defaultInfo] = await Promise.all([
+  const [accountsResult, keyInfoResult, vendorsResult, defaultInfo] = await Promise.all([
     hostApiFetch<ProviderAccount[]>('/api/provider-accounts'),
     fetchAllowingMissingRoute<ProviderAccountKeyInfo[]>('/api/provider-accounts/key-info'),
     hostApiFetch<ProviderVendorInfo[]>('/api/provider-vendors'),
     hostApiFetch<{ accountId: string | null }>('/api/provider-accounts/default'),
   ]);
 
-  let accounts = accountsResult ?? [];
+  const vendors = asArrayPayload<ProviderVendorInfo>(vendorsResult, '/api/provider-vendors');
+  let accounts = asArrayPayload<ProviderAccount>(accountsResult, '/api/provider-accounts');
   let statuses: ProviderWithKeyInfo[];
 
   if (Array.isArray(keyInfoResult)) {

@@ -51,6 +51,7 @@ export interface AppSettings {
   // UI State
   sidebarCollapsed: boolean;
   devModeUnlocked: boolean;
+  setupComplete: boolean;
 
   // Presets
   selectedBundles: string[];
@@ -65,7 +66,24 @@ export interface AppSettings {
   // Preferred chat channel — Online (cloud) vs On this device (local Ollama).
   // Maps to a concrete provider account at send time via pickAccountForChannel.
   // Default 'on-device' for the principals' pilot (Hermes 3 8B).
-  preferredChannel: 'online' | 'on-device';
+  // Optional on purpose: an ABSENT value means "the principal has not chosen a
+  // channel yet", which the cloud-gateway seed keys on to make Online the launch
+  // default. A concrete value is only ever written by an explicit user toggle
+  // (settings PUT) — never by a default — so a persisted value is authoritative
+  // ONCE the one-time migration below has run (see channelDefaultMigrated).
+  preferredChannel?: 'online' | 'on-device';
+
+  // One-time marker, set the first time the cloud-gateway seed applies the
+  // launch-channel default on this box. It gates a legacy-upgrade migration in
+  // cloud-gateway-provider-seed.ts: an OLDER build's store constructor persisted
+  // preferredChannel:'on-device' to disk (electron-store/conf writes the whole
+  // defaults object at construction), which on an in-place upgrade is
+  // indistinguishable from an explicit choice and would otherwise pin the box
+  // on-device forever. The migration flips such a legacy value to Online exactly
+  // once; after the marker is set, an explicit "On this device" toggle is
+  // respected (moe.13 no-clobber). Optional + never defaulted, same reasoning as
+  // preferredChannel.
+  channelDefaultMigrated?: boolean;
 }
 
 /**
@@ -81,7 +99,7 @@ function getSystemLocale(): string {
     || 'en';
 }
 
-function createDefaultSettings(): AppSettings {
+export function createDefaultSettings(): AppSettings {
   return {
     // General
     theme: 'system',
@@ -112,6 +130,7 @@ function createDefaultSettings(): AppSettings {
     // UI State
     sidebarCollapsed: false,
     devModeUnlocked: false,
+    setupComplete: false,
 
     // Presets
     selectedBundles: ['principal'],
@@ -121,8 +140,15 @@ function createDefaultSettings(): AppSettings {
     // Reasoning display — auto inherits from feature-flag default.
     reasoningVisibility: 'auto',
 
-    // Preferred chat channel — defaults to local for the pilot.
-    preferredChannel: 'on-device',
+    // preferredChannel is deliberately NOT defaulted here. electron-store's
+    // `defaults` are returned by `.get()` even when a key was never written, so
+    // defaulting it to 'on-device' made getSetting('preferredChannel') never
+    // return undefined — which silently killed the cloud-gateway seed's
+    // "set Online only when no choice exists yet" guard, leaving the shipped
+    // pilot build on the on-device model despite seeding a working cloud
+    // gateway. Callers that need a concrete launch value fall back to
+    // 'on-device' explicitly (main/index.ts preflight); an explicit user toggle
+    // persists a concrete value via the settings PUT.
   };
 }
 

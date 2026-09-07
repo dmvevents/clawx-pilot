@@ -96,6 +96,7 @@ type ChatLikeState = {
   runError: string | null;
   sending: boolean;
   lastUserMessageAt: number | null;
+  lastSentPayload: { text: string } | null;
   pendingFinal: boolean;
   sessionLabels: Record<string, string>;
   sessionLastActivity: Record<string, number>;
@@ -112,6 +113,7 @@ function makeHarness(initial?: Partial<ChatLikeState>) {
     runError: null,
     sending: false,
     lastUserMessageAt: null,
+    lastSentPayload: null,
     pendingFinal: false,
     sessionLabels: {},
     sessionLastActivity: {},
@@ -221,6 +223,7 @@ describe('chat history actions', () => {
       activeRunId: 'run-error',
       pendingFinal: true,
       lastUserMessageAt: 1773281731000,
+      lastSentPayload: { text: 'What model are you?' },
     });
     const actions = createHistoryActions(h.set as never, h.get as never);
 
@@ -255,6 +258,8 @@ describe('chat history actions', () => {
     const h = makeHarness({
       currentSessionKey: 'agent:main:main',
       runError: 'Connection error.',
+      lastUserMessageAt: 1000,
+      lastSentPayload: { text: 'First question' },
     });
     const actions = createHistoryActions(h.set as never, h.get as never);
 
@@ -286,6 +291,8 @@ describe('chat history actions', () => {
     const h = makeHarness({
       currentSessionKey: 'agent:main:main',
       runError: 'old model error',
+      lastUserMessageAt: 1773281731000,
+      lastSentPayload: { text: 'What model are you?' },
     });
     const actions = createHistoryActions(h.set as never, h.get as never);
 
@@ -308,11 +315,42 @@ describe('chat history actions', () => {
     ]);
   });
 
+  it('never re-seeds the banner from history on an idle-window reload (moe.18 Finding D0)', async () => {
+    // Session re-open / post-gateway-restart shape: no turn active in this
+    // window (lastUserMessageAt null), history's last assistant message is an
+    // old terminal error. The stale banner must not repaint — this mirrors
+    // the live store's guard so the dormant modular copy cannot resurrect D0.
+    const { createHistoryActions } = await import('@/stores/chat/history-actions');
+    const h = makeHarness({
+      currentSessionKey: 'agent:main:main',
+      runError: null,
+      lastUserMessageAt: null,
+      lastSentPayload: { text: 'yesterday question' },
+    });
+    const actions = createHistoryActions(h.set as never, h.get as never);
+
+    invokeIpcMock.mockResolvedValueOnce({
+      success: true,
+      result: {
+        messages: [
+          { role: 'user', content: 'yesterday question', timestamp: 1000 },
+          { role: 'assistant', content: [], timestamp: 1001, stopReason: 'error', errorMessage: '404 Resource not found' },
+        ],
+      },
+    });
+
+    await actions.loadHistory(true);
+
+    expect(h.read().runError).toBeNull();
+  });
+
   it('does not set runError from an older assistant failure when a later turn succeeded', async () => {
     const { createHistoryActions } = await import('@/stores/chat/history-actions');
     const h = makeHarness({
       currentSessionKey: 'agent:main:main',
       runError: 'stale',
+      lastUserMessageAt: 1773281730000,
+      lastSentPayload: { text: 'first' },
     });
     const actions = createHistoryActions(h.set as never, h.get as never);
 

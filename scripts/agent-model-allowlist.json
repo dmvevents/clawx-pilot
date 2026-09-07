@@ -1,0 +1,6 @@
+{
+  "$comment": "CLWX-83: authoritative pin allowlist for agent surfaces, consumed by scripts/agent-model-pins-doctor.mjs and tests/unit/clwx83-agent-model-pins.test.ts. tierAliases are the only values allowed in .claude/agents frontmatter (the harness enforcer resolves them per-provider; bare model IDs silently break under Bedrock/proxy routing). codexModels lists models observed working in this fleet's codex rollout history — extend it when a new model is verified live, do not guess. knownBadModels are pins PROVEN nonexistent (finding #4, docs/BLOCKER_BUG_COLLECTION_2026-09-03.md: 'The requested model gpt-5.3-codex-spark does not exist' cost a month of silently lost subagent workers).",
+  "tierAliases": ["haiku", "sonnet", "opus", "fable", "inherit"],
+  "codexModels": ["gpt-5.5", "gpt-5.3-codex", "gpt-5.6-sol", "gpt-6-astra"],
+  "knownBadModels": ["gpt-5.3-codex-spark"]
+}

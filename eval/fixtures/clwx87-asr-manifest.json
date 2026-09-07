@@ -1,0 +1,13 @@
+{
+  "description": "CLWX-87 ASR WER bench fixture manifest. Each row is a known-speech clip: `text` is the reference transcript; synthetic rows are generated deterministically at bench time via macOS `say` (voice+rate pinned) or Windows System.Speech synthesis — no audio binaries in the repo. Rows with source `real` point at operator-supplied audio (`audioPath` relative to the manifest) for Trinidadian-accent coverage — the named gap synthetic TTS cannot cover.",
+  "clips": [
+    { "id": "daily-report", "source": "synthetic-say", "voice": "Samantha", "rate": 175, "text": "Good afternoon. Please prepare the daily report before three forty five this afternoon." },
+    { "id": "suspension", "source": "synthetic-say", "voice": "Samantha", "rate": 200, "text": "Student A was suspended for seven days following the incident in the Standard Four classroom." },
+    { "id": "circular", "source": "synthetic-say", "voice": "Daniel", "rate": 175, "text": "The Ministry of Education circular requires all principals in the Victoria district to attend." },
+    { "id": "places-couva", "source": "synthetic-say", "voice": "Daniel", "rate": 200, "text": "Parents in Couva and Chaguanas must sign the permission slip before the school tour." },
+    { "id": "nscc-attendance", "source": "synthetic-say", "voice": "Karen", "rate": 175, "text": "The National School Code of Conduct defines irregular attendance as more than five days absent." },
+    { "id": "forms-sanfernando", "source": "synthetic-say", "voice": "Karen", "rate": 210, "text": "Please forward the suspension form to the district office in San Fernando by Friday." },
+    { "id": "minutes", "source": "synthetic-say", "voice": "Moira", "rate": 175, "text": "The staff meeting minutes must record the decisions about the Infant One enrolment." },
+    { "id": "places-tunapuna", "source": "synthetic-say", "voice": "Moira", "rate": 195, "text": "Teachers at the Tunapuna primary school reported a broken standpipe near the cafeteria." }
+  ]
+}

@@ -49,7 +49,8 @@ export function createMenu(): void {
           accelerator: 'CmdOrCtrl+N',
           click: () => {
             const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/chat');
+            // Chat lives at '/', not '/chat'; sending '/chat' left the window blank.
+            win?.webContents.send('navigate', '/');
           },
         },
         { type: 'separator' },
@@ -114,7 +115,8 @@ export function createMenu(): void {
           accelerator: 'CmdOrCtrl+2',
           click: () => {
             const win = BrowserWindow.getFocusedWindow();
-            win?.webContents.send('navigate', '/chat');
+            // Chat lives at '/', not '/chat'; sending '/chat' left the window blank.
+            win?.webContents.send('navigate', '/');
           },
         },
         {
@@ -176,20 +178,20 @@ export function createMenu(): void {
         {
           label: 'Documentation',
           click: async () => {
-            await shell.openExternal('https://claw-x.com');
+            await shell.openExternal('https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260610-bbc4eb1');
           },
         },
         {
           label: 'Report Issue',
           click: async () => {
-            await shell.openExternal('https://github.com/ValueCell-ai/ClawX/issues');
+            await shell.openExternal('https://github.com/dmvevents/clawx-pilot/issues');
           },
         },
         { type: 'separator' },
         {
-          label: 'OpenClaw Documentation',
+          label: 'Release Notes',
           click: async () => {
-            await shell.openExternal('https://docs.openclaw.ai');
+            await shell.openExternal('https://github.com/dmvevents/clawx-pilot/releases/tag/moe10-windows-rc-20260610-bbc4eb1');
           },
         },
       ],

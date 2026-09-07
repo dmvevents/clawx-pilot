@@ -23,6 +23,8 @@ release/
 .env
 .env.local
 .env.*.local
+.tmp/
+.release-build-source.json
 
 # Logs
 logs
@@ -46,6 +48,9 @@ test-results/
 .cache/
 .turbo/
 *.tsbuildinfo
+__pycache__/
+**/__pycache__/
+*.py[cod]
 
 # Electron
 *.dmg
@@ -56,18 +61,33 @@ test-results/
 
 resources/bin
 
+# Native helper build intermediates
+electron/native/**/bin/
+electron/native/**/obj/
+
 # Secrets
 *.p12
 *.pem
 *.key
+cloud-gateway.json
+resources/cloud-gateway.json
+resources/microsoft-graph.json
+azure-speech.json
+resources/azure-speech.json
 
 build/
 artifacts/
 docs/pr-session-notes-*.md
+docs/reports/multi-llm/outputs/
 
 .cursor/
 .claude/*
 !.claude/agents/
+!.claude/commands/
+!.claude/skills/
+!.claude/settings.json
+!.claude/hooks/
+.omc/
 .pnpm-store/
 package-lock.json
 
@@ -85,3 +105,18 @@ ruvector.db
 *.db-shm
 *.db-wal
 docs/ui-snapshots/**/ruvector.db
+
+# Harness/eval JUnit reports written to repo root by the harness runner
+harness-*-junit.xml
+
+# Playwright trace archives in evidence dirs are 10MB+ each — keep local-only
+# (RESULT.md records their existence; video + screenshots are committed)
+skills/laptop/evidence/**/trace.zip
+skills/laptop/evidence/**/run-01-pass-fallback/
+skills/laptop/evidence/**/full-capture.mov
+skills/laptop/evidence/**/permission-probe.mov
+skills/laptop/evidence/*-moe19-verify-*/
+
+# graphify dev tooling — never commit the graph artifact (public repo; may ingest secrets)
+graphify-out/
+*.graphify.json

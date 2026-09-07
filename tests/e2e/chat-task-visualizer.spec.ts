@@ -203,13 +203,13 @@ test.describe('ClawX chat execution graph', () => {
               sessions: [{ key: PROJECT_MANAGER_SESSION_KEY, displayName: 'main' }],
             },
           },
-          [stableStringify(['chat.history', { sessionKey: PROJECT_MANAGER_SESSION_KEY, limit: 200 }])]: {
+          [stableStringify(['chat.history', { sessionKey: 'agent:main:main', limit: 200 }])]: {
             success: true,
             result: {
               messages: seededHistory,
             },
           },
-          [stableStringify(['chat.history', { sessionKey: PROJECT_MANAGER_SESSION_KEY, limit: 1000 }])]: {
+          [stableStringify(['chat.history', { sessionKey: 'agent:main:main', limit: 1000 }])]: {
             success: true,
             result: {
               messages: seededHistory,
@@ -299,13 +299,13 @@ test.describe('ClawX chat execution graph', () => {
               sessions: [{ key: PROJECT_MANAGER_SESSION_KEY, displayName: 'main' }],
             },
           },
-          [stableStringify(['chat.history', { sessionKey: PROJECT_MANAGER_SESSION_KEY, limit: 200 }])]: {
+          [stableStringify(['chat.history', { sessionKey: 'agent:main:main', limit: 200 }])]: {
             success: true,
             result: {
               messages: longRunHistory,
             },
           },
-          [stableStringify(['chat.history', { sessionKey: PROJECT_MANAGER_SESSION_KEY, limit: 1000 }])]: {
+          [stableStringify(['chat.history', { sessionKey: 'agent:main:main', limit: 1000 }])]: {
             success: true,
             result: {
               messages: longRunHistory,
@@ -349,6 +349,13 @@ test.describe('ClawX chat execution graph', () => {
       await expect(page.getByTestId('chat-execution-graph')).toHaveAttribute('data-collapsed', 'true');
       await expect(page.getByTestId('chat-execution-graph')).toContainText('0 tool calls');
       await expect(page.getByTestId('chat-execution-graph')).toContainText('9 process messages');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-sending', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-pending-final', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-active-run-id-present', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-active-execution-graph', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-degrade-in-progress', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-run-error-present', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-error-present', 'false');
       await expect(page.getByText(longRunSummary, { exact: true })).toBeVisible();
       await expect(page.getByText(longRunReplyText, { exact: true })).toHaveCount(0);
     } finally {
@@ -356,7 +363,7 @@ test.describe('ClawX chat execution graph', () => {
     }
   });
 
-  test('surfaces terminal model errors and stops the stale thinking state', async ({ launchElectronApp }) => {
+  test('stops the stale thinking state and does not repaint a stale run-error banner on a fresh window (D0)', async ({ launchElectronApp }) => {
     const app = await launchElectronApp({ skipSetup: true });
 
     try {
@@ -369,13 +376,13 @@ test.describe('ClawX chat execution graph', () => {
               sessions: [{ key: PROJECT_MANAGER_SESSION_KEY, displayName: 'main' }],
             },
           },
-          [stableStringify(['chat.history', { sessionKey: PROJECT_MANAGER_SESSION_KEY, limit: 200 }])]: {
+          [stableStringify(['chat.history', { sessionKey: 'agent:main:main', limit: 200 }])]: {
             success: true,
             result: {
               messages: errorRunHistory,
             },
           },
-          [stableStringify(['chat.history', { sessionKey: PROJECT_MANAGER_SESSION_KEY, limit: 1000 }])]: {
+          [stableStringify(['chat.history', { sessionKey: 'agent:main:main', limit: 1000 }])]: {
             success: true,
             result: {
               messages: errorRunHistory,
@@ -415,15 +422,251 @@ test.describe('ClawX chat execution graph', () => {
       }
 
       await expect(page.getByTestId('main-layout')).toBeVisible();
-      await expect(page.getByText('404 Resource not found')).toBeVisible({ timeout: 30_000 });
-      const runErrorCallout = page.getByTestId('chat-run-error');
-      await expect(runErrorCallout).toBeVisible({ timeout: 30_000 });
-      await expect(runErrorCallout).toContainText('404 Resource not found');
+      // moe.18 Finding D0: a FRESH window loading a session whose last turn
+      // errored historically must NOT repaint the red run-error banner (it
+      // used to persist across reloads/gateway restarts until app relaunch).
+      // The stale thinking state must still stop and the composer must be
+      // usable. In-line rendering of the historical error-stopped message is
+      // the recorded follow-up (no banner ≠ hidden active failures: active
+      // own-turn errors still paint, pinned in chat-channel-degrade tests).
       await expect(page.getByTestId('chat-execution-graph')).toHaveCount(0);
       await expect(page.getByTestId('chat-execution-step-thinking-trailing')).toHaveCount(0);
-      await expect(page.getByText('404 Resource not found')).toHaveCount(1);
+      await expect(page.getByTestId('chat-run-error')).toHaveCount(0);
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-sending', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-pending-final', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-active-run-id-present', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-run-error-present', 'false');
+      await expect(page.getByText('404 Resource not found')).toBeHidden();
       await page.getByTestId('chat-composer-input').fill('retry');
       await expect(page.getByTestId('chat-composer-send')).toBeEnabled();
+    } finally {
+      await closeElectronApp(app);
+    }
+  });
+
+  test('keeps channel recovery visible when a fresh send replaces the degrade notice', async ({ launchElectronApp }) => {
+    const app = await launchElectronApp({ skipSetup: true });
+
+    try {
+      await installIpcMocks(app, {
+        gatewayStatus: { state: 'running', port: 18789, pid: 12345 },
+        gatewayRpc: {
+          [stableStringify(['sessions.list', {}])]: {
+            success: true,
+            result: {
+              sessions: [{ key: PROJECT_MANAGER_SESSION_KEY, displayName: 'main' }],
+            },
+          },
+          [stableStringify(['chat.history', { sessionKey: 'agent:main:main', limit: 200 }])]: {
+            success: true,
+            result: { messages: [] },
+          },
+          [stableStringify(['chat.history', { sessionKey: 'agent:main:main', limit: 1000 }])]: {
+            success: true,
+            result: { messages: [] },
+          },
+        },
+        hostApi: {
+          [stableStringify(['/api/gateway/status', 'GET'])]: {
+            ok: true,
+            data: {
+              status: 200,
+              ok: true,
+              json: { state: 'running', port: 18789, pid: 12345 },
+            },
+          },
+          [stableStringify(['/api/settings', 'GET'])]: {
+            ok: true,
+            data: {
+              status: 200,
+              ok: true,
+              json: { setupComplete: true, preferredChannel: 'online' },
+            },
+          },
+          [stableStringify(['/api/agents', 'GET'])]: {
+            ok: true,
+            data: {
+              status: 200,
+              ok: true,
+              json: {
+                success: true,
+                agents: [{ id: 'main', name: 'main' }],
+              },
+            },
+          },
+          [stableStringify(['/api/provider-accounts', 'GET'])]: {
+            ok: true,
+            data: {
+              status: 200,
+              ok: true,
+              json: [
+                { id: 'google', vendorId: 'google', label: 'Online', model: 'gemini-2.5-pro', isDefault: true, enabled: true },
+                { id: 'ollama', vendorId: 'ollama', label: 'On this device', baseUrl: 'http://127.0.0.1:11434', model: 'qwen2.5:3b-instruct', enabled: true },
+              ],
+            },
+          },
+          [stableStringify(['/api/provider-accounts/key-info', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: [] },
+          },
+          [stableStringify(['/api/provider-vendors', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: [] },
+          },
+          [stableStringify(['/api/provider-accounts/default', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: { accountId: 'google' } },
+          },
+          [stableStringify(['/api/settings/degradeChannel', 'POST'])]: {
+            ok: true,
+            data: {
+              status: 200,
+              ok: true,
+              json: {
+                success: true,
+                channel: 'on-device',
+                accountId: 'ollama',
+                modelRef: 'ollama/qwen2.5:3b-instruct',
+              },
+            },
+          },
+        },
+      });
+      await app.evaluate(() => {
+        const { ipcMain } = process.mainModule!.require('electron') as typeof import('electron');
+        let pinnedOnDevice = false;
+        let sendCount = 0;
+        (globalThis as {
+          __releaseChannelRecoveryClear?: () => void;
+          __resolveOnDevicePin?: () => void;
+        }).__releaseChannelRecoveryClear = undefined;
+        (globalThis as { __resolveOnDevicePin?: () => void }).__resolveOnDevicePin = undefined;
+        ipcMain.removeHandler('gateway:rpc');
+        ipcMain.handle('gateway:rpc', async (_event: unknown, method: string, params: unknown) => {
+          if (method === 'sessions.patch') {
+            const requested = (params as { model?: unknown } | undefined)?.model;
+            const sessionKey = String((params as { key?: unknown } | undefined)?.key ?? 'agent:main:main');
+            if (requested == null) {
+              if (!pinnedOnDevice) {
+                return {
+                  success: true,
+                  result: {
+                    ok: true,
+                    key: sessionKey,
+                    entry: { key: sessionKey },
+                    resolved: {},
+                  },
+                };
+              }
+              return await new Promise((resolve) => {
+                (globalThis as { __releaseChannelRecoveryClear?: () => void }).__releaseChannelRecoveryClear = () => resolve({
+                  success: true,
+                  result: {
+                    ok: true,
+                    key: sessionKey,
+                    entry: { key: sessionKey },
+                    resolved: {},
+                  },
+                });
+              });
+            }
+            const requestedModel = String(requested);
+            return await new Promise((resolve) => {
+              (globalThis as { __resolveOnDevicePin?: () => void }).__resolveOnDevicePin = () => {
+                pinnedOnDevice = true;
+                resolve({
+                  success: true,
+                  result: {
+                    ok: true,
+                    key: sessionKey,
+                    entry: { key: sessionKey, modelOverride: requestedModel, providerOverride: requestedModel.split('/')[0] },
+                    resolved: { modelProvider: 'ollama', model: 'qwen2.5:3b-instruct' },
+                  },
+                });
+              };
+            });
+          }
+          if (method === 'chat.send') {
+            sendCount += 1;
+            return { success: true, result: { runId: sendCount === 1 ? 'run-cloud' : 'run-new' } };
+          }
+          if (method === 'sessions.list') {
+            return { success: true, result: { sessions: [{ key: 'agent:main:main', displayName: 'main' }] } };
+          }
+          if (method === 'chat.history') {
+            return { success: true, result: { messages: [] } };
+          }
+          return { success: true, result: {} };
+        });
+      });
+
+      const page = await getStableWindow(app);
+      try {
+        await page.reload();
+      } catch (error) {
+        if (!String(error).includes('ERR_FILE_NOT_FOUND')) {
+          throw error;
+        }
+      }
+
+      await expect(page.getByTestId('main-layout')).toBeVisible();
+      await expect(page.getByTestId('chat-composer-channel')).toHaveAttribute('data-channel', 'online');
+      await page.getByTestId('chat-composer-input').fill('first turn');
+      await page.getByTestId('chat-composer-send').click();
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-active-run-id-present', 'true');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-sending', 'true');
+
+      await app.evaluate(() => {
+        const { BrowserWindow } = process.mainModule!.require('electron') as typeof import('electron');
+        BrowserWindow.getAllWindows().forEach((window) => {
+          window.webContents.send('gateway:chat-message', {
+            state: 'error',
+            runId: 'run-cloud',
+            sessionKey: 'agent:main:main',
+            errorMessage: 'fetch failed',
+          });
+        });
+      });
+
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-degrade-in-progress', 'true');
+      await expect.poll(async () => await app.evaluate(() => (
+        typeof (globalThis as { __resolveOnDevicePin?: () => void }).__resolveOnDevicePin === 'function'
+      ))).toBe(true);
+      await app.evaluate(() => {
+        const { BrowserWindow } = process.mainModule!.require('electron') as typeof import('electron');
+        BrowserWindow.getAllWindows().forEach((window) => {
+          window.webContents.send('gateway:chat-message', {
+            state: 'final',
+            runId: 'run-cloud',
+            sessionKey: 'agent:main:main',
+            message: {
+              role: 'assistant',
+              id: 'cloud-final-after-pin',
+              stopReason: 'stop',
+              content: [{ type: 'text', text: 'Cloud recovered after pin.' }],
+            },
+          });
+        });
+      });
+      await app.evaluate(() => {
+        (globalThis as { __resolveOnDevicePin?: () => void }).__resolveOnDevicePin?.();
+      });
+      await expect.poll(async () => await app.evaluate(() => (
+        typeof (globalThis as { __releaseChannelRecoveryClear?: () => void }).__releaseChannelRecoveryClear === 'function'
+      ))).toBe(true);
+      await expect(page.getByTestId('chat-composer-input')).toBeEnabled();
+      await page.getByTestId('chat-composer-input').fill('second turn while restore is pending');
+      await page.getByTestId('chat-composer-send').click();
+
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-degrade-in-progress', 'true');
+      await expect(page.getByTestId('chat-channel-recovery-notice')).toBeVisible();
+      await expect(page.getByText('Restoring this chat to your selected channel…')).toBeVisible();
+
+      await app.evaluate(() => {
+        (globalThis as { __releaseChannelRecoveryClear?: () => void }).__releaseChannelRecoveryClear?.();
+      });
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-degrade-in-progress', 'false');
+      await expect(page.getByTestId('chat-channel-recovery-notice')).toHaveCount(0);
     } finally {
       await closeElectronApp(app);
     }

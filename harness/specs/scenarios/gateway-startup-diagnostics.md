@@ -159,7 +159,12 @@ Symptoms:
 Expected mitigation:
 
 - Preserve external plugins that are installed, configured in `plugins.entries`, or loaded through `plugins.load` / `plugins.load.paths`.
-- Preserve configured bundled plugins, active provider plugins, and core runtime plugins such as `browser`, `acpx`, `device-pair`, and `memory-core`.
+- Preserve configured bundled plugins, active provider plugins, and core runtime plugins such as `browser`, `device-pair`, and `memory-core`. Preserve existing ACP policy and `acpx` entries, including disabled choices.
+- For Ministry installs with neither ACP policy nor an ACPX entry, seed `acp.enabled=false` and `plugins.entries.acpx.enabled=false`. Principal tools use native plugins/Host API and do not require the default coding-agent adapter downloaded through `npx`. Explicit ACP setups retain their own adapter requirements.
+
+### Pre-start provider convergence
+
+Cloud/local provider seeding and channel preflight must complete their config writes before the first Gateway start without scheduling a deferred restart. Live provider changes still refresh the running Gateway, and late Graph user-ID refresh retains the manager. Verify this with source regressions and the installed process timeline; a socket connection alone does not prove RPC readiness or an answer.
 - Do not re-add optional provider-like bundled plugins such as `alibaba`, `deepgram`, `elevenlabs`, `groq`, `microsoft`, `phone-control`, `runway`, `talk-voice`, or `voyage` unless configured or active.
 
 ### Escaped Skill Symlinks

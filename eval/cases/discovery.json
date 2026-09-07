@@ -1,0 +1,100 @@
+{
+  "_comment": "File-discovery eval cases (Defect A + B). Raj's tester reported 'I couldn't find any files in that folder' and only got results after pasting an absolute path. These cases stage a real file at a real location and assert resolveReadablePath() finds it — or refuses it, for the sandbox rows. `layout` describes where the file goes relative to $HOME; the runner creates and removes it.",
+  "source": "incoming-tests/ClawX Agent Tests/CHAT-001-6.png + skills/laptop/evidence/2026-08-20-raj-prompt-replay/REPORT.md",
+  "cases": [
+    {
+      "id": "D1-kfm-desktop",
+      "layout": "home:OneDrive/Desktop",
+      "query": "bare-name",
+      "expect": "found",
+      "why": "Windows OneDrive Known Folder Move puts the real Desktop at %USERPROFILE%\\OneDrive\\Desktop. Every Ministry laptop with KFM has this shape; a ~/Desktop-only probe misses all of it."
+    },
+    {
+      "id": "D2-kfm-desktop-subfolder",
+      "layout": "home:OneDrive/Desktop/MoE Agent Testing Folder",
+      "query": "bare-name",
+      "expect": "found",
+      "why": "The exact path Raj's tester used: C:\\Users\\camer\\OneDrive\\Desktop\\MoE Agent Testing Folder."
+    },
+    {
+      "id": "D3-business-onedrive",
+      "layout": "home:OneDrive - Ministry of Education/Documents",
+      "query": "bare-name",
+      "expect": "found",
+      "why": "Work/school accounts use 'OneDrive - <Tenant>'. A live MoE laptop signed in as @moe.gov.tt gets this folder name, not plain 'OneDrive'."
+    },
+    {
+      "id": "D4-business-onedrive-nested",
+      "layout": "home:OneDrive - Ministry of Education/Desktop/Term Two/Circulars",
+      "query": "bare-name",
+      "expect": "found",
+      "why": "Two levels below a business-OneDrive Desktop — within the 3-deep scan budget. Principals nest by term and topic."
+    },
+    {
+      "id": "D5-plain-desktop",
+      "layout": "home:Desktop",
+      "query": "bare-name",
+      "expect": "found",
+      "why": "The non-KFM baseline must not regress while fixing KFM."
+    },
+    {
+      "id": "D6-downloads",
+      "layout": "home:Downloads",
+      "query": "bare-name",
+      "expect": "found",
+      "why": "Where an emailed attachment lands."
+    },
+    {
+      "id": "D7-documents-subfolder",
+      "layout": "home:Documents/Output_Files",
+      "query": "bare-name",
+      "expect": "found",
+      "why": "Raj's P2 and P4 both write into an Output_Files folder, then need to read it back."
+    },
+    {
+      "id": "D8-absolute-path",
+      "layout": "home:Documents",
+      "query": "absolute",
+      "expect": "found",
+      "why": "The workaround Raj's tester fell back to must keep working."
+    },
+    {
+      "id": "D9-tilde-path",
+      "layout": "home:Documents",
+      "query": "tilde",
+      "expect": "found",
+      "why": "~/ prefix is what the agent itself emits when it echoes a path back."
+    },
+    {
+      "id": "D10-tmp-realpath",
+      "layout": "tmpdir",
+      "query": "absolute",
+      "expect": "found",
+      "why": "Defect B: the guard's own message says 'or tmp directory are allowed', and renderer file:stage outputs briefly live there. os.tmpdir() on macOS is under /var/folders which is itself a symlink to /private/var."
+    },
+    {
+      "id": "D11-tmp-symlink-alias",
+      "layout": "tmp-literal",
+      "query": "absolute",
+      "expect": "found",
+      "platform": "darwin",
+      "why": "Defect B proper: /tmp is a symlink to /private/tmp on macOS. The candidate was realpath-resolved but the roots were not, so startsWith() failed and the guard refused a path it claimed to allow."
+    },
+    {
+      "id": "D12-outside-sandbox",
+      "layout": "system",
+      "path": "/etc/hosts",
+      "query": "absolute",
+      "expect": "refused",
+      "platform": "!win32",
+      "why": "The KFM widening must NOT widen the sandbox. Exists on macOS and Linux, so a 'not found' pass would be a false negative."
+    },
+    {
+      "id": "D13-missing-file",
+      "layout": "none",
+      "query": "bare-name",
+      "expect": "not-found",
+      "why": "The not-found message must enumerate what was searched — that is what turns 'I couldn't find any files' into something a principal can act on."
+    }
+  ]
+}

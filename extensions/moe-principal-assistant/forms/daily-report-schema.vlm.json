@@ -885,5 +885,10 @@
       "type": "number",
       "required": true
     }
-  ]
+  ],
+  "fingerprint": {
+    "questionCount": 57,
+    "orderedLabelsHash": "f5e3b0e2ebfe7e94c208a7a5b34ff652adcceba4801c3c4430178a1c4a5721f6",
+    "algorithm": "sha256/normalized-labels-v1"
+  }
 }

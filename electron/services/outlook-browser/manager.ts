@@ -75,7 +75,7 @@ export class OutlookBrowserManager {
         status: 'needs_signin',
         url: OUTLOOK_INBOX_URL,
         message:
-          'Chrome is not running with remote debugging enabled. Start your Chrome and sign in to Outlook, then retry.',
+          'Ministry of Education could not attach to Chrome for Outlook. The assistant should run browser.diagnose and browser.repair_chrome_cdp, then retry outlook.open. If repair reports profile_locked_close_chrome, close all Chrome windows and retry from Ministry of Education. Do not ask the principal to configure Chrome manually.',
       };
     }
 
@@ -133,8 +133,21 @@ export class OutlookBrowserManager {
       };
     }
 
-    const messages = extractInboxMessages(snap?.tree).slice(0, Math.max(1, top));
-    return { status: 'ok', messages };
+    const requestedTop = Math.max(1, top);
+    const messages = extractInboxMessages(snap?.tree).slice(0, requestedTop);
+    return {
+      status: 'ok',
+      messages,
+      scan: {
+        scope: 'recent_inbox_window',
+        requestedTop,
+        scannedCount: messages.length,
+        returnedCount: messages.length,
+        exhaustive: false,
+        note:
+          'Browser Outlook scan covers the recent visible Inbox window only; do not describe it as all mailbox mail.',
+      },
+    };
   }
 
   /**
@@ -207,10 +220,19 @@ export class OutlookBrowserManager {
       };
     }
 
+    const subject = args.subject;
+    if (!args.to || typeof subject !== 'string' || !subject.trim() || typeof args.body !== 'string') {
+      return {
+        status: 'refused',
+        reason:
+          'Send blocked: the legacy Outlook driver requires explicit to, subject, and body fields. Open the reviewed draft in the v2 Outlook path or re-draft before sending.',
+      };
+    }
+
     // Ensure the draft exists (idempotent — fills again if needed).
     const drafted = await this.draftEmail({
       to: args.to,
-      subject: args.subject,
+      subject,
       body: args.body,
       cc: args.cc,
       bcc: args.bcc,

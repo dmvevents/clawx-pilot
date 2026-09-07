@@ -47,3 +47,15 @@ These are the typical landmines:
 
 - Edit `package.json` yourself — surface the diff and let the human run `pnpm` to move dependencies (the lockfile rewrite is meaningful).
 - Skip the audit because "it built locally" — `electron-builder` only strips devDeps in actual packaging, not `pnpm dev`.
+
+## Bundled-parser rules (CLWX-76)
+
+`dependencies`-vs-`devDependencies` is only half the class. The gateway plugin loads document parsers (`pdf-parse`, `mammoth`, `docx`, `xlsx`, `sharp`) from a SEPARATE bundle under `build/openclaw/node_modules` (declared in `EXTRA_BUNDLED_PACKAGES`, `scripts/openclaw-bundle-config.mjs`), not from the asar. Two failure modes live here that the classification pass above cannot see, both proven in production (moe.15 canvas-binding incident, CLWX-72):
+
+**Rule (a) — every `EXTRA_BUNDLED_PACKAGES` entry must pass `scripts/verify-openclaw-bundle.mjs`.**
+Presence in `package.json` does not guarantee presence in the shipped bundle. Run `node scripts/verify-openclaw-bundle.mjs` and require exit 0. It checks presence + ship-target native bindings + host loadability, and is wired into the package chain. FAIL the release on any miss. Do not accept "it's in `dependencies`" as evidence a parser will be in the bundle.
+
+**Rule (b) — any bundled package with platform-native `optionalDependencies` must have all `SHIP_TARGETS` bindings in the bundle.**
+`pnpm` installs an `optionalDependency` only for the build host's platform (`@napi-rs/canvas-win32-x64-msvc` never materialises on a Mac build host unless `supportedArchitectures` forces it). So a module can be present-and-resolvable yet throw at evaluation on the target because its `.node` binding is absent — which the old `loadDep()` catch-all masked as "module not found". For each bundled package, read its `optionalDependencies`; if any are platform-native (`*-win32-*`, `*-darwin-*`, `@napi-rs/*`, `@img/sharp-*`), confirm the `SHIP_TARGETS` bindings exist in `build/openclaw/node_modules` (rule (a)'s script already enforces this for the canvas set — extend `SHIP_TARGETS` when adding a new native-binding parser). Loadability, not resolution, is the bar: `require.resolve` passing is NOT sufficient (see `windows-pilot/scripts/pilot-office-runtime-check.ps1`, which now `require()`s each parser on-target).
+
+The runtime counterpart to these rules is `requireDocDep`/`loadDepDetailed` in `extensions/moe-principal-assistant/doc-tools.mjs`, which surface `loadError` vs `notFound` truthfully so a masked binding failure can never again read as "not installed".

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildConfiguredModelOptions,
+  channelLabelForModelRef,
   formatModelRefLabel,
   resolveRuntimeProviderKey,
 } from '../../src/lib/model-options';
@@ -92,5 +93,35 @@ describe('model option helpers', () => {
         null,
       ),
     ).toEqual([]);
+  });
+});
+
+describe('channelLabelForModelRef', () => {
+  it('maps cloud provider refs to "Online"', () => {
+    const google = account({ id: 'g1', vendorId: 'google', model: 'gemini-2.5-flash' });
+    expect(channelLabelForModelRef('google/gemini-2.5-flash', [google])).toBe('Online');
+  });
+
+  it('maps ollama / localhost refs to "On this device"', () => {
+    const ollama = account({ id: 'ollama-abcd1234', vendorId: 'ollama', model: 'hermes3:8b' });
+    const key = resolveRuntimeProviderKey(ollama);
+    expect(channelLabelForModelRef(`${key}/hermes3:8b`, [ollama])).toBe('On this device');
+
+    const localCustom = account({ id: 'local5678', vendorId: 'custom', baseUrl: 'http://127.0.0.1:11434/v1' });
+    const localKey = resolveRuntimeProviderKey(localCustom);
+    expect(channelLabelForModelRef(`${localKey}/model-x`, [localCustom])).toBe('On this device');
+  });
+
+  it('never returns the raw model id', () => {
+    const google = account({ id: 'g1', vendorId: 'google', model: 'gemini-2.5-flash' });
+    for (const ref of ['google/gemini-2.5-flash', 'unknown-key/moe-demo-pro', null, undefined, '']) {
+      const label = channelLabelForModelRef(ref, [google]);
+      expect(['Online', 'On this device']).toContain(label);
+    }
+  });
+
+  it('classifies unmatched ollama-prefixed refs as on-device, others as online', () => {
+    expect(channelLabelForModelRef('ollama-deadbeef/hermes3:8b', [])).toBe('On this device');
+    expect(channelLabelForModelRef('google/gemini-2.5-pro', [])).toBe('Online');
   });
 });

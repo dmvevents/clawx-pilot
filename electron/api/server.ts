@@ -17,6 +17,8 @@ import { handleFileRoutes } from './routes/files';
 import { handleSessionRoutes } from './routes/sessions';
 import { handleCronRoutes } from './routes/cron';
 import { handleDiagnosticsRoutes } from './routes/diagnostics';
+import { handleBrowserRoutes } from './routes/browser';
+import { handleCapabilitiesRoutes } from './routes/capabilities';
 import { handleOutlookRoutes } from './routes/outlook';
 import { handleFormsRoutes } from './routes/forms';
 import { sendJson, setCorsHeaders, requireJsonContentType } from './route-utils';
@@ -42,6 +44,11 @@ const coreRouteHandlers: RouteHandler[] = [
   handleDiagnosticsRoutes,
   handleLogRoutes,
   handleUsageRoutes,
+  // CLWX-86: capability handshake — the gateway plugin probes this once at
+  // registration to detect tool<->host-API version skew.
+  (req, res, url) => handleCapabilitiesRoutes(req, res, url),
+  // Browser automation diagnostics/repair shared by Outlook and Forms.
+  (req, res, url) => handleBrowserRoutes(req, res, url),
   // Outlook (browser-session) routes for the moe-principal-assistant plugin
   // running inside the OpenClaw gateway. Allowlist-gated inside the handler.
   (req, res, url) => handleOutlookRoutes(req, res, url),

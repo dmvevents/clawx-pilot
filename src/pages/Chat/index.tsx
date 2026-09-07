@@ -5,7 +5,7 @@
  * are in the toolbar; messages render with markdown + streaming.
  */
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import { AlertCircle, Cloud, Laptop, Loader2, Sparkles } from 'lucide-react';
 import { useChatStore, type RawMessage } from '@/stores/chat';
 import { buildBaselineRunKey, getBaseline } from '@/stores/baseline-cache';
 import { useGatewayStore } from '@/stores/gateway';
@@ -28,6 +28,8 @@ import { cn } from '@/lib/utils';
 import { useStickToBottomInstant } from '@/hooks/use-stick-to-bottom-instant';
 import { useMinLoading } from '@/hooks/use-min-loading';
 import { extractGeneratedFiles, generatedFileHasDiffPayload, type GeneratedFile } from '@/lib/generated-files';
+import { principalErrorDisplay, errorBannerVisibility, ERROR_DISPLAY_KEY } from '@/lib/error-display';
+import { degradeNoticeCopy } from '@/lib/degrade-notice';
 import { GeneratedFilesPanel } from '@/components/file-preview/GeneratedFilesPanel';
 import type { FilePreviewTarget } from '@/components/file-preview/types';
 import { buildPreviewTarget } from '@/components/file-preview/build-preview-target';
@@ -40,6 +42,10 @@ const ArtifactPanelLazy = lazy(() =>
 const PanelResizeDividerLazy = lazy(() =>
   import('@/components/file-preview/PanelResizeDivider').then((m) => ({ default: m.PanelResizeDivider })),
 );
+
+// ERROR_DISPLAY_KEY now lives in @/lib/error-display, shared with the
+// in-line message error chip (CLWX-105) — one wording per failure class
+// everywhere the principal sees it.
 
 type GraphStepCacheEntry = {
   steps: ReturnType<typeof deriveTaskSteps>;
@@ -131,6 +137,40 @@ export function Chat() {
   const sendMessage = useChatStore((s) => s.sendMessage);
   const abortRun = useChatStore((s) => s.abortRun);
   const clearError = useChatStore((s) => s.clearError);
+  const degradeNotice = useChatStore((s) => s.degradeNotice);
+  const pendingChannelRecoveryCount = useChatStore((s) => (
+    s.pendingChannelRecoveryBySession[s.currentSessionKey] ?? 0
+  ));
+  const channelRecoveryInProgress = Boolean(degradeNotice?.inProgress) || pendingChannelRecoveryCount > 0;
+  const showGenericChannelRecovery = pendingChannelRecoveryCount > 0 && !degradeNotice?.inProgress;
+  const clearDegradeNotice = useChatStore((s) => s.clearDegradeNotice);
+  // Principal-facing wording for the two error surfaces. The raw string moves
+  // into a collapsed details expander; the classes that must stay visible
+  // (auth/config) still surface, just in plain language.
+  const errorDisplay = useMemo(() => principalErrorDisplay(error), [error]);
+  // Newest error-stopped assistant message — the one whose in-line chip is
+  // suppressed while the ACTIVE failure surface is showing (CLWX-105).
+  const lastErrorStoppedIdx = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i] as unknown as Record<string, unknown>;
+      const sr = m.stopReason ?? m.stop_reason;
+      if (m.role === 'assistant' && typeof sr === 'string' && sr.trim().toLowerCase() === 'error') return i;
+    }
+    return -1;
+  }, [messages]);
+  const runErrorDisplay = useMemo(() => principalErrorDisplay(runError), [runError]);
+  // Notice de-dup (moe.18 Findings D0/D1): rules live in
+  // errorBannerVisibility (unit-tested); this is deliberately a thin call.
+  // The store also clears a success-claiming notice when a newer terminal
+  // error lands; the resent-notice exclusion here is the belt to that
+  // suspender (Codex lane finding: a failed resend must stay visible).
+  const { showRunError, showErrorBar } = errorBannerVisibility({
+    runError,
+    error,
+    runErrorKind: runErrorDisplay.kind,
+    errorKind: errorDisplay.kind,
+    degradeNotice,
+  });
   const fetchAgents = useAgentsStore((s) => s.fetchAgents);
   const agents = useAgentsStore((s) => s.agents);
 
@@ -693,6 +733,13 @@ export function Chat() {
     <div
       ref={splitContainerRef}
       data-testid="chat-page"
+      data-sending={sending ? 'true' : 'false'}
+      data-pending-final={pendingFinal ? 'true' : 'false'}
+      data-active-run-id-present={activeRunId ? 'true' : 'false'}
+      data-active-execution-graph={hasActiveExecutionGraph ? 'true' : 'false'}
+      data-degrade-in-progress={channelRecoveryInProgress ? 'true' : 'false'}
+      data-run-error-present={runError ? 'true' : 'false'}
+      data-error-present={error ? 'true' : 'false'}
       className={cn(
         'relative flex min-h-0 -m-6 overflow-hidden transition-colors duration-500',
         'bg-background',
@@ -742,6 +789,13 @@ export function Chat() {
                     const suppressToolCards = userRunCards.some((card) =>
                       idx > card.triggerIndex && idx <= card.segmentEnd,
                     );
+                    // CLWX-105 coordination: while the ACTIVE failure owns a
+                    // surface (banner / run-error callout / degrade notice),
+                    // the NEWEST error-stopped message must not also chip —
+                    // one surface per active failure (CLWX-104 D1 rule).
+                    // Historical error-stopped messages always chip.
+                    const suppressErrorChip = idx === lastErrorStoppedIdx
+                      && (showErrorBar || showRunError || Boolean(degradeNotice));
                     return (
                     <div
                       key={msg.id || `msg-${idx}`}
@@ -754,6 +808,7 @@ export function Chat() {
                         textOverride={replyTextOverrides.get(idx)}
                         suppressToolCards={suppressToolCards}
                         suppressProcessAttachments={suppressToolCards}
+                        suppressErrorChip={suppressErrorChip}
                         onOpenFile={handleOpenAttachedFile}
                       />
                       {userRunCards
@@ -856,32 +911,102 @@ export function Chat() {
         </div>
       </div>
 
-      {/* Run error callout */}
-      {runError && (
-        <div className="px-4 pt-2" data-testid="chat-run-error">
-          <div className="max-w-4xl mx-auto rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3">
-            <p className="text-sm font-medium text-destructive flex items-center gap-2">
-              <AlertCircle className="h-4 w-4" />
-              {t('runError.title')}
-            </p>
-            <p className="mt-1 text-sm text-destructive/90 break-words">
-              {runError}
+      {/* Channel-degrade notice. Informational, not an error: the turn either
+          already completed on this device or is ready to be resent there.
+          Deliberately anonymised — channel vocabulary only, never a model id. */}
+      {degradeNotice && (() => {
+        // Copy precedence lives in degradeNoticeCopy (pure, unit-tested), so
+        // this stays a thin call — same split as errorBannerVisibility.
+        const copy = degradeNoticeCopy(degradeNotice);
+        const Icon = copy.icon === 'spinner' ? Loader2 : (copy.icon === 'cloud' ? Cloud : Laptop);
+        const spinning = copy.icon === 'spinner';
+        return (
+        <div className="px-4 pt-2" data-testid="chat-degrade-notice" data-in-progress={spinning ? 'true' : undefined}>
+          <div className="max-w-4xl mx-auto rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                <Icon className={spinning ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+                {t(copy.titleKey)}
+              </p>
+              <p className="mt-1 text-xs text-amber-600/80 dark:text-amber-400/80">
+                {t(copy.hintKey)}
+              </p>
+            </div>
+            {copy.dismissible && (
+              <button
+                onClick={clearDegradeNotice}
+                className="shrink-0 text-xs text-amber-600/70 hover:text-amber-600 underline"
+              >
+                {t('common:actions.dismiss')}
+              </button>
+            )}
+          </div>
+        </div>
+        );
+      })()}
+
+      {showGenericChannelRecovery && (
+        <div className="px-4 pt-2" data-testid="chat-channel-recovery-notice" data-in-progress="true">
+          <div className="max-w-4xl mx-auto rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3">
+            <p className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Restoring this chat to your selected channel…
             </p>
           </div>
         </div>
       )}
 
-      {/* Error bar */}
-      {error && (
-        <div className="px-4 py-2 bg-destructive/10 border-t border-destructive/20">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <p className="text-sm text-destructive flex items-center gap-2">
+      {/* Run error callout. Plain-language primary line; the raw provider
+          string stays available behind a collapsed technical-details
+          expander instead of being the headline. Suppressed while the amber
+          degrade notice explains the same transport failure (D0/D1). */}
+      {showRunError && (
+        <div className="px-4 pt-2" data-testid="chat-run-error">
+          <div className="max-w-4xl mx-auto rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3">
+            <p className="text-sm font-medium text-destructive flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
-              {error}
+              {t(ERROR_DISPLAY_KEY[runErrorDisplay.kind])}
             </p>
+            {runErrorDisplay.detail && (
+              <details className="mt-1">
+                <summary className="cursor-pointer text-xs text-destructive/60 hover:text-destructive/80">
+                  {t('errorDisplay.detailsLabel')}
+                </summary>
+                <p className="mt-1 text-xs text-destructive/80 break-words">
+                  {runErrorDisplay.detail}
+                </p>
+              </details>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Error bar. Same principal-facing wording rules as the run error
+          callout above: plain message first, raw string collapsed; never a
+          verbatim duplicate of the callout, and suppressed while the degrade
+          notice explains the same transport failure (D0/D1). */}
+      {showErrorBar && (
+        <div className="px-4 py-2 bg-destructive/10 border-t border-destructive/20">
+          <div className="max-w-4xl mx-auto flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm text-destructive flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {t(ERROR_DISPLAY_KEY[errorDisplay.kind])}
+              </p>
+              {errorDisplay.detail && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-xs text-destructive/60 hover:text-destructive/80">
+                    {t('errorDisplay.detailsLabel')}
+                  </summary>
+                  <p className="mt-1 text-xs text-destructive/80 break-words">
+                    {errorDisplay.detail}
+                  </p>
+                </details>
+              )}
+            </div>
             <button
               onClick={clearError}
-              className="text-xs text-destructive/60 hover:text-destructive underline"
+              className="shrink-0 text-xs text-destructive/60 hover:text-destructive underline"
             >
               {t('common:actions.dismiss')}
             </button>

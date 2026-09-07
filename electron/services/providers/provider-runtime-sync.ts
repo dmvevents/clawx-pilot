@@ -358,6 +358,13 @@ function normalizeRuntimeApi(apiProtocol: string | undefined, fallback: string |
   }
 }
 
+function shouldUseBearerAuthHeader(config: ProviderConfig, api: string | undefined): boolean {
+  if (config.type !== 'custom') {
+    return false;
+  }
+  return api === 'openai-completions' || api === 'openai-responses';
+}
+
 async function resolveRuntimeSyncContext(config: ProviderConfig): Promise<RuntimeProviderSyncContext | null> {
   const runtimeProviderKey = await resolveRuntimeProviderKey(config);
   const meta = getProviderConfig(config.type);
@@ -383,6 +390,7 @@ async function syncRuntimeProviderConfig(
     api: context.api,
     apiKeyEnv: context.meta?.apiKeyEnv,
     headers: config.headers ?? context.meta?.headers,
+    authHeader: shouldUseBearerAuthHeader(config, context.api),
   });
 }
 
@@ -400,12 +408,15 @@ async function syncCustomProviderAgentModel(
     return;
   }
 
-  const modelId = config.model;
+  const modelIds = [config.model, ...(config.fallbackModels ?? [])]
+    .filter((modelId): modelId is string => Boolean(modelId?.trim()));
+  const api = normalizeRuntimeApi(config.apiProtocol, 'openai-completions') ?? 'openai-completions';
   await updateAgentModelProvider(runtimeProviderKey, {
-    baseUrl: normalizeProviderBaseUrl(config, config.baseUrl, normalizeRuntimeApi(config.apiProtocol, 'openai-completions') ?? 'openai-completions'),
-    api: normalizeRuntimeApi(config.apiProtocol, 'openai-completions') ?? 'openai-completions',
-    models: modelId ? [piAiModelsJsonModelEntry(modelId)] : [],
+    baseUrl: normalizeProviderBaseUrl(config, config.baseUrl, api),
+    api,
+    models: modelIds.map((modelId) => piAiModelsJsonModelEntry(modelId)),
     apiKey: resolvedKey,
+    authHeader: shouldUseBearerAuthHeader(config, api),
   });
 }
 
@@ -489,6 +500,7 @@ async function buildAgentModelProviderEntry(
 
   if (isUnregisteredProviderType(config.type)) {
     apiKey = (await getApiKey(config.id)) || undefined;
+    authHeader = shouldUseBearerAuthHeader(config, api);
   } else if (config.type === 'minimax-portal' || config.type === 'minimax-portal-cn') {
     const accountApiKey = await getApiKey(config.id);
     if (accountApiKey) {
@@ -609,6 +621,7 @@ export async function syncUpdatedProviderToRuntime(
         baseUrl: normalizeProviderBaseUrl(config, config.baseUrl, normalizedApi),
         api: normalizedApi,
         headers: config.headers,
+        authHeader: shouldUseBearerAuthHeader(config, normalizedApi),
       }, fallbackModels);
     }
   }
@@ -658,14 +671,36 @@ export async function syncDeletedProviderApiKeyToRuntime(
   await removeProviderKeyFromOpenClaw(ock);
 }
 
+export async function ensureProviderAccountRuntime(providerId: string): Promise<void> {
+  const provider = await getProvider(providerId);
+  if (!provider) {
+    throw new Error(`Provider account "${providerId}" disappeared mid-transaction`);
+  }
+  await syncProviderToRuntime(provider, undefined);
+}
+
 export async function syncDefaultProviderToRuntime(
   providerId: string,
   gatewayManager?: GatewayManager,
+  options?: { skipGatewayRefresh?: boolean },
 ): Promise<void> {
   const provider = await getProvider(providerId);
   if (!provider) {
     return;
   }
+
+  // Per-run send-time degrade (docs/OFFLINE_ARCHITECTURE.md §3.1, CLWX-95/96):
+  // the caller writes the on-device channel into the four stores and then
+  // immediately resends the failed turn. Scheduling a gateway reload/restart
+  // here races that resend — on Windows `debouncedReload` falls through to a
+  // full `restart` (manager.ts) which tears the runtime down under the in-
+  // flight send, so the turn dies with no terminal event and the composer
+  // spins. When `skipGatewayRefresh` is set the config write still lands
+  // (four-store coherence is preserved via the canonical writers below), but
+  // the runtime is left to pick up the new default on its next run rather than
+  // being bounced mid-resend. Default is unchanged (a refresh is scheduled),
+  // so existing callers keep their behaviour.
+  const skipRefresh = options?.skipGatewayRefresh === true;
 
   const ock = await resolveRuntimeProviderKey(provider);
   const providerKey = await getApiKey(providerId);
@@ -685,6 +720,7 @@ export async function syncDefaultProviderToRuntime(
         baseUrl: normalizeProviderBaseUrl(provider, provider.baseUrl, normalizedApi),
         api: normalizedApi,
         headers: provider.headers,
+        authHeader: shouldUseBearerAuthHeader(provider, normalizedApi),
       }, fallbackModels);
     } else {
       const meta = getProviderConfig(provider.type);
@@ -751,10 +787,12 @@ export async function syncDefaultProviderToRuntime(
       } catch (err) {
         logger.warn('[provider-runtime] Failed to sync per-agent model registries after browser OAuth switch:', err);
       }
-      scheduleGatewayRefresh(
-        gatewayManager,
-        `Scheduling Gateway reload after provider switch to "${browserOAuthRuntimeProvider}"`,
-      );
+      if (!skipRefresh) {
+        scheduleGatewayRefresh(
+          gatewayManager,
+          `Scheduling Gateway reload after provider switch to "${browserOAuthRuntimeProvider}"`,
+        );
+      }
       return;
     }
 
@@ -813,9 +851,11 @@ export async function syncDefaultProviderToRuntime(
     logger.warn('[provider-runtime] Failed to sync per-agent model registries after default provider switch:', err);
   }
 
-  scheduleGatewayRefresh(
-    gatewayManager,
-    `Scheduling Gateway reload after provider switch to "${ock}"`,
-    { onlyIfRunning: true },
-  );
+  if (!skipRefresh) {
+    scheduleGatewayRefresh(
+      gatewayManager,
+      `Scheduling Gateway reload after provider switch to "${ock}"`,
+      { onlyIfRunning: true },
+    );
+  }
 }

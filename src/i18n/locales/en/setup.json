@@ -27,7 +27,7 @@
     },
     "welcome": {
         "title": "Welcome to Ministry of Education",
-        "description": "Ministry of Education is a AI-supported administrative assistant for primary-school principals, making it easy to manage admin tasks across your favorite messaging platforms.",
+        "description": "Ministry of Education is an AI-supported administrative assistant for primary-school principals, making it easy to manage admin tasks across your favorite messaging platforms.",
         "features": {
             "noCommand": "Zero command-line required",
             "modernUI": "Modern, beautiful interface",

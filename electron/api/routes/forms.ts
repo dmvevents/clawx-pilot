@@ -24,6 +24,7 @@ import { formsBrowserManagerV2 } from '../../services/forms-browser-v2/manager';
 import type { DailyReportPayload } from '../../services/forms-browser-v2/daily-report-actions';
 import type { SuspensionsPayload } from '../../services/forms-browser-v2/suspensions-actions';
 import { parseJsonBody, sendJson } from '../route-utils';
+import { recordFormSubmitAudit } from '../../services/outbox-service';
 
 function isFormsEnabled(): boolean {
   return PRINCIPAL_SKILL_ALLOWLIST.has('forms');
@@ -31,6 +32,9 @@ function isFormsEnabled(): boolean {
 
 export async function handleFormsRoutes(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+  // CLWX-86 drift-guard convention: endpoints in this family must dispatch
+  // via single-quoted url.pathname equality literals - the inventory guard in
+  // tests/unit/host-api-capabilities-route.test.ts parses exactly that shape.
   if (!url.pathname.startsWith('/api/forms/')) return false;
 
   if (!isFormsEnabled()) {
@@ -67,6 +71,11 @@ export async function handleFormsRoutes(req: IncomingMessage, res: ServerRespons
       logger.info(`[host-api forms/submit-daily-report] attempt confirm=${confirm}`);
       const result = await formsBrowserManagerV2.submitDailyReport({ confirm });
       logger.info(`[host-api forms/submit-daily-report] result=${result.status}`);
+      if (result.status === 'submitted') {
+        // Audit trail written first to the durable outbox (§5.3): the record
+        // of a confirmed submission must survive offline/crash until replay.
+        await recordFormSubmitAudit({ form: 'daily-report', status: result.status });
+      }
       sendJson(res, 200, { success: true, data: result });
       return true;
     }
@@ -89,6 +98,9 @@ export async function handleFormsRoutes(req: IncomingMessage, res: ServerRespons
       logger.info(`[host-api forms/submit-suspension] attempt confirm=${confirm}`);
       const result = await formsBrowserManagerV2.submitSuspension({ confirm });
       logger.info(`[host-api forms/submit-suspension] result=${result.status}`);
+      if (result.status === 'submitted') {
+        await recordFormSubmitAudit({ form: 'suspension', status: result.status });
+      }
       sendJson(res, 200, { success: true, data: result });
       return true;
     }

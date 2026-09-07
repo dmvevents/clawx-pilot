@@ -42,6 +42,23 @@ export interface InboxMessage {
 export interface ReadInboxResult {
   status: 'ok' | 'needs_signin';
   messages: InboxMessage[];
+  /**
+   * Browser/CDP reads are a recent visible Inbox window, not a server-side
+   * exhaustive mailbox export. Agents must surface this when users ask for
+   * "all" mail or month-wide audits.
+   */
+  scan?: {
+    scope: 'recent_inbox_window' | 'graph_inbox';
+    requestedTop: number;
+    scannedCount: number;
+    returnedCount: number;
+    /** Number of list-scroll passes used to gather the bounded browser window. */
+    scrollPasses?: number;
+    /** Rows skipped because they were list artifacts, not message candidates. */
+    artifactSkippedCount?: number;
+    exhaustive: boolean;
+    note?: string;
+  };
   message?: string;
 }
 
@@ -54,7 +71,7 @@ export interface DraftEmailArgs {
 }
 
 export interface DraftEmailResult {
-  status: 'drafted' | 'needs_signin';
+  status: 'drafted' | 'failed' | 'needs_signin';
   /** True when the New-mail compose pane was filled and left open. */
   draftLeftOpen: boolean;
   /** Echo of what we filled, for the agent's "show before you send" hand-off. */
@@ -68,7 +85,17 @@ export interface DraftEmailResult {
   message?: string;
 }
 
-export interface SendEmailArgs extends DraftEmailArgs {
+export interface SendEmailArgs {
+  /**
+   * Optional verification fields. After a principal has reviewed an already
+   * open Outlook draft, the model should normally send only { confirm: true }.
+   * When supplied, recipient fields are treated as safety assertions.
+   */
+  to?: string | string[];
+  subject?: string;
+  body?: string;
+  cc?: string | string[];
+  bcc?: string | string[];
   /**
    * Hard gate. send() refuses unless the caller explicitly sets confirm=true.
    * The agent must show the user the draft and get a "yes, send" before
@@ -109,6 +136,16 @@ export interface SearchInboxResult {
   messages: InboxMessage[];
   /** True when the result is the cap, not necessarily exhaustive. */
   capped?: boolean;
+  scan?: {
+    scope: 'recent_inbox_window' | 'graph_inbox';
+    requestedTop: number;
+    fetchedTop: number;
+    scannedCount: number;
+    matchedCount: number;
+    returnedCount: number;
+    exhaustive: boolean;
+    note?: string;
+  };
   message?: string;
 }
 
@@ -125,10 +162,41 @@ export interface EmailAttachmentInfo {
   mimeType?: string;
 }
 
+/**
+ * WHY a status of `not_found` needs a second, typed field (CLWX-120).
+ *
+ * Two very different situations used to collapse into a bare `not_found`:
+ *
+ *   `not_in_list`      — the id was not among the rows we could reach. The
+ *                        message is genuinely absent from the current view
+ *                        (moved, deleted, or the caller's id is stale).
+ *   `stale_read_guard` — the row WAS found and clicked, and the CLWX-46
+ *                        reading-pane guard then declined to confirm the pane
+ *                        had settled on that message. We are refusing to claim
+ *                        we read the right email; we are NOT claiming the email
+ *                        is missing.
+ *
+ * A caller cannot tell those apart from the status alone, and the difference
+ * matters twice over: the principal should be told "I could not confirm I
+ * opened the right message" rather than "that message does not exist", and a
+ * grader must not charge a healthy safety refusal to the product as a failure.
+ *
+ * Deliberately a typed union, NOT a substring of `message`. Keying a verdict off
+ * log or message text is fail-open — any row can emit the token, so a caller
+ * that greps for it eventually greps a lie. Absent means "no reason recorded",
+ * which callers must treat as the unhelpful case, never as a refusal.
+ */
+export type MessageLocateFailure = 'not_in_list' | 'stale_read_guard';
+
 export interface ReadEmailResult {
   status: 'ok' | 'not_found' | 'needs_signin';
   /** Echo of the id we were asked for. */
   id: string;
+  /**
+   * Only set when status === 'not_found'. See {@link MessageLocateFailure}:
+   * `stale_read_guard` is a safety refusal, not evidence of absence.
+   */
+  notFoundReason?: MessageLocateFailure;
   subject?: string;
   sender?: string;
   receivedAt?: string;
@@ -149,6 +217,8 @@ export interface ReplyArgs {
 
 export interface ReplyResult {
   status: 'drafted' | 'not_found' | 'needs_signin';
+  /** Only set when status === 'not_found'. See {@link MessageLocateFailure}. */
+  notFoundReason?: MessageLocateFailure;
   draftLeftOpen: boolean;
   preview?: { to: string[]; subject: string; body: string };
   message?: string;
@@ -163,6 +233,8 @@ export interface ForwardArgs {
 
 export interface ForwardResult {
   status: 'drafted' | 'not_found' | 'needs_signin';
+  /** Only set when status === 'not_found'. See {@link MessageLocateFailure}. */
+  notFoundReason?: MessageLocateFailure;
   draftLeftOpen: boolean;
   preview?: { to: string[]; subject: string; body: string };
   message?: string;
@@ -176,6 +248,8 @@ export interface MarkReadArgs {
 
 export interface MarkReadResult {
   status: 'ok' | 'not_found' | 'needs_signin';
+  /** Only set when status === 'not_found'. See {@link MessageLocateFailure}. */
+  notFoundReason?: MessageLocateFailure;
   message?: string;
 }
 
@@ -185,6 +259,9 @@ export interface ListAttachmentsArgs {
 
 export interface ListAttachmentsResult {
   status: 'ok' | 'not_found' | 'needs_signin';
+  /** Only set when status === 'not_found'. Propagated from the readEmail this
+   *  delegates to; see {@link MessageLocateFailure}. */
+  notFoundReason?: MessageLocateFailure;
   id: string;
   attachments: EmailAttachmentInfo[];
   message?: string;
@@ -208,7 +285,14 @@ export interface DownloadAttachmentResult {
   savedPath?: string;
   /** Echo of the requested filename for audit. */
   filename: string;
-  /** Set when status === 'refused' or status === 'not_found'. */
+  /** Set when status === 'refused' or status === 'not_found'. Free text for a
+   *  human; never parse it — use notFoundReason for a machine decision. */
   reason?: string;
+  /**
+   * Only set when status === 'not_found'. See {@link MessageLocateFailure}:
+   * `stale_read_guard` means we refused to confirm we opened the right message,
+   * NOT that the message is gone. No download is attempted either way.
+   */
+  notFoundReason?: MessageLocateFailure;
   message?: string;
 }

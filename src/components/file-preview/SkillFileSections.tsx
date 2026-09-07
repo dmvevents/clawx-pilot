@@ -99,7 +99,7 @@ export function SkillFileSections({ baseDir, onOpen, className }: SkillFileSecti
       />
       <SkillFileSection
         title={t('detail.sections.hooks', { defaultValue: 'Hooks' })}
-        description={t('detail.sections.hooksDesc', { defaultValue: 'Hooks injected into the OpenClaw lifecycle' })}
+        description={t('detail.sections.hooksDesc', { defaultValue: 'Hooks injected into the assistant lifecycle' })}
         files={groups.hooks}
         onOpen={onOpen}
       />

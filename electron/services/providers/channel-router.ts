@@ -32,9 +32,12 @@ import { getProviderDefaultModel } from '../../utils/provider-registry';
 import type { GatewayManager } from '../../gateway/manager';
 import { listProviderAccounts } from './provider-store';
 import {
+  ensureProviderAccountRuntime,
   getOpenClawProviderKey,
   syncDefaultProviderToRuntime,
 } from './provider-runtime-sync';
+
+export { ensureBootableAgentsConfig } from '../../utils/agent-config';
 
 export type ProviderChannel = 'online' | 'on-device';
 
@@ -111,6 +114,59 @@ export interface ApplyChannelChangeResult {
   switched: boolean;
 }
 
+export interface ApplyChannelChangeOptions {
+  /**
+   * Write the four stores but leave the running Gateway alone.
+   *
+   * Set by pre-start boot convergence. That path runs before the Gateway starts,
+   * so queueing a refresh there is unnecessary and can only add startup churn.
+   *
+   * Live settings toggles must not set it because their running Gateway needs an
+   * immediate refresh.
+   */
+  skipGatewayRefresh?: boolean;
+}
+
+async function getProviderAccountRuntime(accountId: string): Promise<{ modelRef: string; channel: ProviderChannel }> {
+  const provider = await getProvider(accountId);
+  if (!provider) {
+    throw new Error(`Provider account "${accountId}" disappeared mid-transaction`);
+  }
+
+  const runtimeKey = getOpenClawProviderKey(provider.type, provider.id);
+  const modelRef = deriveModelRef(provider, runtimeKey);
+  if (!modelRef) {
+    throw new Error(
+      `Provider account "${accountId}" has no model configured. ` +
+      `Open Settings → Models and pick a model.`,
+    );
+  }
+
+  return {
+    modelRef,
+    channel: classifyAccount({ vendorId: provider.type, baseUrl: provider.baseUrl }),
+  };
+}
+
+async function applyProviderAccountDefault(
+  accountId: string,
+  gatewayManager?: GatewayManager,
+  options?: ApplyChannelChangeOptions,
+  writeDefault = true,
+): Promise<{ accountId: string; modelRef: string; channel: ProviderChannel }> {
+  const { modelRef, channel } = await getProviderAccountRuntime(accountId);
+
+  if (writeDefault) {
+    await setDefaultProvider(accountId);
+  }
+  await syncDefaultProviderToRuntime(accountId, gatewayManager, {
+    skipGatewayRefresh: options?.skipGatewayRefresh === true,
+  });
+  await setAllAgentsModel(modelRef);
+
+  return { accountId, modelRef, channel };
+}
+
 /**
  * Run the channel-change transaction. If the requested channel has no
  * configured account, throws — callers should surface a "configure a model
@@ -119,6 +175,7 @@ export interface ApplyChannelChangeResult {
 export async function applyChannelChange(
   channel: ProviderChannel,
   gatewayManager?: GatewayManager,
+  options?: ApplyChannelChangeOptions,
 ): Promise<ApplyChannelChangeResult> {
   const picked = await pickAccountForChannel(channel);
   if (!picked) {
@@ -128,40 +185,21 @@ export async function applyChannelChange(
     );
   }
 
-  const provider = await getProvider(picked.accountId);
-  if (!provider) {
-    throw new Error(`Provider account "${picked.accountId}" disappeared mid-transaction`);
-  }
-
-  const runtimeKey = getOpenClawProviderKey(provider.type, provider.id);
-  const modelRef = deriveModelRef(provider, runtimeKey);
-  if (!modelRef) {
-    throw new Error(
-      `Provider account "${picked.accountId}" has no model configured. ` +
-      `Open Settings → Models and pick a model.`,
-    );
-  }
-
   const previousDefault = await getDefaultProvider();
   const switched = previousDefault !== picked.accountId;
 
   // 1+2. clawx-providers.json default + runtime providers/auth (writes both
   // defaultProvider and defaultProviderAccountId, and pushes provider config
-  // into openclaw.json).
-  if (switched) {
-    await setDefaultProvider(picked.accountId);
-  }
-  await syncDefaultProviderToRuntime(picked.accountId, gatewayManager);
-
-  // 3. Pin every agent's effective model so the runtime can't fall back to
-  // some stale entry sitting first in agents/<id>/agent/models.json.
-  await setAllAgentsModel(modelRef);
+  // into openclaw.json). 3. Pin every agent's effective model so the runtime
+  // can't fall back to some stale entry sitting first in agents/<id>/agent/models.json.
+  const { modelRef } = await applyProviderAccountDefault(picked.accountId, gatewayManager, options, switched);
 
   logger.info('[channel-router] Applied channel change', {
     channel,
     accountId: picked.accountId,
     modelRef,
     previousDefault,
+    gatewayRefreshSuppressed: options?.skipGatewayRefresh === true,
   });
 
   return {
@@ -169,6 +207,37 @@ export async function applyChannelChange(
     accountId: picked.accountId,
     modelRef,
     switched,
+  };
+}
+
+export interface TransientChannelChangeResult {
+  channel: ProviderChannel;
+  accountId: string;
+  modelRef: string;
+}
+
+export async function prepareTransientChannelChange(channel: ProviderChannel): Promise<TransientChannelChangeResult> {
+  const picked = await pickAccountForChannel(channel);
+  if (!picked) {
+    throw new Error(
+      `No provider account is configured for the "${channel}" channel. ` +
+      `Add one in Settings → Models before switching channels.`,
+    );
+  }
+
+  const { modelRef, channel: resolvedChannel } = await getProviderAccountRuntime(picked.accountId);
+  await ensureProviderAccountRuntime(picked.accountId);
+
+  logger.info('[channel-router] Prepared transient channel change', {
+    channel: resolvedChannel,
+    accountId: picked.accountId,
+    modelRef,
+  });
+
+  return {
+    channel: resolvedChannel,
+    accountId: picked.accountId,
+    modelRef,
   };
 }
 
@@ -230,6 +299,7 @@ export interface ChannelPreflightResult {
 export async function runChannelPreflight(
   desired: ProviderChannel,
   gatewayManager?: GatewayManager,
+  options?: ApplyChannelChangeOptions,
 ): Promise<ChannelPreflightResult> {
   const accounts = await listProviderAccounts();
   if (accounts.length === 0) {
@@ -251,7 +321,7 @@ export async function runChannelPreflight(
   }
 
   try {
-    const result = await applyChannelChange(target, gatewayManager);
+    const result = await applyChannelChange(target, gatewayManager, options);
     return {
       ran: true,
       reason: target !== desired ? 'desired-unavailable' : (result.switched ? 'reconciled' : 'already-coherent'),

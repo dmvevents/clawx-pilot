@@ -456,7 +456,26 @@ export async function writeOpenClawConfig(config: OpenClawConfig): Promise<void>
         const tempPath = `${CONFIG_FILE}.tmp.${process.pid}.${Date.now()}`;
         try {
             await writeFile(tempPath, serialized, 'utf-8');
-            await rename(tempPath, CONFIG_FILE);
+            // Windows: rename over an OPEN target throws EPERM/EBUSY (share
+            // violation — e.g. the gateway reading openclaw.json at that
+            // instant, or AV scanning it). Seen live on the moe.13 boot
+            // (2026-09-02): the local-provider sync lost this race and the
+            // on-device provider never reached the runtime config. Retry
+            // briefly; the window is milliseconds.
+            let lastErr: unknown;
+            for (let attempt = 0; attempt < 5; attempt++) {
+                try {
+                    await rename(tempPath, CONFIG_FILE);
+                    lastErr = undefined;
+                    break;
+                } catch (err) {
+                    const code = (err as NodeJS.ErrnoException).code;
+                    if (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES') throw err;
+                    lastErr = err;
+                    await new Promise((res) => setTimeout(res, 100 * (attempt + 1)));
+                }
+            }
+            if (lastErr) throw lastErr;
         } catch (writeErr) {
             // Best-effort cleanup of the temp file on failure.
             await unlink(tempPath).catch(() => undefined);
@@ -718,7 +737,7 @@ function migrateLegacyChannelConfigToAccounts(
     const legacyPayload = getLegacyChannelPayload(channelSection);
     const legacyKeys = Object.keys(legacyPayload);
     const existingAccounts = getChannelAccountsMap(channelSection);
-    const hasAccounts = Boolean(existingAccounts) && Object.keys(existingAccounts).length > 0;
+    const hasAccounts = existingAccounts != null && Object.keys(existingAccounts).length > 0;
 
     if (legacyKeys.length === 0) {
         if (hasAccounts && typeof channelSection.defaultAccount !== 'string') {
@@ -1322,11 +1341,12 @@ export async function setChannelEnabled(channelType: string, enabled: boolean): 
         if (PLUGIN_CHANNELS.includes(resolvedChannelType)) {
             if (enabled) {
                 ensurePluginRegistration(currentConfig, resolvedChannelType);
-            } else {
-                if (!currentConfig.plugins) currentConfig.plugins = {};
-                if (!currentConfig.plugins.entries) currentConfig.plugins.entries = {};
-                if (!currentConfig.plugins.entries[resolvedChannelType]) currentConfig.plugins.entries[resolvedChannelType] = {};
             }
+            // No-ops after ensurePluginRegistration; needed on the disable
+            // path and they let the compiler see the chain is populated.
+            if (!currentConfig.plugins) currentConfig.plugins = {};
+            if (!currentConfig.plugins.entries) currentConfig.plugins.entries = {};
+            if (!currentConfig.plugins.entries[resolvedChannelType]) currentConfig.plugins.entries[resolvedChannelType] = {};
             currentConfig.plugins.entries[resolvedChannelType].enabled = enabled;
             syncBuiltinChannelsWithPluginAllowlist(currentConfig);
             await writeOpenClawConfig(currentConfig);

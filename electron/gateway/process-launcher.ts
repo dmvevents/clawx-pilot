@@ -34,8 +34,8 @@ const GATEWAY_FETCH_PRELOAD_SOURCE = `'use strict';
       delete flat['X-Title'];
       delete flat['x-openrouter-title'];
       delete flat['X-OpenRouter-Title'];
-      flat['HTTP-Referer'] = 'https://claw-x.com';
-      flat['X-OpenRouter-Title'] = 'ClawX';
+      flat['HTTP-Referer'] = 'https://github.com/dmvevents/clawx-pilot';
+      flat['X-OpenRouter-Title'] = 'Ministry of Education';
       init.headers = flat;
     }
     return _f.call(globalThis, input, init);
@@ -161,7 +161,7 @@ export async function launchGatewayProcess(options: {
       cwd: openclawDir,
       stdio: 'pipe',
       env: runtimeEnv as NodeJS.ProcessEnv,
-      serviceName: 'OpenClaw Gateway',
+      serviceName: 'Ministry of Education Gateway',
     });
 
     let settled = false;
@@ -176,8 +176,12 @@ export async function launchGatewayProcess(options: {
       reject(error);
     };
 
-    child.on('error', (error) => {
-      logger.error('Gateway process spawn error:', error);
+    // Electron's UtilityProcess 'error' event delivers (type, location,
+    // report) strings, not an Error object; wrap them so downstream
+    // handlers that expect Error get a real one.
+    child.on('error', (type, location) => {
+      logger.error('Gateway process spawn error:', type, location);
+      const error = new Error(`Gateway utility process error: ${type} at ${location}`);
       options.onError(error);
       rejectOnce(error);
     });

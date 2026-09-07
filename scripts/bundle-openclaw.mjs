@@ -19,6 +19,7 @@
 import 'zx/globals';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
 import { patchExtensionOpenClawSelfImports } from './openclaw-self-import-patch.mjs';
+import { patchOpenClawPricingCache } from './openclaw-pricing-cache-patch.mjs';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
@@ -233,10 +234,16 @@ echo`   Skipped ${skippedDevCount} dev-only package references`;
 //     For each package we resolve it from the workspace's own node_modules,
 //     then BFS its transitive deps exactly like we did for openclaw above.
 let extraCount = 0;
+// A missing EXTRA_BUNDLED_PACKAGES entry is a HARD build failure, not a
+// warning: a warn-and-skip here means a runtime dep silently vanishes from
+// the shipped gateway (the moe.9 playwright-core class; audited again during
+// CLWX-72). Collected and thrown after the loop so one run reports them all.
+const missingExtraPackages = [];
 for (const pkgName of EXTRA_BUNDLED_PACKAGES) {
   const pkgLink = path.join(NODE_MODULES, ...pkgName.split('/'));
   if (!fs.existsSync(pkgLink)) {
-    echo`   ⚠️  Extra package ${pkgName} not found in workspace node_modules, skipping.`;
+    missingExtraPackages.push(pkgName);
+    echo`   ✗ Extra package ${pkgName} not found in workspace node_modules.`;
     continue;
   }
 
@@ -274,6 +281,10 @@ for (const pkgName of EXTRA_BUNDLED_PACKAGES) {
 
 if (extraCount > 0) {
   echo`   Added ${extraCount} extra packages (+ transitive deps) for Electron main process`;
+}
+if (missingExtraPackages.length > 0) {
+  echo`✗ BUNDLE FAILED: ${missingExtraPackages.length} EXTRA_BUNDLED_PACKAGES entries missing from workspace node_modules: ${missingExtraPackages.join(', ')} — run pnpm install (and check pnpm.supportedArchitectures covers the ship targets).`;
+  process.exit(1);
 }
 
 // 5. Copy all collected packages into OUTPUT/node_modules/ (flat structure)
@@ -978,6 +989,9 @@ const openclawSelfImportPatch = patchExtensionOpenClawSelfImports(OUTPUT);
 if (openclawSelfImportPatch.specifiersPatched > 0) {
   echo`   🩹 Rewrote ${openclawSelfImportPatch.specifiersPatched} OpenClaw plugin-sdk self-import(s) in ${openclawSelfImportPatch.filesPatched} extension file(s)`;
 }
+
+const pricingPatch = patchOpenClawPricingCache(OUTPUT);
+echo`   🩹 OpenClaw pricing cache normalization: ${pricingPatch.patched ? 'patched' : 'already patched'}`;
 
 // 8. Verify the bundle
 const entryExists = fs.existsSync(path.join(OUTPUT, 'openclaw.mjs'));

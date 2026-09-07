@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import path from 'path';
-import { existsSync, readFileSync, mkdirSync, readdirSync, rmSync, symlinkSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, readdirSync, symlinkSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 
@@ -34,6 +34,7 @@ import { syncProxyConfigToOpenClaw } from '../utils/openclaw-proxy';
 import { logger } from '../utils/logger';
 import { prependPathEntry } from '../utils/env-path';
 import { copyPluginFromNodeModules, fixupPluginManifest, cpSyncSafe } from '../utils/plugin-install';
+import { safeRmSync } from '../utils/safe-fs';
 import { stripSystemdSupervisorEnv } from './config-sync-env';
 import { getPort } from '../utils/config';
 import { getHostApiToken } from '../api/host-api-token';
@@ -91,7 +92,7 @@ function cleanupStaleBuiltInExtensions(): void {
     if (existsSync(fsPath(extDir))) {
       logger.info(`[plugin] Removing stale built-in extension copy: ${ext}`);
       try {
-        rmSync(fsPath(extDir), { recursive: true, force: true });
+        safeRmSync(fsPath(extDir));
       } catch (err) {
         logger.warn(`[plugin] Failed to remove stale extension ${ext}:`, err);
       }
@@ -176,7 +177,7 @@ function ensureConfiguredPluginsUpgraded(configuredChannels: string[]): boolean 
         logger.info(`[plugin] ${isInstalled ? 'Auto-upgrading' : 'Installing'} ${channelType} plugin${isInstalled ? `: ${installedVersion} → ${sourceVersion}` : `: ${sourceVersion}`} (bundled)`);
         try {
           mkdirSync(fsPath(join(homedir(), '.openclaw', 'extensions')), { recursive: true });
-          rmSync(fsPath(targetDir), { recursive: true, force: true });
+          safeRmSync(fsPath(targetDir));
           cpSyncSafe(bundledDir, targetDir);
           fixupPluginManifest(targetDir);
         } catch (err) {
@@ -237,7 +238,7 @@ function cleanupUnconfiguredChannelPlugins(configuredChannels: string[]): boolea
 
     logger.info(`[plugin] Removing unconfigured channel plugin: ${channelType} (${dirName})`);
     try {
-      rmSync(fsPath(targetDir), { recursive: true, force: true });
+      safeRmSync(fsPath(targetDir));
     } catch (err) {
       logger.warn(`[plugin] Failed to remove unconfigured channel plugin ${channelType}:`, err);
       succeeded = false;
@@ -625,12 +626,24 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
       }
     : {};
 
+  // K8: bundled doc parsers (pdf/docx/xlsx) in doc-tools.mjs augment NODE_PATH
+  // from CLAWX_APP_RESOURCES to resolve their deps under
+  // resources/{app.asar.unpacked,openclaw}/node_modules. Without this env var
+  // doc-tools falls back to a hardcoded default install path on Windows (wrong
+  // for relocated installs) and to an empty string on macOS (no roots at all),
+  // so packaged doc reads fail. process.resourcesPath is the correct per-install
+  // resources root. Only set it when packaged; dev resolves deps from the repo.
+  const appResourcesEnv: Record<string, string> = app.isPackaged
+    ? { CLAWX_APP_RESOURCES: process.resourcesPath }
+    : {};
+
   const forkEnv: Record<string, string | undefined> = {
     ...stripSystemdSupervisorEnv(baseEnvPatched),
     ...providerEnv,
     ...uvEnv,
     ...proxyEnv,
     ...hostApiEnv,
+    ...appResourcesEnv,
     OPENCLAW_GATEWAY_TOKEN: appSettings.gatewayToken,
     OPENCLAW_SKIP_CHANNELS: skipChannels ? '1' : '',
     CLAWDBOT_SKIP_CHANNELS: skipChannels ? '1' : '',

@@ -2,7 +2,7 @@
  * Test the clone-v2 logic against just title + first 3 fields.
  * Validates the editor automation before we burn 33 fields.
  */
-import { chromium, type Page } from 'playwright-core';
+import { chromium } from 'playwright-core';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

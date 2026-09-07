@@ -1,0 +1,4 @@
+interface:
+  display_name: "Windows VM Smoke"
+  short_description: "Run clean Windows install and VM smoke evidence."
+  default_prompt: "Use $windows-vm-smoke to run the clean Windows install and VM smoke evidence ladder."

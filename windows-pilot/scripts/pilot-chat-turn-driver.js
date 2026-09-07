@@ -1,0 +1,565 @@
+#!/usr/bin/env node
+/**
+ * Drive a real chat turn through the packaged renderer over CDP and record
+ * what happened. This is the lane-F closer: the eval suite proxies tool
+ * selection with BM25; this script exercises the live model path a principal
+ * actually hits (composer -> gateway -> LLM -> tools -> answer).
+ *
+ * Runs on the Windows pilot host with the app's bundled node.exe. Requires the
+ * app to be running with --remote-debugging-port (see pilot-run-chat-turn.ps1).
+ *
+ * Safe by default: types into the chat composer and sends one prompt. Does not
+ * touch Outlook, Forms, or any external surface. Output JSON carries message
+ * text truncated to 800 chars and never logs credentials.
+ *
+ * Usage:
+ *   node pilot-chat-turn-driver.js --prompt "..." [--port 9223]
+ *     [--turn-timeout 180] [--composer-timeout 180]
+ *     [--terminal-quiet 30] [--expected-channel online|on-device]
+ *     [--outdir C:\path\to\evidence] [--new-session]
+ *
+ * Exit codes: 0 = ANSWERED, 41 = ANSWERED_WITH_RUN_ERROR (answered, but the
+ * principal also saw a red banner), 40 = any non-answer verdict, 1/2/3 =
+ * infrastructure (fatal / bad args / no playwright-core). Never exit 0 for a
+ * turn the principal would call broken.
+ *
+ * --new-session is REQUIRED for any document/tool leg. Without it the turn
+ * lands in whatever session was last open, and a session that already holds a
+ * failed attempt makes the model echo its own prior apology ("still
+ * encountering the same technical error") WITHOUT calling the tool — a false
+ * FAIL that has cost two verify rounds (moe.17 and again moe.19). The flag
+ * fails LOUDLY when the session cannot be proven empty, because contaminated
+ * evidence is worse than no evidence.
+ */
+
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+function parseArgs(argv) {
+  const args = {
+    port: 9223,
+    turnTimeout: 180,
+    composerTimeout: 180,
+    terminalQuiet: 30,
+    expectedChannel: '',
+    outdir: process.cwd(),
+    prompt: '',
+    newSession: false,
+  };
+  for (let i = 2; i < argv.length; i += 1) {
+    const a = argv[i];
+    if (a === '--prompt') args.prompt = String(argv[++i] ?? '');
+    else if (a === '--port') args.port = Number(argv[++i]);
+    else if (a === '--turn-timeout') args.turnTimeout = Number(argv[++i]);
+    else if (a === '--composer-timeout') args.composerTimeout = Number(argv[++i]);
+    else if (a === '--terminal-quiet') args.terminalQuiet = Number(argv[++i]);
+    else if (a === '--expected-channel') args.expectedChannel = String(argv[++i] ?? '').trim().toLowerCase();
+    else if (a === '--outdir') args.outdir = String(argv[++i] ?? process.cwd());
+    else if (a === '--new-session') args.newSession = true;
+  }
+  if (!args.prompt) {
+    console.error('FATAL: --prompt is required');
+    process.exit(2);
+  }
+  if (args.expectedChannel && !['online', 'on-device'].includes(args.expectedChannel)) {
+    console.error('FATAL: --expected-channel must be online or on-device');
+    process.exit(2);
+  }
+  if (!Number.isFinite(args.terminalQuiet) || args.terminalQuiet < 0) {
+    console.error('FATAL: --terminal-quiet must be a non-negative number');
+    process.exit(2);
+  }
+  return args;
+}
+
+// Same resolution ladder as pilot-electron-cdp-probe.js: prefer the
+// playwright-core the installed app ships so this needs no npm install.
+function resolvePlaywrightCore() {
+  const localAppData = process.env.LOCALAPPDATA || '';
+  const resourceRoots = [
+    path.join(localAppData, 'Programs', 'Ministry of Education', 'resources'),
+    'C:\\Program Files\\Ministry of Education\\resources',
+  ];
+  const candidates = [
+    path.join(process.cwd(), 'node_modules', 'playwright-core'),
+    path.join(__dirname, 'node_modules', 'playwright-core'),
+  ];
+  for (const resources of resourceRoots) {
+    candidates.push(
+      path.join(resources, 'node_modules', 'playwright-core'),
+      path.join(resources, 'app.asar.unpacked', 'node_modules', 'playwright-core'),
+      path.join(resources, 'openclaw', 'node_modules', 'playwright-core'),
+      path.join(resources, 'openclaw', 'dist', 'extensions', 'browser', 'node_modules', 'playwright-core'),
+    );
+  }
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(path.join(candidate, 'package.json'))) {
+        return require(candidate);
+      }
+    } catch {
+      // keep walking the ladder
+    }
+  }
+  console.error('FATAL: playwright-core not found in any known location');
+  process.exit(3);
+}
+
+const SEL = {
+  composer: '[data-testid="chat-composer-input"]',
+  send: '[data-testid="chat-composer-send"]',
+  // The error chip's testid ALSO starts with "chat-message-"
+  // (src/pages/Chat/ChatMessage.tsx:436) while real message containers are
+  // "chat-message-<idx>" (src/pages/Chat/index.tsx:791). A bare prefix match
+  // therefore counted the chip as an extra message and — because a chip is a
+  // DESCENDANT of the last container, so it sorts after it in document order —
+  // made `.last()` return the chip's own error text. That text is over 40 chars
+  // and stops changing, so a failed turn whose only assistant content was an
+  // inline error chip settled as ANSWERED with the error string recorded as the
+  // answer (found by cross-model adversarial review, 2026-09-06).
+  message: '[data-testid^="chat-message-"]:not([data-testid="chat-message-error-chip"])',
+  degrade: '[data-testid="chat-degrade-notice"]',
+  runError: '[data-testid="chat-run-error"]',
+  newChat: '[data-testid="sidebar-new-chat"]',
+  executionStep: '[data-testid="chat-execution-step"]',
+  executionGraph: '[data-testid="chat-execution-graph"]',
+  errorChip: '[data-testid="chat-message-error-chip"]',
+  channel: '[data-testid="chat-composer-channel"]',
+  page: '[data-testid="chat-page"]',
+};
+
+async function findChatPage(browser) {
+  for (const context of browser.contexts()) {
+    for (const page of context.pages()) {
+      try {
+        if (await page.locator(SEL.composer).count() > 0) return page;
+      } catch {
+        // page may be a devtools target or mid-navigation; skip
+      }
+    }
+  }
+  return null;
+}
+
+function normalize(text) {
+  return String(text ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function truncate(text, max) {
+  const value = normalize(text);
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+function trimObservations(observations, max = 40) {
+  if (!Array.isArray(observations) || observations.length <= max) return observations;
+  return observations.slice(observations.length - max);
+}
+
+/**
+ * Classify the last rendered message text. Pure so the three ways a non-answer
+ * can masquerade as an answer are unit-testable without a browser:
+ *  - streaming placeholder ("Thinking…") is momentarily stable;
+ *  - the user's own prompt is what remains visible when the assistant bubble is
+ *    empty (silence-on-send);
+ *  - an inline error chip's text is long and stable, and the container's
+ *    innerText includes it.
+ */
+function classifyTurnText({ text, promptNormalized, chipText }) {
+  const value = normalize(text);
+  const isPlaceholder = /Thinking\s*[.…]|^\s*Working\b/i.test(value) || value.length < 40;
+  const isPromptEcho = value.replace(/\s*just now\s*$/i, '').trim() === normalize(promptNormalized)
+    && normalize(promptNormalized).length > 0;
+  const chip = normalize(chipText);
+  const isErrorChipOnly = Boolean(chip)
+    && value.includes(chip)
+    && normalize(value.split(chip).join(' ')).length < 40;
+  return {
+    isPlaceholder,
+    isPromptEcho,
+    isErrorChipOnly,
+    // Only this combination may be recorded as the principal's answer.
+    acceptable: Boolean(value) && !isPlaceholder && !isPromptEcho && !isErrorChipOnly,
+  };
+}
+
+function terminalBlockersFor(surface, expectedChannel = '') {
+  const blockers = [];
+  const channel = normalize(surface?.channel).toLowerCase();
+  const want = normalize(expectedChannel).toLowerCase();
+  const requiredSignals = [
+    ['sending', 'MISSING_TERMINAL_SIGNAL_SENDING'],
+    ['pendingFinal', 'MISSING_TERMINAL_SIGNAL_PENDING_FINAL'],
+    ['activeRunIdPresent', 'MISSING_TERMINAL_SIGNAL_ACTIVE_RUN'],
+    ['degradeInProgress', 'MISSING_TERMINAL_SIGNAL_DEGRADE_IN_PROGRESS'],
+    ['activeExecutionGraph', 'MISSING_TERMINAL_SIGNAL_ACTIVE_GRAPH'],
+    ['runErrorSeen', 'MISSING_TERMINAL_SIGNAL_RUN_ERROR'],
+    ['errorChipSeen', 'MISSING_TERMINAL_SIGNAL_ERROR_CHIP'],
+  ];
+
+  if (!surface?.rootPresent) blockers.push('MISSING_TERMINAL_STATE_ROOT');
+  for (const [field, blocker] of requiredSignals) {
+    if (surface?.[field] !== true && surface?.[field] !== false) blockers.push(blocker);
+  }
+
+  if (want && !channel) {
+    blockers.push('MISSING_CHANNEL_STATE');
+  } else if (want && channel !== want) {
+    blockers.push(`UNEXPECTED_CHANNEL_${channel.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`);
+  }
+  if (want === 'online' && surface?.degradeNoticeSeen) {
+    blockers.push('UNEXPECTED_DEGRADE_TO_ON_DEVICE');
+  }
+  if (surface?.degradeInProgress) blockers.push('DEGRADE_IN_PROGRESS');
+  if (surface?.sending) blockers.push('SEND_STILL_IN_PROGRESS');
+  if (surface?.pendingFinal) blockers.push('PENDING_TOOL_FINAL');
+  if (surface?.activeRunIdPresent) blockers.push('ACTIVE_RUN_STILL_PRESENT');
+  if (surface?.activeExecutionGraph) blockers.push('EXECUTION_GRAPH_STILL_ACTIVE');
+  if (surface?.runErrorSeen) blockers.push('RUN_ERROR_VISIBLE');
+  if (surface?.errorChipSeen) blockers.push('ERROR_CHIP_VISIBLE');
+  return blockers;
+}
+
+/** The verdict for a completed observation. Pure; mirrors main()'s ladder. */
+function verdictFor(result) {
+  if (Array.isArray(result.terminalBlockers) && result.terminalBlockers.length > 0) {
+    if (result.terminalBlockers.includes('UNEXPECTED_DEGRADE_TO_ON_DEVICE')) return 'FAILED_UNEXPECTED_DEGRADE';
+    if (result.terminalBlockers.some((item) => String(item).startsWith('UNEXPECTED_CHANNEL_'))) {
+      return 'FAILED_UNEXPECTED_CHANNEL';
+    }
+    return 'TIMED_OUT_MID_TURN';
+  }
+  if (result.settled && result.terminalStable === false) return 'TIMED_OUT_MID_TURN';
+  if (result.settled) return result.runErrorSeen ? 'ANSWERED_WITH_RUN_ERROR' : 'ANSWERED';
+  if (result.errorChipOnly) return 'FAILED_ERROR_CHIP_ONLY';
+  if (result.assistantPromptEcho) return 'ASSISTANT_EMPTY_SILENCE_ON_SEND';
+  return result.messagesAfter > result.messagesBefore ? 'TIMED_OUT_MID_TURN' : 'NO_RESPONSE';
+}
+
+/**
+ * Verdict -> process exit code. A caller that only checks $LASTEXITCODE
+ * (pilot-run-chat-turn.ps1 propagates it) must never read a failed or blocked
+ * turn as success.
+ */
+function exitCodeFor(verdict) {
+  if (verdict === 'ANSWERED') return 0;
+  if (verdict === 'ANSWERED_WITH_RUN_ERROR') return 41;
+  return 40;
+}
+
+async function captureTerminalSurface(page) {
+  return page.evaluate(({ selectors }) => {
+    const textOf = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
+    const readBool = (value) => {
+      if (value === 'true') return true;
+      if (value === 'false') return false;
+      return null;
+    };
+    const root = document.querySelector(selectors.page);
+    const channel = document.querySelector(selectors.channel);
+    const degrade = document.querySelector(selectors.degrade);
+    const composer = document.querySelector(selectors.composer);
+    const runError = document.querySelector(selectors.runError);
+    const errorChip = document.querySelector(selectors.errorChip);
+    const messages = Array.from(document.querySelectorAll(selectors.message)).map((el) => textOf(el));
+    const runErrorState = root ? readBool(root.getAttribute('data-run-error-present')) : null;
+
+    return {
+      at: new Date().toISOString(),
+      rootPresent: Boolean(root),
+      channel: channel?.getAttribute('data-channel') || textOf(channel) || null,
+      composerEnabled: composer ? !composer.disabled : null,
+      sending: root ? readBool(root.getAttribute('data-sending')) : null,
+      pendingFinal: root ? readBool(root.getAttribute('data-pending-final')) : null,
+      activeRunIdPresent: root ? readBool(root.getAttribute('data-active-run-id-present')) : null,
+      activeExecutionGraph: root ? readBool(root.getAttribute('data-active-execution-graph')) : null,
+      degradeInProgress: root ? readBool(root.getAttribute('data-degrade-in-progress')) : null,
+      runErrorSeen: runErrorState === true || (runErrorState === false ? false : Boolean(runError)),
+      errorChipSeen: Boolean(errorChip),
+      errorPresent: root ? readBool(root.getAttribute('data-error-present')) : null,
+      degradeNoticeSeen: Boolean(degrade),
+      degradeNoticeInProgressAttr: degrade ? degrade.getAttribute('data-in-progress') === 'true' : false,
+      degradeNoticeText: degrade ? textOf(degrade).slice(0, 300) : null,
+      runErrorText: runError ? textOf(runError).slice(0, 300) : null,
+      errorChipText: errorChip ? textOf(errorChip).slice(0, 300) : null,
+      messageCount: messages.length,
+      lastMessageText: messages.length ? messages[messages.length - 1].slice(0, 800) : '',
+    };
+  }, { selectors: SEL });
+}
+
+async function waitForTerminalAcceptance(page, args, answerText) {
+  const quietMs = args.terminalQuiet * 1000;
+  const deadline = Date.now() + Math.max(quietMs + 10_000, 10_000);
+  const startedAt = new Date().toISOString();
+  const observations = [];
+  let stableSince = 0;
+  let lastSignature = '';
+  let finalBlockers = [];
+
+  while (Date.now() <= deadline) {
+    const surface = await captureTerminalSurface(page).catch((error) => ({
+      at: new Date().toISOString(),
+      captureError: error instanceof Error ? error.message : String(error),
+    }));
+    const blockers = terminalBlockersFor(surface, args.expectedChannel);
+    finalBlockers = blockers;
+    observations.push({ ...surface, blockers });
+
+    const latestText = normalize(surface.lastMessageText || '');
+    const expectedText = normalize(answerText || '');
+    const answerStillLatest = !expectedText || latestText === expectedText || latestText.includes(expectedText);
+    const signature = JSON.stringify({
+      messageCount: surface.messageCount,
+      lastMessageText: latestText,
+      channel: surface.channel,
+      blockers,
+    });
+
+    if (blockers.length === 0 && answerStillLatest) {
+      if (signature === lastSignature) {
+        if (stableSince === 0) stableSince = Date.now();
+      } else {
+        stableSince = Date.now();
+        lastSignature = signature;
+      }
+      if (Date.now() - stableSince >= quietMs) {
+        return {
+          stable: true,
+          blockers: [],
+          finalSurface: surface,
+          observations: trimObservations(observations),
+          startedAt,
+          finishedAt: new Date().toISOString(),
+        };
+      }
+    } else {
+      stableSince = 0;
+      lastSignature = signature;
+    }
+
+    await page.waitForTimeout(2_000);
+  }
+
+  return {
+    stable: false,
+    blockers: finalBlockers,
+    finalSurface: observations[observations.length - 1] || null,
+    observations: trimObservations(observations),
+    startedAt,
+    finishedAt: new Date().toISOString(),
+  };
+}
+
+async function main() {
+  const args = parseArgs(process.argv);
+  const { chromium } = resolvePlaywrightCore();
+  fs.mkdirSync(args.outdir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const result = {
+    prompt: args.prompt,
+    startedAt: new Date().toISOString(),
+    sentAt: null,
+    candidateAnswerAt: null,
+    answerLatencyMs: null,
+    cdpPort: args.port,
+    appVersion: null,
+    requestedNewSession: args.newSession,
+    expectedChannel: args.expectedChannel || null,
+    freshSession: null,
+    composerPlaceholder: null,
+    messagesBefore: 0,
+    messagesAfter: 0,
+    executionSteps: [],
+    toolNames: [],
+    errorChipSeen: false,
+    errorChipText: null,
+    errorChipOnly: false,
+    assistantPromptEcho: false,
+    degradeNoticeSeen: false,
+    degradeNoticeText: null,
+    runErrorSeen: false,
+    runErrorText: null,
+    answerText: null,
+    settled: false,
+    terminalStable: null,
+    terminalBlockers: [],
+    terminalState: null,
+    terminalObservations: [],
+    terminalCheckStartedAt: null,
+    terminalCheckFinishedAt: null,
+    terminalCheckDurationMs: null,
+    verdict: 'INCOMPLETE',
+  };
+
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${args.port}`, { timeout: 15_000 });
+  try {
+    const page = await findChatPage(browser);
+    if (!page) {
+      result.verdict = 'FAILED_NO_CHAT_PAGE';
+      return result;
+    }
+    result.appVersion = await page.evaluate(() => navigator.userAgent).catch(() => null);
+
+    if (args.newSession) {
+      const newChat = page.locator(SEL.newChat);
+      if (await newChat.count() === 0) {
+        result.verdict = 'FAILED_NO_NEW_CHAT_CONTROL';
+        result.freshSession = false;
+        return result;
+      }
+      await newChat.first().click();
+      await page.waitForTimeout(2_500);
+      const remaining = await page.locator(SEL.message).count();
+      result.freshSession = remaining === 0;
+      if (!result.freshSession) {
+        // Refuse to run: a non-empty session can produce a refusal that echoes
+        // its own history instead of exercising the tool.
+        result.messagesBefore = remaining;
+        result.verdict = 'FAILED_SESSION_NOT_FRESH';
+        return result;
+      }
+    }
+    result.messagesBefore = await page.locator(SEL.message).count();
+
+    // Wait for the composer to be ENABLED, not just present. A listening port
+    // 18789 is NOT readiness: the renderer disables the composer (placeholder
+    // "Gateway not connected...") until its WS handshake completes, which on
+    // the CPU-bound VM lags the port by minutes after a gateway restart.
+    // Without this the click times out with a raw playwright FATAL and the run
+    // records verdict INCOMPLETE, which reads like a product failure when it
+    // is really "we sent too early" (moe.19 VM, 2026-09-06).
+    const composer = page.locator(SEL.composer).first();
+    const readyDeadline = Date.now() + args.composerTimeout * 1000;
+    while (Date.now() < readyDeadline) {
+      if (await composer.isEnabled().catch(() => false)) break;
+      await page.waitForTimeout(2_000);
+    }
+    if (!(await composer.isEnabled().catch(() => false))) {
+      result.composerPlaceholder = await composer.getAttribute('placeholder').catch(() => null);
+      result.verdict = 'BLOCKED_COMPOSER_DISABLED';
+      return result;
+    }
+
+    await page.locator(SEL.composer).click();
+    await page.locator(SEL.composer).fill(args.prompt);
+    await page.locator(SEL.send).click();
+    result.sentAt = new Date().toISOString();
+
+    // The turn is settled when the message count has grown by >= 2 (user +
+    // assistant) and the last message's text stops changing between polls.
+    const deadline = Date.now() + args.turnTimeout * 1000;
+    const promptNormalized = normalize(args.prompt);
+    let lastText = '';
+    let stableSince = 0;
+    let chipTextRaw = '';
+    while (Date.now() < deadline) {
+      await page.waitForTimeout(2_000);
+      result.messagesAfter = await page.locator(SEL.message).count();
+      // Read the inline chip every poll: the container's innerText INCLUDES its
+      // chip's text, so the chip string is needed to tell "assistant answered"
+      // from "assistant rendered nothing but an error".
+      if (await page.locator(SEL.errorChip).count() > 0) {
+        result.errorChipSeen = true;
+        chipTextRaw = normalize(await page.locator(SEL.errorChip).last().innerText().catch(() => ''));
+        result.errorChipText = truncate(chipTextRaw, 300);
+      }
+      if (await page.locator(SEL.degrade).count() > 0) {
+        result.degradeNoticeSeen = true;
+        result.degradeNoticeText = truncate(await page.locator(SEL.degrade).innerText().catch(() => ''), 300);
+      }
+      if (await page.locator(SEL.runError).count() > 0) {
+        result.runErrorSeen = true;
+        result.runErrorText = truncate(await page.locator(SEL.runError).innerText().catch(() => ''), 300);
+      }
+      if (result.messagesAfter >= result.messagesBefore + 2) {
+        const raw = await page.locator(SEL.message).last().innerText().catch(() => '');
+        const text = normalize(raw);
+        // Placeholders ("Thinking…"), the user's own echoed prompt (empty
+        // assistant bubble = silence-on-send), and an assistant bubble holding
+        // nothing but its inline error chip are all NON-answers that would
+        // otherwise satisfy the stability heuristic. See classifyTurnText.
+        const shape = classifyTurnText({ text, promptNormalized, chipText: chipTextRaw });
+        if (shape.isPromptEcho) result.assistantPromptEcho = true;
+        result.errorChipOnly = shape.isErrorChipOnly;
+        if (text === lastText && shape.acceptable) {
+          if (stableSince === 0) stableSince = Date.now();
+          // 3 consecutive stable polls (~9s) of real content = streaming finished.
+          if (Date.now() - stableSince >= 9_000) {
+            result.settled = true;
+            result.candidateAnswerAt = new Date().toISOString();
+            result.answerLatencyMs = Date.parse(result.candidateAnswerAt) - Date.parse(result.sentAt);
+            result.answerText = truncate(text, 800);
+            break;
+          }
+        } else {
+          lastText = text;
+          stableSince = 0;
+        }
+      }
+    }
+    // Never record the prompt echo (silence-on-send) or a bare error chip
+    // (failed turn) as an answer.
+    if (!result.settled && lastText && !result.assistantPromptEcho && !result.errorChipOnly) {
+      result.answerText = truncate(lastText, 800);
+    }
+
+    if (result.settled) {
+      const terminal = await waitForTerminalAcceptance(page, args, lastText);
+      result.terminalStable = terminal.stable;
+      result.terminalBlockers = terminal.blockers;
+      result.terminalState = terminal.finalSurface;
+      result.terminalObservations = terminal.observations;
+      result.terminalCheckStartedAt = terminal.startedAt;
+      result.terminalCheckFinishedAt = terminal.finishedAt;
+      result.terminalCheckDurationMs = Date.parse(terminal.finishedAt) - Date.parse(terminal.startedAt);
+    }
+
+    // Tool-call evidence: the execution graph is the only renderer-visible
+    // proof that the model actually CALLED a tool rather than answering (or
+    // refusing) from its own context.
+    try {
+      const steps = await page.locator(SEL.executionStep).allInnerTexts();
+      result.executionSteps = steps.map((s) => truncate(s, 200));
+      const names = new Set();
+      for (const step of result.executionSteps) {
+        for (const m of step.matchAll(/\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g)) names.add(m[1]);
+      }
+      result.toolNames = [...names];
+    } catch {
+      // execution graph may be collapsed or absent; leave the arrays empty
+    }
+    if (await page.locator(SEL.errorChip).count() > 0) result.errorChipSeen = true;
+
+    result.verdict = verdictFor(result);
+
+    await page.screenshot({ path: path.join(args.outdir, `chat-turn-${stamp}.png`), fullPage: true }).catch(() => {});
+    return result;
+  } finally {
+    result.finishedAt = new Date().toISOString();
+    const outPath = path.join(args.outdir, `chat-turn-${stamp}.json`);
+    fs.writeFileSync(outPath, JSON.stringify(result, null, 2));
+    console.log(`RESULT ${result.verdict}`);
+    console.log(JSON.stringify(result, null, 2));
+    console.log(`WROTE ${outPath}`);
+    process.exitCode = exitCodeFor(result.verdict);
+    await browser.close().catch(() => {});
+  }
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(`FATAL: ${error && error.message ? error.message : error}`);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  classifyTurnText,
+  terminalBlockersFor,
+  verdictFor,
+  exitCodeFor,
+  normalize,
+  SEL,
+  parseArgs,
+};

@@ -1,9 +1,11 @@
-# Windows pilot install — end-to-end runbook (moe.10)
+# Windows pilot install — historical moe.10 procedure
+
+For current testing, use [Windows VM access, environment and visible outcomes](../windows-pilot/vm-testing/README.md) and [the current candidate](CURRENT_WINDOWS_RC.md). The commands below describe the earlier physical-laptop setup; they do not identify today's candidate or prove current VM access. Preserve host-key verification and existing user state in new runs.
 
 **Target:** `vyonix@169.254.46.90` (pilot Windows 11, build 26100). Cat-5 link.
 **Time:** ~15 min from clean state to working demo.
 
-This runbook is **autonomous** — every step is a one-liner you can paste, with expected output. Stop at the first ✗ and consult `docs/WINDOWS_PROBLEMS_ATLAS.md` for the matching root cause.
+This archived procedure records the earlier moe.10 physical-laptop test. Its addresses, artifact selection and commands are historical examples, not instructions for the current test run. Follow the current testing entrypoint above and select the exact candidate hash before any installation.
 
 ---
 
@@ -101,14 +103,52 @@ if (Test-Path $un) {
 
 ---
 
-## Step 5 — fetch the latest moe.10 .exe
+## Historical step 5 — acquire the June moe.10 artifact
 
-Build is on GitHub Actions, downloadable for 7 days after each push:
+The following packaging notes and command examples belong to the June moe.10 procedure. Do not use this section to select or install a current candidate. Use `docs/CURRENT_WINDOWS_RC.md`, its exact manifest hash and the current testing entrypoint instead. Historical workflow artifacts may have expired.
+
+Release builds must include the managed online gateway seed. The manual
+packaging workflow now fails by default unless these GitHub repository secrets
+exist:
+
+- `CLAWX_CLOUD_GATEWAY_CONFIG_JSON`: JSON matching `resources/cloud-gateway.example.json`
+- `CLAWX_CLOUD_GATEWAY_KEY`: broker/client-scoped gateway key only, not an upstream provider key
+
+For a release candidate that should use programmatic Outlook instead of Chrome
+remote-debugging guidance, also set:
+
+- `CLAWX_MICROSOFT_GRAPH_CONFIG_JSON`: JSON matching `resources/microsoft-graph.example.json`
+
+For a release candidate or GA installer that should use high-quality cloud ASR
+instead of relying on the weaker Windows local recognizer, also set:
+
+- `CLAWX_AZURE_SPEECH_CONFIG_JSON`: JSON matching `resources/azure-speech.example.json`
+- `CLAWX_AZURE_SPEECH_KEY`: Speech resource key only; keep it out of the JSON
+
+This Graph config is not a secret; it contains only tenant/client/scopes. Use
+the workflow input `requireMicrosoftGraphSeed=true` only after MoE IT returns
+the Entra app registration. Until then, leave it optional and the installer
+keeps the browser/CDP demo fallback.
+
+Use the workflow input `requireAzureSpeechSeed=true` for GA packages where the
+microphone must be cloud-first. If the Azure Speech seed is absent, pilot mode
+still tries Azure first, sees no configured key, then falls back to Windows
+native ASR and finally Whisper CLI when available.
+
+The workflow writes those secrets into ignored `resources/cloud-gateway.json`
+and `resources/cloud-gateway.key` files on the runner before packaging. The
+installer should then first-run with the Online channel selected and the cloud
+gateway as the default provider; a clean install falling back to `qwen2.5` is a
+release-blocking packaging failure. When the Microsoft Graph seed is present,
+the workflow also writes ignored `resources/microsoft-graph.json`, and the
+packaged app should show Microsoft 365 as configured before sign-in. When the
+Azure Speech seed is present, the workflow writes ignored
+`resources/azure-speech.json` and `resources/azure-speech.key`; the app should
+transcribe through Azure Speech before trying local ASR.
 
 ```bash
-# On Mac:
-gh run list --repo dmvevents/clawx-pilot --workflow package-win-manual.yml --limit 1 --json databaseId
-# Note the databaseId, then:
+# HISTORICAL June example only; do not run for current acceptance.
+# Select the recorded historical run ID, never the newest workflow run:
 mkdir -p /tmp/moe10
 gh run download <id> --repo dmvevents/clawx-pilot --name windows-installer-x64 --dir /tmp/moe10
 
@@ -116,11 +156,23 @@ gh run download <id> --repo dmvevents/clawx-pilot --name windows-installer-x64 -
 scp -o ProxyCommand=none /tmp/moe10/*.exe vyonix@169.254.46.90:/Users/vyonix/Downloads/
 ```
 
-Or use the in-repo `release/Ministry of Education-0.4.3-moe.10-win-x64.exe` if it exists from a local build.
+The June procedure also used `release/Ministry of Education-0.4.3-moe.10-win-x64.exe`. File presence alone is not candidate selection; do not substitute this historical file for the current manifest-bound installer.
 
 ---
 
-## Step 6 — silent install on pilot
+## Historical step 6 — install the selected June artifact on pilot
+
+The commands below illustrate the archived procedure only. Their wildcard/latest-file lookup must not be used for current acceptance; the current procedure requires one explicit installer path with its verified hash.
+
+For a real tester or principal, use the normal assisted Windows installer
+screens by double-clicking the downloaded `.exe`. Keep the default install
+location and desktop shortcut enabled.
+
+For automation-only smoke tests, the hidden NSIS `/S /CURRENTUSER` path is a
+diagnostic helper, not user-facing release proof. On busy VM/WinRM sessions it
+can stall after copying a partial tree. If that happens, mark the automation
+path red and rerun proof from an interactive desktop/RDP install before
+claiming visual acceptance.
 
 ```bash
 ssh pilot 'powershell -NoProfile -c "
@@ -132,7 +184,13 @@ $p = Start-Process -FilePath $exe.FullName -ArgumentList \"/S\",\"/CURRENTUSER\"
 "'
 ```
 
-Expected: `exit: 0`. If you see `exit: 1`, NSIS hit a precondition (e.g., `vc_redist.x64.exe` missing — see PROBLEMS_ATLAS).
+Expected for the automation helper: `exit: 0` plus
+`%LOCALAPPDATA%\Programs\Ministry of Education\Ministry of Education.exe`
+present. If you see a timeout, a partial install tree, or the app exe is
+missing, do not treat the VM as green. Use
+`windows-pilot/scripts/pilot-run-silent-install.ps1` to capture process and
+install-tree evidence, then switch to an assisted desktop/RDP install or fix
+the NSIS silent path.
 
 ---
 
@@ -208,9 +266,9 @@ Look for `Gateway auto-start succeeded` and `Gateway ready fallback RPC router p
 
 ---
 
-## Step 11 — agent smoke (without launching Chrome)
+## Step 11 — agent smoke (without manual Chrome setup)
 
-The Outlook tools need Chrome on `--remote-debugging-port=18792`. For the demo we won't drive Outlook from SSH; we drive it from the app's chat composer once a principal opens the GUI on the laptop directly. SSH-side smoke is just gateway sanity:
+The app owns the Chrome automation repair path for Outlook and Forms. Do not ask a principal to configure Chrome flags or run Chrome commands. For the demo we won't drive Outlook from SSH; we drive it from the app's chat composer once a principal opens the GUI on the laptop directly. SSH-side smoke is just gateway sanity:
 
 ```bash
 ssh pilot 'powershell -NoProfile -c "
@@ -230,12 +288,84 @@ Expected: `HTTP/1.1 101 Switching Protocols` from gateway, `401` from host-API (
 ## Demo path (principal sits at the laptop, NOT SSH)
 
 For the actual demo, the principal:
-1. Opens Chrome (the openclaw browser plugin auto-attaches via `--remote-debugging-port=18792` when first navigated)
-2. Signs into Outlook in that Chrome
-3. Opens the Ministry of Education app
-4. Types into the chat composer
+1. Opens the Ministry of Education app.
+2. Asks the assistant to check email or open Outlook.
+3. Signs into Outlook in the Chrome window if Microsoft asks for sign-in.
+4. If the assistant says Chrome is already open with the target profile, closes all Chrome windows and retries from ClawX.
+5. Types the demo request into the chat composer.
 
 The SSH-driven steps above are just for IT-side install/verify.
+
+---
+
+## Visual VM smoke (GCP Windows)
+
+Use this when a physical laptop is unavailable or when validating a clean
+installer path before sending a download link. The VM proof must still be
+treated as interactive Windows evidence, not CI Session 0 evidence.
+
+Current VM:
+
+- project: `gen-lang-client-0649986230`
+- zone: `us-central1-a`
+- instance: `clawx-win-rc-20260609`
+- Windows user: `clawxtest`
+
+Start the WinRM tunnel from the Mac:
+
+```bash
+gcloud compute start-iap-tunnel clawx-win-rc-20260609 5986 \
+  --local-host-port=localhost:15986 \
+  --zone=us-central1-a \
+  --project=gen-lang-client-0649986230
+```
+
+Run the installed-app visual smoke from the VM:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File "$env:USERPROFILE\Downloads\clawx-e2e-runner\pilot-managed-cdp-visual-smoke.ps1" `
+  -StopExistingApp -StopChrome
+```
+
+Expected artifact directory:
+
+```text
+C:\Users\clawxtest\Downloads\clawx-managed-cdp-visual-smoke-<timestamp>
+```
+
+Minimum evidence:
+
+- screenshot `clawx-electron-*.png` shows the app shell, not the setup wizard;
+- `STATE:CHROME_CDP_READY=True`;
+- `STATE:ELECTRON_CDP_READY=True`;
+- `STATE:HOSTAPI_READY=True`;
+- `STATE:GATEWAY_PORT_READY=True`;
+- `STATE:POST_PROBE_*` still true after the probe;
+- `OFFICE_RUNTIME_READY`;
+- Outlook read and no-send/no-download safety probes return safe statuses;
+- Forms list returns the Daily Report and Suspensions forms;
+- Forms preview either fills the expected fields or returns a precise sign-in/access diagnostic.
+
+Optional visual desktop:
+
+```bash
+gcloud compute start-iap-tunnel clawx-win-rc-20260609 3389 \
+  --local-host-port=localhost:13389 \
+  --zone=us-central1-a \
+  --project=gen-lang-client-0649986230
+```
+
+Then connect Microsoft Remote Desktop to `localhost:13389` as `clawxtest`.
+Credentials stay in the operator vault/local temp file and must not be pasted
+into logs or docs.
+
+2026-06-09 evidence:
+
+- clean install on the GCP Windows VM succeeded with silent install exit `0`;
+- app screenshot confirmed the setup wizard no longer appears after cloud gateway seeding;
+- Host API, Gateway, Chrome CDP, Electron CDP, Office runtime, and Outlook safety probes were green;
+- Forms preview failed because the managed Chrome profile landed on `login.microsoftonline.com`, meaning Microsoft sign-in is required before the tenant Forms questions render.
 
 ---
 
@@ -250,4 +380,5 @@ The SSH-driven steps above are just for IT-side install/verify.
 | 0 bytes in stdout, no userData | "userData not created" |
 | `Cannot find module` errors | "playwright-core devDep" |
 | Chrome opens but Outlook tools 404 | "Conditional Access / managed Chromium" |
+| Forms preview waits 30s for question items | "Forms preview redirects to Microsoft sign-in" |
 | `chflags uchg` urge | NEVER do this on Windows; band-aid is wrong |

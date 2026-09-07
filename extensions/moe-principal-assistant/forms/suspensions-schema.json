@@ -27,14 +27,25 @@
           "label": "Education District",
           "type": "single_choice",
           "required": true,
-          "options": ["Caroni", "North Eastern", "Port of Spain & Environs", "South Eastern", "St. George East", "St. Patrick", "Victoria"]
+          "options": [
+            "Caroni",
+            "North Eastern",
+            "Port of Spain & Environs",
+            "South Eastern",
+            "St. George East",
+            "St. Patrick",
+            "Victoria"
+          ]
         },
         {
           "id": "school_type",
           "label": "School Type",
           "type": "single_choice",
           "required": true,
-          "options": ["Denominational", "Government"]
+          "options": [
+            "Denominational",
+            "Government"
+          ]
         },
         {
           "id": "school_name",
@@ -49,15 +60,46 @@
     {
       "name": "Perpetrator details",
       "fields": [
-        { "id": "perpetrator_name", "label": "Name of perpetrator", "type": "text", "required": true },
-        { "id": "perpetrator_sex", "label": "Sex", "type": "single_choice", "required": true, "options": ["Male", "Female"] },
-        { "id": "perpetrator_dob", "label": "Date of birth", "type": "date", "required": true },
+        {
+          "id": "perpetrator_name",
+          "label": "Name of perpetrator",
+          "type": "text",
+          "required": true
+        },
+        {
+          "id": "perpetrator_sex",
+          "label": "Sex",
+          "type": "single_choice",
+          "required": true,
+          "options": [
+            "Male",
+            "Female"
+          ]
+        },
+        {
+          "id": "perpetrator_dob",
+          "label": "Date of birth",
+          "type": "date",
+          "required": true
+        },
         {
           "id": "perpetrator_age",
           "label": "Age of perpetrator",
           "type": "single_choice",
           "required": true,
-          "options": ["5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"]
+          "options": [
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15"
+          ]
         },
         {
           "id": "student_birth_certificate_pin",
@@ -71,15 +113,33 @@
           "label": "Class",
           "type": "single_choice",
           "required": true,
-          "options": ["First Year", "Second Year", "Standard 1", "Standard 2", "Standard 3", "Standard 4", "Standard 5"]
+          "options": [
+            "First Year",
+            "Second Year",
+            "Standard 1",
+            "Standard 2",
+            "Standard 3",
+            "Standard 4",
+            "Standard 5"
+          ]
         }
       ]
     },
     {
       "name": "Incident",
       "fields": [
-        { "id": "date_of_infraction", "label": "Date of infraction", "type": "date", "required": true },
-        { "id": "date_of_issue_of_suspension", "label": "Date of issue of suspension", "type": "date", "required": true },
+        {
+          "id": "date_of_infraction",
+          "label": "Date of infraction",
+          "type": "date",
+          "required": true
+        },
+        {
+          "id": "date_of_issue_of_suspension",
+          "label": "Date of issue of suspension",
+          "type": "date",
+          "required": true
+        },
         {
           "id": "term_suspension_count",
           "label": "For the current Term (Term 2 2025/26) this student has been suspended ___ time(s)",
@@ -112,15 +172,36 @@
           "type": "single_choice",
           "required": true,
           "options": [
-            "Arson", "Assault with Weapon", "Assault without Weapon", "Bullying/Intimidation",
-            "Class Truancy", "Cyber Bullying", "Disorderly/Disruptive Conduct", "Disrespect/Defiance of Authority",
-            "Extortion and Taxing", "Fight with Weapon", "Fight without Weapon", "Forgery", "Gambling",
-            "Possession of an Incendiary/Explosive Device", "Lewd/Inappropriate Behaviour",
-            "Misuse of Technology", "Possession of Weapons", "Possession/Use of Alcohol",
-            "Possession/Use of Drugs", "Possession/Use of Drugs (Pharmaceutical)",
-            "Possession/Use of Tobacco/Vaping Products", "Propagation of Misinformation/Mischief",
-            "Robbery/Theft", "Sexual Harassment", "Sexual Misconduct", "Threat with Weapon", "Threat without Weapon",
-            "Use of Obscene Language", "Vandalism", "Other"
+            "Arson",
+            "Assault with Weapon",
+            "Assault without Weapon",
+            "Bullying/Intimidation",
+            "Class Truancy",
+            "Cyber Bullying",
+            "Disorderly/Disruptive Conduct",
+            "Disrespect/Defiance of Authority",
+            "Extortion and Taxing",
+            "Fight with Weapon",
+            "Fight without Weapon",
+            "Forgery",
+            "Gambling",
+            "Possession of an Incendiary/Explosive Device",
+            "Lewd/Inappropriate Behaviour",
+            "Misuse of Technology",
+            "Possession of Weapons",
+            "Possession/Use of Alcohol",
+            "Possession/Use of Drugs",
+            "Possession/Use of Drugs (Pharmaceutical)",
+            "Possession/Use of Tobacco/Vaping Products",
+            "Propagation of Misinformation/Mischief",
+            "Robbery/Theft",
+            "Sexual Harassment",
+            "Sexual Misconduct",
+            "Threat with Weapon",
+            "Threat without Weapon",
+            "Use of Obscene Language",
+            "Vandalism",
+            "Other"
           ]
         },
         {
@@ -128,7 +209,10 @@
           "label": "Were there any additional infractions listed above committed during the incident?",
           "type": "single_choice",
           "required": true,
-          "options": ["Yes", "No"]
+          "options": [
+            "Yes",
+            "No"
+          ]
         },
         {
           "id": "additional_infractions",
@@ -136,7 +220,9 @@
           "subtitle": "(Select all that apply)",
           "type": "multi_choice",
           "required": true,
-          "showWhen": { "additional_infractions_present": "Yes" },
+          "showWhen": {
+            "additional_infractions_present": "Yes"
+          },
           "optionsRef": "infraction_options_same_as_primary"
         },
         {
@@ -144,57 +230,90 @@
           "label": "Was there a victim involved?",
           "type": "single_choice",
           "required": true,
-          "options": ["Yes", "No"]
+          "options": [
+            "Yes",
+            "No"
+          ]
         },
         {
           "id": "victim_type",
           "label": "The victim was a/an",
           "type": "single_choice",
           "required": true,
-          "showWhen": { "victim_present": "Yes" },
-          "options": ["Member of staff", "Student of the same school", "Student of another school", "Individual external to school"]
+          "showWhen": {
+            "victim_present": "Yes"
+          },
+          "options": [
+            "Member of staff",
+            "Student of the same school",
+            "Student of another school",
+            "Individual external to school"
+          ]
         },
         {
           "id": "written_reports_collected",
           "label": "Were written reports collected from the perpetrator(s), victim(s), and other persons of interest?",
           "type": "single_choice",
           "required": true,
-          "options": ["Yes", "No"]
+          "options": [
+            "Yes",
+            "No"
+          ]
         },
         {
           "id": "length_of_suspension",
           "label": "Length of suspension (days)",
           "type": "single_choice",
           "required": true,
-          "options": ["1", "2", "3", "4", "5", "6", "7"]
+          "options": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7"
+          ]
         },
         {
           "id": "extended_suspension_application",
           "label": "Was an application made for an extended suspension?",
           "type": "single_choice",
           "required": true,
-          "options": ["Yes", "No"]
+          "options": [
+            "Yes",
+            "No"
+          ]
         },
         {
           "id": "sssd_referral",
           "label": "Was the student referred to SSSD?",
           "type": "single_choice",
           "required": true,
-          "options": ["Yes", "No"]
+          "options": [
+            "Yes",
+            "No"
+          ]
         },
         {
           "id": "parent_present_at_issue",
           "label": "Was the student's parent/guardian/representative present when the suspension was issued?",
           "type": "single_choice",
           "required": true,
-          "options": ["Yes", "No"]
+          "options": [
+            "Yes",
+            "No"
+          ]
         },
         {
           "id": "parent_signed_notice",
           "label": "Did the parent/guardian/representative sign the Notice of Suspension form?",
           "type": "single_choice",
           "required": true,
-          "options": ["Yes", "No"]
+          "options": [
+            "Yes",
+            "No"
+          ]
         }
       ]
     },
@@ -206,21 +325,33 @@
           "label": "Was the level of the offence, the identified consequence(s), and process to be followed (as outlined in the National School Discipline Matrix) taken into consideration when issuing the suspension?",
           "type": "single_choice",
           "required": true,
-          "options": ["Yes", "No"]
+          "options": [
+            "Yes",
+            "No"
+          ]
         },
         {
           "id": "level_of_offence",
           "label": "Level of offence",
           "type": "single_choice",
           "required": true,
-          "options": ["Minor", "Major", "Severe"]
+          "options": [
+            "Minor",
+            "Major",
+            "Severe"
+          ]
         }
       ]
     },
     {
       "name": "Parent Information",
       "fields": [
-        { "id": "parent_name", "label": "Name of the parent/guardian/representative present", "type": "text", "required": true },
+        {
+          "id": "parent_name",
+          "label": "Name of the parent/guardian/representative present",
+          "type": "text",
+          "required": true
+        },
         {
           "id": "parent_phone_1",
           "label": "Parent/guardian/representative's phone number (1)",
@@ -242,10 +373,30 @@
     {
       "name": "Parent Address",
       "fields": [
-        { "id": "address_house", "label": "House/apartment/light pole/mile marker number", "type": "text", "required": true },
-        { "id": "address_street", "label": "Name of street", "type": "text", "required": true },
-        { "id": "address_city", "label": "Name of city/town/village", "type": "text", "required": true }
+        {
+          "id": "address_house",
+          "label": "House/apartment/light pole/mile marker number",
+          "type": "text",
+          "required": true
+        },
+        {
+          "id": "address_street",
+          "label": "Name of street",
+          "type": "text",
+          "required": true
+        },
+        {
+          "id": "address_city",
+          "label": "Name of city/town/village",
+          "type": "text",
+          "required": true
+        }
       ]
     }
-  ]
+  ],
+  "fingerprint": {
+    "questionCount": 33,
+    "orderedLabelsHash": "111bf553e66d71b33f0d1d96a799aaaca50f9b25ae4d2f3af414b6c2f7c51987",
+    "algorithm": "sha256/normalized-labels-v1"
+  }
 }

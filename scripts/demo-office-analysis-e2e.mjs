@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import Module from 'node:module';
 import os from 'node:os';
@@ -168,6 +168,31 @@ function summarizeDocx(filePath) {
   };
 }
 
+function summarizePptx(filePath) {
+  const buffer = readFileSync(filePath);
+  const slideEntries = readCentralDirectory(buffer)
+    .map((entry) => entry.fileName)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name))
+    .sort((a, b) => slideNumberFromEntry(a) - slideNumberFromEntry(b));
+  const slides = slideEntries.map((entryName, index) => {
+    const xml = extractZipEntry(buffer, entryName).toString('utf8');
+    const paragraphs = extractPresentationParagraphs(xml);
+    return {
+      index: index + 1,
+      entry: entryName,
+      paragraphCount: paragraphs.length,
+      firstParagraphs: paragraphs.slice(0, 10),
+    };
+  });
+  return {
+    fileName: path.basename(filePath),
+    bytes: statSync(filePath).size,
+    parser: 'pptx-ooxml',
+    slideCount: slides.length,
+    slides,
+  };
+}
+
 function parseWorkbookRelationships(xml) {
   const rels = new Map();
   for (const attrs of matchTags(xml, 'Relationship')) {
@@ -253,7 +278,7 @@ function textBetween(xml, tagName) {
 }
 
 function extractTextRuns(xml) {
-  return Array.from(xml.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g))
+  return Array.from(xml.matchAll(/<(?:[\w-]+:)?t\b[^>]*>([\s\S]*?)<\/(?:[\w-]+:)?t>/g))
     .map((match) => decodeXml(match[1]))
     .join('');
 }
@@ -265,6 +290,18 @@ function extractParagraphs(xml) {
     .split(/<\/w:p>/g)
     .map((chunk) => decodeXml(chunk.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()))
     .filter(Boolean);
+}
+
+function extractPresentationParagraphs(xml) {
+  return xml
+    .split(/<\/a:p>/g)
+    .map((chunk) => extractTextRuns(chunk).replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+function slideNumberFromEntry(entryName) {
+  const match = /slide(\d+)\.xml$/i.exec(entryName);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
 }
 
 function extractZipEntry(buffer, entryName) {
@@ -316,7 +353,7 @@ function readCentralDirectory(buffer) {
     const extraLength = buffer.readUInt16LE(offset + 30);
     const commentLength = buffer.readUInt16LE(offset + 32);
     const localHeaderOffset = buffer.readUInt32LE(offset + 42);
-    const fileName = buffer.subarray(offset + 46, offset + 46 + fileNameLength).toString('utf8');
+    const fileName = buffer.subarray(offset + 46, offset + 46 + fileNameLength).toString('utf8').replace(/\\/g, '/');
     entries.push({ fileName, method, compressedSize, localHeaderOffset });
     offset += 46 + fileNameLength + extraLength + commentLength;
   }
@@ -332,17 +369,93 @@ function decodeXml(value) {
     .replace(/&apos;/g, "'");
 }
 
+/**
+ * Write-path assertions (CLWX-65): exercise the SAME implementations the
+ * agent's document.write_docx / document.write_xlsx tools call
+ * (extensions/moe-principal-assistant/doc-tools.mjs), then parse both
+ * artifacts back with this script's own read-side summarizers. The
+ * doc-tools module is imported lazily so the read-only modes keep working
+ * when this script is run standalone against an installed app (where the
+ * repo extensions tree is not on disk).
+ */
+async function runWriteCheck() {
+  const docTools = await import(new URL('../extensions/moe-principal-assistant/doc-tools.mjs', import.meta.url));
+  const outDir = mkdtempSync(path.join(os.tmpdir(), 'clawx-office-write-check-'));
+
+  const docxParagraphs = [
+    'Dear Parents and Guardians,',
+    'Our annual Sports Day takes place on Friday at the school grounds.',
+    'Please ensure your child wears their house colours and brings a water bottle.',
+    'Yours sincerely,',
+    'The Principal',
+  ];
+  const docxWrite = await docTools.writeDocx({
+    path: path.join(outDir, 'write-check-letter.docx'),
+    title: 'Sports Day Letter',
+    paragraphs: docxParagraphs,
+  });
+  const docxSummary = summarizeDocx(docxWrite.path);
+  const docxText = docxSummary.firstParagraphs.join('\n').toLowerCase();
+  const docxChecks = {
+    bytesWritten: docxWrite.bytes > 0 && statSync(docxWrite.path).size === docxWrite.bytes,
+    // Title heading + the 5 body paragraphs must round-trip.
+    paragraphCount: docxSummary.paragraphCount >= docxParagraphs.length + 1,
+    titlePresent: docxText.includes('sports day letter'),
+    bodyPresent: docxText.includes('dear parents') && docxText.includes('house colours'),
+  };
+
+  const xlsxRows = [
+    ['Class', 'Present', 'Absent'],
+    ['Standard 1', 24, 2],
+    ['Standard 2', 22, 4],
+  ];
+  const xlsxWrite = await docTools.writeXlsx({
+    path: path.join(outDir, 'write-check-register.xlsx'),
+    sheets: [{ name: 'Attendance', rows: xlsxRows }],
+  });
+  const xlsxSummary = summarizeWorkbook(xlsxWrite.path);
+  const sheet = xlsxSummary.sheets[0] ?? {};
+  const presentColumn = (sheet.numericColumns ?? []).find((c) => c.header === 'Present');
+  const absentColumn = (sheet.numericColumns ?? []).find((c) => c.header === 'Absent');
+  const xlsxChecks = {
+    bytesWritten: xlsxWrite.bytes > 0 && statSync(xlsxWrite.path).size === xlsxWrite.bytes,
+    sheetName: xlsxSummary.sheetCount === 1 && sheet.name === 'Attendance',
+    headersMatch: JSON.stringify(sheet.headers) === JSON.stringify(['Class', 'Present', 'Absent']),
+    sumsMatch: presentColumn?.sum === 46 && absentColumn?.sum === 6,
+  };
+
+  const ok = Object.values(docxChecks).every(Boolean) && Object.values(xlsxChecks).every(Boolean);
+  return {
+    ok,
+    docx: { path: docxWrite.path, bytes: docxWrite.bytes, checks: docxChecks, summary: docxSummary },
+    xlsx: { path: xlsxWrite.path, bytes: xlsxWrite.bytes, checks: xlsxChecks, summary: xlsxSummary },
+  };
+}
+
 const args = parseArgs(process.argv.slice(2));
-const excelPath = requireFile('Excel', args.excel);
-const wordPath = requireFile('Word', args.word);
+const excelPath = args.excel ? requireFile('Excel', args.excel) : null;
+const wordPath = args.word ? requireFile('Word', args.word) : null;
+const powerpointPath = args.pptx || args.powerpoint
+  ? requireFile('PowerPoint', args.pptx || args.powerpoint)
+  : null;
+const writeCheck = Boolean(args['write-check']);
+if (!excelPath && !wordPath && !powerpointPath && !writeCheck) {
+  throw new Error('At least one --excel, --word, --pptx, or --powerpoint path (or --write-check) is required');
+}
 const result = {
   ok: true,
   generatedAt: new Date().toISOString(),
-  excel: summarizeWorkbook(excelPath),
-  word: summarizeDocx(wordPath),
 };
+if (excelPath) result.excel = summarizeWorkbook(excelPath);
+if (wordPath) result.word = summarizeDocx(wordPath);
+if (powerpointPath) result.powerpoint = summarizePptx(powerpointPath);
+if (writeCheck) {
+  result.writeCheck = await runWriteCheck();
+  if (!result.writeCheck.ok) result.ok = false;
+}
 
 if (args['json-out']) {
   writeFileSync(args['json-out'], `${JSON.stringify(result, null, 2)}\n`);
 }
 console.log(JSON.stringify(result, null, 2));
+if (!result.ok) process.exitCode = 1;

@@ -170,7 +170,7 @@ export function Sidebar() {
   };
 
   const openDevConsole = async () => {
-    await openControlUi('/api/gateway/control-ui', 'OpenClaw Page');
+    await openControlUi('/api/gateway/control-ui', 'Gateway Control');
   };
 
   const { t } = useTranslation(['common', 'chat']);
