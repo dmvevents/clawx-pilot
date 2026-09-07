@@ -130,7 +130,20 @@ describe('PlaywrightDriver tab selection', () => {
     vi.mocked(ensureChromeCdpReady).mockReset();
   });
 
-  it('reuses an existing Outlook tab and does not navigate it', async () => {
+  // BOUNDARY ROW, NOT A CLWX-118 PIN — do not count it as tab-theft coverage.
+  // The four original assertions here all pass against the PRE-fix driver too
+  // (falsifiability lens, 2026-09-07, confirmed by reading it): bfd55b90 already
+  // did `pages.find(isOutlook)` first, and its goto was already guarded by
+  // `if (!isOutlook(url) || forceNavigate)` (bfd55b90:195), so with an Outlook tab
+  // in the context the old code also returned it and also skipped the goto. A row
+  // that cannot fail against the defect it sits next to is a coverage claim the
+  // suite has not earned. The actual theft pins are the two rows below —
+  // 'claims the blank new-tab page...' and 'opens its own tab when every page
+  // holds the principal's work' — both of which DO fail pre-fix, where `pages[0]`
+  // was YouTube and got navigated.
+  // What IS discriminating here is focus: a borrowed tab must never be pulled to
+  // the front (focusIfOurs gates on createdPages), which no other row asserted.
+  it('reuses an existing Outlook tab, navigating and focusing nothing', async () => {
     const outlook = fakePage('https://outlook.cloud.microsoft/mail/0/');
     const other = fakePage('https://www.youtube.com/watch?v=abc');
     const { context } = attachContext([other, outlook]);
@@ -141,6 +154,10 @@ describe('PlaywrightDriver tab selection', () => {
     expect(outlook.goto).not.toHaveBeenCalled();
     expect(other.goto).not.toHaveBeenCalled();
     expect(context.newPage).not.toHaveBeenCalled();
+    // Borrowed, so not ours to raise: yanking the principal's window to a tab
+    // they did not ask for is the same trust violation as navigating it.
+    expect(outlook.bringToFront).not.toHaveBeenCalled();
+    expect(other.bringToFront).not.toHaveBeenCalled();
   });
 
   it('claims the blank new-tab page instead of the principal\'s first tab', async () => {
@@ -157,6 +174,11 @@ describe('PlaywrightDriver tab selection', () => {
     expect(youtube.goto).not.toHaveBeenCalled();
     expect(form.goto).not.toHaveBeenCalled();
     expect(context.newPage).not.toHaveBeenCalled();
+    // Converse of the borrowed-tab row: this one IS ours, and the recovery copy
+    // tells the principal to act in "the Chrome window that just opened", so it
+    // has to actually come forward.
+    expect(blank.bringToFront).toHaveBeenCalled();
+    expect(youtube.bringToFront).not.toHaveBeenCalled();
   });
 
   it('opens its own tab when every page holds the principal\'s work', async () => {
@@ -174,6 +196,11 @@ describe('PlaywrightDriver tab selection', () => {
     expect(casesearch.goto).not.toHaveBeenCalled();
   });
 
+  // BOUNDARY ROW, NOT A CLWX-118 PIN — tautological with respect to the defect.
+  // An empty context reaches newPage under BOTH implementations (`pages[0] ??
+  // newPage()` and `find() ?? newPage()` are identical when there are no pages),
+  // so this row can only ever catch a regression in the empty case itself. Kept
+  // for that, labelled so nobody counts it twice.
   it('opens its own tab when the context is empty', async () => {
     const mine = fakePage('');
     const { context } = attachContext([], mine);
@@ -182,6 +209,7 @@ describe('PlaywrightDriver tab selection', () => {
 
     expect(page).toBe(mine);
     expect(context.newPage).toHaveBeenCalledTimes(1);
+    expect(mine.bringToFront).toHaveBeenCalled();
   });
 
   it('does not claim a page that merely reports about:blank', async () => {

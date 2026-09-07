@@ -1787,6 +1787,45 @@ the production-integration milestone, not a GA blocker.
   the suite. Also corrected: the gate labels this row "15-row" while
   `/tmp/v2-eval-results.json` reports `total: 18`. Evidence:
   `docs/evidence/GA_GATE_2026-09-07_run2.md`, `..._run3.md`.
+  **Round 3 - six HIGHs from three independent lens sessions, triaged against the
+  COMMITTED tree (`62e7b6ae`) rather than the round-1 diff the lenses were handed.
+  FIVE REFUTED with file:line, ONE CONFIRMED and fixed.** Refuted: the probe
+  main-module guard is already `pathToFileURL(realpathSync(...))`
+  (`probe-outlook-tab.mjs:77`) AND the consumption side is token-based, not
+  exit-code-based (`ga-gate.mjs:166` pipes through `grep -q "^outlook-tab:
+  present"`), so two independent barriers stop a silent exit 0 reading as "tab
+  present"; ownership is granted only on tabs we opened or claimed from a committed
+  new-tab-page (`playwright-driver.ts:293,296`) with the borrowed branch explicitly
+  NOT recorded (`:292`); `this.page = target` precedes the goto (`:309` vs `:312`);
+  the Outlook scan already precedes the owned-tab fast path (`:243`, with that exact
+  stranding failure named in the comment); `focusIfOurs` exists (`:374`). Each is
+  pinned by a row named for it. **CONFIRMED - and it is the finding that matters,
+  because it is this family pointed at MY OWN TESTS:** two rows in the CLWX-118
+  suite pass against the PRE-fix driver, so they were never coverage for the defect
+  they sit beside. Proof from the original commit: `bfd55b90` already did
+  `pages.find(isOutlook)` first and already guarded its goto with
+  `if (!isOutlook(url) || forceNavigate)` (`bfd55b90:195`); the empty-context row is
+  tautological because `pages[0] ?? newPage()` and `find() ?? newPage()` are
+  identical when there are no pages. A row that cannot fail is a coverage claim the
+  suite has not earned - the same defect shape as a gate that cannot go red. Both
+  rows now labelled `BOUNDARY ROW, NOT A CLWX-118 PIN` with the pre-fix proof inline
+  and the real theft pins named, then re-pointed at the one discriminating property
+  nothing asserted: **focus**. `focusIfOurs` gates on ownership (`:375`) so a
+  borrowed tab is never raised - implemented since round 2, pinned by nothing until
+  now. 2 legs REAL (drop the guard -> borrowed-tab row fails 1/11; focus no-op -> 3
+  rows fail 3/9), control 12/12, source byte-identical. Also closed:
+  `scripts/outlook-cleanup-compose.ts:7` matched Outlook hosts with an UNANCHORED
+  substring regex (so also `outlook.office.com.attacker.tt`) and that script focuses
+  the match and clicks "Discard" - dev-only, no send path, but destructive to
+  whatever it lands on; now anchored to the driver's three hosts. **Method note,
+  second consecutive tick my own mutation harness lied:** the first run reported both
+  legs INVALID because `Tests +[0-9]+` cannot match vitest's summary - ANSI colour
+  codes sit between `Tests` and the count. Last tick it lied via `--reporter=basic`
+  (removed in vitest 4.1.1). Both times the legs ran correctly and the DETECTOR was
+  wrong; a mis-scoring harness is worse than none because it launders a real result
+  into a false one in either direction. Guard now strips ANSI on top of the
+  positive-summary requirement. Gates: typecheck 0, lint 0 errors, **full unit suite
+  1734 passed / 6 skipped (188 files)**.
 - 2026-09-06 thirteenth tick (gate probe honesty, CLWX-90): the health pulse
   itself was the finding. `GA_GATE_STATIC=1 pnpm ga:gate` came back GREEN (7
   pass / 0 fail / 2 skip) with T2 reading "IAP tunnel up - run the V-batch
