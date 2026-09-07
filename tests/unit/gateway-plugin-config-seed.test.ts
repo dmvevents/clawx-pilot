@@ -55,6 +55,39 @@ afterEach(async () => {
 });
 
 describe('seedGatewayPluginConfig', () => {
+  it('disables implicit ACP harness startup on a principal install without an ACP adapter', async () => {
+    await seedGatewayPluginConfig();
+    const cfg = await readCfg();
+    expect(cfg.acp).toEqual({ enabled: false });
+    expect((cfg as { plugins: { entries: Record<string, unknown> } }).plugins.entries.acpx).toEqual({ enabled: false });
+  });
+
+  it.each([
+    { acp: { enabled: true, backend: 'acpx' } },
+    { acp: { backend: 'acpx' } },
+    { acp: { enabled: false } },
+    { acp: {} },
+    { plugins: { entries: { acpx: { enabled: true } } } },
+    { plugins: { entries: { acpx: { enabled: false } } } },
+    { plugins: { entries: { acpx: { config: { probeAgent: 'claude' } } } } },
+    { plugins: { entries: { acpx: {} } } },
+  ])('preserves an existing ACP policy or ACPX entry: %j', async (original) => {
+    await writeCfg(original);
+    await seedGatewayPluginConfig();
+    const cfg = await readCfg();
+    expect(cfg.acp).toEqual((original as Record<string, unknown>).acp);
+    const initialEntry = (original as { plugins?: { entries: Record<string, unknown> } }).plugins?.entries.acpx;
+    expect((cfg as { plugins: { entries: Record<string, unknown> } }).plugins.entries.acpx).toEqual(initialEntry);
+  });
+
+  it.each([true, false])('preserves the bundled browser plugin with enabled=%s', async (enabled) => {
+    const browser = { enabled, config: { defaultProfile: 'user' } };
+    await writeCfg({ plugins: { entries: { browser } } });
+    await seedGatewayPluginConfig();
+    const cfg = await readCfg();
+    expect((cfg as { plugins: { entries: Record<string, unknown> } }).plugins.entries.browser).toEqual(browser);
+  });
+
   it('writes first-run skeleton when openclaw.json is missing so gateway boots cleanly', async () => {
     await expect(seedGatewayPluginConfig()).resolves.toBeUndefined();
     const cfg = await readCfg();

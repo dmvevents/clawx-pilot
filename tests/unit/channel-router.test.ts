@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getDefaultProvider: vi.fn(),
   setDefaultProvider: vi.fn(),
   syncDefaultProviderToRuntime: vi.fn(),
+  ensureProviderAccountRuntime: vi.fn(),
   getOpenClawProviderKey: vi.fn(),
   setAllAgentsModel: vi.fn(),
   getProviderDefaultModel: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock('@electron/utils/secure-storage', () => ({
 }));
 
 vi.mock('@electron/services/providers/provider-runtime-sync', () => ({
+  ensureProviderAccountRuntime: mocks.ensureProviderAccountRuntime,
   syncDefaultProviderToRuntime: mocks.syncDefaultProviderToRuntime,
   getOpenClawProviderKey: mocks.getOpenClawProviderKey,
 }));
@@ -49,6 +51,7 @@ import {
   applyChannelChange,
   listAvailableChannels,
   getActiveChannel,
+  prepareTransientChannelChange,
   runChannelPreflight,
 } from '@electron/services/providers/channel-router';
 
@@ -88,6 +91,7 @@ describe('channel-router applyChannelChange', () => {
     mocks.getDefaultProvider.mockResolvedValue(undefined);
     mocks.setDefaultProvider.mockResolvedValue(undefined);
     mocks.syncDefaultProviderToRuntime.mockResolvedValue(undefined);
+    mocks.ensureProviderAccountRuntime.mockResolvedValue(undefined);
     mocks.setAllAgentsModel.mockResolvedValue(undefined);
   });
 
@@ -193,12 +197,7 @@ describe('channel-router applyChannelChange', () => {
     expect(mocks.setAllAgentsModel).toHaveBeenCalled();
   });
 
-  it('forwards skipGatewayRefresh so the send-time degrade cannot bounce the runtime', async () => {
-    // The degrade runs inside a failed turn and the renderer resends at once.
-    // On Windows a reload becomes a restart and the restart loses the port
-    // race, so the config write must land WITHOUT touching the live gateway
-    // (moe.19 VM, 2026-09-06: three minutes of downtime, empty assistant
-    // bubble). The four-store write itself must still happen — assert both.
+  it('forwards skipGatewayRefresh for pre-start callers that own gateway lifecycle', async () => {
     const gateway = {} as never;
     mocks.listProviderAccounts.mockResolvedValue([
       makeAccount({ id: 'ollama-local', vendorId: 'ollama', baseUrl: 'http://localhost:11434/v1', model: 'hermes3:8b' }),
@@ -213,6 +212,58 @@ describe('channel-router applyChannelChange', () => {
     expect(mocks.syncDefaultProviderToRuntime).toHaveBeenCalledWith('ollama-local', gateway, { skipGatewayRefresh: true });
     expect(mocks.setDefaultProvider).toHaveBeenCalledWith('ollama-local');
     expect(mocks.setAllAgentsModel).toHaveBeenCalledWith('ollama-ollama-local/hermes3:8b');
+  });
+});
+
+describe('channel-router prepareTransientChannelChange', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getOpenClawProviderKey.mockImplementation((type: string, id: string) => `${type}-${id}`);
+    mocks.getProviderDefaultModel.mockReturnValue(undefined);
+    mocks.getDefaultProvider.mockResolvedValue('gemini-1');
+    mocks.setDefaultProvider.mockResolvedValue(undefined);
+    mocks.syncDefaultProviderToRuntime.mockResolvedValue(undefined);
+    mocks.ensureProviderAccountRuntime.mockResolvedValue(undefined);
+    mocks.setAllAgentsModel.mockResolvedValue(undefined);
+  });
+
+  it('returns the target session model without changing global provider defaults', async () => {
+    mocks.listProviderAccounts.mockResolvedValue([
+      makeAccount({ id: 'gemini-1', vendorId: 'google', model: 'gemini-2.5-pro' }),
+      makeAccount({ id: 'ollama-local', vendorId: 'ollama', baseUrl: 'http://localhost:11434/v1', model: 'hermes3:8b' }),
+    ]);
+    mocks.getProvider.mockResolvedValue(
+      makeProvider({ id: 'ollama-local', type: 'ollama', model: 'hermes3:8b', baseUrl: 'http://localhost:11434/v1' }),
+    );
+
+    const result = await prepareTransientChannelChange('on-device');
+
+    expect(result).toMatchObject({
+      channel: 'on-device',
+      accountId: 'ollama-local',
+      modelRef: 'ollama-ollama-local/hermes3:8b',
+    });
+    expect(mocks.ensureProviderAccountRuntime).toHaveBeenCalledWith('ollama-local');
+    expect(mocks.getDefaultProvider).not.toHaveBeenCalled();
+    expect(mocks.setDefaultProvider).not.toHaveBeenCalled();
+    expect(mocks.syncDefaultProviderToRuntime).not.toHaveBeenCalled();
+    expect(mocks.setAllAgentsModel).not.toHaveBeenCalled();
+  });
+
+  it('throws before any global write when the transient channel has no account', async () => {
+    mocks.listProviderAccounts.mockResolvedValue([
+      makeAccount({ id: 'gemini-1', vendorId: 'google', model: 'gemini-2.5-pro' }),
+    ]);
+    mocks.getProvider.mockResolvedValue(
+      makeProvider({ id: 'gemini-1', type: 'google', model: 'gemini-2.5-pro' }),
+    );
+
+    await expect(prepareTransientChannelChange('on-device')).rejects.toThrow(
+      /No provider account is configured for the "on-device" channel/,
+    );
+    expect(mocks.ensureProviderAccountRuntime).not.toHaveBeenCalled();
+    expect(mocks.setDefaultProvider).not.toHaveBeenCalled();
+    expect(mocks.setAllAgentsModel).not.toHaveBeenCalled();
   });
 });
 
@@ -253,6 +304,7 @@ describe('channel-router runChannelPreflight', () => {
     mocks.getDefaultProvider.mockResolvedValue(undefined);
     mocks.setDefaultProvider.mockResolvedValue(undefined);
     mocks.syncDefaultProviderToRuntime.mockResolvedValue(undefined);
+    mocks.ensureProviderAccountRuntime.mockResolvedValue(undefined);
     mocks.setAllAgentsModel.mockResolvedValue(undefined);
   });
 
@@ -292,28 +344,18 @@ describe('channel-router runChannelPreflight', () => {
     expect(result.modelRef).toBe('ollama-ollama-local/hermes3:8b');
   });
 
-  it('never suppresses the gateway refresh on the boot path', async () => {
-    // The send-time degrade route deliberately passes { skipGatewayRefresh: true }
-    // (settings.ts:129) because it runs inside a failed turn that the renderer
-    // resends immediately, and on Windows a refresh becomes a restart that loses
-    // the port race. Boot preflight is the opposite case: nothing runs after it
-    // to refresh the gateway, so suppressing here would leave the four stores
-    // correct on disk while the live gateway kept serving the previous model —
-    // the exact silence-on-send shape CLWX-95 closed.
-    //
-    // channel-router.ts:287 passes NO options today, which is correct. This row
-    // pins it, so a refactor that copies the degrade call site into the boot
-    // path fails here instead of shipping.
+  it('can converge boot preflight stores without queueing a pre-start gateway refresh', async () => {
     const gateway = {} as never;
     mocks.listProviderAccounts.mockResolvedValue([
       makeAccount({ id: 'gemini-1', vendorId: 'google', model: 'gemini-2.5-pro' }),
     ]);
     mocks.getProvider.mockResolvedValue(makeProvider({ id: 'gemini-1', type: 'google', model: 'gemini-2.5-pro' }));
 
-    await runChannelPreflight('online', gateway);
+    await runChannelPreflight('online', gateway, { skipGatewayRefresh: true });
 
     expect(mocks.syncDefaultProviderToRuntime).toHaveBeenCalledWith('gemini-1', gateway, {
-      skipGatewayRefresh: false,
+      skipGatewayRefresh: true,
     });
+    expect(mocks.setAllAgentsModel).toHaveBeenCalledWith('google-gemini-1/gemini-2.5-pro');
   });
 });

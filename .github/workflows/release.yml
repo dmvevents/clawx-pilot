@@ -25,6 +25,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Block automatic Ministry release path
+        run: node scripts/release-evidence.mjs check-automatic-policy
+
       - name: Assert tag matches package.json
         run: node scripts/assert-tag-matches-package.mjs
 

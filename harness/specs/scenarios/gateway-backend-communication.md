@@ -34,6 +34,7 @@ requiredRules:
   - active-config-guards
   - comms-regression
   - docs-sync
+  - completion-evidence
 forbiddenPatterns:
   - window.electron.ipcRenderer.invoke in src/pages/**
   - window.electron.ipcRenderer.invoke in src/components/**

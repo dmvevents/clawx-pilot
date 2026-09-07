@@ -84,9 +84,16 @@ function accountTargetsLocalEndpoint(account: ProviderAccount): boolean {
   );
 }
 
+export interface LocalProviderSeedOptions {
+  /** Suppress only pre-start boot refreshes; live settings/provider edits still pass the manager. */
+  skipGatewayRefresh?: boolean;
+}
+
 export async function seedDefaultLocalProvider(
   gatewayManager?: GatewayManager,
+  options?: LocalProviderSeedOptions,
 ): Promise<void> {
+  const syncGatewayManager = options?.skipGatewayRefresh === true ? undefined : gatewayManager;
   if (!SEED_LOCAL_LLM_PROVIDER) {
     logger.info('[local-provider-seed] SEED_LOCAL_LLM_PROVIDER disabled — skipping');
     return;
@@ -170,7 +177,7 @@ export async function seedDefaultLocalProvider(
         await syncSavedProviderToRuntime(
           providerAccountToConfig(account),
           LOCAL_PLACEHOLDER_KEY,
-          gatewayManager,
+          syncGatewayManager,
         );
       }
     }
@@ -223,7 +230,7 @@ export async function seedDefaultLocalProvider(
         await syncSavedProviderToRuntime(
           providerAccountToConfig(migrated),
           LOCAL_PLACEHOLDER_KEY,
-          gatewayManager,
+          syncGatewayManager,
         );
       } catch (err) {
         logger.warn(
@@ -281,7 +288,7 @@ export async function seedDefaultLocalProvider(
       await syncSavedProviderToRuntime(
         providerAccountToConfig(account),
         LOCAL_PLACEHOLDER_KEY,
-        gatewayManager,
+        syncGatewayManager,
       );
     } catch (err) {
       logger.warn(

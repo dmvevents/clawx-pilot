@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -52,6 +52,10 @@ function seedArtifactSet(): void {
 
 async function generate() {
   return generateManifest({ releaseDir, version: VERSION, manifestDir, now: () => '2026-09-05T00:00:00.000Z' });
+}
+
+async function generateWithSource(source: unknown) {
+  return generateManifest({ releaseDir, version: VERSION, manifestDir, now: () => '2026-09-05T00:00:00.000Z', buildSource: source });
 }
 
 function writeManifest(manifest: unknown): void {
@@ -193,5 +197,81 @@ describe('release-hash-manifest (CLWX-85)', () => {
     expect((await verifyManifest({ manifest, releaseDir })).ok).toBe(false);
     expect((await verifyManifest({ manifest, releaseDir, allowMissing: true })).ok).toBe(true);
     expect((await verifyManifest({ manifest, releaseDir, only: 'no-such-artifact' })).ok).toBe(false);
+  });
+
+  it('attaches explicit build source provenance to newly hashed artifacts only', async () => {
+    const source = {
+      schemaVersion: 1,
+      gitCommit: '0123456789abcdef0123456789abcdef01234567',
+      gitDirty: false,
+      gitStatusHash: null,
+      builtAt: '2026-09-07T00:00:00.000Z',
+      recordedAt: '2026-09-07T00:00:00.000Z',
+    };
+    const { manifest } = await generateWithSource(source);
+    expect(manifest.artifacts.every((a: { source?: unknown }) => a.source === source)).toBe(true);
+  });
+
+  it('preserves known provenance on rehashing the same bytes, never on changed bytes', async () => {
+    const source = { gitCommit: 'a'.repeat(40), gitDirty: false, gitStatusHash: null, builtAt: '2000-01-01T00:00:00.000Z' };
+    const first = await generateWithSource(source);
+    writeManifest(first.manifest);
+    const same = await generate();
+    expect(same.manifest.artifacts.every((artifact: { source?: unknown }) => JSON.stringify(artifact.source) === JSON.stringify(source))).toBe(true);
+    writeFileSync(join(releaseDir, `Ministry of Education-${VERSION}-win-x64.exe`), 'changed installer');
+    const changed = await generate();
+    expect(changed.manifest.artifacts.find((artifact: { kind: string }) => artifact.kind === 'installer').source).toBeUndefined();
+  });
+
+  it('cannot add a new artifact identity to a published version with unchanged existing bytes', async () => {
+    const first = await generate();
+    first.manifest.artifacts = first.manifest.artifacts.filter((artifact: { kind: string }) => artifact.kind === 'installer');
+    first.manifest.published = true;
+    writeManifest(first.manifest);
+    const result = await generate();
+    expect(result.action).toBe('hard-stop');
+    expect(result.hardStop).toContain('new artifact: win:app.asar');
+    expect(result.manifest.artifacts).toHaveLength(1);
+  });
+
+  it('keeps legacy/other-platform provenance unknown when merging a partial artifact set', async () => {
+    writeMacTree(VERSION);
+    const first = await generate();
+    const macArtifact = first.manifest.artifacts.find((a: { name: string }) => a.name === 'mac-arm64:app.asar');
+    expect(macArtifact.source).toBeUndefined();
+    writeManifest(first.manifest);
+
+    rmSync(join(releaseDir, 'mac-arm64'), { recursive: true, force: true });
+    const source = {
+      schemaVersion: 1,
+      gitCommit: 'fedcba9876543210fedcba9876543210fedcba98',
+      gitDirty: true,
+      gitStatusHash: '0'.repeat(64),
+      builtAt: '2026-09-07T01:00:00.000Z',
+      recordedAt: '2026-09-07T01:00:00.000Z',
+    };
+    const second = await generateWithSource(source);
+    const byName = new Map(second.manifest.artifacts.map((a: { name: string }) => [a.name, a]));
+    expect(byName.get('win:app.asar').source).toEqual(source);
+    expect(byName.get('mac-arm64:app.asar').source).toBeUndefined();
+  });
+
+  it('does not stamp explicit source provenance onto stale same-version leftovers', async () => {
+    const staleDate = new Date('1999-12-31T23:59:00.000Z');
+    utimesSync(join(releaseDir, `Ministry of Education-${VERSION}-win-x64.exe`), staleDate, staleDate);
+    const source = {
+      schemaVersion: 1,
+      gitCommit: '0123456789abcdef0123456789abcdef01234567',
+      gitDirty: false,
+      gitStatusHash: null,
+      builtAt: '2000-01-01T00:00:00.000Z',
+      recordedAt: '2000-01-01T00:00:00.000Z',
+    };
+    const { manifest, warnings } = await generateWithSource(source);
+    const installer = manifest.artifacts.find((a: { kind: string }) => a.kind === 'installer');
+    const asar = manifest.artifacts.find((a: { name: string }) => a.name === 'win:app.asar');
+    expect(installer.source).toBeUndefined();
+    expect(asar.source).toEqual(source);
+    expect(warnings.join('\n')).toMatch(/SOURCE_UNKNOWN: Ministry of Education/);
   });
 });

@@ -671,6 +671,14 @@ export async function syncDeletedProviderApiKeyToRuntime(
   await removeProviderKeyFromOpenClaw(ock);
 }
 
+export async function ensureProviderAccountRuntime(providerId: string): Promise<void> {
+  const provider = await getProvider(providerId);
+  if (!provider) {
+    throw new Error(`Provider account "${providerId}" disappeared mid-transaction`);
+  }
+  await syncProviderToRuntime(provider, undefined);
+}
+
 export async function syncDefaultProviderToRuntime(
   providerId: string,
   gatewayManager?: GatewayManager,

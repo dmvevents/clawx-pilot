@@ -1,5 +1,7 @@
 # GA Release Plan - 2026-06-09
 
+> Historical plan/evidence. Current execution order and readiness: [COMPLETION_PLAN.md](COMPLETION_PLAN.md); shared instructions: [PROJECT_CONTRACT.md](PROJECT_CONTRACT.md). Preserve dated entries below as evidence, not current startup instructions.
+
 ## Target Result
 
 Ship the Ministry of Education Windows app as a GA-quality installer for non-technical principals, with a supported online model path, safe Outlook and Forms automation, Office document handling, ASR expectations, and a documented fallback/support process.

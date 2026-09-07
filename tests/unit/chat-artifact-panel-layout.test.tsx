@@ -18,6 +18,7 @@ vi.mock('@/stores/gateway', () => ({
 const chatState = {
   messages: [],
   currentSessionKey: 'main:test',
+  pendingChannelRecoveryBySession: {},
   currentAgentId: 'main',
   sessionLabels: {},
   loading: false,

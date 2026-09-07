@@ -5,6 +5,8 @@ description: Run and extend the Ministry of Education GA end-to-end regression p
 
 # GA E2E Regression
 
+Current direction: read `docs/PROJECT_CONTRACT.md` and `docs/COMPLETION_PLAN.md` first. Dated plans below are historical regression references; source tests and installed/live acceptance remain separate evidence.
+
 ## Objective
 
 Turn customer/demo failures into repeatable tests and installed-app evidence. This skill owns the regression matrix and proof collection; `ga-release-readiness` owns the final GA/RC verdict.

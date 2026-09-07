@@ -27,14 +27,14 @@ below is **ClawX only**. See `TIMELINE.md` §"Two-project separation".
 
 - **ClawX principal-assistant pilot** — contact **Raj Ramdass** / Ansari Khan.
   This repo.
-- **Curriculum-video generator** — contact **Karunesh Ramdass**. The
-  `Test N - <topic>` QA batches. A separate workstream, not in this repo.
+- **Curriculum-video generator** — `Test N - <topic>` QA batches and video/diagram generation. A separate workstream, also discussed by Raj and Karunesh.
+
+Both contacts also discuss **ClawX**. Karunesh's desktop/email/Office test reports belong here. Classify each message/document by content, never by person alone (source reconciliation: [completion plan](../COMPLETION_PLAN.md)).
 
 The `ministry-liaison-monitor` skill/agent enforces this split when reading the
 inbound-docs drop.
 
 ## Source of truth
 
-For *what to work on* and *what "done" means*, the CLWX Plane board
-(`81a2ea23-e060-49b4-a344-1ab0339f46d5`) and `docs/GA_PLAN.md` are authoritative.
+For current priorities and completion criteria, use [the shared contract](../PROJECT_CONTRACT.md), [completion plan](../COMPLETION_PLAN.md) and existing CLWX card acceptance. `GA_PLAN.md` is historical.
 This folder is the historical record, not the plan.

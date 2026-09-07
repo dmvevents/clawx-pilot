@@ -1,9 +1,11 @@
-# Windows pilot install — end-to-end runbook (moe.10)
+# Windows pilot install — historical moe.10 procedure
+
+For current testing, use [Windows VM access, environment and visible outcomes](../windows-pilot/vm-testing/README.md) and [the current candidate](CURRENT_WINDOWS_RC.md). The commands below describe the earlier physical-laptop setup; they do not identify today's candidate or prove current VM access. Preserve host-key verification and existing user state in new runs.
 
 **Target:** `vyonix@169.254.46.90` (pilot Windows 11, build 26100). Cat-5 link.
 **Time:** ~15 min from clean state to working demo.
 
-This runbook is **autonomous** — every step is a one-liner you can paste, with expected output. Stop at the first ✗ and consult `docs/WINDOWS_PROBLEMS_ATLAS.md` for the matching root cause.
+This archived procedure records the earlier moe.10 physical-laptop test. Its addresses, artifact selection and commands are historical examples, not instructions for the current test run. Follow the current testing entrypoint above and select the exact candidate hash before any installation.
 
 ---
 
@@ -101,9 +103,9 @@ if (Test-Path $un) {
 
 ---
 
-## Step 5 — fetch the latest moe.10 .exe
+## Historical step 5 — acquire the June moe.10 artifact
 
-Build is on GitHub Actions, downloadable for 7 days after each push:
+The following packaging notes and command examples belong to the June moe.10 procedure. Do not use this section to select or install a current candidate. Use `docs/CURRENT_WINDOWS_RC.md`, its exact manifest hash and the current testing entrypoint instead. Historical workflow artifacts may have expired.
 
 Release builds must include the managed online gateway seed. The manual
 packaging workflow now fails by default unless these GitHub repository secrets
@@ -145,9 +147,8 @@ Azure Speech seed is present, the workflow writes ignored
 transcribe through Azure Speech before trying local ASR.
 
 ```bash
-# On Mac:
-gh run list --repo dmvevents/clawx-pilot --workflow package-win-manual.yml --limit 1 --json databaseId
-# Note the databaseId, then:
+# HISTORICAL June example only; do not run for current acceptance.
+# Select the recorded historical run ID, never the newest workflow run:
 mkdir -p /tmp/moe10
 gh run download <id> --repo dmvevents/clawx-pilot --name windows-installer-x64 --dir /tmp/moe10
 
@@ -155,11 +156,13 @@ gh run download <id> --repo dmvevents/clawx-pilot --name windows-installer-x64 -
 scp -o ProxyCommand=none /tmp/moe10/*.exe vyonix@169.254.46.90:/Users/vyonix/Downloads/
 ```
 
-Or use the in-repo `release/Ministry of Education-0.4.3-moe.10-win-x64.exe` if it exists from a local build.
+The June procedure also used `release/Ministry of Education-0.4.3-moe.10-win-x64.exe`. File presence alone is not candidate selection; do not substitute this historical file for the current manifest-bound installer.
 
 ---
 
-## Step 6 — install on pilot
+## Historical step 6 — install the selected June artifact on pilot
+
+The commands below illustrate the archived procedure only. Their wildcard/latest-file lookup must not be used for current acceptance; the current procedure requires one explicit installer path with its verified hash.
 
 For a real tester or principal, use the normal assisted Windows installer
 screens by double-clicking the downloaded `.exe`. Keep the default install

@@ -1,31 +1,18 @@
 /**
  * Settings route contract for the two channel-change entry points.
  *
- * Both POST /api/settings/degradeChannel and PUT /api/settings run the same
- * four-store transaction, and the ONLY differences are the two things this
- * suite pins:
- *
- *   1. the degrade path does not persist `preferredChannel`
- *   2. the degrade path does not bounce the running Gateway
- *
- * (2) is why this file exists. `syncDefaultProviderToRuntime` grew a
- * `skipGatewayRefresh` option for exactly this case (CLWX-95/96) and it was
- * unit-tested at that layer — but no production caller ever passed it, so the
- * option was dead code and the race it was written to prevent still shipped.
- * The moe.19 Windows VM verify (evidence 2026-09-06) caught it live: the first
- * send with the cloud unreachable degraded to on-device, the degrade scheduled
- * a Gateway reload, Windows turned the reload into a full restart, the restart
- * lost the port race ("Port 18789 still occupied" x3), and the Gateway was
- * down for three minutes. Three fresh sessions in a row produced an empty
- * assistant bubble.
- *
- * A layer-level test cannot catch "nobody calls it". This one asserts the wire.
+ * POST /api/settings/degradeChannel is a send-time, per-session prepare path.
+ * It must not claim ownership of the user's global channel preference or the
+ * provider default; the renderer pins only the failed session after this route
+ * returns a concrete model ref. PUT /api/settings remains the explicit global
+ * channel-toggle owner.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 const mocks = vi.hoisted(() => ({
   applyChannelChange: vi.fn(),
+  prepareTransientChannelChange: vi.fn(),
   getSetting: vi.fn(),
   setSetting: vi.fn(),
   getAllSettings: vi.fn(),
@@ -39,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@electron/services/providers/channel-router', () => ({
   applyChannelChange: mocks.applyChannelChange,
+  prepareTransientChannelChange: mocks.prepareTransientChannelChange,
 }));
 
 vi.mock('@electron/utils/store', () => ({
@@ -80,25 +68,21 @@ describe('POST /api/settings/degradeChannel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getSetting.mockResolvedValue('online');
-    mocks.applyChannelChange.mockResolvedValue({
+    mocks.prepareTransientChannelChange.mockResolvedValue({
       channel: 'on-device',
       accountId: 'ollama-local',
       modelRef: 'ollama-ollamalo/qwen2.5:3b-instruct',
-      switched: true,
     });
   });
 
-  it('suppresses the gateway refresh so the in-flight resend is not orphaned', async () => {
+  it('prepares the target channel without running the global channel transaction', async () => {
     mocks.parseJsonBody.mockResolvedValue({ channel: 'on-device', reason: 'unreachable' });
 
     expect(await call('POST', '/api/settings/degradeChannel')).toBe(true);
 
-    expect(mocks.applyChannelChange).toHaveBeenCalledTimes(1);
-    expect(mocks.applyChannelChange).toHaveBeenCalledWith(
-      'on-device',
-      gatewayManager,
-      { skipGatewayRefresh: true },
-    );
+    expect(mocks.prepareTransientChannelChange).toHaveBeenCalledTimes(1);
+    expect(mocks.prepareTransientChannelChange).toHaveBeenCalledWith('on-device');
+    expect(mocks.applyChannelChange).not.toHaveBeenCalled();
   });
 
   it('leaves the principal\'s stored preference untouched', async () => {
@@ -107,8 +91,13 @@ describe('POST /api/settings/degradeChannel', () => {
     await call('POST', '/api/settings/degradeChannel');
 
     expect(mocks.setSetting).not.toHaveBeenCalled();
-    const [, payload] = mocks.sendJson.mock.calls.at(-1) as [unknown, number, Record<string, unknown>];
-    expect(payload).toBe(200);
+    const [, status, payload] = mocks.sendJson.mock.calls.at(-1) as [unknown, number, Record<string, unknown>];
+    expect(status).toBe(200);
+    expect(payload).toMatchObject({
+      channel: 'on-device',
+      accountId: 'ollama-local',
+      modelRef: 'ollama-ollamalo/qwen2.5:3b-instruct',
+    });
   });
 
   it('rejects a channel it does not recognise instead of degrading blind', async () => {
@@ -116,7 +105,7 @@ describe('POST /api/settings/degradeChannel', () => {
 
     await call('POST', '/api/settings/degradeChannel');
 
-    expect(mocks.applyChannelChange).not.toHaveBeenCalled();
+    expect(mocks.prepareTransientChannelChange).not.toHaveBeenCalled();
     expect(mocks.sendJson).toHaveBeenCalledWith(expect.anything(), 400, expect.objectContaining({ success: false }));
   });
 });

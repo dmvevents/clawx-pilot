@@ -14,6 +14,8 @@ param(
   [string] $Mode = "Probe",
   [string] $ArtifactRoot = "$env:USERPROFILE\Downloads",
   [string] $InstallerPattern = "Ministry.of.Education-*-win-x64.exe",
+  # Observations only; this output does not certify a clean machine or a journey.
+  [string] $JsonOutputPath,
   [switch] $OpenSandbox
 )
 
@@ -72,6 +74,17 @@ function Test-Port($port) {
 }
 
 function Write-Probe {
+  if ($JsonOutputPath) {
+    $profile = Get-EnvironmentProfile
+    $parent = Split-Path -Parent $JsonOutputPath
+    if ($parent -and -not (Test-Path -LiteralPath $parent)) {
+      New-Item -ItemType Directory -Path $parent -Force -ErrorAction Stop | Out-Null
+    }
+    if (Test-Path -LiteralPath $JsonOutputPath) { throw "Environment output already exists; use a new run directory." }
+    [IO.File]::WriteAllText($JsonOutputPath, ($profile | ConvertTo-Json -Depth 8), (New-Object Text.UTF8Encoding($false)))
+    Write-State "ENVIRONMENT_COLLECTED" $JsonOutputPath
+    return
+  }
   Write-State "MODE" "Probe"
   Write-State "TIMESTAMP" (Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz")
   Write-State "USER" $env:USERNAME
@@ -98,6 +111,110 @@ function Write-Probe {
   Write-State "PORT_13210_HOSTAPI" (Test-Port 13210)
   Write-State "PORT_18792_CHROME_CDP" (Test-Port 18792)
   Write-State "CHROME_EXE_PROGRAMFILES" (Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe")
+}
+
+function Get-EnvironmentProfile {
+  $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+  $computer = Get-CimInstance Win32_ComputerSystem -ErrorAction Stop
+  $disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$env:SystemDrive'" -ErrorAction Stop
+  $installDir = Join-Path $env:LOCALAPPDATA "Programs\Ministry of Education"
+  $appExe = Join-Path $installDir "Ministry of Education.exe"
+  $asar = Join-Path $installDir "resources\app.asar"
+  $app = Get-Item -LiteralPath $appExe -ErrorAction SilentlyContinue
+  $appProcesses = @(Get-Process -Name "Ministry of Education" -ErrorAction SilentlyContinue)
+  $chromePaths = @(
+    "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+    "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+    "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+  )
+  $chrome = $chromePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+  $chromeVersion = $null
+  if ($chrome) { $chromeVersion = (Get-Item -LiteralPath $chrome).VersionInfo.ProductVersion }
+  $chromeProcesses = @(Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" -ErrorAction SilentlyContinue)
+  $sessions = @()
+  $sessionQuery = @(& quser.exe 2>$null)
+  $sessionQuerySucceeded = $LASTEXITCODE -eq 0
+  foreach ($line in $sessionQuery) {
+    # Retain session IDs/states only, never account names or logon details.
+    if ($line -match '\s+(\d+)\s+(Active|Disc|Disconnected|Connected)\s+') {
+      $sessions += [pscustomobject]@{ id = [int]$Matches[1]; state = $Matches[2] }
+    }
+  }
+  $displays = @()
+  try {
+    Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+    $displays = @([Windows.Forms.Screen]::AllScreens | ForEach-Object {
+      [pscustomobject]@{ width = $_.Bounds.Width; height = $_.Bounds.Height; primary = $_.Primary }
+    })
+  } catch { $displays = @() }
+  $ports = [ordered]@{}
+  foreach ($port in @(13210, 18789, 9223, 18792, 11434)) {
+    $client = New-Object Net.Sockets.TcpClient
+    try {
+      $pending = $client.BeginConnect('127.0.0.1', $port, $null, $null)
+      $ready = $pending.AsyncWaitHandle.WaitOne(400, $false)
+      if ($ready) { $client.EndConnect($pending) }
+      $ports[[string]$port] = [bool]($ready -and $client.Connected)
+    } catch { $ports[[string]$port] = $false } finally { $client.Close() }
+  }
+  $tools = [ordered]@{}
+  foreach ($tool in @('node', 'python', 'ollama', 'ffmpeg', 'ffprobe')) {
+    $tools[$tool] = [bool](Get-Command "$tool.exe" -ErrorAction SilentlyContinue)
+  }
+  $seedRoot = Join-Path $installDir "resources\resources"
+  $seedPresence = [ordered]@{}
+  foreach ($name in @('cloud-gateway.json', 'cloud-gateway.key', 'azure-speech.json', 'azure-speech.key')) {
+    $seedPresence[$name] = Test-Path -LiteralPath (Join-Path $seedRoot $name)
+  }
+  return [ordered]@{
+    schemaVersion = 1
+    status = 'COLLECTED'
+    collectedAt = [DateTime]::UtcNow.ToString('o')
+    windows = [ordered]@{
+      caption = $os.Caption; version = $os.Version; build = $os.BuildNumber
+      productType = [int]$os.ProductType; architecture = $os.OSArchitecture
+    }
+    machine = [ordered]@{
+      manufacturer = $computer.Manufacturer; model = $computer.Model
+      logicalProcessors = [int]$computer.NumberOfLogicalProcessors
+      memoryBytes = [long]$computer.TotalPhysicalMemory; systemDiskFreeBytes = [long]$disk.FreeSpace
+      graphics = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object { $_.Caption })
+      soundDeviceCount = @(Get-CimInstance Win32_SoundDevice -ErrorAction SilentlyContinue).Count
+      physicalMicrophoneTest = 'NOT_RUN'
+    }
+    user = [ordered]@{
+      isElevated = Test-IsAdmin
+      administratorGroupMember = @([Security.Principal.WindowsIdentity]::GetCurrent().Groups | Where-Object { $_.Value -eq 'S-1-5-32-544' }).Count -gt 0
+      domainJoined = [bool]$computer.PartOfDomain
+    }
+    desktop = [ordered]@{
+      callerSessionId = [Diagnostics.Process]::GetCurrentProcess().SessionId
+      callerUserInteractive = [Environment]::UserInteractive
+      sessionQuerySucceeded = $sessionQuerySucceeded; sessions = $sessions; displays = $displays
+      unlockedDesktopProven = $false
+      appWindows = @($appProcesses | Where-Object { $_.MainWindowHandle -ne 0 } | ForEach-Object {
+        [pscustomobject]@{ processId = $_.Id; sessionId = $_.SessionId }
+      })
+    }
+    priorState = [ordered]@{
+      installPresent = Test-Path -LiteralPath $installDir
+      appDataPresent = Test-Path -LiteralPath (Join-Path $env:APPDATA 'Ministry of Education')
+      openclawPresent = Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.openclaw')
+      chromeUserDataPresent = Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data')
+    }
+    installedApp = [ordered]@{
+      present = [bool]$app; version = $(if ($app) { $app.VersionInfo.ProductVersion } else { $null })
+      asarSha256 = $(if (Test-Path -LiteralPath $asar) { (Get-FileHash -LiteralPath $asar -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant() } else { $null })
+      processCount = $appProcesses.Count
+    }
+    chrome = [ordered]@{
+      installed = [bool]$chrome; version = $chromeVersion; processCount = $chromeProcesses.Count
+      dedicatedProfileFlagPresent = @($chromeProcesses | Where-Object { $_.CommandLine -match '--user-data-dir' }).Count -gt 0
+      accountClass = 'NOT_VERIFIED'
+    }
+    listeningPorts = $ports; pathToolsPresent = $tools; seedFilesPresent = $seedPresence
+    coverage = @('Environment observations only', 'No clean-image attestation', 'No tenant sign-in or microphone proof', 'No installed journey or visual acceptance verdict')
+  }
 }
 
 function Escape-Xml($value) {

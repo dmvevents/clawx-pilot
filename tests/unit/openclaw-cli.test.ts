@@ -6,14 +6,28 @@ const originalResourcesPath = process.resourcesPath;
 const {
   mockExistsSync,
   mockIsPackagedGetter,
+  mockSpawn,
 } = vi.hoisted(() => ({
   mockExistsSync: vi.fn<(path: string) => boolean>(),
   mockIsPackagedGetter: { value: false },
+  mockSpawn: vi.fn(),
 }));
 
 function setPlatform(platform: string) {
   Object.defineProperty(process, 'platform', { value: platform, writable: true });
 }
+
+vi.mock('node:child_process', async () => {
+  const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process');
+  return {
+    ...actual,
+    spawn: mockSpawn,
+    default: {
+      ...actual,
+      spawn: mockSpawn,
+    },
+  };
+});
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
@@ -32,6 +46,7 @@ vi.mock('electron', () => ({
     get isPackaged() {
       return mockIsPackagedGetter.value;
     },
+    getName: () => 'ClawX',
   },
 }));
 
@@ -86,5 +101,48 @@ describe('getOpenClawCliCommand (Windows packaged)', () => {
     const command = getOpenClawCliCommand();
     expect(command.startsWith('$env:ELECTRON_RUN_AS_NODE=1; & ')).toBe(true);
     expect(command.endsWith("'C:\\Program Files\\ClawX\\resources\\openclaw\\openclaw.mjs'")).toBe(true);
+  });
+});
+
+describe('generateCompletionCache', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    mockIsPackagedGetter.value = true;
+    mockExistsSync.mockReturnValue(true);
+    mockSpawn.mockReturnValue({ on: vi.fn() });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
+  });
+
+  it('does not spawn the completion cache child on Windows startup', async () => {
+    setPlatform('win32');
+    const { generateCompletionCache } = await import('@electron/utils/openclaw-cli');
+
+    generateCompletionCache();
+
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
+  it('still spawns completion cache generation on supported packaged platforms', async () => {
+    setPlatform('linux');
+    const { generateCompletionCache } = await import('@electron/utils/openclaw-cli');
+
+    generateCompletionCache();
+
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    const [execPath, args, options] = mockSpawn.mock.calls[0];
+    expect(execPath).toBe(process.execPath);
+    expect(args).toEqual(['C:\\Program Files\\ClawX\\resources\\openclaw\\openclaw.mjs', 'completion', '--write-state']);
+    expect(options).toEqual(expect.objectContaining({
+      stdio: 'ignore',
+      detached: false,
+      windowsHide: true,
+    }));
+    expect(options.env.ELECTRON_RUN_AS_NODE).toBe('1');
+    expect(options.env.OPENCLAW_NO_RESPAWN).toBe('1');
+    expect(options.env.OPENCLAW_EMBEDDED_IN).toBe('ClawX');
   });
 });

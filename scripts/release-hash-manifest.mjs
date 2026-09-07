@@ -37,6 +37,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, 
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readVerifiedBuildSource } from './release-build-source.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MANIFEST_DIR_DEFAULT = path.join('docs', 'release-manifests');
@@ -168,13 +169,24 @@ export function discoverArtifacts({ releaseDir, version }) {
   return { artifacts, skipped };
 }
 
-async function hashArtifact(releaseDir, artifact) {
+function sourceForArtifact(buildSource, mtimeMs) {
+  if (!buildSource) return null;
+  const recordedMs = Date.parse(buildSource.builtAt ?? buildSource.recordedAt);
+  if (!Number.isFinite(recordedMs)) return null;
+  return mtimeMs + 1000 >= recordedMs ? buildSource : null;
+}
+
+async function hashArtifact(releaseDir, artifact, buildSource = null) {
   const abs = path.join(releaseDir, artifact.path);
   if (artifact.kind === 'bundle-dir') {
     const { sha256, fileCount } = await hashDirectory(abs);
-    return { ...artifact, sha256, fileCount, mtimeMs: statSync(abs).mtimeMs };
+    const mtimeMs = statSync(abs).mtimeMs;
+    const source = sourceForArtifact(buildSource, mtimeMs);
+    return { ...artifact, sha256, fileCount, mtimeMs, ...(source ? { source } : {}) };
   }
-  return { ...artifact, sha256: await sha256File(abs), bytes: statSync(abs).size, mtimeMs: statSync(abs).mtimeMs };
+  const stats = statSync(abs);
+  const source = sourceForArtifact(buildSource, stats.mtimeMs);
+  return { ...artifact, sha256: await sha256File(abs), bytes: stats.size, mtimeMs: stats.mtimeMs, ...(source ? { source } : {}) };
 }
 
 function stalenessWarnings(hashed) {
@@ -222,14 +234,19 @@ function writeManifestAtomic(manifestDir, manifest) {
  * warnings, hardStop }. hardStop is set (and nothing is written) when the
  * existing manifest is published and any overlapping artifact hash differs.
  */
-export async function generateManifest({ releaseDir, version, manifestDir, now = () => new Date().toISOString() }) {
+export async function generateManifest({ releaseDir, version, manifestDir, now = () => new Date().toISOString(), buildSource = null }) {
   const { artifacts: discovered, skipped } = discoverArtifacts({ releaseDir, version });
   if (discovered.length === 0) {
     return { manifest: null, action: 'no-artifacts', warnings: [...skipped, `no artifacts for ${version} under ${releaseDir}`], hardStop: null };
   }
   const hashed = [];
-  for (const artifact of discovered) hashed.push(await hashArtifact(releaseDir, artifact));
-  const warnings = [...skipped, ...stalenessWarnings(hashed)];
+  for (const artifact of discovered) hashed.push(await hashArtifact(releaseDir, artifact, buildSource));
+  const warnings = [
+    ...skipped,
+    ...stalenessWarnings(hashed),
+    ...(buildSource ? hashed.filter((artifact) => !artifact.source).map((artifact) => `SOURCE_UNKNOWN: ${artifact.name} predates recorded build source context; leaving source provenance unknown`) : []),
+    ...(buildSource ? [] : ['no explicit build source context supplied; generated artifacts are recorded with unknown source provenance']),
+  ];
   const existing = readManifest(manifestDir, version);
   if (!existing) {
     const manifest = { version, generatedAt: now(), published: false, artifacts: hashed, supersededBuilds: [], warnings };
@@ -244,25 +261,31 @@ export async function generateManifest({ releaseDir, version, manifestDir, now =
       drift.push(`${artifact.name}: recorded ${prior.sha256.slice(0, 12)}… != current ${artifact.sha256.slice(0, 12)}…`);
     }
   }
+  const added = hashed.filter((artifact) => !existing.artifacts.some((prior) => prior.name === artifact.name));
+  if (existing.published && (drift.length || added.length)) {
+    return {
+      manifest: existing, action: 'hard-stop', warnings,
+      hardStop: `version ${version} is PUBLISHED with different bits or new artifact identities — shipped artifacts are immutable. Bump moe.N before changing the set. Drift:\n  ${[...drift, ...added.map((artifact) => `new artifact: ${artifact.name}`)].join('\n  ')}`,
+    };
+  }
   // Merge semantics on BOTH branches: current hashes replace same-name
   // entries, artifacts recorded by earlier builds (e.g. the other platform,
   // built on another day or machine) stay in force. Replacing wholesale
   // would silently drop them from verify coverage.
   const merged = [
-    ...existing.artifacts.map((prior) => hashed.find((a) => a.name === prior.name) ?? prior),
+    ...existing.artifacts.map((prior) => {
+      const current = hashed.find((a) => a.name === prior.name);
+      if (!current) return prior;
+      // Rechecking the same bytes without a new build context preserves their
+      // recorded origin. Changed bytes can never inherit that origin.
+      return !current.source && current.sha256 === prior.sha256 && prior.source
+        ? { ...current, source: prior.source } : current;
+    }),
     ...hashed.filter((a) => !existing.artifacts.some((prior) => prior.name === a.name)),
   ];
   if (drift.length === 0) {
     const manifest = { ...existing, artifacts: merged, warnings: [...new Set([...(existing.warnings ?? []), ...warnings])] };
     return { manifest, action: merged.length === existing.artifacts.length ? 'unchanged' : 'merged', warnings, hardStop: null };
-  }
-  if (existing.published) {
-    return {
-      manifest: existing,
-      action: 'hard-stop',
-      warnings,
-      hardStop: `version ${version} is PUBLISHED with different bits — a shipped version string is immutable. Bump moe.N (CLAUDE.md convention) instead of rebuilding. Drift:\n  ${drift.join('\n  ')}`,
-    };
   }
   const manifest = {
     version,
@@ -299,9 +322,32 @@ export async function verifyManifest({ manifest, releaseDir, only = null, pathOv
   return { ok, results };
 }
 
+/** Publication changes state only after the measured release evidence is rechecked. */
+export async function publishManifest({ manifestDir, version, reportPath, releaseDir, source, now = Date.now() }) {
+  const file = manifestPathFor(manifestDir, version);
+  if (!existsSync(file)) return { ok: false, problems: ['No candidate manifest exists.'] };
+  const before = readFileSync(file, 'utf8');
+  const manifest = JSON.parse(before);
+  let reportHash;
+  try { reportHash = await sha256File(reportPath); }
+  catch { return { ok: false, problems: ['Release evidence is missing or unreadable.'] }; }
+  const { validateReleaseEvidence } = await import('./release-evidence.mjs');
+  const result = await validateReleaseEvidence({ reportPath, manifest, releaseDir, source, now });
+  if (!result.ok) return result;
+  if (readFileSync(file, 'utf8') !== before) return { ok: false, problems: ['Candidate changed during publication validation.'] };
+  if (await sha256File(reportPath) !== reportHash) return { ok: false, problems: ['Release evidence changed during publication validation.'] };
+  const published = {
+    ...manifest, published: true,
+    publishedAt: manifest.publishedAt ?? new Date(now).toISOString(),
+    releaseEvidence: { sha256: reportHash, sourceRevision: source.gitCommit },
+  };
+  writeManifestAtomic(manifestDir, published);
+  return { ok: true, problems: [], manifest: published };
+}
+
 function parseArgs(argv) {
   const [command, ...rest] = argv;
-  const opts = { command, releaseDir: path.join(ROOT, 'release'), manifestDir: path.join(ROOT, MANIFEST_DIR_DEFAULT), version: null, only: null, pathOverride: null, allowMissing: false };
+  const opts = { command, releaseDir: path.join(ROOT, 'release'), manifestDir: path.join(ROOT, MANIFEST_DIR_DEFAULT), version: null, only: null, pathOverride: null, allowMissing: false, buildSourcePath: null, reportPath: null };
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
     if (arg === '--dir') opts.releaseDir = path.resolve(rest[(i += 1)]);
@@ -310,6 +356,8 @@ function parseArgs(argv) {
     else if (arg === '--only') opts.only = rest[(i += 1)];
     else if (arg === '--path') opts.pathOverride = rest[(i += 1)];
     else if (arg === '--allow-missing') opts.allowMissing = true;
+    else if (arg === '--build-source-file') opts.buildSourcePath = path.resolve(rest[(i += 1)]);
+    else if (arg === '--evidence') opts.reportPath = path.resolve(rest[(i += 1)]);
     else { console.error(`unknown arg: ${arg}`); process.exit(2); }
   }
   if (!opts.version) opts.version = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
@@ -319,6 +367,10 @@ function parseArgs(argv) {
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.command === 'generate') {
+    const buildSource = opts.buildSourcePath
+      ? readVerifiedBuildSource({ root: ROOT, sourcePath: opts.buildSourcePath, label: 'release manifest source' })
+      : null;
+    opts.buildSource = buildSource;
     const { manifest, action, warnings, hardStop } = await generateManifest(opts);
     for (const warning of warnings) console.warn(`[release-hash-manifest] WARN ${warning}`);
     if (hardStop) { console.error(`[release-hash-manifest] HARD STOP: ${hardStop}`); process.exit(3); }
@@ -329,11 +381,16 @@ async function main() {
     return;
   }
   if (opts.command === 'publish') {
-    const manifest = readManifest(opts.manifestDir, opts.version);
-    if (!manifest) { console.error(`[release-hash-manifest] no manifest for ${opts.version} — run generate first`); process.exit(2); }
-    manifest.published = true;
-    manifest.publishedAt = new Date().toISOString();
-    writeManifestAtomic(opts.manifestDir, manifest);
+    if (!opts.reportPath || opts.allowMissing || opts.only || opts.pathOverride || opts.buildSourcePath) {
+      console.error('[release-hash-manifest] publish requires --evidence <release-evidence.json> and the complete staged installer set; diagnostic/override flags are not accepted.');
+      process.exit(3);
+    }
+    const { readCurrentSource } = await import('./release-build-source.mjs');
+    const result = await publishManifest({ ...opts, source: readCurrentSource(ROOT) });
+    if (!result.ok) {
+      for (const problem of result.problems) console.error(`[release-hash-manifest] ${problem}`);
+      process.exit(3);
+    }
     console.log(`[release-hash-manifest] published: ${opts.version} — this version's bits are now immutable`);
     return;
   }
@@ -349,7 +406,7 @@ async function main() {
     console.log(`[release-hash-manifest] OK: ${results.filter((r) => r.status === 'ok').length} artifact(s) match ${opts.version}`);
     return;
   }
-  console.error('usage: release-hash-manifest.mjs <generate|publish|verify> [--version v] [--dir releaseDir] [--manifest-dir dir] [--only name] [--path file] [--allow-missing]');
+  console.error('usage: release-hash-manifest.mjs <generate|publish|verify> [--version v] [--dir releaseDir] [--manifest-dir dir] [--only name] [--path file] [--allow-missing] [--build-source-file file] [--evidence release-evidence.json]');
   process.exit(2);
 }
 

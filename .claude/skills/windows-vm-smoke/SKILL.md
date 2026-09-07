@@ -11,6 +11,8 @@ Prove the installed Windows app path from a clean environment. Unit tests and lo
 
 ## First Reads
 
+- `windows-pilot/vm-testing/README.md` — current access, environment fidelity and recording contract
+
 - `docs/WINDOWS_INSTALL_RUNBOOK.md`
 - `docs/CURRENT_WINDOWS_RC.md`
 - `docs/GA_RELEASE_EVIDENCE_MANIFEST.md`
@@ -30,9 +32,12 @@ Use the highest available rung:
 
 ## Required Checks
 
+- Collect `pilot-fresh-install-environment.ps1 -Mode Probe -JsonOutputPath <unique-run>/environment.json` before mutation; record OS/build, elevation and administrator membership, prior state, app hash, graphics/audio, Chrome and seed presence.
+- Distinguish Server VM smoke, fresh Windows client acceptance and existing-profile upgrades. Capture the actual interactive session; SSH Session 0 display metadata is not the user desktop.
+
 - Installer SHA256 matches `docs/CURRENT_WINDOWS_RC.md`.
 - Prior app/process state is stopped and user state is backed up before mutation.
-- Silent install exits `0`.
+- Record installation mode. A silent diagnostic must exit `0`; principal-facing acceptance also needs normal assisted installer screens and desktop-shortcut launch.
 - Desktop and Start Menu shortcuts exist.
 - `resources/app.asar`, `resources/openclaw/node_modules/playwright-core/package.json`, `resources/bin/ffmpeg.exe`, and `resources/bin/WinSpeechRecognize.exe` exist.
 - Cloud gateway seed exists when the package is intended to be online-first.
@@ -58,6 +63,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File windows-pilot/scripts/pilot-
 For VM runners, upload scripts into the test user's Downloads folder and record the output directory path. Do not print passwords or raw tokens from the VM bootstrap.
 
 ## Evidence
+
+For visible journeys, use `pilot-record-app-window.ps1` and host `scripts/verify-app-window-recording.mjs`, then inspect sampled frames and deterministic outcome/readback evidence. Capture-only verification is not visual or product acceptance. See the testing README for commands and privacy scope.
 
 Update `docs/GA_RELEASE_EVIDENCE_MANIFEST.md` with:
 

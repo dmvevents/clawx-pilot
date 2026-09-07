@@ -1,13 +1,24 @@
 # Agent And Skill Interoperability
 
-Last reviewed: 2026-06-23.
+Last reconciled: 2026-09-07.
 
 ## Purpose
 
 This repo now has first-class operating surfaces for Codex, Claude Code, and the existing Windows pilot runbooks. The goal is not to create three competing sources of truth. The goal is to let either agent start cleanly, discover the same safety rules, and route to the same release-critical workflows.
 
-Release evidence source of truth: `docs/GA_RELEASE_EVIDENCE_MANIFEST.md`.
-Current candidate pointer: `docs/CURRENT_WINDOWS_RC.md`. As of the 2026-06-23 email draft fix, Outlook release proof must include compose, reply, reply-all, and forward no-send validation plus evidence that ClawX-marked test drafts are cleaned without broadly discarding user drafts.
+Read the same two project documents from either agent: [PROJECT_CONTRACT.md](PROJECT_CONTRACT.md) for stable instructions and [COMPLETION_PLAN.md](COMPLETION_PLAN.md) for current priorities/evidence. `CLAUDE.md` imports the contract; `AGENTS.md` directs Codex to it. They do not maintain separate capability/status tables.
+
+Current candidate: [CURRENT_WINDOWS_RC.md](CURRENT_WINDOWS_RC.md). Release evidence: [GA_RELEASE_EVIDENCE_MANIFEST.md](GA_RELEASE_EVIDENCE_MANIFEST.md). Historical May/June packets are searchable reference, not startup routing. The current recorded Windows candidate is unpublished moe.19; the completion plan identifies newer source and missing installed proof.
+
+Claude's existing `ga-sprint-driver` skill implements the shared continuation policy: follow one outcome across checkpoints, keep source and installed/live evidence distinct, and stop unchanged/blocked ticks. Codex follows the same policy through the shared contract and native domain agents; no additional workflow engine is required.
+
+## Claude guidance and hook scope verified September 7
+
+Keep root guidance concise and move domain procedures behind explicit references. Claude supports shared-file imports; its documentation recommends avoiding conflicting instructions. [Claude memory documentation](https://code.claude.com/docs/en/memory).
+
+The checked-in hook matcher is `Bash`; native MCP tools have their own names and are not covered by that matcher. The current hook scans shell command text, not payload files or actual delivery. It is not a transport-wide authorization or secret-inspection boundary. [Claude hook documentation](https://code.claude.com/docs/en/hooks). This reconciliation preserves the hook behavior and documents its actual limit; any enforcement repair needs tests for each real send surface.
+
+No user-global memory, MCP credentials or tool installation was changed. The existing local sprint-task prompt was aligned, preserving schedule/ownership/firing metadata; runtime reload is unverified. Project history cannot confer authority to send a message in a new session.
 
 ## Official References Reviewed
 
@@ -45,8 +56,8 @@ Current candidate pointer: `docs/CURRENT_WINDOWS_RC.md`. As of the 2026-06-23 em
 | Windows VM/laptop smoke | `.agents/skills/windows-vm-smoke` | `.codex/skills/windows-vm-smoke` | `.claude/skills/windows-vm-smoke` | `docs/WINDOWS_INSTALL_RUNBOOK.md`, `windows-pilot/scripts/` |
 | SSH laptop operations | `.agents/skills/pilot-ssh-ops` | use `.agents/skills/pilot-ssh-ops` | `.claude/skills/pilot-ssh-ops` | `docs/PILOT_LAPTOP_ACCESS.md` |
 | Form prefill | `.agents/skills/moe-form-prefill` | `.codex/skills/moe-form-prefill` | `.claude/skills/moe-form-prefill` | `docs/MOE_FORM_PREFILL_STRATEGY.md` |
-| GA readiness | `.agents/skills/ga-release-readiness` | `.codex/skills/ga-release-readiness` | `.claude/skills/ga-release-readiness` | `docs/GA_RELEASE_PLAN_2026-06-09.md` |
-| GA E2E regression matrix | `.agents/skills/ga-e2e-regression` | `.codex/skills/ga-e2e-regression` | `.claude/skills/ga-e2e-regression` | `docs/GA_RELEASE_PLAN_2026-06-09.md`, `windows-pilot/scripts/` |
+| GA readiness | `.agents/skills/ga-release-readiness` | `.codex/skills/ga-release-readiness` | `.claude/skills/ga-release-readiness` | `docs/COMPLETION_PLAN.md` |
+| GA E2E regression matrix | `.agents/skills/ga-e2e-regression` | `.codex/skills/ga-e2e-regression` | `.claude/skills/ga-e2e-regression` | `docs/COMPLETION_PLAN.md`, `windows-pilot/scripts/` |
 
 ## Canonical Agent Map
 
@@ -61,7 +72,7 @@ Current candidate pointer: `docs/CURRENT_WINDOWS_RC.md`. As of the 2026-06-23 em
 
 ## Routing Rules
 
-1. Start with `ga-release-readiness` for release, installer, documentation, or GA status work.
+1. Start with the shared contract and completion plan. Load `ga-release-readiness` for release/candidate verdicts; ordinary guidance edits do not require a live release run.
 2. Use `ga-e2e-regression` when a demo/customer failure must become a test, when extending the end-to-end harness, or before claiming all known failures are green.
 3. Use `windows-runtime-recovery` for chat stuck on thinking, model call failed, provider drift, Gateway down, Office prompt stalls, or ASR fallback failures.
 4. Use `windows-outlook-forms` for email, Outlook, Microsoft Forms, Chrome CDP, and safe send/submit flows.
@@ -104,13 +115,9 @@ Every agent must state:
 
 ## GA Session Start
 
-For a fresh Codex or Claude session:
+1. Read the entrypoint (`AGENTS.md` or `CLAUDE.md`), shared contract and completion plan.
+2. Inspect git status and the selected card. Load the matching domain skill; use release-readiness for a release verdict, regression/Windows skills for their actual test lanes.
+3. Read candidate/evidence pointers if the task depends on installed or release claims.
+4. State the selected outcome, source/evidence gap and next falsifiable validation, then execute authorized work.
 
-1. Read `AGENTS.md` or `CLAUDE.md`.
-2. Invoke or load `ga-release-readiness`.
-3. Invoke or load `ga-e2e-regression` before changing tests, installer smoke scripts, Outlook, Forms, Office, ASR, or Gateway runtime behavior.
-4. Read `docs/CURRENT_WINDOWS_RC.md`, `docs/GA_RELEASE_EVIDENCE_MANIFEST.md`, and `docs/GA_RELEASE_PLAN_2026-06-09.md`.
-5. Run `git status --short --branch`.
-6. Produce a gate table and regression matrix before changing code.
-
-Stop only when the release verdict is evidence-backed and the next action is clear.
+Stop when the assigned outcome is verified or the next dependency is concretely blocked. A guidance audit does not require launching live account tests. A release verdict does require the actual release evidence.

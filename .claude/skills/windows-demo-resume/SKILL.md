@@ -13,11 +13,12 @@ Use this skill when starting or resuming work on the Windows demo. It gives the 
 
 Read, in order:
 
-1. `CLAUDE.md` current resume packet near the top.
-2. `docs/NEXT_AGENT_WINDOWS_DEMO_HANDOFF_2026-05-29.md`.
-3. `docs/CLAUDE_CODE_RESUME_AND_TEAMS_GUIDE_2026-05-29.md`.
-4. `docs/WINDOWS_PROBLEMS_ATLAS.md`.
-5. `windows-pilot/README.md` and `windows-pilot/AGENTS.md`.
+1. `CLAUDE.md` and its shared `docs/PROJECT_CONTRACT.md`.
+2. `docs/COMPLETION_PLAN.md` and `docs/CURRENT_WINDOWS_RC.md`.
+3. The selected card and relevant evidence; search `docs/WINDOWS_PROBLEMS_ATLAS.md` for the failure class.
+4. `windows-pilot/README.md` and `windows-pilot/AGENTS.md` when working on Windows.
+
+May/June resume packets are historical evidence. Continue the selected completion outcome; do not restore their old defaults or task order.
 
 ## First Commands
 

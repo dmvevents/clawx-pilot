@@ -71,6 +71,7 @@ vi.mock('@electron/utils/logger', () => ({
 }));
 
 import {
+  ensureProviderAccountRuntime,
   syncAgentModelOverrideToRuntime,
   syncDefaultProviderToRuntime,
   syncDeletedProviderApiKeyToRuntime,
@@ -186,18 +187,35 @@ describe('provider-runtime-sync refresh strategy', () => {
     expect(gateway.debouncedRestart).not.toHaveBeenCalled();
   });
 
-  it('writes the config but skips the gateway refresh when skipGatewayRefresh is set (per-run degrade, CLWX-95/96)', async () => {
-    // The send-time degrade path writes the on-device channel and then resends
-    // the failed turn immediately. Bouncing the gateway here would race that
-    // resend (on Windows debouncedReload falls through to a full restart),
-    // killing the turn with no terminal event. The four-store write must still
-    // land — only the reload/restart is suppressed.
+  it('writes the config but skips the gateway refresh when skipGatewayRefresh is set before gateway start', async () => {
     const gateway = createGateway('running');
     await syncDefaultProviderToRuntime('moonshot', gateway as GatewayManager, { skipGatewayRefresh: true });
 
     expect(mocks.setOpenClawDefaultModel).toHaveBeenCalledTimes(1);
     expect(gateway.debouncedReload).not.toHaveBeenCalled();
     expect(gateway.debouncedRestart).not.toHaveBeenCalled();
+  });
+
+  it('ensures a transient provider runtime entry without writing default model state', async () => {
+    mocks.getProvider.mockResolvedValue(createProvider({
+      id: 'ollama-local',
+      type: 'ollama',
+      model: 'qwen2.5:3b-instruct',
+      baseUrl: 'http://127.0.0.1:11434/v1',
+    }));
+
+    await ensureProviderAccountRuntime('ollama-local');
+
+    expect(mocks.syncProviderConfigToOpenClaw).toHaveBeenCalledWith(
+      'ollama-ollamalo',
+      'qwen2.5:3b-instruct',
+      expect.objectContaining({
+        baseUrl: 'http://127.0.0.1:11434/v1',
+        api: 'openai-completions',
+      }),
+    );
+    expect(mocks.setOpenClawDefaultModel).not.toHaveBeenCalled();
+    expect(mocks.setOpenClawDefaultModelWithOverride).not.toHaveBeenCalled();
   });
 
   it('uses gpt-5.4 as the browser OAuth default model for OpenAI', async () => {

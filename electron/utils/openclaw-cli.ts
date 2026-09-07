@@ -345,6 +345,7 @@ function getNodeExecForCli(): string {
 
 export function generateCompletionCache(): void {
   if (!app.isPackaged) return;
+  if (process.platform === 'win32') return;
 
   const entryPath = getOpenClawEntryPath();
   if (!existsSync(entryPath)) return;

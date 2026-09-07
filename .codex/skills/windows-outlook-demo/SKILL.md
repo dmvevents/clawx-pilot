@@ -5,6 +5,8 @@ description: Verify, debug, or repair the ClawX/Ministry Windows pilot demo for 
 
 # Windows Outlook Demo
 
+Start with the repo-root `docs/PROJECT_CONTRACT.md` and `docs/COMPLETION_PLAN.md`; `docs/CURRENT_WINDOWS_RC.md` identifies the candidate. Dated instructions below are historical/domain references and do not supersede the current contract.
+
 ## Operating Rules
 
 - Treat Outlook login as an existing signed-in browser session. Do not print passwords, tokens, full recipient lists, Forms URLs, or email bodies.

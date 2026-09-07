@@ -138,6 +138,11 @@ export function Chat() {
   const abortRun = useChatStore((s) => s.abortRun);
   const clearError = useChatStore((s) => s.clearError);
   const degradeNotice = useChatStore((s) => s.degradeNotice);
+  const pendingChannelRecoveryCount = useChatStore((s) => (
+    s.pendingChannelRecoveryBySession[s.currentSessionKey] ?? 0
+  ));
+  const channelRecoveryInProgress = Boolean(degradeNotice?.inProgress) || pendingChannelRecoveryCount > 0;
+  const showGenericChannelRecovery = pendingChannelRecoveryCount > 0 && !degradeNotice?.inProgress;
   const clearDegradeNotice = useChatStore((s) => s.clearDegradeNotice);
   // Principal-facing wording for the two error surfaces. The raw string moves
   // into a collapsed details expander; the classes that must stay visible
@@ -728,6 +733,13 @@ export function Chat() {
     <div
       ref={splitContainerRef}
       data-testid="chat-page"
+      data-sending={sending ? 'true' : 'false'}
+      data-pending-final={pendingFinal ? 'true' : 'false'}
+      data-active-run-id-present={activeRunId ? 'true' : 'false'}
+      data-active-execution-graph={hasActiveExecutionGraph ? 'true' : 'false'}
+      data-degrade-in-progress={channelRecoveryInProgress ? 'true' : 'false'}
+      data-run-error-present={runError ? 'true' : 'false'}
+      data-error-present={error ? 'true' : 'false'}
       className={cn(
         'relative flex min-h-0 -m-6 overflow-hidden transition-colors duration-500',
         'bg-background',
@@ -932,6 +944,17 @@ export function Chat() {
         </div>
         );
       })()}
+
+      {showGenericChannelRecovery && (
+        <div className="px-4 pt-2" data-testid="chat-channel-recovery-notice" data-in-progress="true">
+          <div className="max-w-4xl mx-auto rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3">
+            <p className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Restoring this chat to your selected channel…
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Run error callout. Plain-language primary line; the raw provider
           string stays available behind a collapsed technical-details

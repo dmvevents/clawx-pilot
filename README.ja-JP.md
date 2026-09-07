@@ -299,10 +299,16 @@ AI を開発ワークフローに統合できます。エージェントを使�
 
 ## 開発
 
+この Ministry フォークでは、[共通プロジェクト規約](docs/PROJECT_CONTRACT.md)と[完了計画](docs/COMPLETION_PLAN.md)を先に確認してください。`GA_GATE_STATIC=1 pnpm ga:gate` は開発用の健全性チェックです。通常の `pnpm ga:gate` は必須 T1 チェックが実行できない場合に非ゼロで終了し、明示的に有効化していない送信チェックはスキップします。`GA_GATE_RELEASE=1 pnpm ga:gate` は厳格なリリース判定を行い、必須証拠の欠落、スキップ、情報のみの結果を失敗とします。`GA_GATE_INSTALLED_EVIDENCE` に Windows VM の実行証拠ディレクトリを指定し、実際のインストールと動作結果を検証します。接続できるだけでは合格になりません。`pnpm release` は公開前の成果物を生成します。公開が承認された段階で `pnpm release:evidence:check --report <bundle>/release-evidence.json --manifest <bundle>/manifest.json --dir <staged>` を実行し、ソース、元の検証結果、インストーラーを照合してください。初期の公開フローは Windows x64 インストーラー1個に対応します。証拠の形式は完了計画を参照してください。実際のメール送信チェックは引き続き明示的な有効化が必要です。pnpm は `package.json` に固定されたバージョンを使用してください。
+
+公開リポジトリの Windows ビルドでは `cloudGatewaySeedProfile=keyless-public` を使用します。クラウドと音声サービスの認証情報は含まれないため、インストール後の設定が必要です。レビュー済みの正確なコミットをビルドしてください。公開時には、生成し直したレポート内の古い観測結果も含め、24 時間を超えた証拠を拒否します。
+
+Windows 環境の記録、IAP 接続、アプリ画面の録画は [Windows テストガイド](windows-pilot/vm-testing/README.md)を参照してください。サーバー VM の検証と校長用ノート PC の受け入れ検証は、それぞれの対象範囲を記録します。
+
 ### 前提条件
 
 - **Node.js**: 22以上（LTS推奨）
-- **パッケージマネージャー**: pnpm 9以上（推奨）またはnpm
+- **パッケージマネージャー**: `package.json` に固定されたバージョンの pnpm
 
 ### プロジェクト構成
 

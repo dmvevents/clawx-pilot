@@ -3,7 +3,11 @@ import { applyProxySettings } from '../../main/proxy';
 import { syncLaunchAtStartupSettingFromStore } from '../../main/launch-at-startup';
 import { syncProxyConfigToOpenClaw } from '../../utils/openclaw-proxy';
 import { getAllSettings, getSetting, resetSettings, setSetting, type AppSettings } from '../../utils/store';
-import { applyChannelChange, type ProviderChannel } from '../../services/providers/channel-router';
+import {
+  applyChannelChange,
+  prepareTransientChannelChange,
+  type ProviderChannel,
+} from '../../services/providers/channel-router';
 import { logger } from '../../utils/logger';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
@@ -115,33 +119,21 @@ export async function handleSettingsRoutes(
         sendJson(res, 400, { success: false, error: `Invalid channel: ${String(body.channel)}` });
         return true;
       }
-      const persisted = await getSetting('preferredChannel');
-      // skipGatewayRefresh: this runs INSIDE a failed turn and the renderer
-      // resends immediately. A reload here becomes a full restart on Windows
-      // and the restart loses the port race, so the runtime disappears under
-      // the resend (moe.19 VM, 2026-09-06: Gateway down 3 minutes, empty
-      // assistant bubble, three fresh sessions in a row). The four-store write
-      // still lands, but it does not by itself move the running Gateway (it
-      // resolves turns from a boot-pinned snapshot). `modelRef` below is
-      // returned so the caller can pin the session onto that model over the RPC
-      // and WAIT for the acknowledgement — that is what makes the degrade take
-      // effect on the resend.
-      const result = await applyChannelChange(body.channel, ctx.gatewayManager, {
-        skipGatewayRefresh: true,
-      });
-      logger.info('[settings] Degraded channel without persisting preference', {
+      // This route runs INSIDE a failed turn. It prepares the target provider
+      // entry/auth and returns the model ref so the renderer can pin only the
+      // current session. It deliberately does not change preferredChannel,
+      // defaultProvider, all-agent defaults, or the running gateway default.
+      const result = await prepareTransientChannelChange(body.channel);
+      logger.info('[settings] Prepared transient channel degrade', {
         channel: body.channel,
         reason: typeof body.reason === 'string' ? body.reason : 'unspecified',
-        persistedPreferenceLeftAt: persisted,
         modelRef: result.modelRef,
-        gatewayRefreshSuppressed: true,
       });
       sendJson(res, 200, {
         success: true,
-        channel: body.channel,
+        channel: result.channel,
         modelRef: result.modelRef,
         accountId: result.accountId,
-        preferredChannelUnchanged: persisted,
       });
     } catch (error) {
       logger.warn('[settings] degradeChannel failed:', error);

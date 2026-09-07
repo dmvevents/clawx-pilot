@@ -509,11 +509,16 @@ async function initialize(): Promise<void> {
     hostEventBus.emit('channel:whatsapp-error', error);
   });
 
+  // The next three convergence steps run before the first Gateway start. Let
+  // the first process read the converged files directly instead of queueing a
+  // deferred Windows refresh/restart that fires immediately after startup.
+  const bootConvergenceOptions = { skipGatewayRefresh: true } as const;
+
   // Seed the managed online gateway first when a bundled/user/env config is
   // available. The local seed below remains the no-cloud fallback.
   if (!isE2EMode) {
     try {
-      await seedCloudGatewayProvider(gatewayManager);
+      await seedCloudGatewayProvider(gatewayManager, bootConvergenceOptions);
     } catch (error) {
       logger.warn('Cloud gateway provider seed failed (non-fatal):', error);
     }
@@ -526,7 +531,7 @@ async function initialize(): Promise<void> {
   // env var CLAWX_SEED_LOCAL_LLM_PROVIDER=0.
   if (!isE2EMode) {
     try {
-      await seedDefaultLocalProvider(gatewayManager);
+      await seedDefaultLocalProvider(gatewayManager, bootConvergenceOptions);
     } catch (error) {
       logger.warn('Local provider seed failed (non-fatal):', error);
     }
@@ -565,7 +570,11 @@ async function initialize(): Promise<void> {
   if (!isE2EMode) {
     try {
       const desired = (await getSetting('preferredChannel')) ?? 'on-device';
-      const result = await runChannelPreflight(desired as 'online' | 'on-device', gatewayManager);
+      const result = await runChannelPreflight(
+        desired as 'online' | 'on-device',
+        gatewayManager,
+        bootConvergenceOptions,
+      );
       logger.info('[main] Channel preflight result', result);
 
       // BUG-012 boot-path safety net: preflight early-returns without writing

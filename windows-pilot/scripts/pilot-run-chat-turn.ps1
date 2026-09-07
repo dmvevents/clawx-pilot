@@ -12,6 +12,8 @@ param(
     [int]$CdpPort = 9223,
     [int]$StartupTimeoutSeconds = 120,
     [int]$TurnTimeoutSeconds = 180,
+    [ValidateSet("online", "on-device", "")][string]$ExpectedChannel = "",
+    [int]$TerminalQuietSeconds = 30,
     [string]$OutDir = "$env:USERPROFILE\Downloads\clawx-chat-turn-evidence",
     # Start the turn in a FRESH chat session. Mandatory in practice for any
     # document/tool leg: a session holding a previous failure makes the model
@@ -81,7 +83,14 @@ $node = @(
 
 $driver = Join-Path $PSScriptRoot "pilot-chat-turn-driver.js"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
-$driverArgs = @('--prompt', $Prompt, '--port', $CdpPort, '--turn-timeout', $TurnTimeoutSeconds, '--outdir', $OutDir)
+$driverArgs = @(
+    '--prompt', $Prompt,
+    '--port', $CdpPort,
+    '--turn-timeout', $TurnTimeoutSeconds,
+    '--terminal-quiet', $TerminalQuietSeconds,
+    '--outdir', $OutDir
+)
+if ($ExpectedChannel) { $driverArgs += @('--expected-channel', $ExpectedChannel) }
 if ($NewSession) { $driverArgs += '--new-session' }
 & $node $driver @driverArgs
 exit $LASTEXITCODE

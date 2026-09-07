@@ -22,6 +22,9 @@
  *   - leaves moe-principal-assistant ENABLED but with "Unconfigured *"
  *     defaults so it's effectively a no-op until first onboarding writes
  *     real values.
+ *   - disables implicit ACP/ACPX harness startup on principal installs;
+ *     existing ACP policy and ACPX entries are preserved. Native Ministry
+ *     plugin tools do not require an external coding-agent adapter.
  *
  * Idempotent: only fills missing keys, never overwrites real values — with
  * the one deliberate policy exception above (microsoft-graph.enabled is
@@ -136,6 +139,17 @@ export async function seedGatewayPluginConfig(): Promise<void> {
 
     let changed = false;
 
+    // The bundled ACPX default probes a Codex adapter through npx, which a
+    // normal Windows principal install does not supply. ACP harness sessions
+    // are opt-in; native MoE tools use the Gateway/Host API directly. Preserve
+    // any existing policy or entry, including empty objects and disabled
+    // choices, so seeding cannot reinterpret an administrator's ACP setup.
+    if (cfg.acp === undefined && entries.acpx === undefined) {
+      cfg.acp = { enabled: false };
+      entries.acpx = { enabled: false };
+      changed = true;
+    }
+
     // microsoft-graph: stub config, forced disabled ALWAYS. The host-API
     // adapter is the sole Graph lane; the gateway stub crashes gateway boot
     // when enabled without host wiring, so this is pinned rather than
@@ -219,7 +233,6 @@ export async function seedGatewayPluginConfig(): Promise<void> {
       'synology-chat',
       'irc',
       'bluebubbles',
-      'browser',
       'google',
       'dingtalk',
     ];

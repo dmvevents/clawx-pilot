@@ -100,9 +100,13 @@ function mockHistory(rest: unknown) {
 function ackFor(params: unknown) {
   const requested = String((params as { model?: unknown } | undefined)?.model ?? '');
   const slash = requested.indexOf('/');
+  const key = (params as { key?: string } | undefined)?.key ?? 'agent:main:main';
   return {
     ok: true,
-    key: (params as { key?: string } | undefined)?.key ?? 'agent:main:main',
+    key,
+    entry: slash > 0
+      ? { key, modelOverride: requested, providerOverride: requested.slice(0, slash) }
+      : { key },
     resolved: slash > 0
       ? { modelProvider: requested.slice(0, slash), model: requested.slice(slash + 1) }
       : {},
@@ -171,6 +175,8 @@ describe('chat store: send-time channel degradation', () => {
     settingsState.preferredChannel = 'online';
     settingsState.setPreferredChannel.mockReset();
     providerState.accounts = [...BOTH_CHANNELS];
+    providerState.refreshProviderSnapshot.mockReset();
+    providerState.refreshProviderSnapshot.mockResolvedValue(undefined);
   });
 
   it('degrades when the run dies with NO terminal event and the history poll finds the error (moe.16 gap)', async () => {
@@ -567,6 +573,447 @@ describe('chat store: send-time channel degradation', () => {
     expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: true, to: 'on-device' });
   });
 
+  it('cancels a pending degrade when the original cloud run finishes through streaming', async () => {
+    const store = await loadStore();
+    let releaseDegrade: (value: unknown) => void = () => {};
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/settings/degradeChannel'
+      ? new Promise((resolve) => { releaseDegrade = resolve; })
+      : Promise.resolve({ success: true })));
+
+    emitError(store, 'fetch failed');
+    await settle();
+    expect(store.getState().degradeNotice)
+      .toEqual({ reason: 'unreachable', resent: false, to: 'on-device', inProgress: true });
+
+    store.getState().handleChatEvent({
+      state: 'final',
+      runId: 'run-1',
+      sessionKey: 'agent:main:main',
+      message: { role: 'assistant', id: 'a-cloud', stopReason: 'stop', content: [{ type: 'text', text: 'cloud recovered' }] },
+    });
+    await settle();
+
+    expect(store.getState().lastSentPayload).toBeNull();
+    expect(store.getState().degradeNotice).toBeNull();
+
+    releaseDegrade({
+      success: true,
+      modelRef: 'ollama/qwen2.5:3b-instruct',
+      accountId: 'ollama-local',
+      preferredChannelUnchanged: 'online',
+    });
+    await settle();
+
+    expect(degradeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toBeNull();
+    expect(store.getState().degradeNotice).toBeNull();
+  });
+
+  it('cancels a pending degrade when history discovers the original cloud success', async () => {
+    const store = await loadStore();
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/settings/degradeChannel'
+      ? Promise.resolve({
+        success: true,
+        modelRef: 'ollama/qwen2.5:3b-instruct',
+        accountId: 'ollama-local',
+        preferredChannelUnchanged: 'online',
+      })
+      : Promise.resolve({ success: true })));
+    let releasePatch: (value: unknown) => void = () => {};
+    let patchCount = 0;
+    let history = {
+      messages: [
+        { role: 'user', id: 'u1', content: [{ type: 'text', text: 'summarise my last 5 emails' }], timestamp: Date.now() / 1000 },
+        {
+          role: 'assistant',
+          id: 'a1',
+          stopReason: 'error',
+          errorMessage: 'LLM request failed: network connection error. rawError=Connection error.',
+          content: [],
+          timestamp: Date.now() / 1000,
+        },
+      ],
+    };
+    gatewayRpcMock.mockImplementation((method: string, params: unknown) => {
+      if (method === 'sessions.patch') {
+        patchCount += 1;
+        if (patchCount === 1) {
+          return new Promise((resolve) => { releasePatch = resolve; });
+        }
+        return Promise.resolve(ackFor(params));
+      }
+      return Promise.resolve(history);
+    });
+
+    await store.getState().loadHistory(true);
+    await settle();
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' }]);
+    expect(store.getState().degradeNotice?.inProgress).toBe(true);
+
+    const now = Date.now();
+    store.setState({
+      sending: true,
+      activeRunId: 'run-1',
+      pendingFinal: true,
+      lastUserMessageAt: now,
+    });
+    history = {
+      messages: [
+        { role: 'user', id: 'u1', content: [{ type: 'text', text: 'summarise my last 5 emails' }], timestamp: now / 1000 },
+        {
+          role: 'assistant',
+          id: 'a-cloud',
+          stopReason: 'stop',
+          content: [{ type: 'text', text: 'cloud recovered from history' }],
+          timestamp: (now + 1) / 1000,
+        },
+      ],
+    };
+
+    await store.getState().loadHistory(false);
+    expect(store.getState().lastSentPayload).toBeNull();
+    expect(store.getState().degradeNotice).toBeNull();
+
+    releasePatch(PATCH_ACK);
+    await settle();
+
+    expect(patchCalls()).toEqual([
+      { key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' },
+      { key: 'agent:main:main', model: null },
+    ]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toBeNull();
+    expect(store.getState().degradeNotice).toBeNull();
+  });
+
+  it('clears the stale session pin when cloud success arrives after the on-device pin is set', async () => {
+    const store = await loadStore();
+    let releaseClear: (value: unknown) => void = () => {};
+    let patchCount = 0;
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/settings/degradeChannel'
+      ? Promise.resolve({
+        success: true,
+        modelRef: 'ollama/qwen2.5:3b-instruct',
+        accountId: 'ollama-local',
+        preferredChannelUnchanged: 'online',
+      })
+      : Promise.resolve({ success: true })));
+    gatewayRpcMock.mockImplementation((method: string, params: unknown) => {
+      if (method !== 'sessions.patch') return Promise.resolve(undefined);
+      patchCount += 1;
+      if (patchCount === 2) {
+        return new Promise((resolve) => { releaseClear = resolve; });
+      }
+      return Promise.resolve(ackFor(params));
+    });
+    providerState.refreshProviderSnapshot.mockImplementationOnce(() => {
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-1',
+        sessionKey: 'agent:main:main',
+        message: { role: 'assistant', id: 'a-cloud', stopReason: 'stop', content: [{ type: 'text', text: 'cloud recovered after pin' }] },
+      });
+      return Promise.resolve();
+    });
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(degradeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([
+      { key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' },
+      { key: 'agent:main:main', model: null },
+    ]);
+    expect(store.getState().degradeNotice)
+      .toEqual({ reason: 'unreachable', resent: false, to: 'on-device', inProgress: true });
+    expect(store.getState().runtimeChannelPin).toEqual({ sessionKey: 'agent:main:main', channel: 'on-device' });
+
+    releaseClear(ackFor({ key: 'agent:main:main', model: null }));
+    await settle();
+
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toBeNull();
+    expect(store.getState().degradeNotice).toBeNull();
+  });
+
+  it('clears a stale pin without forcing an online model when the principal picked on-device before cleanup', async () => {
+    const store = await loadStore();
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/settings/degradeChannel'
+      ? Promise.resolve({
+        success: true,
+        modelRef: 'ollama/qwen2.5:3b-instruct',
+        accountId: 'ollama-local',
+        preferredChannelUnchanged: 'online',
+      })
+      : Promise.resolve({ success: true })));
+    providerState.refreshProviderSnapshot.mockImplementationOnce(() => {
+      settingsState.preferredChannel = 'on-device';
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-1',
+        sessionKey: 'agent:main:main',
+        message: { role: 'assistant', id: 'a-cloud', stopReason: 'stop', content: [{ type: 'text', text: 'cloud recovered after pin' }] },
+      });
+      return Promise.resolve();
+    });
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(patchCalls()).toEqual([
+      { key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' },
+      { key: 'agent:main:main', model: null },
+    ]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toBeNull();
+    expect(store.getState().degradeNotice).toBeNull();
+  });
+
+  it('keeps recovery observable when a new send resets the stale degrade notice before clear ack', async () => {
+    const store = await loadStore();
+    let releaseClear: (value: unknown) => void = () => {};
+    let patchCount = 0;
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/settings/degradeChannel'
+      ? Promise.resolve({
+        success: true,
+        modelRef: 'ollama/qwen2.5:3b-instruct',
+        accountId: 'ollama-local',
+      })
+      : Promise.resolve({ success: true })));
+    gatewayRpcMock.mockImplementation((method: string, params: unknown) => {
+      if (method === 'sessions.patch') {
+        patchCount += 1;
+        if (patchCount === 2) {
+          return new Promise((resolve) => { releaseClear = resolve; });
+        }
+        return Promise.resolve(ackFor(params));
+      }
+      if (method === 'chat.send') return Promise.resolve({ runId: 'run-new' });
+      return Promise.resolve(undefined);
+    });
+    providerState.refreshProviderSnapshot.mockImplementationOnce(() => {
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-1',
+        sessionKey: 'agent:main:main',
+        message: { role: 'assistant', id: 'a-cloud', stopReason: 'stop', content: [{ type: 'text', text: 'cloud recovered after pin' }] },
+      });
+      return Promise.resolve();
+    });
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(patchCalls()).toEqual([
+      { key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' },
+      { key: 'agent:main:main', model: null },
+    ]);
+    expect(store.getState().degradeNotice)
+      .toEqual({ reason: 'unreachable', resent: false, to: 'on-device', inProgress: true });
+    expect(store.getState().pendingChannelRecoveryBySession['agent:main:main']).toBe(1);
+
+    await store.getState().sendMessage('new turn while restore is pending');
+    expect(store.getState().degradeNotice).toBeNull();
+    expect(store.getState().pendingChannelRecoveryBySession['agent:main:main']).toBe(1);
+
+    releaseClear(ackFor({ key: 'agent:main:main', model: null }));
+    await settle();
+
+    expect(patchCalls()).toEqual([
+      { key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' },
+      { key: 'agent:main:main', model: null },
+    ]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toBeNull();
+    expect(store.getState().degradeNotice).toBeNull();
+    expect(store.getState().pendingChannelRecoveryBySession['agent:main:main']).toBeUndefined();
+  });
+
+  it('clears the owned stale pin but preserves a newer notice while clear is pending', async () => {
+    const store = await loadStore();
+    let releaseClear: (value: unknown) => void = () => {};
+    let patchCount = 0;
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/settings/degradeChannel'
+      ? Promise.resolve({
+        success: true,
+        modelRef: 'ollama/qwen2.5:3b-instruct',
+        accountId: 'ollama-local',
+      })
+      : Promise.resolve({ success: true })));
+    gatewayRpcMock.mockImplementation((method: string, params: unknown) => {
+      if (method !== 'sessions.patch') return Promise.resolve(undefined);
+      patchCount += 1;
+      if (patchCount === 2) {
+        return new Promise((resolve) => { releaseClear = resolve; });
+      }
+      return Promise.resolve(ackFor(params));
+    });
+    providerState.refreshProviderSnapshot.mockImplementationOnce(() => {
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-1',
+        sessionKey: 'agent:main:main',
+        message: { role: 'assistant', id: 'a-cloud', stopReason: 'stop', content: [{ type: 'text', text: 'cloud recovered after pin' }] },
+      });
+      return Promise.resolve();
+    });
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    const newerNotice = { reason: 'rate-limited' as const, resent: false, to: 'on-device' as const, inProgress: true };
+    store.setState({
+      degradeNotice: newerNotice,
+      lastSentPayload: { text: 'new turn', attachments: undefined, targetAgentId: null, generation: 999 },
+    });
+    releaseClear(ackFor({ key: 'agent:main:main', model: null }));
+    await settle();
+
+    expect(patchCalls()).toEqual([
+      { key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' },
+      { key: 'agent:main:main', model: null },
+    ]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toBeNull();
+    expect(store.getState().degradeNotice).toBe(newerNotice);
+    expect(store.getState().pendingChannelRecoveryBySession['agent:main:main']).toBeUndefined();
+  });
+
+  it('does not clear a newer pin object while a stale clear is pending', async () => {
+    const store = await loadStore();
+    let releaseClear: (value: unknown) => void = () => {};
+    let patchCount = 0;
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/settings/degradeChannel'
+      ? Promise.resolve({
+        success: true,
+        modelRef: 'ollama/qwen2.5:3b-instruct',
+        accountId: 'ollama-local',
+      })
+      : Promise.resolve({ success: true })));
+    gatewayRpcMock.mockImplementation((method: string, params: unknown) => {
+      if (method !== 'sessions.patch') return Promise.resolve(undefined);
+      patchCount += 1;
+      if (patchCount === 2) {
+        return new Promise((resolve) => { releaseClear = resolve; });
+      }
+      return Promise.resolve(ackFor(params));
+    });
+    providerState.refreshProviderSnapshot.mockImplementationOnce(() => {
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-1',
+        sessionKey: 'agent:main:main',
+        message: { role: 'assistant', id: 'a-cloud', stopReason: 'stop', content: [{ type: 'text', text: 'cloud recovered after pin' }] },
+      });
+      return Promise.resolve();
+    });
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    const newerPin = { sessionKey: 'agent:main:main', channel: 'on-device' as const };
+    store.setState({ runtimeChannelPin: newerPin });
+    releaseClear(ackFor({ key: 'agent:main:main', model: null }));
+    await settle();
+
+    expect(patchCalls()).toEqual([
+      { key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' },
+      { key: 'agent:main:main', model: null },
+    ]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toBe(newerPin);
+    expect(store.getState().degradeNotice).toBeNull();
+  });
+
+  it('keeps the stale on-device pin visible when the cleanup clear fails', async () => {
+    const store = await loadStore();
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/settings/degradeChannel'
+      ? Promise.resolve({
+        success: true,
+        modelRef: 'ollama/qwen2.5:3b-instruct',
+        accountId: 'ollama-local',
+      })
+      : Promise.resolve({ success: true })));
+    let patchCount = 0;
+    gatewayRpcMock.mockImplementation((method: string, params: unknown) => {
+      if (method !== 'sessions.patch') return Promise.resolve(undefined);
+      patchCount += 1;
+      if (patchCount === 2) throw new Error('RPC timeout: sessions.patch');
+      return Promise.resolve(ackFor(params));
+    });
+    providerState.refreshProviderSnapshot.mockImplementationOnce(() => {
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-1',
+        sessionKey: 'agent:main:main',
+        message: { role: 'assistant', id: 'a-cloud', stopReason: 'stop', content: [{ type: 'text', text: 'cloud recovered after pin' }] },
+      });
+      return Promise.resolve();
+    });
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(patchCalls()).toEqual([
+      { key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' },
+      { key: 'agent:main:main', model: null },
+    ]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toEqual({ sessionKey: 'agent:main:main', channel: 'on-device' });
+    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: false, to: 'on-device' });
+  });
+
+  it('keeps the stale on-device pin visible when the cleanup clear ack still has an override', async () => {
+    const store = await loadStore();
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/settings/degradeChannel'
+      ? Promise.resolve({
+        success: true,
+        modelRef: 'ollama/qwen2.5:3b-instruct',
+        accountId: 'ollama-local',
+      })
+      : Promise.resolve({ success: true })));
+    let patchCount = 0;
+    gatewayRpcMock.mockImplementation((method: string, params: unknown) => {
+      if (method !== 'sessions.patch') return Promise.resolve(undefined);
+      patchCount += 1;
+      if (patchCount === 2) {
+        return Promise.resolve({
+          ok: true,
+          key: 'agent:main:main',
+          entry: {
+            key: 'agent:main:main',
+            modelOverride: 'ollama/qwen2.5:3b-instruct',
+            providerOverride: 'ollama',
+          },
+          resolved: { modelProvider: 'ollama', model: 'qwen2.5:3b-instruct' },
+        });
+      }
+      return Promise.resolve(ackFor(params));
+    });
+    providerState.refreshProviderSnapshot.mockImplementationOnce(() => {
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-1',
+        sessionKey: 'agent:main:main',
+        message: { role: 'assistant', id: 'a-cloud', stopReason: 'stop', content: [{ type: 'text', text: 'cloud recovered after pin' }] },
+      });
+      return Promise.resolve();
+    });
+
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(patchCalls()).toEqual([
+      { key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' },
+      { key: 'agent:main:main', model: null },
+    ]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toEqual({ sessionKey: 'agent:main:main', channel: 'on-device' });
+    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: false, to: 'on-device' });
+  });
+
   it('never leaves the progress notice spinning when the host API never answers', async () => {
     // The notice is deliberately not dismissible while it claims to be working,
     // and the host-API transport has no timeout of its own, so an unbounded wait
@@ -645,6 +1092,7 @@ describe('chat store: send-time channel degradation', () => {
   it('pins the session even when the turn is NOT replayed (tools already ran)', async () => {
     // The principal's own retry must land on-device too, so the cutover is not
     // conditional on the replay.
+    providerState.accounts = [...ONLINE_DEFAULT];
     const store = await loadStore();
     store.setState({
       streamingTools: [{ name: 'outlook.read_inbox', status: 'completed', updatedAt: Date.now() }],
@@ -656,6 +1104,28 @@ describe('chat store: send-time channel degradation', () => {
     expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' }]);
     expect(gatewayRpcMock.mock.calls.map((c) => c[0])).not.toContain('chat.send');
     expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: false, to: 'on-device' });
+
+    gatewayRpcMock.mockImplementation((method: string, params: unknown) => {
+      if (method === 'sessions.patch') return Promise.resolve(ackFor(params));
+      if (method === 'chat.send') return Promise.resolve({ runId: 'run-retry' });
+      return Promise.resolve(undefined);
+    });
+    await store.getState().sendMessage('manual retry');
+
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' }]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).toContain('chat.send');
+
+    store.getState().handleChatEvent({
+      state: 'error',
+      runId: 'run-retry',
+      sessionKey: 'agent:main:main',
+      errorMessage: 'fetch failed',
+    });
+    await settle();
+
+    expect(degradeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' }]);
+    expect(store.getState().degradeNotice).toEqual({ reason: 'unreachable', resent: false, to: 'online' });
   });
 
   it('clears the session pin when the principal picks a channel explicitly', async () => {
@@ -691,6 +1161,30 @@ describe('chat store: send-time channel degradation', () => {
 
     // One reconcile for the session, not one per send.
     expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+  });
+
+  it('marks pre-send stale-pin recovery pending while the reconcile clear is in flight', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    let releaseClear: (value: unknown) => void = () => {};
+    gatewayRpcMock.mockImplementation((method: string, params: unknown) => {
+      if (method === 'sessions.patch') {
+        return new Promise((resolve) => { releaseClear = () => resolve(ackFor(params)); });
+      }
+      if (method === 'chat.send') return Promise.resolve({ runId: 'run-after-reconcile' });
+      return Promise.resolve(undefined);
+    });
+    const store = await loadStore();
+
+    const send = store.getState().sendMessage('first turn after restart');
+    await settle();
+
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+    expect(store.getState().pendingChannelRecoveryBySession['agent:main:main']).toBe(1);
+
+    releaseClear(ackFor({ key: 'agent:main:main', model: null }));
+    await send;
+
+    expect(store.getState().pendingChannelRecoveryBySession['agent:main:main']).toBeUndefined();
   });
 
   it('does NOT let the pre-send reconcile undo the pin the degrade just installed', async () => {
@@ -790,7 +1284,7 @@ describe('chat store: send-time channel degradation', () => {
       if (method !== 'sessions.patch') return undefined;
       patches += 1;
       if (patches === 1) throw new Error('RPC timeout: sessions.patch');
-      return { ok: true };
+      return ackFor({ key: 'agent:main:main', model: null });
     });
     const store = await loadStore();
 
@@ -866,6 +1360,8 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
     settingsState.preferredChannel = 'online';
     settingsState.setPreferredChannel.mockReset();
     providerState.accounts = [...BOTH_CHANNELS];
+    providerState.refreshProviderSnapshot.mockReset();
+    providerState.refreshProviderSnapshot.mockResolvedValue(undefined);
   });
 
   const ERRORED_HISTORY = {
@@ -969,6 +1465,25 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
     // stale notice is gone so nothing suppresses it.
     expect(store.getState().error).toBe('Connection error.');
     expect(store.getState().runError).toBeNull();
+    expect(store.getState().degradeNotice).toBeNull();
+  });
+
+  it('clears a stale success-claiming notice when history discovers a terminal local error', async () => {
+    const store = await loadStore();
+    providerState.accounts = [BOTH_CHANNELS[0]];
+    store.setState({
+      lastUserMessageAt: Date.now(),
+      runError: null,
+      degradeNotice: { reason: 'unreachable', resent: true, to: 'on-device' } as never,
+      degradedThisTurn: true,
+    });
+    mockHistory(ERRORED_HISTORY);
+
+    await store.getState().loadHistory(true);
+    await settle();
+
+    expect(degradeCalls().length).toBe(0);
+    expect(store.getState().runError).toContain('network connection error');
     expect(store.getState().degradeNotice).toBeNull();
   });
 

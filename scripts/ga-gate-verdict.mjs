@@ -17,6 +17,34 @@
  * Pinned by tests/unit/ga-gate-verdict.test.ts.
  */
 
+export const RELEASE_REQUIRED_CRITERIA = [
+  { id: 'release-artifact-provenance', label: 'Clean build source and artifact identity' },
+  { id: 't0-typecheck', label: 'T0 TypeScript typecheck' },
+  { id: 't0-lint', label: 'T0 ESLint check' },
+  { id: 't0-pwsh-lint', label: 'T0 PowerShell lint check' },
+  { id: 't0-agent-model-pins', label: 'T0 agent model pin check' },
+  { id: 't0-unit-suite', label: 'T0 unit suite' },
+  { id: 't0-bundle-verify', label: 'T0 OpenClaw bundle verification' },
+  { id: 't0-doc-tooling-harness', label: 'T0 doc tooling harness' },
+  { id: 'renderer-e2e', label: 'Renderer E2E proof' },
+  { id: 't1-outlook-eval', label: 'T1 Outlook eval' },
+  { id: 't1-stale-read', label: 'T1 stale-read guard' },
+  { id: 't1-compose-recovery', label: 'T1 compose auto-recovery guard' },
+  { id: 't1-forms-suspensions', label: 'T1 Forms Suspensions dry gate' },
+  { id: 't1-forms-daily-report', label: 'T1 Forms Daily Report dry gate' },
+  { id: 't1-send-proof', label: 'T1 reviewed send proof' },
+  { id: 't1-nscc-qna', label: 'T1 NSCC Q&A eval' },
+  { id: 't2-installed-windows-app', label: 'T2 installed Windows app proof' },
+];
+
+const PASSING_STATUS = 'PASS';
+
+function criteriaOf(row) {
+  if (Array.isArray(row.criteria)) return row.criteria;
+  if (row.criterion) return [row.criterion];
+  return [];
+}
+
 /**
  * Classify one check row from its EXIT CODE, never from a substring of its output.
  *
@@ -76,8 +104,12 @@ export function surfacesOf(r) {
  * net. T2 is optional by design (the V-batch owns those surfaces) and its tunnel is
  * down in the normal case, so qualifying every default run on T2 would be warning
  * fatigue rather than signal — those surface separately as `blockedOptional`.
+ *
+ * In normal non-static mode, a blocked T1 row is exit-nonzero. That includes the
+ * partial-coverage shape, such as GA_GATE_SEND=1 with no open Outlook tab: other
+ * Email rows may have executed, but the operator-requested required proof did not.
  */
-export function scorecard(rows, { staticOnly = false } = {}) {
+export function scorecard(rows, { staticOnly = false, release = false } = {}) {
   const fails = rows.filter((r) => r.status === 'FAIL' && !r.optional);
   const skips = rows.filter((r) => r.status === 'SKIP');
   const passes = rows.filter((r) => r.status === 'PASS');
@@ -87,16 +119,57 @@ export function scorecard(rows, { staticOnly = false } = {}) {
     rows.filter((r) => r.status === 'PASS' || r.status === 'FAIL').flatMap(surfacesOf),
   );
   const unproven = [...new Set(blockedRequired.flatMap(surfacesOf))].filter((s) => !executedSurfaces.has(s));
-  const partial = fails.length === 0 && unproven.length > 0;
-  const qualifier = partial
+  const requiredCoverageMissing = blockedRequired.length > 0;
+  const partial = fails.length === 0 && requiredCoverageMissing;
+  const qualifier = partial && unproven.length > 0
     ? ` — ${unproven.join(' + ')}: NOT TESTED this run. ${blockedRequired.length} required check(s) were BLOCKED and never executed (${blockedRequired.map((r) => r.id).join('; ')}). Nothing failed, and nothing about ${unproven.join('/')} was proven.`
     : fails.length === 0 && blockedRequired.length > 0
       ? ` — partial coverage: ${blockedRequired.length} required check(s) were BLOCKED (${blockedRequired.map((r) => r.id).join('; ')}), but other rows on the same surface(s) DID execute, so this is a hole inside a proven surface, not an untested surface.`
       : '';
-  const headline = fails.length > 0
+  const releaseBlockers = [];
+  if (release && staticOnly) {
+    releaseBlockers.push({
+      criterion: 'release-mode',
+      label: 'Release acceptance mode',
+      status: 'STATIC_ONLY',
+      rows: [],
+      reason: 'GA_GATE_STATIC=1 is a development health check and cannot satisfy release acceptance.',
+    });
+  }
+  if (release) {
+    for (const criterion of RELEASE_REQUIRED_CRITERIA) {
+      const criterionRows = rows.filter((row) => criteriaOf(row).includes(criterion.id));
+      if (criterionRows.length === 0) {
+        releaseBlockers.push({
+          criterion: criterion.id,
+          label: criterion.label,
+          status: 'ABSENT',
+          rows: [],
+          reason: `${criterion.label} is absent from this run.`,
+        });
+        continue;
+      }
+      const badRows = criterionRows.filter((row) => row.status !== PASSING_STATUS);
+      if (badRows.length > 0) {
+        const statuses = [...new Set(badRows.map((row) => String(row.status ?? 'NOT_RUN')))];
+        releaseBlockers.push({
+          criterion: criterion.id,
+          label: criterion.label,
+          status: statuses.join(','),
+          rows: badRows,
+          reason: `${criterion.label} has non-passing required row(s): ${badRows.map((row) => `${row.id}=${row.status ?? 'NOT_RUN'}`).join('; ')}.`,
+        });
+      }
+    }
+  }
+  const releaseFailed = releaseBlockers.length > 0;
+  const headline = fails.length > 0 || releaseFailed
     ? 'RED'
-    : partial
+    : requiredCoverageMissing
       ? 'INCOMPLETE (nothing failed, required coverage missing)'
       : 'GREEN';
-  return { headline, qualifier, unproven, partial, fails, skips, passes, blockedRequired, blockedOptional };
+  const exitCode = release
+    ? (fails.length === 0 && !releaseFailed ? 0 : 1)
+    : (fails.length === 0 && !requiredCoverageMissing ? 0 : 1);
+  return { headline, qualifier, unproven, partial, fails, skips, passes, blockedRequired, blockedOptional, release, releaseFailed, releaseBlockers, exitCode };
 }

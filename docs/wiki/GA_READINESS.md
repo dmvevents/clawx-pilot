@@ -1,5 +1,7 @@
 # GA readiness scorecard — the single GO/NO-GO document
 
+> Dated readiness evidence. Current contract and release assessment: [PROJECT_CONTRACT](../PROJECT_CONTRACT.md) and [COMPLETION_PLAN](../COMPLETION_PLAN.md). Checked boxes below retain their dated scope and do not override current failures or missing installed proof.
+
 _Last updated: 2026-09-01, HEAD `f99f2c1f`. This is the consolidation the other
 docs feed: gap → feedback → test → mitigation → evaluation criterion, in one
 place. When every row in §4 is checked, we are at GA. Sources: `GA_EXECUTION_PLAN`

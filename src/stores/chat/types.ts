@@ -188,6 +188,12 @@ export interface ChatState {
    * and dismissing the explanation must not restore the lie.
    */
   runtimeChannelPin: { sessionKey: string; channel: 'online' | 'on-device' } | null;
+  /**
+   * Background session-pin recovery operations currently clearing stale
+   * session model overrides. Counted per session so overlapping clears cannot
+   * hide a newer operation when an older one finishes.
+   */
+  pendingChannelRecoveryBySession: Record<string, number>;
 
   // Sessions
   sessions: ChatSession[];

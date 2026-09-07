@@ -15,6 +15,7 @@
  * Usage:
  *   node pilot-chat-turn-driver.js --prompt "..." [--port 9223]
  *     [--turn-timeout 180] [--composer-timeout 180]
+ *     [--terminal-quiet 30] [--expected-channel online|on-device]
  *     [--outdir C:\path\to\evidence] [--new-session]
  *
  * Exit codes: 0 = ANSWERED, 41 = ANSWERED_WITH_RUN_ERROR (answered, but the
@@ -36,18 +37,37 @@ const os = require('node:os');
 const path = require('node:path');
 
 function parseArgs(argv) {
-  const args = { port: 9223, turnTimeout: 180, composerTimeout: 180, outdir: process.cwd(), prompt: '', newSession: false };
+  const args = {
+    port: 9223,
+    turnTimeout: 180,
+    composerTimeout: 180,
+    terminalQuiet: 30,
+    expectedChannel: '',
+    outdir: process.cwd(),
+    prompt: '',
+    newSession: false,
+  };
   for (let i = 2; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === '--prompt') args.prompt = String(argv[++i] ?? '');
     else if (a === '--port') args.port = Number(argv[++i]);
     else if (a === '--turn-timeout') args.turnTimeout = Number(argv[++i]);
     else if (a === '--composer-timeout') args.composerTimeout = Number(argv[++i]);
+    else if (a === '--terminal-quiet') args.terminalQuiet = Number(argv[++i]);
+    else if (a === '--expected-channel') args.expectedChannel = String(argv[++i] ?? '').trim().toLowerCase();
     else if (a === '--outdir') args.outdir = String(argv[++i] ?? process.cwd());
     else if (a === '--new-session') args.newSession = true;
   }
   if (!args.prompt) {
     console.error('FATAL: --prompt is required');
+    process.exit(2);
+  }
+  if (args.expectedChannel && !['online', 'on-device'].includes(args.expectedChannel)) {
+    console.error('FATAL: --expected-channel must be online or on-device');
+    process.exit(2);
+  }
+  if (!Number.isFinite(args.terminalQuiet) || args.terminalQuiet < 0) {
+    console.error('FATAL: --terminal-quiet must be a non-negative number');
     process.exit(2);
   }
   return args;
@@ -103,7 +123,10 @@ const SEL = {
   runError: '[data-testid="chat-run-error"]',
   newChat: '[data-testid="sidebar-new-chat"]',
   executionStep: '[data-testid="chat-execution-step"]',
+  executionGraph: '[data-testid="chat-execution-graph"]',
   errorChip: '[data-testid="chat-message-error-chip"]',
+  channel: '[data-testid="chat-composer-channel"]',
+  page: '[data-testid="chat-page"]',
 };
 
 async function findChatPage(browser) {
@@ -126,6 +149,11 @@ function normalize(text) {
 function truncate(text, max) {
   const value = normalize(text);
   return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+function trimObservations(observations, max = 40) {
+  if (!Array.isArray(observations) || observations.length <= max) return observations;
+  return observations.slice(observations.length - max);
 }
 
 /**
@@ -155,8 +183,53 @@ function classifyTurnText({ text, promptNormalized, chipText }) {
   };
 }
 
+function terminalBlockersFor(surface, expectedChannel = '') {
+  const blockers = [];
+  const channel = normalize(surface?.channel).toLowerCase();
+  const want = normalize(expectedChannel).toLowerCase();
+  const requiredSignals = [
+    ['sending', 'MISSING_TERMINAL_SIGNAL_SENDING'],
+    ['pendingFinal', 'MISSING_TERMINAL_SIGNAL_PENDING_FINAL'],
+    ['activeRunIdPresent', 'MISSING_TERMINAL_SIGNAL_ACTIVE_RUN'],
+    ['degradeInProgress', 'MISSING_TERMINAL_SIGNAL_DEGRADE_IN_PROGRESS'],
+    ['activeExecutionGraph', 'MISSING_TERMINAL_SIGNAL_ACTIVE_GRAPH'],
+    ['runErrorSeen', 'MISSING_TERMINAL_SIGNAL_RUN_ERROR'],
+    ['errorChipSeen', 'MISSING_TERMINAL_SIGNAL_ERROR_CHIP'],
+  ];
+
+  if (!surface?.rootPresent) blockers.push('MISSING_TERMINAL_STATE_ROOT');
+  for (const [field, blocker] of requiredSignals) {
+    if (surface?.[field] !== true && surface?.[field] !== false) blockers.push(blocker);
+  }
+
+  if (want && !channel) {
+    blockers.push('MISSING_CHANNEL_STATE');
+  } else if (want && channel !== want) {
+    blockers.push(`UNEXPECTED_CHANNEL_${channel.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`);
+  }
+  if (want === 'online' && surface?.degradeNoticeSeen) {
+    blockers.push('UNEXPECTED_DEGRADE_TO_ON_DEVICE');
+  }
+  if (surface?.degradeInProgress) blockers.push('DEGRADE_IN_PROGRESS');
+  if (surface?.sending) blockers.push('SEND_STILL_IN_PROGRESS');
+  if (surface?.pendingFinal) blockers.push('PENDING_TOOL_FINAL');
+  if (surface?.activeRunIdPresent) blockers.push('ACTIVE_RUN_STILL_PRESENT');
+  if (surface?.activeExecutionGraph) blockers.push('EXECUTION_GRAPH_STILL_ACTIVE');
+  if (surface?.runErrorSeen) blockers.push('RUN_ERROR_VISIBLE');
+  if (surface?.errorChipSeen) blockers.push('ERROR_CHIP_VISIBLE');
+  return blockers;
+}
+
 /** The verdict for a completed observation. Pure; mirrors main()'s ladder. */
 function verdictFor(result) {
+  if (Array.isArray(result.terminalBlockers) && result.terminalBlockers.length > 0) {
+    if (result.terminalBlockers.includes('UNEXPECTED_DEGRADE_TO_ON_DEVICE')) return 'FAILED_UNEXPECTED_DEGRADE';
+    if (result.terminalBlockers.some((item) => String(item).startsWith('UNEXPECTED_CHANNEL_'))) {
+      return 'FAILED_UNEXPECTED_CHANNEL';
+    }
+    return 'TIMED_OUT_MID_TURN';
+  }
+  if (result.settled && result.terminalStable === false) return 'TIMED_OUT_MID_TURN';
   if (result.settled) return result.runErrorSeen ? 'ANSWERED_WITH_RUN_ERROR' : 'ANSWERED';
   if (result.errorChipOnly) return 'FAILED_ERROR_CHIP_ONLY';
   if (result.assistantPromptEcho) return 'ASSISTANT_EMPTY_SILENCE_ON_SEND';
@@ -174,6 +247,110 @@ function exitCodeFor(verdict) {
   return 40;
 }
 
+async function captureTerminalSurface(page) {
+  return page.evaluate(({ selectors }) => {
+    const textOf = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
+    const readBool = (value) => {
+      if (value === 'true') return true;
+      if (value === 'false') return false;
+      return null;
+    };
+    const root = document.querySelector(selectors.page);
+    const channel = document.querySelector(selectors.channel);
+    const degrade = document.querySelector(selectors.degrade);
+    const composer = document.querySelector(selectors.composer);
+    const runError = document.querySelector(selectors.runError);
+    const errorChip = document.querySelector(selectors.errorChip);
+    const messages = Array.from(document.querySelectorAll(selectors.message)).map((el) => textOf(el));
+    const runErrorState = root ? readBool(root.getAttribute('data-run-error-present')) : null;
+
+    return {
+      at: new Date().toISOString(),
+      rootPresent: Boolean(root),
+      channel: channel?.getAttribute('data-channel') || textOf(channel) || null,
+      composerEnabled: composer ? !composer.disabled : null,
+      sending: root ? readBool(root.getAttribute('data-sending')) : null,
+      pendingFinal: root ? readBool(root.getAttribute('data-pending-final')) : null,
+      activeRunIdPresent: root ? readBool(root.getAttribute('data-active-run-id-present')) : null,
+      activeExecutionGraph: root ? readBool(root.getAttribute('data-active-execution-graph')) : null,
+      degradeInProgress: root ? readBool(root.getAttribute('data-degrade-in-progress')) : null,
+      runErrorSeen: runErrorState === true || (runErrorState === false ? false : Boolean(runError)),
+      errorChipSeen: Boolean(errorChip),
+      errorPresent: root ? readBool(root.getAttribute('data-error-present')) : null,
+      degradeNoticeSeen: Boolean(degrade),
+      degradeNoticeInProgressAttr: degrade ? degrade.getAttribute('data-in-progress') === 'true' : false,
+      degradeNoticeText: degrade ? textOf(degrade).slice(0, 300) : null,
+      runErrorText: runError ? textOf(runError).slice(0, 300) : null,
+      errorChipText: errorChip ? textOf(errorChip).slice(0, 300) : null,
+      messageCount: messages.length,
+      lastMessageText: messages.length ? messages[messages.length - 1].slice(0, 800) : '',
+    };
+  }, { selectors: SEL });
+}
+
+async function waitForTerminalAcceptance(page, args, answerText) {
+  const quietMs = args.terminalQuiet * 1000;
+  const deadline = Date.now() + Math.max(quietMs + 10_000, 10_000);
+  const startedAt = new Date().toISOString();
+  const observations = [];
+  let stableSince = 0;
+  let lastSignature = '';
+  let finalBlockers = [];
+
+  while (Date.now() <= deadline) {
+    const surface = await captureTerminalSurface(page).catch((error) => ({
+      at: new Date().toISOString(),
+      captureError: error instanceof Error ? error.message : String(error),
+    }));
+    const blockers = terminalBlockersFor(surface, args.expectedChannel);
+    finalBlockers = blockers;
+    observations.push({ ...surface, blockers });
+
+    const latestText = normalize(surface.lastMessageText || '');
+    const expectedText = normalize(answerText || '');
+    const answerStillLatest = !expectedText || latestText === expectedText || latestText.includes(expectedText);
+    const signature = JSON.stringify({
+      messageCount: surface.messageCount,
+      lastMessageText: latestText,
+      channel: surface.channel,
+      blockers,
+    });
+
+    if (blockers.length === 0 && answerStillLatest) {
+      if (signature === lastSignature) {
+        if (stableSince === 0) stableSince = Date.now();
+      } else {
+        stableSince = Date.now();
+        lastSignature = signature;
+      }
+      if (Date.now() - stableSince >= quietMs) {
+        return {
+          stable: true,
+          blockers: [],
+          finalSurface: surface,
+          observations: trimObservations(observations),
+          startedAt,
+          finishedAt: new Date().toISOString(),
+        };
+      }
+    } else {
+      stableSince = 0;
+      lastSignature = signature;
+    }
+
+    await page.waitForTimeout(2_000);
+  }
+
+  return {
+    stable: false,
+    blockers: finalBlockers,
+    finalSurface: observations[observations.length - 1] || null,
+    observations: trimObservations(observations),
+    startedAt,
+    finishedAt: new Date().toISOString(),
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   const { chromium } = resolvePlaywrightCore();
@@ -182,9 +359,13 @@ async function main() {
   const result = {
     prompt: args.prompt,
     startedAt: new Date().toISOString(),
+    sentAt: null,
+    candidateAnswerAt: null,
+    answerLatencyMs: null,
     cdpPort: args.port,
     appVersion: null,
     requestedNewSession: args.newSession,
+    expectedChannel: args.expectedChannel || null,
     freshSession: null,
     composerPlaceholder: null,
     messagesBefore: 0,
@@ -201,6 +382,13 @@ async function main() {
     runErrorText: null,
     answerText: null,
     settled: false,
+    terminalStable: null,
+    terminalBlockers: [],
+    terminalState: null,
+    terminalObservations: [],
+    terminalCheckStartedAt: null,
+    terminalCheckFinishedAt: null,
+    terminalCheckDurationMs: null,
     verdict: 'INCOMPLETE',
   };
 
@@ -256,6 +444,7 @@ async function main() {
     await page.locator(SEL.composer).click();
     await page.locator(SEL.composer).fill(args.prompt);
     await page.locator(SEL.send).click();
+    result.sentAt = new Date().toISOString();
 
     // The turn is settled when the message count has grown by >= 2 (user +
     // assistant) and the last message's text stops changing between polls.
@@ -298,6 +487,8 @@ async function main() {
           // 3 consecutive stable polls (~9s) of real content = streaming finished.
           if (Date.now() - stableSince >= 9_000) {
             result.settled = true;
+            result.candidateAnswerAt = new Date().toISOString();
+            result.answerLatencyMs = Date.parse(result.candidateAnswerAt) - Date.parse(result.sentAt);
             result.answerText = truncate(text, 800);
             break;
           }
@@ -311,6 +502,17 @@ async function main() {
     // (failed turn) as an answer.
     if (!result.settled && lastText && !result.assistantPromptEcho && !result.errorChipOnly) {
       result.answerText = truncate(lastText, 800);
+    }
+
+    if (result.settled) {
+      const terminal = await waitForTerminalAcceptance(page, args, lastText);
+      result.terminalStable = terminal.stable;
+      result.terminalBlockers = terminal.blockers;
+      result.terminalState = terminal.finalSurface;
+      result.terminalObservations = terminal.observations;
+      result.terminalCheckStartedAt = terminal.startedAt;
+      result.terminalCheckFinishedAt = terminal.finishedAt;
+      result.terminalCheckDurationMs = Date.parse(terminal.finishedAt) - Date.parse(terminal.startedAt);
     }
 
     // Tool-call evidence: the execution graph is the only renderer-visible
@@ -352,4 +554,12 @@ if (require.main === module) {
   });
 }
 
-module.exports = { classifyTurnText, verdictFor, exitCodeFor, normalize, SEL };
+module.exports = {
+  classifyTurnText,
+  terminalBlockersFor,
+  verdictFor,
+  exitCodeFor,
+  normalize,
+  SEL,
+  parseArgs,
+};

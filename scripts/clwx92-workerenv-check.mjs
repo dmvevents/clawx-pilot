@@ -12,6 +12,12 @@
  *
  * Run: node scripts/clwx92-workerenv-check.mjs
  */
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const CLWX92_PDF_FIXTURE = new URL('../eval/fixtures/clwx92-public-pdf-fixture.pdf', import.meta.url);
+const CLWX92_EXPECTED_TEXT = 'CLWX92_SYNTHETIC_PUBLIC_FIXTURE_TEXT';
+
 process.versions.electron = process.versions.electron || '35.0.0';
 try {
   Object.defineProperty(process, 'type', { value: 'utility', configurable: true });
@@ -28,7 +34,7 @@ if (process.env.CLWX92_BUNDLE_NM) {
   const { mkdtempSync, copyFileSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join, dirname } = await import('node:path');
-  const { pathToFileURL, fileURLToPath } = await import('node:url');
+  const { pathToFileURL } = await import('node:url');
   const dir = mkdtempSync(join(tmpdir(), 'clwx92-'));
   const dst = join(dir, 'doc-tools.mjs');
   copyFileSync(fileURLToPath(docToolsUrl), dst);
@@ -38,18 +44,20 @@ if (process.env.CLWX92_BUNDLE_NM) {
 }
 
 const { readPdf } = await import(docToolsUrl.href);
-const fixture = new URL(
-  '../skills/laptop/evidence/2026-08-20-raj-prompt-replay/fixtures/01_Ministry_Circular_ICT_Equipment_Audit.pdf',
-  import.meta.url,
-).pathname;
+const fixture = fileURLToPath(CLWX92_PDF_FIXTURE);
+
+if (!existsSync(fixture)) {
+  console.log(`CLWX92_VERIFY=FAIL missing public fixture: ${fixture}`);
+  process.exit(1);
+}
 
 try {
   const out = await readPdf({ path: fixture });
-  if (out.totalChars > 100 && out.pages >= 1) {
-    console.log(`CLWX92_VERIFY=PASS pages=${out.pages} chars=${out.totalChars} env=utility-fake`);
+  if (out.totalChars > 100 && out.pages >= 1 && String(out.text || '').includes(CLWX92_EXPECTED_TEXT)) {
+    console.log(`CLWX92_VERIFY=PASS pages=${out.pages} chars=${out.totalChars} marker=${CLWX92_EXPECTED_TEXT} env=utility-fake`);
     process.exit(0);
   }
-  console.log(`CLWX92_VERIFY=FAIL empty result: pages=${out.pages} chars=${out.totalChars}`);
+  console.log(`CLWX92_VERIFY=FAIL unexpected result: pages=${out.pages} chars=${out.totalChars} marker=${String(out.text || '').includes(CLWX92_EXPECTED_TEXT)}`);
   process.exit(1);
 } catch (err) {
   console.log(`CLWX92_VERIFY=FAIL error=${err instanceof Error ? err.message.split('\n')[0] : String(err)}`);

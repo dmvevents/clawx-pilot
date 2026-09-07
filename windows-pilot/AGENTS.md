@@ -1,5 +1,7 @@
 # Windows Pilot Guidance
 
+Start with the repo-root `docs/PROJECT_CONTRACT.md` and `docs/COMPLETION_PLAN.md`; `docs/CURRENT_WINDOWS_RC.md` identifies the candidate. Dated instructions below are historical/domain references and do not supersede the current contract.
+
 This directory contains demo-run scripts, plans, agent prompts, and skills for the Windows pilot laptop.
 
 Rules:

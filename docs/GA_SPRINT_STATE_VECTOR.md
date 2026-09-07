@@ -1,5 +1,7 @@
 # GA sprint — state vector, parallelization, and flight checks
 
+> Historical plan/evidence. Current execution order and readiness: [COMPLETION_PLAN.md](COMPLETION_PLAN.md); shared instructions: [PROJECT_CONTRACT.md](PROJECT_CONTRACT.md). Preserve dated entries below as evidence, not current startup instructions.
+
 _Authored 2026-09-02; **updated 2026-09-02 (second pass)** after KR1 full PASS,
 KR5 wiring, moe.13 build, and the VM-lane auth outage. The operating plan for
 driving the 8 KRs to GA with maximum parallelism and minimum re-debugging.

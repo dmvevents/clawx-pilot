@@ -29,6 +29,17 @@ describe('Windows package inspection contracts', () => {
     expect(pkg.scripts['prep:win-binaries']).toContain('pnpm run win-asr:build:x64');
   });
 
+  it('records build source, finalizes compiled output receipt, and keeps release packaging staged', () => {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { scripts: Record<string, string> };
+
+    expect(pkg.scripts.package).toMatch(/^node scripts\/release-build-source\.mjs record &&/);
+    expect(pkg.scripts.package).toContain('zx scripts/bundle-preinstalled-skills.mjs && node scripts/release-build-source.mjs receipt');
+    expect(pkg.scripts.build).toMatch(/^node scripts\/release-build-source\.mjs record &&/);
+    expect(pkg.scripts.build).toContain('zx scripts/bundle-preinstalled-skills.mjs && node scripts/release-build-source.mjs receipt && node scripts/run-electron-builder.mjs');
+    expect(pkg.scripts.release).toContain('node scripts/run-electron-builder.mjs --publish never');
+    expect(pkg.scripts.release).not.toContain('--publish always');
+  });
+
   it('manual Windows packaging validates cloud, Graph, and Azure seed files without printing keys', () => {
     const workflow = readFileSync(manualWindowsWorkflowPath, 'utf8');
 

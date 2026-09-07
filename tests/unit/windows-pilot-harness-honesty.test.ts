@@ -31,8 +31,13 @@ const driver = require('../../windows-pilot/scripts/pilot-chat-turn-driver.js') 
     isErrorChipOnly: boolean;
     acceptable: boolean;
   };
+  terminalBlockersFor: (surface: Record<string, unknown>, expectedChannel?: string) => string[];
   verdictFor: (result: Record<string, unknown>) => string;
   exitCodeFor: (verdict: string) => number;
+  parseArgs: (argv: string[]) => {
+    expectedChannel: string;
+    terminalQuiet: number;
+  };
   SEL: Record<string, string>;
 };
 const channel = require('../../windows-pilot/scripts/pilot-set-channel.js') as {
@@ -91,6 +96,157 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
     expect(driver.exitCodeFor(verdict)).not.toBe(0);
   });
 
+  it('fails a settled online turn when the UI already degraded to on-device', () => {
+    const blockers = driver.terminalBlockersFor({
+      rootPresent: true,
+      channel: 'on-device',
+      degradeNoticeSeen: true,
+      degradeInProgress: false,
+      sending: false,
+      pendingFinal: false,
+      activeRunIdPresent: false,
+      processingToolResults: false,
+      activeExecutionGraph: false,
+      runErrorSeen: false,
+      errorChipSeen: false,
+    }, 'online');
+
+    expect(blockers).toEqual([
+      'UNEXPECTED_CHANNEL_ON_DEVICE',
+      'UNEXPECTED_DEGRADE_TO_ON_DEVICE',
+    ]);
+    const verdict = driver.verdictFor({
+      settled: true,
+      runErrorSeen: false,
+      terminalStable: true,
+      terminalBlockers: blockers,
+    });
+    expect(verdict).toBe('FAILED_UNEXPECTED_DEGRADE');
+    expect(driver.exitCodeFor(verdict)).toBe(40);
+  });
+
+  it('does not accept stable answer text while resend/degrade surfaces are still active', () => {
+    const blockers = driver.terminalBlockersFor({
+      rootPresent: true,
+      channel: 'online',
+      degradeNoticeSeen: true,
+      degradeInProgress: true,
+      sending: true,
+      pendingFinal: true,
+      activeRunIdPresent: true,
+      activeExecutionGraph: true,
+      runErrorSeen: false,
+      errorChipSeen: false,
+    }, 'online');
+
+    expect(blockers).toEqual(expect.arrayContaining([
+      'UNEXPECTED_DEGRADE_TO_ON_DEVICE',
+      'DEGRADE_IN_PROGRESS',
+      'SEND_STILL_IN_PROGRESS',
+      'PENDING_TOOL_FINAL',
+      'ACTIVE_RUN_STILL_PRESENT',
+      'EXECUTION_GRAPH_STILL_ACTIVE',
+    ]));
+    expect(driver.verdictFor({
+      settled: true,
+      runErrorSeen: false,
+      terminalStable: false,
+      terminalBlockers: blockers,
+    })).toBe('FAILED_UNEXPECTED_DEGRADE');
+  });
+
+  it('blocks success when the exact terminal state attributes are missing', () => {
+    const blockers = driver.terminalBlockersFor({
+      channel: 'online',
+      degradeNoticeSeen: false,
+    }, 'online');
+
+    expect(blockers).toEqual(expect.arrayContaining([
+      'MISSING_TERMINAL_STATE_ROOT',
+      'MISSING_TERMINAL_SIGNAL_SENDING',
+      'MISSING_TERMINAL_SIGNAL_PENDING_FINAL',
+      'MISSING_TERMINAL_SIGNAL_ACTIVE_RUN',
+      'MISSING_TERMINAL_SIGNAL_DEGRADE_IN_PROGRESS',
+      'MISSING_TERMINAL_SIGNAL_ACTIVE_GRAPH',
+      'MISSING_TERMINAL_SIGNAL_RUN_ERROR',
+      'MISSING_TERMINAL_SIGNAL_ERROR_CHIP',
+    ]));
+    expect(driver.verdictFor({
+      settled: true,
+      runErrorSeen: false,
+      terminalStable: true,
+      terminalBlockers: blockers,
+    })).toBe('TIMED_OUT_MID_TURN');
+  });
+
+  it('rejects a later terminal run error or error chip even after stable answer text', () => {
+    const runErrorBlockers = driver.terminalBlockersFor({
+      rootPresent: true,
+      channel: 'online',
+      degradeNoticeSeen: false,
+      degradeInProgress: false,
+      sending: false,
+      pendingFinal: false,
+      activeRunIdPresent: false,
+      activeExecutionGraph: false,
+      runErrorSeen: true,
+      errorChipSeen: false,
+    }, 'online');
+    const chipBlockers = driver.terminalBlockersFor({
+      rootPresent: true,
+      channel: 'online',
+      degradeNoticeSeen: false,
+      degradeInProgress: false,
+      sending: false,
+      pendingFinal: false,
+      activeRunIdPresent: false,
+      activeExecutionGraph: false,
+      runErrorSeen: false,
+      errorChipSeen: true,
+    }, 'online');
+
+    expect(runErrorBlockers).toContain('RUN_ERROR_VISIBLE');
+    expect(chipBlockers).toContain('ERROR_CHIP_VISIBLE');
+    expect(driver.verdictFor({
+      settled: true,
+      terminalStable: false,
+      terminalBlockers: runErrorBlockers,
+    })).toBe('TIMED_OUT_MID_TURN');
+    expect(driver.verdictFor({
+      settled: true,
+      terminalStable: false,
+      terminalBlockers: chipBlockers,
+    })).toBe('TIMED_OUT_MID_TURN');
+  });
+
+  it('treats post-answer instability as a mid-turn timeout, not a clean answer', () => {
+    const verdict = driver.verdictFor({
+      settled: true,
+      runErrorSeen: false,
+      terminalStable: false,
+      terminalBlockers: [],
+    });
+
+    expect(verdict).toBe('TIMED_OUT_MID_TURN');
+    expect(driver.exitCodeFor(verdict)).toBe(40);
+  });
+
+  it('parses expected-channel and terminal quiet options for the VM wrapper', () => {
+    const args = driver.parseArgs([
+      'node',
+      'pilot-chat-turn-driver.js',
+      '--prompt',
+      'hello',
+      '--expected-channel',
+      'online',
+      '--terminal-quiet',
+      '12',
+    ]);
+
+    expect(args.expectedChannel).toBe('online');
+    expect(args.terminalQuiet).toBe(12);
+  });
+
   it('exits 0 only for a clean answer', () => {
     expect(driver.exitCodeFor('ANSWERED')).toBe(0);
     // Answered, but the principal also saw a red banner: distinct, non-zero.
@@ -101,6 +257,8 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
       'ASSISTANT_EMPTY_SILENCE_ON_SEND',
       'BLOCKED_COMPOSER_DISABLED',
       'FAILED_SESSION_NOT_FRESH',
+      'FAILED_UNEXPECTED_DEGRADE',
+      'FAILED_UNEXPECTED_CHANNEL',
       'INCOMPLETE',
     ]) {
       expect(driver.exitCodeFor(verdict)).toBe(40);

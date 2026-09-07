@@ -5,8 +5,9 @@ Resume the ClawX / Ministry Windows demo stabilization work from repo artifacts,
 Read first:
 
 - `CLAUDE.md`
-- `docs/NEXT_AGENT_WINDOWS_DEMO_HANDOFF_2026-05-29.md`
-- `docs/CLAUDE_CODE_RESUME_AND_TEAMS_GUIDE_2026-05-29.md`
+- `docs/PROJECT_CONTRACT.md`
+- `docs/COMPLETION_PLAN.md`
+- `docs/CURRENT_WINDOWS_RC.md`
 - `.claude/skills/windows-demo-resume/SKILL.md`
 - `.claude/skills/windows-runtime-recovery/SKILL.md`
 - `windows-pilot/README.md`

@@ -16,8 +16,9 @@ Load only the files needed for the task:
 - `CLAUDE.md`
 - `AGENTS.md`
 - `docs/AGENT_SKILL_INTEROPERABILITY.md`
-- `docs/GA_RELEASE_PLAN_2026-06-09.md`
-- `docs/NEXT_AGENT_WINDOWS_DEMO_HANDOFF_2026-05-29.md`
+- `docs/PROJECT_CONTRACT.md`
+- `docs/COMPLETION_PLAN.md`
+- `docs/CURRENT_WINDOWS_RC.md`
 - `windows-pilot/README.md`
 - `windows-pilot/AGENTS.md`
 

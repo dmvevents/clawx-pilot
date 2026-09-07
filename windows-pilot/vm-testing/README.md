@@ -1,36 +1,73 @@
-# Windows VM testing for the ClawX installer bug
+# Windows testing: access, environment and visible outcomes
 
-Goal: reproduce and fix "installer tries to install dependencies every time, doesn't work" on a fresh Windows machine, without needing physical access to the pilot laptop.
+Start with [the project contract](../../docs/PROJECT_CONTRACT.md), [completion plan](../../docs/COMPLETION_PLAN.md) and [current Windows candidate](../../docs/CURRENT_WINDOWS_RC.md). This is the current testing entrypoint. EC2 and sandbox bootstrap files in this folder are historical alternatives, not prerequisites for the GCP lane.
 
-## Recommendation for Anton (host = macOS)
+## Access to the existing GCP VM
 
-**EC2 Windows Server 2022 in us-east-2** (Ohio, same region as his existing box `3.139.145.129`).
+Target: `clawx-win-rc-20260609`, project `gen-lang-client-0649986230`, zone `us-central1-a`. The VM is Windows Server 2022 Datacenter, four virtual CPUs and approximately 16 GiB RAM. Its disk and user profiles persist across stops.
 
-Reason: Windows Sandbox requires a Windows Pro/Enterprise **host**. Anton's dev machine is a Mac, so Sandbox is off the table for the person doing the debugging. EC2 gives a persistent RDP desktop from the Mac plus the ability to snapshot a clean AMI and revert between installer runs — which is exactly the disposable-clean-slate need. Estimated cost ~$0.10/hr running, ~$0 stopped (EBS storage only).
+```sh
+export CLAWX_GCP_PROJECT=gen-lang-client-0649986230
+windows-pilot/vm-testing/gcp-iap-lane.sh probe
+# Start the existing test VM when authorized testing requires it:
+windows-pilot/vm-testing/gcp-iap-lane.sh start
+windows-pilot/vm-testing/gcp-iap-lane.sh tunnel
+```
 
-Secondary lane: **GitHub Actions `windows-latest`** for headless installer smoke once we suspect a fix — free, disposable, repeatable, and it already matches the runner used by `win-build-test.yml`.
+Default tunnels expose RDP at `localhost:13389` and SSH at `localhost:12222`. The probe creates temporary tunnels, so use free override ports when working tunnels already exist:
 
-Windows Sandbox `.wsb` is staged anyway so it's ready if we later hand the repro over to the pilot laptop (Windows 11 Pro) for a live walk-through.
+```sh
+CLAWX_RDP_PORT=25289 CLAWX_SSH_PORT=25222 CLAWX_CONTROL_PORT=25299 CLAWX_IAP_READY_TIMEOUT_SECONDS=45 windows-pilot/vm-testing/gcp-iap-lane.sh probe
+ssh -o BatchMode=yes -o ConnectTimeout=15 -p 12222 clawxtest@localhost 'echo CLAWX_VM_ACCESS_OK'
+```
 
-## What's staged
+An authenticated SSH marker proves guest command access. The probe separately requires an RDP protocol response, an SSH banner, and the IAP backend rejection for guest port `9999`. A local listening socket alone proves neither guest reachability nor login. Occupied selected ports, failed authentication/status queries, a stopped VM or an unproven control cause non-success. Select free local ports instead of killing unrelated tunnels.
 
-| File | Purpose |
-|---|---|
-| `install-clawx.wsb` | Windows Sandbox config — mounts host folder read-only, auto-runs installer with `/log`. Requires a Windows Pro/Enterprise host. |
-| `ec2-launch.sh` | EC2 `run-instances` command. **Do NOT execute** until Anton confirms keypair + SG. |
-| `sg-rdp.json` | Security group ingress rule template: TCP 3389 from Anton's `/32` only. |
-| `bootstrap-userdata.ps1` | EC2 user-data — pre-installs Chrome, 7zip, VS Redist, opens firewall for RDP. |
-| `../../.github/workflows/windows-installer-smoke.yml` | GH Actions headless installer test (accepts `installer_url` input). |
+Interactive GCP reauthentication requires the account holder's `gcloud auth login`. After authentication, recheck actual VM status. Keep the VM's egress configuration intact: IAP forwards inbound connections and does not supply outbound Internet access. VM shutdown remains subject to the current recorded owner hold; the script's `stop` command is not automatic authorization.
 
-## What is still needed from Anton
+## What this environment can prove
 
-1. The installer zip (the one currently being uploaded).
-2. Go-ahead + AWS keypair name to launch EC2 (the local `claude-code-local` IAM user cannot list keypairs; needs an admin-scoped token or a keypair name provided directly).
-3. Confirmation of Anton's current public IP for the RDP SG (`/32` lockdown). Detected right now: `2600:4040:b5a4:6f00:b434:fa41:5b89:646b` (IPv6 — for RDP SG we need his IPv4; will re-detect at launch time).
+| Acceptance environment | Required evidence | Limits |
+|---|---|---|
+| Existing Server 2022 VM | Exact installer/app hashes, environment snapshot, installed runtime and app journey | Report reused state, administrator membership, server graphics/audio and cloud network |
+| Fresh Windows 10/11 principal profile | Standard-user normal installer screens, desktop shortcut, first-run journey without developer dependencies | Server VM smoke cannot establish this result |
+| Existing-profile upgrade | State backup, controlled upgrade, preserved settings/history and successful next turn | An upgrade is not a clean-install test |
+| Physical audio and Microsoft account | Real microphone workflow and signed-in user Chrome/tenant checks | Bundled helper presence or a VM audio fixture does not prove microphone quality or sign-in |
 
-## How this fits together
+Identify Server-instance and laptop deployment coverage separately. `COLLECTED`, bridge readiness, file creation and `CAPTURE_ONLY_VERIFIED` are narrower than a successful user journey.
 
-- **First repro**: RDP into EC2 → drop zip → run `.exe /log log.txt` → grep log for the dependency-install loop.
-- **Fix iteration**: snapshot AMI once environment is "fresh Windows"; revert between runs so each install starts identical.
-- **Confirm fix**: push branch, run `windows-installer-smoke.yml` workflow → get log artifact back headless.
-- **Sign-off**: hand `.wsb` to Anton to run on the actual pilot laptop as a last sanity check before shipping.
+## Capture environment before changing it
+
+Copy canonical scripts from `windows-pilot/scripts/` into the test user's Downloads directory. Run the existing environment probe with a unique JSON destination:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\pilot-fresh-install-environment.ps1 -Mode Probe -JsonOutputPath "$env:USERPROFILE\Downloads\<run-id>\environment.json"
+```
+
+It records OS/build, CPU/RAM/disk, graphics/audio presence, token elevation and administrator membership, prior app/OpenClaw/Chrome state, installed app hash, ports, Chrome version and seed presence. It never exports seed contents, keys, account names, message bodies or Chrome command lines. Display metadata belongs to the **calling session**. SSH Session 0 can report 1024×768 while the actual interactive session is 1920×1080; collect another snapshot there and inspect a real desktop screenshot before claiming visual coverage. An active session alone does not prove an unlocked visible app.
+
+Back up both `%APPDATA%\Ministry of Education` and `%USERPROFILE%\.openclaw` before installation, restart or configuration repair. Record copy success and inventory counts. An absent state directory is an observation, not a clean-image attestation.
+
+## Installed app checks
+
+Use `pilot-check-install-artifacts.ps1`, `pilot-office-runtime-check.ps1`, `pilot-office-write-smoke.ps1`, and `pilot-run-electron-cdp-probe.ps1`. Launch the actual installed app in the interactive user session; the test launch may expose Electron CDP on loopback port `9223`. Run plain Electron/Host API inspection before model-driven journeys. A probe without `-SafeChat` can validate the bridge while Gateway is disconnected, so do not promote its verdict to chat readiness.
+
+`scripts/vm-verify-moe19.sh` collects the version-specific installed-smoke bundle and can start or stop a standalone Gateway. It still targets moe.19; do not run it against a later candidate or an active app without adapting the selected artifact and isolating its process lifecycle. Its silent installer phase is an automation diagnostic; normal assisted installer screens and desktop-shortcut launch need separate principal-facing proof. The [install runbook](../../docs/WINDOWS_INSTALL_RUNBOOK.md) retains historical commands: select the current candidate's exact filename/hash, never the newest file or a June version copied from an example.
+
+## Record and inspect an app journey
+
+Run `pilot-record-app-window.ps1` through an interactive scheduled task/RDP session, alongside the existing `pilot-chat-turn-driver.js`. Start with a realistic account-free prompt. For Online acceptance, pass `-ExpectedChannel online` to `pilot-run-chat-turn.ps1`. The driver requires exact send/run/recovery/error lifecycle signals from the current renderer; missing signals, unintended degradation or late errors fail. Answer latency and terminal verification time are reported separately. Corroborate model provenance and absence of replay from the private installed transcript; the channel pill alone cannot prove which provider answered. The driver does not authorize downstream email sends or form submissions. Keep clips and screenshots private under `artifacts/windows-vm/` or guest Downloads. Do not record unrelated windows or confidential tenant content for external grading.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\pilot-record-app-window.ps1 -WindowTitle 'Ministry of Education' -OutDir "$env:USERPROFILE\Downloads\<run-id>\recordings" -DurationSeconds 120 -FrameCount 10
+```
+
+Choose a duration that covers the complete turn and recovery observation; a 120-second clip that ends before the answer is partial evidence. The recorder requires the actual interactive app window and native legible dimensions; it does not upscale a small capture into proof. Run the observer with privileges that can inspect the app executable: a normal-privilege observer may correctly refuse an elevated app. Record that privilege context; an elevated capture is not standard-user acceptance. Without guest `ffprobe`, it records `HOST_VERIFY_REQUIRED`. Pull back the clip and guest manifest and verify using existing host tools:
+
+```sh
+node scripts/verify-app-window-recording.mjs --video <run>/app-window.mp4 --manifest <run>/manifest.json --out-dir <run>/host-verification --min-duration 118 --frame-count 10
+```
+
+The verifier checks guest hash binding, duration, dimensions and extracted frames. This establishes capture mechanics only. Inspect first, last and intermediate frames with the available vision model; `scripts/clwx-vlm-grade-screens.mjs` can grade approved non-sensitive frames through Bedrock. Check the interaction arc—click/type/send, visible work, correct result and artifact readback—against [the video acceptance criteria](../../docs/VIDEO_CAPTURE_OKR_2026-09-03.md). A frozen reconnecting screen is a recorded failure even when encoding succeeds. Sampled frames supplement continuous review; they cannot prove an error never appeared between samples.
+
+Record source/artifact identity, Windows environment, command, timestamps, outcome, video hash and missing coverage in [the evidence index](../../docs/GA_RELEASE_EVIDENCE_MANIFEST.md). Never report GA or deployment readiness from access, an unchecked video, or source tests.

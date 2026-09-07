@@ -238,6 +238,28 @@ describe('cloud-gateway-provider-seed', () => {
     expect(mocks.setSetting).not.toHaveBeenCalledWith('channelDefaultMigrated', expect.anything());
   });
 
+  it('can seed boot provider config without queueing a pre-start gateway refresh', async () => {
+    process.env.CLAWX_CLOUD_GATEWAY_BASE_URL = 'https://gateway.example.run.app';
+    process.env.CLAWX_CLOUD_GATEWAY_API_KEY = 'sk-clawx-client';
+    mocks.getSetting.mockImplementation(async (key: string) => (
+      key === 'preferredChannel' ? undefined : false
+    ));
+    const gateway = {} as never;
+
+    await seedCloudGatewayProvider(gateway, { skipGatewayRefresh: true });
+
+    expect(mocks.saveProviderAccount).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'moe-cloud-gateway',
+      baseUrl: 'https://gateway.example.run.app/v1',
+      model: 'moe-demo-pro',
+    }));
+    expect(mocks.storeApiKey).toHaveBeenCalledWith('moe-cloud-gateway', 'sk-clawx-client');
+    expect(mocks.setDefaultProviderAccount).toHaveBeenCalledWith('moe-cloud-gateway');
+    expect(mocks.syncSavedProviderToRuntime).toHaveBeenCalledWith(expect.any(Object), 'sk-clawx-client', undefined);
+    expect(mocks.syncDefaultProviderToRuntime).toHaveBeenCalledWith('moe-cloud-gateway', undefined);
+    expect(mocks.setSetting).toHaveBeenCalledWith('preferredChannel', 'online');
+  });
+
   it('can seed without taking default when explicitly configured that way', async () => {
     process.env.CLAWX_CLOUD_GATEWAY_BASE_URL = 'https://gateway.example.run.app';
     process.env.CLAWX_CLOUD_GATEWAY_API_KEY = 'sk-clawx-client';

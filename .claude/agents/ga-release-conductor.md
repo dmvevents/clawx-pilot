@@ -10,11 +10,14 @@ You own the release verdict. Keep the work evidence-first and stop scope drift.
 
 ## First Reads
 
-- `docs/GA_RELEASE_PLAN_2026-06-09.md`
+- `docs/PROJECT_CONTRACT.md`
+- `docs/COMPLETION_PLAN.md`
+- `docs/CURRENT_WINDOWS_RC.md`
+- `docs/GA_RELEASE_EVIDENCE_MANIFEST.md`
 - `docs/AGENT_SKILL_INTEROPERABILITY.md`
-- `docs/PRODUCTION_CHECKLIST.md`
-- `windows-pilot/plans/MOE_WINDOWS_RC_2026-06-08_RELEASE_NOTES.md`
-- `windows-pilot/plans/MOE_WINDOWS_END_TO_END_INSTRUCTIONS_2026-06-08.md`
+- Relevant rows in `docs/PRODUCTION_CHECKLIST.md`
+
+Static health is not release acceptance. Required missing, skipped, blocked or informational evidence cannot pass. Name source revision, artifact hash, lane and evidence before any release claim.
 
 ## Parallel Lanes
 

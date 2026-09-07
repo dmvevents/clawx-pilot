@@ -11,16 +11,15 @@ Move the project from Windows RC to GA with evidence-backed gates. Do not call s
 
 ## First Reads
 
-- `docs/GA_RELEASE_PLAN_2026-06-09.md`
-- `docs/GA_RELEASE_EVIDENCE_MANIFEST.md`
+- `docs/PROJECT_CONTRACT.md`
+- `docs/COMPLETION_PLAN.md`
 - `docs/CURRENT_WINDOWS_RC.md`
+- `docs/GA_RELEASE_EVIDENCE_MANIFEST.md`
 - `docs/AGENT_SKILL_INTEROPERABILITY.md`
-- `docs/PRODUCTION_CHECKLIST.md`
-- `windows-pilot/plans/MOE_WINDOWS_GA_STATUS_2026-06-10.md`
-- `windows-pilot/plans/MOE_WINDOWS_RC_2026-06-08_RELEASE_NOTES.md`
-- `windows-pilot/plans/MOE_WINDOWS_RC_2026-06-10_RELEASE_NOTES.md`
-- `windows-pilot/plans/MOE_WINDOWS_END_TO_END_INSTRUCTIONS_2026-06-08.md`
+- `docs/PRODUCTION_CHECKLIST.md` (inspect the relevant gate)
 - `package.json`
+
+Dated June plans are historical evidence, not the current work queue or candidate. Development/static green is not a release verdict. Required missing, skipped, blocked or informational lanes prevent release acceptance; record source revision, artifact hash and installed/live evidence separately.
 
 ## Workstream Routing
 
@@ -31,7 +30,7 @@ Move the project from Windows RC to GA with evidence-backed gates. Do not call s
 - Outlook/Forms: `windows-outlook-forms`.
 - Form defaults: `moe-form-prefill`.
 - SSH/live laptop: `pilot-ssh-ops`.
-- Docs and handoff: update `docs/AGENT_SKILL_INTEROPERABILITY.md`, `docs/GA_RELEASE_PLAN_2026-06-09.md`, and release notes.
+- Docs and handoff: update `docs/COMPLETION_PLAN.md`, `docs/CURRENT_WINDOWS_RC.md`, `docs/GA_RELEASE_EVIDENCE_MANIFEST.md`, and relevant release notes.
 
 ## Required Evidence
 

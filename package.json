@@ -1,7 +1,7 @@
 {
     "name": "clawx",
     "productName": "Ministry of Education",
-    "version": "0.4.3-moe.19",
+    "version": "0.4.3-moe.21",
     "pnpm": {
         "onlyBuiltDependencies": [
             "@discordjs/opus",
@@ -38,7 +38,7 @@
         "predev": "node scripts/generate-ext-bridge.mjs && zx scripts/prepare-preinstalled-skills-dev.mjs",
         "dev": "vite",
         "ext:bridge": "node scripts/generate-ext-bridge.mjs",
-        "build": "node scripts/generate-ext-bridge.mjs && pnpm run build:vite && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && node scripts/run-electron-builder.mjs",
+        "build": "node scripts/release-build-source.mjs record && node scripts/generate-ext-bridge.mjs && pnpm run build:vite && zx scripts/bundle-openclaw.mjs && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && node scripts/release-build-source.mjs receipt && node scripts/run-electron-builder.mjs",
         "build:vite": "node --max-old-space-size=6144 ./node_modules/vite/bin/vite.js build",
         "bundle:openclaw-plugins": "zx scripts/bundle-openclaw-plugins.mjs",
         "bundle:preinstalled-skills": "zx scripts/bundle-preinstalled-skills.mjs",
@@ -78,13 +78,13 @@
         "prep:win-binaries": "pnpm run uv:download:win && pnpm run node:download:win && pnpm run win-asr:build:x64",
         "icons": "zx scripts/generate-icons.mjs",
         "preflight": "pnpm run typecheck && pnpm run lint:check && pnpm run lint:ps && pnpm run doctor:agents && pnpm exec vitest run && pnpm run harness:doc-tooling-e2e",
-        "package": "node scripts/generate-ext-bridge.mjs && pnpm run build:vite && zx scripts/bundle-openclaw.mjs && node scripts/verify-openclaw-bundle.mjs && node scripts/harness-artifact.mjs --fast && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs",
+        "package": "node scripts/release-build-source.mjs record && node scripts/generate-ext-bridge.mjs && pnpm run build:vite && zx scripts/bundle-openclaw.mjs && node scripts/verify-openclaw-bundle.mjs && node scripts/harness-artifact.mjs --fast && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && node scripts/release-build-source.mjs receipt",
         "package:mac": "pnpm run preflight && pnpm run package && node scripts/run-electron-builder.mjs --mac --publish never",
         "package:mac:local": "SKIP_PREINSTALLED_SKILLS=1 pnpm run package && node scripts/run-electron-builder.mjs --mac --publish never",
         "package:win": "pnpm run preflight && pnpm run prep:win-binaries && pnpm run package && node scripts/run-electron-builder.mjs --win --publish never",
         "build:win": "pnpm run preflight && pnpm run prep:win-binaries && pnpm run package && node scripts/run-electron-builder.mjs --win nsis --x64 --publish never",
         "package:linux": "pnpm run package && node scripts/run-electron-builder.mjs --linux --publish never",
-        "release": "pnpm run uv:download && pnpm run package && node scripts/run-electron-builder.mjs --publish always",
+        "release": "pnpm run uv:download && pnpm run package && node scripts/run-electron-builder.mjs --publish never",
         "preversion": "node scripts/pre-version-fetch-tags.mjs",
         "version": "node scripts/assert-release-version.mjs",
         "version:patch": "pnpm version patch",
@@ -97,6 +97,7 @@
         "release:manifest": "node scripts/release-hash-manifest.mjs generate",
         "release:manifest:verify": "node scripts/release-hash-manifest.mjs verify",
         "release:manifest:publish": "node scripts/release-hash-manifest.mjs publish",
+        "release:evidence:check": "node scripts/release-evidence.mjs check",
         "postversion": "node scripts/post-version-push.mjs",
         "ga:gate": "node scripts/ga-gate.mjs"
     },

@@ -1,0 +1,77 @@
+{
+  "version": "0.4.3-moe.20",
+  "generatedAt": "2026-09-07T09:22:22.668Z",
+  "published": false,
+  "artifacts": [
+    {
+      "name": "Ministry of Education-0.4.3-moe.20-win-x64.exe",
+      "path": "Ministry of Education-0.4.3-moe.20-win-x64.exe",
+      "kind": "installer",
+      "sha256": "18a8ad0ab6fe7a4fca2dc0704912dc9a07305f1247c3060da2cd7ec14da946f6",
+      "bytes": 433625081,
+      "mtimeMs": 1788772939078.23,
+      "source": {
+        "schemaVersion": 1,
+        "gitCommit": "58d04eb0490d77271e67ff0c711e9d4ec011eef6",
+        "gitDirty": true,
+        "gitStatusHash": "3c06086e3ac0c0c1d27695dd9139add14cdc75033c30dcec9e7f33ba89da8ac1",
+        "builtAt": "2026-09-07T09:14:03.187Z",
+        "recordedAt": "2026-09-07T09:14:03.187Z"
+      }
+    },
+    {
+      "name": "win:app.asar",
+      "path": "win-unpacked/resources/app.asar",
+      "kind": "asar",
+      "asarVersion": "0.4.3-moe.20",
+      "sha256": "b0ff2022a30733b0c8d2b3cb816191c81d9a300da7f9f783ecafb037e8c05f6e",
+      "bytes": 252688695,
+      "mtimeMs": 1788772690276.0015,
+      "source": {
+        "schemaVersion": 1,
+        "gitCommit": "58d04eb0490d77271e67ff0c711e9d4ec011eef6",
+        "gitDirty": true,
+        "gitStatusHash": "3c06086e3ac0c0c1d27695dd9139add14cdc75033c30dcec9e7f33ba89da8ac1",
+        "builtAt": "2026-09-07T09:14:03.187Z",
+        "recordedAt": "2026-09-07T09:14:03.187Z"
+      }
+    },
+    {
+      "name": "win:extensions",
+      "path": "win-unpacked/resources/extensions",
+      "kind": "bundle-dir",
+      "sha256": "0365e549a8582d89fd1813196a84b784106df5d2a12672bfdf621f187ef2e563",
+      "fileCount": 29,
+      "mtimeMs": 1788772693785.3948,
+      "source": {
+        "schemaVersion": 1,
+        "gitCommit": "58d04eb0490d77271e67ff0c711e9d4ec011eef6",
+        "gitDirty": true,
+        "gitStatusHash": "3c06086e3ac0c0c1d27695dd9139add14cdc75033c30dcec9e7f33ba89da8ac1",
+        "builtAt": "2026-09-07T09:14:03.187Z",
+        "recordedAt": "2026-09-07T09:14:03.187Z"
+      }
+    },
+    {
+      "name": "win:openclaw-plugins",
+      "path": "win-unpacked/resources/openclaw-plugins",
+      "kind": "bundle-dir",
+      "sha256": "b3f380f4fbe6742959b020e98aa084f192843dd5d50683de0436bd2747600e66",
+      "fileCount": 4678,
+      "mtimeMs": 1788772714106.2053,
+      "source": {
+        "schemaVersion": 1,
+        "gitCommit": "58d04eb0490d77271e67ff0c711e9d4ec011eef6",
+        "gitDirty": true,
+        "gitStatusHash": "3c06086e3ac0c0c1d27695dd9139add14cdc75033c30dcec9e7f33ba89da8ac1",
+        "builtAt": "2026-09-07T09:14:03.187Z",
+        "recordedAt": "2026-09-07T09:14:03.187Z"
+      }
+    }
+  ],
+  "supersededBuilds": [],
+  "warnings": [
+    "mac-arm64/Ministry of Education.app/Contents/Resources/app.asar carries version 0.4.3-moe.10, not 0.4.3-moe.20 — tree skipped (stale build leftovers are never recorded under the wrong version)",
+    "mac/Ministry of Education.app/Contents/Resources/app.asar carries version 0.4.3-moe.10, not 0.4.3-moe.20 — tree skipped (stale build leftovers are never recorded under the wrong version)"
+  ]
+}

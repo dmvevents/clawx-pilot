@@ -336,12 +336,24 @@ export async function refreshCloudGatewayUserIdHeader(): Promise<void> {
   });
 }
 
+export interface CloudGatewaySeedOptions {
+  /**
+   * Boot convergence writes provider config before the Gateway starts. Passing
+   * the manager into sync here can queue a deferred Windows restart that fires
+   * immediately after startup, so boot callers suppress only that refresh while
+   * still registering the manager for later Graph UserId header refreshes.
+   */
+  skipGatewayRefresh?: boolean;
+}
+
 export async function seedCloudGatewayProvider(
   gatewayManager?: GatewayManager,
+  options?: CloudGatewaySeedOptions,
 ): Promise<CloudGatewaySeedResult> {
   if (gatewayManager) {
     refreshGatewayManager = gatewayManager;
   }
+  const syncGatewayManager = options?.skipGatewayRefresh === true ? undefined : gatewayManager;
   if (!SEED_CLOUD_GATEWAY_PROVIDER) {
     logger.info('[cloud-gateway-seed] SEED_CLOUD_GATEWAY_PROVIDER disabled — skipping');
     return { status: 'skipped', reason: 'disabled' };
@@ -396,11 +408,11 @@ export async function seedCloudGatewayProvider(
 
   await saveProviderAccount(account);
   await storeApiKey(account.id, seed.apiKey);
-  await syncSavedProviderToRuntime(providerAccountToConfig(account), seed.apiKey, gatewayManager);
+  await syncSavedProviderToRuntime(providerAccountToConfig(account), seed.apiKey, syncGatewayManager);
 
   if (shouldBecomeDefault) {
     await setDefaultProviderAccount(account.id);
-    await syncDefaultProviderToRuntime(account.id, gatewayManager);
+    await syncDefaultProviderToRuntime(account.id, syncGatewayManager);
   }
 
   if (seed.setPreferredChannel) {

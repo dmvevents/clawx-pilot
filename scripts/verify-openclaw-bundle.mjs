@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
+import { verifyOpenClawPricingCachePatch } from './openclaw-pricing-cache-patch.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BUNDLE_NM = path.join(ROOT, 'build', 'openclaw', 'node_modules');
@@ -38,6 +39,7 @@ const SHIP_TARGETS = [
 
 // Parsers whose load failure reaches the principal directly.
 const HOST_LOADABLE = ['pdf-parse', 'mammoth', 'docx', 'xlsx'];
+const CLWX92_PDF_FIXTURE = path.join(ROOT, 'eval', 'fixtures', 'clwx92-public-pdf-fixture.pdf');
 
 const failures = [];
 
@@ -81,15 +83,26 @@ for (const name of HOST_LOADABLE) {
   }
 }
 
-// 4. CLWX-92: PDF parsing must survive the Electron UtilityProcess
+// 4. CLWX-106: pricing refresh must not normalize every remote OpenRouter
+// row through provider plugins during startup. The bundle step patches the
+// pinned OpenClaw usage-format chunk, and verification fails closed if the
+// target drifted or the patch was omitted.
+try {
+  verifyOpenClawPricingCachePatch(path.join(ROOT, 'build', 'openclaw'));
+} catch (err) {
+  failures.push(`PRICING-CACHE: ${err instanceof Error ? err.message : String(err)}`);
+}
+
+// 5. CLWX-92: PDF parsing must survive the Electron UtilityProcess
 // environment shape (process.versions.electron + process.type='utility'
 // makes pdfjs demand GlobalWorkerOptions.workerSrc). Run the shipped
 // doc-tools against the BUNDLE's pdf-parse in a child process with the
 // faked env — this is the exact failure that reached the external tester
 // on moe.16 despite every presence check passing.
 {
-  const fixture = path.join(ROOT, 'skills/laptop/evidence/2026-08-20-raj-prompt-replay/fixtures/01_Ministry_Circular_ICT_Equipment_Audit.pdf');
-  if (fs.existsSync(fixture)) {
+  if (!fs.existsSync(CLWX92_PDF_FIXTURE)) {
+    failures.push(`UTILITY-ENV(pdf): public fixture missing at ${CLWX92_PDF_FIXTURE}`);
+  } else {
     const child = spawnSync(process.execPath, ['scripts/clwx92-workerenv-check.mjs'], {
       cwd: ROOT,
       encoding: 'utf8',
@@ -99,8 +112,6 @@ for (const name of HOST_LOADABLE) {
     if (child.status !== 0) {
       failures.push(`UTILITY-ENV(pdf): ${String(child.stdout + child.stderr).split('\n').filter(Boolean).pop() ?? 'check failed'}`);
     }
-  } else {
-    console.warn('  (utility-env pdf check skipped: fixture missing)');
   }
 }
 

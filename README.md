@@ -303,10 +303,16 @@ Chain multiple skills together to create sophisticated automation pipelines. Pro
 
 ## Development
 
+For this Ministry fork, start with the [shared project contract](docs/PROJECT_CONTRACT.md) and [completion plan](docs/COMPLETION_PLAN.md). `GA_GATE_STATIC=1 pnpm ga:gate` checks development health. Normal `pnpm ga:gate` exits nonzero for blocked required T1 checks, while unset dispatch opt-ins remain skipped; `GA_GATE_RELEASE=1 pnpm ga:gate` uses strict release scoring, where required missing, skipped or informational evidence fails. Set `GA_GATE_INSTALLED_EVIDENCE` to a Windows VM run directory to validate installed producer output; availability alone is insufficient. `pnpm release` stages artifacts. Before authorized publication, `pnpm release:evidence:check --report <bundle>/release-evidence.json --manifest <bundle>/manifest.json --dir <staged>` rechecks source, raw evidence and installer bytes. The initial publication profile supports one Windows x64 installer; see the completion plan for the evidence bundle contract. Live send checks remain explicit opt-in. Use the pnpm version pinned in `package.json`.
+
+Hosted Windows builds on a public repository must use `cloudGatewaySeedProfile=keyless-public`; this profile excludes cloud and speech credentials and requires post-install provisioning. Build the reviewed exact source commit. Publication checks reject evidence older than 24 hours, including old observations inside a newly generated report.
+
+Windows environment profiling, IAP access and app-window recording are documented in the [Windows testing guide](windows-pilot/vm-testing/README.md). Server VM smoke and principal-laptop acceptance have separate coverage requirements.
+
 ### Prerequisites
 
 - **Node.js**: 22+ (LTS recommended)
-- **Package Manager**: pnpm 9+ (recommended) or npm
+- **Package Manager**: pnpm, at the version pinned in `package.json`
 
 ### Project Structure
 

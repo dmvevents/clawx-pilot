@@ -1,5 +1,7 @@
 # ClawX GA plan — the path from today to General Availability
 
+> Historical plan/evidence. Current execution order and readiness: [COMPLETION_PLAN.md](COMPLETION_PLAN.md); shared instructions: [PROJECT_CONTRACT.md](PROJECT_CONTRACT.md). Preserve dated entries below as evidence, not current startup instructions.
+
 **Status: plan. Written 2026-08-27 against branch `fix/doc-tooling-steering`, HEAD `bde78d94`.**
 
 The source of truth for *what to work on* and *what "done" means* is the CLWX Plane

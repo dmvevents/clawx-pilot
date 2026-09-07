@@ -19,6 +19,7 @@
 import 'zx/globals';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
 import { patchExtensionOpenClawSelfImports } from './openclaw-self-import-patch.mjs';
+import { patchOpenClawPricingCache } from './openclaw-pricing-cache-patch.mjs';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
@@ -988,6 +989,9 @@ const openclawSelfImportPatch = patchExtensionOpenClawSelfImports(OUTPUT);
 if (openclawSelfImportPatch.specifiersPatched > 0) {
   echo`   🩹 Rewrote ${openclawSelfImportPatch.specifiersPatched} OpenClaw plugin-sdk self-import(s) in ${openclawSelfImportPatch.filesPatched} extension file(s)`;
 }
+
+const pricingPatch = patchOpenClawPricingCache(OUTPUT);
+echo`   🩹 OpenClaw pricing cache normalization: ${pricingPatch.patched ? 'patched' : 'already patched'}`;
 
 // 8. Verify the bundle
 const entryExists = fs.existsSync(path.join(OUTPUT, 'openclaw.mjs'));

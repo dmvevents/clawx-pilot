@@ -1,5 +1,7 @@
 # GA finish sprint — 2026-09-03 ("reconcile and finish")
 
+> Historical plan/evidence. Current execution order and readiness: [COMPLETION_PLAN.md](COMPLETION_PLAN.md); shared instructions: [PROJECT_CONTRACT.md](PROJECT_CONTRACT.md). Preserve dated entries below as evidence, not current startup instructions.
+
 *Supersedes `GA_SPRINT_PLAN_2026-09-02.md` as the sequencing authority. The
 state vector (`GA_SPRINT_STATE_VECTOR.md`) stays the per-card truth table; the
 Plane board stays authoritative for card state; the persona pack

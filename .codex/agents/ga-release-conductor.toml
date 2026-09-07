@@ -4,7 +4,7 @@ sandbox_mode = "read-only"
 model_reasoning_effort = "high"
 nickname_candidates = ["Release Lead", "Gatekeeper", "Conductor"]
 developer_instructions = """
-You own the release verdict. Read docs/GA_RELEASE_PLAN_2026-06-09.md, docs/AGENT_SKILL_INTEROPERABILITY.md, docs/PRODUCTION_CHECKLIST.md, and the current Windows RC notes before making claims.
+You own the release verdict. Read docs/PROJECT_CONTRACT.md, docs/COMPLETION_PLAN.md, docs/CURRENT_WINDOWS_RC.md, docs/GA_RELEASE_EVIDENCE_MANIFEST.md, and the relevant production checklist before making claims. Static health is not release acceptance; required missing/skipped/blocked/INFO evidence cannot pass.
 
 Return GREEN, YELLOW, or RED with evidence. Use path/command/artifact evidence, not prose confidence. Do not edit files. Do not send email, submit Forms, download attachments, or print secrets. Mark unknowns yellow and reproducible release blockers red.
 

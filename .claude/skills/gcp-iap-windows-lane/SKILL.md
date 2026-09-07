@@ -36,19 +36,14 @@ e2-standard-4, 100 GB. Override with `CLAWX_WINVM` / `CLAWX_WINVM_ZONE`.
 
 ## Hard rules
 
-**Always run the control leg.** `gcloud start-iap-tunnel` opens the local listener before
-it knows whether the guest port is live, so a lone `nc -z` success proves almost nothing.
-Probe a port that is *closed* on the guest (9999) in the same run. A lane that reports PASS
-for every port is worthless. Verified 2026-08-19: 9999 refused while 22 and 3389 succeeded
-— the differential is the evidence.
+**Always run the control leg.** Use the current `gcp-iap-lane.sh probe`: require real RDP protocol and SSH banner responses plus the IAP backend rejection for closed guest port 9999. A local `nc -z` success is only listener readiness. Perform an authenticated SSH marker separately. Use free override ports when working tunnels exist; the probe refuses occupied ports and cleans up only its own processes. See `windows-pilot/vm-testing/README.md` for current commands and environment fidelity requirements.
 
 **Never strip the VM's external IP.** There is no Cloud NAT in `us-central1` (the project's
 only NAT is `tt-eduplatform-nat` in `us-east1`). IAP is inbound only. Removing the external
 IP leaves the guest with zero egress, so it cannot download Chrome, OpenSSH, or installer
 dependencies — which is exactly what installer-dependency bugs need to exercise.
 
-**Stop the VM when done.** ~$0.13/hr while RUNNING, ~$0 stopped, disk retained. The June
-startup script also sets an 8-hour auto-shutdown as a backstop.
+**Respect the recorded VM lifecycle hold.** Starting the existing VM is part of authorized Windows testing when required. Do not stop it while the current owner shutdown hold applies. Report its final observed state; running incurs compute charges and stopped disks still incur storage charges.
 
 **Do not use the EC2 lane.** `windows-pilot/vm-testing/ec2-launch.sh` cannot work: the
 `claude-code-local` IAM user has no EC2 permissions (`ec2:DescribeInstances`,
@@ -67,12 +62,7 @@ Two of the longest stalls in this project's history were self-inflicted. Check t
 
 ## Version discipline
 
-`release/` holds up to `moe.10` (sha256
-`e35ee6cda63a942a585b0638831487562d66a0901b006cf2ccadfe81b0e6f182`, 390,068,457 bytes,
-built 2026-06-23). `package.json` is at `moe.11`. **Testing moe.10 tests June code**, not
-the current tree — it predates BUG-012 (`fc435c6b`) and the on-device tool trim
-(`7add864b`). Run `pnpm build:win` before claiming the current tree is validated, and
-record the installer sha256 in any evidence report.
+Read `docs/CURRENT_WINDOWS_RC.md` and the selected versioned manifest. Historical installer filenames/hashes in the August report are not current inputs. Hash the actual installer and installed app.asar. Testing an older or source-unknown artifact is useful regression evidence with that scope, never validation of the current working tree. Source-bound release acceptance requires the current build/provenance pipeline and measured installed evidence.
 
 ## Static IP guidance
 
