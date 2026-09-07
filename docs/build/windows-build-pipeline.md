@@ -145,7 +145,7 @@ The September 7 build lane exposed repeated friction from treating symptoms as i
 | `34115779033` | `7cfad9bd` | Failed native preflight before installer: 16 files failed, 92 tests failed. | CRLF/shebang and subprocess boundaries must be proven on native Windows. |
 | `34117459118` | `6c2834cb` | Failed native preflight before installer: 199 files and 1,982 tests passed, 11 skipped; two integration cases exceeded the default 5-second Vitest limit. | Keep assertions active, but give real cold/parser and controller-process tests bounded native budgets. |
 | `34121639939` | `fed34dcb` | Failed after preflight and frontend/Electron compilation: 201 files, 2,007 tests passed, 11 skipped; UtilityProcess PDF probe refused a checkout fixture outside parser home/temp roots. | Stage public fixtures in owned temp storage while preserving parser sandbox refusals. |
-| `34123550898` | `8d477e9e` | Failed with no installer: 201 files and 2,011 tests passed, 11 skipped; bundle verifier and seven artifact rows passed; `no-hostapi` transport timed out after 120 seconds. | Newest failure diagnosis is pending; do not convert this to a timeout raise or product skip without root cause. |
+| `34123550898` | `8d477e9e` | Failed with no installer: 201 files and 2,011 tests passed, 11 skipped; bundle verifier and seven artifact rows passed; `no-hostapi` transport timed out after 120 seconds. | All-plugin diagnostics loaded 102 plugins to inspect one. The scoped real-loader repair preserves source/network/inventory checks; both Windows diagnostics subsequently passed under the unchanged 120-second limit (42,413ms cold no-hostapi; 6,094ms full). A complete native package remains required. |
 
 Lessons to preserve:
 
