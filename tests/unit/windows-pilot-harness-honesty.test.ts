@@ -21,6 +21,7 @@
  *
  * These tests pin the decision logic, not the browser plumbing.
  */
+import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
 /* eslint-disable @typescript-eslint/no-require-imports -- both are CommonJS Windows CLI scripts. */
@@ -38,6 +39,9 @@ const driver = require('../../windows-pilot/scripts/pilot-chat-turn-driver.js') 
     expectedChannel: string;
     terminalQuiet: number;
   };
+  semanticMessageTextFromElement: (element: Element) => string;
+  semanticAnswerStillLatest: (latestText: string, expectedText: string) => boolean;
+  terminalLatestText: (surface: { lastMessageText?: string; lastMessageTextFull?: string }) => string;
   SEL: Record<string, string>;
 };
 const channel = require('../../windows-pilot/scripts/pilot-set-channel.js') as {
@@ -81,6 +85,66 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
     // The chip's testid shares the container prefix (ChatMessage.tsx:436 vs
     // Chat/index.tsx:791), so the selector must exclude it explicitly.
     expect(driver.SEL.message).toContain(':not([data-testid="chat-message-error-chip"])');
+  });
+
+  it('extracts assistant prose without hover timestamp chrome for candidate and terminal checks', () => {
+    const answer = 'I have received and acknowledged acceptance token CLWX96-ONLINE-MOE21-34134725489.';
+    const dom = new JSDOM(`
+      <div data-testid="chat-message-1">
+        <div class="space-y-2">
+          <div class="relative rounded-2xl">
+            <div class="prose prose-sm dark:prose-invert max-w-none break-words"><p>${answer}</p></div>
+          </div>
+          <div class="opacity-0"><span>just now</span><button>Copy</button></div>
+        </div>
+      </div>
+    `);
+    const message = dom.window.document.querySelector('[data-testid="chat-message-1"]');
+    expect(message).not.toBeNull();
+    // The container text includes timestamp/copy UI; exact spacing depends on
+    // innerText vs textContent in Chromium. The semantic extractor follows the
+    // ChatMessage DOM contract and reads only the answer body.
+    expect(message?.textContent).toContain('just now');
+    const semantic = driver.semanticMessageTextFromElement(message as Element);
+
+    expect(semantic).toBe(answer);
+    expect(driver.semanticAnswerStillLatest(semantic, answer)).toBe(true);
+  });
+
+  it('rejects a later terminal answer change instead of accepting substring containment', () => {
+    const answer = 'The ordinary online acceptance token is CLWX96-ONLINE-MOE21-34134725489.';
+
+    expect(driver.semanticAnswerStillLatest(`${answer} A newer assistant update appeared.`, answer))
+      .toBe(false);
+    expect(driver.semanticAnswerStillLatest('A different terminal answer appeared.', answer))
+      .toBe(false);
+  });
+
+  it('compares the full semantic terminal text for answers longer than the evidence preview', () => {
+    const answer = `The long answer starts here. ${'word '.repeat(190)}CLWX96-LONG-ANSWER-END`;
+    expect(answer.length).toBeGreaterThan(800);
+    const preview = answer.slice(0, 800);
+
+    const latest = driver.terminalLatestText({
+      lastMessageText: preview,
+      lastMessageTextFull: answer,
+    });
+
+    expect(latest).toBe(answer.trim());
+    expect(driver.semanticAnswerStillLatest(latest, answer)).toBe(true);
+  });
+
+  it('rejects long terminal answers whose suffix changes beyond the evidence preview', () => {
+    const answer = `The long answer starts here. ${'word '.repeat(190)}CLWX96-LONG-ANSWER-END`;
+    const changed = `${answer.slice(0, -3)}BAD`;
+    expect(answer.slice(0, 800)).toBe(changed.slice(0, 800));
+
+    const latest = driver.terminalLatestText({
+      lastMessageText: changed.slice(0, 800),
+      lastMessageTextFull: changed,
+    });
+
+    expect(driver.semanticAnswerStillLatest(latest, answer)).toBe(false);
   });
 
   it('reports FAILED_ERROR_CHIP_ONLY and a non-zero exit for a chip-only turn', () => {
