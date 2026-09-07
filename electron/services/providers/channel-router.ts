@@ -60,7 +60,7 @@ const ONLINE_VENDOR_IDS = new Set([
 
 const LOCAL_VENDOR_IDS = new Set(['ollama']);
 
-function classifyAccount(account: { vendorId: string; baseUrl?: string }): ProviderChannel {
+export function classifyAccount(account: { vendorId: string; baseUrl?: string }): ProviderChannel {
   const baseUrl = (account.baseUrl ?? '').trim();
   if (baseUrl && LOCAL_HOST_PATTERN.test(baseUrl)) return 'on-device';
   const vendorId = (account.vendorId ?? '').trim().toLowerCase();

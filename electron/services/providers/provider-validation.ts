@@ -9,7 +9,8 @@ type ValidationProfile =
   | 'openrouter'
   | 'none';
 
-type ValidationResult = { valid: boolean; error?: string; status?: number };
+export type ValidationResult = { valid: boolean; error?: string; status?: number };
+type ValidateApiKeyOptions = { baseUrl?: string; apiProtocol?: string; signal?: AbortSignal; quiet?: boolean };
 type ClassifiedValidationResult = ValidationResult & { authFailure?: boolean };
 
 const AUTH_ERROR_PATTERN = /\b(unauthorized|forbidden|access denied|invalid api key|api key invalid|incorrect api key|api key incorrect|authentication failed|auth failed|invalid credential|credential invalid|invalid signature|signature invalid|invalid access token|access token invalid|invalid bearer token|bearer token invalid|access token expired)\b|鉴权失败|認証失敗|认证失败|無效密鑰|无效密钥|密钥无效|密鑰無效|憑證無效|凭证无效/i;
@@ -122,11 +123,12 @@ async function performProviderValidationRequest(
   providerLabel: string,
   url: string,
   headers: Record<string, string>,
+  options?: Pick<ValidateApiKeyOptions, 'signal' | 'quiet'>,
 ): Promise<ClassifiedValidationResult> {
   try {
-    logValidationRequest(providerLabel, 'GET', url, headers);
-    const response = await proxyAwareFetch(url, { headers });
-    logValidationStatus(providerLabel, response.status);
+    if (!options?.quiet) logValidationRequest(providerLabel, 'GET', url, headers);
+    const response = await proxyAwareFetch(url, { headers, signal: options?.signal });
+    if (!options?.quiet) logValidationStatus(providerLabel, response.status);
     const data = await response.json().catch(() => ({}));
     const result = classifyAuthResponse(response.status, data);
     return { ...result, status: response.status };
@@ -196,6 +198,7 @@ async function validateOpenAiCompatibleKey(
   apiKey: string,
   apiProtocol: 'openai-completions' | 'openai-responses',
   baseUrl?: string,
+  options?: Pick<ValidateApiKeyOptions, 'signal' | 'quiet'>,
 ): Promise<ValidationResult> {
   const trimmedBaseUrl = baseUrl?.trim();
   if (!trimmedBaseUrl) {
@@ -204,16 +207,18 @@ async function validateOpenAiCompatibleKey(
 
   const headers = { Authorization: `Bearer ${apiKey}` };
   const { modelsUrl, probeUrl } = resolveOpenAiProbeUrls(trimmedBaseUrl, apiProtocol);
-  const modelsResult = await performProviderValidationRequest(providerType, modelsUrl, headers);
+  const modelsResult = await performProviderValidationRequest(providerType, modelsUrl, headers, options);
 
   if (shouldFallbackFromModelsProbe(modelsResult)) {
-    console.log(
-      `[clawx-validate] ${providerType} /models returned ${modelsResult.status}, falling back to ${apiProtocol} probe`,
-    );
-    if (apiProtocol === 'openai-responses') {
-      return await performResponsesProbe(providerType, probeUrl, headers);
+    if (!options?.quiet) {
+      console.log(
+        `[clawx-validate] ${providerType} /models returned ${modelsResult.status}, falling back to ${apiProtocol} probe`,
+      );
     }
-    return await performChatCompletionsProbe(providerType, probeUrl, headers);
+    if (apiProtocol === 'openai-responses') {
+      return await performResponsesProbe(providerType, probeUrl, headers, options);
+    }
+    return await performChatCompletionsProbe(providerType, probeUrl, headers, options);
   }
 
   return modelsResult;
@@ -223,9 +228,10 @@ async function performResponsesProbe(
   providerLabel: string,
   url: string,
   headers: Record<string, string>,
+  options?: Pick<ValidateApiKeyOptions, 'signal' | 'quiet'>,
 ): Promise<ValidationResult> {
   try {
-    logValidationRequest(providerLabel, 'POST', url, headers);
+    if (!options?.quiet) logValidationRequest(providerLabel, 'POST', url, headers);
     const response = await proxyAwareFetch(url, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
@@ -233,8 +239,9 @@ async function performResponsesProbe(
         model: 'validation-probe',
         input: 'hi',
       }),
+      signal: options?.signal,
     });
-    logValidationStatus(providerLabel, response.status);
+    if (!options?.quiet) logValidationStatus(providerLabel, response.status);
     const data = await response.json().catch(() => ({}));
     return classifyProbeResponse(response.status, data);
   } catch (error) {
@@ -249,9 +256,10 @@ async function performChatCompletionsProbe(
   providerLabel: string,
   url: string,
   headers: Record<string, string>,
+  options?: Pick<ValidateApiKeyOptions, 'signal' | 'quiet'>,
 ): Promise<ValidationResult> {
   try {
-    logValidationRequest(providerLabel, 'POST', url, headers);
+    if (!options?.quiet) logValidationRequest(providerLabel, 'POST', url, headers);
     const response = await proxyAwareFetch(url, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
@@ -260,8 +268,9 @@ async function performChatCompletionsProbe(
         messages: [{ role: 'user', content: 'hi' }],
         max_tokens: 1,
       }),
+      signal: options?.signal,
     });
-    logValidationStatus(providerLabel, response.status);
+    if (!options?.quiet) logValidationStatus(providerLabel, response.status);
     const data = await response.json().catch(() => ({}));
     return classifyProbeResponse(response.status, data);
   } catch (error) {
@@ -276,9 +285,10 @@ async function performAnthropicMessagesProbe(
   providerLabel: string,
   url: string,
   headers: Record<string, string>,
+  options?: Pick<ValidateApiKeyOptions, 'signal' | 'quiet'>,
 ): Promise<ValidationResult> {
   try {
-    logValidationRequest(providerLabel, 'POST', url, headers);
+    if (!options?.quiet) logValidationRequest(providerLabel, 'POST', url, headers);
     const response = await proxyAwareFetch(url, {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
@@ -287,8 +297,9 @@ async function performAnthropicMessagesProbe(
         messages: [{ role: 'user', content: 'hi' }],
         max_tokens: 1,
       }),
+      signal: options?.signal,
     });
-    logValidationStatus(providerLabel, response.status);
+    if (!options?.quiet) logValidationStatus(providerLabel, response.status);
     const data = await response.json().catch(() => ({}));
     return classifyProbeResponse(response.status, data);
   } catch (error) {
@@ -303,16 +314,18 @@ async function validateGoogleQueryKey(
   providerType: string,
   apiKey: string,
   baseUrl?: string,
+  options?: Pick<ValidateApiKeyOptions, 'signal' | 'quiet'>,
 ): Promise<ValidationResult> {
   const base = normalizeBaseUrl(baseUrl || 'https://generativelanguage.googleapis.com/v1beta');
   const url = `${base}/models?pageSize=1&key=${encodeURIComponent(apiKey)}`;
-  return await performProviderValidationRequest(providerType, url, {});
+  return await performProviderValidationRequest(providerType, url, {}, options);
 }
 
 async function validateAnthropicHeaderKey(
   providerType: string,
   apiKey: string,
   baseUrl?: string,
+  options?: Pick<ValidateApiKeyOptions, 'signal' | 'quiet'>,
 ): Promise<ValidationResult> {
   const rawBase = normalizeBaseUrl(baseUrl || 'https://api.anthropic.com/v1');
   const base = rawBase.endsWith('/v1') ? rawBase : `${rawBase}/v1`;
@@ -322,7 +335,7 @@ async function validateAnthropicHeaderKey(
     'anthropic-version': '2023-06-01',
   };
 
-  const modelsResult = await performProviderValidationRequest(providerType, url, headers);
+  const modelsResult = await performProviderValidationRequest(providerType, url, headers, options);
 
   // If the endpoint doesn't implement /models (like Minimax Anthropic compatibility), fallback to a /messages probe.
   if (
@@ -331,11 +344,13 @@ async function validateAnthropicHeaderKey(
     modelsResult.error?.includes('API error: 404') ||
     modelsResult.error?.includes('API error: 400')
   ) {
-    console.log(
-      `[clawx-validate] ${providerType} /models returned error, falling back to /messages probe`,
-    );
+    if (!options?.quiet) {
+      console.log(
+        `[clawx-validate] ${providerType} /models returned error, falling back to /messages probe`,
+      );
+    }
     const messagesUrl = `${base}/messages`;
-    return await performAnthropicMessagesProbe(providerType, messagesUrl, headers);
+    return await performAnthropicMessagesProbe(providerType, messagesUrl, headers, options);
   }
 
   return modelsResult;
@@ -344,16 +359,17 @@ async function validateAnthropicHeaderKey(
 async function validateOpenRouterKey(
   providerType: string,
   apiKey: string,
+  options?: Pick<ValidateApiKeyOptions, 'signal' | 'quiet'>,
 ): Promise<ValidationResult> {
   const url = 'https://openrouter.ai/api/v1/auth/key';
   const headers = { Authorization: `Bearer ${apiKey}` };
-  return await performProviderValidationRequest(providerType, url, headers);
+  return await performProviderValidationRequest(providerType, url, headers, options);
 }
 
 export async function validateApiKeyWithProvider(
   providerType: string,
   apiKey: string,
-  options?: { baseUrl?: string; apiProtocol?: string },
+  options?: ValidateApiKeyOptions,
 ): Promise<ValidationResult> {
   const profile = getValidationProfile(providerType, options);
   const resolvedBaseUrl = options?.baseUrl || getProviderConfig(providerType)?.baseUrl;
@@ -375,6 +391,7 @@ export async function validateApiKeyWithProvider(
           trimmedKey,
           'openai-completions',
           resolvedBaseUrl,
+          options,
         );
       case 'openai-responses':
         return await validateOpenAiCompatibleKey(
@@ -382,13 +399,14 @@ export async function validateApiKeyWithProvider(
           trimmedKey,
           'openai-responses',
           resolvedBaseUrl,
+          options,
         );
       case 'google-query-key':
-        return await validateGoogleQueryKey(providerType, trimmedKey, resolvedBaseUrl);
+        return await validateGoogleQueryKey(providerType, trimmedKey, resolvedBaseUrl, options);
       case 'anthropic-header':
-        return await validateAnthropicHeaderKey(providerType, trimmedKey, resolvedBaseUrl);
+        return await validateAnthropicHeaderKey(providerType, trimmedKey, resolvedBaseUrl, options);
       case 'openrouter':
-        return await validateOpenRouterKey(providerType, trimmedKey);
+        return await validateOpenRouterKey(providerType, trimmedKey, options);
       default:
         return { valid: false, error: `Unsupported validation profile for provider: ${providerType}` };
     }

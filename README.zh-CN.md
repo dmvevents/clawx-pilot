@@ -311,6 +311,8 @@ ClawX 采用 **双进程 + Host API 统一接入架构**。渲染进程只调用
 
 构建阶段、依赖缓存、故障诊断及源码到安装包的交接流程见 [Windows 构建流程](docs/build/windows-build-pipeline.md)。Codex 和 Claude 的 `windows-build-pipeline` 技能与构建工程代理共用此文档。
 
+当一轮对话停止产生进展时，聊天会显示明确的错误并恢复输入框。恢复到已保存的在线账号前，需要通过服务商检查并确认会话更新；进度和取消操作始终归属于对应的对话轮次。
+
 Windows 打包会在 Windows 上运行完整预检。请保留 `.gitattributes`：可执行源码使用 LF，`.cmd`/`.bat` 使用 CRLF，PDF 保持原始二进制字节。
 
 Windows 环境信息采集、IAP 连接和应用窗口录制请参阅 [Windows 测试指南](windows-pilot/vm-testing/README.md)。服务器虚拟机检查与校长笔记本验收的覆盖范围分别记录。

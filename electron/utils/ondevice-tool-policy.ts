@@ -3,7 +3,7 @@
  *
  * The default on-device model (qwen2.5:3b-instruct) tool-cascades when the full
  * built-in catalog is injected: it wraps its answer in a spurious tool_call and
- * loops `process -> sessions_list -> subagents` (or hangs on a `tts` call that
+ * loops `process -> sessions_list -> sessions_yield -> subagents` (or hangs on a `tts` call that
  * has no provider), so the chat turn never terminates. See
  * skills/laptop/evidence/2026-08-03-windows-install-ui-flows/REPORT.md.
  *
@@ -35,7 +35,7 @@
  *         not in this list, so they survive the deny filter).
  *   Denied: agent-orchestration + media + web tools the 3B model mis-fires on.
  *
- * `process` is denied to stop the `process -> sessions_list -> subagents`
+ * `process` is denied to stop the `process -> sessions_list -> sessions_yield -> subagents`
  * cascade at its root. `exec` is intentionally NOT denied — a denied `exec`
  * degrades the coding/file tools the model legitimately uses, and `exec`
  * alone did not trigger the cascade in the direct-API repro.
@@ -48,6 +48,7 @@ export const ONDEVICE_DENIED_TOOLS: readonly string[] = [
   'subagents',
   'sessions_list',
   'sessions_spawn',
+  'sessions_yield',
   // Web/media — the 3B model reaches for these instead of answering.
   'web_search',
   'web_fetch',
