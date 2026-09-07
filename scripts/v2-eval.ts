@@ -22,6 +22,15 @@
  *   pnpm exec tsx scripts/v2-eval.ts
  */
 import { writeFileSync } from 'fs';
+import {
+  classifyLatency,
+  evalArtifactPath,
+  evalLatestPath,
+  gradeAttachmentLocate,
+  laneVerdict,
+  LATENCY_CEILING_MS,
+  LATENCY_SLOW_MS,
+} from './eval-verdict.ts';
 import { PlaywrightDriver } from '../electron/services/outlook-browser-v2/playwright-driver.ts';
 import { VlmGrounder } from '../electron/services/outlook-browser-v2/vlm-grounder.ts';
 import { OutlookActions } from '../electron/services/outlook-browser-v2/outlook-actions.ts';
@@ -32,32 +41,63 @@ interface EvalRow {
   description: string;
   status: 'pass' | 'fail' | 'skip';
   latencyMs: number;
+  latencyClass: 'ok' | 'slow' | 'over_ceiling';
   notes: string;
+  /**
+   * TYPED lane-failure flag (CLWX-119). A row sets this when the driver told it
+   * `status === 'needs_signin'`. The exit contract used to infer this by
+   * regex-matching `/needs_signin/` over `notes`, which was wrong in both
+   * directions — see `eval-verdict.ts` for the full reasoning. A row that stays
+   * silent is a product failure.
+   */
+  laneNotReady?: boolean;
 }
 
 const results: EvalRow[] = [];
+
+/**
+ * Helper for the common failing return, so the typed lane flag is set at every
+ * site by construction instead of being remembered at 14 of them. Pass the
+ * driver's own status value — never a message or a note.
+ */
+function refused(status: string, notes?: string): { ok: false; notes: string; laneNotReady: boolean } {
+  return {
+    ok: false,
+    notes: notes ?? `status=${status}`,
+    laneNotReady: status === 'needs_signin',
+  };
+}
 
 async function runRow(
   id: string,
   workflow: string,
   description: string,
-  fn: () => Promise<{ ok: boolean; notes: string; skip?: boolean }>,
+  fn: () => Promise<{ ok: boolean; notes: string; skip?: boolean; laneNotReady?: boolean }>,
 ): Promise<void> {
   const t0 = Date.now();
   let status: EvalRow['status'] = 'fail';
   let notes: string;
+  let laneNotReady: boolean | undefined;
   try {
     const r = await fn();
     if (r.skip) status = 'skip';
     else status = r.ok ? 'pass' : 'fail';
     notes = r.notes;
+    laneNotReady = r.laneNotReady;
   } catch (err) {
     notes = `THREW: ${err instanceof Error ? err.message : String(err)}`;
   }
   const latencyMs = Date.now() - t0;
-  results.push({ id, workflow, description, status, latencyMs, notes });
+  const latencyClass = classifyLatency(latencyMs);
+  results.push({ id, workflow, description, status, latencyMs, latencyClass, notes, laneNotReady });
   const emoji = status === 'pass' ? '✓' : status === 'skip' ? '○' : '✗';
-  console.log(`${emoji}  ${id} (${latencyMs}ms) — ${description}`);
+  const slowTag =
+    latencyClass === 'over_ceiling'
+      ? ` OVER CEILING >${LATENCY_CEILING_MS}ms`
+      : latencyClass === 'slow'
+        ? ` SLOW >${LATENCY_SLOW_MS}ms`
+        : '';
+  console.log(`${emoji}  ${id} (${latencyMs}ms${slowTag}) — ${description}`);
   if (notes && status !== 'pass') console.log(`     ${notes}`);
 }
 
@@ -129,17 +169,15 @@ async function main() {
     // Microsoft is migrating outlook.office.com → outlook.cloud.microsoft;
     // accept both. (The driver's OUTLOOK_HOST_PATTERNS matches both.)
     const validHost = /outlook\.(office\.com|office365\.com|cloud\.microsoft|live\.com)\/mail/.test(r.url);
-    return {
-      ok: r.status === 'opened' && validHost,
-      notes: `status=${r.status} url=${r.url}`,
-    };
+    if (r.status !== 'opened' || !validHost) return refused(r.status, `status=${r.status} url=${r.url}`);
+    return { ok: true, notes: `status=${r.status} url=${r.url}` };
   });
 
   // W2.1 — read_inbox returns clean rows
   let firstId = '';
   await runRow('W2.1', 'read_inbox', 'read_inbox(5) — clean sender/subject (no "Unread " prefix in sender)', async () => {
     const r = await actions.readInbox(5);
-    if (r.status !== 'ok') return { ok: false, notes: `status=${r.status}` };
+    if (r.status !== 'ok') return refused(r.status);
     if (r.messages.length === 0) return { skip: true, ok: false, notes: 'inbox empty' };
     firstId = r.messages[0].id;
     const dirty = r.messages.find((m) => /^unread\b/i.test(m.sender));
@@ -154,7 +192,7 @@ async function main() {
   // W2.2 — search_inbox unread:true
   await runRow('W2.2', 'search_inbox', 'search_inbox({unread:true}) returns only unread', async () => {
     const r = await actions.searchInbox({ unread: true });
-    if (r.status !== 'ok') return { ok: false, notes: `status=${r.status}` };
+    if (r.status !== 'ok') return refused(r.status);
     const allUnread = r.messages.every((m) => m.unread === true);
     return { ok: allUnread, notes: `${r.messages.length} returned, allUnread=${allUnread}` };
   });
@@ -166,7 +204,7 @@ async function main() {
     const probe = inbox.messages[0]?.sender ?? '';
     if (!probe) return { skip: true, ok: false, notes: 'no sender on first row' };
     const r = await actions.searchInbox({ from: probe.slice(0, Math.min(probe.length, 8)) });
-    if (r.status !== 'ok') return { ok: false, notes: `status=${r.status}` };
+    if (r.status !== 'ok') return refused(r.status);
     const allMatch = r.messages.every((m) =>
       m.sender.toLowerCase().includes(probe.slice(0, 8).toLowerCase()),
     );
@@ -179,10 +217,10 @@ async function main() {
     const probe = inbox.messages[0]?.subject?.split(/\s+/).find((w) => w.length >= 5);
     if (!probe) return { skip: true, ok: false, notes: 'no usable subject token' };
     const r = await actions.searchInbox({ subjectContains: probe });
-    return {
-      ok: r.status === 'ok' && r.messages.length > 0,
-      notes: `probe="${probe}" got=${r.messages.length}`,
-    };
+    if (r.status !== 'ok' || r.messages.length === 0) {
+      return refused(r.status, `probe="${probe}" got=${r.messages.length} status=${r.status}`);
+    }
+    return { ok: true, notes: `probe="${probe}" got=${r.messages.length}` };
   });
 
   // A currently-valid top-of-inbox message id (null if the inbox is empty).
@@ -208,13 +246,13 @@ async function main() {
     if (!firstId) return { skip: true, ok: false, notes: 'no firstId' };
     const inbox = await actions.readInbox(5);
     if (inbox.status !== 'ok' || inbox.messages.length === 0) {
-      return { ok: false, notes: `read_inbox status=${inbox.status}` };
+      return refused(inbox.status, `read_inbox status=${inbox.status} count=${inbox.messages.length}`);
     }
     const target = inbox.messages.reduce((best, m) =>
       ((m.snippet?.length ?? 0) > (best.snippet?.length ?? 0) ? m : best), inbox.messages[0]);
     const snip = target.snippet ?? '';
     const r = await actions.readEmail({ id: target.id });
-    if (r.status !== 'ok') return { ok: false, notes: `status=${r.status}` };
+    if (r.status !== 'ok') return refused(r.status);
     const bodyLen = r.body?.length ?? 0;
     const ok = bodyLen > snip.length || (bodyLen > 0 && bodyLen >= snip.length);
     return {
@@ -257,24 +295,17 @@ async function main() {
       id = (await freshTopId()) ?? id;
       r = await actions.readEmail({ id });
     }
-    if (r.status === 'not_found' && r.notFoundReason === 'stale_read_guard') {
-      return {
-        skip: true,
-        ok: false,
-        notes: 'UNEXERCISED — the CLWX-46 stale-read guard refused to confirm the reading pane settled on the clicked message, across two fresh ids. The guard firing is correct behaviour and makes no claim about attachment metadata, so this row proved nothing either way. Not a product failure (CLWX-120).',
-      };
-    }
-    if (r.status !== 'ok' || !Array.isArray(r.attachments)) {
-      return {
-        ok: false,
-        notes: `status=${r.status} attachments=${r.attachments?.length ?? 'undefined'} notFoundReason=${r.notFoundReason ?? 'none'}`,
-      };
-    }
+    // The judgement itself lives in eval-verdict.ts so it is unit-covered — the
+    // residual named on CLWX-120 was that this exact grading had no test, only
+    // a comment. This call site must stay a call site.
+    const grade = gradeAttachmentLocate(r);
+    if (grade.kind === 'skip') return { skip: true, ok: false, notes: grade.notes };
+    if (grade.kind === 'fail') return refused(r.status, grade.notes);
     // Metadata leg: the top message usually has no attachments, so hunt for
     // an attachment-bearing one (the CLWX-61 seeded mail is the intended
     // target). Without one the leg is reported as unexercised rather than
     // silently green.
-    let attachments = r.attachments;
+    let attachments = grade.attachments;
     let source = 'top message';
     if (attachments.length === 0) {
       const search = await actions.searchInbox({ hasAttachment: true });
@@ -323,9 +354,17 @@ async function main() {
       subject: draftSubject,
       body: 'eval harness draft — do not send',
     });
+    const ok = r.status === 'drafted' && r.draftLeftOpen === true;
     return {
-      ok: r.status === 'drafted' && r.draftLeftOpen === true,
-      notes: `status=${r.status} leftOpen=${r.draftLeftOpen}`,
+      ok,
+      // The driver's own message is the only thing that says WHICH refusal this
+      // was — "an open draft <subject> was not written by the assistant" vs "no
+      // Discard control is visible" vs "kept reappearing after 5 passes" all
+      // arrive as the same status=failed. Dropping it (as this row did until
+      // 2026-09-07) turned three reproducible live failures into an
+      // unattributable one. Truncated per the logging rule.
+      notes: `status=${r.status} leftOpen=${r.draftLeftOpen}${ok ? '' : ` message="${(r.message ?? '').slice(0, 200)}"`}`,
+      laneNotReady: r.status === 'needs_signin',
     };
   });
 
@@ -340,6 +379,7 @@ async function main() {
     return {
       ok: r.status === 'refused',
       notes: `status=${r.status} reason=${r.reason ?? '<none>'}`,
+      laneNotReady: r.status === 'needs_signin',
     };
   });
 
@@ -355,6 +395,7 @@ async function main() {
     return {
       ok: r.status === 'refused',
       notes: `status=${r.status} reason=${(r.reason ?? '').slice(0, 80)}`,
+      laneNotReady: r.status === 'needs_signin',
     };
   });
 
@@ -367,7 +408,8 @@ async function main() {
     const id = await freshTopId();
     if (!id) return { skip: true, ok: false, notes: 'inbox empty' };
     const r = await actions.markRead({ id, read: true });
-    return { ok: r.status === 'ok', notes: `status=${r.status}` };
+    if (r.status !== 'ok') return refused(r.status);
+    return { ok: true, notes: `status=${r.status}` };
   });
 
   // W8.1 — search_inbox with hasAttachment
@@ -376,6 +418,7 @@ async function main() {
     return {
       ok: r.status === 'ok',
       notes: `status=${r.status} count=${r.messages.length}`,
+      laneNotReady: r.status === 'needs_signin',
     };
   });
 
@@ -391,6 +434,7 @@ async function main() {
     return {
       ok: r.status === 'ok' && Array.isArray(r.attachments),
       notes: `status=${r.status} count=${r.attachments?.length ?? 'undefined'}`,
+      laneNotReady: r.status === 'needs_signin',
     };
   });
 
@@ -434,6 +478,7 @@ async function main() {
       if (fresh) r = await actions.downloadAttachment({ ...fresh, confirm: true });
     }
     return {
+      laneNotReady: r.status === 'needs_signin',
       ok: r.status === 'downloaded',
       notes: `status=${r.status} filename="${r.filename.slice(0, 60)}" savedPath=${r.savedPath ? 'set' : 'unset'}${r.reason ? ` reason=${r.reason.slice(0, 80)}` : ''}`,
     };
@@ -453,6 +498,7 @@ async function main() {
     return {
       ok: r.status === 'drafted' && r.draftLeftOpen === true,
       notes: `status=${r.status}`,
+      laneNotReady: r.status === 'needs_signin',
     };
   });
 
@@ -474,7 +520,7 @@ async function main() {
       r = await actions.forward({ id, to: 'test.fac@fac.edu.tt', body: 'eval forward — do not send.' });
     }
     if (r.status !== 'drafted' || r.draftLeftOpen !== true) {
-      return { ok: false, notes: `status=${r.status} leftOpen=${r.draftLeftOpen}` };
+      return refused(r.status, `status=${r.status} leftOpen=${r.draftLeftOpen}`);
     }
     // Pane verification: `drafted` already proves To was typed + committed
     // (fillField/commitRecipientField throw on failure); the pane SUBJECT is
@@ -562,8 +608,20 @@ async function main() {
   console.log(`pass: ${passed}/${total} (${passRate.toFixed(1)}%, ${skipped} skipped)`);
   console.log(`fail: ${failed}`);
 
+  const slowPasses = results.filter(
+    (r) => r.status === 'pass' && r.latencyClass !== 'ok',
+  );
+  if (slowPasses.length > 0) {
+    console.log(
+      `latency: ${slowPasses
+        .map((r) => `${r.id}=${r.latencyMs}ms(${r.latencyClass})`)
+        .join(', ')}  [slow>=${LATENCY_SLOW_MS}ms, ceiling>=${LATENCY_CEILING_MS}ms]`,
+    );
+  }
+
+  const runAt = new Date().toISOString();
   const summary = {
-    runAt: new Date().toISOString(),
+    runAt,
     pass: passed,
     fail: failed,
     skip: skipped,
@@ -571,29 +629,36 @@ async function main() {
     passRate,
     rows: results,
   };
-  writeFileSync('/tmp/v2-eval-results.json', JSON.stringify(summary, null, 2));
-  console.log('\nResults saved to /tmp/v2-eval-results.json');
+  const json = JSON.stringify(summary, null, 2);
+  // Per-run artifact FIRST, then the stable "latest" pointer. The eval used to
+  // only ever overwrite the latest path, which is why CLWX-119's central claim
+  // (two runs minutes apart disagree about which rows fail) could not be
+  // evidenced from artifacts — only from two console logs that happened to
+  // still be open. Two runs now leave two comparable files.
+  const perRun = evalArtifactPath(runAt);
+  writeFileSync(perRun, json);
+  writeFileSync(evalLatestPath(), json);
+  console.log(`\nResults saved to ${perRun}`);
+  console.log(`Latest pointer: ${evalLatestPath()}`);
+
+  // Repeated LAST on purpose. scripts/ga-gate.mjs records the final three
+  // non-empty output lines as the row's tail in the committed report, so
+  // whatever prints last is the coverage a human reads. Until 2026-09-07 the
+  // gate's own row LABEL carried the count ("outlook-eval 15-row") — authored
+  // once, never re-checked, and wrong by three rows. A measured count printed
+  // where the report will actually pick it up cannot drift.
+  console.log(`\ncoverage: ${passed} pass / ${failed} fail / ${skipped} skip of ${total} rows`);
 
   // Whole-run lane contract, so scripts/ga-gate.mjs never has to infer our verdict
-  // from a substring of our output. It used to regex /needs_signin/ over the whole
-  // combined stdout, which any SINGLE row can emit — so one sign-in refusal in the
-  // same run as a real product failure relabelled the product failure "lane
-  // blocked" and exited 0 (Claude correctness lens, 2026-09-07).
-  //
-  // Exit 2 (this repo's "lane not ready") therefore requires that EVERY failing row
-  // died at the sign-in wall. One non-sign-in failure and the run stays exit 1, a
-  // product FAIL. Deliberately conservative in the direction that keeps defects
-  // visible.
-  const failing = results.filter((r) => r.status === 'fail');
-  const signinFails = failing.filter((r) => /needs_signin/i.test(r.notes ?? ''));
-  if (failing.length > 0 && signinFails.length === failing.length) {
-    console.log(
-      `\nEVAL ABORTED: needs_signin (${signinFails.length}/${failing.length} failing rows) — every failure was the Microsoft sign-in wall, so this run proves nothing about email integration. Lane not ready, not a product failure.`,
-    );
-    process.exit(2);
-  }
-
-  process.exit(failed > 0 ? 1 : 0);
+  // from a substring of our output — and so THIS script never infers it from a
+  // substring of its own notes either, which is what it did until 2026-09-07
+  // (`/needs_signin/i.test(r.notes)`): fail-OPEN for any row that mentions the
+  // token for an unrelated reason, fail-CLOSED for any row whose richer notes
+  // omit it. The judgement now lives in scripts/eval-verdict.ts, which is
+  // unit-covered, and this is its single call site.
+  const verdict = laneVerdict(results);
+  if (verdict.exitCode !== 0) console.log(`\n${verdict.reason}`);
+  process.exit(verdict.exitCode);
 }
 
 main().catch((err) => {

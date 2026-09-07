@@ -26,7 +26,7 @@
  * Report: printed + written to docs/evidence/GA_GATE_<date>.md.
  */
 import { execSync, spawnSync } from 'node:child_process';
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 // The judgement lives in a sibling module with no I/O and no side effects on import,
 // because THIS file cannot be imported by a test: it spawns pnpm and calls
@@ -68,8 +68,11 @@ mkdirSync(LOG_DIR, { recursive: true });
 //
 // All four lane scripts already implement the same contract, so there is nothing to
 // infer: 0 = pass, 1 = product failure, 2 = lane not ready. (clwx46 :58/:72/:118/
-// :122/:126/:131, clwx58 :74/:86/:124/:127/:132, v2-eval :549/:555, v2-send-test
-// :32-63/:69.) Fail-closed: only exit 2 blocks; every other non-zero stays a FAIL.
+// :122/:126/:131, clwx58 :74/:86/:124/:127/:132, v2-eval via `laneVerdict()` in
+// scripts/eval-verdict.ts — it was inlined at :549/:555 until 2026-09-07, when it
+// turned out to be deciding "lane not ready" by regex-matching its own notes, the
+// same fail-open as below — v2-send-test :32-63/:69.) Fail-closed: only exit 2
+// blocks; every other non-zero stays a FAIL.
 function run(id, tier, box, cmd, { timeout = 600_000, optional = false, laneContract = false, blockedWhy } = {}) {
   process.stdout.write(`[${tier}] ${id} ... `);
   const t0 = Date.now();
@@ -106,6 +109,13 @@ function skip(id, tier, box, why, { blocked = false } = {}) {
 }
 function probe(cmd) {
   try { execSync(cmd, { stdio: 'pipe', timeout: 8_000 }); return true; } catch { return false; }
+}
+/** Row count of the live Outlook eval, read from the suite instead of authored. */
+function evalRowCount() {
+  try {
+    const n = (readFileSync('scripts/v2-eval.ts', 'utf8').match(/await runRow\(/g) ?? []).length;
+    return n > 0 ? `${n}-row` : '(row count unknown)';
+  } catch { return '(row count unknown)'; }
 }
 
 console.log(`=== GA gate ${new Date().toISOString()} (static=${STATIC_ONLY} full=${FULL} send=${SEND}) ===\n`);
@@ -176,7 +186,13 @@ if (STATIC_ONLY) {
   console.log(`[T1] preflight: CDP up, Outlook tab already open = ${OUTLOOK_TAB} (diagnostic only — the driver opens its own tab)`);
   const SIGNIN_WHY = 'lane BLOCKED, not a product failure — the row exited 2 (its own "lane not ready" code), which on this lane means the Chrome session could not present a usable mailbox (Microsoft sign-in wall, or too few rows to assert against), so nothing about email integration was tested. CAE revokes cookies within minutes on this tenant, so this is routine. Unlock: in the SAME Chrome (profile=user), sign in as the test.fac sandbox account, then rerun. See the row log for which of the two it was';
   const EMAIL_ROW = { laneContract: true, blockedWhy: SIGNIN_WHY };
-  run('outlook-eval 15-row (K6/K14 guards)', 'T1', 'ExtValA', `${CLEAN} pnpm exec tsx scripts/v2-eval.ts`, EMAIL_ROW);
+  // The label used to read "outlook-eval 15-row" while the suite ran 18 rows
+  // (CLWX-119c). A count authored into a label once and never re-checked is a
+  // coverage claim that decays silently — the same class as a hardcoded matrix
+  // total. Derive it from the suite, and if the derivation finds nothing say so
+  // rather than inventing a number; the eval also prints its MEASURED
+  // pass/fail/skip as its last line, which is what lands in this row's tail.
+  run(`outlook-eval ${evalRowCount()} (K6/K14 guards)`, 'T1', 'ExtValA', `${CLEAN} pnpm exec tsx scripts/v2-eval.ts`, EMAIL_ROW);
   run('stale-read check (CLWX-46 guard)', 'T1', 'ExtValA', 'pnpm exec tsx scripts/clwx46-stale-read-check.ts', EMAIL_ROW);
   run('compose auto-recovery (CLWX-58 guard)', 'T1', 'ExtValA', `${CLEAN} pnpm exec tsx scripts/clwx58-compose-recovery-check.ts`, EMAIL_ROW);
   run('forms Suspensions fill+gate (dry)', 'T1', 'forms', 'pnpm exec tsx scripts/forms-fill-suspensions.ts');
