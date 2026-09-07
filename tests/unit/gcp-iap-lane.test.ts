@@ -5,6 +5,10 @@ import { spawnSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const scriptPath = join(process.cwd(), 'windows-pilot', 'vm-testing', 'gcp-iap-lane.sh');
+// Three protocol/control legs start real mock processes. Bound the child below
+// the test budget so native Windows startup cannot outlive the assertion window.
+const PROBE_PROCESS_TIMEOUT_MS = 12_000;
+const PROBE_TEST_TIMEOUT_MS = 15_000;
 let tempDir: string;
 let binDir: string;
 let callsPath: string;
@@ -32,6 +36,7 @@ except OSError:
 function runProbe(extraEnv: Record<string, string | undefined> = {}) {
   return spawnSync('bash', [scriptPath, 'probe'], {
     encoding: 'utf8',
+    timeout: PROBE_PROCESS_TIMEOUT_MS,
     env: {
       ...process.env,
       PATH: `${binDir}:${process.env.PATH ?? ''}`,
@@ -167,14 +172,14 @@ describe('gcp-iap-lane probe', () => {
     expect(result.status).not.toBe(0);
     expect(result.stdout + result.stderr).toContain('VM is TERMINATED');
     expect(readFileSync(callsPath, 'utf8')).not.toContain('start-iap-tunnel');
-  });
+  }, PROBE_TEST_TIMEOUT_MS);
 
   it('fails closed when the closed guest-port control opens a listener', () => {
     const result = runProbe({ MOCK_CONTROL: 'open' });
 
     expect(result.status).not.toBe(0);
     expect(result.stdout + result.stderr).toContain('expected provider backend rejection for closed guest :9999');
-  });
+  }, PROBE_TEST_TIMEOUT_MS);
 
   it('accepts the live gcloud backend-connectivity rejection for closed guest port 9999', () => {
     const result = runProbe();
@@ -183,7 +188,7 @@ describe('gcp-iap-lane probe', () => {
     expect(result.stdout).toContain('OK    control guest :9999 rejected by IAP backend connectivity check');
     const calls = readFileSync(callsPath, 'utf8');
     expect(calls).toContain('compute start-iap-tunnel clawx-win-rc-20260609 9999');
-  });
+  }, PROBE_TEST_TIMEOUT_MS);
 
 
 
@@ -192,7 +197,7 @@ describe('gcp-iap-lane probe', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stdout + result.stderr).toContain('exited without the expected backend/port 9999 rejection');
-  });
+  }, PROBE_TEST_TIMEOUT_MS);
 
 
 
@@ -203,7 +208,7 @@ describe('gcp-iap-lane probe', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('OK    control guest :9999 rejected by IAP backend connectivity check');
-  });
+  }, PROBE_TEST_TIMEOUT_MS);
 
   it('rejects provider 4003 backend failures that do not name port 9999', () => {
     const result = runProbe({
@@ -212,7 +217,7 @@ describe('gcp-iap-lane probe', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stdout + result.stderr).toContain('exited without the expected backend/port 9999 rejection');
-  });
+  }, PROBE_TEST_TIMEOUT_MS);
 
   it('does not rely on a gcloud Listening log line before protocol probes', () => {
     const result = runProbe();
@@ -220,14 +225,14 @@ describe('gcp-iap-lane probe', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('PASS  RDP protocol response');
     expect(result.stdout).toContain('PASS  SSH banner verified (not authenticated)');
-  });
+  }, PROBE_TEST_TIMEOUT_MS);
 
   it('rejects an RDP TPKT response without the X.224 confirm byte', () => {
     const result = runProbe({ MOCK_RDP: 'tpkt-only' });
 
     expect(result.status).not.toBe(0);
     expect(result.stdout + result.stderr).toContain('FAIL  RDP protocol response');
-  });
+  }, PROBE_TEST_TIMEOUT_MS);
 
 
 
@@ -237,7 +242,7 @@ describe('gcp-iap-lane probe', () => {
     expect(result.status).toBe(0);
     expect(localPortOpen(31189)).toBe(false);
     expect(localPortOpen(31122)).toBe(false);
-  });
+  }, PROBE_TEST_TIMEOUT_MS);
 
   it('refuses occupied local ports before starting tunnels', () => {
     const result = runProbe({ MOCK_OCCUPIED_PORTS: '31089' });
@@ -245,7 +250,7 @@ describe('gcp-iap-lane probe', () => {
     expect(result.status).not.toBe(0);
     expect(result.stdout + result.stderr).toContain('local port 31089 is already occupied');
     expect(readFileSync(callsPath, 'utf8')).not.toContain('start-iap-tunnel');
-  });
+  }, PROBE_TEST_TIMEOUT_MS);
 
   it('requires an explicit or configured project before probing', () => {
     const result = runProbe({ CLAWX_GCP_PROJECT: undefined, GOOGLE_CLOUD_PROJECT: undefined, MOCK_CONFIG_PROJECT: '(unset)' });
@@ -253,7 +258,7 @@ describe('gcp-iap-lane probe', () => {
     expect(result.status).not.toBe(0);
     expect(result.stdout + result.stderr).toContain('GCP project is not set');
     expect(readFileSync(callsPath, 'utf8')).not.toContain('start-iap-tunnel');
-  });
+  }, PROBE_TEST_TIMEOUT_MS);
 
   it('proves RDP protocol, SSH banner, and a dedicated closed guest control through IAP tunnels', () => {
     const result = runProbe();
@@ -267,5 +272,5 @@ describe('gcp-iap-lane probe', () => {
     expect(calls).toContain('compute start-iap-tunnel clawx-win-rc-20260609 3389');
     expect(calls).toContain('compute start-iap-tunnel clawx-win-rc-20260609 22');
     expect(calls).toContain('compute start-iap-tunnel clawx-win-rc-20260609 9999');
-  });
+  }, PROBE_TEST_TIMEOUT_MS);
 });

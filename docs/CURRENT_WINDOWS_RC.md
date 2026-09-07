@@ -20,7 +20,7 @@ Reconciled: 2026-09-07. Current readiness and finish order: [COMPLETION_PLAN.md]
 
 The historical moe.19 installer/app/manifest were preserved locally. Its [failed Online observation](evidence/WINDOWS_VM_TESTING_2026-09-07.md) remains baseline evidence; it does not describe the new candidate. Match exact hashes, not version labels. Source context records build inputs and does not establish a reproducible build.
 
-The first native moe.21 [build attempt](https://github.com/dmvevents/clawx-pilot/actions/runs/34115779033), from reviewed public source `7cfad9bde5692f84f25b9d441ed83952ef5d835f`, stopped in Windows preflight before producing an installer. The shared CRLF loader failure and POSIX subprocess fixtures are being repaired; a Mac pass does not replace the next native Windows build. See the [runtime report](evidence/WINDOWS_RUNTIME_RECOVERY_2026-09-07.md#native-windows-preflight--september-7).
+The first native moe.21 [build attempt](https://github.com/dmvevents/clawx-pilot/actions/runs/34115779033), from reviewed public source `7cfad9bde5692f84f25b9d441ed83952ef5d835f`, stopped in Windows preflight before producing an installer. The second native attempt, source `6c2834cb`, cleared the shared CRLF and subprocess failures but stopped on two integration-test timeouts. Their bounded test budgets are repaired locally; a Mac pass does not replace the next native Windows build. See the [runtime report](evidence/WINDOWS_RUNTIME_RECOVERY_2026-09-07.md#native-windows-preflight--september-7).
 
 The following June record is retained for history; it is not the current candidate.
 

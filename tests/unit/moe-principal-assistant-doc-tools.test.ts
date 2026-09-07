@@ -228,6 +228,9 @@ describe('readPdf refuses unreadable PDFs in principal language (CLWX-77)', () =
   }
 
   it('names password protection and the way out for an encrypted PDF, never the raw pdfjs message', async () => {
+    // This first real PDF call also loads pdfjs and its worker. Native Windows
+    // preflight measured 17.3s cold, then 132ms/31ms for subsequent PDF calls.
+    // Bound the integration setup here; keep the refusal assertions intact.
     // An /Encrypt trailer entry triggers PasswordException without any real
     // cryptography in the fixture.
     const key = `<${'68656c6c6f'.repeat(6)}6f6f>`;
@@ -243,7 +246,7 @@ describe('readPdf refuses unreadable PDFs in principal language (CLWX-77)', () =
     expect(msg).toMatch(/password-protected/);
     expect(msg).toMatch(/save an unprotected copy/i);
     expect(msg).not.toMatch(PDFJS_INTERNALS);
-  });
+  }, 30_000);
 
   it('maps a corrupt PDF to the damaged-or-not-a-PDF wording, never "Invalid PDF structure."', async () => {
     const msg = await readPdfError('broken.pdf', `%PDF-1.4\n${'garbage '.repeat(64)}`);

@@ -7,6 +7,7 @@ intent: Bind strict release evidence and staged publication to the tested source
 touchedAreas:
   - ".gitattributes"
   - "tests/unit/harness-windows-e2e.test.ts"
+  - "tests/unit/moe-principal-assistant-doc-tools.test.ts"
   - ".agents/skills/ga-e2e-regression/SKILL.md"
   - ".agents/skills/ga-release-readiness/SKILL.md"
   - ".agents/skills/windows-demo-resume/SKILL.md"
@@ -139,6 +140,7 @@ requiredRules:
   - "completion-evidence"
   - "backend-communication-boundary"
 requiredTests:
+  - "tests/unit/moe-principal-assistant-doc-tools.test.ts"
   - "tests/unit/openclaw-pricing-cache-patch.test.ts"
   - "tests/unit/openclaw-cli.test.ts"
   - "tests/unit/clwx92-bundle-fixture.test.ts"
