@@ -63,6 +63,7 @@ describe('Windows build summary', () => {
     const summary = collectWindowsBuildSummary({
       cwd: dir,
       env: { GITHUB_SHA: 'event-sha', BUILD_REF_INPUT: 'refs/heads/main' },
+      platform: 'linux',
       runner: runnerWith({
         'git rev-parse HEAD': { status: 0, stdout: 'checkout-sha\n' },
         'node --version': { status: 0, stdout: 'v24.0.0\n' },
@@ -87,6 +88,7 @@ describe('Windows build summary', () => {
         COMPILE_AND_BUNDLE_OUTCOME: 'skipped',
         BUILD_WINDOWS_INSTALLER_OUTCOME: 'skipped',
       },
+      platform: 'linux',
       runner: runnerWith({
         'git rev-parse HEAD': { status: 0, stdout: 'checkout-sha\n' },
         'node --version': { status: 1, stdout: '' },
@@ -134,6 +136,7 @@ describe('Windows build summary', () => {
         CLOUD_GATEWAY_CONFIG_JSON: 'secret-json',
         AZURE_SPEECH_KEY: 'secret-key',
       },
+      platform: 'linux',
       runner: runnerWith({
         'git rev-parse HEAD': { status: 0, stdout: 'checkout-sha\n' },
       }) as never,
