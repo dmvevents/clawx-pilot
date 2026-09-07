@@ -16,13 +16,26 @@
  *   GA_GATE_SEND=1 node scripts/ga-gate.mjs    # + live 2-gate SEND proof
  *                                              #   (test.fac sandbox ONLY)
  *
- * Exit: non-zero if any non-skipped check fails, or if a REQUIRED tier was
- * fully skipped (T0 is always required; T1 required unless GA_GATE_STATIC).
+ * Exit: non-zero if any non-skipped check fails. NOTE: skips do NOT affect the
+ * exit code — a run where a required check was BLOCKED still exits 0, and the
+ * verdict reads "INCOMPLETE ... <surface>: NOT TESTED this run" rather than
+ * GREEN, so the headline cannot be skimmed as coverage. (This comment
+ * previously claimed a fully-skipped required tier exited non-zero; no such rule
+ * was ever implemented. Making skip-fail real, and gating release on it, is
+ * CLWX-106 — do not rely on the exit code alone for release enforcement.)
  * Report: printed + written to docs/evidence/GA_GATE_<date>.md.
  */
 import { execSync, spawnSync } from 'node:child_process';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
+// The judgement lives in a sibling module with no I/O and no side effects on import,
+// because THIS file cannot be imported by a test: it spawns pnpm and calls
+// process.exit at module scope. Splitting it is not cosmetic — until 2026-09-07
+// `grep -rl ga-gate tests/` returned nothing, and a gate with no gate of its own is
+// how the fail-open below shipped and survived two review lenses. The gate imports
+// the same module the test pins; a copied classifier would verify a surface that is
+// not the shipped surface.
+import { classifyRow, scorecard } from './ga-gate-verdict.mjs';
 
 const STATIC_ONLY = process.env.GA_GATE_STATIC === '1';
 const FULL = process.env.GA_GATE_FULL === '1';
@@ -32,22 +45,63 @@ const results = [];
 const LOG_DIR = `/tmp/ga-gate-logs/${new Date().toISOString().replace(/[:.]/g, '-')}`;
 mkdirSync(LOG_DIR, { recursive: true });
 
-function run(id, tier, box, cmd, { timeout = 600_000, optional = false } = {}) {
+// `laneContract` is how a lane condition gets classified from EVIDENCE instead of
+// from a precondition probe. The previous design refused to run the email rows
+// unless a probe found an Outlook tab first — but the driver opens its own tab and
+// the session cookies live in the profile, so "no tab open" is a perfectly healthy
+// lane (proven 2026-09-07: with zero Outlook tabs, ensureOutlookTab opened one and
+// landed signed in as test.fac in seconds). Refusing to run turned a healthy lane
+// into three BLOCKED rows — the same dishonesty as the FAIL it was fixing, just
+// pointed the other way. So: run the row, and let the row itself say which kind of
+// failure it hit.
+//
+// It says so with its EXIT CODE, never with a substring of its output. The first
+// version of this classifier regex-matched /needs_signin/ over the whole combined
+// stdout+stderr, which is a fail-OPEN and strictly worse than the FAIL it replaced
+// (Claude correctness lens, 2026-09-07): clwx46-stale-read-check.ts prints
+// `[SAFE-REFUSE: ... status=needs_signin]` on its HEALTHY path at :91 and then
+// exits 1 at :118 on a real stale-read leak, so one healthy refusal in the same run
+// as the actual CLWX-46 defect relabelled the defect "not a product failure" and
+// exited 0. It also mis-classified the inverse: clwx58's real lane abort
+// ("LANE NOT READY: could not open the seed owned draft") matched no regex and was
+// recorded as a product FAIL.
+//
+// All four lane scripts already implement the same contract, so there is nothing to
+// infer: 0 = pass, 1 = product failure, 2 = lane not ready. (clwx46 :58/:72/:118/
+// :122/:126/:131, clwx58 :74/:86/:124/:127/:132, v2-eval :549/:555, v2-send-test
+// :32-63/:69.) Fail-closed: only exit 2 blocks; every other non-zero stays a FAIL.
+function run(id, tier, box, cmd, { timeout = 600_000, optional = false, laneContract = false, blockedWhy } = {}) {
   process.stdout.write(`[${tier}] ${id} ... `);
   const t0 = Date.now();
   const r = spawnSync('bash', ['-c', cmd], { timeout, encoding: 'utf8' });
-  const ok = r.status === 0;
+  // ONE decision point, and it is the exported one — if `ok` were computed here
+  // independently, the test could pin `classifyRow` while production used something
+  // else, which is the "verified surface that is not the shipped surface" trap.
+  const verdict = classifyRow({ exitCode: r.status, laneContract });
+  const ok = verdict === 'PASS';
   const secs = Math.round((Date.now() - t0) / 1000);
   // Full output per check — a failing gate must be diagnosable without a
   // re-run (three-line tails cost a full re-diagnosis on the first RED run).
   const logFile = path.join(LOG_DIR, `${id.replace(/[^a-z0-9-]+/gi, '_')}.log`);
+  const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
   writeFileSync(logFile, `$ ${cmd}\nexit=${r.status}\n\n--- stdout ---\n${r.stdout ?? ''}\n--- stderr ---\n${r.stderr ?? ''}`);
-  results.push({ id, tier, box, status: ok ? 'PASS' : 'FAIL', secs, optional, log: logFile, tail: (r.stdout + r.stderr).split('\n').filter(Boolean).slice(-3).join(' | ').slice(0, 240) });
+  if (verdict === 'BLOCKED') {
+    results.push({ id, tier, box, status: 'SKIP', secs, optional: false, blocked: true, log: logFile, tail: `${blockedWhy} — log: ${logFile}` });
+    console.log(`SKIP (${secs}s) — BLOCKED by the lane, not a product failure (exit 2): ${blockedWhy}`);
+    return false;
+  }
+  results.push({ id, tier, box, status: ok ? 'PASS' : 'FAIL', secs, optional, log: logFile, tail: out.split('\n').filter(Boolean).slice(-3).join(' | ').slice(0, 240) });
   console.log(`${ok ? 'PASS' : 'FAIL'} (${secs}s)${ok ? '' : ` — log: ${logFile}`}`);
   return ok;
 }
-function skip(id, tier, box, why) {
-  results.push({ id, tier, box, status: 'SKIP', secs: 0, optional: false, tail: why });
+// `blocked` separates the two kinds of skip, which a reader must not conflate:
+//   flag-driven  — the operator chose a narrower run (GA_GATE_STATIC, !E2E, !FULL,
+//                  !SEND). Expected, and the flags are printed in the header.
+//   blocked      — the current flags say this row SHOULD have run and the
+//                  environment stopped it. That is the only skip a GREEN verdict
+//                  can quietly hide, so only these qualify the verdict below.
+function skip(id, tier, box, why, { blocked = false } = {}) {
+  results.push({ id, tier, box, status: 'SKIP', secs: 0, optional: false, blocked, tail: why });
   console.log(`[${tier}] ${id} ... SKIP (${why})`);
 }
 function probe(cmd) {
@@ -80,21 +134,62 @@ if (process.env.GA_GATE_E2E === '1') {
 }
 
 // ── T1: live Mac lane (user Chrome CDP + test.fac sandbox) ───────────────
+//
+// The preflight used to be a single CDP reachability probe for the whole tier,
+// which is the same under-specification the T2 row had: a reachable CDP port
+// proves Chrome is listening, NOT that the email lane is usable. With CDP up but
+// the Chrome session signed OUT, every email row dies at the sign-in wall and the
+// scorecard attributes that to the PRODUCT. An environment gate the owner clears
+// must read as BLOCKED, never as a product FAIL (the rule vm-verify-moe19.sh
+// :100-116 already states).
+//
+// The FIRST attempt at that split required an Outlook tab to already be open
+// before the email rows were allowed to run, which was wrong in the other
+// direction and equally dishonest: the driver opens its own tab and Chrome holds
+// the session cookies in the profile, so "no tab open" is a healthy lane. Proven
+// 2026-09-07 — with zero Outlook tabs in the context, ensureOutlookTab opened one
+// and landed signed in as test.fac in seconds. Gating on the tab turned that
+// healthy lane into three BLOCKED rows, hiding real coverage.
+//
+// So the email rows RUN whenever CDP is up, and BLOCKED is decided from their own
+// output: the product has a first-class `needs_signin` status for exactly this
+// state (outlook-actions.ts:302+), and that string — not a guess about the
+// environment — is the classifier. Anything else that fails stays a FAIL.
+const CDP_UP = !STATIC_ONLY && probe('curl -s -o /dev/null --max-time 3 http://127.0.0.1:18792/json/version');
+// Diagnostic only, and printed rather than swallowed: the tab probe no longer
+// decides whether rows run, so a wrong answer here can no longer hide coverage.
+// Matched on its POSITIVE token, never on exit 0 alone: a script that no-ops
+// exits 0, and the probe's own main-module guard was one whose correctness
+// depended on the shape of the path it ran from (it no-ops on Windows and on any
+// percent-encoded path — see the guard comment there). Absence of evidence must
+// not read as evidence.
+const OUTLOOK_TAB = CDP_UP && probe('node scripts/probe-outlook-tab.mjs | grep -q "^outlook-tab: present"');
 if (STATIC_ONLY) {
   skip('live-lane', 'T1', 'email+forms', 'GA_GATE_STATIC=1');
-} else if (!probe("curl -s -o /dev/null --max-time 3 http://127.0.0.1:18792/json/version")) {
-  skip('live-lane', 'T1', 'email+forms', 'Chrome CDP :18792 not reachable — start the lane and rerun');
+} else if (!CDP_UP) {
+  skip('live-lane', 'T1', 'email+forms', 'Chrome CDP :18792 not reachable — start the lane and rerun', { blocked: true });
 } else {
   // Lane hygiene between live checks: any timed-out row can leave a compose
   // open and cascade into the NEXT check (seen live 2026-09-03). Cheap and
   // idempotent, so run it before each lane consumer that drafts.
   const CLEAN = 'pnpm exec tsx scripts/outlook-cleanup-compose.ts >/dev/null 2>&1;';
-  run('outlook-eval 15-row (K6/K14 guards)', 'T1', 'ExtValA', `${CLEAN} pnpm exec tsx scripts/v2-eval.ts`);
-  run('stale-read check (CLWX-46 guard)', 'T1', 'ExtValA', 'pnpm exec tsx scripts/clwx46-stale-read-check.ts');
-  run('compose auto-recovery (CLWX-58 guard)', 'T1', 'ExtValA', `${CLEAN} pnpm exec tsx scripts/clwx58-compose-recovery-check.ts`);
+  console.log(`[T1] preflight: CDP up, Outlook tab already open = ${OUTLOOK_TAB} (diagnostic only — the driver opens its own tab)`);
+  const SIGNIN_WHY = 'lane BLOCKED, not a product failure — the row exited 2 (its own "lane not ready" code), which on this lane means the Chrome session could not present a usable mailbox (Microsoft sign-in wall, or too few rows to assert against), so nothing about email integration was tested. CAE revokes cookies within minutes on this tenant, so this is routine. Unlock: in the SAME Chrome (profile=user), sign in as the test.fac sandbox account, then rerun. See the row log for which of the two it was';
+  const EMAIL_ROW = { laneContract: true, blockedWhy: SIGNIN_WHY };
+  run('outlook-eval 15-row (K6/K14 guards)', 'T1', 'ExtValA', `${CLEAN} pnpm exec tsx scripts/v2-eval.ts`, EMAIL_ROW);
+  run('stale-read check (CLWX-46 guard)', 'T1', 'ExtValA', 'pnpm exec tsx scripts/clwx46-stale-read-check.ts', EMAIL_ROW);
+  run('compose auto-recovery (CLWX-58 guard)', 'T1', 'ExtValA', `${CLEAN} pnpm exec tsx scripts/clwx58-compose-recovery-check.ts`, EMAIL_ROW);
   run('forms Suspensions fill+gate (dry)', 'T1', 'forms', 'pnpm exec tsx scripts/forms-fill-suspensions.ts');
   run('forms Daily Report fill+gate (dry, CLWX-62)', 'T1', 'forms', 'pnpm exec tsx scripts/forms-fill-daily-report.ts');
-  if (SEND) run('2-gate SEND proof (sandbox)', 'T1', 'email', `${CLEAN} pnpm exec tsx scripts/v2-send-test.ts`);
+  // The SEND row keeps a stricter rule than the read rows: a real dispatch is
+  // never attempted speculatively. It runs only when the operator asked for it
+  // AND a signed-in tab is already visible, and reclassifies the same way.
+  // "no Outlook tab is open" is exactly what the probe can support and no more:
+  // it reads CDP targets by hostname and knows nothing about auth state, so a tab
+  // left on outlook.office.com after CAE revocation satisfies it (Claude
+  // correctness lens, 2026-09-07 — the message used to claim "signed-in").
+  if (SEND && !OUTLOOK_TAB) skip('2-gate SEND proof', 'T1', 'email', `GA_GATE_SEND=1 but no Outlook tab is open, and a live dispatch is not attempted speculatively. Unlock: open outlook.cloud.microsoft as the test.fac sandbox account in the SAME Chrome, then rerun`, { blocked: true });
+  else if (SEND) run('2-gate SEND proof (sandbox)', 'T1', 'email', `${CLEAN} pnpm exec tsx scripts/v2-send-test.ts`, EMAIL_ROW);
   else skip('2-gate SEND proof', 'T1', 'email', 'GA_GATE_SEND!=1 (refusal rows covered by the eval; real dispatch opt-in)');
   if (FULL) run('NSCC Q&A eval (CLWX-42)', 'T1', 'routine-query', 'pnpm exec tsx scripts/nscc-qna-eval.ts');
   else skip('NSCC Q&A eval', 'T1', 'routine-query', 'GA_GATE_FULL!=1');
@@ -122,26 +217,56 @@ const vmBound = probe(`nc -z -w3 localhost ${VM_PORT}`);
 // Negative control: if a port nothing listens on also answers, the probe
 // method itself is untrustworthy and no verdict from it may be believed (PF-3).
 const vmProbeSane = !probe('nc -z -w2 localhost 9999');
+// These three are all environment blocks, so they carry blocked:true — honest
+// metadata a reader (and the markdown footer) can distinguish from a flag choice.
+// They do NOT enter the required-tier PARTIAL qualifier: T2 is optional by design
+// (the V-batch owns these surfaces) and the tunnel is down in the normal case, so
+// qualifying every default run would be warning fatigue, not signal.
 if (!vmProbeSane) {
-  skip('vm-lane (KR2 + W-matrix)', 'T2', 'KR2', `probe method UNTRUSTWORTHY — control-leg port 9999 answered, so the :${VM_PORT} result proves nothing; investigate before believing any tunnel state`);
+  skip('vm-lane (KR2 + W-matrix)', 'T2', 'KR2', `probe method UNTRUSTWORTHY — control-leg port 9999 answered, so the :${VM_PORT} result proves nothing; investigate before believing any tunnel state`, { blocked: true });
 } else if (!vmBound) {
-  skip('vm-lane (KR2 + W-matrix)', 'T2', 'KR2', 'IAP tunnel down (no local listener) — VM surfaces evidenced by the last V-batch (see state vector); start VM + rerun batch to refresh');
+  skip('vm-lane (KR2 + W-matrix)', 'T2', 'KR2', 'IAP tunnel down (no local listener) — VM surfaces evidenced by the last V-batch (see state vector); start VM + rerun batch to refresh', { blocked: true });
 } else if (probe(`ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=no -p ${VM_PORT} ${VM_USER}@localhost 'echo GUEST_SSH_OK' 2>/dev/null | grep -q GUEST_SSH_OK`)) {
   results.push({ id: 'vm-lane', tier: 'T2', box: 'KR2+W-matrix', status: 'INFO', secs: 0, optional: true, tail: `IAP tunnel up AND guest ssh handshake verified on :${VM_PORT} — run the V-batch workflow for install-verify + W-matrix surfaces` });
   console.log('[T2] vm-lane ... INFO (tunnel up, handshake verified; V-batch owns these surfaces)');
 } else {
-  skip('vm-lane (KR2 + W-matrix)', 'T2', 'KR2', `IAP tunnel NOT USABLE — :${VM_PORT} is bound but the guest ssh handshake failed, which is a live tunnel with dead credentials. This lane is BLOCKED, not available. Owner (interactive): gcloud auth login; if auth is already good: pkill -f start-iap-tunnel, then re-run`);
+  skip('vm-lane (KR2 + W-matrix)', 'T2', 'KR2', `IAP tunnel NOT USABLE — :${VM_PORT} is bound but the guest ssh handshake failed, which is a live tunnel with dead credentials. This lane is BLOCKED, not available. Owner (interactive): gcloud auth login; if auth is already good: pkill -f start-iap-tunnel, then re-run`, { blocked: true });
 }
 
 // ── Scorecard ─────────────────────────────────────────────────────────────
-const fails = results.filter((r) => r.status === 'FAIL' && !r.optional);
-const skips = results.filter((r) => r.status === 'SKIP');
-let md = `# GA gate run — ${new Date().toISOString()}\n\nflags: static=${STATIC_ONLY} full=${FULL} send=${SEND}\n\n| Check | Tier | GA box | Status | s | Tail |\n|---|---|---|---|---|---|\n`;
+// All of the judgement lives in ./ga-gate-verdict.mjs so a test can drive it with
+// synthetic rows; this block only renders what it returns.
+//
+// A blocked skip at a required tier is the one thing a GREEN verdict can hide.
+// T0 is always required; T1 is required unless GA_GATE_STATIC. This matters more
+// since T1 became row-granular: the email rows can block while the forms rows
+// pass, so the tier LOOKS run. GREEN then reads as "the email lane passed" when
+// it never executed. The verdict therefore carries the qualifier inline rather
+// than relying on the reader to scan the table.
+//
+// Deliberately a LABEL, not enforcement: the exit code is unchanged. Making a
+// required-tier skip exit non-zero is CLWX-106's scope (skip-fail semantics +
+// release enforcement) — the header's exit contract has always over-claimed that
+// rule (proven: the gate printed GREEN with T1 fully skipped before this change).
+// Flag-driven skips are excluded on purpose; a qualifier that fires on every
+// default run carries no signal.
+const { headline, qualifier, fails, skips, blockedOptional } = scorecard(results, { staticOnly: STATIC_ONLY });
+const partial = headline.startsWith('INCOMPLETE');
+// Local calendar date, computed BEFORE the title: the run is read as "today's gate"
+// by a human in AST and toISOString rolls over at 20:00 local, so a UTC title put
+// tomorrow's date on a report filed under today's filename (LOW-13).
+const stamp = new Date();
+const day = `${stamp.getFullYear()}-${String(stamp.getMonth() + 1).padStart(2, '0')}-${String(stamp.getDate()).padStart(2, '0')}`;
+let md = `# GA gate run — ${day} (${stamp.toISOString()})\n\nflags: static=${STATIC_ONLY} full=${FULL} send=${SEND}\n\n| Check | Tier | GA box | Status | s | Tail |\n|---|---|---|---|---|---|\n`;
 for (const r of results) md += `| ${r.id} | ${r.tier} | ${r.box} | **${r.status}** | ${r.secs} | ${r.tail.replace(/\|/g, '/')} |\n`;
-md += `\n**Verdict: ${fails.length === 0 ? 'GREEN' : 'RED'}** — ${results.filter((r) => r.status === 'PASS').length} pass / ${fails.length} fail / ${skips.length} skip.\n`;
+md += `\n**Verdict: ${headline}${qualifier}** — ${results.filter((r) => r.status === 'PASS').length} pass / ${fails.length} fail / ${skips.length} skip.\n`;
 md += skips.length ? `\nSkips are NOT coverage — each names its unlock above.\n` : '';
+md += blockedOptional.length ? `\nBlocked optional lanes (owned by the V-batch, not by this gate): ${blockedOptional.map((r) => r.id).join('; ')}.\n` : '';
 mkdirSync('docs/evidence', { recursive: true });
-const out = path.join('docs/evidence', `GA_GATE_${new Date().toISOString().slice(0, 10)}.md`);
+// Never clobber: a second run must not silently overwrite the report a board
+// comment already cites. (`day` is computed with the title, above.)
+let out = path.join('docs/evidence', `GA_GATE_${day}.md`);
+for (let n = 2; existsSync(out); n += 1) out = path.join('docs/evidence', `GA_GATE_${day}_run${n}.md`);
 writeFileSync(out, md);
-console.log(`\n${fails.length === 0 ? '✓ GATE GREEN' : '✗ GATE RED'} — ${results.filter((r) => r.status === 'PASS').length} pass, ${fails.length} fail, ${skips.length} skip. Report: ${out}`);
+console.log(`\n${fails.length > 0 ? '✗ GATE RED' : partial ? '! GATE INCOMPLETE' : '✓ GATE GREEN'}${qualifier} — ${results.filter((r) => r.status === 'PASS').length} pass, ${fails.length} fail, ${skips.length} skip. Report: ${out}`);
 process.exit(fails.length === 0 ? 0 : 1);

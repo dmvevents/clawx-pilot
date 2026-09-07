@@ -71,15 +71,27 @@ returned wrong content. Fixed in commit `e2f084d5` (`scripts/v2-eval.ts` +
 immediately before acting and retries once on a safe `not_found`; W7.1 and the
 standalone check now fail ONLY on an actual leak (an ok read whose subject
 belongs to a DIFFERENT message) and require ≥1 demonstrably-correct read. **No
-production code changed.** Result: full `pnpm ga:gate` **GREEN — 9 pass / 0 fail
-/ 2 opt-in skip** (T0 static + T1 live: 15-row eval, CLWX-46 stale-read check,
-Suspensions + Daily Report fill+gate dry). Report `docs/evidence/GA_GATE_2026-09-04.md`.
+production code changed.** Result as claimed at the time: full `pnpm ga:gate`
+**GREEN — 9 pass / 0 fail / 2 opt-in skip** (T0 static + T1 live: eval, CLWX-46
+stale-read check, Suspensions + Daily Report fill+gate dry).
+**CORRECTION 2026-09-07 — this citation does not support that claim.**
+`docs/evidence/GA_GATE_2026-09-04.md` on disk reports **GREEN 5 pass / 0 fail /
+1 skip** with `live-lane | T1 | email+forms | SKIP | GA_GATE_STATIC=1` (line 12).
+Either the 9/0/2 full run's report was overwritten by a later static run the same
+day — reports were single-slot per date until `_runN` suffixing was added — or the
+number was never sourced from a report at all. Both readings mean the same thing:
+**the surviving evidence for 2026-09-04 is a static run that did not touch the
+live email rows.** Treat 9/0/2 as unsupported. Every GREEN gate report on disk
+(09-03, 09-04, 09-05, 09-06) carries the same `GA_GATE_STATIC=1` live-lane skip;
+the first runs ever to reach the live email rows are both dated 2026-09-07, and
+the second is RED (`docs/evidence/GA_GATE_2026-09-07_run2.md`).
 Board (all already at Ready — caveats removed, not moves): CLWX-46/81/70/79
 commented live-GREEN; CLWX-62 commented fill+gate-dry-PASS with the recorded
 live submit noted as the honest owner-gated remainder; CLWX-73 commented with
 the live lane running on Chrome 152/user-profile as SUPPORTING (not full) proof;
 CLWX-90 (master gate) commented with the authoritative scorecard. Kept honestly
-not-green: CLWX-74 (Todo, non-VLM locator fallback), CLWX-95/96 (Backlog, seam),
+not-green: CLWX-74 (Ready since 2026-09-05, non-VLM locator fallback; this line
+read "Todo" until the 2026-09-07 board audit), CLWX-95/96 (Backlog, seam),
 CLWX-18/19 (owner-gated). VM/packaged legs (CLWX-97, CLWX-76 leg3, CLWX-78 full
 degrade) stay VM-pending — the Mac lane does not advance them. Owner asks
 unchanged from the fix-sprint delta above; the 2-gate real SEND and a recorded
@@ -1638,6 +1650,143 @@ the production-integration milestone, not a GA blocker.
   1627/6-skip; typecheck+lint clean. Remaining for Ready: sandbox positive
   legs + Claude-Code client leg + full lenses (Chrome/build/operator-
   gated). NEXT QUEUED: CLWX-105 (in-line error chip).
+- 2026-09-07 fourteenth tick (T1 honesty -> a PRODUCT defect, CLWX-90 + new
+  CLWX-118): fixing the gate's second false-attribution found a real bug in
+  shipped code. Chain: T1 was gated behind ONE CDP-reachability probe, but a
+  reachable `:18792` proves Chrome is listening, not that email is usable - with
+  CDP up and no signed-in Outlook tab the three email rows died at the sign-in
+  wall and the scorecard blamed the PRODUCT. That is the T1 sibling of last
+  tick's T2 tunnel defect and the same violation of the gate's own probe-honesty
+  rule (`vm-verify-moe19.sh:100-116`: an environment gate the owner can clear
+  must classify BLOCKED, "never as a product FAIL"). Fix: T1 is row-granular by
+  what each row actually needs; the three email rows skip as BLOCKED with their
+  unlock named; `GA_GATE_SEND=1` without a tab skips instead of attempting a
+  real dispatch. **While proving the tab precondition, read-only, the driver
+  itself turned out to steal the principal's tab.**
+  `outlook-browser-v2/playwright-driver.ts::ensureOutlookTab()` did
+  `pages.find(isOutlook) ?? pages[0] ?? newPage()` then `goto(outlook)` - and by
+  hard rule this driver attaches to the principal's OWN Chrome (`profile=user`),
+  so `context.pages()` is their real work. Proven live on the Mac lane:
+  `pages[0]` was a playing YouTube tab while an unused `chrome://new-tab-page`
+  sat at index 2. Present since the original v2 commit `bfd55b90`, so it shipped
+  in EVERY moe build; the principal loses a half-written form mid-task and reads
+  it as the assistant breaking their browser - exactly the trust `profile=user`
+  exists to protect. This is the FIRST product member of the "one surface never
+  learned the repo's own technique" family (VERIFY-VACUOUS-PACKAGES,
+  PROBE-STEERS-PAST-DEFECT, GATE-TUNNEL-FALSE-GREEN were all harness): the
+  *forms* driver already did it right (`forms-driver.ts:227-234` matches its own
+  response page, else `ctx.newPage()`), only Outlook took a tab, and no test
+  covered tab selection at all. Fix in three parts, and parts 2-3 close defects
+  the FIRST fix introduced - both raised by the Codex cross-model lens, which
+  earns its lane here: (1) ownership tracked in a per-instance WeakSet, the only
+  claimable unowned page being the committed new-tab page; (2) `about:blank`
+  REFUSED, because Playwright reports the last *committed* url so a popup
+  mid-navigation and a `document.write()` page both read `about:blank` while
+  holding the principal's state - one extra tab is the cheap side of that trade;
+  (3) an owned tab is retained across Microsoft's sign-in hosts, since fix 1 made
+  the reused tab ineligible once Outlook bounced to `login.microsoftonline.com`
+  and opened a NEW tab per call (reproduced: 3 tabs for 3 calls), and CAE revokes
+  cookies within minutes on this tenant so that redirect is routine, not an edge
+  case. Codex also broke the gate's tab probe three ways (it was a `grep` over
+  raw CDP JSON): it matched non-page targets (an Outlook *service worker* is not
+  drivable), matched any field (a page whose title or `?next=` merely QUOTED an
+  Outlook URL), and matched look-alikes (`outlook.office.example.com`) - each
+  would have re-created the false attribution fix 1 removes. Replaced by
+  `scripts/probe-outlook-tab.mjs` (parsed JSON, `type === 'page'`, https, exact
+  hostname allowlist mirroring the driver's entrypoints) + 8 pinning rows.
+  Verdict labelling: GREEN now carries `/ PARTIAL - N required check(s) were
+  BLOCKED and never ran (...)` in console AND markdown, counting only
+  environment-blocked skips - flag-driven ones (`GA_GATE_STATIC`, `!E2E`,
+  `!FULL`, `!SEND`) are excluded on purpose, because a qualifier that fires on
+  every default run is warning fatigue, not signal. Exit code deliberately NOT
+  changed and refuted-with-reason to Codex: CLWX-106 owns skip-fail semantics
+  *and* release enforcement together, and splitting them yields a gate that is
+  RED on every dev machine without a live Outlook tab, which trains people to
+  ignore RED. The header comment claiming "non-zero if a REQUIRED tier was fully
+  skipped" was an over-claim with NO implementation behind it
+  (`process.exit(fails.length === 0 ? 0 : 1)` is the whole rule); it now states
+  the truth and points at CLWX-106, whose acceptance absorbed Codex's
+  recommendation (track required checks explicitly; `GA_GATE_SEND=1` with no tab
+  must be a BLOCKED non-zero because the operator ASKED for that proof). Gate
+  round 1 (no authed tab): `GREEN / PARTIAL` 9 pass / 0 fail / 7 skip, and **both
+  forms rows PASS - the first live-lane rows ever to execute inside a gate run**;
+  anti-vacuity read from the per-check logs rather than the verdict (Suspensions
+  drift `matched=30/30 unmatchedLive=0`, `filled=29 skipped=4 errors=0`; Daily
+  Report drift `matched=30/30`, `filled=55 skipped=2 errors=0`; hard-confirm
+  REFUSED on both; no submit fired). Falsifiability was itself a lesson: the
+  first mutation harness ran two test files under one `-t` filter and a file with
+  no matching row makes vitest exit non-zero, which is INDISTINGUISHABLE from a
+  guard firing - all three results were discarded and re-run one file per leg
+  with the mutation asserted applied; all four legs then came back REAL with the
+  right assertions (removing owned-tab retention fails with `expected "vi.fn()"
+  to be called 1 times, but got 3 times`, independently reproducing Codex's exact
+  claim) and every file restored byte-identical. Scope deliberately NOT widened:
+  `allowManagedProfileFallback` is still inert dead config (normalized at
+  `chrome-cdp.ts:223`, never read) passed by 2 drivers + 4 test call sites - a
+  LOW cleanliness follow-up under CLWX-73's own stated removal condition, left
+  out rather than folded in. Register rows OUTLOOK-TAB-STEAL and
+  GATE-T1-BLOCKED-AS-FAIL added. Typecheck + eslint clean; 14/14 on the two
+  focused suites; full unit suite PASS inside the gate. Evidence:
+  `docs/evidence/GA_GATE_2026-09-07.md`.
+  **Round 2 of the same tick - the review lane found that MY fix was itself a
+  fail-open, and that is the most important fact in this entry.** The first
+  version of the BLOCKED classifier regex-matched `/needs_signin/` over each
+  row's combined stdout+stderr. `clwx46-stale-read-check.ts` prints
+  `[SAFE-REFUSE: ... status=needs_signin]` on its HEALTHY path (`:91`) and exits 1
+  on a real stale-read LEAK (`:118`) - so ONE healthy refusal occurring in the
+  same run as the actual CLWX-46 defect would have relabelled that defect "lane
+  blocked" and exited **0**. A regex over stdout is fail-OPEN because any single
+  row can emit the token; an exit code is a whole-run contract. Strictly worse
+  than the FAIL it replaced: a recognised-but-misattributed failure ships a
+  positive claim the log disproves. Fixed by a uniform lane-script exit contract -
+  `0` pass / `1` product failure / `2` lane not ready - implemented in all four
+  lane scripts (`clwx46-stale-read-check.ts:58,72,118,122,126,131`,
+  `clwx58-compose-recovery-check.ts:74,86,124,127,132`, `v2-eval.ts:549,555`,
+  `v2-send-test.ts:32-63,69`), with `v2-eval.ts` requiring that EVERY failing row
+  died at the sign-in wall before it may exit 2. Fail-closed: a row must declare
+  the contract, so `pnpm lint:ps` exiting 2 stays RED. The same lens caught the
+  over-correction (MEDIUM-2): keying "NOT TESTED" off *any* blocked required row
+  printed "Email: NOT TESTED this run. Nothing about Email was proven." while the
+  transcript showed three green email rows - an under-claim as dishonest as the
+  over-claim. "NOT TESTED" is now a claim about a SURFACE and may only be made
+  when that surface has ZERO executed rows; a hole inside a proven surface gets
+  its own "partial coverage" sentence.
+  **Systemic fix, not a patch: `scripts/ga-gate.mjs` - THE acceptance gate - had
+  ZERO tests.** `grep -rl ga-gate tests/` returned nothing, which is precisely how
+  a fail-open shipped inside it and survived two lenses. The gate script cannot be
+  imported (it spawns pnpm and calls `process.exit` at module scope), so the
+  judgement moved to a new pure module `scripts/ga-gate-verdict.mjs`
+  (`classifyRow`, `surfacesOf`, `scorecard`) which the gate imports as its SINGLE
+  decision point - a test pinning a copy would verify a surface that is not the
+  shipped surface. Pinned by `tests/unit/ga-gate-verdict.test.ts`, **17 rows**,
+  first row the HIGH-1 regression. Pure-module extraction was chosen over a
+  main-module guard deliberately: no I/O and no side effects on import means no
+  `invokedDirectly()` guard, avoiding the `file://${process.argv[1]}` path-shape
+  trap documented at `scripts/probe-outlook-tab.mjs:62-83`. Falsifiability 6/6
+  REAL (exit-code contract; unproven-ignores-executed-surfaces; staticOnly;
+  optional-failures; T2-qualifies; email-family surface map), **13/13 mutation
+  legs REAL across the whole tick**, control 17/17 green, source restored
+  byte-identical. My own mutation harness was broken first and reported false
+  VACUOUS on all five legs: `--reporter=basic` was REMOVED in vitest 4.1.1, every
+  leg died at reporter module-load, and my guard only scanned for known failure
+  strings - a NEGATIVE guard cannot detect a harness that never ran. The guard is
+  now POSITIVE: a leg must print a `Tests N passed|failed` summary or it is
+  declared invalid.
+  **Round-2 live gate: `RED` - 11 pass / 1 fail / 4 skip**, and the RED is the
+  point: with a signed-in tab the three email rows executed for the FIRST time
+  ever inside a gate run (CLWX-46 stale-read PASS, CLWX-58 compose-recovery PASS)
+  and `outlook-eval` failed honestly at W3.2 (`status=not_found
+  attachments=undefined`, cause logged as `reading-pane settle FAILED: pane stayed
+  on a different message`), 16/18 rows. Post-refactor static re-run: `GREEN` 7
+  pass / 0 fail / 3 skip (`docs/evidence/GA_GATE_2026-09-07_run3.md`), proving the
+  extraction did not break the gate. **New finding, no card existed: the 18-row
+  eval is not reproducible.** Two runs ten minutes apart on identical code gave
+  W4.1 PASS + W3.2 FAIL (in-gate, 00:58) and W4.1 FAIL + W3.2 PASS (standalone,
+  01:08), both 16/18 - so a single eval run cannot support a GO/NO-GO box either
+  way, and W4.1's passing run took 83,474 ms with no latency assertion anywhere in
+  the suite. Also corrected: the gate labels this row "15-row" while
+  `/tmp/v2-eval-results.json` reports `total: 18`. Evidence:
+  `docs/evidence/GA_GATE_2026-09-07_run2.md`, `..._run3.md`.
 - 2026-09-06 thirteenth tick (gate probe honesty, CLWX-90): the health pulse
   itself was the finding. `GA_GATE_STATIC=1 pnpm ga:gate` came back GREEN (7
   pass / 0 fail / 2 skip) with T2 reading "IAP tunnel up - run the V-batch
@@ -1918,7 +2067,10 @@ Chrome CDP/gateway state probed per-lane by the executing agents.
 
 CLWX-18 scrub, CLWX-19 rotation, trim unhold (`7add864b`), latency budget
 sign-off, KR2 acceptance decision, external-tester handoff, CLWX-45 per-item
-GO, close the 18 Ready cards. **New this tick:** (a) GO on the drafted Raj
+GO, close the Ready queue — **61 cards as of the 2026-09-07 export, not the 18
+this line said until then; 0 of 117 cards have ever been closed Done, so "Ready"
+currently carries no signal distinguishing finished from awaiting-blessing.**
+**New this tick:** (a) GO on the drafted Raj
 Graph-working update (`outbound-drafts/2026-09-02-raj-graph-signin-working-DRAFT.md`);
 (b) rotate the Entra client secret Ansari shared — PKCE means we never need it.
 

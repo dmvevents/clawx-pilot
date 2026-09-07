@@ -546,6 +546,25 @@ async function main() {
   writeFileSync('/tmp/v2-eval-results.json', JSON.stringify(summary, null, 2));
   console.log('\nResults saved to /tmp/v2-eval-results.json');
 
+  // Whole-run lane contract, so scripts/ga-gate.mjs never has to infer our verdict
+  // from a substring of our output. It used to regex /needs_signin/ over the whole
+  // combined stdout, which any SINGLE row can emit — so one sign-in refusal in the
+  // same run as a real product failure relabelled the product failure "lane
+  // blocked" and exited 0 (Claude correctness lens, 2026-09-07).
+  //
+  // Exit 2 (this repo's "lane not ready") therefore requires that EVERY failing row
+  // died at the sign-in wall. One non-sign-in failure and the run stays exit 1, a
+  // product FAIL. Deliberately conservative in the direction that keeps defects
+  // visible.
+  const failing = results.filter((r) => r.status === 'fail');
+  const signinFails = failing.filter((r) => /needs_signin/i.test(r.notes ?? ''));
+  if (failing.length > 0 && signinFails.length === failing.length) {
+    console.log(
+      `\nEVAL ABORTED: needs_signin (${signinFails.length}/${failing.length} failing rows) — every failure was the Microsoft sign-in wall, so this run proves nothing about email integration. Lane not ready, not a product failure.`,
+    );
+    process.exit(2);
+  }
+
   process.exit(failed > 0 ? 1 : 0);
 }
 

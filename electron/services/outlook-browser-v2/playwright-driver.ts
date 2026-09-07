@@ -51,13 +51,75 @@ import {
  * Microsoft is migrating outlook.office.com → outlook.cloud.microsoft;
  * both work today and we accept both. Some tenants may also redirect
  * through outlook.office365.com.
+ *
+ * WORK accounts only. `outlook.live.com` (consumer Hotmail/Outlook.com) was
+ * briefly listed here and is deliberately gone: this product is tenant-only
+ * (`@moe.gov.tt` / `@fac.edu.tt`), and matching it meant a principal's personal
+ * mailbox tab could be adopted as THE mailbox — reading, drafting, and running
+ * the two-gate send against the wrong account. The wrong-mailbox hazard is worse
+ * than opening one extra tab. `scripts/probe-outlook-tab.mjs` mirrors this exact
+ * list and `tests/unit/probe-outlook-tab.test.ts` pins the parity.
  */
 const OUTLOOK_HOST_PATTERNS = [
   /^https:\/\/outlook\.office\.com\//i,
   /^https:\/\/outlook\.office365\.com\//i,
   /^https:\/\/outlook\.cloud\.microsoft\//i,
-  /^https:\/\/outlook\.live\.com\//i,
 ];
+
+/**
+ * The browser's own new-tab page — a COMMITTED, definitely-empty target, so
+ * navigating it destroys nothing. Everything else in the context belongs to the
+ * principal: this driver attaches to THEIR Chrome by hard rule (profile=user),
+ * so the page list is their real work, not a pool of scratch tabs.
+ *
+ * `about:blank` and '' are deliberately NOT here. Playwright reports the last
+ * COMMITTED url, so a principal's popup that is mid-navigation somewhere else
+ * still reads as about:blank, and a document.write() page keeps about:blank while
+ * holding unsaved input. Claiming those is the same theft with extra steps
+ * (Codex adversarial review, 2026-09-07). Ownership is tracked explicitly
+ * instead — an unclaimable context just costs us one new tab, which is the
+ * cheap side of this trade.
+ */
+const NEW_TAB_PAGE_PATTERNS = [
+  /^chrome:\/\/new-?tab-?page\/?$/i,
+  /^chrome:\/\/newtab\/?$/i,
+  /^edge:\/\/newtab\/?$/i,
+];
+
+/**
+ * Microsoft's sign-in wall. Outlook redirects here whenever the session expires
+ * (CAE revokes cookies in minutes on this tenant), and a tab WE CREATED is still
+ * ours while it sits there. Treating it as "not Outlook" made every following
+ * tool call open another tab — three calls, three tabs — which is exactly the
+ * duplicate-pane failure the single-tab discipline exists to prevent.
+ *
+ * Work-account sign-in hosts only, and used ONLY to keep a tab we created (never
+ * to claim one). `login.live.com` is deliberately absent for the same reason
+ * `outlook.live.com` is: consumer identity is not this product's business.
+ */
+const MICROSOFT_AUTH_HOST_PATTERNS = [
+  /^https:\/\/login\.microsoftonline\.(com|us)\//i,
+  /^https:\/\/device\.login\.microsoftonline\.com\//i,
+  /^https:\/\/login\.microsoft\.com\//i,
+  /^https:\/\/login\.windows\.net\//i,
+  /^https:\/\/autologon\.microsoftazuread-sso\.com\//i,
+];
+
+/** Exported for the host-list parity test against scripts/probe-outlook-tab.mjs. */
+export function isOutlookUrl(url: string): boolean {
+  return OUTLOOK_HOST_PATTERNS.some((re) => re.test(url ?? ''));
+}
+
+/** Where we always land, so every action starts from the inbox view. */
+const OUTLOOK_MAIL_URL = 'https://outlook.office.com/mail/';
+
+function isNewTabPage(url: string): boolean {
+  return NEW_TAB_PAGE_PATTERNS.some((re) => re.test((url ?? '').trim()));
+}
+
+function isMicrosoftAuthUrl(url: string): boolean {
+  return MICROSOFT_AUTH_HOST_PATTERNS.some((re) => re.test(url ?? ''));
+}
 
 export interface DriverConfig {
   /** CDP endpoint exposed by the running Chrome (e.g. http://127.0.0.1:18792). */
@@ -77,6 +139,30 @@ export class PlaywrightDriver {
   private context: BrowserContext | null = null;
   private page: Page | null = null;
   private readonly dialogHandledPages = new WeakSet<Page>();
+  /**
+   * Tabs this driver CREATED (context.newPage) or claimed while they were the
+   * browser's committed new-tab page, mapped to the URL we navigated them to.
+   * Membership is the ONLY thing that authorizes navigating a page away from what
+   * it currently shows.
+   *
+   * Deliberately not "pages we have used": the first fix added every page it
+   * matched — including a pre-existing Outlook tab of the principal's — and
+   * Chrome keeps the same CDP target (so the same Page object) across same-tab
+   * navigations. A tab granted rights because it was on Outlook at 09:00 stayed
+   * grantable at 11:00 when the principal had moved it to a half-written form,
+   * which resurrects the exact theft this fix exists to stop.
+   *
+   * The grant is also not permanent, for the same reason pointed the other way
+   * (Claude correctness lens, 2026-09-07): we open our tab AND bring it to the
+   * front, so the tab we would hold rights over forever is precisely the one the
+   * principal is now looking at and liable to type a URL into. `stillOurs` spends
+   * the grant the moment the tab no longer holds what we put there.
+   *
+   * Known limit, recorded rather than papered over: a WeakMap is per-Page-object,
+   * so ownership does not survive a CDP reconnect (fresh Page objects) or another
+   * process. The failure mode of forgetting is conservative — we open a new tab.
+   */
+  private readonly createdPages = new WeakMap<Page, string>();
   private readonly cfg: Required<DriverConfig>;
 
   constructor(cfg: DriverConfig = {}) {
@@ -92,6 +178,14 @@ export class PlaywrightDriver {
   /** Connect to a running Chrome via CDP, falling back to self-launch. */
   async ensureBrowser(): Promise<void> {
     if (this.browser && this.browser.isConnected()) return;
+
+    // Every path below establishes a NEW connection, which means new Page objects.
+    // Anything this.page still points at belongs to the dead one, and whether
+    // isClosed() flips on a CDP disconnect is not something we should bet a
+    // navigation on — so forget it here rather than operate a stale handle. Losing
+    // it is conservative: ensureOutlookTab re-finds a real Outlook tab, or opens
+    // one. (The createdPages grants are per-Page-object and lapse for free.)
+    this.page = null;
 
     // Path 1: CDP attach — cheapest, preserves user's running session.
     try {
@@ -137,38 +231,153 @@ export class PlaywrightDriver {
    */
   async ensureOutlookTab(opts?: { forceNavigate?: boolean }): Promise<Page> {
     await this.ensureBrowser();
-    if (!this.context) {
+    const ctx = this.context;
+    if (!ctx) {
       throw new Error('PlaywrightDriver: no browser context after ensureBrowser');
     }
+    const force = opts?.forceNavigate === true;
+    const live = () => ctx.pages().filter((p) => !p.isClosed());
+    const usable = (p: Page | null): p is Page => p !== null && !p.isClosed();
 
-    // Reuse an existing live page if we already have one.
-    if (this.page && !this.page.isClosed()) {
-      const url = this.page.url();
-      if (OUTLOOK_HOST_PATTERNS.some((p) => p.test(url)) && !opts?.forceNavigate) {
-        return this.page;
+    // ── Phase 1: is a usable Outlook tab already open? ─────────────────────
+    // Order matters. The scan for a live Outlook tab must come BEFORE the
+    // fast path for our own tab parked on the sign-in wall: the reverse order
+    // stranded every call on that sign-in page while a signed-in Outlook tab sat
+    // one index away in the same context (the principal signs in themselves in
+    // another tab, which is the normal recovery on this tenant).
+    if (!force) {
+      if (usable(this.page) && isOutlookUrl(this.page.url())) return await this.attachTo(this.page);
+      const open = live().find((p) => isOutlookUrl(p.url()));
+      if (open) return await this.attachTo(open);
+      // Our own tab mid-sign-in. Retries must land back on it, not stack tabs.
+      if (usable(this.page) && this.stillOurs(this.page) && isMicrosoftAuthUrl(this.page.url())) {
+        return await this.attachTo(this.page);
       }
     }
 
-    // Walk all pages in the context, prefer one already on Outlook.
-    const pages = this.context.pages();
-    let outlookPage = pages.find((p) => OUTLOOK_HOST_PATTERNS.some((re) => re.test(p.url())));
-    if (!outlookPage) {
-      outlookPage = pages[0] ?? await this.context.newPage();
+    // ── Phase 2: pick a tab we are ALLOWED to navigate ─────────────────────
+    // Taking pages[0] here navigated whatever the principal happened to have in
+    // their first tab away from under them — proven live 2026-09-06 on the Mac
+    // lane, where pages[0] was a playing YouTube tab and an unused
+    // chrome://new-tab-page sat at index 2. The principal loses a half-written
+    // form or a class list and reads it as the assistant breaking their browser,
+    // which is exactly the trust the profile=user rule exists to protect.
+    //
+    // So navigation rights come from creation, never from what a page reports.
+    // The one exception is forceNavigate (a dev entrypoint: scripts/v2-goto-inbox
+    // .ts) re-homing a tab that is already inside Outlook — intra-app, and what
+    // that script means by "go to the inbox".
+    // `live().includes` and not just `!isClosed()`: ensureBrowser can have replaced
+    // the connection under us, and a Page from the dead one does not necessarily
+    // report closed. It nulls this.page on reconnect, and this is the belt to that
+    // brace — an operation on a stale handle is worse than opening a tab.
+    const own = live();
+    const reusableOwn = usable(this.page) && own.includes(this.page) && this.stillOurs(this.page)
+      ? this.page
+      : own.find((p) => this.stillOurs(p));
+    // Under forceNavigate, prefer OUR Outlook tab: `find` over the page list would
+    // re-home the principal's tab while ours sat untouched, which is single-tab
+    // discipline pointed at the wrong tab.
+    const borrowedOutlook = force
+      ? (usable(this.page) && isOutlookUrl(this.page.url())
+        ? this.page
+        : own.find((p) => isOutlookUrl(p.url())))
+      : undefined;
+    const claimable = own.find((p) => isNewTabPage(p.url()));
+
+    let target: Page;
+    if (reusableOwn) {
+      target = reusableOwn;                                  // already ours
+    } else if (borrowedOutlook) {
+      target = borrowedOutlook;                              // stays the principal's — NOT recorded
+    } else if (claimable) {
+      target = claimable;
+      this.createdPages.set(target, OUTLOOK_MAIL_URL);       // a committed empty tab, ours now
+    } else {
+      target = await ctx.newPage();
+      this.createdPages.set(target, OUTLOOK_MAIL_URL);
     }
 
-    // Navigate if needed. We always go to /mail/ so subsequent actions
-    // start from the inbox view.
-    const targetUrl = 'https://outlook.office.com/mail/';
-    if (!OUTLOOK_HOST_PATTERNS.some((re) => re.test(outlookPage.url())) || opts?.forceNavigate) {
-      await outlookPage.goto(targetUrl, {
-        timeout: this.cfg.actionTimeoutMs,
-        waitUntil: 'domcontentloaded',
-      });
-    }
+    // Register the tab BEFORE navigating. Doing it after meant a goto rejection
+    // (timeout, sign-in interstitial, network drop) left a tab we had created
+    // unrecorded and unreferenced — one orphan per failed call — while this.page
+    // still pointed at the stale previous tab. Same reason the dialog handler and
+    // the focus go first: a beforeunload prompt is raised DURING the navigation, so
+    // a handler installed afterwards never sees it, and if we are about to park on a
+    // sign-in wall the principal has to be able to find the tab asking them to sign
+    // in.
+    this.page = target;
+    this.installDialogHandler(target);
+    await this.focusIfOurs(target);
+    await target.goto(OUTLOOK_MAIL_URL, {
+      timeout: this.cfg.actionTimeoutMs,
+      waitUntil: 'domcontentloaded',
+    });
+    return target;
+  }
 
-    this.page = outlookPage;
-    this.installDialogHandler(outlookPage);
-    return outlookPage;
+  /**
+   * Is this tab still ours to NAVIGATE? Creation grants that right; the grant is
+   * spent as soon as the tab stops holding what we put there, because the same
+   * Page object survives the principal typing a new URL into it.
+   *
+   * `about:blank` counts as still-ours here even though it is deliberately
+   * unclaimable in NEW_TAB_PAGE_PATTERNS. The two rules answer different
+   * questions: we can never know that SOMEONE ELSE's about:blank page is empty,
+   * but a page we created ourselves and whose goto has not committed yet
+   * definitely is — and treating it as forfeited would leak one orphan tab per
+   * failed navigation, the exact bug the register-before-goto ordering fixed.
+   */
+  private stillOurs(page: Page): boolean {
+    const granted = this.createdPages.get(page);
+    if (granted === undefined) return false;
+    const url = (page.url() ?? '').trim();
+    if (
+      url === granted
+      || url === '' || url === 'about:blank'
+      || isOutlookUrl(url)
+      || isMicrosoftAuthUrl(url)
+      || isNewTabPage(url)
+    ) {
+      return true;
+    }
+    // The principal has repurposed it. Forget it rather than navigate their work
+    // away — forgetting costs one extra tab, the cheap side of this trade.
+    this.createdPages.delete(page);
+    return false;
+  }
+
+  /**
+   * Drive an already-usable tab: remember it and make its dialogs ours, without
+   * navigating it. Used for a tab we created AND for a pre-existing Outlook tab
+   * of the principal's — driving their open Outlook is the intended design; only
+   * navigating it away is not.
+   */
+  private async attachTo(page: Page): Promise<Page> {
+    this.page = page;
+    this.installDialogHandler(page);
+    await this.focusIfOurs(page);
+    return page;
+  }
+
+  /**
+   * Bring a tab forward only when it is one of OURS.
+   *
+   * Ours needs it: the caller's recovery text tells the principal "sign in in
+   * Chrome and retry" (outlook-actions.ts:589), and every retry after the first
+   * used to return through a path that never focused, so the tab they were being
+   * asked to act on stayed in the background (Claude correctness lens, 2026-09-07).
+   * A borrowed tab must NOT be focused: yanking the principal's own window to the
+   * front mid-task is the disturbance the trust lens objects to, and we do not need
+   * focus to drive a tab.
+   */
+  private async focusIfOurs(page: Page): Promise<void> {
+    if (!this.createdPages.has(page)) return;
+    try {
+      await page.bringToFront();
+    } catch {
+      // Cosmetic only — never fail an email action because focus could not move.
+    }
   }
 
   private installDialogHandler(page: Page): void {
@@ -176,6 +385,33 @@ export class PlaywrightDriver {
     this.dialogHandledPages.add(page);
     page.on('dialog', (dialog) => {
       const message = dialog.message();
+      // `beforeunload` is not a prompt to dismiss — it asks "leave this page?", so
+      // dismiss() CANCELS our own navigation. Playwright's unhandled default is
+      // accept (node_modules/playwright-core/lib/server/dialog.js:61-66), and the
+      // blanket dismiss silently inverted it: a goto that Outlook guarded because a
+      // compose was unsent quietly did not happen, the caller swallowed the
+      // rejection at debug level, and the next inbox-scoped action read the compose
+      // view as the mailbox. Verified from Playwright source, 2026-09-07.
+      //
+      // So answer it by OWNERSHIP, which is the only honest split: our own tab's
+      // unsent draft is ours to discard, and a silently-cancelled navigation there
+      // costs a misread mailbox. The principal's borrowed tab is not — cancelling
+      // our navigation is the correct outcome when the alternative is discarding
+      // their unsaved work, and it is logged at warn so it cannot pass unnoticed.
+      if (dialog.type() === 'beforeunload') {
+        const ours = this.createdPages.has(page);
+        logger.warn(
+          ours
+            ? '[outlook-v2] beforeunload on our own tab — accepting (navigation proceeds; any unsent draft of OURS is discarded)'
+            : '[outlook-v2] beforeunload on the principal\'s own tab — DISMISSING, so our navigation is cancelled rather than discard their unsaved work. The caller must treat this navigation as not-performed',
+        );
+        (ours ? dialog.accept() : dialog.dismiss()).catch((err) => {
+          logger.debug?.(
+            `[outlook-v2] beforeunload answer race ignored: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        });
+        return;
+      }
       logger.warn(`[outlook-v2] Dismissing browser dialog from Outlook page: ${message.slice(0, 120)}`);
       dialog.dismiss().catch((err) => {
         logger.debug?.(
@@ -193,17 +429,33 @@ export class PlaywrightDriver {
     return this.page;
   }
 
-  /** Return all live Outlook tabs in the attached Chrome context. */
+  /**
+   * Return all live Outlook tabs in the attached Chrome context.
+   *
+   * READ-ONLY by contract: the only caller is outlook-actions'
+   * `hasAnyVisibleOpenDraft`, which evaluates a visibility predicate to protect
+   * the two-gate send. It used to install our dialog handler on every Outlook tab
+   * it saw — including tabs of the principal's that this driver never drives — so
+   * the reduced surface is worth keeping. Handlers are installed where a tab is
+   * actually attached (attachTo), and nowhere else.
+   *
+   * What this does NOT buy, stated plainly because the first version of this
+   * comment claimed it (Claude correctness lens, 2026-09-07): it does not hand the
+   * principal back their own dialogs. Outlook's "Discard draft?" is a DOM dialog,
+   * not a browser one (see `clickDiscardConfirmOk`), so no page.on('dialog')
+   * handler ever saw it; and for real native dialogs, un-subscribing does not opt
+   * out — with no handler attached Playwright closes the dialog itself
+   * (dialog.js:76-88), context-wide, for as long as we are attached over CDP.
+   * Removing our handler swapped "we answer it and log it" for "Playwright answers
+   * it and nobody logs it". That is a CDP-attach property we cannot change from
+   * here; it is recorded so nobody re-derives it as a fix.
+   */
   async outlookPages(): Promise<Page[]> {
     await this.ensureBrowser();
     if (!this.context) return [];
-    const pages = this.context
+    return this.context
       .pages()
-      .filter((page) => !page.isClosed() && OUTLOOK_HOST_PATTERNS.some((re) => re.test(page.url())));
-    for (const page of pages) {
-      this.installDialogHandler(page);
-    }
-    return pages;
+      .filter((page) => !page.isClosed() && isOutlookUrl(page.url()));
   }
 
   /** Take a PNG screenshot of the visible viewport. Used by the VLM grounder. */
