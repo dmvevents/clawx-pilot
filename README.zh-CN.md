@@ -309,6 +309,8 @@ ClawX 采用 **双进程 + Host API 统一接入架构**。渲染进程只调用
 
 验证托管构建时，将 `GA_GATE_BUILD_PROFILE` 设为下载的 `build-provenance/.tmp/release-build-profile.json`，并保留同一目录结构中的源码记录和编译输出凭据。发布检查会验证此配置并将其保存在证据包中。无密钥安装包必须证明实际安装目录中不存在凭据文件，同时通过 Gateway、聊天和 Office 检查。
 
+构建阶段、依赖缓存、故障诊断及源码到安装包的交接流程见 [Windows 构建流程](docs/build/windows-build-pipeline.md)。Codex 和 Claude 的 `windows-build-pipeline` 技能与构建工程代理共用此文档。
+
 Windows 打包会在 Windows 上运行完整预检。请保留 `.gitattributes`：可执行源码使用 LF，`.cmd`/`.bat` 使用 CRLF，PDF 保持原始二进制字节。
 
 Windows 环境信息采集、IAP 连接和应用窗口录制请参阅 [Windows 测试指南](windows-pilot/vm-testing/README.md)。服务器虚拟机检查与校长笔记本验收的覆盖范围分别记录。

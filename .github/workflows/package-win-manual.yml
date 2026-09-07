@@ -234,19 +234,27 @@ jobs:
         run: |
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
+      - name: Restore pnpm dependency cache
+        id: pnpm-cache-restore
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+            ${{ runner.os }}-${{ runner.arch }}-pnpm-store-
 
       - name: Install dependencies
-        run: pnpm install
+        id: install-dependencies
+        run: pnpm install --frozen-lockfile
 
-      - name: Download uv binaries for Windows
-        run: pnpm run uv:download:win
+      - name: Save pnpm dependency cache
+        id: pnpm-cache-save
+        if: ${{ steps.pnpm-cache-restore.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ steps.pnpm-cache-restore.outputs.cache-primary-key }}
 
       - name: Resolve hosted build profile
         shell: pwsh
@@ -490,10 +498,43 @@ jobs:
           $profile | ConvertTo-Json -Depth 5 | Set-Content -Path $profilePath -Encoding utf8
           Write-Host "Hosted build profile provenance written: $profilePath"
 
-      - name: Build Windows package (no publish)
+      - name: Preflight release source
+        id: preflight-release-source
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run package:win
+        run: pnpm run preflight
+
+      - name: Prepare Windows runtime binaries
+        id: prep-win-binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm run prep:win-binaries
+
+      - name: Compile and bundle application
+        id: compile-and-bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm run package
+
+      - name: Build Windows installer (no publish)
+        id: build-windows-installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/run-electron-builder.mjs --win --publish never
+
+      - name: Summarize Windows build phases
+        if: ${{ always() }}
+        env:
+          BUILD_REF_INPUT: ${{ inputs.ref }}
+          BUILD_PROFILE_INPUT: ${{ inputs.cloudGatewaySeedProfile }}
+          PNPM_CACHE_RESTORE_OUTCOME: ${{ steps.pnpm-cache-restore.outcome }}
+          INSTALL_DEPENDENCIES_OUTCOME: ${{ steps.install-dependencies.outcome }}
+          PNPM_CACHE_SAVE_OUTCOME: ${{ steps.pnpm-cache-save.outcome }}
+          PREFLIGHT_OUTCOME: ${{ steps.preflight-release-source.outcome }}
+          PREP_WIN_BINARIES_OUTCOME: ${{ steps.prep-win-binaries.outcome }}
+          COMPILE_AND_BUNDLE_OUTCOME: ${{ steps.compile-and-bundle.outcome }}
+          BUILD_WINDOWS_INSTALLER_OUTCOME: ${{ steps.build-windows-installer.outcome }}
+        run: node scripts/windows-build-summary.mjs
 
       - name: Verify keyless staged package seeds
         if: ${{ inputs.cloudGatewaySeedProfile == 'keyless-public' }}

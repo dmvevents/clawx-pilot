@@ -1,0 +1,6 @@
+interface:
+  display_name: "Windows Build Pipeline"
+  short_description: "Diagnose and harden Windows CI builds"
+  default_prompt: "Use $windows-build-pipeline to review and improve the Windows hosted build workflow without weakening release gates."
+policy:
+  allow_implicit_invocation: true

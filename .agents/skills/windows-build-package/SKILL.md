@@ -11,7 +11,8 @@ Read:
 
 - `docs/WINDOWS_INSTALL_RUNBOOK.md`
 - `docs/WINDOWS_PROBLEMS_ATLAS.md`
-- `docs/GA_RELEASE_PLAN_2026-06-09.md`
+- `docs/COMPLETION_PLAN.md`
+- `docs/build/windows-build-pipeline.md`
 - `package.json`
 - `electron-builder.yml`
 
