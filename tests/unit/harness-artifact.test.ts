@@ -8,7 +8,7 @@
  * matrix rows stay well-formed (unique ids, known entrypoints).
  */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync as fsRealpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -468,8 +468,12 @@ type FakeTransportStage = {
   workspaceDir: string;
 };
 
+function canonicalRealpath(value: string): string {
+  return (fsRealpathSync.native ?? fsRealpathSync)(value);
+}
+
 function writeFakeTransportStage(options: { toolNames?: string[]; stdoutFlood?: boolean } = {}): FakeTransportStage {
-  const dir = mkdtempSync(path.join(tmpdir(), 'clwx-transport-child-'));
+  const dir = canonicalRealpath(mkdtempSync(path.join(tmpdir(), 'clwx-transport-child-')));
   const gatewayDir = path.join(dir, 'resources', 'openclaw');
   const distDir = path.join(gatewayDir, 'dist');
   const pluginRoot = path.join(dir, 'resources', 'extensions', 'moe-principal-assistant');
@@ -484,11 +488,13 @@ function writeFakeTransportStage(options: { toolNames?: string[]; stdoutFlood?: 
   writeFileSync(path.join(distDir, 'loader-test.js'), `
 import { realpathSync } from 'node:fs';
 
+const canonicalRealpath = realpathSync.native ?? realpathSync;
+
 function loadOpenClawPlugins(options) {
   ${stdoutFlood}
   const requested = new Set(options.onlyPluginIds ?? []);
   const all = [
-    { id: 'moe-principal-assistant', status: 'loaded', activated: true, rootDir: realpathSync(options.env.CLAWX_APP_RESOURCES + '/extensions/moe-principal-assistant'), toolNames: ${JSON.stringify(toolNames)} },
+    { id: 'moe-principal-assistant', status: 'loaded', activated: true, rootDir: canonicalRealpath(options.env.CLAWX_APP_RESOURCES + '/extensions/moe-principal-assistant'), toolNames: ${JSON.stringify(toolNames)} },
     { id: 'unrelated-stock-plugin', status: 'loaded', activated: true, rootDir: '/unrelated', toolNames: ['unrelated.tool'] },
   ];
   const plugins = process.env.MOCK_RETURN_EXTRA === '1' ? all : all.filter((plugin) => requested.has(plugin.id));
@@ -644,7 +650,7 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
       expect(verdict.exitCode).toBe(0);
       expect(verdict.payload.ok).toBe(true);
       expect(verdict.payload.result.plugin.id).toBe('moe-principal-assistant');
-      expect(verdict.payload.result.plugin.rootDir).toBe(realpathSync(stage.pluginRoot));
+      expect(verdict.payload.result.plugin.rootDir).toBe(canonicalRealpath(stage.pluginRoot));
       expect(verdict.payload.result.plugin.toolNames).toEqual(['document.read_pdf']);
       expect(JSON.stringify(verdict.payload)).not.toContain('unrelated-stock-plugin');
     } finally {
