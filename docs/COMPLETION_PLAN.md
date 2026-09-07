@@ -4,7 +4,7 @@ Reconciled 2026-09-07 against source **58d04eb0**, the September 7 board export,
 
 ## Independent assessment
 
-**Native Windows preflight:** the first moe.21 hosted attempt on reviewed public source `7cfad9bd` failed before producing an installer. The shared CRLF loader cause was reproduced, and checkout/subprocess repairs passed a real autocrlf checkout plus 55 focused checks. The [runtime report](evidence/WINDOWS_RUNTIME_RECOVERY_2026-09-07.md#native-windows-preflight--september-7) records the evidence; the next native build and installed acceptance remain required.
+**Native Windows preflight:** the first moe.21 hosted attempt on reviewed public source `7cfad9bd` failed before producing an installer. The shared CRLF loader cause was reproduced, and checkout/subprocess repairs passed a real autocrlf checkout plus 55 focused checks. The [runtime report](evidence/WINDOWS_RUNTIME_RECOVERY_2026-09-07.md#native-windows-preflight--september-7) records the evidence; the second native run cleared those failures, with 199 files passing and only two five-second integration-test timeouts remaining. Those cases now have bounded execution budgets; another native build and installed acceptance remain required.
 
 The project has useful working capabilities and real fixes. The main failure is incomplete integration: source fixes, test verdicts, installed artifacts and stakeholder outcomes are treated as if they were interchangeable. Repeated card-sized work cannot close that gap unless it continues through an installed user journey.
 
