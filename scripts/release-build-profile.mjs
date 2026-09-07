@@ -32,7 +32,7 @@ function sameSource(expected, actual) {
   return ['gitCommit', 'gitDirty', 'gitStatusHash', 'builtAt'].every((key) => expected?.[key] === actual?.[key]);
 }
 
-function validateBuildSource(source) {
+export function validateBuildSource(source) {
   const problems = [];
   if (source?.schemaVersion !== 1) problems.push('release-build-source has unsupported schema.');
   if (!COMMIT.test(String(source?.gitCommit ?? ''))) problems.push('release-build-source is missing a valid gitCommit.');
@@ -42,10 +42,8 @@ function validateBuildSource(source) {
   return problems;
 }
 
-export function publicReleaseProfileProblems({ profile, source, receipt, manifest }) {
+function publicProfileIdentityProblems(profile, source) {
   const problems = [];
-  problems.push(...validateBuildSource(source));
-
   if (profile?.schemaVersion !== 1) problems.push('release-build-profile has unsupported schema.');
   if (profile?.producer !== PRODUCER) problems.push('release-build-profile producer is unsupported.');
   if (profile?.cloudGatewaySeedProfile !== 'keyless-public') problems.push('Windows release publication requires a keyless-public build profile.');
@@ -58,15 +56,11 @@ export function publicReleaseProfileProblems({ profile, source, receipt, manifes
     problems.push('Windows release publication requires no credential-bearing seeds in the selected build.');
   }
   if (typeof profile?.microsoftGraphSeedIncluded !== 'boolean') problems.push('release-build-profile must record microsoftGraphSeedIncluded as a boolean.');
+  return problems;
+}
 
-  const expectedSource = sourceIdentity(source);
-  const receiptSource = sourceIdentity(receipt?.source);
-  if (receipt?.schemaVersion !== 1) problems.push('release-build-output receipt has unsupported schema.');
-  if (!sameSource(expectedSource, receiptSource)) problems.push('release-build-output receipt source does not match release-build-source.');
-  if (!validIso(receipt?.recordedAt)) problems.push('release-build-output receipt is missing a valid recordedAt timestamp.');
-  if (!Array.isArray(receipt?.outputs?.directories) || receipt.outputs.directories.length === 0) problems.push('release-build-output receipt is missing compiled directory records.');
-  if (!Array.isArray(receipt?.outputs?.entrypoints) || receipt.outputs.entrypoints.length === 0) problems.push('release-build-output receipt is missing entrypoint records.');
-
+function manifestSourceProblems(manifest, expectedSource) {
+  const problems = [];
   const artifacts = Array.isArray(manifest?.artifacts) ? manifest.artifacts : [];
   if (!manifest || typeof manifest.version !== 'string' || artifacts.length === 0) problems.push('Candidate manifest has no artifact inventory.');
   for (const artifact of artifacts) {
@@ -78,6 +72,46 @@ export function publicReleaseProfileProblems({ profile, source, receipt, manifes
       problems.push(`${artifact.name}: manifest artifact source does not match release-build-source.`);
     }
   }
+  return problems;
+}
+
+export function sanitizePublicReleaseProfile(profile) {
+  return {
+    schemaVersion: profile?.schemaVersion,
+    producer: profile?.producer,
+    cloudGatewaySeedProfile: profile?.cloudGatewaySeedProfile,
+    sourceGitCommit: profile?.sourceGitCommit,
+    repositoryPrivate: profile?.repositoryPrivate,
+    repositoryVisibility: profile?.repositoryVisibility,
+    credentialSeedIncluded: profile?.credentialSeedIncluded,
+    cloudGatewaySeedIncluded: profile?.cloudGatewaySeedIncluded,
+    azureSpeechSeedIncluded: profile?.azureSpeechSeedIncluded,
+    microsoftGraphSeedIncluded: profile?.microsoftGraphSeedIncluded,
+  };
+}
+
+export function publicReleaseProfileSummaryProblems({ profile, manifest }) {
+  const artifacts = Array.isArray(manifest?.artifacts) ? manifest.artifacts : [];
+  const source = artifacts[0]?.source;
+  const problems = validateBuildSource(source);
+  problems.push(...publicProfileIdentityProblems(profile, source));
+  problems.push(...manifestSourceProblems(manifest, sourceIdentity(source)));
+  return problems;
+}
+
+export function publicReleaseProfileProblems({ profile, source, receipt, manifest }) {
+  const problems = [];
+  problems.push(...validateBuildSource(source));
+  problems.push(...publicProfileIdentityProblems(profile, source));
+
+  const expectedSource = sourceIdentity(source);
+  const receiptSource = sourceIdentity(receipt?.source);
+  if (receipt?.schemaVersion !== 1) problems.push('release-build-output receipt has unsupported schema.');
+  if (!sameSource(expectedSource, receiptSource)) problems.push('release-build-output receipt source does not match release-build-source.');
+  if (!validIso(receipt?.recordedAt)) problems.push('release-build-output receipt is missing a valid recordedAt timestamp.');
+  if (!Array.isArray(receipt?.outputs?.directories) || receipt.outputs.directories.length === 0) problems.push('release-build-output receipt is missing compiled directory records.');
+  if (!Array.isArray(receipt?.outputs?.entrypoints) || receipt.outputs.entrypoints.length === 0) problems.push('release-build-output receipt is missing entrypoint records.');
+  problems.push(...manifestSourceProblems(manifest, expectedSource));
 
   return problems;
 }

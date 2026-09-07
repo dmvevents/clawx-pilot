@@ -161,6 +161,9 @@ requiredTests:
   - "tests/unit/gcp-iap-lane.test.ts"
   - "tests/unit/windows-app-recording.test.ts"
 acceptance:
+  - "Hosted acceptance validates source and compiled receipt companions, persists the sanitized keyless build profile, and revalidates the same profile during publication replay."
+  - "Keyless installed evidence requires explicit absent cloud/Azure credential rows under the actual install root; missing or malformed rows and wrong-source profiles fail. Legacy no-profile seeded checks remain."
+  - "Keyless credential absence never bypasses installed Gateway, safe chat, Office, environment or artifact hash evidence."
   - "Windows checkout preserves LF source and embedded scripts while retaining binary PDF bytes; native Windows preflight executes portable subprocess fixtures without POSIX executable assumptions."
   - "`node scripts/ga-gate.mjs --release` and `GA_GATE_RELEASE=1 node scripts/ga-gate.mjs` select strict release scoring without enabling live send or form submit actions."
   - "Strict release scoring uses explicit criterion identifiers on rows, not row-label or log regexes."

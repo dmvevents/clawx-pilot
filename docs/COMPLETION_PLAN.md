@@ -160,3 +160,12 @@ The next native Windows build includes this source correction and the bounded in
 Final reviewed public source preflight passed: **201 files, 1,994 tests passed and 6 skipped**; typecheck, lint (0 errors, 51 warnings), PowerShell checks (0 gating findings), agent configuration checks and 5 direct Office checks passed. The scoped harness diff validation/dry run and communication comparison also passed.
 
 **Post-release feature:** owner-requested CLWX-124 tracks durable action history, interruption reconciliation and cleanup of proven agent-owned drafts. It is in Backlog, linked to CLWX-70/28/94, and is excluded from this release scope. Intentionally prepared drafts awaiting review must remain distinguishable from abandoned residuals.
+
+
+## Hosted keyless package acceptance — September 7
+
+The public build profile deliberately excludes cloud and Azure Speech credential seeds. The installed-evidence adapter previously required the cloud seed files unconditionally, so it could reject a correctly built public package. The release controller now carries the downloaded build profile through source/receipt validation, installed evidence and portable publication replay. Set `GA_GATE_BUILD_PROFILE` to `build-provenance/.tmp/release-build-profile.json` with its source and output-receipt companions intact.
+
+For a validated source-bound keyless profile, the installed producer must explicitly prove that all four cloud/Azure config and key paths are absent under the actual running app's installation. Missing or malformed observations do not prove absence. A run without a profile retains the legacy seeded requirements. Installer and app hashes, package inventory, environment, live Gateway, Electron safe chat and Office checks remain mandatory; keyless packaging does not establish post-install provisioning or GA readiness.
+
+Final controller review is clear. The five focused controller/gate files pass **135 tests**, including rejection before live commands when build provenance is invalid. Full public packaging preflight passes **201 files, 2,012 tests and 6 skips**, typecheck, lint (0 errors, 51 warnings), PowerShell (0 gating findings), agent checks and 5 direct Office checks. Full reviewed-source verification reports 0 mismatches across 1,280 included paths; 361 private/generated paths remain excluded. Native Windows packaging and installed acceptance remain pending.

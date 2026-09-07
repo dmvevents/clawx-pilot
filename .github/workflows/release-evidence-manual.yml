@@ -81,6 +81,7 @@ jobs:
           GA_GATE_INSTALLED_EVIDENCE: ${{ inputs.installedEvidenceDir }}
           GA_GATE_ARTIFACT_DIR: ${{ runner.temp }}/acceptance-installer
           BUILD_PROVENANCE_DIR: ${{ runner.temp }}/acceptance-build
+          GA_GATE_BUILD_PROFILE: ${{ runner.temp }}/acceptance-build/.tmp/release-build-profile.json
         run: |
           set -euo pipefail
           # A dedicated controller must already have the approved live test
@@ -89,6 +90,7 @@ jobs:
           export GA_GATE_MANIFEST="$BUILD_PROVENANCE_DIR/docs/release-manifests/$VERSION.json"
           export GA_GATE_OUTPUT_DIR="$RUNNER_TEMP/release-evidence-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           test -f "$GA_GATE_MANIFEST"
+          test -f "$GA_GATE_BUILD_PROFILE"
           test -d "$GA_GATE_INSTALLED_EVIDENCE"
           node scripts/ga-gate.mjs --release
 

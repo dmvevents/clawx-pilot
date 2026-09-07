@@ -307,6 +307,8 @@ For this Ministry fork, start with the [shared project contract](docs/PROJECT_CO
 
 Hosted Windows builds on a public repository must use `cloudGatewaySeedProfile=keyless-public`; this profile excludes cloud and speech credentials and requires post-install provisioning. Build the reviewed exact source commit. Publication checks reject evidence older than 24 hours, including old observations inside a newly generated report.
 
+For hosted-build acceptance, set `GA_GATE_BUILD_PROFILE` to the downloaded `build-provenance/.tmp/release-build-profile.json`, keeping its source and compiled-output receipt companions together. The gate validates and retains this profile in the release evidence bundle. A keyless package must prove credential-file absence in the actual install directory and still pass Gateway, chat and Office checks.
+
 Windows packaging runs the complete preflight on Windows. Preserve `.gitattributes`: executable source uses LF, `.cmd`/`.bat` use CRLF, and PDFs retain their binary bytes.
 
 Windows environment profiling, IAP access and app-window recording are documented in the [Windows testing guide](windows-pilot/vm-testing/README.md). Server VM smoke and principal-laptop acceptance have separate coverage requirements.

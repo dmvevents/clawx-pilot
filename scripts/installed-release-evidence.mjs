@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
+import { publicReleaseProfileSummaryProblems } from './release-build-profile.mjs';
 
 const STATUS = {
   PASS: 'PASS',
@@ -12,16 +13,24 @@ const STATUS = {
   NOT_RUN: 'NOT_RUN',
 };
 
-const REQUIRED_INSTALL_SUFFIXES = [
+const REQUIRED_BASE_INSTALL_SUFFIXES = [
   { id: 'app-exe', suffix: 'Ministry of Education.exe' },
   { id: 'app-asar', suffix: 'resources\\app.asar' },
   { id: 'playwright-core', suffix: 'resources\\openclaw\\node_modules\\playwright-core\\package.json' },
   { id: 'ffmpeg', suffix: 'resources\\bin\\ffmpeg.exe' },
   { id: 'win-speech', suffix: 'resources\\bin\\WinSpeechRecognize.exe' },
-  { id: 'cloud-config', suffix: 'resources\\resources\\cloud-gateway.json' },
-  { id: 'cloud-key', suffix: 'resources\\resources\\cloud-gateway.key', secret: true },
   { id: 'desktop-shortcut', suffix: 'Desktop\\Ministry of Education.lnk' },
   { id: 'start-shortcut', suffix: 'Microsoft\\Windows\\Start Menu\\Programs\\Ministry of Education.lnk' },
+];
+const LEGACY_SEEDED_INSTALL_SUFFIXES = [
+  { id: 'cloud-config', suffix: 'resources\\resources\\cloud-gateway.json' },
+  { id: 'cloud-key', suffix: 'resources\\resources\\cloud-gateway.key', secret: true },
+];
+const KEYLESS_ABSENT_INSTALL_SUFFIXES = [
+  { id: 'cloud-config', suffix: 'resources\\resources\\cloud-gateway.json' },
+  { id: 'cloud-key', suffix: 'resources\\resources\\cloud-gateway.key', secret: true },
+  { id: 'azure-config', suffix: 'resources\\resources\\azure-speech.json' },
+  { id: 'azure-key', suffix: 'resources\\resources\\azure-speech.key', secret: true },
 ];
 
 const REQUIRED_RUNTIME_MODULES = ['playwright-core', 'xlsx', 'docx', 'mammoth', 'pdf-parse'];
@@ -325,8 +334,12 @@ function rowPath(row) {
   return row?.Path ?? row?.path;
 }
 
+function rowRawHash(row) {
+  return row?.Sha256 ?? row?.sha256;
+}
+
 function rowHash(row) {
-  return lowerHash(row?.Sha256 ?? row?.sha256);
+  return lowerHash(rowRawHash(row));
 }
 
 function rowLength(row) {
@@ -335,6 +348,10 @@ function rowLength(row) {
 
 function rowExists(row) {
   return row?.Exists === true || row?.exists === true;
+}
+
+function rowExplicitlyAbsent(row) {
+  return row?.Exists === false || row?.exists === false;
 }
 
 function installRowsForSuffix(rows, suffix) {
@@ -349,19 +366,48 @@ function oneInstallRow(rows, suffix, problems) {
   return matches[0];
 }
 
-function checkInstallArtifacts(rowsValue, appAsar, vmRun, checks) {
+function oneExactInstallRow(rows, expectedPath, problems) {
+  const matches = rows.filter((row) => normalizeWinPath(rowPath(row)) === normalizeWinPath(expectedPath));
+  if (matches.length === 0) return null;
+  if (matches.length > 1) problems.push(`duplicate ${expectedPath}`);
+  return matches[0];
+}
+
+function isKeylessPublicBuildProfile(buildProfile) {
+  return isObject(buildProfile)
+    && buildProfile.cloudGatewaySeedProfile === 'keyless-public'
+    && buildProfile.credentialSeedIncluded === false
+    && buildProfile.cloudGatewaySeedIncluded === false
+    && buildProfile.azureSpeechSeedIncluded === false;
+}
+
+function checkInstalledBuildProfile(buildProfile, manifest, checks) {
+  if (buildProfile == null) {
+    addCheck(checks, 'installed-build-profile', STATUS.PASS, 'legacy seeded install-artifact contract');
+    return false;
+  }
+  const problems = publicReleaseProfileSummaryProblems({ profile: buildProfile, manifest });
+  const ok = problems.length === 0 && isKeylessPublicBuildProfile(buildProfile);
+  addCheck(
+    checks,
+    'installed-build-profile',
+    ok ? STATUS.PASS : STATUS.FAIL,
+    ok ? 'keyless-public profile requires explicit credential seed absence rows' : problems.join('; ') || 'unsupported or credential-bearing build profile',
+  );
+  return ok;
+}
+
+function checkInstallArtifacts(rowsValue, appAsar, vmRun, manifest, checks, buildProfile) {
   const rows = asArray(rowsValue);
   const missing = [];
+  const missingAbsent = [];
+  const presentCredentials = [];
+  const invalidAbsentRows = [];
+  const badAbsentMetadata = [];
   const badSecrets = [];
   const duplicateProblems = [];
-  for (const item of REQUIRED_INSTALL_SUFFIXES) {
-    const row = oneInstallRow(rows, item.suffix, duplicateProblems);
-    if (!row || !rowExists(row)) {
-      missing.push(item.id);
-      continue;
-    }
-    if (item.secret && (row.SecretMetadataOnly !== true || rowHash(row) != null)) badSecrets.push(item.id);
-  }
+  const keylessPublic = checkInstalledBuildProfile(buildProfile, manifest, checks);
+  const requiredPresent = keylessPublic ? REQUIRED_BASE_INSTALL_SUFFIXES : [...REQUIRED_BASE_INSTALL_SUFFIXES, ...LEGACY_SEEDED_INSTALL_SUFFIXES];
   const exeRow = oneInstallRow(rows, 'Ministry of Education.exe', duplicateProblems);
   const asarRow = oneInstallRow(rows, 'resources\\app.asar', duplicateProblems);
   const exeRowHash = rowHash(exeRow);
@@ -369,6 +415,31 @@ function checkInstallArtifacts(rowsValue, appAsar, vmRun, checks) {
   const exeMeasured = Boolean(exeRowHash && rowLength(exeRow) > 0);
   const appRoot = normalizeWinPath(vmRun?.runningApp?.path).replace(/\\ministry of education\.exe$/, '');
   const expectedAsarPath = appRoot ? `${appRoot}\\resources\\app.asar` : '';
+  for (const item of requiredPresent) {
+    const row = oneInstallRow(rows, item.suffix, duplicateProblems);
+    if (!row || !rowExists(row)) {
+      missing.push(item.id);
+      continue;
+    }
+    if (item.secret && (row.SecretMetadataOnly !== true || rowHash(row) != null)) badSecrets.push(item.id);
+  }
+  if (keylessPublic) {
+    for (const item of KEYLESS_ABSENT_INSTALL_SUFFIXES) {
+      const suffixRows = installRowsForSuffix(rows, item.suffix);
+      if (suffixRows.length > 1) duplicateProblems.push(`duplicate ${item.suffix}`);
+      const expectedPath = appRoot ? `${appRoot}\\${normalizeWinPath(item.suffix)}` : '';
+      const row = expectedPath ? oneExactInstallRow(rows, expectedPath, duplicateProblems) : null;
+      if (!row) {
+        missingAbsent.push(item.id);
+        continue;
+      }
+      if (rowExists(row)) presentCredentials.push(item.id);
+      if (!rowExplicitlyAbsent(row) && !rowExists(row)) invalidAbsentRows.push(item.id);
+      const rawHash = rowRawHash(row);
+      const rawLength = row?.Length ?? row?.length;
+      if (rawHash != null || (rawLength != null && Number(rawLength) !== 0)) badAbsentMetadata.push(item.id);
+    }
+  }
   const asarPathMatches = Boolean(
     expectedAsarPath
       && normalizeWinPath(rowPath(asarRow)) === expectedAsarPath
@@ -382,13 +453,17 @@ function checkInstallArtifacts(rowsValue, appAsar, vmRun, checks) {
   addCheck(
     checks,
     'install-artifact-rows',
-    missing.length === 0 && badSecrets.length === 0 && duplicateProblems.length === 0 && pathProblems.length === 0 ? STATUS.PASS : STATUS.FAIL,
+    missing.length === 0 && missingAbsent.length === 0 && presentCredentials.length === 0 && invalidAbsentRows.length === 0 && badAbsentMetadata.length === 0 && badSecrets.length === 0 && duplicateProblems.length === 0 && pathProblems.length === 0 ? STATUS.PASS : STATUS.FAIL,
     [
       missing.length ? `missing ${missing.join(', ')}` : '',
+      missingAbsent.length ? `missing explicit absence ${missingAbsent.join(', ')}` : '',
+      presentCredentials.length ? `credential seed rows present for keyless profile: ${presentCredentials.join(', ')}` : '',
+      invalidAbsentRows.length ? `absence rows must set Exists:false: ${invalidAbsentRows.join(', ')}` : '',
+      badAbsentMetadata.length ? `absence rows carry hash or nonzero length: ${badAbsentMetadata.join(', ')}` : '',
       duplicateProblems.length ? duplicateProblems.join('; ') : '',
       badSecrets.length ? `secret rows hashed or not metadata-only: ${badSecrets.join(', ')}` : '',
       pathProblems.length ? pathProblems.join('; ') : '',
-    ].filter(Boolean).join('; ') || `${REQUIRED_INSTALL_SUFFIXES.length} unique rows present`,
+    ].filter(Boolean).join('; ') || `${requiredPresent.length + (keylessPublic ? KEYLESS_ABSENT_INSTALL_SUFFIXES.length : 0)} profile-aware rows valid`,
   );
 
   const expectedAsar = lowerHash(appAsar?.sha256);
@@ -646,7 +721,7 @@ function readOptionalStructured(evidenceDir, candidates, checks, id, files) {
   }
 }
 
-export async function evaluateInstalledEvidence({ manifest, evidenceDir }) {
+export async function evaluateInstalledEvidence({ manifest, evidenceDir, buildProfile = null }) {
   const checks = [];
   const files = [];
   const resolvedEvidenceDir = path.resolve(evidenceDir);
@@ -667,7 +742,7 @@ export async function evaluateInstalledEvidence({ manifest, evidenceDir }) {
   if (environment) checkEnvironment(environment, vmRun, checks);
 
   const installArtifacts = readOptionalStructured(resolvedEvidenceDir, EVIDENCE_FILE_CANDIDATES.installArtifacts, checks, 'install-artifacts-file', files);
-  if (installArtifacts) checkInstallArtifacts(installArtifacts, appAsar, vmRun, checks);
+  if (installArtifacts) checkInstallArtifacts(installArtifacts, appAsar, vmRun, manifest, checks, buildProfile);
 
   const packagesPath = findOne(resolvedEvidenceDir, EVIDENCE_FILE_CANDIDATES.packages, checks, 'packages-file');
   if (packagesPath) {

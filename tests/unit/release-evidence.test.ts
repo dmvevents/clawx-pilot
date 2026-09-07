@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RELEASE_REQUIRED_CRITERIA } from '../../scripts/ga-gate-verdict.mjs';
-import { automaticPublicationProblems, candidateDigest, candidateProblems, validateReleaseEvidence, writeReleaseEvidence } from '../../scripts/release-evidence.mjs';
+import { automaticPublicationProblems, candidateDigest, candidateProblems, loadReleaseBuildProfile, validateReleaseEvidence, writeReleaseEvidence } from '../../scripts/release-evidence.mjs';
 import { publishManifest } from '../../scripts/release-hash-manifest.mjs';
 import { writeInstalledReleaseEvidenceFixture } from '../fixtures/installed-release-evidence';
 
@@ -21,7 +21,7 @@ let outputDir: string;
 let manifest: ReturnType<typeof fixtureManifest>;
 
 function fixtureManifest() {
-  const source = { ...SOURCE, builtAt: BUILD_TIME };
+  const source = { schemaVersion: 1, ...SOURCE, builtAt: BUILD_TIME, recordedAt: BUILD_TIME };
   return {
     version: '0.4.3-moe.99', generatedAt: BUILD_TIME, published: false,
     artifacts: [
@@ -31,6 +31,39 @@ function fixtureManifest() {
     ],
   };
 }
+
+function fixtureBuildProfile(source = SOURCE) {
+  return {
+    schemaVersion: 1,
+    producer: '.github/workflows/package-win-manual.yml',
+    cloudGatewaySeedProfile: 'keyless-public',
+    sourceGitCommit: source.gitCommit,
+    repositoryPrivate: false,
+    repositoryVisibility: 'public',
+    credentialSeedIncluded: false,
+    cloudGatewaySeedIncluded: false,
+    azureSpeechSeedIncluded: false,
+    microsoftGraphSeedIncluded: false,
+  };
+}
+
+function writeBuildProfileFiles(profile = fixtureBuildProfile(), buildSource = { ...SOURCE, schemaVersion: 1, builtAt: BUILD_TIME, recordedAt: BUILD_TIME }) {
+  const root = path.join(dir, 'provenance');
+  const tmp = path.join(root, '.tmp');
+  mkdirSync(tmp, { recursive: true });
+  const receipt = {
+    schemaVersion: 1,
+    source: buildSource,
+    recordedAt: END,
+    outputs: { directories: ['dist', 'dist-electron'], entrypoints: ['dist/index.html', 'dist-electron/main/index.js'] },
+  };
+  const profilePath = path.join(tmp, 'release-build-profile.json');
+  writeFileSync(path.join(root, '.release-build-source.json'), JSON.stringify(buildSource));
+  writeFileSync(path.join(tmp, 'release-build-output.json'), JSON.stringify(receipt));
+  writeFileSync(profilePath, JSON.stringify(profile));
+  return profilePath;
+}
+
 
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), 'clwx106-evidence-'));
@@ -49,19 +82,20 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-async function writeProof() {
+async function writeProof(buildProfile: unknown = null) {
   const rows = RELEASE_REQUIRED_CRITERIA.map(({ id }, index) => {
     const log = path.join(dir, `command-${index}.log`);
     writeFileSync(log, '$ fixture-check\nexit=0\n\n--- stdout ---\nfixture observation\n--- stderr ---\n');
     return { id, tier: id.startsWith('t2-') ? 'T2' : 'T0', box: 'fixture', criteria: [id], status: 'PASS', exitCode: 0, log, startedAt: '2026-09-07T02:01:00.000Z', completedAt: END };
   });
-  return writeReleaseEvidence({ outputDir, manifest, source: SOURCE, rows, staticOnly: false, release: true, installedDir, startedAt: START, completedAt: END });
+  return writeReleaseEvidence({ outputDir, manifest, source: SOURCE, rows, staticOnly: false, release: true, installedDir, buildProfile, startedAt: START, completedAt: END });
 }
 
 type MutableProof = {
   mode: string; staticOnly: boolean; source: typeof SOURCE; candidateSha256: string;
   startedAt: string | null; completedAt: string;
   rows: Array<{ id: string; status: string; criteria: string[]; log: { path: string; sha256: string } }>;
+  buildProfile?: Record<string, unknown> | null;
 };
 
 function changeReport(reportPath: string, change: (report: MutableProof) => void) {
@@ -97,6 +131,66 @@ describe('release evidence from machine observations, bound to staged bytes', ()
     const reportPath = await writeProof();
     rmSync(installedDir, { recursive: true });
     expect(await validate(reportPath)).toEqual({ ok: true, problems: [] });
+  });
+
+  it('persists a sanitized keyless-public build profile and revalidates installed absence rows from the bundle', async () => {
+    rmSync(installedDir, { recursive: true, force: true });
+    mkdirSync(installedDir);
+    writeInstalledReleaseEvidenceFixture({
+      evidenceDir: installedDir,
+      manifest,
+      startedAt: '2026-09-07T01:00:00.000Z',
+      completedAt: END,
+      seedProfile: 'keyless-public',
+    });
+    const buildProfile = loadReleaseBuildProfile({ profilePath: writeBuildProfileFiles(), manifest, source: SOURCE });
+    const reportPath = await writeProof(buildProfile);
+
+    rmSync(installedDir, { recursive: true });
+    const report = JSON.parse(readFileSync(reportPath, 'utf8'));
+
+    expect(report.buildProfile).toEqual(fixtureBuildProfile());
+    expect(await validate(reportPath)).toEqual({ ok: true, problems: [] });
+  });
+
+  it('rejects bundle replay when a persisted keyless profile is invalid or source-mismatched', async () => {
+    rmSync(installedDir, { recursive: true, force: true });
+    mkdirSync(installedDir);
+    writeInstalledReleaseEvidenceFixture({ evidenceDir: installedDir, manifest, startedAt: '2026-09-07T01:00:00.000Z', completedAt: END, seedProfile: 'keyless-public' });
+    const buildProfile = loadReleaseBuildProfile({ profilePath: writeBuildProfileFiles(), manifest, source: SOURCE });
+    const reportPath = await writeProof(buildProfile);
+
+    changeReport(reportPath, (report) => {
+      report.buildProfile.sourceGitCommit = 'b'.repeat(40);
+    });
+
+    const result = await validate(reportPath);
+    expect(result.ok).toBe(false);
+    expect(result.problems).toEqual(expect.arrayContaining([expect.stringContaining('release-build-profile sourceGitCommit does not match release-build-source')]));
+  });
+
+  it('blocks a provided invalid downloaded build profile before release evidence is written', () => {
+    const profilePath = writeBuildProfileFiles({ ...fixtureBuildProfile(), cloudGatewaySeedIncluded: true });
+
+    expect(() => loadReleaseBuildProfile({ profilePath, manifest, source: SOURCE })).toThrow(/Windows release publication requires no credential-bearing seeds/);
+  });
+
+  it('blocks a downloaded build profile whose recorded source differs from the gate checkout', () => {
+    const otherSource = { ...SOURCE, schemaVersion: 1, gitCommit: 'b'.repeat(40), builtAt: BUILD_TIME, recordedAt: BUILD_TIME };
+    const profilePath = writeBuildProfileFiles({ ...fixtureBuildProfile({ gitCommit: otherSource.gitCommit, gitDirty: false, gitStatusHash: null }) }, otherSource);
+
+    expect(() => loadReleaseBuildProfile({ profilePath, manifest, source: SOURCE })).toThrow(/source companion does not match the gate source/);
+  });
+
+  it('does not weaken seeded installed-evidence validation when the release bundle has no build profile', async () => {
+    rmSync(installedDir, { recursive: true, force: true });
+    mkdirSync(installedDir);
+    writeInstalledReleaseEvidenceFixture({ evidenceDir: installedDir, manifest, startedAt: '2026-09-07T01:00:00.000Z', completedAt: END, seedProfile: 'keyless-public' });
+    const reportPath = await writeProof();
+
+    const result = await validate(reportPath);
+    expect(result.ok).toBe(false);
+    expect(result.problems).toEqual(expect.arrayContaining([expect.stringContaining('install-artifact-rows: FAIL')]));
   });
 
 
