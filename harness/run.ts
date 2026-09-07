@@ -200,7 +200,29 @@ function checkSchema(result: Record<string, unknown>, schema: Record<string, str
   }
 }
 
-function checkAssertions(result: Record<string, unknown>, assertions: Record<string, unknown>): void {
+export function readAssertionField(result: Record<string, unknown>, field: string): unknown {
+  if (field === 'content.text') {
+    const block = Array.isArray(result.content)
+      ? result.content.find((item) => item && typeof item === 'object' && (item as { type?: unknown }).type === 'text')
+      : null;
+    return block && typeof block === 'object' ? (block as { text?: unknown }).text : undefined;
+  }
+  if (field.startsWith('content.image.')) {
+    const imageField = field.slice('content.image.'.length);
+    const block = Array.isArray(result.content)
+      ? result.content.find((item) => item && typeof item === 'object' && (item as { type?: unknown }).type === 'image')
+      : null;
+    return block && typeof block === 'object'
+      ? (block as Record<string, unknown>)[imageField]
+      : undefined;
+  }
+  return field.split('.').reduce<unknown>((current, part) => {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined;
+    return (current as Record<string, unknown>)[part];
+  }, result);
+}
+
+export function checkAssertions(result: Record<string, unknown>, assertions: Record<string, unknown>): void {
   for (const [key, expected] of Object.entries(assertions)) {
     if (key === 'file_exists_at_path') {
       if (expected === true) {
@@ -211,7 +233,7 @@ function checkAssertions(result: Record<string, unknown>, assertions: Record<str
     }
     if (key.endsWith('_min')) {
       const field = key.slice(0, -'_min'.length);
-      const actual = Number(result[field]);
+      const actual = Number(readAssertionField(result, field));
       if (!Number.isFinite(actual) || actual < Number(expected)) {
         throw new Error(`assertion ${key}: ${field}=${actual} < ${expected}`);
       }
@@ -219,7 +241,7 @@ function checkAssertions(result: Record<string, unknown>, assertions: Record<str
     }
     if (key.endsWith('_max')) {
       const field = key.slice(0, -'_max'.length);
-      const actual = Number(result[field]);
+      const actual = Number(readAssertionField(result, field));
       if (!Number.isFinite(actual) || actual > Number(expected)) {
         throw new Error(`assertion ${key}: ${field}=${actual} > ${expected}`);
       }
@@ -227,18 +249,28 @@ function checkAssertions(result: Record<string, unknown>, assertions: Record<str
     }
     if (key.endsWith('_equals')) {
       const field = key.slice(0, -'_equals'.length);
-      if (result[field] !== expected) {
-        throw new Error(`assertion ${key}: ${field}=${JSON.stringify(result[field])} !== ${JSON.stringify(expected)}`);
+      const actual = readAssertionField(result, field);
+      if (actual !== expected) {
+        throw new Error(`assertion ${key}: ${field}=${JSON.stringify(actual)} !== ${JSON.stringify(expected)}`);
       }
       continue;
     }
     if (key.endsWith('_matches')) {
       const field = key.slice(0, -'_matches'.length);
       const rx = new RegExp(String(expected));
-      if (!rx.test(String(result[field] ?? ''))) {
+      const actual = readAssertionField(result, field);
+      if (!rx.test(String(actual ?? ''))) {
         throw new Error(
-          `assertion ${key}: /${String(expected)}/ !~ ${String(result[field] ?? '').slice(0, 120)}`,
+          `assertion ${key}: /${String(expected)}/ !~ ${String(actual ?? '').slice(0, 120)}`,
         );
+      }
+      continue;
+    }
+    if (key.endsWith('_contains')) {
+      const field = key.slice(0, -'_contains'.length);
+      const actual = String(readAssertionField(result, field) ?? '');
+      if (!actual.includes(String(expected))) {
+        throw new Error(`assertion ${key}: ${field} does not include ${JSON.stringify(expected)}`);
       }
       continue;
     }
@@ -292,7 +324,7 @@ async function runDirect(prompt: Prompt, workDir: string): Promise<{ preview: st
   checkSchema(result, golden.result_schema);
   checkAssertions(result, golden.assertions);
   const stdoutForPromptRegex = String(
-    result.markdown ?? result.text ?? result.dataUrl ?? result.path ?? JSON.stringify(result),
+    result.markdown ?? result.text ?? readAssertionField(result, 'details.path') ?? result.path ?? JSON.stringify(result),
   );
   const rx = new RegExp(prompt.expected_stdout_regex);
   if (!rx.test(stdoutForPromptRegex)) {
@@ -397,7 +429,9 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-main().catch((err) => {
-  process.stderr.write(`clawx-harness: fatal ${(err as Error).stack ?? (err as Error).message}\n`);
-  process.exit(2);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    process.stderr.write(`clawx-harness: fatal ${(err as Error).stack ?? (err as Error).message}\n`);
+    process.exit(2);
+  });
+}

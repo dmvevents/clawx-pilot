@@ -21,14 +21,14 @@ Two layers expose functionality:
 - **Skills** — bundled document/utility packs (the legacy Python doc skills are
   now superseded by native `document.*` tools; kept for fallback).
 
-### 1a. Agent tools (31), by category
+### 1a. Agent tools (33), by category
 
 | Category | Tools | Count |
 |---|---|---|
 | **Outlook (email)** | open, read_inbox, draft_email, send_email*, search_inbox, read_email, reply, forward, mark_read, list_attachments, download_attachment* | 11 |
 | **Forms (MoE)** | list, preview_suspension, preview_daily_report, submit_suspension*, submit_daily_report* | 5 |
-| **Documents** | read_pdf, read_docx, write_docx, read_xlsx, write_xlsx, read_image | 6 |
-| **Principal/taskflow** | draft_letter, draft_memo, summarise_circular, daily_report_payload, daily_report_form_payload, suspension_payload, find_school | 7 |
+| **Documents** | document.find, read_pdf, read_docx, write_docx, read_xlsx, write_xlsx, read_image | 7 |
+| **Principal/taskflow** | draft_letter, draft_memo, summarise_circular, daily_report_payload, daily_report_form_payload, suspension_payload, find_school, nscc_lookup | 8 |
 | **Browser/misc** | browser.diagnose, browser.repair_chrome_cdp | 2 |
 
 `*` = hard-confirm gate (send/submit/download). **+6 parked Graph tools**

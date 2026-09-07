@@ -279,7 +279,7 @@ const PNG_1PX = Buffer.from(
 // can't do email"). These lists pin the inventory per activation mode; adding
 // a tool is a conscious matrix update, exactly like adding a doc-type row.
 export const DOC_TOOL_NAMES = [
-  'document.read_pdf', 'document.read_docx', 'document.write_docx',
+  'document.find', 'document.read_pdf', 'document.read_docx', 'document.write_docx',
   'document.read_xlsx', 'document.write_xlsx', 'document.read_image',
 ];
 export const PRINCIPAL_TOOL_NAMES = [
@@ -533,6 +533,25 @@ export const MATRIX = [
       ? true : `expected >10MB parsed with marker (bytes=${r.bytes}, totalChars=${r.totalChars})`),
   },
   {
+    id: 'pdf-title.find', fn: 'findDocuments', expectation: 'ok',
+    fixture: { name: '01_Ministry_Circular_ICT_Equipment_Audit.pdf', bytes: () => '%PDF-1.4\n' },
+    args: (workDir) => ({
+      query: 'ICT Equipment Audit circular',
+      folder: workDir,
+      extensions: ['pdf'],
+    }),
+    check: (r) => (
+      r.safeUnique === true
+      && r.uniquePath
+      && /01_Ministry_Circular_ICT_Equipment_Audit\.pdf$/.test(String(r.uniquePath))
+      && Array.isArray(r.matches)
+      && r.matches.length === 1
+      && !JSON.stringify(r).includes('%PDF')
+        ? true
+        : `document.find did not return one metadata-only safe unique PDF match (${JSON.stringify(r)})`
+    ),
+  },
+  {
     id: 'docx.read_docx', fn: 'readDocx', expectation: 'ok', kLedger: 'K8', repeat: 3,
     fixture: { name: 'letter.docx', seed: 'docx', paragraphs: ['Dear parent, the ICT audit is Friday.'] },
     check: (r) => (String(r.markdown ?? '').includes('ICT audit') ? true : 'seed paragraph missing from markdown'),
@@ -604,7 +623,17 @@ export const MATRIX = [
   {
     id: 'png.read_image', fn: 'readImage', expectation: 'ok',
     fixture: { name: 'badge.png', bytes: () => PNG_1PX },
-    check: (r) => (String(r.dataUrl ?? '').startsWith('data:image/') ? true : 'no dataUrl produced'),
+    check: (r) => {
+      const imageBlock = Array.isArray(r.content) ? r.content.find((block) => block?.type === 'image') : null;
+      const textBlock = Array.isArray(r.content) ? r.content.find((block) => block?.type === 'text') : null;
+      return imageBlock?.mimeType?.startsWith('image/')
+        && (typeof imageBlock.data === 'string' || imageBlock.dataOmitted === true)
+        && typeof textBlock?.text === 'string'
+        && r.details?.mimeType?.startsWith('image/')
+        && !JSON.stringify(r.details).includes('base64,')
+        ? true
+        : 'native image content block with metadata-only details not produced';
+    },
   },
   {
     // readImage treats sharp as a soft dep (raw bytes fall through), so the
@@ -614,7 +643,7 @@ export const MATRIX = [
     // finding, 2026-09-05 — the moe.15 canvas class, image edition).
     id: 'png-sharp-binding.read_image', fn: 'readImage', expectation: 'ok',
     fixture: { name: 'probe.png', bytes: () => PNG_1PX },
-    check: (r) => (r.width === 1 && r.height === 1 ? true : `sharp did not decode metadata (width=${r.width}) — binding missing or broken in the staged bundle`),
+    check: (r) => (r.details?.width === 1 && r.details?.height === 1 ? true : `sharp did not decode metadata (width=${r.details?.width}) — binding missing or broken in the staged bundle`),
   },
   {
     id: 'pptx.read', fn: null, expectation: 'no-tool',
@@ -623,8 +652,8 @@ export const MATRIX = [
   },
   {
     // Registration smoke, full activation: complete config + host-API env →
-    // the ENTIRE 32-tool inventory must register from the STAGED PLUGIN copy
-    // (outlook 11 + forms 5 + browser 2 + principal 8 + document 6). Pins the
+    // the ENTIRE 33-tool inventory must register from the STAGED PLUGIN copy
+    // (outlook 11 + forms 5 + browser 2 + principal 8 + document 7). Pins the
     // env/config gates and entry-file integrity. Honest coverage note: index
     // .mjs's static import graph today is builtins + local files (doc deps
     // load lazily at call time — the doc rows cover those), so this row
@@ -694,7 +723,7 @@ export const MATRIX = [
   {
     // Gateway-process transport, full activation: with host-API env present
     // (fake port/token; fetch stubbed via preload so the CLWX-86 probe fails
-    // open without a socket) the ENTIRE 32-tool inventory must register
+    // open without a socket) the ENTIRE 33-tool inventory must register
     // through the real gateway host.
     id: 'gateway-transport.full', mode: 'transport', expectation: 'ok',
     transport: { pluginConfig: FULL_PLUGIN_CONFIG, hostApi: FAKE_HOST_API },
@@ -769,6 +798,7 @@ export function foldRepeatVerdicts(verdicts) {
 export const FAST_ROW_IDS = [
   'pdf-text.read_pdf',
   'pdf-text.read_pdf@electronlike',
+  'pdf-title.find',
   'docx.read_docx',
   'docx-out.write_docx',
   'xlsx.read_xlsx',

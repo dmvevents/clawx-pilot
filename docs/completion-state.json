@@ -1,16 +1,293 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-07T13:55:07.963042+00:00",
+  "updatedAt": "2026-09-07T17:01:32Z",
   "purpose": "Completion planning only; this file is not a release verdict or a substitute for machine-produced acceptance evidence.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
   "source": {
-    "publicCommit": "8d477e9ea27eafeb8bf78ceee49c532858209762",
+    "publicCommit": "34e951dc9d986ce82ef44396d440e9a02bc35242",
     "branch": "release/moe21-reviewed",
     "version": "0.4.3-moe.21",
-    "buildRunId": 34123550898,
-    "buildStatus": "failure",
-    "installerSha256": null
+    "buildRunId": 34134725489,
+    "buildStatus": "success",
+    "installerSha256": "d0da3062156e2faaac1df5967f03710736693f8fc7571adfccf254865579b00f",
+    "previousAttempt": {
+      "runId": 34133858590,
+      "publicCommit": "18bd7d7aab40cac21376e5c333b64143453eb810",
+      "buildStatus": "failure",
+      "phase": "Source preflight",
+      "passedFiles": 202,
+      "passedTests": 2049,
+      "failedTests": 3,
+      "skippedTests": 11,
+      "artifactTestsPassed": 72,
+      "failureSummary": "Source preflight failed three diagnostics-routes tests; all hit the 5-second default because unmocked diagnoseChromeCdp calls reached real OS/browser/network PowerShell probes. Artifact tests all passed."
+    },
+    "dispatchAttempt": {
+      "runId": 34133768880,
+      "publicCommit": "18bd7d7aab40cac21376e5c333b64143453eb810",
+      "buildStatus": "failure",
+      "phase": "checkout",
+      "failureSummary": "Operator dispatch passed abbreviated ref 18bd7d7a; actions/checkout treated it as a branch ref and failed before source checkout, tests, compilation or packaging."
+    },
+    "packageJobDuration": "13m14s",
+    "artifacts": {
+      "windows-installer-x64": {
+        "uploaded": true,
+        "zipBytes": 355198112,
+        "artifactId": 10023937132,
+        "verifiedIdentity": true,
+        "installerBytes": 359123558,
+        "installerSha256": "d0da3062156e2faaac1df5967f03710736693f8fc7571adfccf254865579b00f"
+      },
+      "windows-blockmap": {
+        "uploaded": true,
+        "zipBytes": 348108,
+        "artifactId": 10023938060,
+        "verifiedIdentity": true,
+        "reason": "Downloaded and structurally validated; no differential update execution was run.",
+        "blockmapBytes": 347786,
+        "sha256": "44ac9fa6deebf3b600cc86252a2d45bd3fdd50210c0de9673d0dd5dc7db75111",
+        "chunks": 17319,
+        "coverage": "covers installer",
+        "differentialUpdateExecuted": false
+      },
+      "build-provenance": {
+        "uploaded": true,
+        "zipBytes": 5206,
+        "artifactId": 10023938797,
+        "verifiedIdentity": true
+      },
+      "windows-installer-arm64": {
+        "uploaded": false,
+        "reason": "No release/*-win-arm64.exe matched"
+      },
+      "windows-update-manifests": {
+        "uploaded": false,
+        "reason": "No release/*.yml matched after excluding builder-debug.yml"
+      }
+    },
+    "artifactIdentityVerified": true,
+    "artifactIdentityReport": "artifacts/windows-vm/20260907-moe21/native-artifact-verification-34134725489.json",
+    "vmDownloadVerified": true,
+    "vmDownloadReport": "artifacts/windows-vm/20260907-moe21/download-34134725489-result.json",
+    "identity": {
+      "installer": {
+        "bytes": 359123558,
+        "sha256": "d0da3062156e2faaac1df5967f03710736693f8fc7571adfccf254865579b00f"
+      },
+      "appAsar": {
+        "bytes": 256224473,
+        "sha256": "8905aef127a3f1e443069b484a54481e76caa8a152902b85da3d778079f2cc94"
+      },
+      "packagedAppExe": {
+        "bytes": 214315008,
+        "sha256": "b60a4000d657085d4940f0f97ccc05132b04061b88891e2d4b6c34842a0c3bbe"
+      }
+    },
+    "installedEvidence": {
+      "status": "fail",
+      "evidenceDir": "artifacts/windows-vm/20260907-moe21/installed-evidence-34134725489",
+      "environment": "Windows Server 2022 Datacenter 10.0.20348 on Google Compute Engine; elevated administrator; reused profile with prior install/app data/OpenClaw/Chrome state present",
+      "installCompletedAt": "2026-09-07T15:14:29.3208846Z",
+      "installExit": 0,
+      "installStatus": "INSTALLED_HASH_VERIFIED",
+      "installedVersion": "0.4.3-moe.21",
+      "versionSource": "electron-cdp hostapi:fetch GET /api/capabilities appVersion",
+      "hashesMatchVerifiedArtifact": true,
+      "coldLaunch": {
+        "status": "APP_COLD_STABLE_READY",
+        "launchToFirstReadyMs": 151459,
+        "quietDurationMs": 20169,
+        "stableSamples": 11
+      },
+      "officeRuntime": "PASS_WITH_LIMITATIONS",
+      "officeWriteReadback": "PASS",
+      "safeChatFormsList": "PASS",
+      "video": {
+        "status": "CAPTURE_ONLY_VERIFIED",
+        "durationSeconds": 300.067,
+        "frameCount": 30,
+        "scope": "Later launch plus Online answer; not complete cold launch; visual/product verdicts not run"
+      },
+      "limitations": [
+        "Reused Server 2022 administrator profile; not a fresh Windows 10/11 standard-client proof",
+        "Original ordinary chat false failure is retained; fresh ordinary Online v2 rerun passed after external producer timestamp parsing fix",
+        "Five accepted ordinary journeys, cancellation/fault recovery, warm latency and adapter release evidence remain pending",
+        "Microsoft Outlook account-holder sign-in remains unanswered",
+        "Startup recorder permission/token failure retained; later video capture verified mechanics only",
+        "Required ffmpeg.exe is absent from the run9 fresh package and second clean application-directory install; moe.21 cannot be accepted.",
+        "Video/recording path is blocked by missing ffmpeg.exe; helper-launched warm observations are not product warm-launch evidence.",
+        "Blockmap was downloaded and structurally validated, but no differential update execution was run.",
+        "First on-device run is valid failed prerequisite evidence because the existing Ollama service was stopped after VM restart; service/model restored without new dependency installation, then a fresh uncontaminated installed rerun failed with NO_RESPONSE and degradeNoticeTrue.",
+        "Second clean install Office imports and Word/Excel write-readback passed; controlled forms.list passed but is not Forms preview evidence.",
+        "Reminder natural one-shot fired, job cleanup was verified, and exact retained history opened by job ID showed the marker visibly at 2026-09-07T16:48:05Z; this does not prove desktop notification, manual run or ordinary chat creation.",
+        "Document content acceptance is partial: D0/P1/P2/P4 passed, P2/P4 parseback passed with unchanged source hashes, P3 failed with no tool call, and P5 failed content review after the correct PNG reader returned truncated JSON text rather than a native image block.",
+        "Overlapping document/on-device attempts after the valid Online/cancel checks are excluded."
+      ],
+      "ordinaryOnlineTurn": {
+        "status": "PASS",
+        "evidenceDir": "artifacts/windows-vm/20260907-moe21/clwx-ordinary-online-20260907-153309",
+        "turnArtifact": "artifacts/windows-vm/20260907-moe21/clwx-ordinary-online-20260907-153309/turn/chat-turn-2026-09-07T15-33-16-391Z.json",
+        "semanticReaderVerification": "artifacts/windows-vm/20260907-moe21/semantic-reader-verification.json",
+        "sentAt": "2026-09-07T15:33:19.451Z",
+        "answerAt": "2026-09-07T15:33:51.918Z",
+        "answerLatencyMs": 32467,
+        "terminalStableSeconds": 30,
+        "terminalStable": true,
+        "toolCalls": 0,
+        "errorOrDegradeSeen": false,
+        "driverSha256": "f19db2e24e40f0635b7632e53100ed2aa131f900fa7391f296fe2e2c78653433",
+        "scope": "Fresh ordinary Online turn on reused Server 2022/admin profile; producer fix is external test harness only and does not alter candidate source."
+      },
+      "packageCompleteness": "FAIL_MISSING_FFMPEG_EXE",
+      "firstUpgradeMaskedPackageGap": true,
+      "secondCleanApplicationDirInstall": {
+        "status": "INSTALLED_HASH_VERIFIED_BUT_PACKAGE_INCOMPLETE",
+        "completedAt": "2026-09-07T16:04:02Z",
+        "exit": 0,
+        "exeAndAsarSameAsVerifiedArtifact": true,
+        "oldAppDirPreserved": true,
+        "existingProfileRetained": true,
+        "credentialSeedRowsAbsent": [
+          "cloud gateway seed rows",
+          "Azure seed rows"
+        ],
+        "coldLaunch": {
+          "status": "APP_COLD_STABLE_READY",
+          "launchToFirstReadyMs": 86838,
+          "quietDurationMs": 20176,
+          "stableSamples": 11
+        },
+        "video": "BLOCKED_MISSING_FFMPEG_EXE",
+        "officeRuntime": "PASS_WITH_LIMITATIONS",
+        "officeWriteReadback": "PASS",
+        "safeChatFormsList": "PASS_FOR_FORMS_LIST_NOT_PREVIEW",
+        "evidenceDir": "artifacts/windows-vm/20260907-moe21-clean/installed-evidence-34134725489-clean"
+      },
+      "blockmap": {
+        "status": "STRUCTURALLY_VALID",
+        "bytes": 347786,
+        "sha256": "44ac9fa6deebf3b600cc86252a2d45bd3fdd50210c0de9673d0dd5dc7db75111",
+        "chunks": 17319,
+        "coverage": "installer",
+        "differentialUpdateExecuted": false
+      },
+      "cancelNext": {
+        "status": "PASS_OBSERVABLE_CANCEL_NEXT_SEND",
+        "window": "2026-09-07T15:34:50Z/2026-09-07T15:35:57Z",
+        "exactRuntimeAbortProven": false,
+        "scope": "Observable installed behavior before later overlapping controller attempts; source tests separately cover exact old-run abort."
+      },
+      "onDeviceFirstRun": {
+        "status": "FAIL_PREREQUISITE_OBSERVED",
+        "reason": "Existing Ollama service was stopped after VM restart, so the first on-device run is valid prerequisite-failure evidence. Ollama 0.32.14 service/model was later restored without new dependency installation; the next overlapping attempt is excluded."
+      },
+      "onDeviceFreshRerun": {
+        "status": "FAIL_ORDINARY_ON_DEVICE",
+        "evidenceDir": "artifacts/windows-vm/20260907-moe21-clean/clwx-ordinary-on-device-20260907-164900",
+        "turnArtifact": "artifacts/windows-vm/20260907-moe21-clean/clwx-ordinary-on-device-20260907-164900/turn/chat-turn-2026-09-07T16-49-29-732Z.json",
+        "modelPresent": "qwen2.5:3b-instruct",
+        "verdict": "NO_RESPONSE",
+        "degradeNoticeSeen": true,
+        "terminalAnswerSeen": false
+      },
+      "cleanEvidenceDir": "artifacts/windows-vm/20260907-moe21-clean/installed-evidence-34134725489-clean",
+      "cleanOfficeRuntime": "PASS_WITH_LIMITATIONS",
+      "cleanOfficeWriteReadback": "PASS",
+      "cleanSafeChatFormsList": "PASS_FOR_FORMS_LIST_NOT_PREVIEW",
+      "reminderOneShot": {
+        "status": "PASS_VISIBLE_RETAINED_HISTORY_SCOPED",
+        "evidenceDir": "artifacts/windows-vm/20260907-moe21-clean/reminder-34134725489-clean",
+        "window": "2026-09-07T16:17:49Z/2026-09-07T16:21:43Z",
+        "naturalRunFired": true,
+        "historyAssistantMarkerPresent": true,
+        "lastRunSuccess": true,
+        "durationMs": 47686,
+        "ownedJobDeletionVerified": true,
+        "visibleAt": "2026-09-07T16:48:05Z",
+        "exactJobIdOpened": "fb7aad7f-304b-4aeb-b67d-9f61b14b3987",
+        "assistantMarkerVisible": true,
+        "rawModelMetadataVisible": false,
+        "scope": "Natural scheduler plus retained in-app history only; not manual run, desktop notification or ordinary chat creation.",
+        "visibleEvidence": "artifacts/windows-vm/20260907-moe21-clean/reminder-existing-visible.json"
+      },
+      "documentContentAcceptance": {
+        "status": "FAIL_CONTENT_ACCEPTANCE",
+        "evidence": "artifacts/windows-vm/20260907-moe21-clean/document-content-review-20260907-1652.json",
+        "parseback": "artifacts/windows-vm/20260907-moe21-clean/document-parseback-20260907-1649/document-journeys-parseback.json",
+        "passes": [
+          "D0",
+          "P1",
+          "P2",
+          "P4"
+        ],
+        "failures": [
+          "P3 PDF title prompt asked for pasted text and called no tool",
+          "P5 image prompt used the correct PNG reader but returned invented content; tool result was truncated JSON text, not a native image block"
+        ],
+        "sourceFilesUnchanged": true
+      }
+    },
+    "installedAcceptanceStatus": "fail",
+    "installedAcceptanceSummary": "Run9 native build and artifact identity passed, but installed package acceptance failed: required resources/bin/ffmpeg.exe is absent from the fresh package and second clean application-directory install. The first assisted upgrade hid the gap with a legacy file in the old application directory. Second install completed at 2026-09-07T16:04:02Z with exit 0 and matching EXE/ASAR, retained the existing profile, had cloud/Azure credential seed rows absent, and reached cold readiness in 86,838ms with 20,176ms quiet / 11 stable samples. Second clean install Office imports and Word/Excel write-readback passed; controlled forms.list passed but is not preview evidence. Video/recording is blocked by missing ffmpeg, so moe.21 cannot be accepted. Valid scoped positives remain fresh ordinary Online v2 PASS, observable cancel-next PASS, P2/P4 document parseback PASS and visible retained reminder history PASS. Current installed failures include on-device NO_RESPONSE/degradeNoticeTrue, P3 PDF title discovery with no tool call, and P5 image grounding with invented content after a truncated JSON tool result.",
+    "nativeBuildStatus": "PASS",
+    "installedPackageStatus": "FAIL",
+    "acceptanceStatus": "BLOCKED_BY_MISSING_PACKAGED_FFMPEG",
+    "moe22Repair": {
+      "status": "PUBLIC_SOURCE_REVIEWED_NO_BUILD",
+      "worktree": "/tmp/clawx-moe22-package-complete-20260907",
+      "branch": "release/moe22-package-complete",
+      "publicCommit": "aeb54555bb7b242930463f5277b83cf69fb23ec6",
+      "commits": [
+        "93c00bb4 Prevent clean Windows installs from missing required runtime helpers",
+        "aeb54555 Capture current-turn tool evidence after execution details collapse"
+      ],
+      "sourceValidation": [
+        "package review approved",
+        "180 focused package tests/typecheck/lint passed",
+        "29 graph-reader tests passed"
+      ],
+      "nativeFfmpegDiagnostic": {
+        "status": "PASS",
+        "scope": "isolated helper preparation, not installed package proof",
+        "startedAt": "2026-09-07T16:33:48Z",
+        "completedAt": "2026-09-07T16:34:04Z",
+        "downloaderSha256": "11b9f0acaf1a3426df92705bd95dddca3ef225ec081662368089a2ca4726f8a9",
+        "outputs": [
+          "ffmpeg.exe",
+          "FFMPEG_LICENSE.txt",
+          "FFMPEG_PROVENANCE.json",
+          "THIRD_PARTY_FFMPEG.txt"
+        ]
+      },
+      "buildStatus": "not_started",
+      "note": "No moe.22 hosted build hash, installer hash or installed evidence exists in this state vector yet. Document title discovery and image grounding repair remain in progress before the next one-build attempt."
+    },
+    "packageCompleteness": {
+      "status": "FAIL",
+      "missingRequiredHelpers": [
+        "resources/bin/ffmpeg.exe"
+      ],
+      "observedPackagedBinFiles": [
+        "node.exe",
+        "uv.exe",
+        "WinSpeechRecognize.exe",
+        "WinSpeechRecognize.exe.config"
+      ],
+      "failureSummary": "run9 artifact and second clean application-directory install lack required ffmpeg.exe; first assisted upgrade had a legacy ffmpeg.exe in the old application directory, masking the package gap.",
+      "impact": "Video/recording path exits with missing ffmpeg; moe.21 cannot be accepted or sent to testers."
+    },
+    "candidateBranch": "release/moe22-package-complete",
+    "candidateBaseCommit": "aeb54555bb7b242930463f5277b83cf69fb23ec6",
+    "candidateRepairStatus": "source-package-staging-validated; hosted build not run",
+    "candidateValidation": {
+      "documentImageRepairEvidence": "docs/evidence/MOE22_DOCUMENT_IMAGE_REPAIR_2026-09-07.json",
+      "directHarness": "PASS P1-P5",
+      "artifactFast": "PASS 9/9",
+      "typecheck": "PASS",
+      "lint": "PASS with 49 existing warnings"
+    }
   },
   "baseline": {
     "installedVersion": "0.4.3-moe.20",
@@ -58,14 +335,25 @@
       ],
       "owner": "build engineer",
       "dependsOn": [],
-      "evidenceSummary": "Reviewed workflow, cache, summary, procedure, planning artifacts and aligned agent/skill pushed as ae391338. Draft PR18 targets the release branch;32focused checks pass. Native speedup not yet measured.",
-      "nextAction": "Integrate the reviewed process commit into the next candidate freeze; measure the next native run rather than claiming an estimated speedup.",
+      "evidenceSummary": "Process PR18 merged into the release branch. Native run9 succeeded packaging from clean public source 34e951dc9d986ce82ef44396d440e9a02bc35242 in 13m14s. Preflight passed 203 test files / 2,053 tests with 11 skips; cache restore hit in 26s, dependency install took 22s, preflight 2m45s, Windows runtime binary preparation 44s, compile/bundle 3m27s and electron-builder 4m34s. The keyless-public staged package seed scan passed, x64 artifact identity/provenance passed, and blockmap structural validation later passed. Installed package completeness failed because ffmpeg.exe was not shipped. Public candidate source on release/moe22-package-complete repairs helper packaging, graph-reader capture, document title discovery and native image grounding. Validation includes focused units, direct P1-P5 harness, TypeScript, lint, task-spec validation, OpenClaw bundling and package-fast 9/9. No hosted moe.22 build exists yet.",
+      "nextAction": "Build moe.22 from the exact public SHA and verify the full runtime helper set before installed acceptance.",
       "exitCriterion": "Equivalent package commands and publication guards; focused tests pass; branch SHA read back from GitHub.",
       "references": [
         ".github/workflows/package-win-manual.yml",
         "docs/build/windows-build-pipeline.md",
         "tests/unit/windows-build-summary.test.ts",
-        "https://github.com/dmvevents/clawx-pilot/pull/18"
+        "https://github.com/dmvevents/clawx-pilot/pull/18",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34133858590",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34133768880",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34131398263",
+        "artifacts/windows-vm/20260907-moe21/native-unit-probe/third-result.json",
+        "artifacts/windows-vm/20260907-moe21/native-seventh-failed.log",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34134725489",
+        "artifacts/windows-vm/20260907-moe21/native-diagnostics-probe/result.json",
+        "artifacts/windows-vm/20260907-moe21/native-diagnostics-probe/tests.stdout.log",
+        "artifacts/windows-vm/20260907-moe21/native-artifact-verification-34134725489.json",
+        "artifacts/windows-vm/20260907-moe21/download-34134725489-result.json",
+        "docs/evidence/MOE22_DOCUMENT_IMAGE_REPAIR_2026-09-07.json"
       ]
     },
     {
@@ -79,18 +367,29 @@
       "dependsOn": [
         "build_process"
       ],
-      "evidenceSummary": "Run 34123550898 failed after 201 files / 2011 tests and seven artifact rows passed. The scoped-loader repair now passes both native Windows diagnostics (42413ms cold no-hostapi, 6094ms full) under the unchanged 120-second limit, with exact host/guest script hashes. This is diagnostic evidence, not a moe.21 installer.",
-      "nextAction": "Build once from the frozen reviewed public source, including native-proven transport, lifecycle/retry repairs and process workflow; validate installer/profile/source/compiled receipts and manifest before VM transfer.",
+      "evidenceSummary": "Run9 native build and artifact identity PASS from clean public source 34e951dc9d986ce82ef44396d440e9a02bc35242. Artifact verification binds run/source/profile/provenance/manifest plus x64 installer, extracted ASAR and packaged EXE. Installer is 359,123,558 bytes sha256 d0da3062156e2faaac1df5967f03710736693f8fc7571adfccf254865579b00f; ASAR is 256,224,473 bytes sha256 8905aef127a3f1e443069b484a54481e76caa8a152902b85da3d778079f2cc94; EXE is 214,315,008 bytes sha256 b60a4000d657085d4940f0f97ccc05132b04061b88891e2d4b6c34842a0c3bbe. The package is not acceptable because resources/bin/ffmpeg.exe is absent from the artifact and second clean application-directory install; the first upgrade was masked by a legacy file.",
+      "nextAction": "Replace moe.21 with a repaired moe.22 package that includes required runtime helpers, then verify installer, blockmap, package completeness and installed hashes again.",
       "exitCriterion": "Native package succeeds from the exact clean reviewed SHA; installer, profile, source and compiled receipts plus manifest validate.",
       "references": [
-        "https://github.com/dmvevents/clawx-pilot/actions/runs/34123550898",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34133858590",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34133768880",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34131398263",
+        "artifacts/windows-vm/20260907-moe21/native-unit-probe/third-result.json",
+        "artifacts/windows-vm/20260907-moe21/native-unit-probe/third-host-source-verification.json",
+        "artifacts/windows-vm/20260907-moe21/result-shortpath.json",
         "scripts/harness-artifact.mjs",
-        "scripts/release-build-profile.mjs"
+        "scripts/release-build-profile.mjs",
+        "artifacts/windows-vm/20260907-moe21/native-seventh-failed.log",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34134725489",
+        "artifacts/windows-vm/20260907-moe21/native-diagnostics-probe/result.json",
+        "artifacts/windows-vm/20260907-moe21/native-diagnostics-probe/tests.stdout.log",
+        "artifacts/windows-vm/20260907-moe21/native-artifact-verification-34134725489.json",
+        "artifacts/windows-vm/20260907-moe21/download-34134725489-result.json"
       ]
     },
     {
       "id": "installed_candidate",
-      "status": "NOT_RUN",
+      "status": "FAIL",
       "cards": [
         "CLWX-25",
         "CLWX-85",
@@ -100,14 +399,24 @@
       "dependsOn": [
         "native_installer"
       ],
-      "evidenceSummary": "GCP Server 2022 VM reachable; app stopped and profile backed up. Latest installed moe.20 is a reused-profile diagnostic baseline. A keyless fresh profile has no automatic Online credentials; supported provisioning is an existing account or the documented post-install drop-in.",
-      "nextAction": "Transfer verified installer; assisted visible-session install; hash/version/readiness and video before diagnostic warm-up. Verify first-run behavior and documented provisioning separately from reused-profile Online chat.",
+      "evidenceSummary": "Installed package acceptance failed for moe.21. The second clean application-directory install completed at 2026-09-07T16:04:02Z with exit 0, matching EXE/ASAR, existing profile retained, credential seed rows absent, and cold readiness in 86,838ms with 20,176ms quiet / 11 stable samples, but resources/bin/ffmpeg.exe was missing and the first upgrade had masked the gap with a legacy file. Office imports and Word/Excel write-readback passed; controlled forms.list passed but is not preview evidence. Video/recording is blocked. Valid scoped positives remain fresh ordinary Online v2, observable cancel-next, P2/P4 document parseback and visible retained reminder history. Current installed failures include on-device NO_RESPONSE/degradeNoticeTrue, P3 PDF title discovery and P5 image grounding.",
+      "nextAction": "Do not distribute moe.21. After moe.22 package repair, rerun clean install, helper inventory, video/ASR, fresh Online, cancel/fault, on-device/offline, warm latency and journey acceptance.",
       "exitCriterion": "Installer transfer hash and installed EXE/ASAR match the candidate; complete helpers; zero manual dependency installation; cold and warm observations recorded. Report profile/provisioning prerequisites explicitly; a reused Online profile cannot prove an unaided keyless first run.",
       "references": [
         "windows-pilot/vm-testing/README.md",
         "docs/CURRENT_WINDOWS_RC.md",
         "scripts/installed-release-evidence.mjs",
-        "docs/RELEASE_PROVISIONING_PLAN.md"
+        "docs/RELEASE_PROVISIONING_PLAN.md",
+        "artifacts/windows-vm/20260907-moe21/installed-evidence-34134725489/install-result.json",
+        "artifacts/windows-vm/20260907-moe21/installed-evidence-34134725489/cold-start.json",
+        "artifacts/windows-vm/20260907-moe21/installed-evidence-34134725489/running-identity.json",
+        "artifacts/windows-vm/20260907-moe21/installed-evidence-34134725489/install-artifacts.json",
+        "artifacts/windows-vm/20260907-moe21/installed-evidence-34134725489/runtime-after-cold-launch/host-verification/host-verification.json",
+        "artifacts/windows-vm/20260907-moe21/clwx-ordinary-online-20260907-153309/turn/chat-turn-2026-09-07T15-33-16-391Z.json",
+        "artifacts/windows-vm/20260907-moe21/semantic-reader-verification.json",
+        "artifacts/windows-vm/20260907-moe21-clean/clwx-ordinary-on-device-20260907-164900/turn/chat-turn-2026-09-07T16-49-29-732Z.json",
+        "artifacts/windows-vm/20260907-moe21-clean/document-content-review-20260907-1652.json",
+        "artifacts/windows-vm/20260907-moe21-clean/reminder-existing-visible.json"
       ]
     },
     {
@@ -122,8 +431,8 @@
       "dependsOn": [
         "installed_candidate"
       ],
-      "evidenceSummary": "Current source passes 117 focused tests, six Electron interactions and independent review: owned-progress watchdog, exact old-run abort, strict Main-owned saved-provider proof, acknowledged inactive-pin recovery and per-episode retry accounting. Installed moe.20 remains the failing older baseline; moe.21 installed proof is pending.",
-      "nextAction": "On the frozen installer, verify ordinary Online completion, cancellation, stalled/late runs, controlled provider outage and repeated next-turn recovery without restarting.",
+      "evidenceSummary": "Current source passes lifecycle-focused tests and six Electron interactions. Installed moe.21 has fresh ordinary Online v2 PASS and observable cancel-next PASS before later overlapping attempts; exact runtime abort remains proven by source tests, not this installed run. Package acceptance is blocked by missing ffmpeg.exe, so these scoped passes cannot promote moe.21.",
+      "nextAction": "On the frozen installer, verify cancellation, stalled/late runs, controlled provider outage and repeated next-turn recovery without restarting.",
       "exitCriterion": "Each accepted turn reaches one answer, visible failure or cancellation within the test bound; no duplicate turn/effect; recovery works without restart and preserves user channel intent. A successful actual Online provider probe clears the owned stale failure notice. Accepted sends without acknowledgement/events terminate visibly.",
       "references": [
         "src/stores/chat.ts",
@@ -142,13 +451,14 @@
       "dependsOn": [
         "installed_candidate"
       ],
-      "evidenceSummary": "Current source denies sessions_yield and terminalizes stalled tool/partial-stream runs using owned progress, including no-op and empty-tool-array regressions. Source and Electron checks pass; the latest installed moe.20 reproduction remains a failure until the new candidate is tested.",
-      "nextAction": "Run an ordinary installed on-device prompt and offline document path without test-only steering; prove terminal output, stalled-run recovery and no non-loopback egress.",
+      "evidenceSummary": "Current source denies sessions_yield and terminalizes stalled tool/partial-stream runs using owned progress. Installed moe.21 first on-device run is valid failed prerequisite evidence because the existing Ollama service was stopped after VM restart. Ollama 0.32.14 service/model was restored without new dependency installation; the overlapping second attempt is excluded. A fresh uncontaminated installed on-device rerun then failed with local model qwen2.5:3b-instruct present: NO_RESPONSE, degradeNoticeTrue and no terminal answer. Package acceptance is also blocked by missing ffmpeg.exe.",
+      "nextAction": "Diagnose the installed on-device NO_RESPONSE/degradeNoticeTrue failure, then prove terminal output, stalled-run recovery and no non-loopback egress on the repaired package.",
       "exitCriterion": "Nonempty terminal answer without top-level sessions_yield; a stalled tool yields a visible terminal outcome; offline document path has no non-loopback egress.",
       "references": [
         "electron/utils/ondevice-tool-policy.ts",
         "windows-pilot/scripts/pilot-electron-cdp-probe.js",
-        "docs/PROJECT_CONTRACT.md"
+        "docs/PROJECT_CONTRACT.md",
+        "artifacts/windows-vm/20260907-moe21-clean/clwx-ordinary-on-device-20260907-164900/turn/chat-turn-2026-09-07T16-49-29-732Z.json"
       ]
     },
     {
@@ -165,13 +475,17 @@
         "installed_candidate",
         "turn_lifecycle"
       ],
-      "evidenceSummary": "Native package parsers and VM Office helpers pass within their scopes. Current candidate live model selection and complete user journeys remain unproved.",
-      "nextAction": "Run the five Ministry document prompts plus folder discovery, parse back outputs, policy citation questions and a visible reminder through installed chat.",
+      "evidenceSummary": "Native package parsers pass. Second clean moe.21 install Office imports PASS_WITH_LIMITATIONS and Word/Excel write-readback PASS. D0/P1/P2/P4 have scoped installed evidence; P2 Word output parsed back and root full XML review preserved original agenda/deadlines; P4 Excel output parsed back with six expected average/grade rows and unchanged source hashes. Installed moe.21 P3/P5 failed: P3 asked for pasted PDF text without a tool call, and P5 returned invented content because read_image exposed truncated JSON text instead of a native image block. Current moe.22 source repairs both boundaries and passes focused units, direct P1-P5 harness, TypeScript, lint, task-spec validation, OpenClaw bundling and package-fast 9/9. Natural reminder evidence proves the second owned one-shot fired, persisted in in-app history, cleaned up the exact job and was visible when opened by exact job ID at 2026-09-07T16:48:05Z; this does not prove desktop notification, manual run or ordinary chat creation. Complete installed chat journeys remain unproved, and moe.22 hosted build/installed acceptance have not run.",
+      "nextAction": "After moe.22 package repair build, rerun the five Ministry document prompts plus folder discovery, parse back outputs, policy citation questions and visible reminder through installed chat.",
       "exitCriterion": "Real document tools selected; correct structured content and output parse-back; no missing Python/dependency workaround; correct policy citation; reminder fires visibly or has an accurate supported disposition.",
       "references": [
         "docs/PRODUCT_PRINCIPAL_ASSISTANT.md",
         "harness/specs",
-        "windows-pilot/vm-testing/README.md"
+        "windows-pilot/vm-testing/README.md",
+        "artifacts/windows-vm/20260907-moe21-clean/document-content-review-20260907-1652.json",
+        "artifacts/windows-vm/20260907-moe21-clean/document-parseback-20260907-1649/document-journeys-parseback.json",
+        "artifacts/windows-vm/20260907-moe21-clean/reminder-existing-visible.json",
+        "docs/evidence/MOE22_DOCUMENT_IMAGE_REPAIR_2026-09-07.json"
       ]
     },
     {
@@ -187,8 +501,8 @@
         "installed_candidate",
         "turn_lifecycle"
       ],
-      "evidenceSummary": "Recipient/body boundary source tests and one Mac compose check pass. VM Outlook requires sign-in; Forms list alone is not preview evidence; external tester attach regression remains open.",
-      "nextAction": "Use authenticated user Chrome to prove attach/read/draft/reopen/reply/forward and two Forms previews; preserve send/submit gates.",
+      "evidenceSummary": "Recipient/body boundary source tests and one Mac compose check pass. Second clean moe.21 install controlled safeChat forms.list passed on reused Server 2022/admin, but it is not Forms preview evidence. VM Outlook still requires sign-in; external tester attach regression remains open. The Microsoft account-holder question remains unanswered.",
+      "nextAction": "After account-holder sign-in is available, use authenticated user Chrome to prove attach/read/draft/reopen/reply/forward and two Forms previews; preserve send/submit gates.",
       "exitCriterion": "Correct compose identity, recipient buckets, body and subject; changed/ambiguous review refuses; preview has required coverage and no submission. Separately authorized sandbox dispatch proof is required by the full release gate.",
       "references": [
         "electron/services/outlook-browser-v2",
@@ -207,7 +521,7 @@
       "dependsOn": [
         "native_installer"
       ],
-      "evidenceSummary": "Physical pilot SSH timed out at 12:52Z. Available Server 2022/admin/reused-profile VM lacks a microphone and does not prove a Windows 10/11 principal installation.",
+      "evidenceSummary": "Physical pilot SSH timed out at 12:52Z. Available Server 2022/admin/reused-profile VM lacks a microphone and does not prove a Windows 10/11 principal installation. moe.21 package completeness failed because required ffmpeg.exe is absent, so video/recording/ASR acceptance is blocked until a repaired package is built.",
       "nextAction": "Complete Server VM proof now; obtain a reachable client/standard-user lane and exercise fresh setup, signed-in Chrome and microphone.",
       "exitCriterion": "Same installer passes fresh client/standard-user setup and advertised ASR; lane limitations remain explicit until evidenced or an actual scope deferral is accepted.",
       "references": [
@@ -217,7 +531,7 @@
     },
     {
       "id": "latency_rehearsal",
-      "status": "NOT_RUN",
+      "status": "PARTIAL",
       "cards": [
         "CLWX-43",
         "CLWX-107"
@@ -228,8 +542,8 @@
         "documents_policy_reminders",
         "microsoft_journeys"
       ],
-      "evidenceSummary": "Pricing-only diagnostic improved warm readiness 191.090s to 84.171s in one comparable repeat; this is not current-candidate acceptance. Historical latency budgets conflict.",
-      "nextAction": "Measure actual ready/first-output/terminal timings on the candidate, then rehearse all three demo moments consecutively with named backstop recordings.",
+      "evidenceSummary": "Second moe.21 clean application-directory install on reused Server 2022/admin reached cold readiness in 86,838ms with 20,176ms quiet / 11 stable samples, but package acceptance failed because ffmpeg.exe is missing. Root helper warm-launch observations are not product warm-launch evidence; overlapping controller attempts are excluded.",
+      "nextAction": "After a repaired package exists, measure warm launch and first useful response on the installed candidate, then rehearse all three demo moments consecutively with named backstop recordings.",
       "exitCriterion": "Report p50/p90 and sample size for repeated prompts; measure cold/warm separately; record accepted latency budget and a continuous successful rehearsal on the demo machine/account.",
       "references": [
         "docs/evidence/WINDOWS_RUNTIME_RECOVERY_2026-09-07.md",
@@ -271,7 +585,7 @@
         "microsoft_journeys",
         "representative_windows_asr"
       ],
-      "evidenceSummary": "Latest tester complaint remains September 4; no new installed moe.21 retest exists. Deployment ambition is 450 laptops, not an assumed 20-device release.",
+      "evidenceSummary": "Latest tester complaint remains September 4; no unaided external retest exists. moe.21 is not tester-ready because the fresh package is missing required ffmpeg.exe. Deployment ambition is 450 laptops, not an assumed 20-device release.",
       "nextAction": "Provide exact verified artifact/checklist through the authorized handoff and collect the unaided reproduction result.",
       "exitCriterion": "Tester completes formerly failing attach/read workflow on the same artifact; limitations and rollout scope recorded.",
       "references": [
@@ -298,8 +612,8 @@
         "latency_rehearsal",
         "external_acceptance"
       ],
-      "evidenceSummary": "Owner authorized release and completion notice after verification. No release tag, uploaded moe.21 installer or completion notification exists.",
-      "nextAction": "Run canonical strict gate with actual build profile/manifest/installed bundle; verify freshness and publication replay; publish and verify downloads before notifying stakeholders.",
+      "evidenceSummary": "Owner authorized release and completion notice after verification. Run9 produced verified native build/artifact identity, but installed package acceptance failed due missing ffmpeg.exe; moe.21 cannot be published or sent to testers. Public candidate source on release/moe22-package-complete now has helper packaging, document.find and native-image repair validated locally, but moe.22 has no hosted build/hash, installed acceptance or release gate evidence yet.",
+      "nextAction": "Wait for repaired package build and full accepted installed evidence before release upload, board closure or stakeholder completion notice.",
       "exitCriterion": "All required automated and principal-facing pilot criteria PASS on the identified artifact and scope, with no required missing/skipped evidence; published downloads match hashes; completion-notification delivery verified. Release notes explicitly exclude Ministry production identity/APIM/PostgreSQL/backend integration and fleet capacity until the production milestone passes.",
       "references": [
         "scripts/ga-gate.mjs",

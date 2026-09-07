@@ -154,7 +154,7 @@ describe('MATRIX shape', () => {
 
   it('uses only shipped doc-tools entrypoints (or null for no-tool rows)', async () => {
     const { MATRIX } = await load();
-    const known = new Set(['readPdf', 'readDocx', 'writeDocx', 'readXlsx', 'writeXlsx', 'readImage', null]);
+    const known = new Set(['findDocuments', 'readPdf', 'readDocx', 'writeDocx', 'readXlsx', 'writeXlsx', 'readImage', null]);
     for (const row of MATRIX) {
       // registration rows call register(), transport rows use the scoped OpenClaw loader — neither uses a doc-tools fn
       if (row.mode === 'register' || row.mode === 'transport') continue;
@@ -330,7 +330,7 @@ describe('registration-inventory fast-lane drift guard (Claude lens 2026-09-06)'
   // must also fail in the UNIT lane: parse the registerTool name literals
   // straight out of index.mjs source and set-compare with the exported
   // constants. Same discipline as the CLWX-86 route-literal drift guard.
-  it('the 32 hardcoded names match the registerTool literals in index.mjs', async () => {
+  it('the 33 hardcoded names match the registerTool literals in index.mjs', async () => {
     const { readFile } = await import('node:fs/promises');
     const src = await readFile('extensions/moe-principal-assistant/index.mjs', 'utf8');
     const found = new Set<string>();
@@ -340,7 +340,7 @@ describe('registration-inventory fast-lane drift guard (Claude lens 2026-09-06)'
     const { DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES, BROWSER_TOOL_NAMES, OUTLOOK_TOOL_NAMES, FORMS_TOOL_NAMES, inventoryDiff } = await load();
     const expected = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES];
     expect(inventoryDiff(expected, [...found])).toBe(true);
-    expect(found.size).toBe(32);
+    expect(found.size).toBe(33);
   });
 
   it('inventoryDiff flags duplicate registrations — set semantics cannot hide a double register', async () => {
@@ -620,10 +620,10 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
     expect(String(wrongPlugin)).toContain('moe-principal-assistant');
   });
 
-  it('transport contract inventories: 14 tools without host-API, 32 with (matches the register-mode rows)', async () => {
+  it('transport contract inventories: 15 tools without host-API, 33 with (matches the register-mode rows)', async () => {
     const { TRANSPORT_NO_HOSTAPI_EXPECTED, TRANSPORT_FULL_EXPECTED, DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES } = await load();
-    expect(TRANSPORT_NO_HOSTAPI_EXPECTED.length).toBe(14);
-    expect(TRANSPORT_FULL_EXPECTED.length).toBe(32);
+    expect(TRANSPORT_NO_HOSTAPI_EXPECTED.length).toBe(15);
+    expect(TRANSPORT_FULL_EXPECTED.length).toBe(33);
     expect(TRANSPORT_NO_HOSTAPI_EXPECTED).toEqual([...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES]);
   });
 
@@ -836,6 +836,7 @@ describe('FAST_ROW_IDS drift guard (package preflight wiring, trail 2026-09-06)'
     const { FAST_ROW_IDS } = await load();
     expect(FAST_ROW_IDS).toContain('pdf-text.read_pdf@electronlike'); // CLWX-92 class
     expect(FAST_ROW_IDS).toContain('pdf-text.read_pdf');
+    expect(FAST_ROW_IDS).toContain('pdf-title.find');
     expect(FAST_ROW_IDS.some((id: string) => id.includes('read_docx'))).toBe(true);
     expect(FAST_ROW_IDS.some((id: string) => id.includes('write_docx'))).toBe(true);
     expect(FAST_ROW_IDS.some((id: string) => id.includes('read_xlsx'))).toBe(true);

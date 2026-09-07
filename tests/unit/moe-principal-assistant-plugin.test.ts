@@ -48,7 +48,7 @@ describe('moe-principal-assistant plugin registration', () => {
     });
 
     expect(result).toEqual({ registered: true });
-    expect(tools.length).toBeGreaterThanOrEqual(6);
+    expect(tools.length).toBeGreaterThanOrEqual(7);
     expect(tools.some((tool) => typeof tool.handler === 'function')).toBe(false);
 
     for (const tool of tools) {
@@ -113,6 +113,10 @@ describe('moe-principal-assistant plugin registration', () => {
     const { SYSTEM_PROMPT } = await loadPersona();
     const prompt = String(SYSTEM_PROMPT);
 
+    expect(prompt).toMatch(/document\.find/);
+    expect(prompt).toMatch(/safeUnique true/i);
+    expect(prompt).toMatch(/ambiguous or incomplete/i);
+    expect(prompt).toMatch(/ask the principal to choose/i);
     // The generic core read tool returns raw PK/ZIP bytes for OOXML files;
     // the persona must forbid it for binary documents outright.
     expect(prompt).toMatch(/generic file read tool/i);
@@ -125,6 +129,50 @@ describe('moe-principal-assistant plugin registration', () => {
     // The filename-only search promise (Downloads/Documents/Desktop/OneDrive)
     // is the fork-side answer to the "allowlist rejects ~/Downloads" class.
     expect(prompt).toMatch(/searches Downloads, Documents, Desktop, and the OneDrive-redirected/i);
+  });
+
+  it('registers document.find as a metadata-only discovery tool before exact readers', async () => {
+    const { register } = await loadPlugin();
+    const tools: RegisteredTool[] = [];
+    register({
+      pluginConfig,
+      registerTool: (tool: RegisteredTool) => tools.push(tool),
+      log: { info() {}, warn() {} },
+    });
+
+    const names = tools.map((tool) => tool.name);
+    const find = tools.find((tool) => tool.name === 'document.find');
+    expect(find).toBeTruthy();
+    expect(names.indexOf('document.find')).toBeLessThan(names.indexOf('document.read_pdf'));
+    expect(find!.parameters).toMatchObject({
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        folder: { type: 'string' },
+        extensions: { type: 'array' },
+      },
+    });
+    const description = String((find as { description?: unknown }).description ?? '');
+    expect(description).toMatch(/metadata-only/i);
+    expect(description).toMatch(/safeUnique\/uniquePath/i);
+    expect(description).toMatch(/ask the principal to choose/i);
+  });
+
+  it('registers document.read_image as a native image-content tool', async () => {
+    const { register } = await loadPlugin();
+    const tools: RegisteredTool[] = [];
+    register({
+      pluginConfig,
+      registerTool: (tool: RegisteredTool) => tools.push(tool),
+      log: { info() {}, warn() {} },
+    });
+
+    const readImage = tools.find((tool) => tool.name === 'document.read_image');
+    expect(readImage).toBeTruthy();
+    const description = String((readImage as { description?: unknown }).description ?? '');
+    expect(description).toMatch(/native image content block/i);
+    expect(description).toMatch(/metadata text/i);
+    expect(description).not.toMatch(/data URL|dataUrl/i);
   });
 
   it('registers principal.nscc_lookup and its execute returns grounded NSCC passages (CLWX-42)', async () => {

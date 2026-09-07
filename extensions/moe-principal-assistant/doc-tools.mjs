@@ -81,6 +81,16 @@ function insideSandbox(resolved) {
   return false;
 }
 
+function canonicalRealpath(value) {
+  const realpath = realpathSync.native ?? realpathSync;
+  return realpath(value);
+}
+
+function isNetworkPath(value) {
+  const input = String(value ?? '').trim();
+  return input.startsWith('\\\\') || input.startsWith('//');
+}
+
 const require_ = createRequire(import.meta.url);
 
 /**
@@ -508,6 +518,367 @@ export async function resolveWritablePath(input) {
   return resolved;
 }
 
+// ── Document discovery ──────────────────────────────────────────────────
+
+const DOCUMENT_FIND_EXTENSIONS = [
+  '.pdf',
+  '.docx',
+  '.xlsx',
+  '.xls',
+  '.csv',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.bmp',
+  '.avif',
+  '.tif',
+  '.tiff',
+];
+const DOCUMENT_FIND_MAX_DEPTH = 3;
+const DOCUMENT_FIND_MAX_ENTRIES = 4000;
+const DOCUMENT_FIND_DEFAULT_RESULTS = 10;
+const DOCUMENT_FIND_MAX_RESULTS = 50;
+const DOCUMENT_FIND_STOPWORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'for',
+  'in',
+  'of',
+  'on',
+  'or',
+  'the',
+  'to',
+  'with',
+  'file',
+  'document',
+  'docs',
+  'local',
+  'named',
+  'open',
+  'read',
+  'find',
+  'summarise',
+  'summarize',
+]);
+const DOCUMENT_FIND_TYPE_WORDS = new Set([
+  'pdf',
+  'docx',
+  'word',
+  'xlsx',
+  'xls',
+  'excel',
+  'spreadsheet',
+  'workbook',
+  'csv',
+  'image',
+  'picture',
+  'photo',
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'bmp',
+  'tif',
+  'tiff',
+]);
+
+function uniqueStrings(values) {
+  const seen = new Set();
+  const out = [];
+  for (const value of values) {
+    if (seen.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+  }
+  return out;
+}
+
+function sanitizeExtensions(extensions) {
+  const raw = Array.isArray(extensions) && extensions.length
+    ? extensions
+    : DOCUMENT_FIND_EXTENSIONS;
+  const allowed = new Set(DOCUMENT_FIND_EXTENSIONS);
+  const out = [];
+  for (const value of raw) {
+    if (typeof value !== 'string') continue;
+    const ext = value.trim().toLowerCase().replace(/^\*?\.?/, '.');
+    if (allowed.has(ext)) out.push(ext);
+  }
+  return uniqueStrings(out);
+}
+
+function normalizeDocumentTokens(value, { keepTypeWords = false } = {}) {
+  return String(value ?? '')
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/i, '')
+    .split(/[^a-z0-9]+/i)
+    .filter(Boolean)
+    .filter((token) => !/^\d+$/.test(token))
+    .filter((token) => !DOCUMENT_FIND_STOPWORDS.has(token))
+    .filter((token) => keepTypeWords || !DOCUMENT_FIND_TYPE_WORDS.has(token));
+}
+
+function matchesDocumentQuery(name, query) {
+  const queryTokens = normalizeDocumentTokens(query);
+  if (!queryTokens.length) return true;
+  const nameTokens = new Set(normalizeDocumentTokens(name, { keepTypeWords: true }));
+  return queryTokens.every((token) => nameTokens.has(token));
+}
+
+function discoveryMatchScore(name, query) {
+  const queryTokens = normalizeDocumentTokens(query);
+  if (!queryTokens.length) return 0;
+  const nameTokens = normalizeDocumentTokens(name, { keepTypeWords: true });
+  let score = 0;
+  for (const token of queryTokens) {
+    if (nameTokens.includes(token)) score += 10;
+  }
+  const nameJoined = nameTokens.join(' ');
+  const queryJoined = queryTokens.join(' ');
+  if (nameJoined.includes(queryJoined)) score += 5;
+  score -= Math.max(0, nameTokens.length - queryTokens.length);
+  return score;
+}
+
+function asDisplayRoot(value) {
+  const home = os.homedir();
+  return String(value).startsWith(home + path.sep)
+    ? `~${String(value).slice(home.length)}`
+    : String(value);
+}
+
+function resolveDiscoveryRoot(candidate) {
+  if (typeof candidate !== 'string' || !candidate.trim()) return null;
+  if (isNetworkPath(candidate)) {
+    throw new Error(`refused to search ${candidate}: network paths are not allowed.`);
+  }
+  const home = os.homedir();
+  let root = candidate.trim();
+  if (root === '~' || root.startsWith('~/')) {
+    root = path.join(home, root.slice(1));
+  }
+  if (!path.isAbsolute(root)) {
+    root = path.resolve(root);
+  }
+  if (!existsSync(root)) return null;
+  const real = canonicalRealpath(root);
+  if (!insideSandbox(real)) {
+    throw new Error(
+      `refused to search ${real}: only folders under the user's home or tmp directory are allowed.`,
+    );
+  }
+  if (!statSync(real).isDirectory()) {
+    throw new Error(`refused to search ${real}: folder must be a directory.`);
+  }
+  return real;
+}
+
+function findDirectoryWithinDir(dir, name, maxDepth = DOCUMENT_FIND_MAX_DEPTH, maxEntries = DOCUMENT_FIND_MAX_ENTRIES) {
+  const target = String(name ?? '').trim();
+  if (!target) return null;
+  let budget = maxEntries;
+  let queue = [dir];
+  for (let depth = 0; depth <= maxDepth && queue.length; depth++) {
+    const next = [];
+    for (const current of queue) {
+      const direct = path.join(current, target);
+      try {
+        if (existsSync(direct) && statSync(direct).isDirectory()) return direct;
+      } catch {
+        // fall through to bounded listing
+      }
+      if (depth === maxDepth || budget <= 0) continue;
+      let entries;
+      try {
+        entries = readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (budget-- <= 0) break;
+        if (!entry.isDirectory()) continue;
+        if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+        next.push(path.join(current, entry.name));
+      }
+    }
+    queue = next;
+  }
+  return null;
+}
+
+function discoveryRoots(folder) {
+  if (typeof folder === 'string' && folder.trim()) {
+    const direct = resolveDiscoveryRoot(folder);
+    if (direct) return [direct];
+    if (isNetworkPath(folder)) {
+      throw new Error(`refused to search ${folder}: network paths are not allowed.`);
+    }
+    const hits = [];
+    for (const base of relativeSearchDirs(os.homedir())) {
+      if (!existsSync(base)) continue;
+      const hit = findDirectoryWithinDir(base, folder);
+      if (!hit) continue;
+      hits.push(resolveDiscoveryRoot(hit));
+    }
+    const unique = uniqueStrings(hits.filter(Boolean));
+    if (!unique.length) {
+      throw new Error(`folder not found: ${folder}`);
+    }
+    return unique;
+  }
+  const roots = [];
+  for (const dir of relativeSearchDirs(os.homedir())) {
+    if (!existsSync(dir)) continue;
+    const root = resolveDiscoveryRoot(dir);
+    if (root) roots.push(root);
+  }
+  return uniqueStrings(roots);
+}
+
+function scanDocumentRoot(root, { query, extensions, maxResults }) {
+  let entriesScanned = 0;
+  let incomplete = false;
+  let refused = 0;
+  const matches = [];
+  const extSet = new Set(extensions);
+  const seen = new Set();
+  let queue = [{ dir: root, depth: 0 }];
+
+  while (queue.length) {
+    const { dir, depth } = queue.shift();
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+    } catch {
+      incomplete = true;
+      continue;
+    }
+    for (const entry of entries) {
+      if (entriesScanned >= DOCUMENT_FIND_MAX_ENTRIES) {
+        incomplete = true;
+        queue = [];
+        break;
+      }
+      entriesScanned += 1;
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isSymbolicLink()) {
+        refused += 1;
+        continue;
+      }
+      if (entry.isDirectory()) {
+        if (depth < DOCUMENT_FIND_MAX_DEPTH) queue.push({ dir: fullPath, depth: depth + 1 });
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const ext = path.extname(entry.name).toLowerCase();
+      if (!extSet.has(ext)) continue;
+      if (!matchesDocumentQuery(entry.name, query)) continue;
+      let real;
+      let stat;
+      try {
+        real = canonicalRealpath(fullPath);
+        stat = statSync(real);
+        if (!insideSandbox(real)) {
+          refused += 1;
+          continue;
+        }
+      } catch {
+        refused += 1;
+        continue;
+      }
+      if (!stat.isFile()) continue;
+      if (seen.has(real)) continue;
+      seen.add(real);
+      matches.push({
+        path: real,
+        name: path.basename(real),
+        extension: ext.slice(1),
+        bytes: stat.size,
+        modifiedTime: stat.mtime.toISOString(),
+        score: discoveryMatchScore(entry.name, query),
+      });
+      if (matches.length >= maxResults) {
+        incomplete = true;
+        queue = [];
+        break;
+      }
+    }
+  }
+
+  return { matches, entriesScanned, incomplete, refused };
+}
+
+export function findDocuments({ query = '', folder, extensions, maxResults = DOCUMENT_FIND_DEFAULT_RESULTS } = {}) {
+  const extList = sanitizeExtensions(extensions);
+  if (!extList.length) {
+    throw new Error('extensions must include at least one supported document extension.');
+  }
+  const limit = Math.max(1, Math.min(DOCUMENT_FIND_MAX_RESULTS, Number(maxResults) || DOCUMENT_FIND_DEFAULT_RESULTS));
+  const roots = discoveryRoots(folder);
+  const allMatches = [];
+  let entriesScanned = 0;
+  let incomplete = false;
+  let refused = 0;
+  const seen = new Set();
+
+  for (const root of roots) {
+    const result = scanDocumentRoot(root, { query, extensions: extList, maxResults: limit });
+    entriesScanned += result.entriesScanned;
+    incomplete = incomplete || result.incomplete;
+    refused += result.refused;
+    for (const match of result.matches) {
+      if (seen.has(match.path)) continue;
+      seen.add(match.path);
+      allMatches.push(match);
+    }
+    if (allMatches.length >= limit) {
+      incomplete = true;
+      break;
+    }
+  }
+
+  allMatches.sort((left, right) => {
+    if (right.score !== left.score) return right.score - left.score;
+    return left.path.localeCompare(right.path);
+  });
+  const matches = allMatches.slice(0, limit);
+  const safeUnique = matches.length === 1 && !incomplete;
+  const status = safeUnique
+    ? 'found'
+    : matches.length > 1
+      ? (incomplete ? 'incomplete' : 'ambiguous')
+      : incomplete
+        ? 'incomplete'
+        : 'not_found';
+
+  return {
+    status,
+    query: String(query ?? ''),
+    folder: folder ?? null,
+    extensions: extList.map((ext) => ext.slice(1)),
+    matches,
+    safeUnique,
+    uniquePath: safeUnique ? matches[0].path : null,
+    incomplete,
+    limits: {
+      maxDepth: DOCUMENT_FIND_MAX_DEPTH,
+      maxEntries: DOCUMENT_FIND_MAX_ENTRIES,
+      maxResults: limit,
+    },
+    scanned: {
+      roots: roots.map(asDisplayRoot),
+      entries: entriesScanned,
+      refused,
+    },
+  };
+}
+
 // ── PDF ──────────────────────────────────────────────────────────────────
 
 /**
@@ -899,7 +1270,7 @@ export async function readImage({ path: inputPath, maxDim = 768 } = {}) {
   let width;
   let height;
   let format;
-  let dataUrlBuffer = buf;
+  let imageBuffer = buf;
   let mimeType = mimeForExt(path.extname(filePath));
   if (sharp) {
     try {
@@ -916,7 +1287,7 @@ export async function readImage({ path: inputPath, maxDim = 768 } = {}) {
       ) {
         // Downscale (and normalise unusual formats to PNG) so the payload
         // is small enough to hand to a VLM. Preserve aspect ratio.
-        dataUrlBuffer = await img
+        imageBuffer = await img
           .resize({ width: maxDim, height: maxDim, fit: 'inside', withoutEnlargement: true })
           .png()
           .toBuffer();
@@ -926,15 +1297,15 @@ export async function readImage({ path: inputPath, maxDim = 768 } = {}) {
       // fall through with the raw bytes; agent will still get metadata
     }
   }
-  return {
+  const metadata = {
     path: filePath,
     bytes: buf.length,
     width: width ?? null,
     height: height ?? null,
     format: format ?? null,
     mimeType,
-    dataUrl: `data:${mimeType};base64,${dataUrlBuffer.toString('base64')}`,
-    resized: dataUrlBuffer !== buf,
+    imageBytes: imageBuffer.length,
+    resized: imageBuffer !== buf,
     ...(sharpLoadError
       ? {
           sharpUnavailable:
@@ -943,6 +1314,20 @@ export async function readImage({ path: inputPath, maxDim = 768 } = {}) {
               : String(sharpLoadError),
         }
       : {}),
+  };
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(metadata, null, 2),
+      },
+      {
+        type: 'image',
+        data: imageBuffer.toString('base64'),
+        mimeType,
+      },
+    ],
+    details: metadata,
   };
 }
 

@@ -50,8 +50,9 @@ const MANIFEST = path.join(
   'resources/skills/preinstalled-manifest.json',
 );
 
-// The six document.* tools we actually ship.
+// The seven document.* tools we actually ship.
 const DOC_TOOLS_NAMES = [
+  'document.find',
   'document.read_pdf',
   'document.read_docx',
   'document.write_docx',

@@ -315,6 +315,8 @@ ClawX 采用 **双进程 + Host API 统一接入架构**。渲染进程只调用
 
 Windows 二进制准备阶段会下载固定版本的 LGPL FFmpeg 及其许可证和来源记录，并在 Windows 上验证音频转码。打包前后都会检查必需工具，发布清单记录实际交付的 `resources/bin` 目录哈希。
 
+Ministry 校长助手在读取内容前使用 `document.find` 解析本地文档名称。发现阶段只返回有界元数据和 `safeUnique`；只有精确的 `document.read_*` 工具会读取选中的文件。存在歧义或扫描不完整时，助手会请校长选择候选文件。
+
 Windows 打包会在 Windows 上运行完整预检。请保留 `.gitattributes`：可执行源码使用 LF，`.cmd`/`.bat` 使用 CRLF，PDF 保持原始二进制字节。
 
 Windows 环境信息采集、IAP 连接和应用窗口录制请参阅 [Windows 测试指南](windows-pilot/vm-testing/README.md)。服务器虚拟机检查与校长笔记本验收的覆盖范围分别记录。

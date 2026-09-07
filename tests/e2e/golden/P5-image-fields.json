@@ -2,18 +2,14 @@
   "id": "P5-image-fields",
   "tool_called": "document.read_image",
   "result_schema": {
-    "path": "string",
-    "bytes": "number",
-    "width": "any",
-    "height": "any",
-    "format": "any",
-    "mimeType": "string",
-    "dataUrl": "string",
-    "resized": "boolean"
+    "content": "array",
+    "details": "object"
   },
   "assertions": {
-    "bytes_min": 1,
-    "mimeType_matches": "^image/",
-    "dataUrl_matches": "^data:image/(png|jpeg);base64,"
+    "details.bytes_min": 1,
+    "details.mimeType_matches": "^image/",
+    "content.image.mimeType_matches": "^image/",
+    "content.image.data_matches": "^iVBOR",
+    "content.text_contains": "\"path\""
   }
 }

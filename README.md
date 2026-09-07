@@ -315,6 +315,8 @@ Chat returns the composer to an available state with a visible error when a turn
 
 Windows binary preparation downloads pinned LGPL FFmpeg with its license and provenance notices and exercises a native audio transcode. Package checks require the helper set before and after packaging, and the release manifest hashes the shipped `resources/bin` directory.
 
+The Ministry principal assistant resolves named local documents with `document.find` before it reads content. Discovery returns bounded metadata and `safeUnique`; only the exact `document.read_*` tool reads the selected file. Ambiguous or incomplete discovery asks the principal to choose.
+
 Windows packaging runs the complete preflight on Windows. Preserve `.gitattributes`: executable source uses LF, `.cmd`/`.bat` use CRLF, and PDFs retain their binary bytes.
 
 Windows environment profiling, IAP access and app-window recording are documented in the [Windows testing guide](windows-pilot/vm-testing/README.md). Server VM smoke and principal-laptop acceptance have separate coverage requirements.

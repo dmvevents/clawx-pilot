@@ -35,6 +35,7 @@ import {
   readXlsx as docReadXlsx,
   writeXlsx as docWriteXlsx,
   readImage as docReadImage,
+  findDocuments as docFindDocuments,
 } from './doc-tools.mjs';
 import {
   createHostApiCapabilityGate,
@@ -633,6 +634,21 @@ function registerDocumentTools({ registerTool, log }) {
   const numberSchema = { type: 'number', minimum: 1 };
 
   registerTool({
+    name: 'document.find',
+    description:
+      'Find local Word, PDF, Excel/CSV, or image files by ordinary title or filename WITHOUT invoking Python or reading file contents. Prefer this before exact document readers when the principal names a file by title instead of path. Args: { query?, folder?, extensions?, maxResults? }. Searches bounded permitted folders only; folder scopes an exact testing folder when provided. Returns metadata-only candidates plus safeUnique/uniquePath. If safeUnique is true, call the exact reader for the returned path. If ambiguous, incomplete, or multiple matches, ask the principal to choose; never guess.',
+    parameters: toolParameters(
+      {
+        query: { type: 'string' },
+        folder: { type: 'string', description: 'Optional absolute, ~/ or known-folder-relative directory to search.' },
+        extensions: { type: 'array', items: { type: 'string' } },
+        maxResults: numberSchema,
+      },
+    ),
+    execute: async (_toolCallId, args = {}) => docFindDocuments(args),
+  });
+
+  registerTool({
     name: 'document.read_pdf',
     description:
       "Extract text from a PDF file WITHOUT invoking Python. Uses the bundled pdf-parse dep, so this works on Windows even if the pdf/nano-pdf skills' Python runtime is unavailable. Args: { path, maxChars? (default 200000) }. Returns { path, bytes, pages, info, text, truncated, totalChars }. Prefer this over the pdf skill when handling emailed attachments or files the principal dropped into chat.",
@@ -718,7 +734,7 @@ function registerDocumentTools({ registerTool, log }) {
   registerTool({
     name: 'document.read_image',
     description:
-      'Read an image (.png/.jpg/.gif/.webp/.bmp/.avif/.tiff) from disk and return its metadata plus a base64 data URL suitable for VLM analysis. Uses Electron\'s bundled sharp module — no Python or ImageMagick. Args: { path, maxDim? (default 768) }. Large images are downscaled server-side so the response stays within model limits. Returns { path, bytes, width, height, format, mimeType, dataUrl, resized }. Prefer this over any OCR skill: you read the returned image directly, so pytesseract/Pillow/Tesseract are never needed and must never be requested from the principal. Accepts a bare filename and searches Downloads, Documents, Desktop, and the OneDrive-redirected Desktop/Documents, including subfolders.',
+      'Read an image (.png/.jpg/.gif/.webp/.bmp/.avif/.tiff) from disk and return metadata plus a native image content block for VLM analysis. Uses Electron\'s bundled sharp module — no Python or ImageMagick. Args: { path, maxDim? (default 768) }. Large images are downscaled server-side so the response stays within model limits. The tool result content contains metadata text and the image itself; details contains { path, bytes, width, height, format, mimeType, imageBytes, resized }. Prefer this over any OCR skill: you read the returned image directly, so pytesseract/Pillow/Tesseract are never needed and must never be requested from the principal. Accepts a bare filename and searches Downloads, Documents, Desktop, and the OneDrive-redirected Desktop/Documents, including subfolders.',
     parameters: toolParameters(
       { path: readableSchema, maxDim: numberSchema },
       ['path'],
@@ -727,7 +743,7 @@ function registerDocumentTools({ registerTool, log }) {
   });
 
   log?.info?.(
-    'moe-principal-assistant: document.* tools registered (read_pdf, read_docx, write_docx, read_xlsx, write_xlsx, read_image)',
+    'moe-principal-assistant: document.* tools registered (find, read_pdf, read_docx, write_docx, read_xlsx, write_xlsx, read_image)',
   );
 }
 

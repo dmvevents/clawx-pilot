@@ -89,15 +89,21 @@ browser Forms path for GA.
 
 The principal reviews and edits before anything leaves the machine. No content is sent to the cloud unless the principal triggers an Outlook send.
 
-**Templates** live in `extensions/moe-principal-assistant/templates/`. The bundled principal toolkit includes:
+**Templates** live in `extensions/moe-principal-assistant/templates/`. The
+principal plugin exposes first-party document tools for Windows-safe work:
+`document.find` discovers local Word, PDF, Excel/CSV, and image files by
+metadata only, then the exact readers/writers handle the selected path:
+`document.read_docx`, `document.read_pdf`, `document.read_xlsx`,
+`document.read_image`, `document.write_docx`, and `document.write_xlsx`.
+`document.read_image` returns metadata text plus a native image content block for VLM analysis; it does not expose image bytes through text-only `dataUrl` output.
+Ambiguous or incomplete discovery asks the principal to choose a candidate.
+PowerPoint reading is not supported yet; the assistant asks for a PDF export or
+pasted text.
 
-- **docx** — Word document handling
-- **pdf** + **nano-pdf** — PDF read/extract
-- **xlsx** — Excel spreadsheets
-- **pptx** — PowerPoint
-- **summarize** — document summarisation skill
-
-**Verified today:** the chat composer can read `~/Downloads/improving-gemini-for-education_v7.pdf` via the bundled `pdf` skill (subject to the path-allowlist gate). Excel + email compound queries through the `xlsx` skill route to Gemini 2.5 Pro (the default).
+**Verified today:** the chat composer can read and write Word, PDF, Excel/CSV,
+and image files through the native `document.*` tools without Python, pandoc, or
+external binaries. Exact installed-build evidence is tracked in the completion
+plan and GA release evidence manifest.
 
 **Status (corrected 2026-09-03):** the `templates/` directory now contains `letter.md`, `memo.md`, `daily_report_brief.md`, and `meeting_minutes.md`. The remaining gap is a live in-app drafting proof plus the classification e2e — tracked as CLWX-65 and CLWX-66.
 

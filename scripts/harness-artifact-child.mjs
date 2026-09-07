@@ -128,9 +128,19 @@ async function main() {
   }
   try {
     const result = await fn(spec.args);
-    // dataUrl payloads can be large; cap what travels back to the parent.
-    if (result && typeof result.dataUrl === 'string' && result.dataUrl.length > 200) {
-      result.dataUrl = result.dataUrl.slice(0, 200);
+    // Image payloads can be large; the parent harness only needs proof that a
+    // native image block existed, not the full base64 bytes.
+    if (result && Array.isArray(result.content)) {
+      result.content = result.content.map((block) => {
+        if (!block || block.type !== 'image' || typeof block.data !== 'string') return block;
+        const { data, ...rest } = block;
+        return {
+          ...rest,
+          dataPrefix: data.slice(0, 32),
+          dataBytes: data.length,
+          dataOmitted: true,
+        };
+      });
     }
     emit({ ok: true, result });
   } catch (err) {

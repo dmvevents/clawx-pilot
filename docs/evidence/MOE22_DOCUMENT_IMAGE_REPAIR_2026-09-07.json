@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-09-07T17:01:32Z",
+  "scope": "moe.22 candidate source repair for installed moe.21 P3 PDF title discovery and P5 image grounding failures",
+  "worktree": "/tmp/clawx-moe22-package-complete-20260907",
+  "branch": "release/moe22-package-complete",
+  "baseHeadBeforeRepair": "aeb54555bb7b242930463f5277b83cf69fb23ec6",
+  "installedFailureEvidence": {
+    "p5Transcript": "artifacts/windows-vm/20260907-moe21-clean/document-journeys-2026-09-07T16-39-54-761Z/P5-image-fields/chat-turn-2026-09-07T16-41-24-959Z.json",
+    "p5Diagnostic": "artifacts/windows-vm/20260907-moe21-clean/image-grounding-diagnostic/transcript-shape.json",
+    "p5SourceImageSha256": "6eea5898d3cc9e00f4ae9176da63238a539849b64229fa03ceafeee552d7c748",
+    "p3Review": "artifacts/windows-vm/20260907-moe21-clean/document-content-review-20260907-1652.json"
+  },
+  "repairs": [
+    {
+      "id": "document_read_image_native_content",
+      "summary": "document.read_image returns metadata text plus a native image content block and keeps base64 out of text/details so tool-result text truncation cannot remove the image payload.",
+      "primaryFiles": [
+        "extensions/moe-principal-assistant/doc-tools.mjs",
+        "extensions/moe-principal-assistant/index.mjs",
+        "scripts/harness-artifact-child.mjs",
+        "scripts/harness-artifact.mjs",
+        "harness/run.ts",
+        "tests/e2e/golden/P5-image-fields.json"
+      ]
+    },
+    {
+      "id": "document_find_title_discovery",
+      "summary": "document.find title discovery and boundary spec are present in the candidate and covered by focused steering/package harness tests.",
+      "primaryFiles": [
+        "extensions/moe-principal-assistant/doc-tools.mjs",
+        "extensions/moe-principal-assistant/persona.mjs",
+        "harness/specs/tasks/document-title-discovery.md",
+        "harness/specs/rules/document-discovery-boundary.md",
+        "tests/unit/doc-tooling-steering.test.ts"
+      ]
+    }
+  ],
+  "validation": [
+    {
+      "command": "node -c extensions/moe-principal-assistant/doc-tools.mjs && node -c extensions/moe-principal-assistant/index.mjs && node -c extensions/moe-principal-assistant/persona.mjs && node -c scripts/harness-artifact.mjs && node -c scripts/harness-artifact-child.mjs",
+      "result": "PASS"
+    },
+    {
+      "command": "local document.read_image probe against artifacts/windows-vm/20260907-moe21-clean/P5-source.png",
+      "result": "PASS",
+      "observed": {
+        "topKeys": [
+          "content",
+          "details"
+        ],
+        "contentTypes": [
+          "text",
+          "image"
+        ],
+        "mimeType": "image/png",
+        "hasDataUrlInTextOrDetails": false
+      }
+    },
+    {
+      "command": "pnpm exec vitest run tests/unit/moe-principal-assistant-doc-tools.test.ts tests/unit/moe-principal-assistant-plugin.test.ts tests/unit/harness-artifact.test.ts tests/unit/doc-tooling-steering.test.ts",
+      "result": "PASS",
+      "observed": "4 files, 142 tests"
+    },
+    {
+      "command": "pnpm exec tsx harness/run.ts --mode direct --out /tmp/clawx-harness-direct-image-fix.json",
+      "result": "PASS",
+      "observed": "direct P1-P5 harness passed"
+    },
+    {
+      "command": "pnpm exec vitest run tests/unit/harness-artifact.test.ts tests/unit/moe-principal-assistant-doc-tools.test.ts tests/unit/moe-principal-assistant-plugin.test.ts",
+      "result": "PASS",
+      "observed": "3 files, 127 tests"
+    },
+    {
+      "command": "pnpm exec vitest run tests/unit/harness-windows-e2e.test.ts tests/unit/doc-tooling-steering.test.ts tests/unit/chat-helpers-enrichment.test.ts tests/unit/chat-message.test.tsx",
+      "result": "PASS",
+      "observed": "4 files, 45 tests"
+    },
+    {
+      "command": "pnpm typecheck",
+      "result": "PASS"
+    },
+    {
+      "command": "pnpm lint:check",
+      "result": "PASS",
+      "observed": "49 existing no-explicit-any warnings; no lint failure"
+    },
+    {
+      "command": "pnpm harness validate --spec harness/specs/tasks/document-title-discovery.md --no-diff",
+      "result": "PASS"
+    },
+    {
+      "command": "pnpm exec zx scripts/bundle-openclaw.mjs",
+      "result": "PASS",
+      "observed": "build/openclaw staged; existing patch-skip warnings only"
+    },
+    {
+      "command": "pnpm harness:artifact --fast",
+      "result": "PASS",
+      "observed": "9 rows, 9 PASS"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "releaseStatus": "Source/package-staging repair only. GA remains RED until hosted moe.22 build, artifact identity, helper inventory, clean installed Windows acceptance and journey reruns pass."
+}

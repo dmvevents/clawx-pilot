@@ -84,6 +84,26 @@ describe('harness/run.ts — 5-prompt doc-tooling E2E', () => {
     // preflight suite) is not mis-flagged as a failure. Default 5s was too tight.
   }, 90_000);
 
+
+
+  it('P5 native-image golden rejects old or malformed image outputs through the real harness assertions', async () => {
+    const { checkAssertions } = await import('../../harness/run');
+    const golden = JSON.parse(await readFile(path.join(GOLDEN_DIR, 'P5-image-fields.json'), 'utf8')) as GoldenSpec;
+    const validNativeImage = {
+      content: [
+        { type: 'text', text: JSON.stringify({ path: '/tmp/Student_Support_Referral_Form.png', bytes: 68 }, null, 2) },
+        { type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgo=' },
+      ],
+      details: { path: '/tmp/Student_Support_Referral_Form.png', bytes: 68, mimeType: 'image/png' },
+    };
+
+    expect(() => checkAssertions(validNativeImage, golden.assertions as Record<string, unknown>)).not.toThrow();
+    expect(() => checkAssertions({ ...validNativeImage, dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }, golden.assertions as Record<string, unknown>)).not.toThrow();
+    expect(() => checkAssertions({ ...validNativeImage, content: [{ type: 'text', text: validNativeImage.content[0].text }] }, golden.assertions as Record<string, unknown>)).toThrow(/content\.image\.mimeType|content\.image\.data/);
+    expect(() => checkAssertions({ ...validNativeImage, content: [{ type: 'text', text: validNativeImage.content[0].text }, { type: 'image', mimeType: 'image/png', data: '' }] }, golden.assertions as Record<string, unknown>)).toThrow(/content\.image\.data/);
+    expect(() => checkAssertions({ path: '/tmp/Student_Support_Referral_Form.png', bytes: 68, mimeType: 'image/png', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }, golden.assertions as Record<string, unknown>)).toThrow(/details\.bytes|content\.image/);
+  });
+
   it('binary mode SKIPs cleanly with exit 0 (does not red-fail CI)', () => {
     const res = runHarness(['--mode=binary'], 30_000);
     expect(res.status).toBe(0);

@@ -58,3 +58,7 @@ Explicit local fallback flags are narrow exceptions:
 `clawx:allow-localhost-fallback` belongs to Host API browser fallback only, `clawx:allow-sse-fallback` belongs to host event SSE fallback only, and `clawx:gateway-ws-diagnostic` belongs to API client transport diagnostics only.
 
 Channel/plugin migration behavior is also part of this scenario when ClawX rewrites OpenClaw config before Gateway launch. Upgrades must preserve single-owner channel registration for migrated plugin-backed channels such as Feishu/Lark.
+
+Named local document discovery through the runtime is governed by
+`document-discovery-boundary`: bounded metadata lookup precedes exact format
+readers, and incomplete/ambiguous results cannot select a file automatically.

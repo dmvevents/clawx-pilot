@@ -84,7 +84,7 @@
       "kind": "png",
       "name": "Student_Support_Referral_Form.png"
     },
-    "expected_stdout_regex": "data:image/(png|jpeg);base64,",
+    "expected_stdout_regex": "Student_Support_Referral_Form\\.png",
     "timeout_ms": 30000
   }
 ]

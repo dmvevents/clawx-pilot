@@ -1,12 +1,10 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 import { Document, Packer, Paragraph } from 'docx';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 import * as XLSX from 'xlsx';
 
 async function loadDocTools() {
@@ -14,6 +12,15 @@ async function loadDocTools() {
 }
 
 let workDir: string;
+const PNG_1PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+  'base64',
+);
+
+function canonicalPath(value: string) {
+  const realpath = realpathSync.native ?? realpathSync;
+  return realpath(value);
+}
 
 beforeAll(async () => {
   workDir = mkdtempSync(path.join(tmpdir(), 'moe-doc-tools-'));
@@ -28,6 +35,154 @@ afterAll(() => {
 });
 
 describe('document.* native tools (Lane A — Windows-safe)', () => {
+  it('finds a numerically prefixed underscored PDF from an ordinary title in a supplied folder', async () => {
+    const { findDocuments } = await loadDocTools();
+    const folder = path.join(workDir, `MoE Agent Testing Folder ${process.pid}`);
+    const file = path.join(folder, '01_Ministry_Circular_ICT_Equipment_Audit.pdf');
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(file, '%PDF-1.4\n');
+
+    const result = (await findDocuments({
+      query: 'ICT Equipment Audit circular',
+      folder,
+      extensions: ['pdf'],
+    })) as {
+      status: string;
+      safeUnique: boolean;
+      uniquePath: string | null;
+      matches: Array<{ path: string; name: string; bytes: number }>;
+      incomplete: boolean;
+    };
+
+    expect(result.status).toBe('found');
+    expect(result.safeUnique).toBe(true);
+    expect(result.uniquePath).toBe(canonicalPath(file));
+    expect(result.incomplete).toBe(false);
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]).toMatchObject({
+      path: canonicalPath(file),
+      name: '01_Ministry_Circular_ICT_Equipment_Audit.pdf',
+      bytes: expect.any(Number),
+    });
+    expect(JSON.stringify(result)).not.toContain('%PDF');
+  });
+
+  it('finds an underscored image filename by title and extension filter', async () => {
+    const { findDocuments } = await loadDocTools();
+    const folder = path.join(workDir, `image-folder-${process.pid}`);
+    const file = path.join(folder, 'Student_Support_Referral_Form.png');
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(file, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+
+    const result = await findDocuments({
+      query: 'Student Support Referral Form image',
+      folder,
+      extensions: ['png', 'jpg'],
+    });
+
+    expect(result.safeUnique).toBe(true);
+    expect(result.uniquePath).toBe(canonicalPath(file));
+  });
+
+  it('returns native image content without duplicating base64 into text metadata', async () => {
+    const { readImage } = await loadDocTools();
+    const file = path.join(workDir, 'Student_Support_Referral_Form.png');
+    writeFileSync(file, PNG_1PX);
+
+    const result = await readImage({ path: file }) as {
+      content: Array<Record<string, unknown>>;
+      details: Record<string, unknown>;
+      dataUrl?: unknown;
+    };
+
+    const textBlock = result.content.find((block) => block.type === 'text');
+    const imageBlock = result.content.find((block) => block.type === 'image');
+
+    expect(textBlock?.text).toContain('"path"');
+    expect(textBlock?.text).not.toContain('base64,');
+    expect(imageBlock).toMatchObject({
+      type: 'image',
+      mimeType: 'image/png',
+      data: expect.any(String),
+    });
+    expect(String(imageBlock?.data)).toMatch(/^iVBOR/);
+    expect(result.details).toMatchObject({
+      path: file,
+      bytes: PNG_1PX.length,
+      mimeType: 'image/png',
+      imageBytes: expect.any(Number),
+      resized: expect.any(Boolean),
+    });
+    expect(JSON.stringify(result.details)).not.toContain('base64,');
+    expect(result).not.toHaveProperty('dataUrl');
+  });
+
+  it('marks multiple plausible title matches ambiguous instead of selecting one', async () => {
+    const { findDocuments } = await loadDocTools();
+    const folder = path.join(workDir, `ambiguous-${process.pid}`);
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(path.join(folder, 'ICT_Equipment_Audit.pdf'), 'one');
+    writeFileSync(path.join(folder, 'ICT Equipment Audit Circular.pdf'), 'two');
+
+    const result = await findDocuments({
+      query: 'ICT Equipment Audit',
+      folder,
+      extensions: ['pdf'],
+    });
+
+    expect(result.status).toBe('ambiguous');
+    expect(result.safeUnique).toBe(false);
+    expect(result.uniquePath).toBeNull();
+    expect(result.matches.map((m) => m.name).sort()).toEqual([
+      'ICT Equipment Audit Circular.pdf',
+      'ICT_Equipment_Audit.pdf',
+    ]);
+  });
+
+  it('marks result-limit truncation incomplete instead of claiming a safe unique match', async () => {
+    const { findDocuments } = await loadDocTools();
+    const folder = path.join(workDir, `truncated-${process.pid}`);
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(path.join(folder, 'Audit Alpha.pdf'), 'one');
+    writeFileSync(path.join(folder, 'Audit Beta.pdf'), 'two');
+
+    const result = await findDocuments({
+      query: 'Audit',
+      folder,
+      extensions: ['pdf'],
+      maxResults: 1,
+    });
+
+    expect(result.status).toBe('incomplete');
+    expect(result.safeUnique).toBe(false);
+    expect(result.uniquePath).toBeNull();
+    expect(result.matches).toHaveLength(1);
+    expect(result.incomplete).toBe(true);
+  });
+
+  it('rejects network folders before scanning', async () => {
+    const { findDocuments } = await loadDocTools();
+    expect(() => findDocuments({ query: 'audit', folder: '\\\\server\\share' })).toThrow(/network paths are not allowed/);
+  });
+
+  it('does not follow symlinked files during discovery', async () => {
+    const { findDocuments } = await loadDocTools();
+    if (process.platform === 'win32') return;
+    const folder = path.join(workDir, `symlink-${process.pid}`);
+    mkdirSync(folder, { recursive: true });
+    symlinkSync('/etc/hosts', path.join(folder, 'ICT_Equipment_Audit.pdf'));
+
+    const result = await findDocuments({
+      query: 'ICT Equipment Audit',
+      folder,
+      extensions: ['pdf'],
+    });
+
+    expect(result.status).toBe('not_found');
+    expect(result.safeUnique).toBe(false);
+    expect(result.scanned.refused).toBeGreaterThan(0);
+  });
+
   it('reads a .docx file with mammoth without shelling out', async () => {
     const { readDocx } = await loadDocTools();
     const docxPath = path.join(workDir, 'sample.docx');
