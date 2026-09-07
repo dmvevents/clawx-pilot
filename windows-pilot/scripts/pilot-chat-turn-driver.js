@@ -32,6 +32,7 @@
  * evidence is worse than no evidence.
  */
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -157,6 +158,55 @@ function trimObservations(observations, max = 40) {
 }
 
 /**
+ * Extract the semantic chat message text from a rendered message container.
+ * ChatMessage renders assistant answer markdown inside `.prose`; timestamp/copy
+ * UI sits in the sibling hover bar and must not be part of the answer. User
+ * bubbles render the prompt in the direct whitespace-pre-wrap paragraph. If the
+ * markup changes, fall back only after removing known chrome/error-chip nodes.
+ */
+function semanticMessageTextFromElement(el) {
+  const textOf = (node) => (typeof node?.innerText === 'string' ? node.innerText : (node?.textContent || '')).replace(/\s+/g, ' ').trim();
+  const assistantBody = el?.querySelector?.('.prose');
+  if (assistantBody) return textOf(assistantBody);
+  const userBody = el?.querySelector?.('p.whitespace-pre-wrap');
+  if (userBody) return textOf(userBody);
+  const clone = el?.cloneNode?.(true);
+  if (!clone) return textOf(el);
+  clone.querySelectorAll?.('[data-testid="chat-message-error-chip"], .opacity-0, button, [role="button"]').forEach((node) => node.remove());
+  return textOf(clone);
+}
+
+function semanticAnswerStillLatest(latestText, expectedText) {
+  const expected = normalize(expectedText || '');
+  if (!expected) return true;
+  return normalize(latestText || '') === expected;
+}
+
+function textDigest(value) {
+  return crypto.createHash('sha256').update(String(value || ''), 'utf8').digest('hex');
+}
+
+function terminalLatestText(surface) {
+  return normalize(surface?.lastMessageTextFull || surface?.lastMessageText || '');
+}
+
+function redactTerminalSurface(surface) {
+  if (!surface || typeof surface !== 'object') return surface;
+  const full = typeof surface.lastMessageTextFull === 'string' ? surface.lastMessageTextFull : '';
+  if (!full) return surface;
+  const { lastMessageTextFull, ...rest } = surface;
+  return {
+    ...rest,
+    lastMessageTextHash: textDigest(lastMessageTextFull),
+    lastMessageTextLength: normalize(lastMessageTextFull).length,
+  };
+}
+
+async function readSemanticMessageText(locator) {
+  return normalize(await locator.evaluate(semanticMessageTextFromElement));
+}
+
+/**
  * Classify the last rendered message text. Pure so the three ways a non-answer
  * can masquerade as an answer are unit-testable without a browser:
  *  - streaming placeholder ("Thinking…") is momentarily stable;
@@ -248,8 +298,9 @@ function exitCodeFor(verdict) {
 }
 
 async function captureTerminalSurface(page) {
-  return page.evaluate(({ selectors }) => {
+  return page.evaluate(({ selectors, semanticMessageTextFunctionSource }) => {
     const textOf = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
+    const semanticMessageText = (0, eval)(`(${semanticMessageTextFunctionSource})`);
     const readBool = (value) => {
       if (value === 'true') return true;
       if (value === 'false') return false;
@@ -261,7 +312,7 @@ async function captureTerminalSurface(page) {
     const composer = document.querySelector(selectors.composer);
     const runError = document.querySelector(selectors.runError);
     const errorChip = document.querySelector(selectors.errorChip);
-    const messages = Array.from(document.querySelectorAll(selectors.message)).map((el) => textOf(el));
+    const messages = Array.from(document.querySelectorAll(selectors.message)).map((el) => semanticMessageText(el));
     const runErrorState = root ? readBool(root.getAttribute('data-run-error-present')) : null;
 
     return {
@@ -284,8 +335,9 @@ async function captureTerminalSurface(page) {
       errorChipText: errorChip ? textOf(errorChip).slice(0, 300) : null,
       messageCount: messages.length,
       lastMessageText: messages.length ? messages[messages.length - 1].slice(0, 800) : '',
+      lastMessageTextFull: messages.length ? messages[messages.length - 1] : '',
     };
-  }, { selectors: SEL });
+  }, { selectors: SEL, semanticMessageTextFunctionSource: semanticMessageTextFromElement.toString() });
 }
 
 async function waitForTerminalAcceptance(page, args, answerText) {
@@ -304,14 +356,16 @@ async function waitForTerminalAcceptance(page, args, answerText) {
     }));
     const blockers = terminalBlockersFor(surface, args.expectedChannel);
     finalBlockers = blockers;
-    observations.push({ ...surface, blockers });
+    const latestText = terminalLatestText(surface);
+    observations.push({ ...redactTerminalSurface(surface), blockers });
 
-    const latestText = normalize(surface.lastMessageText || '');
     const expectedText = normalize(answerText || '');
-    const answerStillLatest = !expectedText || latestText === expectedText || latestText.includes(expectedText);
+    const answerStillLatest = semanticAnswerStillLatest(latestText, expectedText);
     const signature = JSON.stringify({
       messageCount: surface.messageCount,
-      lastMessageText: latestText,
+      lastMessageText: normalize(surface.lastMessageText || ''),
+      lastMessageTextHash: surface.lastMessageTextFull ? textDigest(surface.lastMessageTextFull) : undefined,
+      lastMessageTextLength: latestText.length,
       channel: surface.channel,
       blockers,
     });
@@ -327,7 +381,7 @@ async function waitForTerminalAcceptance(page, args, answerText) {
         return {
           stable: true,
           blockers: [],
-          finalSurface: surface,
+          finalSurface: redactTerminalSurface(surface),
           observations: trimObservations(observations),
           startedAt,
           finishedAt: new Date().toISOString(),
@@ -473,8 +527,7 @@ async function main() {
         result.runErrorText = truncate(await page.locator(SEL.runError).innerText().catch(() => ''), 300);
       }
       if (result.messagesAfter >= result.messagesBefore + 2) {
-        const raw = await page.locator(SEL.message).last().innerText().catch(() => '');
-        const text = normalize(raw);
+        const text = await readSemanticMessageText(page.locator(SEL.message).last()).catch(() => '');
         // Placeholders ("Thinking…"), the user's own echoed prompt (empty
         // assistant bubble = silence-on-send), and an assistant bubble holding
         // nothing but its inline error chip are all NON-answers that would
@@ -562,4 +615,9 @@ module.exports = {
   normalize,
   SEL,
   parseArgs,
+  semanticMessageTextFromElement,
+  semanticAnswerStillLatest,
+  terminalLatestText,
+  redactTerminalSurface,
+  captureTerminalSurface,
 };
