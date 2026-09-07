@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-07T13:06:11.255997+00:00",
+  "updatedAt": "2026-09-07T13:30:43.895478+00:00",
   "purpose": "Completion planning only; this file is not a release verdict or a substitute for machine-produced acceptance evidence.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -51,20 +51,21 @@
     },
     {
       "id": "build_process",
-      "status": "PARTIAL",
+      "status": "PASS",
       "cards": [
         "CLWX-25",
         "CLWX-106"
       ],
       "owner": "build engineer",
       "dependsOn": [],
-      "evidenceSummary": "Staged workflow, dependency cache, diagnostic summary, skill and agent implemented and independently reviewed; focused tests pass. GitHub delivery pending.",
-      "nextAction": "Resolve final review, validate and push a separate process branch.",
+      "evidenceSummary": "Reviewed workflow, cache, summary, procedure, planning artifacts and aligned agent/skill pushed as ae391338. Draft PR18 targets the release branch;32focused checks pass. Native speedup not yet measured.",
+      "nextAction": "Integrate the reviewed process commit into the next candidate freeze; measure the next native run rather than claiming an estimated speedup.",
       "exitCriterion": "Equivalent package commands and publication guards; focused tests pass; branch SHA read back from GitHub.",
       "references": [
         ".github/workflows/package-win-manual.yml",
         "docs/build/windows-build-pipeline.md",
-        "tests/unit/windows-build-summary.test.ts"
+        "tests/unit/windows-build-summary.test.ts",
+        "https://github.com/dmvevents/clawx-pilot/pull/18"
       ]
     },
     {
@@ -78,8 +79,8 @@
       "dependsOn": [
         "build_process"
       ],
-      "evidenceSummary": "Run 34123550898: 201 native test files and 2011 tests pass; 11 platform skips. Bundle verifier and 7 artifact rows pass; gateway-transport.no-hostapi times out at 120000ms. No moe.21 installer.",
-      "nextAction": "Repair the demonstrated all-plugin diagnostics sweep with the scoped real OpenClaw loader; verify both inventories natively and audit adjacent subprocess paths before one new source freeze.",
+      "evidenceSummary": "Run 34123550898 failed after 201 files / 2011 tests and seven artifact rows passed. The scoped-loader repair now passes both native Windows diagnostics (42413ms cold no-hostapi, 6094ms full) under the unchanged 120-second limit, with exact host/guest script hashes. This is diagnostic evidence, not a moe.21 installer.",
+      "nextAction": "Integrate the reviewed CLWX-117/96 runtime slice with the committed transport and process changes, validate the actual public diff, freeze an exact clean SHA and run one new native package.",
       "exitCriterion": "Native package succeeds from the exact clean reviewed SHA; installer, profile, source and compiled receipts plus manifest validate.",
       "references": [
         "https://github.com/dmvevents/clawx-pilot/actions/runs/34123550898",
@@ -99,13 +100,14 @@
       "dependsOn": [
         "native_installer"
       ],
-      "evidenceSummary": "GCP Server 2022 VM reachable; app stopped and profile backed up. Latest installed moe.20 is an older diagnostic baseline.",
-      "nextAction": "Transfer verified installer; assisted visible-session install; hash/version/readiness and video collection before any diagnostic warm-up.",
-      "exitCriterion": "Installer transfer hash and installed EXE/ASAR match the candidate; complete helpers; zero manual dependency installation; cold and warm observations recorded.",
+      "evidenceSummary": "GCP Server 2022 VM reachable; app stopped and profile backed up. Latest installed moe.20 is a reused-profile diagnostic baseline. A keyless fresh profile has no automatic Online credentials; supported provisioning is an existing account or the documented post-install drop-in.",
+      "nextAction": "Transfer verified installer; assisted visible-session install; hash/version/readiness and video before diagnostic warm-up. Verify first-run behavior and documented provisioning separately from reused-profile Online chat.",
+      "exitCriterion": "Installer transfer hash and installed EXE/ASAR match the candidate; complete helpers; zero manual dependency installation; cold and warm observations recorded. Report profile/provisioning prerequisites explicitly; a reused Online profile cannot prove an unaided keyless first run.",
       "references": [
         "windows-pilot/vm-testing/README.md",
         "docs/CURRENT_WINDOWS_RC.md",
-        "scripts/installed-release-evidence.mjs"
+        "scripts/installed-release-evidence.mjs",
+        "docs/RELEASE_PROVISIONING_PLAN.md"
       ]
     },
     {
@@ -253,7 +255,8 @@
         "docs/PROJECT_CONTRACT.md",
         "docs/COMPLETION_PLAN.md",
         "services/model-broker"
-      ]
+      ],
+      "scope": "Ministry production and fleet rollout; separate from scoped pilot publication."
     },
     {
       "id": "external_acceptance",
@@ -293,16 +296,38 @@
         "microsoft_journeys",
         "representative_windows_asr",
         "latency_rehearsal",
-        "production_identity_delivery",
         "external_acceptance"
       ],
       "evidenceSummary": "Owner authorized release and completion notice after verification. No release tag, uploaded moe.21 installer or completion notification exists.",
       "nextAction": "Run canonical strict gate with actual build profile/manifest/installed bundle; verify freshness and publication replay; publish and verify downloads before notifying stakeholders.",
-      "exitCriterion": "All required automated criteria and stakeholder KRs PASS on the identified scope, with no required missing/skipped evidence; release hashes match downloaded assets; notification delivery independently verified.",
+      "exitCriterion": "All required automated and principal-facing pilot criteria PASS on the identified artifact and scope, with no required missing/skipped evidence; published downloads match hashes; completion-notification delivery verified. Release notes explicitly exclude Ministry production identity/APIM/PostgreSQL/backend integration and fleet capacity until the production milestone passes.",
       "references": [
         "scripts/ga-gate.mjs",
         "scripts/release-evidence.mjs",
         ".github/workflows/package-win-manual.yml"
+      ],
+      "scope": "single_school_windows_pilot"
+    },
+    {
+      "id": "fleet_rollout",
+      "status": "BLOCKED",
+      "cards": [
+        "CLWX-22",
+        "CLWX-29",
+        "CLWX-31",
+        "CLWX-110"
+      ],
+      "owner": "Ministry + owner; root prepares handoff",
+      "dependsOn": [
+        "ga_publication",
+        "production_identity_delivery"
+      ],
+      "evidenceSummary": "Pilot readiness and fleet production readiness are distinct under the existing contract. The 450-laptop ambition has no current production integration/capacity acceptance.",
+      "nextAction": "Keep the production decision packet and staged rollout/support plan ready; integrate after Ministry inputs and pilot feedback.",
+      "exitCriterion": "Production identity/backend/quotas and agreed deployment scope pass; fleet rollout explicitly authorized with support and distribution procedures.",
+      "references": [
+        "docs/PROJECT_CONTRACT.md",
+        "docs/MINISTRY_ASKS_2026-09-02.md"
       ]
     },
     {
@@ -320,5 +345,11 @@
         "docs/PROJECT_CONTRACT.md"
       ]
     }
+  ],
+  "releaseScope": "Windows single-school pilot using the existing broker and approved test tenant; no claim of Ministry production connectivity or 450-laptop fleet readiness.",
+  "scopeBasis": [
+    "docs/PROJECT_CONTRACT.md#product-and-completion",
+    "docs/MINISTRY_ASKS_2026-09-02.md",
+    "docs/GA_FINISH_SPRINT_2026-09-03.md"
   ]
 }
