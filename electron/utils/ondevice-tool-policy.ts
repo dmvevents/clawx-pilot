@@ -3,14 +3,16 @@
  *
  * The default on-device model (qwen2.5:3b-instruct) tool-cascades when the full
  * built-in catalog is injected: it wraps its answer in a spurious tool_call and
- * loops `process -> sessions_list -> sessions_yield -> subagents` (or hangs on a `tts` call that
- * has no provider), so the chat turn never terminates. See
+ * loops `process -> sessions_list -> sessions_yield -> subagents`, repeatedly
+ * calls the internal `gateway` tool with invalid arguments, or hangs on a `tts`
+ * call that has no provider, so the chat turn never terminates. See
  * skills/laptop/evidence/2026-08-03-windows-install-ui-flows/REPORT.md.
  *
  * The gateway resolves an effective tool policy from, among other layers,
  * `config.tools` (global) and `config.tools.byProvider[<providerKey>]`
  * (per-provider). Both feed `filterToolsByPolicy`, which gates EVERY tool —
- * including core built-ins like `tts`, `process`, `subagents`, `sessions_list`.
+ * including core built-ins like `tts`, `gateway`, `process`, `subagents`,
+ * `sessions_list`.
  * A per-provider `deny` list therefore trims the catalog for the on-device
  * model only, leaving cloud providers (Gemini/Sonnet) on the full catalog.
  *
@@ -33,7 +35,8 @@
  *   Kept: read/write/edit (documents), message, exec/process-free reply path,
  *         and every plugin tool (outlook.*, forms.*, moe_* — plugin tools are
  *         not in this list, so they survive the deny filter).
- *   Denied: agent-orchestration + media + web tools the 3B model mis-fires on.
+ *   Denied: internal gateway, agent-orchestration, media and web tools the 3B
+ *           model mis-fires on.
  *
  * `process` is denied to stop the `process -> sessions_list -> sessions_yield -> subagents`
  * cascade at its root. `exec` is intentionally NOT denied — a denied `exec`
@@ -41,6 +44,8 @@
  * alone did not trigger the cascade in the direct-API repro.
  */
 export const ONDEVICE_DENIED_TOOLS: readonly string[] = [
+  // Gateway administration — qwen repeatedly calls it with invalid arguments.
+  'gateway',
   // Speech — hangs the turn (no TTS provider registered on the desktop build).
   'tts',
   // Agent orchestration — the observed infinite-cascade tools.

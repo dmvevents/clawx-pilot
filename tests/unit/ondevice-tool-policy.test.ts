@@ -51,6 +51,7 @@ const FULL_CATALOG = [
   'forms_fill',
   'moe_draft_letter',
   // The cascade offenders — must be removed.
+  'gateway',
   'tts',
   'process',
   'subagents',
@@ -71,6 +72,7 @@ describe('applyOnDeviceToolTrim (pure transform)', () => {
     for (const tool of ONDEVICE_DENIED_TOOLS) {
       expect(deny).toContain(tool);
     }
+    expect(deny).toContain('gateway');
     expect(deny).toContain('sessions_yield');
   });
 
@@ -138,6 +140,7 @@ describe('trim honoured by the REAL openclaw tool-policy matcher', () => {
     for (const denied of ONDEVICE_DENIED_TOOLS) {
       expect(survivors).not.toContain(denied);
     }
+    expect(survivors).not.toContain('gateway');
     // The tools that make the assistant useful remain.
     for (const kept of [
       'read',
