@@ -186,7 +186,7 @@ acceptance:
   - "A successful owning cloud turn cancels pending degradation before a stale payload can be replayed; streaming and history-discovered terminal outcomes share ownership semantics."
   - "Installed chat acceptance rejects unexpected channel degradation, duplicate prompt replay, and a visible answer with unfinished recovery."
   - "Publication rejects report, required execution, and installed observations older than 24 hours, including stale observations inside a fresh report."
-  - "Packaged PDF parsing uses a checked-in synthetic public fixture and fails if it is missing; excluding private evidence cannot silently skip the parser regression."
+  - "Packaged PDF parsing stages the checked-in synthetic public fixture in an owned OS temp directory and cleans probe files on success or failure. External checkout locations remain supported without widening runtime read roots; missing source fixture and missing expected text fail."
   - "Public hosted packaging does not inject cloud or speech credentials, verifies staged seed absence before upload, and binds the explicit build profile to publication provenance."
   - "Pinned OpenClaw pricing refresh normalizes only configured candidate providers, preserves exact/alias/wrapper and LiteLLM pricing lookup, and packaging rejects missing or partially applied patch code."
   - "Pending session recovery remains visible to users and the terminal acceptance driver when a new turn replaces the originating notice; operation completion cannot erase a newer session pin."
