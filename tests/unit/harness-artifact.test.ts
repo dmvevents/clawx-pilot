@@ -7,6 +7,11 @@
  * outcomes fold into PASS/REFUSED-READABLY/FAIL/NO-TOOL, and that the
  * matrix rows stay well-formed (unique ids, known entrypoints).
  */
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -151,7 +156,7 @@ describe('MATRIX shape', () => {
     const { MATRIX } = await load();
     const known = new Set(['readPdf', 'readDocx', 'writeDocx', 'readXlsx', 'writeXlsx', 'readImage', null]);
     for (const row of MATRIX) {
-      // registration rows call register(), transport rows boot the gateway CLI — neither uses a doc-tools fn
+      // registration rows call register(), transport rows use the scoped OpenClaw loader — neither uses a doc-tools fn
       if (row.mode === 'register' || row.mode === 'transport') continue;
       expect(known.has(row.fn)).toBe(true);
     }
@@ -455,6 +460,80 @@ describe('foldRepeatVerdicts — K8 intermittence bar (trail 2026-09-06)', () =>
   });
 });
 
+
+type FakeTransportStage = {
+  dir: string;
+  gatewayDir: string;
+  pluginRoot: string;
+  workspaceDir: string;
+};
+
+function writeFakeTransportStage(options: { toolNames?: string[]; stdoutFlood?: boolean } = {}): FakeTransportStage {
+  const dir = mkdtempSync(path.join(tmpdir(), 'clwx-transport-child-'));
+  const gatewayDir = path.join(dir, 'resources', 'openclaw');
+  const distDir = path.join(gatewayDir, 'dist');
+  const pluginRoot = path.join(dir, 'resources', 'extensions', 'moe-principal-assistant');
+  const workspaceDir = path.join(dir, 'home', '.openclaw', 'workspace');
+  mkdirSync(distDir, { recursive: true });
+  mkdirSync(pluginRoot, { recursive: true });
+  mkdirSync(workspaceDir, { recursive: true });
+  mkdirSync(path.join(gatewayDir, 'node_modules'), { recursive: true });
+  writeFileSync(path.join(gatewayDir, 'package.json'), JSON.stringify({ type: 'module' }));
+  const toolNames = options.toolNames ?? ['document.read_pdf'];
+  const stdoutFlood = options.stdoutFlood ? "process.stdout.write('x'.repeat(2 * 1024 * 1024) + '\\n');" : '';
+  writeFileSync(path.join(distDir, 'loader-test.js'), `
+import { realpathSync } from 'node:fs';
+
+function loadOpenClawPlugins(options) {
+  ${stdoutFlood}
+  const requested = new Set(options.onlyPluginIds ?? []);
+  const all = [
+    { id: 'moe-principal-assistant', status: 'loaded', activated: true, rootDir: realpathSync(options.env.CLAWX_APP_RESOURCES + '/extensions/moe-principal-assistant'), toolNames: ${JSON.stringify(toolNames)} },
+    { id: 'unrelated-stock-plugin', status: 'loaded', activated: true, rootDir: '/unrelated', toolNames: ['unrelated.tool'] },
+  ];
+  const plugins = process.env.MOCK_RETURN_EXTRA === '1' ? all : all.filter((plugin) => requested.has(plugin.id));
+  return { workspaceDir: options.workspaceDir, plugins };
+}
+export { loadOpenClawPlugins as r };
+`);
+  writeFileSync(path.join(distDir, 'load-context-test.js'), `
+function resolvePluginRuntimeLoadContext(options) {
+  return { ...options, config: {} };
+}
+function buildPluginRuntimeLoadOptions(context, overrides) {
+  return { ...context, ...overrides };
+}
+export { resolvePluginRuntimeLoadContext as i, buildPluginRuntimeLoadOptions as t };
+`);
+  return { dir, gatewayDir, pluginRoot, workspaceDir };
+}
+
+function runTransportChild(stage: FakeTransportStage, options: { returnExtra?: boolean } = {}) {
+  const childPath = path.resolve('scripts/harness-artifact-transport-child.mjs');
+  const result = spawnSync(process.execPath, [childPath, JSON.stringify({
+    gatewayDir: stage.gatewayDir,
+    pluginId: 'moe-principal-assistant',
+    workspaceDir: stage.workspaceDir,
+  })], {
+    encoding: 'utf8',
+    env: {
+      PATH: process.env.PATH ?? '',
+      HOME: path.dirname(path.dirname(stage.workspaceDir)),
+      CLAWX_APP_RESOURCES: path.join(stage.dir, 'resources'),
+      MOCK_PLUGIN_ROOT: stage.pluginRoot,
+      MOCK_RETURN_EXTRA: options.returnExtra ? '1' : '0',
+      NODE_OPTIONS: '',
+    },
+  });
+  const line = result.stdout.split('\n').find((entry) => entry.startsWith('CLAWX77_TRANSPORT_VERDICT:'));
+  if (!line) throw new Error(`transport child emitted no verdict; exit=${result.status}; stderr=${result.stderr}; stdout=${result.stdout}`);
+  return {
+    exitCode: result.status,
+    stderr: result.stderr,
+    payload: JSON.parse(line.slice('CLAWX77_TRANSPORT_VERDICT:'.length)),
+  };
+}
+
 describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
   it('parseInspectJson extracts the JSON block after interleaved register log lines', async () => {
     const { parseInspectJson } = await load();
@@ -481,7 +560,7 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
   it('checkTransportInspect demands loaded + activated + exact inventory', async () => {
     const { checkTransportInspect, TRANSPORT_NO_HOSTAPI_EXPECTED } = await load();
     const good = {
-      plugin: { status: 'loaded', activated: true, toolNames: [...TRANSPORT_NO_HOSTAPI_EXPECTED] },
+      plugin: { id: 'moe-principal-assistant', status: 'loaded', activated: true, toolNames: [...TRANSPORT_NO_HOSTAPI_EXPECTED] },
     };
     expect(checkTransportInspect(TRANSPORT_NO_HOSTAPI_EXPECTED, good)).toBe(true);
     expect(String(checkTransportInspect(TRANSPORT_NO_HOSTAPI_EXPECTED, { plugin: { ...good.plugin, status: 'error' } }))).toContain('status');
@@ -489,6 +568,37 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
     expect(String(checkTransportInspect(TRANSPORT_NO_HOSTAPI_EXPECTED, {}))).toContain('no plugin object');
     const missingTool = { plugin: { ...good.plugin, toolNames: good.plugin.toolNames.slice(1) } };
     expect(String(checkTransportInspect(TRANSPORT_NO_HOSTAPI_EXPECTED, missingTool))).toContain('missing:');
+  });
+
+
+  it('checkTransportInspect rejects broad diagnostics payloads and wrong plugin ids', async () => {
+    const { checkTransportInspect, TRANSPORT_NO_HOSTAPI_EXPECTED } = await load();
+    const broadPayload = {
+      plugins: [
+        { id: 'moe-principal-assistant' },
+        { id: 'unrelated-stock-plugin' },
+      ],
+      plugin: {
+        id: 'moe-principal-assistant',
+        status: 'loaded',
+        activated: true,
+        toolNames: [...TRANSPORT_NO_HOSTAPI_EXPECTED],
+      },
+    };
+    const broadVerdict = checkTransportInspect(TRANSPORT_NO_HOSTAPI_EXPECTED, broadPayload);
+    expect(broadVerdict).not.toBe(true);
+    expect(String(broadVerdict)).toContain('single scoped plugin payload');
+
+    const wrongPlugin = checkTransportInspect(TRANSPORT_NO_HOSTAPI_EXPECTED, {
+      plugin: {
+        id: 'not-moe-principal-assistant',
+        status: 'loaded',
+        activated: true,
+        toolNames: [...TRANSPORT_NO_HOSTAPI_EXPECTED],
+      },
+    });
+    expect(wrongPlugin).not.toBe(true);
+    expect(String(wrongPlugin)).toContain('moe-principal-assistant');
   });
 
   it('transport contract inventories: 14 tools without host-API, 32 with (matches the register-mode rows)', async () => {
@@ -526,14 +636,76 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
     expect(String(validateFastSelection(doubled, FAST_ROW_IDS))).toContain('more than once');
   });
 
+
+  it('transport child loads only the requested staged plugin through the OpenClaw loader', async () => {
+    const stage = writeFakeTransportStage();
+    try {
+      const verdict = runTransportChild(stage);
+      expect(verdict.exitCode).toBe(0);
+      expect(verdict.payload.ok).toBe(true);
+      expect(verdict.payload.result.plugin.id).toBe('moe-principal-assistant');
+      expect(verdict.payload.result.plugin.rootDir).toBe(realpathSync(stage.pluginRoot));
+      expect(verdict.payload.result.plugin.toolNames).toEqual(['document.read_pdf']);
+      expect(JSON.stringify(verdict.payload)).not.toContain('unrelated-stock-plugin');
+    } finally {
+      rmSync(stage.dir, { recursive: true, force: true });
+    }
+  });
+
+
+  it('parent transport row parses the child verdict after chatty stdout drains', async () => {
+    const { TRANSPORT_NO_HOSTAPI_EXPECTED } = await load();
+    const stage = writeFakeTransportStage({
+      toolNames: [...TRANSPORT_NO_HOSTAPI_EXPECTED],
+      stdoutFlood: true,
+    });
+    try {
+      const result = spawnSync(process.execPath, ['scripts/harness-artifact.mjs',
+        '--stage-dir', stage.dir,
+        '--reuse-bundle',
+        '--fast',
+        '--only', 'gateway-transport.no-hostapi',
+      ], {
+        encoding: 'utf8',
+        env: {
+          PATH: process.env.PATH ?? '',
+          HOME: path.join(stage.dir, 'outer-home'),
+          TMPDIR: tmpdir(),
+          LANG: 'C.UTF-8',
+          NODE_OPTIONS: '',
+          CLAWX77_TRANSPORT_TIMEOUT_MS: '10000',
+        },
+      });
+      expect(result.status, `${result.stdout}
+${result.stderr}`).toBe(0);
+      expect(result.stdout).toContain('PASS              gateway-transport.no-hostapi');
+      expect(result.stdout).toContain('1 PASS');
+    } finally {
+      rmSync(stage.dir, { recursive: true, force: true });
+    }
+  });
+
+  it('transport child refuses a loader result containing unrelated plugins', async () => {
+    const stage = writeFakeTransportStage();
+    try {
+      const verdict = runTransportChild(stage, { returnExtra: true });
+      expect(verdict.exitCode).toBe(0);
+      expect(verdict.payload.ok).toBe(false);
+      expect(verdict.payload.infra).toBe(true);
+      expect(verdict.payload.message).toContain('expected exactly 1');
+    } finally {
+      rmSync(stage.dir, { recursive: true, force: true });
+    }
+  });
+
   it('full transport row check FAILs when the outlook family is absent (falsifiability)', async () => {
     const { MATRIX, TRANSPORT_FULL_EXPECTED } = await load();
     const row = MATRIX.find((r: { id: string }) => r.id === 'gateway-transport.full');
     expect(row.mode).toBe('transport');
-    const ok = row.check({ plugin: { status: 'loaded', activated: true, toolNames: [...TRANSPORT_FULL_EXPECTED] } });
+    const ok = row.check({ plugin: { id: 'moe-principal-assistant', status: 'loaded', activated: true, toolNames: [...TRANSPORT_FULL_EXPECTED] } });
     expect(ok).toBe(true);
     const noOutlook = TRANSPORT_FULL_EXPECTED.filter((n: string) => !n.startsWith('outlook.'));
-    const verdict = row.check({ plugin: { status: 'loaded', activated: true, toolNames: noOutlook } });
+    const verdict = row.check({ plugin: { id: 'moe-principal-assistant', status: 'loaded', activated: true, toolNames: noOutlook } });
     expect(verdict).not.toBe(true);
     expect(String(verdict)).toContain('outlook.send_email');
   });
