@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // @ts-expect-error - plain .mjs module without type declarations
 import { FFMPEG_TARGETS, assertExecutableFile, setupFfmpegTarget, targetsForOptions, validateWindowsFfmpegFunctional } from '../../scripts/download-bundled-ffmpeg.mjs';
 
@@ -75,10 +75,15 @@ describe('download-bundled-ffmpeg', () => {
     expect(targetsForOptions({ platform: 'win' }, 'darwin', 'arm64')).toEqual(['win32-x64']);
   });
 
-  it('hash-verifies the pinned archive before installing ffmpeg only', async () => {
+  it.each(['darwin', 'linux', 'win32'])('hash-verifies the pinned archive before installing ffmpeg only on %s', async (platform) => {
     const extractZip = (_archive: string, outDir: string) => {
       writeExactArchiveLayout(outDir);
     };
+    // Archive fixtures are inert bytes; native process execution has its own boundary assertions below.
+    const spawnSync = vi.fn((_binary: string, args: string[]) => {
+      if (args.includes('-f') && args.includes('wav')) writeFileSync(args.at(-1) as string, 'wav');
+      return { status: 0, stdout: '', stderr: '' };
+    });
 
     const result = await setupFfmpegTarget('win32-x64', {
       target: fakeTarget(),
@@ -86,6 +91,9 @@ describe('download-bundled-ffmpeg', () => {
       fetch: async () => response(archiveBytes),
       extractZip,
       keepTemp: false,
+      platform,
+      spawnSync,
+      smokeRoot: join(root, 'smoke'),
     });
 
     const binDir = join(root, 'resources', 'bin', 'win32-x64');
@@ -94,6 +102,7 @@ describe('download-bundled-ffmpeg', () => {
     expect(readFileSync(join(binDir, 'FFMPEG_LICENSE.txt'), 'utf8')).toBe('license');
     expect(readFileSync(join(binDir, 'THIRD_PARTY_FFMPEG.txt'), 'utf8')).toContain('LGPL');
     expect(JSON.parse(readFileSync(join(binDir, 'FFMPEG_PROVENANCE.json'), 'utf8')).files['ffmpeg.exe'].sha256).toBe(sha256(Buffer.from('ffmpeg')));
+    expect(spawnSync).toHaveBeenCalledTimes(platform === 'win32' ? 3 : 0);
   });
 
   it('fails closed on size mismatch before extracting corrupt downloads', async () => {
@@ -191,13 +200,17 @@ describe('download-bundled-ffmpeg', () => {
     expect(existsSync(smokeRoot)).toBe(false);
   });
 
-  it('fails native prep when the Windows ffmpeg functional smoke fails', () => {
+  it('fails native prep when the Windows ffmpeg functional smoke fails', async () => {
     const smokeRoot = join(root, 'smoke-fail');
-    expect(() => validateWindowsFfmpegFunctional(root, {
+    await expect(setupFfmpegTarget('win32-x64', {
+      target: fakeTarget(),
+      outputBase: join(root, 'resources', 'bin'),
+      fetch: async () => response(archiveBytes),
+      extractZip: (_archive: string, outDir: string) => writeExactArchiveLayout(outDir),
       platform: 'win32',
       smokeRoot,
       spawnSync: () => ({ status: 1, stdout: '', stderr: 'cannot execute' }),
-    })).toThrow(/cannot execute/);
+    })).rejects.toThrow(/cannot execute/);
     expect(existsSync(smokeRoot)).toBe(false);
   });
 
