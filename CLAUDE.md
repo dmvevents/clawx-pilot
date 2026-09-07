@@ -14,6 +14,7 @@ The shared contract governs both Claude and Codex. Current status is maintained 
 
 - Sprint continuation: `.claude/skills/ga-sprint-driver/SKILL.md` follows the completion plan. A scheduled invocation is a bounded checkpoint, not a reason to repeat unchanged tests or generate another backlog.
 - Domain routing: `docs/AGENT_SKILL_INTEROPERABILITY.md` maps release, Windows, Outlook/Forms, Office and runtime skills/agents.
+- Build process: `.claude/skills/windows-build-pipeline/SKILL.md` and `.claude/agents/windows-build-engineer.md` cover CI stages, caching and build-failure prevention. Use the shared [build procedure](docs/build/windows-build-pipeline.md); preserve the source identity of any candidate already undergoing acceptance.
 - Release verification: `.claude/skills/ga-e2e-regression/SKILL.md` covers known failures; `.claude/skills/windows-vm-smoke/SKILL.md` covers installed Windows evidence.
 - Stakeholder intake: `.claude/skills/ministry-liaison-monitor/SKILL.md`. Classify messages by project content; **Karunesh also tests ClawX**. Resolve the current WhatsApp thread and preserve dated, redacted source references.
 - MCP availability is session-local. Inspect configured tool names before relying on WhatsApp, browser or review tools; do not copy credentials from `.claude.json` into the repo. Developer MCP availability is not proof of a capability in the installed app.

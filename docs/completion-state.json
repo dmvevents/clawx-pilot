@@ -1,0 +1,324 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-07T13:06:11.255997+00:00",
+  "purpose": "Completion planning only; this file is not a release verdict or a substitute for machine-produced acceptance evidence.",
+  "plan": "docs/COMPLETION_PLAN.md",
+  "readiness": "RED",
+  "source": {
+    "publicCommit": "8d477e9ea27eafeb8bf78ceee49c532858209762",
+    "branch": "release/moe21-reviewed",
+    "version": "0.4.3-moe.21",
+    "buildRunId": 34123550898,
+    "buildStatus": "failure",
+    "installerSha256": null
+  },
+  "baseline": {
+    "installedVersion": "0.4.3-moe.20",
+    "currentSourceAccepted": false
+  },
+  "intake": {
+    "whatsappAccess": "configured bridge storage, SQLite read-only; no callable WhatsApp MCP in this session",
+    "refreshedAt": "2026-09-07T13:03:23Z",
+    "latestRelevantStakeholderMessage": "2026-09-04",
+    "boardIssueCount": 124
+  },
+  "statusMeaning": {
+    "PASS": "The named row exit is evidenced only in its recorded scope.",
+    "PARTIAL": "Some implementation or scoped proof exists; the row exit is not met.",
+    "FAIL": "A directly observed required check failed.",
+    "BLOCKED": "A specific access, authority or external-state prerequisite is absent.",
+    "NOT_RUN": "Required current-candidate evidence has not been collected.",
+    "DEFERRED": "Explicit user-requested work outside the current candidate."
+  },
+  "dimensions": [
+    {
+      "id": "requirements",
+      "status": "PASS",
+      "cards": [
+        "CLWX-22",
+        "CLWX-107",
+        "CLWX-110"
+      ],
+      "owner": "root",
+      "dependsOn": [],
+      "evidenceSummary": "Current project-relevant stakeholder messages, board and contract reconciled; historical titles are not current acceptance.",
+      "nextAction": "Use the same acceptance matrix throughout execution.",
+      "exitCriterion": "Latest relevant asks mapped to existing cards; scope changes require a recorded disposition.",
+      "references": [
+        "docs/PROJECT_CONTRACT.md",
+        "docs/PLANE_BOARD_API.md"
+      ]
+    },
+    {
+      "id": "build_process",
+      "status": "PARTIAL",
+      "cards": [
+        "CLWX-25",
+        "CLWX-106"
+      ],
+      "owner": "build engineer",
+      "dependsOn": [],
+      "evidenceSummary": "Staged workflow, dependency cache, diagnostic summary, skill and agent implemented and independently reviewed; focused tests pass. GitHub delivery pending.",
+      "nextAction": "Resolve final review, validate and push a separate process branch.",
+      "exitCriterion": "Equivalent package commands and publication guards; focused tests pass; branch SHA read back from GitHub.",
+      "references": [
+        ".github/workflows/package-win-manual.yml",
+        "docs/build/windows-build-pipeline.md",
+        "tests/unit/windows-build-summary.test.ts"
+      ]
+    },
+    {
+      "id": "native_installer",
+      "status": "FAIL",
+      "cards": [
+        "CLWX-25",
+        "CLWX-77"
+      ],
+      "owner": "root + runtime verifier",
+      "dependsOn": [
+        "build_process"
+      ],
+      "evidenceSummary": "Run 34123550898: 201 native test files and 2011 tests pass; 11 platform skips. Bundle verifier and 7 artifact rows pass; gateway-transport.no-hostapi times out at 120000ms. No moe.21 installer.",
+      "nextAction": "Repair the demonstrated all-plugin diagnostics sweep with the scoped real OpenClaw loader; verify both inventories natively and audit adjacent subprocess paths before one new source freeze.",
+      "exitCriterion": "Native package succeeds from the exact clean reviewed SHA; installer, profile, source and compiled receipts plus manifest validate.",
+      "references": [
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34123550898",
+        "scripts/harness-artifact.mjs",
+        "scripts/release-build-profile.mjs"
+      ]
+    },
+    {
+      "id": "installed_candidate",
+      "status": "NOT_RUN",
+      "cards": [
+        "CLWX-25",
+        "CLWX-85",
+        "CLWX-106"
+      ],
+      "owner": "root",
+      "dependsOn": [
+        "native_installer"
+      ],
+      "evidenceSummary": "GCP Server 2022 VM reachable; app stopped and profile backed up. Latest installed moe.20 is an older diagnostic baseline.",
+      "nextAction": "Transfer verified installer; assisted visible-session install; hash/version/readiness and video collection before any diagnostic warm-up.",
+      "exitCriterion": "Installer transfer hash and installed EXE/ASAR match the candidate; complete helpers; zero manual dependency installation; cold and warm observations recorded.",
+      "references": [
+        "windows-pilot/vm-testing/README.md",
+        "docs/CURRENT_WINDOWS_RC.md",
+        "scripts/installed-release-evidence.mjs"
+      ]
+    },
+    {
+      "id": "turn_lifecycle",
+      "status": "PARTIAL",
+      "cards": [
+        "CLWX-94",
+        "CLWX-95",
+        "CLWX-96"
+      ],
+      "owner": "runtime owner",
+      "dependsOn": [
+        "installed_candidate"
+      ],
+      "evidenceSummary": "Acknowledgement and per-turn ownership fixes have source/Electron regression evidence. Installed moe.20 reproduced late duplicate recovery; current installed proof missing.",
+      "nextAction": "Complete CLWX-96 through the existing provider-probe and watchdog owner, then run ordinary Online turn, cancellation, late events, controlled mid-turn provider failure and next-turn recovery.",
+      "exitCriterion": "Each accepted turn reaches one answer, visible failure or cancellation within the test bound; no duplicate turn/effect; recovery works without restart and preserves user channel intent. A successful actual Online provider probe clears the owned stale failure notice. Accepted sends without acknowledgement/events terminate visibly.",
+      "references": [
+        "src/stores/chat.ts",
+        "tests/unit/chat-channel-degrade.test.ts",
+        "docs/evidence/WINDOWS_RUNTIME_RECOVERY_2026-09-07.md"
+      ]
+    },
+    {
+      "id": "on_device",
+      "status": "FAIL",
+      "cards": [
+        "CLWX-117",
+        "CLWX-47"
+      ],
+      "owner": "runtime owner",
+      "dependsOn": [
+        "installed_candidate"
+      ],
+      "evidenceSummary": "Latest direct installed reproduction parks at top-level sessions_yield. Source audit confirms the deny-list omission and active-stream watchdog gap. Targeted current-source repair is authorized; held trim branch remains untouched.",
+      "nextAction": "Add sessions_yield to the on-device deny boundary and extend the existing terminal watchdog for the demonstrated stalled-tool/silent-send modes; prove no stale timer can terminate a newer or progressing turn. Then run ordinary installed prompts without test-only steering.",
+      "exitCriterion": "Nonempty terminal answer without top-level sessions_yield; a stalled tool yields a visible terminal outcome; offline document path has no non-loopback egress.",
+      "references": [
+        "electron/utils/ondevice-tool-policy.ts",
+        "windows-pilot/scripts/pilot-electron-cdp-probe.js",
+        "docs/PROJECT_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "documents_policy_reminders",
+      "status": "PARTIAL",
+      "cards": [
+        "CLWX-22",
+        "CLWX-42",
+        "CLWX-77",
+        "CLWX-115"
+      ],
+      "owner": "Office verifier",
+      "dependsOn": [
+        "installed_candidate",
+        "turn_lifecycle"
+      ],
+      "evidenceSummary": "Native package parsers and VM Office helpers pass within their scopes. Current candidate live model selection and complete user journeys remain unproved.",
+      "nextAction": "Run the five Ministry document prompts plus folder discovery, parse back outputs, policy citation questions and a visible reminder through installed chat.",
+      "exitCriterion": "Real document tools selected; correct structured content and output parse-back; no missing Python/dependency workaround; correct policy citation; reminder fires visibly or has an accurate supported disposition.",
+      "references": [
+        "docs/PRODUCT_PRINCIPAL_ASSISTANT.md",
+        "harness/specs",
+        "windows-pilot/vm-testing/README.md"
+      ]
+    },
+    {
+      "id": "microsoft_journeys",
+      "status": "BLOCKED",
+      "cards": [
+        "CLWX-61",
+        "CLWX-73",
+        "CLWX-123"
+      ],
+      "owner": "Office verifier + account holder",
+      "dependsOn": [
+        "installed_candidate",
+        "turn_lifecycle"
+      ],
+      "evidenceSummary": "Recipient/body boundary source tests and one Mac compose check pass. VM Outlook requires sign-in; Forms list alone is not preview evidence; external tester attach regression remains open.",
+      "nextAction": "Use authenticated user Chrome to prove attach/read/draft/reopen/reply/forward and two Forms previews; preserve send/submit gates.",
+      "exitCriterion": "Correct compose identity, recipient buckets, body and subject; changed/ambiguous review refuses; preview has required coverage and no submission. Separately authorized sandbox dispatch proof is required by the full release gate.",
+      "references": [
+        "electron/services/outlook-browser-v2",
+        "electron/services/forms-browser-v2",
+        "docs/PROJECT_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "representative_windows_asr",
+      "status": "BLOCKED",
+      "cards": [
+        "CLWX-25",
+        "CLWX-67"
+      ],
+      "owner": "root + tester",
+      "dependsOn": [
+        "native_installer"
+      ],
+      "evidenceSummary": "Physical pilot SSH timed out at 12:52Z. Available Server 2022/admin/reused-profile VM lacks a microphone and does not prove a Windows 10/11 principal installation.",
+      "nextAction": "Complete Server VM proof now; obtain a reachable client/standard-user lane and exercise fresh setup, signed-in Chrome and microphone.",
+      "exitCriterion": "Same installer passes fresh client/standard-user setup and advertised ASR; lane limitations remain explicit until evidenced or an actual scope deferral is accepted.",
+      "references": [
+        "docs/PILOT_LAPTOP_ACCESS.md",
+        "windows-pilot/vm-testing/README.md"
+      ]
+    },
+    {
+      "id": "latency_rehearsal",
+      "status": "NOT_RUN",
+      "cards": [
+        "CLWX-43",
+        "CLWX-107"
+      ],
+      "owner": "root + demo operator",
+      "dependsOn": [
+        "turn_lifecycle",
+        "documents_policy_reminders",
+        "microsoft_journeys"
+      ],
+      "evidenceSummary": "Pricing-only diagnostic improved warm readiness 191.090s to 84.171s in one comparable repeat; this is not current-candidate acceptance. Historical latency budgets conflict.",
+      "nextAction": "Measure actual ready/first-output/terminal timings on the candidate, then rehearse all three demo moments consecutively with named backstop recordings.",
+      "exitCriterion": "Report p50/p90 and sample size for repeated prompts; measure cold/warm separately; record accepted latency budget and a continuous successful rehearsal on the demo machine/account.",
+      "references": [
+        "docs/evidence/WINDOWS_RUNTIME_RECOVERY_2026-09-07.md",
+        "docs/COMPLETION_PLAN.md"
+      ]
+    },
+    {
+      "id": "production_identity_delivery",
+      "status": "BLOCKED",
+      "cards": [
+        "CLWX-7",
+        "CLWX-8",
+        "CLWX-28",
+        "CLWX-31",
+        "CLWX-110"
+      ],
+      "owner": "Ministry + owner; root prepares evidence",
+      "dependsOn": [],
+      "evidenceSummary": "Outbox exists and has local/stub evidence; stale anchor text saying unbuilt is superseded. Production hostname, Entra identity, write/dedupe API, quotas and rollout decisions are not established by those tests.",
+      "nextAction": "Reconcile actual implementation against all eight CLWX-22 KRs; prepare the concrete integration/deployment packet while desktop verification proceeds.",
+      "exitCriterion": "Production sign-in yields real identity; backend enforces configured quotas and idempotent writes; Ministry hostname/redirect/caching decisions recorded; fleet rollout has an explicit readiness decision.",
+      "references": [
+        "docs/PROJECT_CONTRACT.md",
+        "docs/COMPLETION_PLAN.md",
+        "services/model-broker"
+      ]
+    },
+    {
+      "id": "external_acceptance",
+      "status": "BLOCKED",
+      "cards": [
+        "CLWX-73",
+        "CLWX-107",
+        "CLWX-110"
+      ],
+      "owner": "tester + root",
+      "dependsOn": [
+        "microsoft_journeys",
+        "representative_windows_asr"
+      ],
+      "evidenceSummary": "Latest tester complaint remains September 4; no new installed moe.21 retest exists. Deployment ambition is 450 laptops, not an assumed 20-device release.",
+      "nextAction": "Provide exact verified artifact/checklist through the authorized handoff and collect the unaided reproduction result.",
+      "exitCriterion": "Tester completes formerly failing attach/read workflow on the same artifact; limitations and rollout scope recorded.",
+      "references": [
+        "docs/COMPLETION_PLAN.md",
+        "docs/PROJECT_CONTRACT.md"
+      ]
+    },
+    {
+      "id": "ga_publication",
+      "status": "NOT_RUN",
+      "cards": [
+        "CLWX-22",
+        "CLWX-106"
+      ],
+      "owner": "root",
+      "dependsOn": [
+        "native_installer",
+        "installed_candidate",
+        "turn_lifecycle",
+        "on_device",
+        "documents_policy_reminders",
+        "microsoft_journeys",
+        "representative_windows_asr",
+        "latency_rehearsal",
+        "production_identity_delivery",
+        "external_acceptance"
+      ],
+      "evidenceSummary": "Owner authorized release and completion notice after verification. No release tag, uploaded moe.21 installer or completion notification exists.",
+      "nextAction": "Run canonical strict gate with actual build profile/manifest/installed bundle; verify freshness and publication replay; publish and verify downloads before notifying stakeholders.",
+      "exitCriterion": "All required automated criteria and stakeholder KRs PASS on the identified scope, with no required missing/skipped evidence; release hashes match downloaded assets; notification delivery independently verified.",
+      "references": [
+        "scripts/ga-gate.mjs",
+        "scripts/release-evidence.mjs",
+        ".github/workflows/package-win-manual.yml"
+      ]
+    },
+    {
+      "id": "action_journal",
+      "status": "DEFERRED",
+      "cards": [
+        "CLWX-124"
+      ],
+      "owner": "post-release owner",
+      "dependsOn": [],
+      "evidenceSummary": "Explicitly post-GA: durable action history, restart reconciliation and cleanup of proven unchanged agent-owned drafts. No drafts deleted.",
+      "nextAction": "Keep in Backlog; reuse existing outbox/action ownership after release design review.",
+      "exitCriterion": "Not a prerequisite for this candidate; no mailbox-wide cleanup or blind retry introduced.",
+      "references": [
+        "docs/PROJECT_CONTRACT.md"
+      ]
+    }
+  ]
+}

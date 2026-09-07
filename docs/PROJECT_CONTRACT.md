@@ -22,6 +22,7 @@ The technical lead owns product and release decisions. Agents execute authorized
 | What is the next completion outcome? | [COMPLETION_PLAN.md](COMPLETION_PLAN.md) |
 | Which work item owns a defect? | CLWX board; local snapshot in [plane-board/CLWX-board-export.json](plane-board/CLWX-board-export.json) |
 | How do agents operate the board? | [PLANE_BOARD_API.md](PLANE_BOARD_API.md); verified project-scoped writer and readback |
+| How is the Windows build run and improved? | [Build pipeline](build/windows-build-pipeline.md); CI stages, cache boundaries, failure diagnosis and artifact handoff |
 | What artifact exists? | [CURRENT_WINDOWS_RC.md](CURRENT_WINDOWS_RC.md) → versioned release manifest |
 | What was actually verified? | [GA_RELEASE_EVIDENCE_MANIFEST.md](GA_RELEASE_EVIDENCE_MANIFEST.md) → dated raw evidence |
 | What happened previously? | [GA_SPRINT_STATE_VECTOR.md](GA_SPRINT_STATE_VECTOR.md), defect/error ledgers and [project-history](project-history/README.md); search the relevant card/failure, do not load the whole history at startup |

@@ -76,6 +76,8 @@ azure-speech.json
 resources/azure-speech.json
 
 build/
+!docs/build/
+!docs/build/**
 artifacts/
 docs/pr-session-notes-*.md
 docs/reports/multi-llm/outputs/

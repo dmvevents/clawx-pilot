@@ -13,6 +13,7 @@ Read [docs/PROJECT_CONTRACT.md](docs/PROJECT_CONTRACT.md) before project work. I
 ## Codex routing
 
 - [docs/AGENT_SKILL_INTEROPERABILITY.md](docs/AGENT_SKILL_INTEROPERABILITY.md) maps Codex, OMX and Claude project surfaces.
+- Use `windows-build-pipeline` and the `windows_build_engineer` agent for CI stages, caching and build-failure prevention. The canonical procedure is [docs/build/windows-build-pipeline.md](docs/build/windows-build-pipeline.md); installer execution and VM acceptance remain separate domain workflows.
 - Use `ga-e2e-regression` for known-failure coverage and `windows-vm-smoke` for installed Windows proof; both are available under `.agents/skills/` and `.codex/skills/`.
 - Project skills are available in `.agents/skills/` and OMX compatibility `.codex/skills/`; native project agents are in `.codex/agents/`. Skills are loaded from `SKILL.md`, not agent TOMLs. Keep equivalent critical workflows aligned.
 - Use bounded native subagents for independent work when useful; assign ownership and acceptance criteria. Authors do not approve their own code.

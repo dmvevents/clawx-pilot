@@ -309,6 +309,8 @@ Hosted Windows builds on a public repository must use `cloudGatewaySeedProfile=k
 
 For hosted-build acceptance, set `GA_GATE_BUILD_PROFILE` to the downloaded `build-provenance/.tmp/release-build-profile.json`, keeping its source and compiled-output receipt companions together. The gate validates and retains this profile in the release evidence bundle. A keyless package must prove credential-file absence in the actual install directory and still pass Gateway, chat and Office checks.
 
+For build stages, dependency caching, failure diagnosis and the source-to-installer handoff, use the [Windows build procedure](docs/build/windows-build-pipeline.md). The `windows-build-pipeline` skill and `windows_build_engineer` agent share that procedure across Codex and Claude.
+
 Windows packaging runs the complete preflight on Windows. Preserve `.gitattributes`: executable source uses LF, `.cmd`/`.bat` use CRLF, and PDFs retain their binary bytes.
 
 Windows environment profiling, IAP access and app-window recording are documented in the [Windows testing guide](windows-pilot/vm-testing/README.md). Server VM smoke and principal-laptop acceptance have separate coverage requirements.

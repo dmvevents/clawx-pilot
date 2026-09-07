@@ -128,7 +128,7 @@ describe('release publication workflow guards (CLWX-106)', () => {
     const resolve = stepIndex(steps, 'Resolve hosted build profile');
     const cloud = stepIndex(steps, 'Prepare cloud gateway seed');
     const azure = stepIndex(steps, 'Prepare Azure Speech seed');
-    const build = stepIndex(steps, 'Build Windows package (no publish)');
+    const build = stepIndex(steps, 'Build Windows installer (no publish)');
     expect(resolve).toBeGreaterThan(-1);
     expect(cloud).toBeGreaterThan(resolve);
     expect(azure).toBeGreaterThan(resolve);
@@ -160,7 +160,7 @@ describe('release publication workflow guards (CLWX-106)', () => {
     expect(record?.run).toContain('azureSpeechSeedIncluded');
     expect(record?.run).toContain('credentialSeedIncluded');
     expect(record?.run).toContain('keyless-public build profile cannot include cloud gateway or Azure Speech credential-bearing seeds.');
-    expect(verify).toBeGreaterThan(stepIndex(steps, 'Build Windows package (no publish)'));
+    expect(verify).toBeGreaterThan(stepIndex(steps, 'Build Windows installer (no publish)'));
     expect(upload).toBeGreaterThan(verify);
     expect(steps[verify]?.run).toContain('keyless-public staged package contains credential-bearing seed files');
     expect(text).toContain('.tmp/release-build-profile.json');
@@ -196,7 +196,7 @@ describe('release publication workflow guards (CLWX-106)', () => {
     const setupNode = stepIndex(steps, 'Setup Node.js');
     const setupDotnet = stepIndex(steps, 'Setup .NET SDK for Windows ASR helper');
     const verifyDotnet = stepIndex(steps, 'Verify .NET SDK');
-    const prepWin = stepIndex(steps, 'Build Windows package (no publish)');
+    const prepWin = stepIndex(steps, 'Build Windows installer (no publish)');
     const dotnetStep = steps[setupDotnet];
     const verifyStep = steps[verifyDotnet];
 
@@ -210,10 +210,103 @@ describe('release publication workflow guards (CLWX-106)', () => {
     expect(verifyStep?.run).toContain('dotnet --info');
   });
 
+  it('manual Windows package job splits the package chain into observable ordered phases', () => {
+    const { text, workflow } = readWorkflow(manualWorkflowPath);
+    const steps = jobSteps(workflow, 'package-windows');
+    const install = stepIndex(steps, 'Install dependencies');
+    const resolve = stepIndex(steps, 'Resolve hosted build profile');
+    const profile = stepIndex(steps, 'Record hosted build profile provenance');
+    const preflight = stepIndex(steps, 'Preflight release source');
+    const prep = stepIndex(steps, 'Prepare Windows runtime binaries');
+    const compile = stepIndex(steps, 'Compile and bundle application');
+    const installer = stepIndex(steps, 'Build Windows installer (no publish)');
+    const verifySeeds = stepIndex(steps, 'Verify keyless staged package seeds');
+
+    expect(preflight).toBeGreaterThan(profile);
+    expect(prep).toBeGreaterThan(preflight);
+    expect(compile).toBeGreaterThan(prep);
+    expect(installer).toBeGreaterThan(compile);
+    expect(verifySeeds).toBeGreaterThan(installer);
+    expect(resolve).toBeGreaterThan(install);
+    expect(steps[preflight]).toMatchObject({ id: 'preflight-release-source', run: 'pnpm run preflight' });
+    expect(steps[prep]).toMatchObject({ id: 'prep-win-binaries', run: 'pnpm run prep:win-binaries' });
+    expect(steps[compile]).toMatchObject({ id: 'compile-and-bundle', run: 'pnpm run package' });
+    expect(steps[installer]).toMatchObject({ id: 'build-windows-installer', run: 'node scripts/run-electron-builder.mjs --win --publish never' });
+    for (const index of [preflight, prep, compile, installer]) {
+      expect(steps[index]?.env).toMatchObject({ GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}' });
+    }
+    expect(text).not.toContain('pnpm run package:win');
+    expect(text).not.toContain('Download uv binaries for Windows');
+  });
+
+  it('manual Windows package job saves the pnpm dependency cache immediately after install', () => {
+    const { workflow } = readWorkflow(manualWorkflowPath);
+    const steps = jobSteps(workflow, 'package-windows');
+    const store = stepIndex(steps, 'Get pnpm store directory');
+    const restore = stepIndex(steps, 'Restore pnpm dependency cache');
+    const install = stepIndex(steps, 'Install dependencies');
+    const save = stepIndex(steps, 'Save pnpm dependency cache');
+    const resolve = stepIndex(steps, 'Resolve hosted build profile');
+
+    expect(steps[install]?.id).toBe('install-dependencies');
+    expect(restore).toBeGreaterThan(store);
+    expect(install).toBeGreaterThan(restore);
+    expect(save).toBeGreaterThan(install);
+    expect(resolve).toBeGreaterThan(save);
+    expect(steps[restore]).toMatchObject({
+      id: 'pnpm-cache-restore',
+      uses: 'actions/cache/restore@v4',
+      with: {
+        path: '${{ env.STORE_PATH }}',
+        key: "${{ runner.os }}-${{ runner.arch }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}",
+      },
+    });
+    expect(steps[restore]?.with?.['restore-keys']).toContain('${{ runner.os }}-${{ runner.arch }}-pnpm-store-');
+    expect(steps[install]?.run).toBe('pnpm install --frozen-lockfile');
+    expect(steps[save]).toMatchObject({
+      id: 'pnpm-cache-save',
+      if: "${{ steps.pnpm-cache-restore.outputs.cache-hit != 'true' }}",
+      'continue-on-error': true,
+      uses: 'actions/cache/save@v4',
+      with: {
+        path: '${{ env.STORE_PATH }}',
+        key: '${{ steps.pnpm-cache-restore.outputs.cache-primary-key }}',
+      },
+    });
+  });
+
+  it('manual Windows package job writes an allowlisted always-on build summary', () => {
+    const { workflow } = readWorkflow(manualWorkflowPath);
+    const steps = jobSteps(workflow, 'package-windows');
+    const installer = stepIndex(steps, 'Build Windows installer (no publish)');
+    const summary = stepIndex(steps, 'Summarize Windows build phases');
+    const summaryStep = steps[summary];
+    const run = summaryStep?.run ?? '';
+
+    expect(summary).toBeGreaterThan(installer);
+    expect(summaryStep?.if).toBe('${{ always() }}');
+    expect(summaryStep?.run).toBe('node scripts/windows-build-summary.mjs');
+    expect(summaryStep?.env).toMatchObject({
+      BUILD_REF_INPUT: '${{ inputs.ref }}',
+      BUILD_PROFILE_INPUT: '${{ inputs.cloudGatewaySeedProfile }}',
+      PNPM_CACHE_RESTORE_OUTCOME: '${{ steps.pnpm-cache-restore.outcome }}',
+      INSTALL_DEPENDENCIES_OUTCOME: '${{ steps.install-dependencies.outcome }}',
+      PNPM_CACHE_SAVE_OUTCOME: '${{ steps.pnpm-cache-save.outcome }}',
+      PREFLIGHT_OUTCOME: '${{ steps.preflight-release-source.outcome }}',
+      PREP_WIN_BINARIES_OUTCOME: '${{ steps.prep-win-binaries.outcome }}',
+      COMPILE_AND_BUNDLE_OUTCOME: '${{ steps.compile-and-bundle.outcome }}',
+      BUILD_WINDOWS_INSTALLER_OUTCOME: '${{ steps.build-windows-installer.outcome }}',
+    });
+    expect(run).not.toContain('Get-ChildItem Env:');
+    expect(run).not.toContain('secrets.');
+    expect(run).not.toContain('CLOUD_GATEWAY_CONFIG_JSON');
+    expect(run).not.toContain('AZURE_SPEECH_KEY');
+  });
+
   it('manual Windows package job uploads full build provenance for later evidence checks', () => {
     const { text, workflow } = readWorkflow(manualWorkflowPath);
     const steps = jobSteps(workflow, 'package-windows');
-    const build = stepIndex(steps, 'Build Windows package (no publish)');
+    const build = stepIndex(steps, 'Build Windows installer (no publish)');
     const provenance = stepIndex(steps, 'Upload build provenance manifest');
     const provenanceStep = steps[provenance];
 

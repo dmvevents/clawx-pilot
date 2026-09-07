@@ -8,7 +8,7 @@ This repo now has first-class operating surfaces for Codex, Claude Code, and the
 
 Read the same two project documents from either agent: [PROJECT_CONTRACT.md](PROJECT_CONTRACT.md) for stable instructions and [COMPLETION_PLAN.md](COMPLETION_PLAN.md) for current priorities/evidence. `CLAUDE.md` imports the contract; `AGENTS.md` directs Codex to it. They do not maintain separate capability/status tables.
 
-Current candidate: [CURRENT_WINDOWS_RC.md](CURRENT_WINDOWS_RC.md). Release evidence: [GA_RELEASE_EVIDENCE_MANIFEST.md](GA_RELEASE_EVIDENCE_MANIFEST.md). Historical May/June packets are searchable reference, not startup routing. The current recorded Windows candidate is unpublished moe.19; the completion plan identifies newer source and missing installed proof.
+Current candidate: [CURRENT_WINDOWS_RC.md](CURRENT_WINDOWS_RC.md). Release evidence: [GA_RELEASE_EVIDENCE_MANIFEST.md](GA_RELEASE_EVIDENCE_MANIFEST.md). Historical May/June packets are searchable reference, not startup routing. Read the candidate pointer for the recorded installer and installed proof; build-process documentation does not maintain a second current-version table.
 
 Claude's existing `ga-sprint-driver` skill implements the shared continuation policy: follow one outcome across checkpoints, keep source and installed/live evidence distinct, and stop unchanged/blocked ticks. Codex follows the same policy through the shared contract and native domain agents; no additional workflow engine is required.
 
@@ -52,6 +52,7 @@ No user-global memory, MCP credentials or tool installation was changed. The exi
 | Resume/handoff | `.agents/skills/windows-demo-resume` | `.codex/skills/windows-outlook-demo` | `.claude/skills/windows-demo-resume` | `windows-pilot/README.md` |
 | Runtime/Gateway/model repair | `.agents/skills/windows-runtime-recovery` | `.codex/skills/windows-runtime-recovery` | `.claude/skills/windows-runtime-recovery` | `windows-pilot/skills/model-gateway-recovery.md` |
 | Outlook and Forms | `.agents/skills/windows-outlook-forms` | `.codex/skills/windows-outlook-demo` | `.claude/skills/windows-outlook-forms` | `windows-pilot/skills/outlook-email-windows.md`, `windows-pilot/skills/forms-suspension-fill.md` |
+| Build process and CI reliability | `.agents/skills/windows-build-pipeline` | `.codex/skills/windows-build-pipeline` | `.claude/skills/windows-build-pipeline` | `docs/build/windows-build-pipeline.md` |
 | Windows build/package | `.agents/skills/windows-build-package` | use `.agents/skills/windows-build-package` | `.claude/skills/windows-build-package` | `docs/WINDOWS_INSTALL_RUNBOOK.md` |
 | Windows VM/laptop smoke | `.agents/skills/windows-vm-smoke` | `.codex/skills/windows-vm-smoke` | `.claude/skills/windows-vm-smoke` | `docs/WINDOWS_INSTALL_RUNBOOK.md`, `windows-pilot/scripts/` |
 | SSH laptop operations | `.agents/skills/pilot-ssh-ops` | use `.agents/skills/pilot-ssh-ops` | `.claude/skills/pilot-ssh-ops` | `docs/PILOT_LAPTOP_ACCESS.md` |
@@ -67,6 +68,7 @@ No user-global memory, MCP credentials or tool installation was changed. The exi
 | Runtime debugging | `.codex/agents/windows-runtime-debugger.toml` | `.claude/agents/clawx-config-doctor.md`, `.claude/agents/gateway-recovery.md` | Diagnoses model/Gateway/config drift and app-path proof. |
 | Outlook/Forms/Office verification | `.codex/agents/office-automation-verifier.toml` | `.claude/agents/windows-smoke.md`, `.claude/agents/dom-selector-regression-tester.md` | Verifies Office, Outlook, Forms, and selector-safety evidence. |
 | GA E2E regression verification | `.codex/agents/ga-e2e-regression-verifier.toml` | `.claude/agents/ga-e2e-regression-verifier.md` | Owns tests and evidence for known and adjacent demo failures before release verdict. |
+| Build process engineering | `.codex/agents/windows-build-engineer.toml` | `.claude/agents/windows-build-engineer.md` | Owns CI stages, dependency caching, reproducible build inputs and failure diagnosis; returns verification and handoff evidence. |
 | Installer/package | `.codex/agents/windows-release-packager.toml` | `.claude/agents/windows-smoke.md`, `.claude/agents/dependency-class-auditor.md` | Builds/checks Windows packaging and runtime dependencies. |
 | Official docs research | `.codex/agents/ga-docs-researcher.toml` | use Claude research subagent or default | Confirms current external docs before changing agent surfaces. |
 
@@ -77,7 +79,7 @@ No user-global memory, MCP credentials or tool installation was changed. The exi
 3. Use `windows-runtime-recovery` for chat stuck on thinking, model call failed, provider drift, Gateway down, Office prompt stalls, or ASR fallback failures.
 4. Use `windows-outlook-forms` for email, Outlook, Microsoft Forms, Chrome CDP, and safe send/submit flows.
 5. Use `moe-form-prefill` before filling Daily Report or Suspension Forms so the agent asks fewer questions without inventing PII.
-6. Use `windows-build-package` for NSIS, desktop shortcuts, Windows helper binaries, and post-install smoke.
+6. Use `windows-build-pipeline` for CI organization, caching and recurring build failures; `windows-build-package` owns NSIS, desktop shortcuts and Windows helper binaries. Read `docs/build/windows-build-pipeline.md` for the shared source-to-artifact procedure.
 7. Use `windows-vm-smoke` for clean Windows VM/laptop install evidence after a package is built.
 8. Use `pilot-ssh-ops` before touching the laptop over SSH.
 

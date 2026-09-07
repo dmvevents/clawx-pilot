@@ -305,6 +305,8 @@ AI を開発ワークフローに統合できます。エージェントを使�
 
 ホストされたビルドの検証では、`GA_GATE_BUILD_PROFILE` にダウンロードした `build-provenance/.tmp/release-build-profile.json` を指定し、ソース記録とコンパイル出力の記録も同じディレクトリ構成で保持してください。ゲートはこのプロファイルを検証し、リリース証拠に保存します。認証情報を含まないパッケージでも、実際のインストール先に認証情報ファイルがないことを証明し、Gateway、チャット、Office の検証を通過する必要があります。
 
+ビルド段階、依存関係キャッシュ、障害診断、ソースからインストーラーへの引き継ぎは [Windows ビルド手順](docs/build/windows-build-pipeline.md)を参照してください。Codex と Claude の `windows-build-pipeline` スキルとビルド担当エージェントは、この手順を共有します。
+
 Windows のパッケージ作成では、Windows 上で完全な事前検証を実行します。`.gitattributes` を維持してください。実行可能なソースは LF、`.cmd`/`.bat` は CRLF を使用し、PDF のバイナリデータは変更しません。
 
 Windows 環境の記録、IAP 接続、アプリ画面の録画は [Windows テストガイド](windows-pilot/vm-testing/README.md)を参照してください。サーバー VM の検証と校長用ノート PC の受け入れ検証は、それぞれの対象範囲を記録します。
