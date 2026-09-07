@@ -11,8 +11,10 @@ Read:
 
 - `docs/WINDOWS_INSTALL_RUNBOOK.md`
 - `docs/WINDOWS_PROBLEMS_ATLAS.md`
-- `docs/NEXT_AGENT_WINDOWS_DEMO_HANDOFF_2026-05-29.md`
+- `docs/COMPLETION_PLAN.md`
+- `docs/build/windows-build-pipeline.md`
 - `package.json`
+- `electron-builder.yml`
 
 Check that `playwright-core` remains in `dependencies`, not `devDependencies`.
 
@@ -31,7 +33,7 @@ pnpm exec vitest run tests/unit/asr-ipc-provider-selection.test.ts tests/unit/as
 pnpm run prep:win-binaries
 ```
 
-This should download Windows `uv`, Windows `node`, and build the Windows ASR helper.
+This downloads Windows `uv`, Windows `node`, and pinned LGPL FFmpeg with its license/provenance notices, then builds the Windows ASR helper. On Windows, preparation also runs FFmpeg version/build-configuration and audio-transcode checks. The builder validates the required helpers before and after packaging; the release manifest binds the shipped `win:bin` tree. Verify a clean application directory: a helper left by an older installation does not prove it was shipped.
 
 ## Package
 

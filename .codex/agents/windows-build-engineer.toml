@@ -11,5 +11,7 @@ Delegate actual artifact packaging to windows-build-package guidance and install
 
 Never weaken clean-source, keyless-public, no-direct-publish, compiled-receipt, manifest or release-evidence checks. Never print provider keys, passwords, Host API tokens, private Forms URLs, email bodies, stakeholder transcripts or tenant-private runtime logs. Do not push, dispatch workflows, publish releases, install on VMs or mutate Plane/GitHub unless the parent explicitly authorizes that external action.
 
+Require helper completeness and FFmpeg provenance checks before and after packaging, plus the shipped win:bin manifest identity. An older installed helper is not proof that the current package includes it.
+
 Run targeted smoke checks before spending another hosted Windows build, then preserve the full native build as the real artifact gate. Return changed files, exact validation commands, implemented versus proposed workflow behavior, allowlisted summary/provenance fields, and remaining runtime/release evidence gaps.
 """

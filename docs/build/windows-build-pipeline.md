@@ -134,11 +134,11 @@ pnpm exec vitest run tests/unit/release-publication-workflows.test.ts tests/unit
 pnpm run typecheck:scripts
 ```
 
-Add the failing domain-specific test file when the fix belongs to a parser, subprocess, fixture or runtime boundary. Do not skip the full build after the smoke passes; the smoke exists to avoid spending another native run on a predictable setup or contract failure.
+Add the failing domain-specific test file when the fix belongs to a parser, subprocess, fixture or runtime boundary. For Windows-specific repairs, run that test on Windows before another full package. Include the failing environment shape (such as an 8.3 TEMP alias); a platform mock or Mac pass alone cannot prove Windows path or process semantics. Keep this diagnostic toolchain isolated from the installed app and bind the tested source by hashes. Do not skip the full build after the smoke passes; the smoke exists to avoid spending another native run on a predictable setup or contract failure.
 
 ## September 7 retrospective
 
-The September 7 build lane exposed repeated friction from treating symptoms as isolated failures. The durable fix is phase separation with evidence at each boundary.
+The September 7 build lane exposed repeated friction from treating symptoms as isolated failures. The durable fix is phase separation with evidence at each boundary. The seventh hosted run is recorded as a checkout-only operator dispatch error, not a product or build-system failure.
 
 | Run | Source | Result | Lesson |
 | --- | --- | --- | --- |
@@ -146,6 +146,11 @@ The September 7 build lane exposed repeated friction from treating symptoms as i
 | `34117459118` | `6c2834cb` | Failed native preflight before installer: 199 files and 1,982 tests passed, 11 skipped; two integration cases exceeded the default 5-second Vitest limit. | Keep assertions active, but give real cold/parser and controller-process tests bounded native budgets. |
 | `34121639939` | `fed34dcb` | Failed after preflight and frontend/Electron compilation: 201 files, 2,007 tests passed, 11 skipped; UtilityProcess PDF probe refused a checkout fixture outside parser home/temp roots. | Stage public fixtures in owned temp storage while preserving parser sandbox refusals. |
 | `34123550898` | `8d477e9e` | Failed with no installer: 201 files and 2,011 tests passed, 11 skipped; bundle verifier and seven artifact rows passed; `no-hostapi` transport timed out after 120 seconds. | All-plugin diagnostics loaded 102 plugins to inspect one. The scoped real-loader repair preserves source/network/inventory checks; both Windows diagnostics subsequently passed under the unchanged 120-second limit (42,413ms cold no-hostapi; 6,094ms full). A complete native package remains required. |
+| `34130171081` | `87d7b74e` | Failed native preflight: 2,048 tests passed, 11 skipped; two new fixture assumptions failed. | Native async realpath expands Windows 8.3 aliases; plain synchronous realpath did not. Mock subprocess dispatch with an explicit platform. The corrected files passed 75 real Windows tests before run6; strict product/artifact checks were preserved. |
+| `34131398263` | `afd7a94d` | Failed before installer: 203 files and 2,050 tests passed, 11 skipped; compile, bundle verifier and seven artifact rows passed; a real transport artifact row completed in 2,821ms but was falsely rejected because the staged root used an 8.3 short TEMP path. | Canonicalize the staged root before deriving comparison roots while keeping source equality strict. Proof after the fix: 77 focused Windows tests with short TEMP, five file-hash matches, and two pinned OpenClaw 2026.4.23 rows at 83s and 5s under the unchanged 120s budget. |
+| `34133768880` | `18bd7d7a` dispatch ref | Failed at checkout in 14 seconds before source checkout or tests. | Hosted workflow dispatch must pass the full immutable 40-character source SHA. Abbreviated refs can be interpreted as branch names by `actions/checkout`. |
+| `34133858590` | `18bd7d7` | Failed source preflight before installer: 202 files and 2,049 tests passed, 11 skipped; 3 diagnostics-routes tests failed at the 5-second default; all 72 artifact tests passed. | The route tests crossed their external boundary by calling real `diagnoseChromeCdp`, which ran OS/browser/network PowerShell probes. Mock that boundary, verify payload propagation and existing 500 handling, and keep production unchanged. |
+| `34134725489` | `34e951dc` | Succeeded packaging in 13m14s. Preflight passed 203 files / 2,053 tests with 11 skips; keyless-public staged seed scan passed; `windows-installer-x64`, `windows-blockmap` and `build-provenance` uploaded. Private artifact verification passed for x64 installer, provenance, manifest, extracted ASAR and packaged EXE; blockmap structural validation later passed. Installed package acceptance then failed because `resources/bin/ffmpeg.exe` was absent from the fresh package and second clean application-directory install. | Phase separation and cache made the success diagnosable, but artifact identity was not enough. The runtime-helper inventory must require shipped `ffmpeg.exe` alongside node, uv and WinSpeech before a package can be accepted. Direct VM artifact download and hash check took about 32s; moe.21 remains blocked and moe.22 repair is in progress. |
 
 Lessons to preserve:
 
@@ -158,7 +163,12 @@ Lessons to preserve:
 - Source, artifact, installed evidence and release approval are separate. Do not attach a fresh HEAD to stale artifacts, and do not call a candidate GA until installed evidence proves the exact selected artifact.
 - Interactive VM installation evidence needs visible-session proof and recorded operator-safe steps; SSH-only install shortcuts can miss installer UI behavior.
 
-No September 7 native run produced a moe.21 installer. Do not use any run/source pair above as a default in commands or future docs; update status from the actual next successful run before making release claims.
+Run9 produced verified x64 moe.21 installer/provenance artifacts, but installed package acceptance failed because the fresh package did not include required `ffmpeg.exe`; the first upgrade masked the gap with a legacy helper in the old application directory. The direct VM artifact-download pattern took about 32s and verified the downloaded installer hash against the host-verified identity; keep that pattern, but also verify packaged runtime helpers before acceptance. Do not use any run/source pair above as a default in commands or future docs; update status from the actual next successful run before making release claims.
+
+
+`prep:win-binaries` now downloads a pinned BtbN LGPL FFmpeg archive, verifies archive and copied-file hashes, preserves license/source/provenance notices, and runs a bounded native version/build-configuration/audio-transcode smoke. Both builder boundaries verify the actual helper files and FFmpeg receipt; the release manifest hashes the complete shipped `win:bin` tree. The smoke output is temporary and is not packaged.
+
+Runtime-helper completeness is now an explicit build/release lesson: a keyless staged seed scan and ASAR/EXE identity check do not prove that unpacked helper binaries are complete. Before accepting a Windows package, verify the shipped `resources/bin` inventory includes required runtime helpers, including `ffmpeg.exe`, `node.exe`, `uv.exe`, `WinSpeechRecognize.exe` and its config. A helper found only in an old installed application directory is stale evidence.
 
 ## Agent and skill surfaces
 
@@ -182,3 +192,5 @@ Before changing the Windows build workflow or scripts, verify:
 - The build-provenance artifact includes source, compiled-output receipt and profile records.
 - Tests cover failure ordering, public/private profile contradictions and missing provenance.
 - Package execution still delegates runtime acceptance to installed Windows evidence rather than marking artifacts GA from CI alone.
+
+Native run5 phase evidence: dependency restore succeeded in 1 second, install in 57 seconds and immediate cache save in 16 seconds. Preflight later failed, so the cache survives that failure. This is measured phase evidence, not an end-to-end build speedup.

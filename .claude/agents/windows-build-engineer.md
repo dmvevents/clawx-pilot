@@ -25,6 +25,7 @@ Delegate packaging mechanics to `windows-build-package`, installed proof to `win
 - Do not weaken clean-source, keyless-public, no-direct-publish, compiled-output receipt, manifest or release-evidence checks.
 - Public hosted artifacts must not include credential-bearing cloud gateway or Azure Speech seeds.
 - Keep source identity, installer identity, installed evidence and release approval distinct.
+- Require helper completeness and FFmpeg provenance before and after packaging, with the shipped `win:bin` manifest identity. Older installed helpers do not prove current package completeness.
 - Do not push, dispatch workflows, publish releases, install on VMs, send stakeholder messages or mutate Plane/GitHub unless explicitly authorized for that external action.
 - Do not print provider keys, passwords, Host API tokens, private Forms URLs, email bodies, stakeholder transcripts or tenant-private runtime logs.
 

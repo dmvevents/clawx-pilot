@@ -38,11 +38,13 @@ import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readVerifiedBuildSource } from './release-build-source.mjs';
+import { assertWindowsFfmpegPackage } from './run-electron-builder.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MANIFEST_DIR_DEFAULT = path.join('docs', 'release-manifests');
 const INSTALLER_EXTENSIONS = new Set(['.exe', '.dmg', '.zip']);
 const BUNDLE_DIR_NAMES = ['extensions', 'openclaw-plugins'];
+const REQUIRED_WIN_HELPERS = ['node.exe', 'uv.exe', 'ffmpeg.exe', 'WinSpeechRecognize.exe', 'WinSpeechRecognize.exe.config', 'FFMPEG_LICENSE.txt', 'FFMPEG_PROVENANCE.json', 'THIRD_PARTY_FFMPEG.txt'];
 // Unpacked-tree asar written more than this long before/after the newest
 // installer for the version is suspicious: likely two different builds.
 const STALENESS_WINDOW_MS = 30 * 60 * 1000;
@@ -127,7 +129,7 @@ function escapeRegExp(value) {
  * of their app.asar matches (an unprovable or mismatched tree is skipped,
  * reported in the returned skipped list). Returns { artifacts, skipped }.
  */
-export function discoverArtifacts({ releaseDir, version }) {
+export function discoverArtifacts({ releaseDir, version, ffmpegPackageValidator = assertWindowsFfmpegPackage }) {
   const artifacts = [];
   const skipped = [];
   if (!existsSync(releaseDir)) return { artifacts, skipped };
@@ -160,6 +162,20 @@ export function discoverArtifacts({ releaseDir, version }) {
       continue;
     }
     artifacts.push({ name: `${platform}:app.asar`, path: `${rel}/app.asar`, kind: 'asar', asarVersion });
+    if (platform === 'win') {
+      const binRoot = path.join(resources, 'bin');
+      const missing = REQUIRED_WIN_HELPERS.filter((name) => !existsSync(path.join(binRoot, name)) || !statSync(path.join(binRoot, name)).isFile());
+      if (missing.length > 0) {
+        skipped.push(`${rel}/bin is missing required Windows helper(s): ${missing.join(', ')} — bin tree skipped`);
+      } else {
+        try {
+          ffmpegPackageValidator(binRoot);
+          artifacts.push({ name: 'win:bin', path: `${rel}/bin`, kind: 'bin-dir' });
+        } catch (error) {
+          skipped.push(`${rel}/bin failed required FFmpeg provenance validation: ${error.message} — bin tree skipped`);
+        }
+      }
+    }
     for (const bundle of BUNDLE_DIR_NAMES) {
       if (existsSync(path.join(resources, bundle))) {
         artifacts.push({ name: `${platform}:${bundle}`, path: `${rel}/${bundle}`, kind: 'bundle-dir' });
@@ -178,7 +194,7 @@ function sourceForArtifact(buildSource, mtimeMs) {
 
 async function hashArtifact(releaseDir, artifact, buildSource = null) {
   const abs = path.join(releaseDir, artifact.path);
-  if (artifact.kind === 'bundle-dir') {
+  if (artifact.kind === 'bundle-dir' || artifact.kind === 'bin-dir') {
     const { sha256, fileCount } = await hashDirectory(abs);
     const mtimeMs = statSync(abs).mtimeMs;
     const source = sourceForArtifact(buildSource, mtimeMs);
@@ -234,8 +250,17 @@ function writeManifestAtomic(manifestDir, manifest) {
  * warnings, hardStop }. hardStop is set (and nothing is written) when the
  * existing manifest is published and any overlapping artifact hash differs.
  */
-export async function generateManifest({ releaseDir, version, manifestDir, now = () => new Date().toISOString(), buildSource = null }) {
-  const { artifacts: discovered, skipped } = discoverArtifacts({ releaseDir, version });
+export async function generateManifest({ releaseDir, version, manifestDir, now = () => new Date().toISOString(), buildSource = null, ffmpegPackageValidator = assertWindowsFfmpegPackage }) {
+  const { artifacts: discovered, skipped } = discoverArtifacts({ releaseDir, version, ffmpegPackageValidator });
+  const missingWindowsHelpers = skipped.filter((warning) => warning.includes('/bin is missing required Windows helper(s):') || warning.includes('/bin failed required FFmpeg provenance validation:'));
+  if (missingWindowsHelpers.length > 0) {
+    return {
+      manifest: null,
+      action: 'hard-stop',
+      warnings: skipped,
+      hardStop: `Windows release tree is missing required helper binaries. ${missingWindowsHelpers.join(' ')}`,
+    };
+  }
   if (discovered.length === 0) {
     return { manifest: null, action: 'no-artifacts', warnings: [...skipped, `no artifacts for ${version} under ${releaseDir}`], hardStop: null };
   }
@@ -314,7 +339,7 @@ export async function verifyManifest({ manifest, releaseDir, only = null, pathOv
       results.push({ name: artifact.name, status: allowMissing ? 'missing-skipped' : 'missing', path: abs });
       continue;
     }
-    const actual = artifact.kind === 'bundle-dir' ? (await hashDirectory(abs)).sha256 : await sha256File(abs);
+    const actual = artifact.kind === 'bundle-dir' || artifact.kind === 'bin-dir' ? (await hashDirectory(abs)).sha256 : await sha256File(abs);
     results.push({ name: artifact.name, status: actual === artifact.sha256 ? 'ok' : 'mismatch', expected: artifact.sha256, actual, path: abs });
   }
   const checked = results.filter((r) => r.status === 'ok' || r.status === 'mismatch');

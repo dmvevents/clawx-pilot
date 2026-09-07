@@ -33,8 +33,17 @@ function buildTinyAsar(version: string, payload = 'v1'): Buffer {
 function writeUnpackedTree(version: string, payload = 'v1'): void {
   const resources = join(releaseDir, 'win-unpacked', 'resources');
   mkdirSync(join(resources, 'extensions', 'moe-principal-assistant'), { recursive: true });
+  mkdirSync(join(resources, 'bin'), { recursive: true });
   writeFileSync(join(resources, 'app.asar'), buildTinyAsar(version, payload));
   writeFileSync(join(resources, 'extensions', 'moe-principal-assistant', 'index.mjs'), `plugin-bits-${payload}`);
+  writeFileSync(join(resources, 'bin', 'node.exe'), 'node');
+  writeFileSync(join(resources, 'bin', 'uv.exe'), 'uv');
+  writeFileSync(join(resources, 'bin', 'ffmpeg.exe'), 'ffmpeg');
+  writeFileSync(join(resources, 'bin', 'FFMPEG_LICENSE.txt'), 'license');
+  writeFileSync(join(resources, 'bin', 'FFMPEG_PROVENANCE.json'), '{"schemaVersion":1}');
+  writeFileSync(join(resources, 'bin', 'THIRD_PARTY_FFMPEG.txt'), 'notice');
+  writeFileSync(join(resources, 'bin', 'WinSpeechRecognize.exe'), 'speech');
+  writeFileSync(join(resources, 'bin', 'WinSpeechRecognize.exe.config'), '<configuration />');
 }
 
 function writeMacTree(version: string, payload = 'v1'): void {
@@ -51,11 +60,11 @@ function seedArtifactSet(): void {
 }
 
 async function generate() {
-  return generateManifest({ releaseDir, version: VERSION, manifestDir, now: () => '2026-09-05T00:00:00.000Z' });
+  return generateManifest({ releaseDir, version: VERSION, manifestDir, now: () => '2026-09-05T00:00:00.000Z', ffmpegPackageValidator: () => undefined });
 }
 
 async function generateWithSource(source: unknown) {
-  return generateManifest({ releaseDir, version: VERSION, manifestDir, now: () => '2026-09-05T00:00:00.000Z', buildSource: source });
+  return generateManifest({ releaseDir, version: VERSION, manifestDir, now: () => '2026-09-05T00:00:00.000Z', buildSource: source, ffmpegPackageValidator: () => undefined });
 }
 
 function writeManifest(manifest: unknown): void {
@@ -75,12 +84,41 @@ afterEach(() => {
 
 describe('release-hash-manifest (CLWX-85)', () => {
   it('discovers only the requested version: installer, asar, and bundle dir', () => {
-    const { artifacts } = discoverArtifacts({ releaseDir, version: VERSION });
+    const { artifacts } = discoverArtifacts({ releaseDir, version: VERSION, ffmpegPackageValidator: () => undefined });
     const names = artifacts.map((a: { name: string }) => a.name);
     expect(names).toContain(`Ministry of Education-${VERSION}-win-x64.exe`);
     expect(names).toContain('win:app.asar');
+    expect(names).toContain('win:bin');
     expect(names).toContain('win:extensions');
     expect(names.join()).not.toContain('moe.98');
+  });
+
+  it('skips the Windows bin tree when a required helper is missing', () => {
+    rmSync(join(releaseDir, 'win-unpacked', 'resources', 'bin', 'ffmpeg.exe'));
+    const { artifacts, skipped } = discoverArtifacts({ releaseDir, version: VERSION, ffmpegPackageValidator: () => undefined });
+    expect(artifacts.map((a: { name: string }) => a.name)).not.toContain('win:bin');
+    expect(skipped.join('\n')).toMatch(/missing required Windows helper\(s\): ffmpeg\.exe/);
+  });
+
+  it('hard-stops manifest generation when a Windows helper is missing', async () => {
+    rmSync(join(releaseDir, 'win-unpacked', 'resources', 'bin', 'ffmpeg.exe'));
+    const result = await generate();
+    expect(result.action).toBe('hard-stop');
+    expect(result.hardStop).toMatch(/missing required helper binaries/);
+  });
+
+  it('hard-stops manifest generation when FFmpeg provenance validation fails', async () => {
+    const result = await generateManifest({
+      releaseDir,
+      version: VERSION,
+      manifestDir,
+      now: () => '2026-09-05T00:00:00.000Z',
+      ffmpegPackageValidator: () => {
+        throw new Error('ffmpeg.exe checksum mismatch');
+      },
+    });
+    expect(result.action).toBe('hard-stop');
+    expect(result.hardStop).toMatch(/FFmpeg provenance validation/);
   });
 
   it('reads the version out of an asar and returns null on garbage', () => {
@@ -92,7 +130,7 @@ describe('release-hash-manifest (CLWX-85)', () => {
 
   it('skips (and reports) unpacked trees whose asar carries another version — never binds stale bits', () => {
     writeUnpackedTree('0.4.3-moe.10');
-    const { artifacts, skipped } = discoverArtifacts({ releaseDir, version: VERSION });
+    const { artifacts, skipped } = discoverArtifacts({ releaseDir, version: VERSION, ffmpegPackageValidator: () => undefined });
     const names = artifacts.map((a: { name: string }) => a.name);
     expect(names).not.toContain('win:app.asar');
     expect(names).not.toContain('win:extensions');
@@ -101,13 +139,13 @@ describe('release-hash-manifest (CLWX-85)', () => {
 
   it('skips unpacked trees whose asar version is unreadable (fail closed)', () => {
     writeFileSync(join(releaseDir, 'win-unpacked', 'resources', 'app.asar'), 'corrupted');
-    const { artifacts, skipped } = discoverArtifacts({ releaseDir, version: VERSION });
+    const { artifacts, skipped } = discoverArtifacts({ releaseDir, version: VERSION, ffmpegPackageValidator: () => undefined });
     expect(artifacts.map((a: { name: string }) => a.name)).not.toContain('win:app.asar');
     expect(skipped.join('\n')).toMatch(/unreadable/);
   });
 
   it('a plain base version never sweeps the moe.N-suffixed installer family', () => {
-    const { artifacts } = discoverArtifacts({ releaseDir, version: '0.4.3' });
+    const { artifacts } = discoverArtifacts({ releaseDir, version: '0.4.3', ffmpegPackageValidator: () => undefined });
     expect(artifacts.filter((a: { kind: string }) => a.kind === 'installer')).toHaveLength(0);
   });
 
@@ -125,6 +163,14 @@ describe('release-hash-manifest (CLWX-85)', () => {
     const { manifest } = await generate();
     writeFileSync(join(releaseDir, 'win-unpacked', 'resources', 'extensions', 'moe-principal-assistant', 'index.mjs'), 'plugin-bits-TAMPERED');
     expect((await verifyManifest({ manifest, releaseDir })).ok).toBe(false);
+  });
+
+  it('detects drift inside the packaged Windows bin helper tree', async () => {
+    const { manifest } = await generate();
+    writeFileSync(join(releaseDir, 'win-unpacked', 'resources', 'bin', 'ffmpeg.exe'), 'ffmpeg-TAMPERED');
+    const result = await verifyManifest({ manifest, releaseDir });
+    expect(result.ok).toBe(false);
+    expect(result.results.some((r: { name: string; status: string }) => r.name === 'win:bin' && r.status === 'mismatch')).toBe(true);
   });
 
   it('hashDirectory digest is stable and order-independent but content-sensitive', async () => {

@@ -17,4 +17,6 @@ Keep these boundaries:
 
 Do not weaken clean-source, keyless-public, no-direct-publish, compiled-receipt, manifest or evidence checks. Public hosted artifacts must not include credential-bearing cloud gateway or Azure Speech seeds. Do not push, dispatch, publish, install on VMs or mutate Plane/GitHub unless explicitly authorized for that external action.
 
+Validate required Windows helpers before and after packaging, including pinned FFmpeg bytes, license and provenance notices. Bind the shipped helper directory in the release manifest; retained files from an older installation cannot satisfy package completeness.
+
 For workflow improvements, prefer phase-visible changes: setup, dependency/cache, source/profile record, preflight, Windows binary preparation, compile/bundle, receipt verification, builder, seed scan and artifact upload. Run targeted smoke checks before spending another hosted Windows build, then preserve the full native build as the real artifact gate. Separate proposed improvements from implemented behavior, report allowlisted summary/provenance fields, and return exact validation evidence.

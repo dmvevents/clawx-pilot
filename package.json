@@ -1,7 +1,7 @@
 {
     "name": "clawx",
     "productName": "Ministry of Education",
-    "version": "0.4.3-moe.21",
+    "version": "0.4.3-moe.22",
     "pnpm": {
         "onlyBuiltDependencies": [
             "@discordjs/opus",
@@ -73,9 +73,10 @@
         "uv:download:linux": "zx scripts/download-bundled-uv.mjs --platform=linux",
         "uv:download:all": "zx scripts/download-bundled-uv.mjs --all",
         "node:download:win": "zx scripts/download-bundled-node.mjs --platform=win",
+        "ffmpeg:download:win": "node scripts/download-bundled-ffmpeg.mjs --platform=win",
         "win-asr:build": "node scripts/build-windows-asr-helper.mjs --all",
         "win-asr:build:x64": "node scripts/build-windows-asr-helper.mjs --arch=x64",
-        "prep:win-binaries": "pnpm run uv:download:win && pnpm run node:download:win && pnpm run win-asr:build:x64",
+        "prep:win-binaries": "pnpm run uv:download:win && pnpm run node:download:win && pnpm run win-asr:build:x64 && pnpm run ffmpeg:download:win",
         "icons": "zx scripts/generate-icons.mjs",
         "preflight": "pnpm run typecheck && pnpm run lint:check && pnpm run lint:ps && pnpm run doctor:agents && pnpm exec vitest run && pnpm run harness:doc-tooling-e2e",
         "package": "node scripts/release-build-source.mjs record && node scripts/generate-ext-bridge.mjs && pnpm run build:vite && zx scripts/bundle-openclaw.mjs && node scripts/verify-openclaw-bundle.mjs && node scripts/harness-artifact.mjs --fast && zx scripts/bundle-openclaw-plugins.mjs && zx scripts/bundle-preinstalled-skills.mjs && node scripts/release-build-source.mjs receipt",

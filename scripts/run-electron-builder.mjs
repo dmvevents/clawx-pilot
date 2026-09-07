@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { FFMPEG_TARGETS } from './download-bundled-ffmpeg.mjs';
 import { BUILD_OUTPUT_RECEIPT_FILE, BUILD_SOURCE_FILE, readVerifiedBuildOutputReceipt, readVerifiedBuildSource } from './release-build-source.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -11,6 +14,9 @@ const ELECTRON_BUILDER_BIN = process.platform === 'win32'
   ? path.join(ROOT, 'node_modules', '.bin', 'electron-builder.cmd')
   : path.join(ROOT, 'node_modules', '.bin', 'electron-builder');
 const args = process.argv.slice(2);
+const REQUIRED_WIN_HELPERS = ['node.exe', 'uv.exe', 'ffmpeg.exe', 'WinSpeechRecognize.exe', 'WinSpeechRecognize.exe.config'];
+const REQUIRED_FFMPEG_FILES = ['ffmpeg.exe', 'FFMPEG_LICENSE.txt', 'FFMPEG_PROVENANCE.json', 'THIRD_PARTY_FFMPEG.txt'];
+const FFMPEG_TARGET = FFMPEG_TARGETS['win32-x64'];
 
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -74,6 +80,99 @@ export function assertNoDirectPublish(argv, env = process.env) {
   return prepared;
 }
 
+export function builderArgsIncludeWindowsTarget(argv) {
+  return argv.some((arg) => arg === '--win' || arg === '-w' || arg.startsWith('--win='));
+}
+
+export function builderArgsIncludeArm64Only(argv) {
+  return argv.some((arg) => arg === '--arm64' || arg === '--ia32') && !argv.some((arg) => arg === '--x64');
+}
+
+function assertPlainFile(filePath, label) {
+  if (!existsSync(filePath)) throw new Error(`${label} is missing: ${filePath}`);
+  if (!statSync(filePath).isFile()) throw new Error(`${label} is not a file: ${filePath}`);
+}
+
+function sha256FileSync(filePath) {
+  return createHash('sha256').update(readFileSync(filePath)).digest('hex');
+}
+
+function assertFileHash(filePath, expected) {
+  const stats = statSync(filePath);
+  if (stats.size !== expected.bytes) {
+    throw new Error(`${path.basename(filePath)} size mismatch: expected ${expected.bytes}, got ${stats.size}`);
+  }
+  const digest = sha256FileSync(filePath);
+  if (digest !== expected.sha256) {
+    throw new Error(`${path.basename(filePath)} checksum mismatch: expected ${expected.sha256}, got ${digest}`);
+  }
+}
+
+export function assertWindowsFfmpegPackage(binDir, target = FFMPEG_TARGET) {
+  for (const name of REQUIRED_FFMPEG_FILES) {
+    assertPlainFile(path.join(binDir, name), `Windows FFmpeg package file ${name}`);
+  }
+  for (const [name, expected] of Object.entries(target.files)) {
+    assertFileHash(path.join(binDir, name), expected);
+  }
+  const receiptPath = path.join(binDir, 'FFMPEG_PROVENANCE.json');
+  const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+  const archive = receipt.archive ?? {};
+  if (
+    receipt.schemaVersion !== 1 ||
+    receipt.target !== 'win32-x64' ||
+    archive.name !== target.archiveName ||
+    archive.url !== target.downloadUrl ||
+    archive.sha256 !== target.archiveSha256 ||
+    archive.bytes !== target.archiveBytes ||
+    archive.root !== target.archiveRoot
+  ) {
+    throw new Error('FFMPEG_PROVENANCE.json does not match the pinned FFmpeg archive metadata');
+  }
+  const upstream = receipt.upstream ?? {};
+  if (
+    upstream.buildCommit !== target.buildCommit ||
+    upstream.buildCommitUrl !== target.buildCommitUrl ||
+    upstream.ffmpegSourceCommit !== target.ffmpegSourceCommit ||
+    upstream.ffmpegSourceUrl !== target.ffmpegSourceUrl ||
+    upstream.checksumsSha256 !== target.checksumsSha256
+  ) {
+    throw new Error('FFMPEG_PROVENANCE.json does not match the pinned FFmpeg source/build metadata');
+  }
+  for (const [name, expected] of Object.entries(target.files)) {
+    const file = receipt.files?.[name];
+    if (!file || file.bytes !== expected.bytes || file.sha256 !== expected.sha256 || file.source !== expected.source) {
+      throw new Error(`FFMPEG_PROVENANCE.json does not match ${name}`);
+    }
+  }
+  const notice = readFileSync(path.join(binDir, 'THIRD_PARTY_FFMPEG.txt'), 'utf8');
+  for (const expected of [target.archiveSha256, target.files['ffmpeg.exe'].sha256, target.files['FFMPEG_LICENSE.txt'].sha256]) {
+    if (!notice.includes(expected)) throw new Error(`THIRD_PARTY_FFMPEG.txt is missing ${expected}`);
+  }
+}
+
+export function assertWindowsHelperInputs({ root = ROOT, arch = 'x64', ffmpegTarget = FFMPEG_TARGET } = {}) {
+  const binDir = path.join(root, 'resources', 'bin', `win32-${arch}`);
+  for (const name of REQUIRED_WIN_HELPERS) {
+    assertPlainFile(path.join(binDir, name), `Windows helper ${name}`);
+  }
+  assertWindowsFfmpegPackage(binDir, ffmpegTarget);
+  const config = readFileSync(path.join(root, 'electron-builder.yml'), 'utf8');
+  if (!config.includes('from: resources/bin/win32-${arch}') || !config.includes('to: bin')) {
+    throw new Error('electron-builder.yml must copy resources/bin/win32-${arch} to installed resources/bin for Windows builds');
+  }
+  return binDir;
+}
+
+export function assertWindowsUnpackedHelpers({ root = ROOT, ffmpegTarget = FFMPEG_TARGET } = {}) {
+  const binDir = path.join(root, 'release', 'win-unpacked', 'resources', 'bin');
+  for (const name of REQUIRED_WIN_HELPERS) {
+    assertPlainFile(path.join(binDir, name), `Packaged Windows helper ${name}`);
+  }
+  assertWindowsFfmpegPackage(binDir, ffmpegTarget);
+  return binDir;
+}
+
 function verifyBuildSource(label) {
   return readVerifiedBuildSource({ root: ROOT, sourcePath: BUILD_SOURCE_FILE, label });
 }
@@ -129,6 +228,8 @@ export function runElectronBuilderWrapper(argv = args, env = process.env, deps =
   const verifyReceipt = deps.verifyBuildReceipt ?? verifyBuildReceipt;
   const spawnBuilder = deps.spawnElectronBuilder ?? spawnElectronBuilder;
   const recordManifest = deps.recordHashManifest ?? recordHashManifest;
+  const validateWindowsInputs = deps.assertWindowsHelperInputs ?? assertWindowsHelperInputs;
+  const validateWindowsOutput = deps.assertWindowsUnpackedHelpers ?? assertWindowsUnpackedHelpers;
   let prepared;
   try {
     prepared = assertNoDirectPublish(argv, env);
@@ -141,6 +242,9 @@ export function runElectronBuilderWrapper(argv = args, env = process.env, deps =
   try {
     source = verifySource('release build source before electron-builder');
     verifyReceipt('release build output receipt before electron-builder');
+    if (builderArgsIncludeWindowsTarget(prepared.args) && !builderArgsIncludeArm64Only(prepared.args)) {
+      validateWindowsInputs({ root: ROOT, arch: 'x64' });
+    }
   } catch (error) {
     errorLog(`[run-electron-builder] ERROR ${error.message}`);
     errorLog('[run-electron-builder] Run the package/build pipeline through "node scripts/release-build-source.mjs receipt" before electron-builder so compiled artifacts can be bound to their source.');
@@ -158,6 +262,9 @@ export function runElectronBuilderWrapper(argv = args, env = process.env, deps =
       try {
         verifySource('release build source after electron-builder');
         verifyReceipt('release build output receipt after electron-builder');
+        if (builderArgsIncludeWindowsTarget(prepared.args) && !builderArgsIncludeArm64Only(prepared.args)) {
+          validateWindowsOutput({ root: ROOT });
+        }
       } catch (error) {
         errorLog(`[run-electron-builder] ERROR ${error.message}`);
         exit(3);
