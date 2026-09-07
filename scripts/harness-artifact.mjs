@@ -449,6 +449,26 @@ export function validateFastSelection(expandedRows, fastIds) {
   return `fast subset integrity failure — ${parts.join('; ')}`;
 }
 
+export async function canonicalizeStageDir(stageDir) {
+  const resolved = path.resolve(stageDir);
+  const missing = [];
+  let cursor = resolved;
+
+  while (true) {
+    try {
+      return path.join(await realpath(cursor), ...missing);
+    } catch (err) {
+      if (err?.code !== 'ENOENT') throw err;
+      const parent = path.dirname(cursor);
+      if (parent === cursor) {
+        throw new Error(`unable to canonicalize stage dir ${resolved}: no existing ancestor`);
+      }
+      missing.unshift(path.basename(cursor));
+      cursor = parent;
+    }
+  }
+}
+
 // Written into the stage and passed via NODE_OPTIONS=--require so the
 // transport child gets the same deterministic network isolation as the
 // register-mode children: every fetch attempt is rejected without a socket.
@@ -1082,9 +1102,10 @@ function parseArgs(argv) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  const stageDir = args.stageDir
+  const rawStageDir = args.stageDir
     ? path.resolve(args.stageDir)
     : await mkdtemp(path.join(os.tmpdir(), 'clawx-artifact-'));
+  const stageDir = await canonicalizeStageDir(rawStageDir);
   const bundleNodeModules = args.reuseBundle
     ? path.join(stageDir, 'resources', 'openclaw', 'node_modules')
     : BUNDLE_NM;
@@ -1098,7 +1119,8 @@ async function main() {
   // Equality matters as much as containment: `--stage-dir .` from the repo
   // root passed the old prefix check and would rm -rf tracked resources/
   // paths before staging 1.4GB INSIDE the repo (lens finding, 2026-09-06).
-  if (path.resolve(stageDir) === REPO_ROOT || stageDir.startsWith(REPO_ROOT + path.sep)) {
+  const repoRootForGuard = await realpath(REPO_ROOT);
+  if (path.resolve(stageDir) === repoRootForGuard || stageDir.startsWith(repoRootForGuard + path.sep)) {
     console.error('FAIL: --stage-dir must be OUTSIDE the repo tree (walk-up resolution would mask bundle gaps).');
     process.exit(1);
   }
