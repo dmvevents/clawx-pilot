@@ -17,7 +17,20 @@ const SOURCE = {
   gitCommit: '0123456789abcdef0123456789abcdef01234567',
   gitDirty: false,
   gitStatusHash: null,
+  builtAt: '2026-09-07T00:00:00.000Z',
   recordedAt: '2026-09-07T00:00:00.000Z',
+};
+const KEYLESS_PROFILE = {
+  schemaVersion: 1,
+  producer: '.github/workflows/package-win-manual.yml',
+  cloudGatewaySeedProfile: 'keyless-public',
+  sourceGitCommit: SOURCE.gitCommit,
+  repositoryPrivate: false,
+  repositoryVisibility: 'public',
+  credentialSeedIncluded: false,
+  cloudGatewaySeedIncluded: false,
+  azureSpeechSeedIncluded: false,
+  microsoftGraphSeedIncluded: false,
 };
 
 let evidenceDir: string;
@@ -77,8 +90,8 @@ function writeFullFixture(): ReturnType<typeof writeInstalledReleaseEvidenceFixt
   return writeInstalledReleaseEvidenceFixture({ evidenceDir, manifest: manifest() });
 }
 
-async function evaluate(currentManifest: unknown = manifest()) {
-  return evaluateInstalledEvidence({ manifest: currentManifest, evidenceDir });
+async function evaluate(currentManifest: unknown = manifest(), buildProfile: unknown = null) {
+  return evaluateInstalledEvidence({ manifest: currentManifest, evidenceDir, buildProfile });
 }
 
 function statuses(result: Awaited<ReturnType<typeof evaluateInstalledEvidence>>) {
@@ -129,6 +142,143 @@ describe('installed-release-evidence (CLWX-106)', () => {
         memoryBytes: 17179869184,
       },
     });
+  });
+
+  it('accepts keyless-public installed evidence only when cloud and Azure credential rows are explicitly absent', async () => {
+    writeInstalledReleaseEvidenceFixture({ evidenceDir, manifest: manifest(), seedProfile: 'keyless-public' });
+
+    const result = await evaluate(manifest(), KEYLESS_PROFILE);
+
+    expect(result.ok).toBe(true);
+    expect(statuses(result).get('installed-build-profile')).toMatchObject({ status: 'PASS' });
+    expect(statuses(result).get('install-artifact-rows')?.reason).toContain('profile-aware rows valid');
+  });
+
+  it('rejects keyless-public installed evidence when an expected credential absence row is missing', async () => {
+    writeInstalledReleaseEvidenceFixture({ evidenceDir, manifest: manifest(), seedProfile: 'keyless-public' });
+    rewriteJsonFixture<Array<{ Path: string }>>('install-artifacts.json', (rows) => {
+      const index = rows.findIndex((row) => row.Path.endsWith('resources\\resources\\azure-speech.key'));
+      if (index >= 0) rows.splice(index, 1);
+    });
+
+    const result = await evaluate(manifest(), KEYLESS_PROFILE);
+
+    expect(result.ok).toBe(false);
+    expect(statuses(result).get('install-artifact-rows')).toMatchObject({ status: 'FAIL' });
+    expect(statuses(result).get('install-artifact-rows')?.reason).toContain('missing explicit absence azure-key');
+  });
+
+  it('rejects keyless-public installed evidence when a credential seed file is present', async () => {
+    writeInstalledReleaseEvidenceFixture({ evidenceDir, manifest: manifest(), seedProfile: 'keyless-public' });
+    rewriteJsonFixture<Array<{ Path: string; Exists: boolean; Length: number | null; Modified: string | null; SecretMetadataOnly: boolean }>>('install-artifacts.json', (rows) => {
+      const cloudKey = rows.find((row) => row.Path.endsWith('resources\\resources\\cloud-gateway.key'));
+      if (cloudKey) {
+        cloudKey.Exists = true;
+        cloudKey.Length = 42;
+        cloudKey.Modified = '2026-09-07T01:03:00.0000000Z';
+        cloudKey.SecretMetadataOnly = true;
+      }
+    });
+
+    const result = await evaluate(manifest(), KEYLESS_PROFILE);
+
+    expect(result.ok).toBe(false);
+    expect(statuses(result).get('install-artifact-rows')).toMatchObject({ status: 'FAIL' });
+    expect(statuses(result).get('install-artifact-rows')?.reason).toContain('credential seed rows present for keyless profile: cloud-key');
+  });
+
+  it('rejects keyless-public absence rows that omit an explicit boolean Exists:false', async () => {
+    writeInstalledReleaseEvidenceFixture({ evidenceDir, manifest: manifest(), seedProfile: 'keyless-public' });
+    rewriteJsonFixture<Array<{ Path: string; Exists?: boolean | string }>>('install-artifacts.json', (rows) => {
+      const azureKey = rows.find((row) => row.Path.endsWith('resources\\resources\\azure-speech.key'));
+      if (azureKey) delete azureKey.Exists;
+      const cloudConfig = rows.find((row) => row.Path.endsWith('resources\\resources\\cloud-gateway.json'));
+      if (cloudConfig) cloudConfig.Exists = 'False';
+    });
+
+    const result = await evaluate(manifest(), KEYLESS_PROFILE);
+
+    expect(result.ok).toBe(false);
+    expect(statuses(result).get('install-artifact-rows')).toMatchObject({ status: 'FAIL' });
+    expect(statuses(result).get('install-artifact-rows')?.reason).toContain('absence rows must set Exists:false');
+    expect(statuses(result).get('install-artifact-rows')?.reason).toContain('azure-key');
+    expect(statuses(result).get('install-artifact-rows')?.reason).toContain('cloud-config');
+  });
+
+  it('rejects keyless-public negative rows from a different install root', async () => {
+    writeInstalledReleaseEvidenceFixture({ evidenceDir, manifest: manifest(), seedProfile: 'keyless-public' });
+    rewriteJsonFixture<Array<{ Path: string }>>('install-artifacts.json', (rows) => {
+      const azureConfig = rows.find((row) => row.Path.endsWith('resources\\resources\\azure-speech.json'));
+      if (azureConfig) azureConfig.Path = azureConfig.Path.replace('C:\\Users\\clawxtest\\AppData', 'D:\\OtherUser\\AppData');
+    });
+
+    const result = await evaluate(manifest(), KEYLESS_PROFILE);
+
+    expect(result.ok).toBe(false);
+    expect(statuses(result).get('install-artifact-rows')).toMatchObject({ status: 'FAIL' });
+    expect(statuses(result).get('install-artifact-rows')?.reason).toContain('missing explicit absence azure-config');
+  });
+
+  it('rejects keyless-public absence rows with hash values or nonzero length metadata', async () => {
+    writeInstalledReleaseEvidenceFixture({ evidenceDir, manifest: manifest(), seedProfile: 'keyless-public' });
+    rewriteJsonFixture<Array<{ Path: string; Sha256: string | null; Length: number | null }>>('install-artifacts.json', (rows) => {
+      const cloudKey = rows.find((row) => row.Path.endsWith('resources\\resources\\cloud-gateway.key'));
+      if (cloudKey) cloudKey.Sha256 = 'not-a-sha-but-still-raw-metadata';
+      const azureKey = rows.find((row) => row.Path.endsWith('resources\\resources\\azure-speech.key'));
+      if (azureKey) azureKey.Length = 12;
+    });
+
+    const result = await evaluate(manifest(), KEYLESS_PROFILE);
+
+    expect(result.ok).toBe(false);
+    expect(statuses(result).get('install-artifact-rows')).toMatchObject({ status: 'FAIL' });
+    expect(statuses(result).get('install-artifact-rows')?.reason).toContain('absence rows carry hash or nonzero length');
+    expect(statuses(result).get('install-artifact-rows')?.reason).toContain('cloud-key');
+    expect(statuses(result).get('install-artifact-rows')?.reason).toContain('azure-key');
+  });
+
+  it('keeps runtime, ASAR, Gateway, Electron, Office, and environment checks mandatory for keyless-public evidence', async () => {
+    writeInstalledReleaseEvidenceFixture({ evidenceDir, manifest: manifest(), seedProfile: 'keyless-public' });
+    writeText('office-runtime.txt', 'playwright-core=OK C:\\p\\playwright\nSTATE: OFFICE_RUNTIME_PARTIAL');
+    refreshInstalledEvidenceBindings(evidenceDir);
+
+    const result = await evaluate(manifest(), KEYLESS_PROFILE);
+
+    expect(result.ok).toBe(false);
+    expect(statuses(result).get('install-artifact-rows')).toMatchObject({ status: 'PASS' });
+    expect(statuses(result).get('office-runtime')).toMatchObject({ status: 'FAIL' });
+  });
+
+  it('retains the legacy seeded install-artifact requirements when no build profile is supplied', async () => {
+    writeInstalledReleaseEvidenceFixture({ evidenceDir, manifest: manifest(), seedProfile: 'keyless-public' });
+
+    const result = await evaluate();
+
+    expect(result.ok).toBe(false);
+    expect(statuses(result).get('installed-build-profile')).toMatchObject({ status: 'PASS' });
+    expect(statuses(result).get('install-artifact-rows')).toMatchObject({ status: 'FAIL' });
+    expect(statuses(result).get('install-artifact-rows')?.reason).toContain('missing cloud-config');
+    expect(statuses(result).get('install-artifact-rows')?.reason).toContain('cloud-key');
+  });
+
+  it('rejects malformed build profiles at the installed-evidence boundary', async () => {
+    writeInstalledReleaseEvidenceFixture({ evidenceDir, manifest: manifest(), seedProfile: 'keyless-public' });
+
+    const result = await evaluate(manifest(), { ...KEYLESS_PROFILE, schemaVersion: 2 });
+
+    expect(result.ok).toBe(false);
+    expect(statuses(result).get('installed-build-profile')).toMatchObject({ status: 'FAIL' });
+    expect(statuses(result).get('installed-build-profile')?.reason).toContain('unsupported schema');
+  });
+
+  it('rejects build profiles whose source does not match the installed candidate manifest', async () => {
+    writeInstalledReleaseEvidenceFixture({ evidenceDir, manifest: manifest(), seedProfile: 'keyless-public' });
+
+    const result = await evaluate(manifest({ ...SOURCE, gitCommit: 'f'.repeat(40) }), KEYLESS_PROFILE);
+
+    expect(result.ok).toBe(false);
+    expect(statuses(result).get('installed-build-profile')).toMatchObject({ status: 'FAIL' });
+    expect(statuses(result).get('installed-build-profile')?.reason).toContain('sourceGitCommit does not match release-build-source');
   });
 
   it('requires a collected environment profile bound to the vm-run portable inventory', async () => {

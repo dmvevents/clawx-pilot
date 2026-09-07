@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { RELEASE_REQUIRED_CRITERIA, scorecard } from './ga-gate-verdict.mjs';
 import { sha256File } from './release-hash-manifest.mjs';
 import { evaluateInstalledEvidence } from './installed-release-evidence.mjs';
+import { publicReleaseProfileProblems, publicReleaseProfileSummaryProblems, sanitizePublicReleaseProfile } from './release-build-profile.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -50,6 +51,48 @@ export function candidateProblems(manifest, { gitCommit, gitDirty } = {}) {
   return problems;
 }
 
+
+function readJsonFile(filePath, label) {
+  try { return JSON.parse(readFileSync(filePath, 'utf8')); }
+  catch (error) { throw new Error(`${label} is missing or unreadable: ${error.message}`); }
+}
+
+function sourceIdentity(source) {
+  return {
+    gitCommit: source?.gitCommit,
+    gitDirty: source?.gitDirty,
+    gitStatusHash: source?.gitStatusHash,
+    builtAt: source?.builtAt,
+  };
+}
+
+function sameSourceIdentity(a, b) {
+  return ['gitCommit', 'gitDirty', 'gitStatusHash'].every((key) => a?.[key] === b?.[key]);
+}
+
+function findBuildProfileCompanion(profilePath, candidates, label) {
+  const base = path.dirname(profilePath);
+  const matches = candidates.map((candidate) => path.resolve(base, candidate)).filter((candidate) => existsSync(candidate));
+  if (matches.length !== 1) throw new Error(`${label} companion for release-build-profile is ${matches.length === 0 ? 'missing' : 'ambiguous'}.`);
+  return matches[0];
+}
+
+export function loadReleaseBuildProfile({ profilePath, manifest, source }) {
+  if (!profilePath) return null;
+  const resolvedProfilePath = path.resolve(profilePath);
+  const profile = readJsonFile(resolvedProfilePath, 'release-build-profile');
+  const sourcePath = findBuildProfileCompanion(resolvedProfilePath, ['../.release-build-source.json', '.release-build-source.json'], 'release-build-source');
+  const receiptPath = findBuildProfileCompanion(resolvedProfilePath, ['release-build-output.json', '.tmp/release-build-output.json'], 'release-build-output receipt');
+  const buildSource = readJsonFile(sourcePath, 'release-build-source');
+  const receipt = readJsonFile(receiptPath, 'release-build-output receipt');
+  const expectedSource = sourceIdentity(source);
+  const actualSource = sourceIdentity(buildSource);
+  const problems = publicReleaseProfileProblems({ profile, source: buildSource, receipt, manifest });
+  if (!sameSourceIdentity(expectedSource, actualSource)) problems.push('release-build-profile source companion does not match the gate source.');
+  if (problems.length > 0) throw new Error(problems.join('\n'));
+  return sanitizePublicReleaseProfile(profile);
+}
+
 /** Ministry releases use the staged Windows acceptance lane, including tag pushes. */
 export function automaticPublicationProblems(version) {
   if (typeof version !== 'string' || !version) return ['Package version is missing.'];
@@ -67,7 +110,7 @@ function within(root, relative) {
 }
 
 /** Persist raw measured inputs as well as the derived verdict; never copy prose PASS. */
-export async function writeReleaseEvidence({ outputDir, manifest, source, rows, staticOnly, release, installedDir, startedAt, completedAt }) {
+export async function writeReleaseEvidence({ outputDir, manifest, source, rows, staticOnly, release, installedDir, buildProfile = null, startedAt, completedAt }) {
   mkdirSync(outputDir, { recursive: true });
   const storedRows = [];
   for (const row of rows) {
@@ -87,7 +130,7 @@ export async function writeReleaseEvidence({ outputDir, manifest, source, rows, 
   }
   let installed = null;
   if (manifest && installedDir) {
-    const result = await evaluateInstalledEvidence({ manifest, evidenceDir: installedDir });
+    const result = await evaluateInstalledEvidence({ manifest, evidenceDir: installedDir, buildProfile });
     const files = [];
     for (const file of result.files) {
       const relative = `installed/${file.path}`;
@@ -104,7 +147,7 @@ export async function writeReleaseEvidence({ outputDir, manifest, source, rows, 
     mode: release ? 'strict-release-evidence' : 'development-health', staticOnly,
     startedAt, completedAt, source, version: manifest?.version ?? null,
     candidateSha256: manifest ? candidateDigest(manifest) : null,
-    rows: storedRows, installed,
+    rows: storedRows, installed, buildProfile: buildProfile ? sanitizePublicReleaseProfile(buildProfile) : null,
   };
   const reportPath = path.join(outputDir, 'release-evidence.json');
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
@@ -135,6 +178,7 @@ export async function validateReleaseEvidence({ reportPath, manifest, releaseDir
     problems.push('Evidence is not a supported, non-static strict gate run.');
   }
   if (report.source?.gitCommit !== source?.gitCommit || report.source?.gitDirty !== false) problems.push('Gate evidence belongs to a different or dirty source revision.');
+  if (report.buildProfile != null) problems.push(...publicReleaseProfileSummaryProblems({ profile: report.buildProfile, manifest }));
   try {
     if (report.version !== manifest.version || report.candidateSha256 !== candidateDigest(manifest)) problems.push('Gate evidence belongs to a different candidate artifact set.');
   } catch { problems.push('Candidate identity cannot be verified.'); }
@@ -181,7 +225,7 @@ export async function validateReleaseEvidence({ reportPath, manifest, releaseDir
   }
   try {
     if (report.installed?.directory !== 'installed' || !Array.isArray(report.installed.files) || report.installed.files.length === 0) throw new Error('missing installed evidence');
-    const actual = await evaluateInstalledEvidence({ manifest, evidenceDir: within(root, 'installed') });
+    const actual = await evaluateInstalledEvidence({ manifest, evidenceDir: within(root, 'installed'), buildProfile: report.buildProfile ?? null });
     if (!actual.ok) problems.push(...actual.checks.filter((c) => c.status !== 'PASS').map((c) => `${c.id}: ${c.status}`));
     const expectedFiles = new Map(report.installed.files.map((file) => [file.path, file.sha256]));
     if (expectedFiles.size !== report.installed.files.length || actual.files.length !== expectedFiles.size) problems.push('Installed evidence inventory changed or contains duplicates.');

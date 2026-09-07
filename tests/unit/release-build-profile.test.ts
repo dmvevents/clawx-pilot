@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { publicReleaseProfileProblems } from '../../scripts/release-build-profile.mjs';
+import { publicReleaseProfileProblems, publicReleaseProfileSummaryProblems, sanitizePublicReleaseProfile } from '../../scripts/release-build-profile.mjs';
 
 const commit = '0123456789abcdef0123456789abcdef01234567';
 const builtAt = '2026-09-07T00:00:00.000Z';
@@ -14,7 +14,7 @@ type Bundle = ReturnType<typeof validBundle>;
 
 function validBundle() {
   const source = { schemaVersion: 1, gitCommit: commit, gitDirty: false, gitStatusHash: null, builtAt, recordedAt: builtAt };
-  const sourceForReceipt = { gitCommit: commit, gitDirty: false, gitStatusHash: null, builtAt };
+  const sourceForReceipt = { schemaVersion: 1, gitCommit: commit, gitDirty: false, gitStatusHash: null, builtAt, recordedAt: builtAt };
   return {
     profile: {
       schemaVersion: 1,
@@ -90,6 +90,26 @@ describe('release build profile publication guard', () => {
     const result = runCli(bundle);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('PASS: selected Windows build provenance is public keyless and source-bound');
+  });
+
+  it('accepts the sanitized profile summary replayed from a release-evidence bundle', () => {
+    const bundle = validBundle();
+    const sanitized = sanitizePublicReleaseProfile(bundle.profile);
+
+    expect(sanitized).not.toHaveProperty('limitations');
+    expect(publicReleaseProfileSummaryProblems({ profile: sanitized, manifest: bundle.manifest })).toEqual([]);
+  });
+
+  it('rejects sanitized profile summaries that are malformed or mismatched to manifest source', () => {
+    const bundle = validBundle();
+    expect(publicReleaseProfileSummaryProblems({
+      profile: { ...sanitizePublicReleaseProfile(bundle.profile), schemaVersion: 2 },
+      manifest: bundle.manifest,
+    })).toContain('release-build-profile has unsupported schema.');
+    expect(publicReleaseProfileSummaryProblems({
+      profile: { ...sanitizePublicReleaseProfile(bundle.profile), sourceGitCommit: 'f'.repeat(40) },
+      manifest: bundle.manifest,
+    })).toContain('release-build-profile sourceGitCommit does not match release-build-source.');
   });
 
   it('executable CLI rejects missing, invalid or mismatched profile commits', () => {

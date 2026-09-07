@@ -63,11 +63,13 @@ async function runGateWithMocks({
   env = {},
   cdpUp = true,
   outlookTab = true,
+  buildProfileError = null,
 }: {
   argv?: string[];
   env?: Record<string, string>;
   cdpUp?: boolean;
   outlookTab?: boolean;
+  buildProfileError?: string | null;
 } = {}) {
   const source = readFileSync('scripts/ga-gate.mjs', 'utf8');
   const transformed = source
@@ -77,7 +79,7 @@ async function runGateWithMocks({
     .replace("import { classifyRow, scorecard } from './ga-gate-verdict.mjs';", 'const { classifyRow, scorecard } = verdict;')
     .replace("import { readCurrentSource } from './release-build-source.mjs';", 'const { readCurrentSource } = evidence;')
     .replace("import { evaluateInstalledEvidence } from './installed-release-evidence.mjs';", 'const { evaluateInstalledEvidence } = evidence;')
-    .replace("import { candidateProblems, validateReleaseEvidence, writeReleaseEvidence } from './release-evidence.mjs';", 'const { candidateProblems, validateReleaseEvidence, writeReleaseEvidence } = evidence;');
+    .replace("import { candidateProblems, loadReleaseBuildProfile, validateReleaseEvidence, writeReleaseEvidence } from './release-evidence.mjs';", 'const { candidateProblems, loadReleaseBuildProfile, validateReleaseEvidence, writeReleaseEvidence } = evidence;');
   const spawned: string[] = [];
   const writes: Array<{ file: string; text: string }> = [];
   let output = '';
@@ -95,6 +97,7 @@ async function runGateWithMocks({
   };
   const fakeConsole = {
     log: (text = '') => { output += `${text}\n`; },
+    error: (text = '') => { output += `${text}\n`; },
   };
   const fakeChildProcess = {
     spawnSync: (_bin: string, args: string[]) => {
@@ -133,6 +136,10 @@ async function runGateWithMocks({
       evidence: {
         readCurrentSource: () => ({ gitCommit: 'a'.repeat(40), gitDirty: false }),
         candidateProblems: () => ['No source-bound candidate in this runner fixture.'],
+        loadReleaseBuildProfile: () => {
+          if (buildProfileError) throw new Error(buildProfileError);
+          return null;
+        },
         evaluateInstalledEvidence: async () => ({ ok: false, checks: [], files: [] }),
         writeReleaseEvidence: async () => '/fixture/release-evidence.json',
         validateReleaseEvidence: async () => ({ ok: false, problems: ['No installed candidate'] }),
@@ -458,6 +465,17 @@ describe('scorecard — the headline may not over- or under-claim coverage', () 
     expect(run.exitCode).toBe(1);
     expect(run.output).toContain('GA_GATE_SEND=1 but no Outlook tab is open');
     expect(run.spawned.some((cmd) => cmd.includes('v2-send-test.ts'))).toBe(false);
+  });
+
+  it('the executable gate exits before live commands when the provided build profile is invalid', async () => {
+    const run = await runGateWithMocks({
+      env: { GA_GATE_BUILD_PROFILE: '/fixture/bad-profile.json' },
+      buildProfileError: 'release-build-profile is unsupported for this fixture',
+    });
+
+    expect(run.exitCode).toBe(3);
+    expect(run.output).toContain('release-build-profile is unsupported for this fixture');
+    expect(run.spawned).toEqual([]);
   });
 
   it('the executable gate preserves GA_GATE_STATIC=1 as an explicit live-lane exclusion', async () => {

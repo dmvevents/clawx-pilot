@@ -18,6 +18,7 @@ export type InstalledEvidenceFixtureOptions = {
   manifest: InstalledEvidenceFixtureManifest;
   startedAt?: string;
   completedAt?: string;
+  seedProfile?: 'seeded-private' | 'keyless-public';
 };
 
 const INSTALL_ROOT = 'C:\\Users\\clawxtest\\AppData\\Local\\Programs\\Ministry of Education';
@@ -50,6 +51,7 @@ export function writeInstalledReleaseEvidenceFixture({
   manifest,
   startedAt = '2026-09-07T01:02:03.000Z',
   completedAt = '2026-09-07T01:05:03.000Z',
+  seedProfile = 'seeded-private',
 }: InstalledEvidenceFixtureOptions) {
   const installer = manifest.artifacts.find((artifact) => artifact.kind === 'installer' && artifact.name.endsWith('.exe'));
   const appAsar = manifest.artifacts.find((artifact) => artifact.name === 'win:app.asar');
@@ -98,30 +100,45 @@ export function writeInstalledReleaseEvidenceFixture({
     coverage: ['Environment observations only', 'No clean-image attestation', 'No laptop-equivalence proof'],
   });
 
-  const installArtifacts = writeJson('install-artifacts.json', [
+  const presentInstallRows = [
     ['Ministry of Education.exe', '1'.repeat(64)],
     ['resources\\app.asar', appAsar.sha256],
     ['resources\\openclaw\\node_modules\\playwright-core\\package.json', '2'.repeat(64)],
     ['resources\\bin\\ffmpeg.exe', '3'.repeat(64)],
     ['resources\\bin\\WinSpeechRecognize.exe', '4'.repeat(64)],
-    ['resources\\resources\\cloud-gateway.json', '5'.repeat(64)],
     ['Desktop\\Ministry of Education.lnk', '6'.repeat(64)],
     ['Microsoft\\Windows\\Start Menu\\Programs\\Ministry of Education.lnk', '7'.repeat(64)],
-  ].map(([suffix, hash]) => ({
+  ];
+  if (seedProfile === 'seeded-private') presentInstallRows.splice(5, 0, ['resources\\resources\\cloud-gateway.json', '5'.repeat(64)]);
+  const absentCredentialRows = [
+    'resources\\resources\\cloud-gateway.json',
+    'resources\\resources\\cloud-gateway.key',
+    'resources\\resources\\azure-speech.json',
+    'resources\\resources\\azure-speech.key',
+  ].map((suffix) => ({
     Path: `${INSTALL_ROOT}\\${suffix}`,
-    Exists: true,
-    Length: 123,
-    Modified: '2026-09-07T01:03:00.0000000Z',
-    Sha256: hash,
-    SecretMetadataOnly: false,
-  })).concat({
+    Exists: false,
+    Length: null,
+    Modified: null,
+    Sha256: null,
+    SecretMetadataOnly: suffix.endsWith('.key'),
+  }));
+  const seededSecretRows = [{
     Path: `${INSTALL_ROOT}\\resources\\resources\\cloud-gateway.key`,
     Exists: true,
     Length: 42,
     Modified: '2026-09-07T01:03:00.0000000Z',
     Sha256: null,
     SecretMetadataOnly: true,
-  }));
+  }];
+  const installArtifacts = writeJson('install-artifacts.json', presentInstallRows.map(([suffix, hash]) => ({
+    Path: `${INSTALL_ROOT}\\${suffix}`,
+    Exists: true,
+    Length: 123,
+    Modified: '2026-09-07T01:03:00.0000000Z',
+    Sha256: hash,
+    SecretMetadataOnly: false,
+  })).concat(seedProfile === 'keyless-public' ? absentCredentialRows : seededSecretRows));
   const packages = writeText(
     'packages-nscc-presence.txt',
     [...EXTRA_BUNDLED_PACKAGES, 'nscc-2026.txt'].map((name) => `${name}=True`).join('\n'),

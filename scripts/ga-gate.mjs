@@ -44,7 +44,7 @@ import path from 'node:path';
 import { classifyRow, scorecard } from './ga-gate-verdict.mjs';
 import { readCurrentSource } from './release-build-source.mjs';
 import { evaluateInstalledEvidence } from './installed-release-evidence.mjs';
-import { candidateProblems, validateReleaseEvidence, writeReleaseEvidence } from './release-evidence.mjs';
+import { candidateProblems, loadReleaseBuildProfile, validateReleaseEvidence, writeReleaseEvidence } from './release-evidence.mjs';
 
 const STATIC_ONLY = process.env.GA_GATE_STATIC === '1';
 const FULL = process.env.GA_GATE_FULL === '1';
@@ -59,6 +59,13 @@ try {
   manifest = JSON.parse(readFileSync(process.env.GA_GATE_MANIFEST || `docs/release-manifests/${version}.json`, 'utf8'));
 } catch { /* Missing or malformed candidate is an explicit release blocker below. */ }
 const installedDir = process.env.GA_GATE_INSTALLED_EVIDENCE;
+let buildProfile = null;
+try {
+  buildProfile = loadReleaseBuildProfile({ profilePath: process.env.GA_GATE_BUILD_PROFILE, manifest, source: initialSource });
+} catch (error) {
+  console.error(`[ga-gate] ${error.message}`);
+  process.exit(3);
+}
 
 const T1_REQUIRED_CRITERIA = [
   't1-outlook-eval',
@@ -264,7 +271,7 @@ if (STATIC_ONLY) {
 // Three states, kept distinguishable — "bound but dead" must never read as up.
 if (installedDir && !STATIC_ONLY) {
   try {
-    const installed = await evaluateInstalledEvidence({ manifest, evidenceDir: installedDir });
+    const installed = await evaluateInstalledEvidence({ manifest, evidenceDir: installedDir, buildProfile });
     results.push({ id: 'installed Windows app evidence', tier: 'T2', box: 'KR2+W-matrix', status: installed.ok ? 'PASS' : 'FAIL', secs: 0, criteria: ['t2-installed-windows-app'], tail: installed.checks.filter((check) => check.status !== 'PASS').map((check) => `${check.id}=${check.status}`).join('; ') || 'Measured installed Windows evidence matches the candidate.' });
   } catch {
     results.push({ id: 'installed Windows app evidence', tier: 'T2', box: 'KR2+W-matrix', status: 'FAIL', secs: 0, criteria: ['t2-installed-windows-app'], tail: 'Installed producer evidence is invalid or unreadable.' });
@@ -318,7 +325,7 @@ if (RELEASE && (finalSource.gitCommit !== initialSource.gitCommit || finalSource
   provenance.tail = 'Source changed during acceptance or is not clean.';
 }
 const completedAt = new Date().toISOString();
-const evidenceInput = { outputDir: LOG_DIR, manifest, source: initialSource, rows: results, staticOnly: STATIC_ONLY, release: RELEASE, installedDir: STATIC_ONLY ? undefined : installedDir, startedAt, completedAt };
+const evidenceInput = { outputDir: LOG_DIR, manifest, source: initialSource, rows: results, staticOnly: STATIC_ONLY, release: RELEASE, installedDir: STATIC_ONLY ? undefined : installedDir, buildProfile, startedAt, completedAt };
 let reportPath;
 try {
   reportPath = await writeReleaseEvidence(evidenceInput);

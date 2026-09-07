@@ -45,7 +45,14 @@ describe('release publication workflow guards (CLWX-106)', () => {
     expect(workflow.on.workflow_dispatch.inputs.authorizedSendProof).toMatchObject({ default: false });
     const steps = jobSteps(workflow, 'collect-evidence');
     const gate = steps.find((step) => step.name === 'Run strict acceptance with measured Windows evidence');
-    expect(gate?.env).toMatchObject({ GA_GATE_RELEASE: '1', GA_GATE_STATIC: '0', GA_GATE_E2E: '1', GA_GATE_INSTALLED_EVIDENCE: '${{ inputs.installedEvidenceDir }}' });
+    expect(gate?.env).toMatchObject({
+      GA_GATE_RELEASE: '1',
+      GA_GATE_STATIC: '0',
+      GA_GATE_E2E: '1',
+      GA_GATE_INSTALLED_EVIDENCE: '${{ inputs.installedEvidenceDir }}',
+      GA_GATE_BUILD_PROFILE: '${{ runner.temp }}/acceptance-build/.tmp/release-build-profile.json',
+    });
+    expect(gate?.run).toContain('test -f "$GA_GATE_BUILD_PROFILE"');
     expect(gate?.run).toContain('node scripts/ga-gate.mjs --release');
     expect(gate?.run).toContain('node scripts/release-evidence.mjs check');
     expect(gate?.run).not.toContain('|| true');
