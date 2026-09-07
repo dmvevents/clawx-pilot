@@ -32,9 +32,11 @@
  *   pnpm harness:artifact --node-bin /path/to/packaged/node   # spawn rows
  *   #   under a REAL packaged node binary (Windows-lane / ELECTRON_RUN_AS_NODE
  *   #   parity runs); default is the dev process.execPath.
- *   # --stage-dir always refreshes the gateway copy from build/openclaw;
- *   # --reuse-bundle skips the refresh (negative-control probes only —
- *   # a reused copy may be STALE vs a rebuilt bundle).
+ *   # --stage-dir normally refreshes the gateway copy from build/openclaw;
+ *   # --reuse-bundle skips the refresh and requires an existing
+ *   # <stage-dir>/resources/openclaw bundle (native diagnostics /
+ *   # negative-control probes only — a reused copy may be STALE vs a
+ *   # rebuilt bundle unless the caller binds provenance separately).
  *   # Staged-PLUGIN mutations for falsifiability probes: the plugin copy is
  *   # re-staged on EVERY harness run, so mutate a kept stage and drive
  *   # scripts/harness-artifact-child.mjs directly (CLAWX_APP_RESOURCES set),
@@ -53,8 +55,8 @@
  *     from the fake shape: the real gateway dist under a faked electron env
  *     without real electron modules would test an untruthful combination —
  *     the true utility-env gateway run is the Windows/VM lane.
- *   - GATEWAY-PROCESS TRANSPORT: rows boot the STAGED gateway CLI
- *     (openclaw.mjs plugins inspect --json) with a hermetic
+ *   - GATEWAY-PROCESS TRANSPORT: rows import the STAGED OpenClaw
+ *     plugin loader scoped to the MoE plugin with a hermetic
  *     OPENCLAW_STATE_DIR whose config points plugins.load.paths at the
  *     staged plugin — the plugin loads through the REAL gateway plugin-host
  *     (not the harness mock) and the reported toolNames must match the
@@ -87,9 +89,11 @@ const OPENCLAW_DIR = path.join(REPO_ROOT, 'build', 'openclaw');
 const BUNDLE_NM = path.join(OPENCLAW_DIR, 'node_modules');
 const PLUGIN_SRC = path.join(REPO_ROOT, 'extensions', 'moe-principal-assistant');
 const CHILD_SCRIPT = path.join(__dirname, 'harness-artifact-child.mjs');
+const TRANSPORT_CHILD_SCRIPT = path.join(__dirname, 'harness-artifact-transport-child.mjs');
 const ROW_TIMEOUT_MS = 60_000;
-// The gateway CLI loads every discovered stock plugin before answering
-// inspect; give transport rows more headroom than a doc-tools child. The
+// The transport row imports the staged OpenClaw plugin-host in a child. Give
+// it more headroom than a doc-tools child because it still loads the shipped
+// plugin runtime and dependencies. The
 // env override exists for slow build hosts — the fast lane is a release
 // gate and a red-for-CPU-reasons build needs a knob, not a code edit
 // (isolation lens, 2026-09-06).
@@ -329,9 +333,9 @@ const FULL_PLUGIN_CONFIG = {
 // ── gateway-process transport (CLWX-77 trail leg, 2026-09-06)
 //
 // The register-mode rows prove the plugin against a MOCK gateway API; these
-// prove it through the REAL gateway plugin-host: the staged openclaw.mjs
-// (`plugins inspect <id> --json`) loads the plugin exactly like the shipped
-// gateway process does (same loader, same registerTool surface) and reports
+// prove it through the REAL gateway plugin-host: a scoped child imports the
+// staged OpenClaw loader with onlyPluginIds=['moe-principal-assistant'], the
+// same registerTool surface used by the shipped gateway process, and reports
 // the registered toolNames. State is hermetic (OPENCLAW_STATE_DIR inside the
 // stage); network is stubbed via a --require preload (fetch records+rejects,
 // no socket) so the CLWX-86 capability probe deterministically fails open.
@@ -343,9 +347,10 @@ export const TRANSPORT_FULL_EXPECTED = [
 ];
 
 /**
- * Extract the top-level JSON object from `plugins inspect --json` stdout,
- * which interleaves plugin register log lines and config warnings before the
- * JSON block (pure; unit-tested). Returns the parsed object or null.
+ * Extract the top-level JSON object from legacy `plugins inspect --json`
+ * stdout, which interleaves plugin register log lines and config warnings
+ * before the JSON block (pure; unit-tested). Retained for fixture/backward
+ * parser coverage; current transport rows use the scoped child verdict.
  */
 export function parseInspectJson(stdout) {
   if (typeof stdout !== 'string' || !stdout.trim()) return null;
@@ -368,8 +373,12 @@ export function parseInspectJson(stdout) {
  * match the contract inventory exactly (inventoryDiff semantics).
  */
 export function checkTransportInspect(expectedTools, payload) {
+  if (Array.isArray(payload?.plugins)) {
+    return `transport payload included ${payload.plugins.length} plugin(s); expected a single scoped plugin payload`;
+  }
   const plugin = payload?.plugin;
   if (!plugin) return 'inspect payload has no plugin object';
+  if (plugin.id !== TRANSPORT_PLUGIN_ID) return `plugin id is "${plugin.id ?? 'unknown'}", expected "${TRANSPORT_PLUGIN_ID}"`;
   if (plugin.status !== 'loaded') return `plugin status is "${plugin.status}", expected "loaded"`;
   if (plugin.activated !== true) return `plugin not activated (activationReason: ${plugin.activationReason ?? 'unknown'})`;
   return inventoryDiff(expectedTools, plugin.toolNames);
@@ -441,7 +450,7 @@ export function validateFastSelection(expandedRows, fastIds) {
 }
 
 // Written into the stage and passed via NODE_OPTIONS=--require so the
-// gateway CLI process gets the same deterministic network isolation as the
+// transport child gets the same deterministic network isolation as the
 // register-mode children: every fetch attempt is rejected without a socket.
 // The sentinel write makes the stub FALSIFIABLE: NODE_OPTIONS is silently
 // ignored by some runtimes (packaged Electron), and a transport row must
@@ -653,7 +662,7 @@ export const MATRIX = [
     },
   },
   {
-    // Gateway-process transport, no host-API env: the staged gateway CLI
+    // Gateway-process transport, no host-API env: the staged OpenClaw loader
     // loads the staged plugin through the REAL plugin-host; without the
     // host-API env exactly doc + principal register (the honest-degradation
     // contract, mirrored from plugin-registration.no-hostapi but through the
@@ -798,12 +807,11 @@ async function stageArtifact(stageDir, { reuseBundle = false } = {}) {
 
 /**
  * Run a gateway-transport row: seed a hermetic OPENCLAW_STATE_DIR whose
- * config points plugins.load.paths at the STAGED plugin, then spawn the
- * STAGED gateway CLI (`plugins inspect <id> --json`) and grade the reported
- * plugin state. The gateway process gets the fetch-stub preload via
- * NODE_OPTIONS (plain-node CLI — NODE_OPTIONS is honored here, unlike the
- * packaged Electron utilityProcess), so the CLWX-86 capability probe fails
- * open deterministically and no socket is ever opened.
+ * config points plugins.load.paths at the STAGED plugin, then spawn a small
+ * child that imports the STAGED OpenClaw plugin loader and scopes it to the
+ * MoE plugin. This keeps the real plugin-host boundary without accidentally
+ * running `plugins inspect`, whose diagnostics path loads every discovered
+ * OpenClaw plugin before filtering to the requested id on Windows.
  */
 async function runTransport(row, { pluginDest, gatewayDest, preloadPath }, stageDir, { nodeBin } = {}) {
   const stateDir = path.join(stageDir, 'state', row.id.replace(/[^a-z0-9_.-]/gi, '_'));
@@ -869,49 +877,70 @@ async function runTransport(row, { pluginDest, gatewayDest, preloadPath }, stage
   return new Promise((resolve) => {
     const child = spawn(
       nodeBin ?? process.execPath,
-      [path.join(gatewayDest, 'openclaw.mjs'), 'plugins', 'inspect', TRANSPORT_PLUGIN_ID, '--json'],
-      { cwd: gatewayDest, env, stdio: ['ignore', 'pipe', 'pipe'] },
+      [TRANSPORT_CHILD_SCRIPT, JSON.stringify({
+        gatewayDir: gatewayDest,
+        pluginId: TRANSPORT_PLUGIN_ID,
+        workspaceDir: path.join(fakeHome, '.openclaw', 'workspace'),
+      })],
+      { cwd: path.dirname(TRANSPORT_CHILD_SCRIPT), env, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (d) => { stdout += d; });
-    child.stderr.on('data', (d) => { stderr += d; });
+    let exitCode = null;
+    let exitSignal = null;
+    let settled = false;
+    const settle = (outcome) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(outcome);
+    };
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
-      resolve({ ok: false, infra: true, message: `transport row timed out after ${TRANSPORT_TIMEOUT_MS}ms` });
+      settle({ ok: false, infra: true, message: `transport row timed out after ${TRANSPORT_TIMEOUT_MS}ms` });
     }, TRANSPORT_TIMEOUT_MS);
+    child.stdout.on('data', (d) => { stdout += d; });
+    child.stderr.on('data', (d) => { stderr += d; });
     child.on('exit', (code, signal) => {
-      clearTimeout(timer);
-      if (signal || code !== 0) {
-        resolve({ ok: false, infra: true, message: `gateway CLI exited ${signal ?? code}; stderr: ${stderr.slice(0, 300)}` });
-        return;
-      }
+      exitCode = code;
+      exitSignal = signal;
+    });
+    child.on('close', (code, signal) => {
+      exitCode = exitCode ?? code;
+      exitSignal = exitSignal ?? signal;
       // The net-stub preload must PROVABLY have loaded — NODE_OPTIONS is
       // silently ignored by some runtimes (packaged Electron via
       // --node-bin), and an un-stubbed run only "passes" because the fake
-      // port happens to be closed on this machine.
+      // port happens to be closed on this machine. Parse on `close`, not
+      // `exit`, because `close` is the event that guarantees stdout/stderr
+      // streams have drained.
       if (!existsSync(netStubSentinel)) {
-        resolve({ ok: false, infra: true, message: 'net-stub preload never loaded (NODE_OPTIONS ignored by this runtime?) — refusing to grade an un-stubbed gateway run' });
+        settle({ ok: false, infra: true, message: 'net-stub preload never loaded (NODE_OPTIONS ignored by this runtime?) — refusing to grade an un-stubbed gateway run' });
         return;
       }
-      const payload = parseInspectJson(stdout);
-      if (!payload) {
-        resolve({ ok: false, infra: true, message: `gateway CLI produced no parsable inspect JSON; stdout tail: ${stdout.slice(-300)}` });
+      const line = stdout.split('\n').filter((l) => l.startsWith('CLAWX77_TRANSPORT_VERDICT:')).pop();
+      let outcome = null;
+      try {
+        outcome = JSON.parse(line.slice('CLAWX77_TRANSPORT_VERDICT:'.length));
+      } catch { /* no framed transport verdict — report below */ }
+      const folded = foldChildExit(exitCode, exitSignal, outcome, stderr.slice(0, 300));
+      if (!folded.ok) {
+        settle(folded);
         return;
       }
+      const payload = folded.result;
       // Stage-integrity gate BEFORE the inventory check: the plugin the
       // gateway reports must be the STAGED copy, not something an inherited
       // config/discovery path found elsewhere (Codex lane, 2026-09-06).
       const sourceVerdict = checkTransportSource(realPluginDest, payload);
       if (sourceVerdict !== true) {
-        resolve({ ok: false, infra: true, message: sourceVerdict });
+        settle({ ok: false, infra: true, message: sourceVerdict });
         return;
       }
-      resolve({ ok: true, result: payload });
+      settle({ ok: true, result: payload });
     });
     child.on('error', (err) => {
-      clearTimeout(timer);
-      resolve({ ok: false, infra: true, message: `gateway CLI spawn failed: ${err.message}` });
+      settle({ ok: false, infra: true, message: `transport child spawn failed: ${err.message}` });
     });
   });
 }
@@ -1053,13 +1082,19 @@ function parseArgs(argv) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  if (!existsSync(BUNDLE_NM)) {
-    console.error(`FAIL: gateway bundle not found at ${BUNDLE_NM} — run: pnpm exec zx scripts/bundle-openclaw.mjs`);
-    process.exit(1);
-  }
   const stageDir = args.stageDir
     ? path.resolve(args.stageDir)
     : await mkdtemp(path.join(os.tmpdir(), 'clawx-artifact-'));
+  const bundleNodeModules = args.reuseBundle
+    ? path.join(stageDir, 'resources', 'openclaw', 'node_modules')
+    : BUNDLE_NM;
+  if (!existsSync(bundleNodeModules)) {
+    const hint = args.reuseBundle
+      ? `prepare ${path.join(stageDir, 'resources', 'openclaw')} before using --reuse-bundle`
+      : 'run: pnpm exec zx scripts/bundle-openclaw.mjs';
+    console.error(`FAIL: gateway bundle not found at ${bundleNodeModules} — ${hint}`);
+    process.exit(1);
+  }
   // Equality matters as much as containment: `--stage-dir .` from the repo
   // root passed the old prefix check and would rm -rf tracked resources/
   // paths before staging 1.4GB INSIDE the repo (lens finding, 2026-09-06).
@@ -1158,9 +1193,10 @@ async function main() {
       `Staged plugin + FULL gateway (build/openclaw) outside the repo tree; each row`,
       `ran in a child process resolving deps ONLY from the staged copy`,
       `(CLAWX_APP_RESOURCES seam). Registration rows call the staged plugin's`,
-      `register() with a mock gateway API; gateway-transport rows boot the STAGED`,
-      `gateway CLI (plugins inspect --json) with a hermetic OPENCLAW_STATE_DIR — the`,
-      `plugin loads through the real gateway plugin-host. fetch is stubbed before the`,
+      `register() with a mock gateway API; gateway-transport rows import the STAGED`,
+      `OpenClaw plugin loader with onlyPluginIds=['moe-principal-assistant'] and a`,
+      `hermetic OPENCLAW_STATE_DIR — the plugin loads through the real gateway`,
+      `plugin-host while unrelated bundled plugins are excluded. fetch is stubbed before the`,
       `plugin loads in both modes — the full registration row asserts the stub`,
       `recorded the CLWX-86 probe attempt, and transport rows FAIL unless the`,
       `preload's load-sentinel exists — so the probe is deterministically`,
