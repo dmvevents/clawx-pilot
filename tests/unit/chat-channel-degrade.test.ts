@@ -1923,6 +1923,135 @@ describe('chat store: send-time channel degradation', () => {
     }
   });
 
+  it('keeps a pending chat.send acknowledgement alive until the send deadline, then adopts the run', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      let releaseSend: (value: { runId: string }) => void = () => {};
+      gatewayRpcMock.mockImplementation((method: string) => {
+        if (method === 'chat.send') {
+          return new Promise((resolve) => { releaseSend = resolve; });
+        }
+        return Promise.resolve(undefined);
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      const send = store.getState().sendMessage('cold local runtime first turn');
+      await vi.advanceTimersByTimeAsync(96_000);
+
+      expect(store.getState().sending).toBe(true);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toBeNull();
+      expect(degradeCalls()).toEqual([]);
+      expect(gatewayRpcMock.mock.calls.some((call) => call[0] === 'chat.abort')).toBe(false);
+
+      releaseSend({ runId: 'run-after-cold-start' });
+      await send;
+
+      expect(store.getState().sending).toBe(true);
+      expect(store.getState().activeRunId).toBe('run-after-cold-start');
+      expect(store.getState().error).toBeNull();
+
+      await vi.advanceTimersByTimeAsync(80_000);
+      expect(store.getState().sending).toBe(true);
+      expect(store.getState().activeRunId).toBe('run-after-cold-start');
+
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-after-cold-start',
+        sessionKey: 'agent:main:main',
+        message: { role: 'assistant', id: 'slow-final', content: [{ type: 'text', text: 'ready after runtime preparation' }] },
+      });
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().messages.some((message) => message.id === 'slow-final')).toBe(true);
+      expect(degradeCalls()).toEqual([]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a pending media send acknowledgement bounded by the same send deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      let releaseMediaSend: (value: { success: boolean; result: { runId: string } }) => void = () => {};
+      hostApiFetchMock.mockImplementation((path: unknown) => {
+        if (String(path) === '/api/chat/send-with-media') {
+          return new Promise((resolve) => { releaseMediaSend = resolve; });
+        }
+        if (String(path) === '/api/settings/degradeChannel') {
+          return Promise.resolve({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
+        }
+        if (String(path) === '/api/provider-accounts/default/probe') {
+          return Promise.resolve({ success: true, valid: true, accountId: 'google', channel: 'online', status: 200, reason: 'ok' });
+        }
+        return Promise.resolve({ success: true });
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      const send = store.getState().sendMessage('process this attachment', [{
+        fileName: 'sample.png',
+        mimeType: 'image/png',
+        fileSize: 42,
+        stagedPath: '/tmp/sample.png',
+        preview: null,
+      }]);
+      await vi.advanceTimersByTimeAsync(96_000);
+
+      expect(store.getState().sending).toBe(true);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toBeNull();
+      expect(degradeCalls()).toEqual([]);
+
+      releaseMediaSend({ success: true, result: { runId: 'run-media-cold-start' } });
+      await send;
+
+      expect(store.getState().sending).toBe(true);
+      expect(store.getState().activeRunId).toBe('run-media-cold-start');
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('fails visibly at the existing send deadline when chat.send never acknowledges', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation((method: string) => {
+        if (method === 'chat.send') {
+          return new Promise(() => {});
+        }
+        return Promise.resolve(undefined);
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      void store.getState().sendMessage('send that never receives a run id');
+      await vi.advanceTimersByTimeAsync(119_000);
+
+      expect(store.getState().sending).toBe(true);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toBeNull();
+
+      await vi.advanceTimersByTimeAsync(2_000);
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toMatch(/No response received from the model/);
+      expect(degradeCalls()).toEqual([]);
+      expect(gatewayRpcMock.mock.calls.some((call) => call[0] === 'chat.abort')).toBe(false);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it('ignores late events from a run already terminated by the watchdog', async () => {
     vi.useFakeTimers();
     try {
@@ -1997,6 +2126,121 @@ describe('chat store: send-time channel degradation', () => {
         message: { role: 'assistant', id: 'too-late', content: [{ type: 'text', text: 'too late' }] },
       });
       expect(store.getState().messages.some((message) => message.id === 'too-late')).toBe(false);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('aborts a late run id when the user cancels before the acknowledgement arrived', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      let releaseSend: (value: { runId: string }) => void = () => {};
+      gatewayRpcMock.mockImplementation((method: string) => {
+        if (method === 'chat.send') {
+          return new Promise((resolve) => { releaseSend = resolve; });
+        }
+        return Promise.resolve(undefined);
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      const send = store.getState().sendMessage('cancel before run id');
+      await vi.advanceTimersByTimeAsync(40_000);
+      await store.getState().abortRun();
+
+      releaseSend({ runId: 'run-after-cancel' });
+      await send;
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(gatewayRpcMock.mock.calls).toContainEqual(['chat.abort', {
+        sessionKey: 'agent:main:main',
+        runId: 'run-after-cancel',
+      }]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('aborts a late run id after a newer send supersedes the pending acknowledgement', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      let firstRelease: (value: { runId: string }) => void = () => {};
+      let sendCount = 0;
+      gatewayRpcMock.mockImplementation((method: string) => {
+        if (method === 'chat.send') {
+          sendCount += 1;
+          if (sendCount === 2) return Promise.resolve({ runId: 'run-second' });
+          return new Promise((resolve) => {
+            firstRelease = (value: { runId: string }) => {
+              resolve(value);
+            };
+          });
+        }
+        return Promise.resolve(undefined);
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      const firstSend = store.getState().sendMessage('first pending send');
+      await vi.advanceTimersByTimeAsync(40_000);
+      await store.getState().sendMessage('second accepted send');
+
+      expect(store.getState().activeRunId).toBe('run-second');
+
+      firstRelease({ runId: 'run-after-superseded' });
+      await firstSend;
+
+      expect(store.getState().activeRunId).toBe('run-second');
+      expect(store.getState().lastSentPayload?.text).toBe('second accepted send');
+      expect(gatewayRpcMock.mock.calls).toContainEqual(['chat.abort', {
+        sessionKey: 'agent:main:main',
+        runId: 'run-after-superseded',
+      }]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('aborts a late run id when the user switched sessions before the acknowledgement arrived', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      let releaseSend: (value: { runId: string }) => void = () => {};
+      gatewayRpcMock.mockImplementation((method: string) => {
+        if (method === 'chat.send') {
+          return new Promise((resolve) => { releaseSend = resolve; });
+        }
+        return Promise.resolve(undefined);
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      const send = store.getState().sendMessage('run id for old session');
+      await vi.advanceTimersByTimeAsync(40_000);
+      store.setState({ currentSessionKey: 'agent:main:other-session' });
+
+      releaseSend({ runId: 'run-after-session-switch' });
+      await send;
+
+      expect(store.getState().activeRunId).toBeNull();
+      expect(gatewayRpcMock.mock.calls).toContainEqual(['chat.abort', {
+        sessionKey: 'agent:main:main',
+        runId: 'run-after-session-switch',
+      }]);
+
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-after-session-switch',
+        sessionKey: 'agent:main:main',
+        message: { role: 'assistant', id: 'wrong-session-final', content: [{ type: 'text', text: 'old session answer' }] },
+      });
+      expect(store.getState().messages.some((message) => message.id === 'wrong-session-final')).toBe(false);
     } finally {
       vi.clearAllTimers();
       vi.useRealTimers();

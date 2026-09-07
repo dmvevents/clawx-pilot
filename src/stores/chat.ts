@@ -1811,6 +1811,10 @@ const SESSION_PATCH_TIMEOUT_MS = 15_000;
  */
 const DEGRADE_ROUTE_TIMEOUT_MS = 20_000;
 
+// Existing Gateway chat.send budget. The renderer watchdog must not declare a
+// pre-ack send dead before this deadline, but it also must not wait longer.
+const CHAT_SEND_TIMEOUT_MS = 120_000;
+
 /**
  * The reconcile below is a store WRITE sitting in front of the first send of a
  * session, so it gets a much smaller budget than a cutover: a session-store
@@ -3192,6 +3196,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // Add user message optimistically (with local file metadata for UI display)
     const nowMs = Date.now();
+    const sendStartedAtMs = nowMs;
     const userMsg: RawMessage = {
       role: 'user',
       content: trimmed || (attachments?.length ? '(file attached)' : ''),
@@ -3280,6 +3285,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (state.currentSessionKey !== currentSessionKey) return;
       if ((state.lastSentPayload?.generation ?? -1) !== sendGeneration) return;
 
+      const elapsedSinceSendMs = Date.now() - sendStartedAtMs;
+      const waitingForSendAck = !state.activeRunId;
+      if (waitingForSendAck && elapsedSinceSendMs < CHAT_SEND_TIMEOUT_MS) {
+        setTimeout(checkStuck, Math.max(1, Math.min(10_000, CHAT_SEND_TIMEOUT_MS - elapsedSinceSendMs)));
+        return;
+      }
+
       const staleForMs = Date.now() - _lastChatEventAt;
       if (staleForMs < SAFETY_TIMEOUT_MS) {
         setTimeout(checkStuck, 10_000);
@@ -3299,7 +3311,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           console.warn('[chat] best-effort abort after stale run watchdog failed:', error);
         });
       }
-      const shouldTryDegrade = !_streamEventSeenThisSend;
+      const shouldTryDegrade = Boolean(stalledRunId) && !_streamEventSeenThisSend;
       const toolsRan = state.streamingTools.length > 0 || state.pendingToolImages.length > 0;
 
       // CLWX-78 residual: route a stall through the same send-time failover as
@@ -3358,9 +3370,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       let result: { success: boolean; result?: { runId?: string }; error?: string };
 
-      // Longer timeout for chat sends to tolerate high-latency networks (avoids connect error)
-      const CHAT_SEND_TIMEOUT_MS = 120_000;
-
       if (hasMedia) {
         result = await hostApiFetch<{ success: boolean; result?: { runId?: string }; error?: string }>(
           '/api/chat/send-with-media',
@@ -3405,7 +3414,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       } else if (result.result?.runId) {
         const stateAfterSend = get();
-        if (!stateAfterSend.sending || (stateAfterSend.lastSentPayload?.generation ?? -1) !== sendGeneration) {
+        if (
+          !stateAfterSend.sending
+          || stateAfterSend.currentSessionKey !== currentSessionKey
+          || (stateAfterSend.lastSentPayload?.generation ?? -1) !== sendGeneration
+        ) {
           _watchdogTerminatedRunIds.add(result.result.runId);
           void useGatewayStore.getState().rpc('chat.abort', {
             sessionKey: currentSessionKey,
@@ -3418,6 +3431,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // Bind this run to the generation that issued it so a terminal event
         // can tell whether it still owns lastSentPayload (CLWX-94).
         _runGenerationById.set(result.result.runId, sendGeneration);
+        _lastChatEventAt = Date.now();
         set({ activeRunId: result.result.runId });
       }
     } catch (err) {
