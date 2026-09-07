@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -68,11 +68,6 @@ function psSingleQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-function writeExecutable(path: string, content: string): void {
-  writeFileSync(path, content);
-  chmodSync(path, 0o755);
-}
-
 function sha256(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
@@ -130,17 +125,14 @@ describe('pilot app window recording script', () => {
     if (!pwsh) return;
 
     withTempDir((dir) => {
-      const fakeTool = join(dir, 'fake tool.sh');
+      const fakeTool = join(dir, 'fake-tool-argv.cjs');
       const stdoutPath = join(dir, 'stdout with spaces.txt');
       const stderrPath = join(dir, 'stderr with spaces.txt');
-      writeExecutable(
+      writeFileSync(
         fakeTool,
-        `#!/usr/bin/env bash
-printf '%s\n' "$#"
-printf '%s\n' "$1"
-printf '%s\n' "$2"
-printf '%s\n' "$3"
-printf 'warn with spaces\n' >&2
+        `process.stdout.write(String(process.argv.length - 2) + '\\n');
+for (const arg of process.argv.slice(2)) process.stdout.write(arg + '\\n');
+process.stderr.write('warn with spaces\\n');
 `,
       );
 
@@ -149,7 +141,7 @@ printf 'warn with spaces\n' >&2
 $ErrorActionPreference = 'Stop'
 $env:CLAWX_RECORD_APP_WINDOW_DOT_SOURCE_ONLY = '1'
 . ${psSingleQuote(scriptPath)}
-$result = Invoke-ExternalTool -FilePath ${psSingleQuote(fakeTool)} -Arguments @('first arg', 'title=Ministry of Education', 'C:\\Path With Spaces\\app-window.mp4') -StdoutPath ${psSingleQuote(stdoutPath)} -StderrPath ${psSingleQuote(stderrPath)}
+$result = Invoke-ExternalTool -FilePath ${psSingleQuote(process.execPath)} -Arguments @(${psSingleQuote(fakeTool)}, 'first arg', 'title=Ministry of Education', 'C:\\Path With Spaces\\app-window.mp4') -StdoutPath ${psSingleQuote(stdoutPath)} -StderrPath ${psSingleQuote(stderrPath)}
 [pscustomobject]@{
   exitCode = $result.exitCode
   stdout = Get-Content -LiteralPath ${psSingleQuote(stdoutPath)} -Raw

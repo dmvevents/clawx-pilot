@@ -10,7 +10,7 @@ import {
   readdirSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { platform, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -21,6 +21,9 @@ const gatewayProducerPath = join(process.cwd(), 'windows-pilot', 'scripts', 'pil
 const script = readFileSync(scriptPath, 'utf8');
 const gatewayProducer = readFileSync(gatewayProducerPath, 'utf8');
 const require = createRequire(import.meta.url);
+// This collector runs on the macOS/Linux SSH controller. Its PowerShell and
+// embedded Node producers below remain covered on native Windows.
+const posixControllerIt = platform() === 'win32' ? it.skip : it;
 
 function indexOfOrThrow(needle: string): number {
   const index = script.indexOf(needle);
@@ -279,11 +282,11 @@ write_vm_run_json
 }
 
 describe('vm-verify moe.19 evidence collection contract', () => {
-  it('is valid bash after evidence collector changes', () => {
+  posixControllerIt('is valid bash after evidence collector changes', () => {
     expect(() => execFileSync('bash', ['-n', scriptPath], { stdio: 'pipe' })).not.toThrow();
   });
 
-  it('captures producer stdout and stderr sidecar bytes and records hashes', () => {
+  posixControllerIt('captures producer stdout and stderr sidecar bytes and records hashes', () => {
     withTempDir((dir) => {
       const producer = join(dir, 'producer.sh');
       writeExecutable(
@@ -312,7 +315,7 @@ printf '%s' "$EVIDENCE_FILES" > ${shQuote(join(dir, 'evidence-files.txt'))}
     });
   });
 
-  it('classifies gateway producer prerequisite exits as BLOCKED with captured output', () => {
+  posixControllerIt('classifies gateway producer prerequisite exits as BLOCKED with captured output', () => {
     withTempDir((dir) => {
       const producer = join(dir, 'gateway-blocked.sh');
       writeExecutable(
@@ -337,7 +340,7 @@ exit 2
     });
   });
 
-  it('classifies Electron CDP producer exit 4 as BLOCKED, not product failure', () => {
+  posixControllerIt('classifies Electron CDP producer exit 4 as BLOCKED, not product failure', () => {
     withTempDir((dir) => {
       const producer = join(dir, 'electron-blocked.sh');
       writeExecutable(
@@ -362,7 +365,7 @@ exit 4
     });
   });
 
-  it('does not treat every exit 2 as BLOCKED', () => {
+  posixControllerIt('does not treat every exit 2 as BLOCKED', () => {
     withTempDir((dir) => {
       const producer = join(dir, 'office-fail.sh');
       writeExecutable(
@@ -386,7 +389,7 @@ exit 2
     });
   });
 
-  it('writes only portable acceptance evidence entries into vm-run metadata', () => {
+  posixControllerIt('writes only portable acceptance evidence entries into vm-run metadata', () => {
     withTempDir((dir) => {
       const result = runVmRunWriterInvocation(
         dir,

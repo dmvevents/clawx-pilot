@@ -1,0 +1,10 @@
+# Keep executable modules, shell scripts and embedded probe text identical on
+# Windows and POSIX checkouts. CRLF shebang modules fail the pinned Vitest loader.
+* text=auto eol=lf
+
+# Native Windows command scripts retain their conventional line endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Some PDFs contain only text bytes; Git must not normalize their xref offsets.
+*.pdf binary
