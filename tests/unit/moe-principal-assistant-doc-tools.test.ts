@@ -143,7 +143,7 @@ describe('document.* native tools (Lane A — Windows-safe)', () => {
     const { findDocuments } = await loadDocTools();
     const previousHome = process.env.HOME;
     const previousUserProfile = process.env.USERPROFILE;
-    const fakeHome = path.join(workDir, `global-budget-home-${process.pid}`);
+    const fakeHome = path.join(canonicalPath(workDir), `global-budget-home-${process.pid}`);
     const downloads = path.join(fakeHome, 'Downloads');
     const documents = path.join(fakeHome, 'Documents');
     mkdirSync(downloads, { recursive: true });
