@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-07T13:30:43.895478+00:00",
+  "updatedAt": "2026-09-07T13:55:07.963042+00:00",
   "purpose": "Completion planning only; this file is not a release verdict or a substitute for machine-produced acceptance evidence.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -80,7 +80,7 @@
         "build_process"
       ],
       "evidenceSummary": "Run 34123550898 failed after 201 files / 2011 tests and seven artifact rows passed. The scoped-loader repair now passes both native Windows diagnostics (42413ms cold no-hostapi, 6094ms full) under the unchanged 120-second limit, with exact host/guest script hashes. This is diagnostic evidence, not a moe.21 installer.",
-      "nextAction": "Integrate the reviewed CLWX-117/96 runtime slice with the committed transport and process changes, validate the actual public diff, freeze an exact clean SHA and run one new native package.",
+      "nextAction": "Build once from the frozen reviewed public source, including native-proven transport, lifecycle/retry repairs and process workflow; validate installer/profile/source/compiled receipts and manifest before VM transfer.",
       "exitCriterion": "Native package succeeds from the exact clean reviewed SHA; installer, profile, source and compiled receipts plus manifest validate.",
       "references": [
         "https://github.com/dmvevents/clawx-pilot/actions/runs/34123550898",
@@ -122,8 +122,8 @@
       "dependsOn": [
         "installed_candidate"
       ],
-      "evidenceSummary": "Acknowledgement and per-turn ownership fixes have source/Electron regression evidence. Installed moe.20 reproduced late duplicate recovery; current installed proof missing.",
-      "nextAction": "Complete CLWX-96 through the existing provider-probe and watchdog owner, then run ordinary Online turn, cancellation, late events, controlled mid-turn provider failure and next-turn recovery.",
+      "evidenceSummary": "Current source passes 117 focused tests, six Electron interactions and independent review: owned-progress watchdog, exact old-run abort, strict Main-owned saved-provider proof, acknowledged inactive-pin recovery and per-episode retry accounting. Installed moe.20 remains the failing older baseline; moe.21 installed proof is pending.",
+      "nextAction": "On the frozen installer, verify ordinary Online completion, cancellation, stalled/late runs, controlled provider outage and repeated next-turn recovery without restarting.",
       "exitCriterion": "Each accepted turn reaches one answer, visible failure or cancellation within the test bound; no duplicate turn/effect; recovery works without restart and preserves user channel intent. A successful actual Online provider probe clears the owned stale failure notice. Accepted sends without acknowledgement/events terminate visibly.",
       "references": [
         "src/stores/chat.ts",
@@ -142,8 +142,8 @@
       "dependsOn": [
         "installed_candidate"
       ],
-      "evidenceSummary": "Latest direct installed reproduction parks at top-level sessions_yield. Source audit confirms the deny-list omission and active-stream watchdog gap. Targeted current-source repair is authorized; held trim branch remains untouched.",
-      "nextAction": "Add sessions_yield to the on-device deny boundary and extend the existing terminal watchdog for the demonstrated stalled-tool/silent-send modes; prove no stale timer can terminate a newer or progressing turn. Then run ordinary installed prompts without test-only steering.",
+      "evidenceSummary": "Current source denies sessions_yield and terminalizes stalled tool/partial-stream runs using owned progress, including no-op and empty-tool-array regressions. Source and Electron checks pass; the latest installed moe.20 reproduction remains a failure until the new candidate is tested.",
+      "nextAction": "Run an ordinary installed on-device prompt and offline document path without test-only steering; prove terminal output, stalled-run recovery and no non-loopback egress.",
       "exitCriterion": "Nonempty terminal answer without top-level sessions_yield; a stalled tool yields a visible terminal outcome; offline document path has no non-loopback egress.",
       "references": [
         "electron/utils/ondevice-tool-policy.ts",
