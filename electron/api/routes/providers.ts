@@ -18,12 +18,112 @@ import {
   syncUpdatedProviderToRuntime,
 } from '../../services/providers/provider-runtime-sync';
 import { validateApiKeyWithProvider } from '../../services/providers/provider-validation';
+import { classifyAccount, type ProviderChannel } from '../../services/providers/channel-router';
 import { getProviderService } from '../../services/providers/provider-service';
 import { providerAccountToConfig } from '../../services/providers/provider-store';
 import type { ProviderAccount } from '../../shared/providers/types';
 import { logger } from '../../utils/logger';
 
 const legacyProviderRoutesWarned = new Set<string>();
+
+const STORED_DEFAULT_PROBE_TIMEOUT_MS = 5_000;
+
+type StoredDefaultProviderProbeReason =
+  | 'ok'
+  | 'missing-default'
+  | 'missing-account'
+  | 'offline-channel'
+  | 'missing-key'
+  | 'unsupported'
+  | 'unavailable'
+  | 'changed-default'
+  | 'probe-error';
+
+type StoredDefaultProviderProbeResult = {
+  success: true;
+  valid: boolean;
+  accountId: string | null;
+  channel: ProviderChannel | null;
+  status: number | null;
+  reason: StoredDefaultProviderProbeReason;
+};
+
+function storedDefaultProviderProbeResult(
+  reason: StoredDefaultProviderProbeReason,
+  options: { accountId?: string | null; channel?: ProviderChannel | null; status?: number | null; valid?: boolean } = {},
+): StoredDefaultProviderProbeResult {
+  return {
+    success: true,
+    valid: options.valid ?? reason === 'ok',
+    accountId: options.accountId ?? null,
+    channel: options.channel ?? null,
+    status: options.status ?? null,
+    reason,
+  };
+}
+
+async function probeStoredDefaultProvider(): Promise<StoredDefaultProviderProbeResult> {
+  const providerService = getProviderService();
+  const defaultAccountId = await providerService.getDefaultAccountId();
+  if (!defaultAccountId) {
+    return storedDefaultProviderProbeResult('missing-default');
+  }
+
+  const accounts = await providerService.listAccounts();
+  const account = accounts.find((candidate) => candidate.id === defaultAccountId)
+    ?? await providerService.getAccount(defaultAccountId);
+  if (!account) {
+    return storedDefaultProviderProbeResult('missing-account', { accountId: defaultAccountId });
+  }
+
+  const channel = classifyAccount(account);
+  if (channel !== 'online') {
+    return storedDefaultProviderProbeResult('offline-channel', { accountId: account.id, channel });
+  }
+
+  const apiKey = await providerService.getEffectiveAccountApiKey(account);
+  if (!apiKey?.trim()) {
+    return storedDefaultProviderProbeResult('missing-key', { accountId: account.id, channel });
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), STORED_DEFAULT_PROBE_TIMEOUT_MS);
+  try {
+    const registryBaseUrl = getProviderConfig(account.vendorId)?.baseUrl;
+    const result = await validateApiKeyWithProvider(account.vendorId, apiKey, {
+      baseUrl: account.baseUrl || registryBaseUrl,
+      apiProtocol: account.apiProtocol,
+      quiet: true,
+      signal: controller.signal,
+    });
+    const currentDefaultAccountId = await providerService.getDefaultAccountId();
+    if (currentDefaultAccountId !== defaultAccountId) {
+      return storedDefaultProviderProbeResult('changed-default', {
+        accountId: defaultAccountId,
+        channel,
+        status: result.status ?? null,
+      });
+    }
+
+    const status = result.status ?? null;
+    if (typeof status !== 'number') {
+      return storedDefaultProviderProbeResult('unsupported', { accountId: account.id, channel, status });
+    }
+    if (result.valid === true && status >= 200 && status < 300) {
+      return storedDefaultProviderProbeResult('ok', { accountId: account.id, channel, status, valid: true });
+    }
+    return storedDefaultProviderProbeResult('unavailable', { accountId: account.id, channel, status });
+  } catch (error) {
+    logger.warn('[provider-probe] stored default provider probe failed', {
+      accountId: account.id,
+      providerType: account.vendorId,
+      error: error instanceof Error ? error.name : typeof error,
+    });
+    return storedDefaultProviderProbeResult('probe-error', { accountId: account.id, channel });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function hasObjectChanges<T extends Record<string, unknown>>(
   existing: T,
@@ -103,6 +203,18 @@ export async function handleProviderRoutes(
 
   if (url.pathname === '/api/provider-accounts/key-info' && req.method === 'GET') {
     sendJson(res, 200, await providerService.listAccountsKeyInfo());
+    return true;
+  }
+
+  if (url.pathname === '/api/provider-accounts/default/probe' && req.method === 'GET') {
+    try {
+      sendJson(res, 200, await probeStoredDefaultProvider());
+    } catch (error) {
+      logger.warn('[provider-probe] stored default provider probe failed before validation', {
+        error: error instanceof Error ? error.name : typeof error,
+      });
+      sendJson(res, 200, storedDefaultProviderProbeResult('probe-error'));
+    }
     return true;
   }
 

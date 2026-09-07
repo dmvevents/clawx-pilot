@@ -56,6 +56,7 @@ const FULL_CATALOG = [
   'subagents',
   'sessions_list',
   'sessions_spawn',
+  'sessions_yield',
   'web_search',
   'web_fetch',
   'image',
@@ -70,6 +71,7 @@ describe('applyOnDeviceToolTrim (pure transform)', () => {
     for (const tool of ONDEVICE_DENIED_TOOLS) {
       expect(deny).toContain(tool);
     }
+    expect(deny).toContain('sessions_yield');
   });
 
   it('is idempotent — a second apply is a no-op and returns the same reference', () => {

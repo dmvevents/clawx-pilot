@@ -34,6 +34,33 @@ describe('validateApiKeyWithProvider', () => {
     );
   });
 
+  it('passes abort signals and suppresses validation logs when quiet is requested', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      const controller = new AbortController();
+      const { validateApiKeyWithProvider } = await import('@electron/services/providers/provider-validation');
+
+      const result = await validateApiKeyWithProvider('openai', 'sk-openai-test', {
+        signal: controller.signal,
+        quiet: true,
+      });
+
+      expect(result).toMatchObject({ valid: true, status: 200 });
+      expect(proxyAwareFetch).toHaveBeenCalledWith(
+        'https://api.openai.com/v1/models?limit=1',
+        expect.objectContaining({
+          signal: controller.signal,
+          headers: expect.objectContaining({
+            Authorization: 'Bearer sk-openai-test',
+          }),
+        }),
+      );
+      expect(logSpy).not.toHaveBeenCalled();
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
   it('still validates OpenAI-compatible providers with bearer auth', async () => {
     const { validateApiKeyWithProvider } = await import('@electron/services/providers/provider-validation');
 

@@ -78,6 +78,7 @@ let _streamEventSeenThisSend = false;
 // can tell whether they own the payload currently in the store.
 let _sendGeneration = 0;
 const _runGenerationById = new Map<string, number>();
+const _watchdogTerminatedRunIds = new Set<string>();
 
 type DegradeTurnToken = {
   sessionKey: string;
@@ -1817,7 +1818,9 @@ const DEGRADE_ROUTE_TIMEOUT_MS = 20_000;
  * or AV) a wedged gateway would otherwise hold the principal's first message for
  * the full 15s with nothing on screen moving, before the turn is even
  * dispatched — the 30s/90s watchdogs cannot see a stall that happens before
- * them. On expiry we count the attempt and send anyway.
+ * them. If the provider is still unhealthy we send immediately without
+ * consuming the bounded patch retry budget; the budget exists for clear RPCs,
+ * not for health probes during the outage.
  */
 const RECONCILE_PATCH_TIMEOUT_MS = 3_000;
 
@@ -1844,7 +1847,7 @@ const RECONCILE_MAX_ATTEMPTS = 3;
  */
 const _pinReconciledSessions = new Set<string>();
 
-/** Attempts spent per session this run (see RECONCILE_MAX_ATTEMPTS). */
+/** Clear-RPC attempts spent per session for the current stale-pin episode. */
 const _pinReconcileAttempts = new Map<string, number>();
 
 /** Sessions with a reconcile RPC in flight, so concurrent sends do not stampede. */
@@ -1924,6 +1927,39 @@ function isSessionModelClearConfirmed(ack: unknown, sessionKey: string): boolean
     && !hasNonEmptyStringField(top.entry, 'modelProvider');
 }
 
+type StoredDefaultProviderProbe = {
+  success?: boolean;
+  valid?: boolean;
+  accountId?: string | null;
+  channel?: ProviderClass | null;
+  status?: number | null;
+  reason?: string;
+};
+
+function isStoredDefaultProviderProbeHealthy(
+  probe: StoredDefaultProviderProbe | null | undefined,
+  expectedAccountId: string,
+): boolean {
+  const status = probe?.status;
+  return probe?.success === true
+    && probe.valid === true
+    && probe.accountId === expectedAccountId
+    && probe.channel === 'online'
+    && typeof status === 'number'
+    && status >= 200
+    && status < 300;
+}
+
+async function probeStoredDefaultOnlineProvider(expectedAccountId: string): Promise<boolean> {
+  try {
+    const probe = await hostApiFetch<StoredDefaultProviderProbe>('/api/provider-accounts/default/probe');
+    return isStoredDefaultProviderProbeHealthy(probe, expectedAccountId);
+  } catch (error) {
+    console.warn('[chat] stored default provider probe failed:', error);
+    return false;
+  }
+}
+
 async function clearSessionModelPinRpc(
   sessionKey: string,
   timeoutMs: number = SESSION_PATCH_TIMEOUT_MS,
@@ -1963,28 +1999,78 @@ async function clearSessionModelPinRpc(
  * "null means unproven, never assume" rule the runtime-vs-preference derivation
  * follows (CLWX-94/96).
  */
-async function reconcileSessionModelPin(sessionKey: string, set: ChatSet): Promise<void> {
-  if (!sessionKey || _pinReconciledSessions.has(sessionKey)) return;
+async function reconcileSessionModelPin(
+  sessionKey: string,
+  set: ChatSet,
+  sendGeneration: number,
+): Promise<void> {
+  if (!sessionKey) return;
   if (_pinReconcileInFlight.has(sessionKey)) return;
-  const runtimePin = useChatStore.getState().runtimeChannelPin;
-  if (runtimePin?.sessionKey === sessionKey && runtimePin.channel === 'on-device') {
-    return;
-  }
   // A degrade is installing (or has just proved) a pin for this turn. Its replay
   // comes back through sendMessage, and undoing that pin here would send the
   // turn out on the provider that just failed.
   if (_degradeResendInFlight) return;
   if ((_pinReconcileAttempts.get(sessionKey) ?? 0) >= RECONCILE_MAX_ATTEMPTS) return;
+
+  const stateBeforeProbe = useChatStore.getState();
+  if (stateBeforeProbe.currentSessionKey !== sessionKey) return;
+  if ((stateBeforeProbe.lastSentPayload?.generation ?? -1) !== sendGeneration) return;
+  if ((stateBeforeProbe.pendingChannelRecoveryBySession?.[sessionKey] ?? 0) > 0) return;
+  if (useSettingsStore.getState().preferredChannel !== 'online') return;
+
+  const runtimePin = stateBeforeProbe.runtimeChannelPin;
+  const ownedPin = runtimePin?.sessionKey === sessionKey && runtimePin.channel === 'on-device'
+    ? runtimePin
+    : null;
+  if (!ownedPin && _pinReconciledSessions.has(sessionKey)) return;
+  if (ownedPin && (stateBeforeProbe.activeRunId || stateBeforeProbe.degradeNotice?.inProgress === true)) return;
+
+  const ownedNotice = stateBeforeProbe.degradeNotice?.to === 'on-device'
+    && stateBeforeProbe.degradeNotice.inProgress !== true
+    ? stateBeforeProbe.degradeNotice
+    : null;
+
   const defaultAccount = (useProviderStore.getState().accounts ?? []).find((a) => a.isDefault === true);
   if (!defaultAccount || classifyProvider(defaultAccount) !== 'online') return;
+
   _pinReconcileInFlight.add(sessionKey);
-  _pinReconcileAttempts.set(sessionKey, (_pinReconcileAttempts.get(sessionKey) ?? 0) + 1);
   beginPendingChannelRecovery(set, sessionKey);
   try {
-    // Only a confirmed clear closes this session out for the run.
+    if (!await probeStoredDefaultOnlineProvider(defaultAccount.id)) {
+      return;
+    }
+    const stateAfterProbe = useChatStore.getState();
+    if (stateAfterProbe.currentSessionKey !== sessionKey) return;
+    if ((stateAfterProbe.lastSentPayload?.generation ?? -1) !== sendGeneration) return;
+    if (useSettingsStore.getState().preferredChannel !== 'online') return;
+    const defaultAfterProbe = (useProviderStore.getState().accounts ?? []).find((a) => a.isDefault === true);
+    if (defaultAfterProbe?.id !== defaultAccount.id || classifyProvider(defaultAfterProbe) !== 'online') return;
+    if (ownedPin && stateAfterProbe.runtimeChannelPin !== ownedPin) return;
+    if (!ownedPin && stateAfterProbe.runtimeChannelPin?.sessionKey === sessionKey) return;
+    if (ownedNotice && stateAfterProbe.degradeNotice !== ownedNotice) return;
+
+    // Only spend the bounded retry budget once the provider is proven healthy
+    // and ownership checks pass. Transient outage probes must not burn the clear
+    // budget before a clear RPC is even attempted.
+    _pinReconcileAttempts.set(sessionKey, (_pinReconcileAttempts.get(sessionKey) ?? 0) + 1);
+    // Only a confirmed clear closes this stale-pin episode out for the run.
     if (await clearSessionModelPinRpc(sessionKey, RECONCILE_PATCH_TIMEOUT_MS)) {
+      const stateAfterClear = useChatStore.getState();
+      if (stateAfterClear.currentSessionKey !== sessionKey) return;
+      if ((stateAfterClear.lastSentPayload?.generation ?? -1) !== sendGeneration) return;
+      if (useSettingsStore.getState().preferredChannel !== 'online') return;
       _pinReconciledSessions.add(sessionKey);
-      set((s) => (s.runtimeChannelPin?.sessionKey === sessionKey ? { runtimeChannelPin: null } : {}));
+      _pinReconcileAttempts.delete(sessionKey);
+      set((s) => {
+        const next: Partial<ChatState> = {};
+        if (ownedPin && s.runtimeChannelPin === ownedPin) {
+          next.runtimeChannelPin = null;
+        }
+        if (ownedNotice && s.degradeNotice === ownedNotice) {
+          next.degradeNotice = null;
+        }
+        return next;
+      });
     }
   } finally {
     finishPendingChannelRecovery(set, sessionKey);
@@ -2161,6 +2247,8 @@ async function maybeDegradeChannel(
     // 2026-09-06). Deliberately NOT tied to the dismissible notice — dismissing
     // an explanation must not restore the lie — and NOT written to
     // `preferredChannel`, which stays the principal's own choice.
+    _pinReconciledSessions.delete(pinSessionKey);
+    _pinReconcileAttempts.delete(pinSessionKey);
     set({ runtimeChannelPin: { sessionKey: pinSessionKey, channel: 'on-device' } });
     // The renderer's provider snapshot still shows the cloud account as default
     // until it is re-read, and the failover classifies the runtime channel from
@@ -2198,6 +2286,33 @@ async function maybeDegradeChannel(
   } finally {
     _degradeResendInFlight = false;
   }
+}
+
+function hasMeaningfulChatEventProgress(event: Record<string, unknown>, resolvedState: string): boolean {
+  if (resolvedState === 'final' || resolvedState === 'error' || resolvedState === 'aborted') return true;
+  if (resolvedState !== 'delta') return false;
+
+  const message = event.message;
+  if (typeof message === 'string') return message.trim().length > 0;
+  if (!message || typeof message !== 'object') return false;
+
+  const msg = message as Record<string, unknown>;
+  if (typeof msg.errorMessage === 'string' && msg.errorMessage.trim()) return true;
+  if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) return true;
+  if (Array.isArray(msg.toolCalls) && msg.toolCalls.length > 0) return true;
+  const content = msg.content;
+  if (typeof content === 'string') return content.trim().length > 0;
+  if (Array.isArray(content)) {
+    return content.some((block) => {
+      if (!block || typeof block !== 'object') return false;
+      const rec = block as Record<string, unknown>;
+      if (rec.type === 'tool_use' || rec.type === 'toolCall' || rec.type === 'tool_result' || rec.type === 'toolResult') {
+        return true;
+      }
+      return rec.type === 'text' && typeof rec.text === 'string' && rec.text.trim().length > 0;
+    });
+  }
+  return false;
 }
 
 function collectToolUpdates(message: unknown, eventState: string): ToolStatus[] {
@@ -3162,18 +3277,30 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const checkStuck = () => {
       const state = get();
       if (!state.sending) return;
-      if (state.streamingMessage || state.streamingText) return;
-      if (state.pendingFinal) {
+      if (state.currentSessionKey !== currentSessionKey) return;
+      if ((state.lastSentPayload?.generation ?? -1) !== sendGeneration) return;
+
+      const staleForMs = Date.now() - _lastChatEventAt;
+      if (staleForMs < SAFETY_TIMEOUT_MS) {
         setTimeout(checkStuck, 10_000);
         return;
       }
-      if (Date.now() - _lastChatEventAt < SAFETY_TIMEOUT_MS) {
-        setTimeout(checkStuck, 10_000);
-        return;
-      }
-      // Terminal watchdog (CLWX-95): 90s of silence with nothing streaming and
-      // no pending final — the composer can never be left spinning forever.
+      // Terminal watchdog (CLWX-95/117): 90s without an owned stream/tool/final
+      // event and no newer run owning the composer. Static partial text and a
+      // stale `running` tool are not progress; both mean the principal has a
+      // frozen turn. Fresh events keep `_lastChatEventAt` moving and extend the
+      // same budget without a second timer or state machine.
       clearHistoryPoll();
+      const stalledRunId = state.activeRunId;
+      if (stalledRunId) {
+        _runGenerationById.delete(stalledRunId);
+        _watchdogTerminatedRunIds.add(stalledRunId);
+        void useGatewayStore.getState().rpc('chat.abort', { sessionKey: currentSessionKey, runId: stalledRunId }).catch((error: unknown) => {
+          console.warn('[chat] best-effort abort after stale run watchdog failed:', error);
+        });
+      }
+      const shouldTryDegrade = !_streamEventSeenThisSend;
+      const toolsRan = state.streamingTools.length > 0 || state.pendingToolImages.length > 0;
 
       // CLWX-78 residual: route a stall through the same send-time failover as
       // the `error`/`final` paths, but ONLY when it is genuine unreachability
@@ -3187,10 +3314,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         error: NO_RESPONSE_ERROR,
         sending: false,
         activeRunId: null,
+        pendingFinal: false,
+        streamingText: '',
+        streamingMessage: null,
+        streamingTools: [],
+        lastSentPayload: shouldTryDegrade ? state.lastSentPayload : null,
         lastUserMessageAt: null,
       });
-      if (!_streamEventSeenThisSend) {
-        const toolsRan = get().streamingTools.length > 0 || get().pendingToolImages.length > 0;
+      if (shouldTryDegrade) {
         // Synthetic error string chosen to classify as `unreachable` (matches
         // UNREACHABLE_PATTERNS: "provider unreachable" / "no response from model").
         void maybeDegradeChannel(set, get, 'provider unreachable: no response from model', toolsRan);
@@ -3202,7 +3333,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // Drop a model pin left behind by a degrade in an earlier app run, before
       // the turn resolves its model. No-op on all but the first send per session
       // per run, and never acts while the configured channel is still on-device.
-      await reconcileSessionModelPin(currentSessionKey, set);
+      await reconcileSessionModelPin(currentSessionKey, set, sendGeneration);
 
       const idempotencyKey = crypto.randomUUID();
       const hasMedia = attachments && attachments.length > 0;
@@ -3273,6 +3404,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           set({ error: errorMsg, sending: false });
         }
       } else if (result.result?.runId) {
+        const stateAfterSend = get();
+        if (!stateAfterSend.sending || (stateAfterSend.lastSentPayload?.generation ?? -1) !== sendGeneration) {
+          _watchdogTerminatedRunIds.add(result.result.runId);
+          void useGatewayStore.getState().rpc('chat.abort', {
+            sessionKey: currentSessionKey,
+            runId: result.result.runId,
+          }).catch((error: unknown) => {
+            console.warn('[chat] best-effort abort for orphaned late run failed:', error);
+          });
+          return;
+        }
         // Bind this run to the generation that issued it so a terminal event
         // can tell whether it still owns lastSentPayload (CLWX-94).
         _runGenerationById.set(result.result.runId, sendGeneration);
@@ -3321,6 +3463,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    if (runId && _watchdogTerminatedRunIds.has(runId)) {
+      if (eventState === 'aborted') {
+        _watchdogTerminatedRunIds.delete(runId);
+      }
+      return;
+    }
+
     // Only process events for the active run (or if no active run set)
     if (activeRunId && runId && runId !== activeRunId) {
       return;
@@ -3329,8 +3478,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (isDuplicateChatEvent(eventState, event)) {
       return;
     }
-
-    _lastChatEventAt = Date.now();
 
     // Defensive: if state is missing but we have a message, try to infer state.
     let resolvedState = eventState;
@@ -3350,8 +3497,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // The gateway sends "agent" events with { phase, startedAt } that carry
     // no message — these must NOT kill the poll, since the poll is our only
     // way to track progress when the gateway doesn't stream intermediate turns.
-    const hasUsefulData = resolvedState === 'delta' || resolvedState === 'final'
-      || resolvedState === 'error' || resolvedState === 'aborted';
+    const hasUsefulData = hasMeaningfulChatEventProgress(event, resolvedState);
     // Whether THIS client had a send in flight, read before the adoption block
     // below can set `sending` for a run we never started. The `error` case uses
     // this to decide whether a channel failover is ours to perform: replaying a
@@ -3359,6 +3505,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // whatever stale payload we happen to be holding.
     const hadLocalSendInFlight = get().sending;
     if (hasUsefulData) {
+      _lastChatEventAt = Date.now();
       // A real stream event arrived, so the provider was reachable this send.
       // The stall watchdog reads this to avoid false-degrading a merely-slow
       // turn that streamed and then went quiet (CLWX-78).
@@ -3431,8 +3578,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
           const finalIsTerminalError = finalMsgForClear
             ? isTerminalAssistantErrorMessage(normalizeStreamingMessage(finalMsgForClear) as RawMessage)
             : false;
+          const finalIsToolOnly = finalMsgForClear
+            ? isToolOnlyMessage(normalizeStreamingMessage(finalMsgForClear) as RawMessage)
+            : false;
           const ownedPayload = get().lastSentPayload;
-          if (!finalIsTerminalError && ownedPayload) {
+          if (!finalIsTerminalError && !finalIsToolOnly && ownedPayload) {
             const finalGen = runId ? _runGenerationById.get(runId) : undefined;
             if (finalGen === undefined || finalGen >= (ownedPayload.generation ?? 0)) {
               set((s) => ({

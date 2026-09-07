@@ -311,6 +311,8 @@ For hosted-build acceptance, set `GA_GATE_BUILD_PROFILE` to the downloaded `buil
 
 For build stages, dependency caching, failure diagnosis and the source-to-installer handoff, use the [Windows build procedure](docs/build/windows-build-pipeline.md). The `windows-build-pipeline` skill and `windows_build_engineer` agent share that procedure across Codex and Claude.
 
+Chat returns the composer to an available state with a visible error when a turn stops making progress. Recovery to the saved Online account requires a successful provider check and confirmed session update; progress and cancellation remain tied to the turn that owns them.
+
 Windows packaging runs the complete preflight on Windows. Preserve `.gitattributes`: executable source uses LF, `.cmd`/`.bat` use CRLF, and PDFs retain their binary bytes.
 
 Windows environment profiling, IAP access and app-window recording are documented in the [Windows testing guide](windows-pilot/vm-testing/README.md). Server VM smoke and principal-laptop acceptance have separate coverage requirements.

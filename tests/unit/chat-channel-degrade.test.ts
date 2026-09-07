@@ -132,6 +132,7 @@ const patchBudgets = () => gatewayRpcMock.mock.calls
   .map((c) => [(c[1] as { model?: string | null }).model ?? null, c[2]] as [string | null, unknown]);
 const degradeCalls = () => hostApiFetchMock.mock.calls.filter((c) => String(c[0]) === '/api/settings/degradeChannel');
 const preferenceWrites = () => hostApiFetchMock.mock.calls.filter((c) => String(c[0]).includes('preferredChannel'));
+const storedProviderProbeCalls = () => hostApiFetchMock.mock.calls.filter((c) => String(c[0]) === '/api/provider-accounts/default/probe');
 
 async function loadStore() {
   const { useChatStore } = await import('@/stores/chat');
@@ -170,7 +171,15 @@ describe('chat store: send-time channel degradation', () => {
     gatewayRpcMock.mockReset();
     mockHistory(undefined);
     hostApiFetchMock.mockReset();
-    hostApiFetchMock.mockResolvedValue({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
+    hostApiFetchMock.mockImplementation((path: unknown) => {
+      if (String(path) === '/api/settings/degradeChannel') {
+        return Promise.resolve({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
+      }
+      if (String(path) === '/api/provider-accounts/default/probe') {
+        return Promise.resolve({ success: true, valid: true, accountId: 'google', channel: 'online', status: 200, reason: 'ok' });
+      }
+      return Promise.resolve({ success: true });
+    });
     agentsState.agents = [];
     settingsState.preferredChannel = 'online';
     settingsState.setPreferredChannel.mockReset();
@@ -1090,9 +1099,19 @@ describe('chat store: send-time channel degradation', () => {
   });
 
   it('pins the session even when the turn is NOT replayed (tools already ran)', async () => {
-    // The principal's own retry must land on-device too, so the cutover is not
-    // conditional on the replay.
+    // The principal's own retry must land on-device too while the Online
+    // provider is still unavailable, so the cutover is not conditional on the
+    // replay.
     providerState.accounts = [...ONLINE_DEFAULT];
+    hostApiFetchMock.mockImplementation((path: unknown) => {
+      if (String(path) === '/api/provider-accounts/default/probe') {
+        return Promise.resolve({ success: true, valid: false, accountId: 'google', channel: 'online', status: 503, reason: 'unavailable' });
+      }
+      if (String(path) === '/api/settings/degradeChannel') {
+        return Promise.resolve({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
+      }
+      return Promise.resolve({ success: true });
+    });
     const store = await loadStore();
     store.setState({
       streamingTools: [{ name: 'outlook.read_inbox', status: 'completed', updatedAt: Date.now() }],
@@ -1161,6 +1180,190 @@ describe('chat store: send-time channel degradation', () => {
 
     // One reconcile for the session, not one per send.
     expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+  });
+
+  it('clears an inactive same-session runtime pin on the next send after the stored Online provider is healthy', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    gatewayRpcMock.mockImplementation((method: string, params: unknown) => {
+      if (method === 'sessions.patch') return Promise.resolve(ackFor(params));
+      if (method === 'chat.send') return Promise.resolve({ runId: 'run-after-runtime-pin-clear' });
+      return Promise.resolve(undefined);
+    });
+    const store = await loadStore();
+    const stalePin = { sessionKey: 'agent:main:main', channel: 'on-device' as const };
+    store.setState({
+      sending: false,
+      activeRunId: null,
+      lastSentPayload: null,
+      runtimeChannelPin: stalePin,
+      degradeNotice: { reason: 'unreachable', resent: false, to: 'on-device' },
+    });
+
+    await store.getState().sendMessage('retry after fallback completed');
+
+    expect(storedProviderProbeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toBeNull();
+  });
+
+  it('retries inactive runtime-pin recovery after a failed stored provider probe', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    let probeCount = 0;
+    hostApiFetchMock.mockImplementation((path: unknown) => {
+      if (String(path) === '/api/provider-accounts/default/probe') {
+        probeCount += 1;
+        return Promise.resolve(probeCount === 1
+          ? { success: true, valid: false, accountId: 'google', channel: 'online', status: 503, reason: 'unavailable' }
+          : { success: true, valid: true, accountId: 'google', channel: 'online', status: 200, reason: 'ok' });
+      }
+      return Promise.resolve({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
+    });
+    const store = await loadStore();
+    const stalePin = { sessionKey: 'agent:main:main', channel: 'on-device' as const };
+    store.setState({ sending: false, activeRunId: null, lastSentPayload: null, runtimeChannelPin: stalePin });
+
+    await store.getState().sendMessage('first retry while provider unavailable');
+    expect(storedProviderProbeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([]);
+    expect(store.getState().runtimeChannelPin).toBe(stalePin);
+
+    store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+    await store.getState().sendMessage('second retry after provider recovers');
+
+    expect(storedProviderProbeCalls()).toHaveLength(2);
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+    expect(store.getState().runtimeChannelPin).toBeNull();
+  });
+
+  it('does not spend the stale-pin clear budget on failed stored provider probes', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    let probeCount = 0;
+    hostApiFetchMock.mockImplementation((path: unknown) => {
+      if (String(path) === '/api/provider-accounts/default/probe') {
+        probeCount += 1;
+        return Promise.resolve(probeCount <= 3
+          ? { success: true, valid: false, accountId: 'google', channel: 'online', status: 503, reason: 'unavailable' }
+          : { success: true, valid: true, accountId: 'google', channel: 'online', status: 200, reason: 'ok' });
+      }
+      return Promise.resolve({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
+    });
+    const store = await loadStore();
+    const stalePin = { sessionKey: 'agent:main:main', channel: 'on-device' as const };
+    store.setState({ sending: false, activeRunId: null, lastSentPayload: null, runtimeChannelPin: stalePin });
+
+    for (const text of ['probe one', 'probe two', 'probe three', 'healthy fourth']) {
+      await store.getState().sendMessage(text);
+      if (store.getState().runtimeChannelPin) {
+        store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+      }
+    }
+
+    expect(storedProviderProbeCalls()).toHaveLength(4);
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+    expect(store.getState().runtimeChannelPin).toBeNull();
+  });
+
+  it('keeps a stale disk pin when the stored Online provider probe fails, then clears after a healthy probe', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    let probeCount = 0;
+    hostApiFetchMock.mockImplementation((path: unknown) => {
+      if (String(path) === '/api/provider-accounts/default/probe') {
+        probeCount += 1;
+        return Promise.resolve(probeCount === 1
+          ? { success: true, valid: false, accountId: 'google', channel: 'online', status: 503, reason: 'unavailable' }
+          : { success: true, valid: true, accountId: 'google', channel: 'online', status: 200, reason: 'ok' });
+      }
+      return Promise.resolve({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
+    });
+    const store = await loadStore();
+
+    await store.getState().sendMessage('first turn while online provider is still unhealthy');
+
+    expect(storedProviderProbeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([]);
+
+    await store.getState().sendMessage('second turn after online provider recovers');
+
+    expect(storedProviderProbeCalls()).toHaveLength(2);
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+  });
+
+  it('does not clear a stale pin when the stored provider probe proves a different default account', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/provider-accounts/default/probe'
+      ? Promise.resolve({ success: true, valid: true, accountId: 'anthropic', channel: 'online', status: 200, reason: 'ok' })
+      : Promise.resolve({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' })));
+    const store = await loadStore();
+
+    await store.getState().sendMessage('turn during provider account race');
+
+    expect(storedProviderProbeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([]);
+  });
+
+  it('keeps a stale pin when the stored provider probe is healthy but the clear ack is not proven', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    gatewayRpcMock.mockImplementation((method: string, params: unknown) => {
+      if (method === 'sessions.patch') {
+        return Promise.resolve({
+          ok: true,
+          key: 'agent:main:main',
+          entry: { key: 'agent:main:main', modelOverride: 'ollama/qwen2.5:3b-instruct', providerOverride: 'ollama' },
+          resolved: { modelProvider: 'ollama', model: 'qwen2.5:3b-instruct' },
+        });
+      }
+      return Promise.resolve(params && undefined);
+    });
+    const store = await loadStore();
+
+    await store.getState().sendMessage('turn with failed clear ack');
+
+    expect(storedProviderProbeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+    await store.getState().sendMessage('retry after failed clear ack');
+    expect(patchCalls()).toEqual([
+      { key: 'agent:main:main', model: null },
+      { key: 'agent:main:main', model: null },
+    ]);
+  });
+
+  it('keeps a stale pin and still sends when the stored provider probe route is absent', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/provider-accounts/default/probe'
+      ? Promise.reject(new Error('No route for GET /api/provider-accounts/default/probe'))
+      : Promise.resolve({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' })));
+    const store = await loadStore();
+
+    await store.getState().sendMessage('turn with legacy main process');
+
+    expect(storedProviderProbeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).toContain('chat.send');
+  });
+
+  it('does not clobber a newer runtime pin that appears while pre-send reconcile is clearing disk state', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    let releaseClear: (value: unknown) => void = () => {};
+    gatewayRpcMock.mockImplementation((method: string, params: unknown) => {
+      if (method === 'sessions.patch') {
+        return new Promise((resolve) => { releaseClear = () => resolve(ackFor(params)); });
+      }
+      if (method === 'chat.send') return Promise.resolve({ runId: 'run-after-reconcile' });
+      return Promise.resolve(undefined);
+    });
+    const store = await loadStore();
+
+    const send = store.getState().sendMessage('turn while stale disk pin is clearing');
+    await settle();
+    const newerPin = { sessionKey: 'agent:main:main', channel: 'on-device' as const };
+    store.setState({ runtimeChannelPin: newerPin });
+
+    releaseClear(ackFor({ key: 'agent:main:main', model: null }));
+    await send;
+
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+    expect(store.getState().runtimeChannelPin).toBe(newerPin);
   });
 
   it('marks pre-send stale-pin recovery pending while the reconcile clear is in flight', async () => {
@@ -1312,6 +1515,89 @@ describe('chat store: send-time channel degradation', () => {
     expect(patchCalls()).toHaveLength(3);
   });
 
+  it('starts a fresh clear budget after a newly acknowledged fallback pin', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    let clearAttempts = 0;
+    gatewayRpcMock.mockImplementation(async (method: string, params: unknown) => {
+      if (method === 'sessions.patch') {
+        const requested = (params as { model?: string | null }).model ?? null;
+        if (requested === null) {
+          clearAttempts += 1;
+          return clearAttempts <= 3
+            ? { ok: true, key: 'agent:main:main', entry: { key: 'agent:main:main', modelOverride: 'ollama/qwen2.5:3b-instruct', providerOverride: 'ollama' }, resolved: { modelProvider: 'ollama', model: 'qwen2.5:3b-instruct' } }
+            : ackFor(params);
+        }
+        return ackFor(params);
+      }
+      if (method === 'chat.send') return { runId: 'run-after-pin-budget' };
+      return undefined;
+    });
+    const store = await loadStore();
+
+    for (const text of ['bad clear one', 'bad clear two', 'bad clear three', 'capped clear four']) {
+      await store.getState().sendMessage(text);
+    }
+    expect(patchCalls().filter((call) => call.model === null)).toHaveLength(3);
+
+    store.setState({
+      sending: true,
+      activeRunId: 'run-1',
+      lastSentPayload: { text: 'cloud fails into a fresh fallback episode', attachments: undefined, targetAgentId: null, generation: 999 },
+      degradedThisTurn: false,
+      degradeNotice: null,
+      streamingTools: [{ name: 'outlook.read_inbox', status: 'running', updatedAt: Date.now() }],
+    });
+    emitError(store, 'fetch failed');
+    await settle();
+
+    expect(patchCalls().at(-1)).toEqual({ key: 'agent:main:main', model: 'ollama/qwen2.5:3b-instruct' });
+    expect(store.getState().runtimeChannelPin).toEqual({ sessionKey: 'agent:main:main', channel: 'on-device' });
+
+    store.setState({ sending: false, activeRunId: null, lastSentPayload: null, degradedThisTurn: false });
+    await store.getState().sendMessage('healthy online after fresh fallback');
+
+    expect(patchCalls().filter((call) => call.model === null)).toHaveLength(4);
+    expect(store.getState().runtimeChannelPin).toBeNull();
+  });
+
+  it('supports repeated fallback and heal episodes in one app run', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    gatewayRpcMock.mockImplementation(async (method: string, params: unknown) => {
+      if (method === 'sessions.patch') return ackFor(params);
+      if (method === 'chat.send') return { runId: 'run-repeated-episode' };
+      return undefined;
+    });
+    const store = await loadStore();
+
+    for (let episode = 1; episode <= 4; episode += 1) {
+      const runId = `run-repeated-fallback-${episode}`;
+      store.setState({
+        sending: true,
+        activeRunId: runId,
+        lastSentPayload: { text: `cloud failure ${episode}`, attachments: undefined, targetAgentId: null, generation: 1000 + episode },
+        degradedThisTurn: false,
+        degradeNotice: null,
+        streamingTools: [{ name: 'outlook.read_inbox', status: 'running', updatedAt: Date.now() }],
+      });
+      store.getState().handleChatEvent({
+        state: 'error',
+        runId,
+        sessionKey: 'agent:main:main',
+        errorMessage: 'fetch failed',
+      });
+      await vi.waitFor(() => {
+        expect(store.getState().runtimeChannelPin).toEqual({ sessionKey: 'agent:main:main', channel: 'on-device' });
+      });
+
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null, degradedThisTurn: false });
+      await store.getState().sendMessage(`online recovered ${episode}`);
+      expect(store.getState().runtimeChannelPin).toBeNull();
+    }
+
+    expect(patchCalls().filter((call) => call.model === 'ollama/qwen2.5:3b-instruct')).toHaveLength(4);
+    expect(patchCalls().filter((call) => call.model === null)).toHaveLength(4);
+  });
+
   it('budgets the pre-send reconcile far shorter than the in-turn cutover', async () => {
     // The reconcile write sits in FRONT of the first send of the run: a stalled
     // gateway would hold the principal's message for the full cutover budget
@@ -1346,6 +1632,376 @@ describe('chat store: send-time channel degradation', () => {
 
     expect(patchCalls()).toEqual([]);
   });
+
+  it('turns a completed tool-only stall into a visible terminal failure instead of spinning forever', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-tool-only' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('check the inbox');
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-tool-only',
+        sessionKey: 'agent:main:main',
+        message: {
+          role: 'toolresult',
+          toolName: 'sessions_yield',
+          toolCallId: 'yield-1',
+          content: [{ type: 'text', text: 'yielded to a subtask' }],
+        },
+      });
+
+      expect(store.getState().sending).toBe(true);
+      expect(store.getState().pendingFinal).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().pendingFinal).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toContain('No response received from the model');
+      expect(degradeCalls()).toEqual([]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a stream alive while owned progress continues within the watchdog budget', async () => {
+    vi.useFakeTimers();
+    try {
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-streaming' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('draft a note');
+      store.getState().handleChatEvent({
+        state: 'delta',
+        runId: 'run-streaming',
+        sessionKey: 'agent:main:main',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'I am drafting the note.' }],
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(80_000);
+      store.getState().handleChatEvent({
+        state: 'delta',
+        runId: 'run-streaming',
+        sessionKey: 'agent:main:main',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'I am still drafting the note.' }],
+        },
+      });
+      await vi.advanceTimersByTimeAsync(80_000);
+
+      expect(store.getState().sending).toBe(true);
+      expect(store.getState().activeRunId).toBe('run-streaming');
+      expect(store.getState().error).toBeNull();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('turns stale partial text into a visible terminal failure after the watchdog budget', async () => {
+    vi.useFakeTimers();
+    try {
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-partial' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('draft a note');
+      store.getState().handleChatEvent({
+        state: 'delta',
+        runId: 'run-partial',
+        sessionKey: 'agent:main:main',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'I am drafting the note.' }],
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().pendingFinal).toBe(false);
+      expect(store.getState().streamingMessage).toBeNull();
+      expect(store.getState().error).toContain('No response received from the model');
+      expect(degradeCalls()).toEqual([]);
+      expect(gatewayRpcMock.mock.calls).toContainEqual(['chat.abort', { sessionKey: 'agent:main:main', runId: 'run-partial' }]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('turns an observed assistant tool-call graph with no terminal event into a visible failure', async () => {
+    vi.useFakeTimers();
+    try {
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-tool-call' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('check the inbox');
+      store.getState().handleChatEvent({
+        state: 'delta',
+        runId: 'run-tool-call',
+        sessionKey: 'agent:main:main',
+        message: {
+          role: 'assistant',
+          content: [{
+            type: 'tool_use',
+            id: 'yield-call',
+            name: 'sessions_yield',
+            input: { message: 'waiting for child task' },
+          }],
+        },
+      });
+
+      expect(store.getState().streamingTools).toEqual([expect.objectContaining({
+        name: 'sessions_yield',
+        status: 'running',
+      })]);
+
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().streamingTools).toEqual([]);
+      expect(store.getState().error).toContain('No response received from the model');
+      expect(degradeCalls()).toEqual([]);
+      expect(gatewayRpcMock.mock.calls).toContainEqual(['chat.abort', { sessionKey: 'agent:main:main', runId: 'run-tool-call' }]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a running tool alive while tool progress continues within the watchdog budget', async () => {
+    vi.useFakeTimers();
+    try {
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-tool-progress' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('check the inbox');
+      const toolDelta = (text: string) => ({
+        state: 'delta',
+        runId: 'run-tool-progress',
+        sessionKey: 'agent:main:main',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text }, {
+            type: 'tool_use',
+            id: 'inbox-call',
+            name: 'outlook.read_inbox',
+            input: {},
+          }],
+        },
+      });
+      store.getState().handleChatEvent(toolDelta('Reading inbox…'));
+      await vi.advanceTimersByTimeAsync(80_000);
+      store.getState().handleChatEvent(toolDelta('Still reading inbox…'));
+      await vi.advanceTimersByTimeAsync(80_000);
+
+      expect(store.getState().sending).toBe(true);
+      expect(store.getState().activeRunId).toBe('run-tool-progress');
+      expect(store.getState().streamingTools).toEqual([expect.objectContaining({
+        name: 'outlook.read_inbox',
+        status: 'running',
+      })]);
+      expect(store.getState().error).toBeNull();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not let an older watchdog timer terminate a newer send', async () => {
+    vi.useFakeTimers();
+    try {
+      let runIndex = 0;
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') {
+          runIndex += 1;
+          return { runId: `run-${runIndex}` };
+        }
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('first turn');
+      await store.getState().sendMessage('second turn');
+      await vi.advanceTimersByTimeAsync(35_000);
+
+      expect(store.getState().sending).toBe(true);
+      expect(store.getState().activeRunId).toBe('run-2');
+      expect(store.getState().lastSentPayload?.text).toBe('second turn');
+      expect(store.getState().error).toBeNull();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not let owned no-op heartbeat events keep a stalled run alive', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-heartbeat' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('heartbeat only');
+      await vi.advanceTimersByTimeAsync(80_000);
+      store.getState().handleChatEvent({
+        state: 'delta',
+        runId: 'run-heartbeat',
+        sessionKey: 'agent:main:main',
+        message: { role: 'assistant', tool_calls: [], toolCalls: [] },
+      });
+      await vi.advanceTimersByTimeAsync(40_000);
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toContain('No response received from the model');
+      expect(gatewayRpcMock.mock.calls).toContainEqual(['chat.abort', { sessionKey: 'agent:main:main', runId: 'run-heartbeat' }]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('makes an accepted send with no events visible through the terminal watchdog', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-no-events' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('will not stream');
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().pendingFinal).toBe(false);
+      expect(store.getState().error).toContain('No response received from the model');
+      expect(degradeCalls()).toEqual([]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('ignores late events from a run already terminated by the watchdog', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-late' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('will finish too late');
+      await vi.advanceTimersByTimeAsync(120_000);
+      const terminalError = store.getState().error;
+
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-late',
+        sessionKey: 'agent:main:main',
+        message: { role: 'assistant', id: 'late-final', content: [{ type: 'text', text: 'late answer' }] },
+      });
+      store.getState().handleChatEvent({
+        state: 'aborted',
+        runId: 'run-late',
+        sessionKey: 'agent:main:main',
+      });
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toBe(terminalError);
+      expect(store.getState().messages.some((message) => message.id === 'late-final')).toBe(false);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not adopt a chat.send run id that arrives after the watchdog made the turn terminal', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      let releaseSend: (value: { runId: string }) => void = () => {};
+      gatewayRpcMock.mockImplementation((method: string) => {
+        if (method === 'chat.send') {
+          return new Promise((resolve) => { releaseSend = resolve; });
+        }
+        return Promise.resolve(undefined);
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      const send = store.getState().sendMessage('run id will arrive late');
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toContain('No response received from the model');
+
+      releaseSend({ runId: 'run-after-terminal' });
+      await send;
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(gatewayRpcMock.mock.calls).toContainEqual(['chat.abort', {
+        sessionKey: 'agent:main:main',
+        runId: 'run-after-terminal',
+      }]);
+
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-after-terminal',
+        sessionKey: 'agent:main:main',
+        message: { role: 'assistant', id: 'too-late', content: [{ type: 'text', text: 'too late' }] },
+      });
+      expect(store.getState().messages.some((message) => message.id === 'too-late')).toBe(false);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0)', () => {
@@ -1355,7 +2011,15 @@ describe('chat store: run-error banner lifecycle from history (moe.18 Finding D0
     gatewayRpcMock.mockReset();
     mockHistory(undefined);
     hostApiFetchMock.mockReset();
-    hostApiFetchMock.mockResolvedValue({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
+    hostApiFetchMock.mockImplementation((path: unknown) => {
+      if (String(path) === '/api/settings/degradeChannel') {
+        return Promise.resolve({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' });
+      }
+      if (String(path) === '/api/provider-accounts/default/probe') {
+        return Promise.resolve({ success: true, valid: true, accountId: 'google', channel: 'online', status: 200, reason: 'ok' });
+      }
+      return Promise.resolve({ success: true });
+    });
     agentsState.agents = [];
     settingsState.preferredChannel = 'online';
     settingsState.setPreferredChannel.mockReset();

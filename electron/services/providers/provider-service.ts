@@ -369,15 +369,20 @@ export class ProviderService {
   // the account namespace and are the preferred surface for the
   // /api/provider-accounts/* HTTP routes and modern renderer code.
 
+  /** Resolve the effective API key for an account, including OpenClaw runtime aliases. */
+  async getEffectiveAccountApiKey(account: ProviderAccount): Promise<string | null> {
+    const runtimeProviderKey = getOpenClawProviderKeyForType(account.vendorId, account.id);
+    return (await getProviderApiKeyFromOpenClaw(runtimeProviderKey))
+      ?? (await getApiKey(account.id))
+      ?? (runtimeProviderKey !== account.id ? await getApiKey(runtimeProviderKey) : null);
+  }
+
   /** Return per-account API key status for the new account API surface. */
   async listAccountsKeyInfo(): Promise<Array<{ accountId: string; hasKey: boolean; keyMasked: string | null }>> {
     const accounts = await this.listAccounts();
     const results: Array<{ accountId: string; hasKey: boolean; keyMasked: string | null }> = [];
     for (const account of accounts) {
-      const runtimeProviderKey = getOpenClawProviderKeyForType(account.vendorId, account.id);
-      const apiKey = (await getProviderApiKeyFromOpenClaw(runtimeProviderKey))
-        ?? (await getApiKey(account.id))
-        ?? (runtimeProviderKey !== account.id ? await getApiKey(runtimeProviderKey) : null);
+      const apiKey = await this.getEffectiveAccountApiKey(account);
       results.push({
         accountId: account.id,
         hasKey: !!apiKey,

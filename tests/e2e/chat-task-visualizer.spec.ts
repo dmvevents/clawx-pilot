@@ -444,6 +444,304 @@ test.describe('ClawX chat execution graph', () => {
     }
   });
 
+
+  test('surfaces a visible terminal error after partial tool progress stalls', async ({ launchElectronApp }) => {
+    const app = await launchElectronApp({ skipSetup: true });
+
+    try {
+      await installIpcMocks(app, {
+        gatewayStatus: { state: 'running', port: 18789, pid: 12345 },
+        gatewayRpc: {
+          [stableStringify(['sessions.list', {}])]: {
+            success: true,
+            result: {
+              sessions: [{ key: PROJECT_MANAGER_SESSION_KEY, displayName: 'main' }],
+            },
+          },
+          [stableStringify(['chat.send', {
+            deliver: false,
+            idempotencyKey: '__dynamic__',
+            message: 'check stale tool progress',
+            sessionKey: 'agent:main:main',
+          }])]: {
+            success: true,
+            result: { runId: 'run-stale-tool' },
+          },
+          [stableStringify(['chat.history', { sessionKey: 'agent:main:main', limit: 200 }])]: {
+            success: true,
+            result: { messages: [] },
+          },
+          [stableStringify(['chat.history', { sessionKey: 'agent:main:main', limit: 1000 }])]: {
+            success: true,
+            result: { messages: [] },
+          },
+        },
+        hostApi: {
+          [stableStringify(['/api/gateway/status', 'GET'])]: {
+            ok: true,
+            data: {
+              status: 200,
+              ok: true,
+              json: { state: 'running', port: 18789, pid: 12345 },
+            },
+          },
+          [stableStringify(['/api/agents', 'GET'])]: {
+            ok: true,
+            data: {
+              status: 200,
+              ok: true,
+              json: {
+                success: true,
+                agents: [{ id: 'main', name: 'main' }],
+              },
+            },
+          },
+        },
+      });
+      await app.evaluate(() => {
+        const { ipcMain } = process.mainModule!.require('electron') as typeof import('electron');
+        ipcMain.removeHandler('gateway:rpc');
+        ipcMain.handle('gateway:rpc', async (_event: unknown, method: string) => {
+          if (method === 'sessions.list') {
+            return { success: true, result: { sessions: [{ key: 'agent:main:main', displayName: 'main' }] } };
+          }
+          if (method === 'chat.history') {
+            return { success: true, result: { messages: [] } };
+          }
+          if (method === 'chat.send') {
+            return { success: true, result: { runId: 'run-stale-tool' } };
+          }
+          return { success: true, result: {} };
+        });
+      });
+
+      const page = await getStableWindow(app);
+      try {
+        await page.reload();
+      } catch (error) {
+        if (!String(error).includes('ERR_FILE_NOT_FOUND')) {
+          throw error;
+        }
+      }
+
+      await expect(page.getByTestId('main-layout')).toBeVisible();
+      await page.getByTestId('chat-composer-input').fill('check stale tool progress');
+      await page.getByTestId('chat-composer-send').click();
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-active-run-id-present', 'true');
+
+      await app.evaluate(() => {
+        const { BrowserWindow } = process.mainModule!.require('electron') as typeof import('electron');
+        BrowserWindow.getAllWindows().forEach((window) => {
+          window.webContents.send('gateway:chat-message', {
+            state: 'delta',
+            runId: 'run-stale-tool',
+            sessionKey: 'agent:main:main',
+            message: {
+              role: 'assistant',
+              content: [{
+                type: 'tool_use',
+                id: 'yield-call',
+                name: 'sessions_yield',
+                input: { message: 'waiting on a child task' },
+              }],
+            },
+          });
+        });
+      });
+
+      await expect(page.getByTestId('chat-execution-graph')).toBeVisible();
+      await expect(page.locator('[data-testid="chat-execution-step"]').filter({ hasText: 'sessions_yield' })).toBeVisible();
+
+      await app.evaluate(() => {
+        const { BrowserWindow } = process.mainModule!.require('electron') as typeof import('electron');
+        BrowserWindow.getAllWindows().forEach((window) => {
+          window.webContents.send('gateway:chat-message', {
+            state: 'error',
+            runId: 'run-stale-tool',
+            sessionKey: 'agent:main:main',
+            errorMessage: 'No response received from the model. The provider may be unavailable or the API key may have insufficient quota. Please check your provider settings.',
+          });
+        });
+      });
+
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-sending', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-active-run-id-present', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-error-present', 'true');
+      await expect(page.getByText('Technical details')).toBeVisible();
+    } finally {
+      await closeElectronApp(app);
+    }
+  });
+
+  test('clears an inactive on-device runtime pin on the next send after Online provider proof', async ({ launchElectronApp }) => {
+    const app = await launchElectronApp({ skipSetup: true });
+
+    try {
+      await installIpcMocks(app, {
+        gatewayStatus: { state: 'running', port: 18789, pid: 12345 },
+        gatewayRpc: {
+          [stableStringify(['sessions.list', {}])]: {
+            success: true,
+            result: { sessions: [{ key: PROJECT_MANAGER_SESSION_KEY, displayName: 'main' }] },
+          },
+          [stableStringify(['chat.history', { sessionKey: 'agent:main:main', limit: 200 }])]: {
+            success: true,
+            result: { messages: [] },
+          },
+          [stableStringify(['chat.history', { sessionKey: 'agent:main:main', limit: 1000 }])]: {
+            success: true,
+            result: { messages: [] },
+          },
+        },
+        hostApi: {
+          [stableStringify(['/api/gateway/status', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: { state: 'running', port: 18789, pid: 12345 } },
+          },
+          [stableStringify(['/api/settings', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: { setupComplete: true, preferredChannel: 'online' } },
+          },
+          [stableStringify(['/api/agents', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: { success: true, agents: [{ id: 'main', name: 'main' }] } },
+          },
+          [stableStringify(['/api/provider-accounts', 'GET'])]: {
+            ok: true,
+            data: {
+              status: 200,
+              ok: true,
+              json: [
+                { id: 'google', vendorId: 'google', label: 'Online', model: 'gemini-2.5-pro', isDefault: true, enabled: true },
+                { id: 'ollama', vendorId: 'ollama', label: 'On this device', baseUrl: 'http://127.0.0.1:11434', model: 'qwen2.5:3b-instruct', enabled: true },
+              ],
+            },
+          },
+          [stableStringify(['/api/provider-accounts/key-info', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: [] },
+          },
+          [stableStringify(['/api/provider-vendors', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: [] },
+          },
+          [stableStringify(['/api/provider-accounts/default', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: { accountId: 'google' } },
+          },
+          [stableStringify(['/api/provider-accounts/default/probe', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: { success: true, valid: true, accountId: 'google', channel: 'online', status: 200, reason: 'ok' } },
+          },
+          [stableStringify(['/api/settings/degradeChannel', 'POST'])]: {
+            ok: true,
+            data: {
+              status: 200,
+              ok: true,
+              json: { success: true, channel: 'on-device', accountId: 'ollama', modelRef: 'ollama/qwen2.5:3b-instruct' },
+            },
+          },
+        },
+      });
+
+      await app.evaluate(() => {
+        const { ipcMain } = process.mainModule!.require('electron') as typeof import('electron');
+        (globalThis as { __chatPatchModels?: Array<unknown> }).__chatPatchModels = [];
+        let sendCount = 0;
+        ipcMain.removeHandler('gateway:rpc');
+        ipcMain.handle('gateway:rpc', async (_event: unknown, method: string, params: unknown) => {
+          if (method === 'sessions.patch') {
+            const requested = (params as { model?: unknown } | undefined)?.model;
+            const sessionKey = String((params as { key?: unknown } | undefined)?.key ?? 'agent:main:main');
+            (globalThis as { __chatPatchModels?: Array<unknown> }).__chatPatchModels?.push(requested ?? null);
+            if (requested == null) {
+              return { success: true, result: { ok: true, key: sessionKey, entry: { key: sessionKey }, resolved: {} } };
+            }
+            const requestedModel = String(requested);
+            return {
+              success: true,
+              result: {
+                ok: true,
+                key: sessionKey,
+                entry: { key: sessionKey, modelOverride: requestedModel, providerOverride: requestedModel.split('/')[0] },
+                resolved: { modelProvider: 'ollama', model: 'qwen2.5:3b-instruct' },
+              },
+            };
+          }
+          if (method === 'chat.send') {
+            sendCount += 1;
+            return { success: true, result: { runId: sendCount === 1 ? 'run-cloud' : 'run-after-clear' } };
+          }
+          if (method === 'sessions.list') {
+            return { success: true, result: { sessions: [{ key: 'agent:main:main', displayName: 'main' }] } };
+          }
+          if (method === 'chat.history') {
+            return { success: true, result: { messages: [] } };
+          }
+          return { success: true, result: {} };
+        });
+      });
+
+      const page = await getStableWindow(app);
+      try {
+        await page.reload();
+      } catch (error) {
+        if (!String(error).includes('ERR_FILE_NOT_FOUND')) throw error;
+      }
+
+      await expect(page.getByTestId('main-layout')).toBeVisible();
+      await expect(page.getByTestId('chat-composer-channel')).toBeVisible();
+      await expect(page.getByTestId('chat-composer-channel')).toHaveAttribute('data-channel', 'online');
+      await page.getByTestId('chat-composer-input').fill('first turn uses a tool before fallback');
+      await page.getByTestId('chat-composer-send').click();
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-active-run-id-present', 'true');
+
+      await app.evaluate(() => {
+        const { BrowserWindow } = process.mainModule!.require('electron') as typeof import('electron');
+        BrowserWindow.getAllWindows().forEach((window) => {
+          window.webContents.send('gateway:chat-message', {
+            state: 'delta',
+            runId: 'run-cloud',
+            sessionKey: 'agent:main:main',
+            message: {
+              role: 'assistant',
+              content: [{ type: 'tool_use', id: 'tool-1', name: 'outlook.read_inbox', input: {} }],
+            },
+          });
+        });
+      });
+      await expect(page.locator('[data-testid="chat-execution-step"]').filter({ hasText: 'outlook.read_inbox' })).toBeVisible();
+
+      await app.evaluate(() => {
+        const { BrowserWindow } = process.mainModule!.require('electron') as typeof import('electron');
+        BrowserWindow.getAllWindows().forEach((window) => {
+          window.webContents.send('gateway:chat-message', {
+            state: 'error',
+            runId: 'run-cloud',
+            sessionKey: 'agent:main:main',
+            errorMessage: 'fetch failed',
+          });
+        });
+      });
+
+      await expect.poll(async () => await app.evaluate(() => (
+        (globalThis as { __chatPatchModels?: Array<unknown> }).__chatPatchModels ?? []
+      ))).toContain('ollama/qwen2.5:3b-instruct');
+      await expect(page.getByTestId('chat-composer-channel')).toHaveAttribute('data-channel', 'on-device');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-sending', 'false');
+
+      await page.getByTestId('chat-composer-input').fill('second turn after Online is healthy');
+      await page.getByTestId('chat-composer-send').click();
+
+      await expect(page.getByTestId('chat-composer-channel')).toHaveAttribute('data-channel', 'online');
+      await expect.poll(async () => await app.evaluate(() => (
+        ((globalThis as { __chatPatchModels?: Array<unknown> }).__chatPatchModels ?? []).slice(-2)
+      ))).toEqual(['ollama/qwen2.5:3b-instruct', null]);
+    } finally {
+      await closeElectronApp(app);
+    }
+  });
+
   test('keeps channel recovery visible when a fresh send replaces the degrade notice', async ({ launchElectronApp }) => {
     const app = await launchElectronApp({ skipSetup: true });
 
