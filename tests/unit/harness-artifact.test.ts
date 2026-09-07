@@ -8,7 +8,7 @@
  * matrix rows stay well-formed (unique ids, known entrypoints).
  */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync as fsRealpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync as fsRealpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -472,7 +472,7 @@ function canonicalRealpath(value: string): string {
   return (fsRealpathSync.native ?? fsRealpathSync)(value);
 }
 
-function writeFakeTransportStage(options: { toolNames?: string[]; stdoutFlood?: boolean } = {}): FakeTransportStage {
+function writeFakeTransportStage(options: { toolNames?: string[]; reportRawRoot?: boolean; stdoutFlood?: boolean } = {}): FakeTransportStage {
   const dir = canonicalRealpath(mkdtempSync(path.join(tmpdir(), 'clwx-transport-child-')));
   const gatewayDir = path.join(dir, 'resources', 'openclaw');
   const distDir = path.join(gatewayDir, 'dist');
@@ -485,6 +485,9 @@ function writeFakeTransportStage(options: { toolNames?: string[]; stdoutFlood?: 
   writeFileSync(path.join(gatewayDir, 'package.json'), JSON.stringify({ type: 'module' }));
   const toolNames = options.toolNames ?? ['document.read_pdf'];
   const stdoutFlood = options.stdoutFlood ? "process.stdout.write('x'.repeat(2 * 1024 * 1024) + '\\n');" : '';
+  const rootExpression = options.reportRawRoot
+    ? "options.env.CLAWX_APP_RESOURCES + '/extensions/moe-principal-assistant'"
+    : "canonicalRealpath(options.env.CLAWX_APP_RESOURCES + '/extensions/moe-principal-assistant')";
   writeFileSync(path.join(distDir, 'loader-test.js'), `
 import { realpathSync } from 'node:fs';
 
@@ -494,7 +497,7 @@ function loadOpenClawPlugins(options) {
   ${stdoutFlood}
   const requested = new Set(options.onlyPluginIds ?? []);
   const all = [
-    { id: 'moe-principal-assistant', status: 'loaded', activated: true, rootDir: canonicalRealpath(options.env.CLAWX_APP_RESOURCES + '/extensions/moe-principal-assistant'), toolNames: ${JSON.stringify(toolNames)} },
+    { id: 'moe-principal-assistant', status: 'loaded', activated: true, rootDir: ${rootExpression}, toolNames: ${JSON.stringify(toolNames)} },
     { id: 'unrelated-stock-plugin', status: 'loaded', activated: true, rootDir: '/unrelated', toolNames: ['unrelated.tool'] },
   ];
   const plugins = process.env.MOCK_RETURN_EXTRA === '1' ? all : all.filter((plugin) => requested.has(plugin.id));
@@ -512,6 +515,16 @@ function buildPluginRuntimeLoadOptions(context, overrides) {
 export { resolvePluginRuntimeLoadContext as i, buildPluginRuntimeLoadOptions as t };
 `);
   return { dir, gatewayDir, pluginRoot, workspaceDir };
+}
+
+function portableHarnessEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    PATH: process.env.PATH ?? '',
+  };
+  for (const key of ['SystemRoot', 'SystemDrive', 'windir', 'PATHEXT', 'ComSpec']) {
+    if (process.env[key] !== undefined) env[key] = process.env[key];
+  }
+  return env;
 }
 
 function runTransportChild(stage: FakeTransportStage, options: { returnExtra?: boolean } = {}) {
@@ -642,7 +655,6 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
     expect(String(validateFastSelection(doubled, FAST_ROW_IDS))).toContain('more than once');
   });
 
-
   it('transport child loads only the requested staged plugin through the OpenClaw loader', async () => {
     const stage = writeFakeTransportStage();
     try {
@@ -658,6 +670,57 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
     }
   });
 
+  it('canonicalizeStageDir resolves aliases through the nearest existing ancestor', async () => {
+    const { canonicalizeStageDir } = await load();
+    const stage = writeFakeTransportStage();
+    const aliasPath = `${stage.dir}-missing-parent-alias`;
+    const aliasType = process.platform === 'win32' ? 'junction' : 'dir';
+    try {
+      symlinkSync(stage.dir, aliasPath, aliasType);
+      const nested = path.join(aliasPath, 'new', 'nested', 'stage');
+      const canonical = await canonicalizeStageDir(nested);
+      expect(canonical).toBe(path.join(stage.dir, 'new', 'nested', 'stage'));
+    } finally {
+      rmSync(aliasPath, { force: true });
+      rmSync(stage.dir, { recursive: true, force: true });
+    }
+  });
+
+  it('parent transport row canonicalizes an aliased stage path before handing roots to OpenClaw', async () => {
+    const { TRANSPORT_NO_HOSTAPI_EXPECTED } = await load();
+    const stage = writeFakeTransportStage({
+      reportRawRoot: true,
+      toolNames: [...TRANSPORT_NO_HOSTAPI_EXPECTED],
+    });
+    const aliasPath = `${stage.dir}-alias`;
+    const aliasType = process.platform === 'win32' ? 'junction' : 'dir';
+    try {
+      symlinkSync(stage.dir, aliasPath, aliasType);
+      const result = spawnSync(process.execPath, ['scripts/harness-artifact.mjs',
+        '--stage-dir', aliasPath,
+        '--reuse-bundle',
+        '--fast',
+        '--only', 'gateway-transport.no-hostapi',
+      ], {
+        encoding: 'utf8',
+        env: {
+          ...portableHarnessEnv(),
+          HOME: path.join(stage.dir, 'outer-home'),
+          TMPDIR: tmpdir(),
+          LANG: 'C.UTF-8',
+          NODE_OPTIONS: '',
+          CLAWX77_TRANSPORT_TIMEOUT_MS: '10000',
+        },
+      });
+      expect(result.status, `${result.stdout}
+${result.stderr}`).toBe(0);
+      expect(result.stdout).toContain(`Staging artifact runtime in ${stage.dir}`);
+      expect(result.stdout).toContain('PASS              gateway-transport.no-hostapi');
+    } finally {
+      rmSync(aliasPath, { force: true });
+      rmSync(stage.dir, { recursive: true, force: true });
+    }
+  });
 
   it('parent transport row parses the child verdict after chatty stdout drains', async () => {
     const { TRANSPORT_NO_HOSTAPI_EXPECTED } = await load();
@@ -674,7 +737,7 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
       ], {
         encoding: 'utf8',
         env: {
-          PATH: process.env.PATH ?? '',
+          ...portableHarnessEnv(),
           HOME: path.join(stage.dir, 'outer-home'),
           TMPDIR: tmpdir(),
           LANG: 'C.UTF-8',
