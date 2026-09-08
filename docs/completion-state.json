@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T10:41:23.981235+00:00",
+  "updatedAt": "2026-09-08T10:42:41.730591+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -1957,15 +1957,15 @@
       "card": "CLWX-126"
     },
     "handoffPlaneUpdate": {
-      "verifiedAt": "2026-09-08T10:41:23.957685+00:00",
+      "verifiedAt": "2026-09-08T10:42:41.705535+00:00",
       "projectId": "81a2ea23-e060-49b4-a344-1ab0339f46d5",
       "issues": 127,
       "states": 6,
       "stateCounts": {
-        "In Progress": 22,
+        "Ready": 61,
         "Backlog": 25,
+        "In Progress": 21,
         "Todo": 8,
-        "Ready": 60,
         "Cancelled": 12
       },
       "enrichmentRegression": false,
@@ -2018,6 +2018,20 @@
           "created": "2026-09-08T10:39:14.290349Z",
           "detailAndListReadback": "PASS",
           "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-126",
+          "id": "3f55acc6-a201-4058-8276-3f2eba899f1f",
+          "created": "2026-09-08T10:42:05.110021Z",
+          "detailAndListReadback": "PASS",
+          "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-127",
+          "id": "fcc95221-eff7-408b-9d48-5a6c1be28663",
+          "created": "2026-09-08T10:42:05.507092Z",
+          "detailAndListReadback": "PASS",
+          "exportReadback": "PASS"
         }
       ],
       "marker": "CLWX-HANDOFF-CURRENT-20260908",
@@ -2039,7 +2053,8 @@
         "CLWX-115",
         "CLWX-117",
         "CLWX-123",
-        "CLWX-125"
+        "CLWX-125",
+        "CLWX-127"
       ],
       "originalAcceptancePreserved": true,
       "stateChanges": [
@@ -2054,6 +2069,12 @@
           "from": "In Progress",
           "to": "Backlog",
           "reason": "Owner deferred ASR/microphone from this release"
+        },
+        {
+          "card": "CLWX-127",
+          "from": "In Progress",
+          "to": "Ready",
+          "reason": "Checkpoint committed; independent handoff review and board/guidance validation pass"
         }
       ]
     }
@@ -2072,7 +2093,7 @@
     "heldCommit": "24e1cfd3dd1d736d15252f77ef3e305fb5367857"
   },
   "handoff": {
-    "status": "REVIEWED_PENDING_COMMIT_AND_BOARD_READY",
+    "status": "COMPLETE_READY_FOR_NEXT_AGENT",
     "entrypoint": "docs/COMPLETION_PLAN.md",
     "repositoryGuide": "docs/REPOSITORY_GUIDE.md",
     "sourceCandidate": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
@@ -2095,6 +2116,10 @@
       "claudeAgents": 20,
       "newSkillMirrorsValidated": 2,
       "criticalMirrorPairsChecked": 5
-    }
+    },
+    "checkpointCommit": "bb729688",
+    "boardCardState": "Ready",
+    "boardReadback": "PASS_DETAIL_LIST_AND_EXPORT",
+    "completedAt": "2026-09-08T10:42:41.730591+00:00"
   }
 }

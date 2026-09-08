@@ -435,6 +435,10 @@ Next sprint acceptance
 - Independent review chooses keep/adopt/reject from evidence. Missing benchmark or broken tool/installer behavior prevents migration and release promotion.
 Owner: next dependency researcher/executor; sole VM operator runs measurements sequentially. No approved numerical latency budget is invented. Sources and experiment design: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md; evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md; current plan: docs/COMPLETION_PLAN.md.
 
+**Comments (1):**
+
+- CLWX-HANDOFF-20260908 Research baseline is documented and committed in bb729688. Direct native Ollama: 27.396s tiny/no-tools request, 23.331s model load (85.2%), allocation 3.137 GiB/context32768. Native-route source 0b46e833 is reviewed in frozen f93ac8b3, not installed. No llama.cpp runtime or same-machine comparison was tested. Keep this card Backlog for a matched next-sprint experiment: identical weights/hash/quantization, actual candidate tools, context/threads/output budget, cold/warm samples, memory, offline identity and vanilla installation. Equivalent model weights must be reported as confounded. Changing advertised offline scope requires an explicit owner decision; Online-only cannot silently satisfy the existing KR. Primary references and experiment controls: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md.
+
 ## Unstarted
 
 ### CLWX-3 — dmvevents/clawx-pilot#7 — Remove ClawX/OpenClaw from principal-facing UI and copy
@@ -1742,6 +1746,30 @@ Why this matters here specifically: this project already treats internals-in-the
 Not a security leak — a loopback port and a local pid are not secrets. It is a trust-surface defect, so it is filed at medium rather than high, and it belongs to the principal-proxy lens.
 Acceptance: the principal-facing footer states what happened and what to do in plain language, with the port/pid retained in the backend log for diagnosis. Pin it with a row that fails if a numeric port or pid reaches the rendered string, so the leak cannot come back through a different code path.
 
+### CLWX-127 — Stabilize repository guidance, Plane snapshot and next-agent handoff
+
+- **State:** Ready  |  **Priority:** high
+
+CLWX-HANDOFF-CURRENT-20260908
+HANDOFF EVIDENCE COMPLETE: repository checkpoint bb729688 contains the navigation/ownership guide, linked AGENTS.md and CLAUDE.md, two validated skill mirrors, current source/artifact/evidence pointers, Ollama/llama.cpp research, next-sprint sequence and full 127-card board snapshot. Independent read-only review found no blocker. Validation: 115 local links, seven native TOMLs, five identical critical mirror pairs, nine-node dependency graph; all prior board comments retained and 13 current descriptions read back with original acceptance preserved. Ready is documentation/handoff acceptance only; GA remains RED. Source f93ac8b3 is frozen/unbuilt; held24e1cfd3 is excluded. No product implementation/package/VM work was resumed.
+Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
+Prior acceptance and dated history (scope retained)
+CLWX-HANDOFF-20260908 — repository organization
+Owner requested repo/code navigation, skills, agent instructions, full board/docs synchronization and a handoff before the next sprint. Scope is operating structure and recoverable reviewed source; new product implementation/packaging is paused.
+Acceptance
+
+- One current completion plan names the exact clean candidate, installed baseline, held branches, blockers, owners and sequential/parallel dependencies.
+- Repository guide maps source modules, runtime boundaries, tests, public summaries and private artifacts to existing contracts.
+- Codex/Claude skill and agent inventories parse; critical resume/VM workflows exist and matching mirrors agree; local links resolve.
+- Live CLWX changes preserve original acceptance, are detail/list readback-verified, and full JSON/Markdown board snapshots are committed in the repo without enrichment regression.
+- Ollama/llama.cpp research distinguishes measured results from proposals, preserves ASR deferral and no-GA status, and provides a bounded next-agent experiment.
+- Independent handoff review can locate source, evidence and next work without chat history; no new release or external acceptance is claimed.
+Owner: root integrates; documentation author and independent reviewer have separate scopes. Evidence: docs/REPOSITORY_GUIDE.md, docs/AGENT_SKILL_INTEROPERABILITY.md, docs/COMPLETION_PLAN.md, docs/completion-state.json and docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Existing unrelated edits are preserved. Ready requires these documentation checks; only a human closes Done.
+
+**Comments (1):**
+
+- CLWX-HANDOFF-20260908 HANDOFF EVIDENCE COMPLETE: repository checkpoint bb729688 contains the navigation/ownership guide, linked AGENTS.md and CLAUDE.md, two validated skill mirrors, current source/artifact/evidence pointers, Ollama/llama.cpp research, next-sprint sequence and full 127-card board snapshot. Independent read-only review found no blocker. Validation: 115 local links, seven native TOMLs, five identical critical mirror pairs, nine-node dependency graph; all prior board comments retained and 13 current descriptions read back with original acceptance preserved. Ready is documentation/handoff acceptance only; GA remains RED. Source f93ac8b3 is frozen/unbuilt; held24e1cfd3 is excluded. No product implementation/package/VM work was resumed.
+
 ## Started
 
 ### CLWX-20 — clawx-asr voice-note path fails with ffmpeg-not-found on user machines
@@ -2614,22 +2642,6 @@ Evidence: docs/evidence/WINDOWS_STAKEHOLDER_CONNECTION_2026-09-08.md; artifacts/
 - CLWX125-NATIVE-SDK-20260908-0729Z Reviewed SDK patch ba459ef1 passes a native Windows fixture against all 295 installed SDK modules: 296 unchanged writes become zero, all wrapper bytes are preserved, and one stale wrapper is repaired with one write. Warm repeat 357ms baseline / 280ms patched; this is not an app-level speedup claim. No model request or installed-file mutation in the fixture. Driver repair 141841df passes 32 focused tests and three Electron interactions. It waits for hydration and requires a real session-key transition before Send, reproducing and rejecting the old empty-DOM false freshness result. Root review completed. The live stored Online provider probe returns matching account, success/valid true and HTTP200; this narrows provisioning, not response delivery. A separately backed-up SDK-only diagnostic is running. A source integration of reviewed history f5875b54, UI aa398dfb / driver141841df and SDK ba459ef1 is being assembled for VM validation. No repaired installer acceptance or stakeholder handoff; GA RED; CLWX-125 stays In Progress. Documentation: docs/evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md includes flow map, exact timelines, good historical code samples, falsifiers and VM setup history.
 - CLWX125-PROFILE-PROVENANCE-CORRECTION-20260908. Exact-token trajectory and the 07:01:08Z runtime failover record show the diagnostic selected ollama-ollamalo/qwen2.5:3b-instruct in the existing agent:main:main session, although the composer stayed Online. Driver NewSession did not establish a new session; seven displayed messages included earlier history. This diagnostic proves the measured runtime filesystem cost and exposes a session/model mismatch. It is not Online acceptance or a provider-identical comparison with the original06:11 cloud failure. The original06:11 exact-session cloud failure remains unchanged. Session selection/pinning is now under bounded investigation before further response tests. SDK content-idempotence repair ba459ef1 passes29 focused bundle/patch tests, typecheck, comms, bundle verification and actual-diff harness. Root reviewed its narrow behavior; native performance/response acceptance pending. docs/evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md records this correction. GA RED.
 - CLWX125-PROFILE-20260908-0708Z: measured cause and bounded repair. Same installed moe.24 b814f804 / run34189597051; standard-user Server2022 profile; original watchdog, Defender, VM and provider settings retained. CPU capture06:58:03–07:01:03Z (180.796s) identifies loadOpenClawPlugins95.215s inclusive, ensureOpenClawPluginSdkAlias54.133s and writeRuntimeModuleWrapper52.370s. SDK native writeFileUtf8/mkdir self times29.706s/12.395s. Inclusive rows overlap and must not be added. SDK materialization consumes45.277s before observed renderer idle. Repeated unconditional generated-wrapper writes are the bounded performance target; missing/stale wrappers must still regenerate. No global provider disable or timeout increase. Diagnostic prompt06:58:08.144Z, owned run06:58:11.712Z, renderer idle06:59:48.279Z. Original driver ends07:01:09.782Z with ASSISTANT_EMPTY_SILENCE_ON_SEND, inline error and no answer. Seven rendered message elements differ from the earlier zero-message NO_RESPONSE. Auxiliary observer message count used a wrong selector and is excluded; its state attributes remain valid. No renderer WS abort frame was captured, so exact cancellation provenance remains unproved. Original entry restored07:04:02.339Z; original entry and ASAR hashes match; owned app exited and listeners gone. No VM lifecycle or security changes. UI/driver repair aa398dfb (over history repair f5875b54) independently reviewed. Baseline reproduces lost prompt;137 focused tests,2 Electron interactions,typecheck,lint zero errors,comms replay/compare and actual-diff harness pass. Preserves prompt/error and unrelated history; clears hard-deleted snapshot; fails generic errors even with an answer candidate. Installed repair acceptance remains NOT_RUN. Repository RCA includes Mermaid flow map, exact old/new timeline, useful commit-backed code samples, falsifiers, testing criteria and GCP-from-local-Mac setup history: docs/evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md; windows-pilot/vm-testing/README.md. Allowlisted timing artifacts: artifacts/windows-vm/20260908-connection-rca/cpu-hot-paths.json and cpu-summary.json. Raw logs/profiles remain protected. No callable Plane/WhatsApp MCP is exposed in this session; canonical project-scoped Plane API writer/readback is used. Card stays In Progress; GA RED.
-
-### CLWX-127 — Stabilize repository guidance, Plane snapshot and next-agent handoff
-
-- **State:** In Progress  |  **Priority:** high
-
-CLWX-HANDOFF-20260908 — repository organization
-Owner requested repo/code navigation, skills, agent instructions, full board/docs synchronization and a handoff before the next sprint. Scope is operating structure and recoverable reviewed source; new product implementation/packaging is paused.
-Acceptance
-
-- One current completion plan names the exact clean candidate, installed baseline, held branches, blockers, owners and sequential/parallel dependencies.
-- Repository guide maps source modules, runtime boundaries, tests, public summaries and private artifacts to existing contracts.
-- Codex/Claude skill and agent inventories parse; critical resume/VM workflows exist and matching mirrors agree; local links resolve.
-- Live CLWX changes preserve original acceptance, are detail/list readback-verified, and full JSON/Markdown board snapshots are committed in the repo without enrichment regression.
-- Ollama/llama.cpp research distinguishes measured results from proposals, preserves ASR deferral and no-GA status, and provides a bounded next-agent experiment.
-- Independent handoff review can locate source, evidence and next work without chat history; no new release or external acceptance is claimed.
-Owner: root integrates; documentation author and independent reviewer have separate scopes. Evidence: docs/REPOSITORY_GUIDE.md, docs/AGENT_SKILL_INTEROPERABILITY.md, docs/COMPLETION_PLAN.md, docs/completion-state.json and docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Existing unrelated edits are preserved. Ready requires these documentation checks; only a human closes Done.
 
 ## Cancelled
 
