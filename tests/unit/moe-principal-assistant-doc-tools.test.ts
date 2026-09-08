@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -20,6 +20,122 @@ const PNG_1PX = Buffer.from(
 function canonicalPath(value: string) {
   const realpath = realpathSync.native ?? realpathSync;
   return realpath(value);
+}
+
+type VirtualDirent = {
+  name: string;
+  isSymbolicLink: () => boolean;
+  isDirectory: () => boolean;
+  isFile: () => boolean;
+};
+
+function virtualFile(name: string): VirtualDirent {
+  return {
+    name,
+    isSymbolicLink: () => false,
+    isDirectory: () => false,
+    isFile: () => true,
+  };
+}
+
+function virtualDir(name: string): VirtualDirent {
+  return {
+    name,
+    isSymbolicLink: () => false,
+    isDirectory: () => true,
+    isFile: () => false,
+  };
+}
+
+async function loadDocToolsWithVirtualDefaultRoots() {
+  const fakeHome = path.join(canonicalPath(workDir), `global-budget-home-${process.pid}`);
+  const downloads = path.join(fakeHome, 'Downloads');
+  const documents = path.join(fakeHome, 'Documents');
+  const target = path.join(downloads, 'A_Unique_Target_Audit.pdf');
+  const directories = new Set([fakeHome, downloads, documents]);
+  const files = new Set([target]);
+  const entriesByDir = new Map<string, VirtualDirent[]>([
+    [fakeHome, [virtualDir('Downloads'), virtualDir('Documents')]],
+    [
+      downloads,
+      [
+        virtualFile('A_Unique_Target_Audit.pdf'),
+        ...Array.from({ length: 2000 }, (_, i) =>
+          virtualFile(`downloads-filler-${String(i).padStart(4, '0')}.pdf`),
+        ),
+      ],
+    ],
+    [
+      documents,
+      Array.from({ length: 2000 }, (_, i) =>
+        virtualFile(`documents-filler-${String(i).padStart(4, '0')}.pdf`),
+      ),
+    ],
+  ]);
+  const normalize = (value: string) => path.resolve(value);
+  const isVirtual = (value: string) => {
+    const candidate = normalize(value);
+    return candidate === fakeHome || candidate.startsWith(fakeHome + path.sep);
+  };
+  const makeRealpath = (actualRealpath: typeof realpathSync) => {
+    const realpath = ((value: string) =>
+      (isVirtual(value) ? normalize(value) : actualRealpath(value))) as typeof realpathSync;
+    realpath.native = ((value: string) =>
+      (isVirtual(value) ? normalize(value) : (actualRealpath.native ?? actualRealpath)(value))) as typeof realpathSync.native;
+    return realpath;
+  };
+
+  vi.resetModules();
+  vi.doMock('node:fs', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:fs')>();
+    return {
+      ...actual,
+      existsSync(value: Parameters<typeof actual.existsSync>[0]) {
+        const candidate = normalize(String(value));
+        if (directories.has(candidate) || files.has(candidate)) return true;
+        if (isVirtual(candidate)) return false;
+        return actual.existsSync(value);
+      },
+      readdirSync(
+        value: Parameters<typeof actual.readdirSync>[0],
+        options?: Parameters<typeof actual.readdirSync>[1],
+      ) {
+        const candidate = normalize(String(value));
+        const entries = entriesByDir.get(candidate);
+        if (entries) return options ? entries : entries.map((entry) => entry.name);
+        return actual.readdirSync(value, options as never);
+      },
+      realpathSync: makeRealpath(actual.realpathSync),
+      statSync(value: Parameters<typeof actual.statSync>[0]) {
+        const candidate = normalize(String(value));
+        if (directories.has(candidate)) {
+          return {
+            isDirectory: () => true,
+            isFile: () => false,
+            size: 0,
+            mtime: new Date('2026-09-08T00:00:00.000Z'),
+          };
+        }
+        if (files.has(candidate)) {
+          return {
+            isDirectory: () => false,
+            isFile: () => true,
+            size: 5,
+            mtime: new Date('2026-09-08T00:00:00.000Z'),
+          };
+        }
+        return actual.statSync(value);
+      },
+    };
+  });
+
+  try {
+    const mod = await import('../../extensions/moe-principal-assistant/doc-tools.mjs');
+    return { ...mod, fakeHome };
+  } finally {
+    vi.doUnmock('node:fs');
+    vi.resetModules();
+  }
 }
 
 beforeAll(async () => {
@@ -140,21 +256,9 @@ describe('document.* native tools (Lane A — Windows-safe)', () => {
   });
 
   it('applies the document.find entry budget globally across default roots', async () => {
-    const { findDocuments } = await loadDocTools();
+    const { findDocuments, fakeHome } = await loadDocToolsWithVirtualDefaultRoots();
     const previousHome = process.env.HOME;
     const previousUserProfile = process.env.USERPROFILE;
-    const fakeHome = path.join(canonicalPath(workDir), `global-budget-home-${process.pid}`);
-    const downloads = path.join(fakeHome, 'Downloads');
-    const documents = path.join(fakeHome, 'Documents');
-    mkdirSync(downloads, { recursive: true });
-    mkdirSync(documents, { recursive: true });
-    writeFileSync(path.join(downloads, 'A_Unique_Target_Audit.pdf'), 'match');
-    for (let i = 0; i < 2000; i += 1) {
-      writeFileSync(path.join(downloads, `downloads-filler-${String(i).padStart(4, '0')}.pdf`), 'x');
-    }
-    for (let i = 0; i < 2500; i += 1) {
-      writeFileSync(path.join(documents, `documents-filler-${String(i).padStart(4, '0')}.pdf`), 'x');
-    }
 
     process.env.HOME = fakeHome;
     process.env.USERPROFILE = fakeHome;
