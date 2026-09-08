@@ -68,11 +68,25 @@
       "output": "SUMMARY:\nThe committee shares the staff meal preferences for Friday. Keisha Mohammed asked for the small meal, Keisha Ali asked for the extra-large meal, and Marcus Persad asked for the medium meal. Anil Rampersad is not attending. They ask you to confirm the final counts with the caterer by Wednesday.\n\nREPLY:\nI will confirm the small, extra-large and medium meals with the caterer by Wednesday."
     },
     {
+      "id": "within-sentence-attribute-swap",
+      "expected": "FAIL",
+      "mutationClass": "attribute-cue-borrow",
+      "note": "W2 review Finding 2: 'small meal and a vegetarian shirt' — every binding is attribute-swapped inside one sentence, yet both 'meal' and 'shirt' cues are present in the segment. A checker that tests cue presence anywhere in the segment (instead of proximity to the value) passes this.",
+      "output": "SUMMARY:\nThe sports day committee reports staff meal and shirt picks for Friday. Keisha Mohammed wants a small meal and a vegetarian shirt. Keisha Ali wants the chicken meal and an extra-large shirt with no peanuts in her meal. Marcus Persad wants the fish meal, a medium shirt and 3 extra jerseys for his relay team. Anil Rampersad is not attending, so he needs no meal or shirt. They ask you to confirm the final counts with the caterer by Wednesday.\n\nREPLY:\nThank you for collecting the picks. I will confirm the final counts with the caterer by Wednesday, and I have the note that Keisha Ali's meal must contain no peanuts. Noted that Anil Rampersad is not attending."
+    },
+    {
       "id": "negation-dropped",
       "expected": "FAIL",
       "mutationClass": "negation-drop",
       "note": "Anil's 'not attending' becomes 'attending' — a strict token subset of the source, invisible to membership checks.",
       "output": "SUMMARY:\nThe sports day committee reports staff meal and shirt picks for Friday. Keisha Mohammed wants the vegetarian meal and a small shirt; Keisha Ali wants the chicken meal and an extra-large shirt with no peanuts in her meal. Marcus Persad wants the fish meal, a medium shirt and 3 extra jerseys for his relay team. Anil Rampersad is attending on Friday. They ask you to confirm the final counts with the caterer by Wednesday.\n\nREPLY:\nThank you for collecting the picks. I will confirm the final counts with the caterer by Wednesday, and I have the note that Keisha Ali's meal must contain no peanuts."
+    },
+    {
+      "id": "negation-borrowed-from-adjacent-fact",
+      "expected": "FAIL",
+      "mutationClass": "negation-borrow",
+      "note": "W2 review Finding 1: 'Anil Rampersad is attending and needs no meal or shirt.' — the most realistic negation drop for this source: only the first negation is dropped, and the adjacent fact's legitimate 'no meal' sits inside a lookahead window from 'attending'. A checker with an unbound after-window credits it and passes.",
+      "output": "SUMMARY:\nThe sports day committee reports staff meal and shirt picks for Friday. Keisha Mohammed wants the vegetarian meal and a small shirt; Keisha Ali wants the chicken meal and an extra-large shirt with no peanuts in her meal. Marcus Persad wants the fish meal, a medium shirt and 3 extra jerseys for his relay team. Anil Rampersad is attending and needs no meal or shirt. They ask you to confirm the final counts with the caterer by Wednesday.\n\nREPLY:\nThank you for collecting the picks. I will confirm the final counts with the caterer by Wednesday, and I have the note that Keisha Ali's meal must contain no peanuts."
     },
     {
       "id": "negation-inverted",

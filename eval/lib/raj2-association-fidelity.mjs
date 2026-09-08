@@ -25,12 +25,17 @@
  *                                to the expected person.
  *   - association-misattributed— an expected value of an attribute attributed
  *                                to a person who does not hold that value.
- *   - attribute-cue-missing    — value found with the right person but none of
- *                                the fact's attribute cue words in the segment
- *                                (the literal RAJ-2 class: "small MEAL" where
- *                                the source said "small SHIRT").
+ *   - attribute-cue-missing    — value found with the right person but the
+ *                                attribute cue NEAREST the value is never one
+ *                                of the fact's cues (the literal RAJ-2 class:
+ *                                "small MEAL" where the source said "small
+ *                                SHIRT" — even when both cue words co-occur in
+ *                                the sentence).
  *   - negation-dropped         — a negated fact stated without a negation cue
- *                                in the window around the value.
+ *                                bound to the value: in the window AND not
+ *                                separated by a clause fence (comma/
+ *                                conjunction), so an adjacent fact's negation
+ *                                is never borrowed.
  *   - negation-inverted        — a positive fact stated under a negation cue.
  *   - action-token-missing     — a required requested-action token absent from
  *                                the whole output.
@@ -53,6 +58,14 @@ export const NEG_BEFORE_WINDOW = 24;
  * lookahead from "extra-large" reaches the legitimate "no" of the NEXT fact
  * and would fail a faithful summary. */
 export const NEG_AFTER_WINDOW = 16;
+
+/** Clause fence between a negation cue and its value: the cue does not bind
+ * across punctuation or a coordinating/subordinating conjunction. This is what
+ * stops "is attending AND needs no meal" from crediting the adjacent fact's
+ * "no" to "attending" (W2 Finding 1) and "not one to skip, is attending" from
+ * crediting a stray "not" across a comma. Deterministic token fence, not a
+ * parser. */
+const BINDING_BREAKER = /[,;:()]|(?<![A-Za-z0-9-])(?:and|but|so|or|then|because|while)(?![A-Za-z0-9-])/i;
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -101,11 +114,44 @@ export function findMentions(segmentText_, persons) {
   return mentions.sort((a, b) => a.start - b.start);
 }
 
-function hasCueInWindow(segment, valueStart, valueEnd, lookAfter) {
-  const from = Math.max(0, valueStart - NEG_BEFORE_WINDOW);
-  const to = lookAfter ? Math.min(segment.length, valueEnd + NEG_AFTER_WINDOW) : valueStart;
-  const window = segment.slice(from, to);
-  return NEGATION_CUES.some((cue) => tokenRegex(cue).test(window));
+/** A negation cue counts for a value only when it is inside the window AND the
+ * text between cue and value crosses no clause fence — i.e. the cue is bound
+ * to THIS value, not borrowed from an adjacent fact. */
+function hasBoundNegationCue(segment, valueStart, valueEnd, lookAfter) {
+  for (const cue of NEGATION_CUES) {
+    for (const hit of allMatches(tokenRegex(cue), segment)) {
+      if (hit.end <= valueStart) {
+        if (valueStart - hit.end > NEG_BEFORE_WINDOW) continue;
+        if (!BINDING_BREAKER.test(segment.slice(hit.end, valueStart))) return true;
+      } else if (lookAfter && hit.start >= valueEnd) {
+        if (hit.start - valueEnd > NEG_AFTER_WINDOW) continue;
+        if (!BINDING_BREAKER.test(segment.slice(valueEnd, hit.start))) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** Nearest attribute-cue occurrence to a value, over the WHOLE cue vocabulary.
+ * The following cue wins (English attributive: "small SHIRT", "3 extra
+ * JERSEYS"); with none following, the nearest preceding one ("Keisha Ali's
+ * MEAL must contain no peanuts"). The fact's own cue being merely present
+ * somewhere in the segment is NOT binding — in "a small meal and a vegetarian
+ * shirt" the nearest cue to "small" is "meal", so the shirt-size fact reds
+ * (W2 Finding 2). */
+function nearestAttributeCue(segment, valueStart, valueEnd, cueVocabulary) {
+  let after = null;
+  let before = null;
+  for (const cue of cueVocabulary) {
+    for (const hit of allMatches(tokenRegex(cue), segment)) {
+      if (hit.start >= valueEnd) {
+        if (after === null || hit.start < after.start) after = { start: hit.start, end: hit.end, cue };
+      } else if (hit.end <= valueStart) {
+        if (before === null || hit.end > before.end) before = { start: hit.start, end: hit.end, cue };
+      }
+    }
+  }
+  return after ?? before;
 }
 
 function factValues(fact) {
@@ -139,6 +185,9 @@ export function checkAssociationFidelity(outputText, expectations) {
   const failures = [];
   const persons = expectations.persons ?? [];
   const text = String(outputText ?? '');
+  const cueVocabulary = [...new Set(
+    persons.flatMap((p) => (p.facts ?? []).flatMap((f) => (f.attributeCues ?? []).map((c) => c.toLowerCase()))),
+  )];
 
   for (const person of persons) {
     for (const fact of person.facts ?? []) {
@@ -148,20 +197,26 @@ export function checkAssociationFidelity(outputText, expectations) {
         failures.push({ type: 'association-missing', person: person.name, attribute: fact.attribute, value: fact.value, detail: 'no occurrence of the value is attributed to this person' });
         continue;
       }
-      const cues = fact.attributeCues ?? [];
-      if (cues.length > 0 && !mine.some((o) => cues.some((cue) => tokenRegex(cue).test(o.segment)))) {
-        failures.push({ type: 'attribute-cue-missing', person: person.name, attribute: fact.attribute, value: fact.value, detail: `value bound to the person but none of [${cues.join(', ')}] appears in any such segment` });
+      const cues = (fact.attributeCues ?? []).map((c) => c.toLowerCase());
+      if (cues.length > 0) {
+        const bound = mine.some((o) => {
+          const nearest = nearestAttributeCue(o.segment, o.start, o.end, cueVocabulary);
+          return nearest !== null && cues.includes(nearest.cue);
+        });
+        if (!bound) {
+          failures.push({ type: 'attribute-cue-missing', person: person.name, attribute: fact.attribute, value: fact.value, detail: `value bound to the person but the attribute cue nearest the value is never one of [${cues.join(', ')}] — a cue elsewhere in the segment does not bind` });
+        }
       }
       if (fact.negated) {
         for (const o of mine) {
-          if (!hasCueInWindow(o.segment, o.start, o.end, true)) {
-            failures.push({ type: 'negation-dropped', person: person.name, attribute: fact.attribute, value: fact.value, detail: 'negated fact stated without a negation cue' });
+          if (!hasBoundNegationCue(o.segment, o.start, o.end, true)) {
+            failures.push({ type: 'negation-dropped', person: person.name, attribute: fact.attribute, value: fact.value, detail: 'negated fact stated without a negation cue bound to the value' });
             break;
           }
         }
       } else {
         for (const o of mine) {
-          if (hasCueInWindow(o.segment, o.start, o.end, false)) {
+          if (hasBoundNegationCue(o.segment, o.start, o.end, false)) {
             failures.push({ type: 'negation-inverted', person: person.name, attribute: fact.attribute, value: fact.value, detail: 'positive fact stated under a negation cue' });
             break;
           }
@@ -207,7 +262,13 @@ export function checkAssociationFidelity(outputText, expectations) {
 
 /** Mutation classes the fixture MUST carry as expected-FAIL controls; without
  * them a weakened checker could go green silently. */
-export const REQUIRED_MUTATION_CLASSES = ['association-swap', 'attribute-swap', 'negation-drop'];
+export const REQUIRED_MUTATION_CLASSES = [
+  'association-swap',
+  'attribute-swap',
+  'attribute-cue-borrow', // W2 review Finding 2: within-sentence attribute swap where both cues co-occur
+  'negation-drop',
+  'negation-borrow', // W2 review Finding 1: adjacent fact's negation credited to a dropped one
+];
 
 /**
  * Structural fail-closed validation of the fixture itself.

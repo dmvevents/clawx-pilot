@@ -93,6 +93,46 @@ describe('CLWX-115 checker: person→fact bindings the membership probe cannot s
     expect(failureTypes(caseById('negation-dropped').output)).toContain('negation-dropped');
   });
 
+  it('fails a borrowed negation: the adjacent fact\'s "no meal" cannot negate "attending" (W2 Finding 1)', () => {
+    const { failures } = checkAssociationFidelity(
+      caseById('negation-borrowed-from-adjacent-fact').output,
+      fixture.expectations,
+    );
+    expect(failures).toContainEqual(
+      expect.objectContaining({ type: 'negation-dropped', person: 'Anil Rampersad', value: 'attending' }),
+    );
+  });
+
+  it('a stray "not" across a clause boundary does not satisfy a negated fact', () => {
+    // Reviewer variant of Finding 1: "not one to skip" is separated from
+    // "attending" by a comma; the cue must not bind across it.
+    const output = caseById('faithful').output.replace(
+      'Anil Rampersad is not attending, so he needs no meal or shirt.',
+      'Anil Rampersad, not one to skip, is attending on Friday.',
+    );
+    const { failures } = checkAssociationFidelity(output, fixture.expectations);
+    expect(failures).toContainEqual(
+      expect.objectContaining({ type: 'negation-dropped', person: 'Anil Rampersad', value: 'attending' }),
+    );
+  });
+
+  it('fails the within-sentence attribute swap: "small meal and a vegetarian shirt" (W2 Finding 2)', () => {
+    // Both cue words are present in the segment; only proximity to the value
+    // exposes that every binding is swapped. Both of Keisha Mohammed's facts
+    // must red, and this is a cue failure, not a missing association.
+    const { failures } = checkAssociationFidelity(
+      caseById('within-sentence-attribute-swap').output,
+      fixture.expectations,
+    );
+    expect(failures).toContainEqual(
+      expect.objectContaining({ type: 'attribute-cue-missing', person: 'Keisha Mohammed', attribute: 'meal' }),
+    );
+    expect(failures).toContainEqual(
+      expect.objectContaining({ type: 'attribute-cue-missing', person: 'Keisha Mohammed', attribute: 'shirt-size' }),
+    );
+    expect(failures.map((f: { type: string }) => f.type)).not.toContain('association-missing');
+  });
+
   it('fails an inverted negation: "does not want the vegetarian meal" against a positive source fact', () => {
     expect(failureTypes(caseById('negation-inverted').output)).toContain('negation-inverted');
   });
