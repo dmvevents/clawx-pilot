@@ -1,6 +1,8 @@
 # Deferred Windows ASR: memory-efficient whisper.cpp
 
-**Owner direction, September 8:** plan to use [whisper.cpp](https://github.com/ggml-org/whisper.cpp) efficiently. ASR/microphone remains **outside the current release**. This is a post-release design under CLWX-87, linked from the [main source study](OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md) and [completion plan](../COMPLETION_PLAN.md). No binary/model was downloaded, built or tested for this study.
+**Execution update, September 8:** the owner has now authorized Claude CLI implementation on a separate backlog branch (`lane/whisper-cpp-backlog-20260908`). The current GA candidate still excludes ASR. Adapter source tests, binary/model provenance, Windows memory/accuracy and installed microphone acceptance remain distinct gates. The design below remains the implementation basis.
+
+**Original planning direction, September 8:** plan to use [whisper.cpp](https://github.com/ggml-org/whisper.cpp) efficiently. ASR/microphone remains **outside the current release**. This is a post-release design under CLWX-87, linked from the [main source study](OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md) and [completion plan](../COMPLETION_PLAN.md). No binary/model was downloaded, built or tested for this study.
 
 ## Proposed design
 

@@ -32,6 +32,7 @@ This guide is a navigation map for agents and reviewers working in the ClawX / M
 | `docs/PROJECT_CONTRACT.md` | Stable cross-agent product and safety contract. | Update only for durable rules that should survive sessions. |
 | `docs/COMPLETION_PLAN.md`, `docs/CURRENT_WINDOWS_RC.md`, `docs/GA_RELEASE_EVIDENCE_MANIFEST.md` | Current outcome, candidate pointer and release evidence. | Root owns these during release execution. Do not create competing current-status docs. |
 | `docs/plane-board` | Local snapshots of Plane board state. | Board **Ready** requires evidence; humans close **Done**. Do not edit for private scratch notes. |
+| `docs/bugs` | Reproducible defect reports and the shared handoff template. | Every discovered bug needs a deduplicated Plane card, evidence, cause confidence, verification status and next action. |
 | `docs/build`, `docs/testing`, `docs/evidence`, `docs/research`, `docs/release-manifests` | Maintained runbooks, local/VM testing docs, receipts, research ledgers and release manifests. | Add dated, source-backed evidence. Keep private data redacted. |
 | `docs/project-history`, `docs/wiki`, legacy dated plans | Searchable history and decision context. | Historical notes are evidence, not current authority. Check current candidate docs before using them. |
 | `artifacts/`, `.tmp/`, `.omx/`, `.omc/`, `playwright-report/` | Local/generated diagnostic output. | Treat as private/local unless a task explicitly stages a redacted artifact. Do not commit raw private logs, credentials, full emails or form URLs. |

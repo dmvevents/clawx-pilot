@@ -25,6 +25,8 @@ Repository layout, module ownership and evidence locations: [docs/REPOSITORY_GUI
 
 ## Verification
 
+Every discovered bug requires an existing-or-deduplicated Plane card and a reproducible report under [docs/bugs](docs/bugs/README.md), using the [template](docs/bugs/TEMPLATE.md). Record evidence, hypotheses, fixes, failed attempts, tests and the next exact action before leaving the workstream; incomplete fixes and defects in tests/tooling need the same handoff.
+
 Use `pnpm typecheck`, `pnpm lint:check`, focused Vitest and applicable harness/E2E checks from the shared contract. Development gate green is not installed-build or release acceptance. Do not run live email/forms commands without first checking their actual side effects and authorization.
 
 Report what changed, the exact evidence, remaining gaps and the next outcome. Keep all product status in the linked maintained documents; keep this entrypoint small.

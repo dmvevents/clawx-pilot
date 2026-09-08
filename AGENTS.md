@@ -24,6 +24,8 @@ Repository layout, module ownership and evidence locations: [docs/REPOSITORY_GUI
 
 ## Verification and reporting
 
+Every discovered bug requires a reproducible handoff: update the existing Plane card (create one only after checking for duplicates) and its report under [docs/bugs](docs/bugs/README.md). Follow the [bug report template](docs/bugs/TEMPLATE.md); document the defect before leaving the workstream, including when the fix is incomplete. This applies to product, test, tooling and false-PASS defects.
+
 Use focused tests, then applicable typecheck/lint/harness/E2E gates. `pnpm lint:check` does not autofix. A source/static pass does not prove an installed artifact, tenant flow or release. Record the exact tested revision, artifact/environment where relevant, result and remaining gaps.
 
 Keep current product state in the completion plan, candidate pointer and evidence manifest. Do not add another competing “current” plan. Report the completed outcome and the next evidence needed, not the number of agent iterations.

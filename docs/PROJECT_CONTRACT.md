@@ -70,6 +70,18 @@ Do not reorganize runtime folders during stabilization merely to make this table
 6. Review must be independent of the author. Resolve findings against the actual contract and evidence. Preserve assigned review requirements; do not manufacture extra review rounds once findings are resolved and the diff is unchanged.
 7. Update current plan and existing card evidence once per meaningful delta. If nothing material changed and the next step is externally blocked, report the blocker and stop the tick. Do not rediscover it or manufacture work.
 
+## Bug documentation and handoff
+
+The owner requires thorough, transferable documentation for every discovered bug, including unmerged changes, broken tests, automation and false-PASS results. Do not wait for a fix before reporting a defect.
+
+1. Search the existing CLWX cards and bug reports. Update the owning card; create a bug card only when the defect has no suitable owner. Related setup features and acceptance cards remain linked dependencies, not substitutes for a reproducible bug record.
+2. Create or update `docs/bugs/CLWX-<number>-<topic>.md` using [the template](bugs/TEMPLATE.md). Capture environment/build identity, timestamp/timezone, minimal reproduction, expected/actual behavior, redacted evidence, the relevant code path, confirmed cause versus hypotheses, attempted changes and outcomes, test commands/results, owner/worktree/revisions, blockers and the next exact action. Write `UNKNOWN` or `NOT_RUN` where evidence is absent.
+3. Preserve failed attempts and independent review findings. A spending cap, running process, source test or reachable port is not evidence that the user journey works. Record fixes and regression coverage separately from packaging, installed, tenant and stakeholder acceptance.
+4. Link the report from its Plane card and the report index. Verify board write/readback and refresh the repo snapshot after meaningful changes. If the board is unavailable, retain the exact pending payload locally and state that synchronization is blocked; do not claim the bug is filed remotely.
+5. Store secrets and private customer material only in authorized private evidence locations; committed reports contain sanitized facts and durable source references. Another agent must be able to recover the work without reading the original conversation or repeating failed experiments.
+
+Keep overall release state in the completion plan and evidence manifest. Bug reports are defect-specific handoffs, not competing release plans.
+
 ## Stakeholder intake
 
 Read only the project-relevant threads/documents. Resolve current WhatsApp contacts rather than assuming the old phone-number thread is current: Raj's newer messages use a privacy `@lid` thread. The local MCP may be present in Claude but unavailable in Codex; record the actual access path and freshness. Read-only underlying storage is a valid fallback when authorized.

@@ -1,10 +1,10 @@
 # Current Windows RC
 
-**September 8 handoff: GA RED; new implementation and packaging paused by the owner.** The current work is research, repository/board organization and a verifiable next-agent handoff. [COMPLETION_PLAN.md](COMPLETION_PLAN.md) owns the next sprint; [execution evidence](evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md) owns the scoped proofs. ASR is deferred; helper/keyless integrity remains required.
+**September 8 execution resumed: GA RED.** The owner has started supervised Claude Fable 5/Bedrock worktrees for source repairs, CLI monitoring, history/skills review and a separate Whisper.cpp backlog branch. [COMPLETION_PLAN.md](COMPLETION_PLAN.md) owns execution and dependencies; [execution evidence](evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md) owns the scoped product proofs. ASR remains outside this release; helper/keyless integrity remains required. No artifact identity has changed.
 
-## Frozen source candidate — moe.26, not packaged
+## Current source candidate — moe.26, not packaged
 
-`release/moe26-plan-execution` at `f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5`, checkout `/private/tmp/clawx-plan-execution-20260908`. Reviewed S1–S4 and native Ollama changes are integrated; version is `0.4.3-moe.26`. No push, hosted build, installer, installation or publication exists for this source. Full preflight is not green: one actual-9.2 tool-policy oracle remains unresolved; held test repair `24e1cfd3` is excluded. See the exact handoff and remaining gates in the completion plan.
+`release/moe26-plan-execution` at `6ec328073f272c538e2e0d653824c1f407b6e6e4`, checkout `/private/tmp/clawx-plan-execution-20260908`. Reviewed S1–S4, native Ollama, actual-9.2 policy oracle and read-only Graph diagnosis are integrated; version is `0.4.3-moe.26`. No push, hosted build, installer, installation or publication exists for this source. The policy oracle now has independent approval and 22 focused passes; Graph diagnosis has 83 focused passes and independent approval. Full preflight awaits the remaining source integrations; held test repair `24e1cfd3` remains excluded. See the exact handoff and remaining gates in the completion plan.
 
 ## Latest installed diagnostic — moe.25
 

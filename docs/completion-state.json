@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T10:42:41.730591+00:00",
+  "updatedAt": "2026-09-08T12:13:39.204988+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -1104,6 +1104,18 @@
           }
         }
       }
+    },
+    "ownerRdpSeptember8": {
+      "observedAt": "2026-09-08T11:59:18Z",
+      "bugCards": [
+        "CLWX-130",
+        "CLWX-131"
+      ],
+      "graph": "handler present; configured=false; signedIn=false",
+      "browser": "stock browser.start timed out; Mac menubar hint in tool result; later 18792 CDP belongs Session1 while Gateway and18800 belongSession2",
+      "artifactIdentity": "incident version/hash not freshly reverified",
+      "evidence": "artifacts/ga-fable-20260908/graph-feedback/",
+      "reports": "docs/bugs/README.md"
     }
   },
   "statusMeaning": {
@@ -1578,17 +1590,17 @@
     }
   },
   "planningPause": {
-    "status": "ACTIVE_HANDOFF_STABILIZATION",
+    "status": "LIFTED_OWNER_EXECUTION_RESUMED",
     "ownerDirected": true,
     "date": "2026-09-08",
     "scope": "Owner paused new implementation and packaging for Ollama/llama.cpp research, repository/skills/agent organization, full Plane/docs update and next-agent handoff. ASR remains deferred.",
     "study": "docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md",
     "communicationMap": "docs/architecture/OPENCLAW_WINDOWS_COMMUNICATION_MAP.md",
     "deferredAsrPlan": "docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md",
-    "resumedAt": "2026-09-08T09:34:32.351960+00:00",
-    "resumeDirection": "Historical 09:34 execution instruction, superseded by current research/organization handoff pause.",
+    "resumedAt": "2026-09-08T11:27:19.208808+00:00",
+    "resumeDirection": "Owner requests plan then execute using Claude Fable 5 through Bedrock, independent tester, board/state acceptance and live CLI monitoring.",
     "pausedAt": "2026-09-08T10:33:12.002316+00:00",
-    "resumeCondition": "Next owner execution instruction; do not infer permission to build from this documentation task.",
+    "resumeCondition": "Satisfied by newer owner execution instruction",
     "reviewedUpgradeWorktree": "/private/tmp/clawx-openclaw-2026-9-upgrade-20260908"
   },
   "latestDiagnosticBaseline": {
@@ -1643,7 +1655,7 @@
     }
   },
   "improvementPlan": {
-    "status": "PAUSED_FOR_RESEARCH_ORGANIZATION_HANDOFF",
+    "status": "EXECUTING_CLAUDE_BEDROCK",
     "path": "docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md",
     "maxConcurrentChildAgents": 6,
     "integrationOwner": "root",
@@ -1720,7 +1732,7 @@
       {
         "id": "S5",
         "name": "Integration and independent review",
-        "status": "BLOCKED_POLICY_ORACLE_HANDOFF",
+        "status": "INTEGRATING_REVIEWED_SOURCE_REMAINING_BROWSER_GRAPH_FIDELITY",
         "dependsOn": [
           "S1",
           "S2",
@@ -1732,7 +1744,7 @@
       {
         "id": "S6",
         "name": "Identified build then sequential Windows acceptance",
-        "status": "PAUSED_NOT_BUILT",
+        "status": "WAITING_PREREQUISITE_EVIDENCE",
         "dependsOn": [
           "S5"
         ],
@@ -1741,7 +1753,7 @@
       {
         "id": "S7",
         "name": "Gate, distribution and stakeholder acceptance",
-        "status": "PAUSED_NOT_RUN",
+        "status": "WAITING_PREREQUISITE_EVIDENCE",
         "dependsOn": [
           "S6"
         ],
@@ -1750,12 +1762,12 @@
       {
         "id": "D1",
         "name": "Deferred whisper.cpp ASR implementation",
-        "status": "DEFERRED",
-        "dependsOn": [
-          "S7"
-        ],
-        "owner": "future Windows ASR lane",
-        "design": "docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md"
+        "status": "IMPLEMENTING_SEPARATE_BRANCH_RELEASE_DEFERRED",
+        "dependsOn": [],
+        "owner": "Claude Fable5 Whisper.cpp backlog lane",
+        "design": "docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md",
+        "sourceBase": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
+        "releaseIntegration": "NOT_AUTHORIZED_FOR_CURRENT_CANDIDATE"
       }
     ],
     "completedResearchAt": "2026-09-08T09:26:46.297498+00:00",
@@ -2081,7 +2093,7 @@
   },
   "currentSourceCandidate": {
     "version": "0.4.3-moe.26",
-    "source": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
+    "source": "6ec328073f272c538e2e0d653824c1f407b6e6e4",
     "branch": "release/moe26-plan-execution",
     "worktree": "/private/tmp/clawx-plan-execution-20260908",
     "clean": true,
@@ -2089,8 +2101,29 @@
     "packaged": false,
     "installed": false,
     "published": false,
-    "fullPreflight": "NOT_GREEN_POLICY_ORACLE_UNRESOLVED",
-    "heldCommit": "24e1cfd3dd1d736d15252f77ef3e305fb5367857"
+    "fullPreflight": "PENDING_FINAL_INTEGRATION_POLICY_ORACLE_REPAIRED",
+    "heldCommit": "24e1cfd3dd1d736d15252f77ef3e305fb5367857",
+    "reviewedAdditions": [
+      {
+        "authorCommit": "babc1bdc",
+        "integratedCommit": "1c387821",
+        "scope": "actual OpenClaw9.2 policy oracle",
+        "focusedTests": 22,
+        "independentReview": "APPROVE"
+      },
+      {
+        "authorCommit": "73b77d0c",
+        "integratedCommit": "6ec32807",
+        "scope": "read-only Outlook/Graph readiness diagnosis",
+        "focusedTests": 83,
+        "independentReview": "APPROVE"
+      }
+    ],
+    "combinedFocusedTests": {
+      "passed": 105,
+      "files": 6,
+      "source": "6ec328073f272c538e2e0d653824c1f407b6e6e4"
+    }
   },
   "handoff": {
     "status": "COMPLETE_READY_FOR_NEXT_AGENT",
@@ -2121,5 +2154,258 @@
     "boardCardState": "Ready",
     "boardReadback": "PASS_DETAIL_LIST_AND_EXPORT",
     "completedAt": "2026-09-08T10:42:41.730591+00:00"
+  },
+  "execution": {
+    "startedAt": "2026-09-08T11:27:19.208808+00:00",
+    "owner": "root coordinator; Claude CLI authors and independent testers",
+    "model": "claude-fable-5",
+    "provider": "bedrock",
+    "awsProfile": "bedrock",
+    "region": "us-east-2",
+    "baseSource": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
+    "phase": "REVIEWED_SOURCE_INTEGRATED_REMAINING_FIXES",
+    "privateReceipts": "artifacts/ga-fable-20260908",
+    "plan": ".omx/plans/prd-ga-fable-20260908.md",
+    "testSpec": ".omx/plans/test-spec-ga-fable-20260908.md",
+    "planner": "CLI_SUCCEEDED",
+    "independentPlanReview": "REVISE_CORRECTIONS_APPLIED",
+    "monitorImplementation": "REVIEWED_INTEGRATED_ROOT_d1605abf",
+    "acceptance": "PENDING",
+    "vmMutationOwner": "root only; owner actively testing, observation only",
+    "publication": "BLOCKED_REQUIRED_ACCEPTANCE",
+    "monitorCard": "CLWX-128",
+    "lanes": [
+      {
+        "id": "M0",
+        "cards": [
+          "CLWX-128"
+        ],
+        "status": "REVIEWED_INTEGRATED",
+        "owner": "Claude monitor author",
+        "scope": "root operational script/test/runbook; separate from product release",
+        "source": "08891d6c",
+        "tests": 17,
+        "integrated": "d1605abf",
+        "independentReview": "APPROVE"
+      },
+      {
+        "id": "W1",
+        "cards": [
+          "CLWX-106",
+          "CLWX-117"
+        ],
+        "status": "REVIEWED_INTEGRATED",
+        "owner": "Claude policy author",
+        "scope": "actual9.2 tool-policy oracle",
+        "source": "babc1bdc",
+        "integrated": "1c387821",
+        "tests": 22
+      },
+      {
+        "id": "W2",
+        "cards": [
+          "CLWX-115",
+          "CLWX-106"
+        ],
+        "status": "SOURCE_CORRECTION_COMMITTED_REVIEW_PENDING",
+        "owner": "Claude fidelity author",
+        "scope": "synthetic association/negation source fixture and recurring gate",
+        "source": "6ed95e82",
+        "report": "docs/bugs/CLWX-115-fidelity-validator.md",
+        "receipts": "artifacts/ga-fable-20260908/w2-negation-finish"
+      },
+      {
+        "id": "W3/W4",
+        "cards": [
+          "CLWX-25",
+          "CLWX-40",
+          "CLWX-61",
+          "CLWX-43",
+          "CLWX-107"
+        ],
+        "status": "WAITING_SOURCE_FIXES_AND_ACCOUNT_HOLDER",
+        "owner": "Claude audit/protocol author",
+        "scope": "Exact operator/client protocol follows current Microsoft and browser fixes; no live tenant proof yet"
+      },
+      {
+        "id": "TEST",
+        "status": "ACTIVE_INDEPENDENT_REVIEWS",
+        "owner": "independent Claude reviewer/tester"
+      },
+      {
+        "id": "OP",
+        "status": "WAITING_ACCEPTED_INTEGRATION",
+        "owner": "root sole package/VM operator"
+      },
+      {
+        "id": "HISTORY",
+        "cards": [
+          "CLWX-129"
+        ],
+        "status": "SOURCE_CHECKPOINT_REVIEW_PENDING",
+        "owner": "Claude Fable5 author plus bounded Bedrock Nova2Lite critic",
+        "worktree": "/private/tmp/clawx-history-skills-20260908",
+        "scope": "sanitized project log review, repo map, FreeRDP lessons and reusable skills; advisory findings require source verification",
+        "report": "docs/bugs/CLWX-129-history-redaction.md",
+        "source": "2b4a3e81",
+        "tests": 44
+      },
+      {
+        "id": "ASR",
+        "cards": [
+          "CLWX-87"
+        ],
+        "status": "SOURCE_REVIEW_APPROVED_BACKLOG_ONLY",
+        "owner": "Claude Whisper.cpp author",
+        "worktree": "/private/tmp/clawx-whisper-cpp-20260908",
+        "scope": "memory-bounded opt-in adapter; excluded from current release candidate",
+        "source": "ec97e27b",
+        "independentReview": "APPROVE",
+        "tests": 38,
+        "report": "docs/bugs/CLWX-87-whisper-cancellation.md"
+      },
+      {
+        "id": "GRAPH-DIAG",
+        "owner": "Claude Fable5 / Bedrock",
+        "cards": [
+          "CLWX-131"
+        ],
+        "scope": "Read-only Main-owned Outlook diagnosis",
+        "status": "REVIEWED_INTEGRATED",
+        "receipts": "artifacts/ga-fable-20260908/graph-readiness",
+        "source": "73b77d0c",
+        "integrated": "6ec32807",
+        "tests": 83
+      },
+      {
+        "id": "GRAPH-SETUP",
+        "owner": "Claude Fable5 / Bedrock",
+        "cards": [
+          "CLWX-39",
+          "CLWX-40"
+        ],
+        "scope": "Existing OAuth setup, cancellation and reauthentication",
+        "status": "SOURCE_APPROVED_PENDING_UI_AND_INTEGRATION",
+        "receipts": "artifacts/ga-fable-20260908/graph-connection-review",
+        "source": "7a129570",
+        "tests": 63,
+        "e2e": "BLOCKED_MISSING_ELECTRON_BINARY",
+        "independentReview": "APPROVE"
+      },
+      {
+        "id": "BROWSER",
+        "owner": "Claude Fable5 / Bedrock",
+        "cards": [
+          "CLWX-130"
+        ],
+        "scope": "Explicit Chrome opening and Windows session/profile ownership",
+        "status": "SOURCE_COMMITTED_REVIEW_PENDING",
+        "receipts": "artifacts/ga-fable-20260908/browser-finish",
+        "source": "a091a968b89c5127e41c55ab62bf942c56c08e46",
+        "tests": 113
+      },
+      {
+        "id": "FORMS-FILES",
+        "owner": "Claude Fable5 / Bedrock",
+        "cards": [
+          "CLWX-63",
+          "CLWX-71"
+        ],
+        "scope": "Official API and local-tool study; needs factual review",
+        "status": "DOC_REVIEW_PENDING",
+        "receipts": "artifacts/ga-fable-20260908/forms-files-review",
+        "source": "a57e6bd7"
+      }
+    ],
+    "maxConcurrentAuthorClis": 5,
+    "concurrencyReason": "Independent source and tooling lanes; no concurrent VM mutations. Source accepts only after independent review.",
+    "bugHandoffPolicy": "docs/bugs/TEMPLATE.md required by PROJECT_CONTRACT, AGENTS.md and CLAUDE.md",
+    "statusCheckedAt": "2026-09-08T12:33:46.670019+00:00",
+    "epic": "CLWX-22",
+    "sprintExit": "Reviewed browser/Graph/fidelity integration, full source preflight and one identified moe.26 artifact ready for installed acceptance",
+    "activeCliTasks": [
+      "browser-review",
+      "w2-binding-review",
+      "graph-ui-proof",
+      "history-source-review",
+      "forms-files-factual-review"
+    ],
+    "budgetAuthorization": {
+      "source": "Owner: There is no limit. Execute the work trees.",
+      "recordedAt": "2026-09-08T12:36:00.652793+00:00",
+      "spendingCapUsd": null,
+      "newPaidLaunches": "AUTHORIZED",
+      "billing": "CLI metadata is estimated; outcome/ownership/monitoring requirements retained"
+    },
+    "boardCheckpoint": {
+      "issues": 131,
+      "states": 6,
+      "readback": "PASS",
+      "receipt": "artifacts/ga-fable-20260908/no-cap-board-export-verification.json",
+      "monitorState": "Ready"
+    },
+    "releaseCardTally": {
+      "at": "2026-09-08T12:39:25.441861+00:00",
+      "epic": "CLWX-22",
+      "releaseScopeCards": [
+        24,
+        25,
+        26,
+        39,
+        40,
+        42,
+        43,
+        61,
+        63,
+        67,
+        73,
+        77,
+        94,
+        95,
+        96,
+        106,
+        107,
+        110,
+        115,
+        117,
+        123,
+        125,
+        130,
+        131
+      ],
+      "openCards": [
+        25,
+        26,
+        39,
+        40,
+        43,
+        61,
+        63,
+        77,
+        95,
+        96,
+        106,
+        107,
+        110,
+        115,
+        117,
+        123,
+        125,
+        130,
+        131
+      ],
+      "readyCardsRequiringFinalArtifactRevalidation": [
+        24,
+        42,
+        67,
+        73,
+        94
+      ],
+      "openCount": 19,
+      "readyCount": 5,
+      "scope": "Pilot release portions of shared cards; CLWX110 cohort rollout excluded beyond release handoff",
+      "estimate": "Rest of current stabilization sprint plus one acceptance/release sprint; contingency if acceptance exposes defects",
+      "notAnEta": true
+    }
   }
 }

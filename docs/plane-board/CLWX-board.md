@@ -157,115 +157,6 @@ Design first: persistent store decision (local SQLite vs Ministry SharePoint Lis
 Story
 S9 post-GA. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-03.md, four-audit synthesis). Persona bar in docs/PERSONA_STATE_VECTOR_2026-09-03.md.
 
-### CLWX-87 — [asr] Windows ASR quality: WER benchmark + engine decision (System.Speech complaints x4)
-
-- **State:** Backlog  |  **Priority:** medium
-
-CLWX-HANDOFF-CURRENT-20260908
-OWNER DEFERRAL: microphone/ASR quality and whisper.cpp implementation are deferred from this release. Research design lives in docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md; no ASR quality or engine benchmark pass is claimed. Package helper/ffmpeg integrity checks remain required. Correction: the earlier execution prefix/comment about Graph draft permission was posted to this ASR card in error; its current owning card is CLWX-40. Original ASR acceptance/history below is preserved.
-Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
-Prior acceptance and dated history (scope retained)
-CLWX-STUDY-20260908 — deferred whisper.cpp direction
-
-Owner excluded microphone/ASR from the current release and selected memory-efficient whisper.cpp for future ASR. Status is DEFERRED IN RELEASE SCOPE; card is not implementation-complete. Existing packaged helper/keyless checks remain required. No binaries/models were downloaded or built in this research. No source or board state changed.
-
-Proposed design
-
-Use a bundled CPU-only whisper-cli.exe in a short-lived child process. Load one quantized English model only when a transcription is requested; allow one job at a time; exit the process after completion/cancellation. Keep model weights on disk rather than resident in Electron or the Gateway. Start by comparing base.en-q5_1 with base.en-q8_0; choose the smaller model only if it meets the same accuracy criteria. tiny.en is an explicit lower-resource candidate; small.en is an optional quality experiment, not a silent retry/default.
-
-This avoids persistent ASR memory while idle and isolates native allocation lifetime. It trades repeated model loading for lower idle memory. A persistent worker with an idle timeout can be considered later only if measured repeated-dictation latency justifies its memory cost.
-
-flowchart LR
-  Mic[User starts recording] --> Capture[Bounded capture and temporary file]
-  Capture --> Normalize[Bundled FFmpeg: bounded PCM WAV]
-  Normalize --> Admit[Single-job admission and model check]
-  Admit --> Helper[CPU whisper.cpp helper with one model]
-  Helper --> Transcript[Parse bounded result; preserve language and timing]
-  Transcript --> Review[Return editable transcript]
-  Helper --> Cleanup[Exit process; clear owned temporary files]
-  Cancel[Cancel / timeout] --> Cleanup
-
-Transcription produces editable text; it must not automatically send an email or submit a form. Local inference needs no cloud key once its binary and model are available. Keep any existing cloud ASR option separate and explicit; no silent audio upload when a local model fails.
-
-Proposed acceptance criteria for CLWX-87
-
-All thresholds below are initial engineering targets, not approved/measured product guarantees. Revisit only through a recorded decision with evidence; do not quietly raise a budget to obtain a pass.
-
-Criterion
-Proposed measurable target
-
-Hardware/class
-Clean Windows 10/11 standard user, 4 logical CPUs / 8 GiB RAM, CPU-only/no CUDA, no Python, no global Whisper/Node and no developer caches
-
-Default memory
-Compare base q5/q8. Target helper-tree peak Working Set and private bytes each ≤700 MiB for accepted ≤5-minute clips; additionally target ≤512 MiB for q5 on 10–30s clips. Report maximum and p95, not weights size alone.
-
-Low-resource option
-Tiny q8 target ≤450 MiB helper-tree peak; promote it only if the task accuracy criterion holds or the lower-quality option is explicitly documented
-
-Whole-app overhead
-Measure renderer/Main/Gateway plus FFmpeg/helper. Parent process incremental private bytes target ≤64 MiB, measured against an idle baseline with unrelated model jobs stopped
-
-Idle/cancel cleanup
-No ASR helper or model-resident worker within 5s of normal completion, cancellation or timeout; no growing job/temp-file count after 20 repeated clips; parent returns within 32 MiB of its pre-series private-byte baseline after 30s idle
-
-Speed
-On the declared machine, p95 saved-audio-to-text ≤8s for 5s clips and ≤45s for 30s clips. Measure cold model load separately; 5-minute clips target real-time factor ≤1.5. UI remains usable.
-
-Accuracy
-Fixed corpus with at least 40 clips/2,000 reference words, including Trinidadian speakers, MoE vocabulary, dates/numbers, clean/noisy audio and silence. Proposed clean-speech aggregate WER ≤15%; publish every subgroup and entity-error result. Compare System.Speech and available existing cloud evidence without concealing worse subgroups.
-
-Critical facts
-Exact dates/numbers and named entities in a small curated acceptance subset; report uncertain/incorrect transcription for user review rather than automatic downstream action
-
-Silence and failures
-Silence yields no invented sentence; missing/corrupt model, unsupported CPU, denied recording, oversized input and helper crash return typed actionable outcomes; next job succeeds after correction
-
-Distribution/privacy
-Exact binary/model hashes and notices; no administrative install or first-recording package download; local transcription works with non-loopback network blocked; no silent cloud fallback
-
-Observe process memory throughout capture → save → normalization → model load → inference → cleanup, including child processes. Use identical audio, threads, decoding parameters and CPU load across candidates; collect at least 20 timing/memory runs per selected candidate and report sample size. Disk-cold and OS-cache-warm observations are separate. The upstream benchmark helps isolate model compute, but it cannot replace end-to-end app measurements.
-
-Delivery and sequencing
-
-- Now: finish this plan and update CLWX-87/OKR scope. No ASR source or release dependency changes.
-
-- After current release and a resumed ASR workstream: pin/review binary and model provenance; collect the existing and representative reference corpus in parallel with adapter/package design.
-
-- Implement the supervised Windows adapter and bounded capture/normalization. Run focused invocation/error/cleanup tests; do not install CMake/Python on the principal machine.
-
-- Compare quantization/model candidates sequentially on the same Windows hardware, one helper at a time. Select the smallest passing candidate; document rejected alternatives.
-
-- Package once the measured dependency/quality criteria pass; verify offline first use, actual microphone, cancellation, repeated jobs and unaided user workflow on that exact installer.
-
-whisper.cpp source license is MIT; the converted model repository identifies MIT terms. Retain the relevant source/model notices, verify the selected model's provenance, and preserve FFmpeg's existing notices. A successful metadata fetch is not release-artifact verification.
-
-No persistent server, continuous listening, GPU package, automatic larger-model retry or cloud upload is selected for the initial design. Their benefits and costs can be evaluated later without reopening the current release scope.
-
-Design: docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md. Source: https://github.com/ggml-org/whisper.cpp; asset tag b4938 / version v1.9.3 identified by metadata only.
-
-Original finding and acceptance retained below
-
-Finding
-Owner feedback 4+ times across a month: "So have we updated the ASR model? This one is not that good." - System.Speech quality, previously masked by the ffmpeg/packaging failures (CLWX-20/K4). The pipeline is now proven (ASR_SMOKE_OK); the QUALITY question is unanswered.
-
-Acceptance
-WER measured on a fixed known-speech fixture set (Trinidadian-accent samples included) for System.Speech vs whisper.cpp vs Azure; decision recorded; if whisper wins, the Windows bundling cost is estimated. Ties to the minutes story S4.
-
-Source
-Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
-
-**Comments (8):**
-
-- CLWX-HANDOFF-20260908 OWNER DEFERRAL: microphone/ASR quality and whisper.cpp implementation are deferred from this release. Research design lives in docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md; no ASR quality or engine benchmark pass is claimed. Package helper/ffmpeg integrity checks remain required. Correction: the earlier execution prefix/comment about Graph draft permission was posted to this ASR card in error; its current owning card is CLWX-40. Original ASR acceptance/history below is preserved. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Handoff: docs/COMPLETION_PLAN.md. All original acceptance is retained; GA RED, implementation/package pause active.
-- CLWX-EXECUTION-MICROSOFT-20260908. Approved plan execution resumed; S4 Graph permission fix independently reviewed and integrated. Author9ea0dbd7 at base8058e9b5, integrated8fa6bc64: draft creation no longer requires Mail.Send before calling Graph; drafts use Mail.ReadWrite. Send permission plus confirm/review gates remain required. Operation-specific403 diagnostics distinguish draft/send. Baseline failing regression,35 focused tests, typecheck/lint, communication replay/compare and independent review pass. User-Chrome attach/tenant identity, actual inbox/draft/reopen/reply/forward and Forms previews remain distinct installed-account acceptance requirements. Existing VM evidence reports needs_signin; no account-holder session was substituted, no mail sent or Form submitted. No GA promotion from this source result. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md; current plan docs/COMPLETION_PLAN.md. Root alone owns VM mutations. Runtime upgrade b6a0fe8d is separately under independent review; no new package yet.
-- CLWX-STUDY-20260908 Updated the ASR description with the owner-selected whisper.cpp future design and proposed memory/quality/CPU/cleanup acceptance. ASR remains deferred from current release. Quantized base q5/q8 comparison, tiny low-resource candidate, on-demand single-job CPU helper and bounded audio; no measured performance claim. Full plan: docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md.
-- GA checkpoint 03:23 - 2026-09-08 ASR quality boundary. The selected a4efc7e4 VM artifact now has helper identity and synthetic execution proof: ffmpeg and WinSpeech binaries match the artifact, FFmpeg can generate valid PCM, and WinSpeech can execute against a synthetic tone. The VM still has no sound device and the test did not exercise microphone input, app ASR routing or WER/quality against representative Trinidadian-accent fixtures. CLWX-20 helper absence is narrowed; this CLWX-87 quality/engine decision remains In Progress.
-- GA checkpoint 02:30 - 2026-09-08 ASR boundary. Native helper smoke on selected installed 258d3ac passed identity and execution checks for FFmpeg and WinSpeech, including valid PCM generation and synthetic-tone execution. Microphone, ASR quality/WER and app ASR routing are still NOT_TESTED. This removes another helper-layer uncertainty but does not close the ASR quality card.
-- GA final artifact delta - 2026-09-08 ASR boundary. The selected package now artifact-verifies the ASR packaging prerequisite: Windows speech helper files and ffmpeg.exe are present in run 34171848832 / source 258d3ac079e7cbaa8a9c80c574066923f8ef988c. This removes the current package-content blocker that masked ASR runtime testing. This does not close the ASR quality card. The Windows System.Speech WER leg, representative microphone/client proof and any real-accent owner samples remain NOT_RUN or owner/VM gated. GA cannot count ASR quality accepted without those rows or an explicit accepted deferral.
-- GA blocker correction - 2026-09-08 ASR quality/microphone. This is the correct card for the repeated owner complaint that System.Speech quality is not good enough and for the Windows ASR engine decision. CLWX-20 owns the separate ffmpeg-not-found packaging prerequisite; CLWX-67 is reminder pipeline and is not ASR. Current status remains In Progress. The WER harness and Mac whisper measurements exist, but the Windows System.Speech leg, representative Windows client/microphone proof and any real-accent owner samples are still gated by Windows access/current candidate install. GA cannot count ASR quality as accepted until this card has the Windows row or an explicit accepted deferral.
-- WER bench BUILT + Mac legs MEASURED (2026-09-06 driver tick, commit 610779dd) — the quality question now has numbers and a one-command Windows leg; card Todo → In Progress. - Harness: scripts/clwx87-wer-bench.mjs — standard word-level WER (pure, 8 unit guards incl. >100% garbage semantics), deterministic synthetic fixtures (macOS say, voice+rate pinned in eval/fixtures/clwx87-asr-manifest.json; 8 MoE-domain clips carrying the Trinidadian vocabulary a principal dictates — Couva, Chaguanas, San Fernando, Tunapuna, NSCC, daily report, suspensions; no audio binaries committed). Engines: whisper (local CLI — same weights as whisper.cpp, quality-equivalent proxy), transcripts (grades the Windows System.Speech JSON so grading lives in ONE place), azure (loud BLOCKED-INPUT exit 3 without keys — proven; enabling it is an owner/Ministry call since cloud ASR sends audio off-device). - Measured live: whisper/tiny 13.5% and whisper/base 13.5% aggregate on the clean-audio floor (different error mixes; per-clip hypotheses recorded). Visible weakness: Trinidadian place names (“Tuna Pune” for Tunapuna — 30.8% on that clip) — exactly the owner's complaint domain; a domain initial-prompt is the named tuning lever if whisper wins. Number-format artifacts (“3.45” vs spelled-out reference) recorded honestly — fair BETWEEN engines, inflates the absolute floor. - Windows leg authored, VM-gated: windows-pilot/scripts/pilot-asr-wer.ps1 — System.Speech synthesis + the SHIPPED recognition engine over the same manifest, BOM-less JSON, STATE-line contract, lint:ps GREEN. Grading wiring proven both directions locally (perfect stub → 0.0%; corrupted clip caught). - Gates: guards 8/8 new; full suite 1608/6-skip; typecheck + lint + lint:ps clean; static GA gate GREEN 7/0/2 at tick SENSE. Evidence: docs/evidence/CLWX87_WER_2026-09-06.md (incl. bundling-cost groundwork: whisper.cpp tiny ≈75MB / base ≈142MB vs System.Speech 0MB). Resumable trail to acceptance: (1) OWNER: start clawx-win-rc-20260609 (gcloud auth is restored; the VM is TERMINATED) → run pilot-asr-wer.ps1 → grade with --engine transcripts → the System.Speech row completes the comparison and the engine decision gets recorded; (2) OWNER (optional): drop Trinidadian-accent recordings as source:"real" manifest rows — the named gap synthetic TTS cannot cover; (3) if whisper wins, the bundling-cost estimate is already on the evidence. Honest scope note: this tick's review = unit guards + falsifiability probes (transcripts-lane both directions, azure exit-code, symlink entry guard applied from the CLWX-77 lens lesson) — test-infra only, no production code touched, card NOT moved to Ready, so the full multi-lens lane is deferred to the Ready move after the VM leg.
-
 ### CLWX-88 — [forms] Disposition the dead Bearer-API fill tier (401 since May)
 
 - **State:** Backlog  |  **Priority:** low
@@ -740,14 +631,16 @@ Fix directions: plugin-side breaker (after N identical failures return a success
 
 - **State:** Todo  |  **Priority:** none
 
+CLWX-RDP-FEEDBACK-20260908-1548 — Fresh owner RDP evidence: Graph handler is bundled but configured=false and signedIn=false. Chrome-less Graph acceptance cannot run until actual tenant/client setup and account-holder sign-in. Source diagnostic/setup lanes are active under CLWX-39; original Graph-C criteria remain open.
 CLWX-HANDOFF-CURRENT-20260908
 SOURCE-ONLY GRAPH DELTA: reviewed 8fa6bc64 lets draft creation use Mail.ReadWrite without requiring Mail.Send; send still requires its action permission and exact reviewed-state confirmation. Invalid grants/IDs refuse. Chrome-less installed Graph workflow, tenant registration/consent and authenticated read/draft/send evidence are still open. This corrects the email summary mistakenly placed on ASR CLWX-87; that older comment is retained as history, not ASR evidence.
 Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
 Prior acceptance and dated history (scope retained)
 docs/MINISTRY_GRAPH_ACCESS_PLAN.md step C: on a clean install with NO Chrome session, sign in via Entra and run the 14-row Outlook eval against the GRAPH transport (same suite, different path — the routes are already dual-path). Proves the GA-durable Outlook lane end-to-end. Blocked by [Graph-B] + the four Raj decision items (scopes, PKCE public client, loopback redirect, no-app-server identity) on the CLWX-31 session agenda.
 
-**Comments (4):**
+**Comments (5):**
 
+- CLWX-RDP-FEEDBACK-20260908-1548 — Fresh owner RDP evidence: Graph handler is bundled but configured=false and signedIn=false. Chrome-less Graph acceptance cannot run until actual tenant/client setup and account-holder sign-in. Source diagnostic/setup lanes are active under CLWX-39; original Graph-C criteria remain open. Private receipt: artifacts/ga-fable-20260908/graph-feedback/installed-status-and-trace.jsonl. Source/session progress stays separate from installed acceptance.
 - CLWX-HANDOFF-20260908 SOURCE-ONLY GRAPH DELTA: reviewed 8fa6bc64 lets draft creation use Mail.ReadWrite without requiring Mail.Send; send still requires its action permission and exact reviewed-state confirmation. Invalid grants/IDs refuse. Chrome-less installed Graph workflow, tenant registration/consent and authenticated read/draft/send evidence are still open. This corrects the email summary mistakenly placed on ASR CLWX-87; that older comment is retained as history, not ASR evidence. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Handoff: docs/COMPLETION_PLAN.md. All original acceptance is retained; GA RED, implementation/package pause active.
 - 2026-09-03: this card's predecessor (CLWX-39 wiring) landed and the L4 runner now exists: scripts/v2-eval-graph.ts drives the Graph transport in-process with read-only scope expectations (read rows assert real data; draft/send rows assert the graceful refusal; browser-only rows report N-A; anti-mock guard refuses signed-out/mock state; the suite is structurally incapable of dispatching mail). Blocked now ONLY on one ~2-min interactive sandbox sign-in to persist tokens (in-app Settings sign-in or graph-signin-smoke --persist). L5 (Chrome-less) follows on any machine without a Chrome session.
 - Prerequisite unblocked and de-risked: L1-L3 of the Graph ladder PASS (CLWX-39). The Chrome-less transport eval (L4/L5) can now run once the in-app path is wired. Stays Todo.
@@ -1770,6 +1663,21 @@ Owner: root integrates; documentation author and independent reviewer have separ
 
 - CLWX-HANDOFF-20260908 HANDOFF EVIDENCE COMPLETE: repository checkpoint bb729688 contains the navigation/ownership guide, linked AGENTS.md and CLAUDE.md, two validated skill mirrors, current source/artifact/evidence pointers, Ollama/llama.cpp research, next-sprint sequence and full 127-card board snapshot. Independent read-only review found no blocker. Validation: 115 local links, seven native TOMLs, five identical critical mirror pairs, nine-node dependency graph; all prior board comments retained and 13 current descriptions read back with original acceptance preserved. Ready is documentation/handoff acceptance only; GA remains RED. Source f93ac8b3 is frozen/unbuilt; held24e1cfd3 is excluded. No product implementation/package/VM work was resumed.
 
+### CLWX-128 — Supervise Bedrock Claude CLI lanes with progress, deadlines and verified outcomes
+
+- **State:** Ready  |  **Priority:** high
+
+CLWX-SPRINT-CHECKPOINT-20260908-1235 — Operational source independently APPROVED and integrated in root asd1605abf;17synthetic process tests PASS. Corrections cover explicit contrary provider evidence, structured spawn failure, tool restrictions and terminal error subtype refusal. Final review artifacts/ga-fable-20260908/monitor-final-review/result.md; repro python3 -m unittest discover -s tests/ops -p test_claude_runner.py -v. All stated operational criteria verified; Ready for human review. Separate from product candidate/release acceptance. Report:docs/bugs/CLWX-128-supervisor-results.md.
+Prior dated status and full acceptance preserved below.
+CLWX-CLAUDE-MONITOR-20260908 — Owner requested live monitoring of Claude Fable 5 CLI workstreams through Bedrock to reduce GPT spend and prevent silent stalls.
+Acceptance: explicit model/provider; private session/process/event receipts; supervisor heartbeat distinguished from model activity; silence warning without false failure; bounded task deadline with termination limited to the owned process tree; persisted session for deliberate recovery without automatic write replay; exit code plus valid final result checked; independent task/test acceptance kept separate.
+Automated negative controls: quiet live process, exit 0 without result, is_error true, malformed/partial JSON, result before exit, deadline and unrelated-process survival. Independent Claude tester reviews code and runs tests. Reusable script/runbook in repo; no global hooks or credentials changed.
+Current: planner successful on Bedrock; isolated monitor author and independent plan reviewer running. GA remains RED. Product source, installed Windows, tenant and external acceptance are separate gates.
+
+**Comments (1):**
+
+- CLWX-FABLE-EXECUTION-20260908 — Monitor implementation is running in an isolated root worktree; both product source lanes are already covered by the private supervisor. Streams include partial messages, session IDs and explicit Fable 5 selection; task deadlines and quiet warnings are distinct. Independent fake-process tests/review required before Ready. Initial planner authentication failure was an expired bearer override; per-child Bedrock named-profile routing succeeded. Global credentials unchanged. Private evidence: artifacts/ga-fable-20260908/; current docs: docs/COMPLETION_PLAN.md and docs/completion-state.json. No release readiness promotion.
+
 ## Started
 
 ### CLWX-20 — clawx-asr voice-note path fails with ffmpeg-not-found on user machines
@@ -1792,6 +1700,12 @@ Source: local WhatsApp store 2026-06-22. Tier: verified_at_commit (store read 20
 
 - **State:** In Progress  |  **Priority:** none
 
+CLWX-NO-CAP-EXECUTION-20260908 — Latest owner direction supersedes the pending-budget hold: NO SPENDING LIMIT; execute the worktrees. Five monitored Claude Fable5 sessions on Bedrock are live with no CLI cap: Chrome independent review, fidelity delta review, Graph Electron UI proof, history/skills source review and Forms/files factual review. Root owns integration and later single-owner packaging/VM. Source candidate6ec32807 remains unbuilt; GA RED. Sprint/epic sequence and seven pilot acceptance rows remain in docs/COMPLETION_PLAN.md and this card; no scope or acceptance waiver.
+CLWX-SOURCE-CHECKPOINT-20260908-1240 — Progress since sprint checkpoint: Chrome source a091a968 committed with113focused tests and remaining checks passing, independent review queued. Graph source7a129570 independently APPROVED; UI test environment and integration still open. Fidelity correction remains the only active Claude lane at this check. New paid launches/continuations held pending owner total spending limit. GA RED; candidate still6ec32807, no new installer.
+CLWX-SPRINT-CHECKPOINT-20260908-1235 — GA sprint and epic checkpoint: reviewed moe.26 source 6ec32807 has 105 combined focused tests passing. Active lanes are Chrome validation/commit, Graph independent review and fidelity correction. Full integrated preflight and one build precede installed Windows acceptance, Windows10/11 client and Microsoft account proof, performance/recovery rehearsal, verified download and Karunesh unaided rerun. The seven pilot acceptance criteria remain required; broader production/fleet KRs retain their separate milestone. GA RED; no moe.26 installer yet. Current plan docs/COMPLETION_PLAN.md; test spec .omx/plans/test-spec-ga-fable-20260908.md. Owner requested a total spending limit after authorizing doubled lane allowances. Amount is pending; new paid launches/continuations are held. Existing sessions retain original caps.
+Prior dated status and full acceptance preserved below.
+CLWX-RDP-FEEDBACK-20260908-1548 — Owner RDP feedback adds an observed Chrome-open timeout with incorrect Mac recovery guidance and confirms Graph configured=false/signedIn=false. Dedicated Claude browser investigation, Graph connection and Forms/files review sessions launched in isolated worktrees. Existing Gateway connection does not establish browser or email readiness. Independent reviewer rejected two fidelity false-PASS cases; correction is queued. GA remains RED.
+CLWX-FABLE-EXECUTION-20260908 — Owner resumed execution through Claude Fable 5 on Bedrock. Planner completed; independent review corrections applied. W1 actual9.2 oracle and W2 fidelity gate are running from f93ac8b3; M0 monitor is CLWX-128. Independent tester follows receipts, then source integration and one package/VM operator. No moe.26 build or acceptance yet; GA RED.
 CLWX-HANDOFF-CURRENT-20260908
 HANDOFF: reviewed candidate f93ac8b3 (moe.26 reserved) is frozen, not pushed/built/installed. All seven pilot KRs remain incomplete end to end. Moe.25 has three scoped Online passes; actual-9.2 policy oracle, changed-runtime package/client/tenant/document/offline/recovery/rehearsal and unaided tester acceptance remain open. Original production/fleet KRs below remain separate. Root integrates; independent review precedes one build and single-owner VM acceptance. CLWX-126 owns engine comparison; CLWX-127 owns repository/board handoff.
 Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
@@ -2068,8 +1982,10 @@ P5 read image"pytesseract and Pillow are required"document.read_image (base64 to
 Discovery"I couldn't find any files in that folder"breadth-first findWithinDir (c1b18125); OneDrive Desktop still unhandledeval lane; Windows OneDrive path UNVERIFIED
 Accept (GA): every KR above GREEN with cited evidence, and a human closes each workstream card. No card reaches Done by the agent.
 
-**Comments (29):**
+**Comments (31):**
 
+- CLWX-RDP-FEEDBACK-20260908-1548 — Owner RDP feedback adds an observed Chrome-open timeout with incorrect Mac recovery guidance and confirms Graph configured=false/signedIn=false. Dedicated Claude browser investigation, Graph connection and Forms/files review sessions launched in isolated worktrees. Existing Gateway connection does not establish browser or email readiness. Independent reviewer rejected two fidelity false-PASS cases; correction is queued. GA remains RED. Private receipt: artifacts/ga-fable-20260908/graph-feedback/installed-status-and-trace.jsonl. Source/session progress stays separate from installed acceptance.
+- CLWX-FABLE-EXECUTION-20260908 — Owner resumed execution through Claude Fable 5 on Bedrock. Planner completed; independent review corrections applied. W1 actual9.2 oracle and W2 fidelity gate are running from f93ac8b3; M0 monitor is CLWX-128. Independent tester follows receipts, then source integration and one package/VM operator. No moe.26 build or acceptance yet; GA RED. Private evidence: artifacts/ga-fable-20260908/; current docs: docs/COMPLETION_PLAN.md and docs/completion-state.json. No release readiness promotion.
 - CLWX-HANDOFF-20260908 HANDOFF: reviewed candidate f93ac8b3 (moe.26 reserved) is frozen, not pushed/built/installed. All seven pilot KRs remain incomplete end to end. Moe.25 has three scoped Online passes; actual-9.2 policy oracle, changed-runtime package/client/tenant/document/offline/recovery/rehearsal and unaided tester acceptance remain open. Original production/fleet KRs below remain separate. Root integrates; independent review precedes one build and single-owner VM acceptance. CLWX-126 owns engine comparison; CLWX-127 owns repository/board handoff. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Handoff: docs/COMPLETION_PLAN.md. All original acceptance is retained; GA RED, implementation/package pause active.
 - CLWX-EXECUTION-RESUMED-20260908 The owner resumed the documented plan after research completion. S1 lifecycle/failure oracles, S2 isolated OpenClaw compatibility, S3 document fidelity and S4 Microsoft diagnostics now have separate source owners. Root owns integration and the sole VM mutation lane. Independent review precedes one selected candidate build, then installed Windows acceptance and external rerun. ASR remains deferred. Current installed moe.25 source 8058e9b5 hashes are unchanged; IAP protocol/control and authenticated SSH pass. Existing-Main ordinary Online acceptance is running, with no outcome claimed yet. Separate local VM skill/runbook work distinguishes local hypervisor evidence from the verified GCP Server lane. docs/COMPLETION_PLAN.md and docs/completion-state.json are the current pointers; the planning pause is lifted. GA remains RED.
 - CLWX-STUDY-20260908 Updated the OKR description with the dated current pilot acceptance amendment, all five source URLs, concrete reuse decisions, deferred whisper.cpp direction, existing owner-card mapping and concurrent/sequential work packages. Original fleet KRs retained below; no state changed. Research documented; implementation/build/distribution paused; GA RED.
@@ -2231,10 +2147,15 @@ Accept (KR8): reply sent (by Anton); working-session notes record the hostname d
 
 - **State:** In Progress  |  **Priority:** none
 
+CLWX-SOURCE-CHECKPOINT-20260908-1240 — Independent review APPROVE for7a129570, with focused Graph regressions rerun. Source is awaiting integration and Electron UI proof; missing Electron42 test binary and real account-holder/tenant acceptance remain open. See docs/bugs/CLWX-39-graph-sign-in-recovery.md and private graph-connection-review/result.md.
+CLWX-SPRINT-CHECKPOINT-20260908-1235 — Source7a129570 completes callback-state-before-error validation, terminal cancellation and typed rejected-refresh reauthentication;18new+45existing Graph unit tests, typecheck/lint/harness/comms PASS. Independent Graph review now running. Mocked Electron E2E BLOCKED by missing Electron42 binary path.txt in shared test store; not evidence of a Windows installer defect. Real account-holder authentication remains required. Report:docs/bugs/CLWX-39-graph-sign-in-recovery.md.
+Prior dated status and full acceptance preserved below.
+CLWX-RDP-FEEDBACK-20260908-1548 — Read-only installed status at 11:44:52Z confirms Graph integration handler present but client unconfigured and user unsigned in; effectiveMock is true and is not live email. Agent instead queried fictional Gateway outlook configuration. Separate Claude lanes now implement truthful capability diagnostics and customer Graph setup using existing PKCE/config/Settings surfaces. Tenant registration/consent and account-holder sign-in remain external gates; no fake connection, extra permissions or duplicated OAuth implementation. Exact new source must pass independent tests and installed read/draft/recovery acceptance.
 Pull-forward from docs/MINISTRY_GRAPH_ACCESS_PLAN.md step B: wire the EXISTING microsoft-graph oauth flow (manager.ts + microsoft-graph-oauth.ts, already built) behind a flag (CLAWX_GRAPH_AUTH=1) against a dev Entra tenant with a loopback redirect. Acceptance: sign-in → token → one Graph read on a dev account. Makes the Ministry values a config swap and collapses most of KR7 (UserId from token oid claim). Agent-executable now (P class).
 
-**Comments (4):**
+**Comments (5):**
 
+- CLWX-RDP-FEEDBACK-20260908-1548 — Read-only installed status at 11:44:52Z confirms Graph integration handler present but client unconfigured and user unsigned in; effectiveMock is true and is not live email. Agent instead queried fictional Gateway outlook configuration. Separate Claude lanes now implement truthful capability diagnostics and customer Graph setup using existing PKCE/config/Settings surfaces. Tenant registration/consent and account-holder sign-in remain external gates; no fake connection, extra permissions or duplicated OAuth implementation. Exact new source must pass independent tests and installed read/draft/recovery acceptance. Private receipt: artifacts/ga-fable-20260908/graph-feedback/installed-status-and-trace.jsonl. Source/session progress stays separate from installed acceptance.
 - 2026-09-03 completion tick: the in-app Graph lane LANDED. Read-only default scopes (match the granted consent), persisted transport toggles (Settings switches: read/compose via Microsoft cloud) + env overrides, scope-aware compose refusal (URL-form grants recognised; structured principal-readable reason, no raw 500), Graph-403 to structured refusal, graph-prefixed read ids refused loudly by the 5 browser-only actions, attachment fidelity under Graph read, gateway-plugin stub force-parked (host-API adapter is the sole lane). Adversarial review found 3 medium defects in the fresh build; all fixed + regression-tested same tick. Gates: typecheck 0, lint 0 errors, full suite 161 files green. L4 is STAGED (scripts/v2-eval-graph.ts + graph-signin-smoke --persist): the one human step left is a ~2-min interactive sandbox sign-in, then L4 runs agent-side. Held below Ready until the live in-app sign-in + L4 run.
 - Tick 2026-09-02: external gate CLEARED and L1-L3 PASS live against the REAL Ministry tenant. The Ministry delivered the real Application (client) ID and registered the dev redirect URI (http://localhost:53682/callback) with read-only admin consent (profile + inbox read + offline_access). Built scripts/graph-signin-smoke.ts (PKCE loopback, using the shipped extensions/microsoft-graph auth+client modules). Ran it with the sandbox account: L1 PASS - token acquired via PURE PKCE, no client secret in play (refresh token present from offline_access); L2 PASS - stable oid claim present (the KR7 UserId key), tid=9590bb09; L3 PASS - /me resolved + inbox read returned 5 messages. typecheck exit 0. Non-secret config in gitignored ~/openclaw-agent/secrets/graph.env; the client secret is stored NOWHERE. Held below Ready: the in-app flag wiring (CLAWX_GRAPH_AUTH) + host getAccessToken/token-persistence are still pending - openclaw.json keeps plugins.microsoft-graph.enabled=false because register() throws without that host wiring. Evidence: skills/laptop/evidence/2026-09-02-graph-signin-L1-L3/.
 - Card scope transformed by the deep-dive discovery: moe.gov.tt and fac.edu.tt are ONE Entra tenant (9590bb09-ce2c-40e2-8181-fad0a7edebfe — public OpenID metadata, confirmed by the Ministry-branded sign-in on test.fac). The twin registration is now a FALLBACK only: our sandbox account already lives in the Ministry tenant, so once Ansari registers the dev URI + consents the read-only scopes on the REAL app, test.fac signs into it directly — ladder L1–L5 run against production registration with zero twin work. Remaining needs: the client id (tenant id is now public knowledge) + the dev URI (both asked in 01b, SENT). One owner decision parked in GRAPH_TEST_PLAN §4: whether to MFA-enroll test.fac for portal read access (recommendation: no — lane risk; the client id from Raj is the zero-risk path).
@@ -2382,6 +2303,118 @@ Owner directive 2026-09-03 + CLWX-72 lesson: test the artifact, not the workspac
 - 14 FIXED-UNGUARDED findings folded into this matrix (mining pass 2026-09-03; full list docs/BLOCKER_BUG_COLLECTION_2026-09-03.md sec.3): NSIS upgrade-path smoke; SUBMIT_CONFIRMATION_RE unit row; empty-Azure-transcript fallback; packaged forms URL/schema presence; Bedrock transitive deps in verify-openclaw-bundle HOST_LOADABLE; waitForSendCompletion false-sent spec; release hash-chain gate (CLWX-85); persona never advises manual Chrome debugging; PS token-fragment redaction assertion; account-portable harness prompts; branding string-scan as repeatable check; no skipIf(win32) on release-platform coverage; K5 regression matrix per RC; claimed-evidence-exists release gate.
 - Normative input added (owner-directed 2026-09-03): docs/KARUNESH_ERROR_LEDGER.md - every error the external tester ever reported (full WhatsApp history 2026-05-01 onward, 14 ClawX rows K1-K14), each with its derived test criterion. The matrix MUST cover: K1/K2 fresh-box CDP-attach onboarding; K8 INTERMITTENCE rule (each doc read/write repeated >=3x per run, every load context); K10 drag-PDF on a fresh install incl. scanned/protected/large variants; K11 seeded-litter mailbox + no-AWS-creds box for the email flow; K13 Windows degrade with the OpenAI-SDK "Connection error." surface; K14 his exact 5 prompts as a named fixture (karunesh-matrix) beside Raj's 5-prompt suite (K9). Video-generator rows are tagged SEPARATE per the liaison rule and stay out of this matrix.
 
+### CLWX-87 — [asr] Windows ASR quality: WER benchmark + engine decision (System.Speech complaints x4)
+
+- **State:** In Progress  |  **Priority:** medium
+
+CLWX-SPRINT-CHECKPOINT-20260908-1235 — Development-only Whisper.cpp sourceec97e27b independently APPROVED within opt-in scope;38focused tests and Electron typecheck PASS. Reviewer reproduced accepted cancellation having no effect during pre-spawn validation; fix with deterministic barrier/control before product acceptance. Real binary/model/package/Windows mic/RAM/WER NOT_RUN. Excluded from current moe.26 release; no GA promotion. Report:docs/bugs/CLWX-87-whisper-cancellation.md.
+Prior dated status and full acceptance preserved below.
+CLWX-WHISPER-EXECUTION-20260908 — New owner instruction authorizes Claude Fable 5 implementation on a separate backlog branch from f93ac8b3. Memory-bounded CPU whisper.cpp adapter, explicit development opt-in, one helper per job, cancellation/cleanup and typed failure tests. Current GA candidate still excludes ASR; no runtime/model download, Windows memory/WER/microphone/package acceptance claimed. Independent review required. Original criteria remain below.
+CLWX-HANDOFF-CURRENT-20260908
+OWNER DEFERRAL: microphone/ASR quality and whisper.cpp implementation are deferred from this release. Research design lives in docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md; no ASR quality or engine benchmark pass is claimed. Package helper/ffmpeg integrity checks remain required. Correction: the earlier execution prefix/comment about Graph draft permission was posted to this ASR card in error; its current owning card is CLWX-40. Original ASR acceptance/history below is preserved.
+Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
+Prior acceptance and dated history (scope retained)
+CLWX-STUDY-20260908 — deferred whisper.cpp direction
+
+Owner excluded microphone/ASR from the current release and selected memory-efficient whisper.cpp for future ASR. Status is DEFERRED IN RELEASE SCOPE; card is not implementation-complete. Existing packaged helper/keyless checks remain required. No binaries/models were downloaded or built in this research. No source or board state changed.
+
+Proposed design
+
+Use a bundled CPU-only whisper-cli.exe in a short-lived child process. Load one quantized English model only when a transcription is requested; allow one job at a time; exit the process after completion/cancellation. Keep model weights on disk rather than resident in Electron or the Gateway. Start by comparing base.en-q5_1 with base.en-q8_0; choose the smaller model only if it meets the same accuracy criteria. tiny.en is an explicit lower-resource candidate; small.en is an optional quality experiment, not a silent retry/default.
+
+This avoids persistent ASR memory while idle and isolates native allocation lifetime. It trades repeated model loading for lower idle memory. A persistent worker with an idle timeout can be considered later only if measured repeated-dictation latency justifies its memory cost.
+
+flowchart LR
+  Mic[User starts recording] --> Capture[Bounded capture and temporary file]
+  Capture --> Normalize[Bundled FFmpeg: bounded PCM WAV]
+  Normalize --> Admit[Single-job admission and model check]
+  Admit --> Helper[CPU whisper.cpp helper with one model]
+  Helper --> Transcript[Parse bounded result; preserve language and timing]
+  Transcript --> Review[Return editable transcript]
+  Helper --> Cleanup[Exit process; clear owned temporary files]
+  Cancel[Cancel / timeout] --> Cleanup
+
+Transcription produces editable text; it must not automatically send an email or submit a form. Local inference needs no cloud key once its binary and model are available. Keep any existing cloud ASR option separate and explicit; no silent audio upload when a local model fails.
+
+Proposed acceptance criteria for CLWX-87
+
+All thresholds below are initial engineering targets, not approved/measured product guarantees. Revisit only through a recorded decision with evidence; do not quietly raise a budget to obtain a pass.
+
+Criterion
+Proposed measurable target
+
+Hardware/class
+Clean Windows 10/11 standard user, 4 logical CPUs / 8 GiB RAM, CPU-only/no CUDA, no Python, no global Whisper/Node and no developer caches
+
+Default memory
+Compare base q5/q8. Target helper-tree peak Working Set and private bytes each ≤700 MiB for accepted ≤5-minute clips; additionally target ≤512 MiB for q5 on 10–30s clips. Report maximum and p95, not weights size alone.
+
+Low-resource option
+Tiny q8 target ≤450 MiB helper-tree peak; promote it only if the task accuracy criterion holds or the lower-quality option is explicitly documented
+
+Whole-app overhead
+Measure renderer/Main/Gateway plus FFmpeg/helper. Parent process incremental private bytes target ≤64 MiB, measured against an idle baseline with unrelated model jobs stopped
+
+Idle/cancel cleanup
+No ASR helper or model-resident worker within 5s of normal completion, cancellation or timeout; no growing job/temp-file count after 20 repeated clips; parent returns within 32 MiB of its pre-series private-byte baseline after 30s idle
+
+Speed
+On the declared machine, p95 saved-audio-to-text ≤8s for 5s clips and ≤45s for 30s clips. Measure cold model load separately; 5-minute clips target real-time factor ≤1.5. UI remains usable.
+
+Accuracy
+Fixed corpus with at least 40 clips/2,000 reference words, including Trinidadian speakers, MoE vocabulary, dates/numbers, clean/noisy audio and silence. Proposed clean-speech aggregate WER ≤15%; publish every subgroup and entity-error result. Compare System.Speech and available existing cloud evidence without concealing worse subgroups.
+
+Critical facts
+Exact dates/numbers and named entities in a small curated acceptance subset; report uncertain/incorrect transcription for user review rather than automatic downstream action
+
+Silence and failures
+Silence yields no invented sentence; missing/corrupt model, unsupported CPU, denied recording, oversized input and helper crash return typed actionable outcomes; next job succeeds after correction
+
+Distribution/privacy
+Exact binary/model hashes and notices; no administrative install or first-recording package download; local transcription works with non-loopback network blocked; no silent cloud fallback
+
+Observe process memory throughout capture → save → normalization → model load → inference → cleanup, including child processes. Use identical audio, threads, decoding parameters and CPU load across candidates; collect at least 20 timing/memory runs per selected candidate and report sample size. Disk-cold and OS-cache-warm observations are separate. The upstream benchmark helps isolate model compute, but it cannot replace end-to-end app measurements.
+
+Delivery and sequencing
+
+- Now: finish this plan and update CLWX-87/OKR scope. No ASR source or release dependency changes.
+
+- After current release and a resumed ASR workstream: pin/review binary and model provenance; collect the existing and representative reference corpus in parallel with adapter/package design.
+
+- Implement the supervised Windows adapter and bounded capture/normalization. Run focused invocation/error/cleanup tests; do not install CMake/Python on the principal machine.
+
+- Compare quantization/model candidates sequentially on the same Windows hardware, one helper at a time. Select the smallest passing candidate; document rejected alternatives.
+
+- Package once the measured dependency/quality criteria pass; verify offline first use, actual microphone, cancellation, repeated jobs and unaided user workflow on that exact installer.
+
+whisper.cpp source license is MIT; the converted model repository identifies MIT terms. Retain the relevant source/model notices, verify the selected model's provenance, and preserve FFmpeg's existing notices. A successful metadata fetch is not release-artifact verification.
+
+No persistent server, continuous listening, GPU package, automatic larger-model retry or cloud upload is selected for the initial design. Their benefits and costs can be evaluated later without reopening the current release scope.
+
+Design: docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md. Source: https://github.com/ggml-org/whisper.cpp; asset tag b4938 / version v1.9.3 identified by metadata only.
+
+Original finding and acceptance retained below
+
+Finding
+Owner feedback 4+ times across a month: "So have we updated the ASR model? This one is not that good." - System.Speech quality, previously masked by the ffmpeg/packaging failures (CLWX-20/K4). The pipeline is now proven (ASR_SMOKE_OK); the QUALITY question is unanswered.
+
+Acceptance
+WER measured on a fixed known-speech fixture set (Trinidadian-accent samples included) for System.Speech vs whisper.cpp vs Azure; decision recorded; if whisper wins, the Windows bundling cost is estimated. Ties to the minutes story S4.
+
+Source
+Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
+
+**Comments (8):**
+
+- CLWX-HANDOFF-20260908 OWNER DEFERRAL: microphone/ASR quality and whisper.cpp implementation are deferred from this release. Research design lives in docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md; no ASR quality or engine benchmark pass is claimed. Package helper/ffmpeg integrity checks remain required. Correction: the earlier execution prefix/comment about Graph draft permission was posted to this ASR card in error; its current owning card is CLWX-40. Original ASR acceptance/history below is preserved. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Handoff: docs/COMPLETION_PLAN.md. All original acceptance is retained; GA RED, implementation/package pause active.
+- CLWX-EXECUTION-MICROSOFT-20260908. Approved plan execution resumed; S4 Graph permission fix independently reviewed and integrated. Author9ea0dbd7 at base8058e9b5, integrated8fa6bc64: draft creation no longer requires Mail.Send before calling Graph; drafts use Mail.ReadWrite. Send permission plus confirm/review gates remain required. Operation-specific403 diagnostics distinguish draft/send. Baseline failing regression,35 focused tests, typecheck/lint, communication replay/compare and independent review pass. User-Chrome attach/tenant identity, actual inbox/draft/reopen/reply/forward and Forms previews remain distinct installed-account acceptance requirements. Existing VM evidence reports needs_signin; no account-holder session was substituted, no mail sent or Form submitted. No GA promotion from this source result. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md; current plan docs/COMPLETION_PLAN.md. Root alone owns VM mutations. Runtime upgrade b6a0fe8d is separately under independent review; no new package yet.
+- CLWX-STUDY-20260908 Updated the ASR description with the owner-selected whisper.cpp future design and proposed memory/quality/CPU/cleanup acceptance. ASR remains deferred from current release. Quantized base q5/q8 comparison, tiny low-resource candidate, on-demand single-job CPU helper and bounded audio; no measured performance claim. Full plan: docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md.
+- GA checkpoint 03:23 - 2026-09-08 ASR quality boundary. The selected a4efc7e4 VM artifact now has helper identity and synthetic execution proof: ffmpeg and WinSpeech binaries match the artifact, FFmpeg can generate valid PCM, and WinSpeech can execute against a synthetic tone. The VM still has no sound device and the test did not exercise microphone input, app ASR routing or WER/quality against representative Trinidadian-accent fixtures. CLWX-20 helper absence is narrowed; this CLWX-87 quality/engine decision remains In Progress.
+- GA checkpoint 02:30 - 2026-09-08 ASR boundary. Native helper smoke on selected installed 258d3ac passed identity and execution checks for FFmpeg and WinSpeech, including valid PCM generation and synthetic-tone execution. Microphone, ASR quality/WER and app ASR routing are still NOT_TESTED. This removes another helper-layer uncertainty but does not close the ASR quality card.
+- GA final artifact delta - 2026-09-08 ASR boundary. The selected package now artifact-verifies the ASR packaging prerequisite: Windows speech helper files and ffmpeg.exe are present in run 34171848832 / source 258d3ac079e7cbaa8a9c80c574066923f8ef988c. This removes the current package-content blocker that masked ASR runtime testing. This does not close the ASR quality card. The Windows System.Speech WER leg, representative microphone/client proof and any real-accent owner samples remain NOT_RUN or owner/VM gated. GA cannot count ASR quality accepted without those rows or an explicit accepted deferral.
+- GA blocker correction - 2026-09-08 ASR quality/microphone. This is the correct card for the repeated owner complaint that System.Speech quality is not good enough and for the Windows ASR engine decision. CLWX-20 owns the separate ffmpeg-not-found packaging prerequisite; CLWX-67 is reminder pipeline and is not ASR. Current status remains In Progress. The WER harness and Mac whisper measurements exist, but the Windows System.Speech leg, representative Windows client/microphone proof and any real-accent owner samples are still gated by Windows access/current candidate install. GA cannot count ASR quality as accepted until this card has the Windows row or an explicit accepted deferral.
+- WER bench BUILT + Mac legs MEASURED (2026-09-06 driver tick, commit 610779dd) — the quality question now has numbers and a one-command Windows leg; card Todo → In Progress. - Harness: scripts/clwx87-wer-bench.mjs — standard word-level WER (pure, 8 unit guards incl. >100% garbage semantics), deterministic synthetic fixtures (macOS say, voice+rate pinned in eval/fixtures/clwx87-asr-manifest.json; 8 MoE-domain clips carrying the Trinidadian vocabulary a principal dictates — Couva, Chaguanas, San Fernando, Tunapuna, NSCC, daily report, suspensions; no audio binaries committed). Engines: whisper (local CLI — same weights as whisper.cpp, quality-equivalent proxy), transcripts (grades the Windows System.Speech JSON so grading lives in ONE place), azure (loud BLOCKED-INPUT exit 3 without keys — proven; enabling it is an owner/Ministry call since cloud ASR sends audio off-device). - Measured live: whisper/tiny 13.5% and whisper/base 13.5% aggregate on the clean-audio floor (different error mixes; per-clip hypotheses recorded). Visible weakness: Trinidadian place names (“Tuna Pune” for Tunapuna — 30.8% on that clip) — exactly the owner's complaint domain; a domain initial-prompt is the named tuning lever if whisper wins. Number-format artifacts (“3.45” vs spelled-out reference) recorded honestly — fair BETWEEN engines, inflates the absolute floor. - Windows leg authored, VM-gated: windows-pilot/scripts/pilot-asr-wer.ps1 — System.Speech synthesis + the SHIPPED recognition engine over the same manifest, BOM-less JSON, STATE-line contract, lint:ps GREEN. Grading wiring proven both directions locally (perfect stub → 0.0%; corrupted clip caught). - Gates: guards 8/8 new; full suite 1608/6-skip; typecheck + lint + lint:ps clean; static GA gate GREEN 7/0/2 at tick SENSE. Evidence: docs/evidence/CLWX87_WER_2026-09-06.md (incl. bundling-cost groundwork: whisper.cpp tiny ≈75MB / base ≈142MB vs System.Speech 0MB). Resumable trail to acceptance: (1) OWNER: start clawx-win-rc-20260609 (gcloud auth is restored; the VM is TERMINATED) → run pilot-asr-wer.ps1 → grade with --engine transcripts → the System.Speech row completes the comparison and the engine decision gets recorded; (2) OWNER (optional): drop Trinidadian-accent recordings as source:"real" manifest rows — the named gap synthetic TTS cannot cover; (3) if whisper wins, the bundling-cost estimate is already on the evidence. Honest scope note: this tick's review = unit guards + falsifiability probes (transcripts-lane both directions, azure exit-code, symlink entry guard applied from the CLWX-77 lens lesson) — test-infra only, no production code touched, card NOT moved to Ready, so the full multi-lens lane is deferred to the Ready move after the VM leg.
+
 ### CLWX-95 — [hardening/chat] Degraded turn orphans at prompt.submitted — on-device answer never lands after gateway-restart switch
 
 - **State:** In Progress  |  **Priority:** none
@@ -2427,6 +2460,7 @@ Acceptance: after connectivity returns, the next Online turn succeeds without an
 
 - **State:** In Progress  |  **Priority:** high
 
+CLWX-FABLE-EXECUTION-20260908 — Execution resumed. W1 repairs the actual OpenClaw 2026.9.2 policy oracle; W2 adds the required synthetic source-fixture fidelity row. Source-fixture GREEN cannot satisfy installed fidelity. Independent review and one full integrated preflight are required before packaging. CLWX-128 owns CLI liveness/deadline/outcome automation.
 CLWX-HANDOFF-CURRENT-20260908
 RELEASE GATE RED: f93ac8b3 is reviewed source only. Initial full preflight at 5251ea8d: 2180 pass, 5 fail, 29 skip. Four failures repaired with 35 targeted tests in reviewed 42265f97; held 24e1cfd3 still fails the actual OpenClaw 2026.9.2 canvas policy oracle and is excluded. No full pass or moe.26 artifact is claimed. Independent source approval then exact keyless package, installed Windows/client/tenant/external evidence and strict non-skip gate remain sequential requirements.
 Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
@@ -2482,6 +2516,10 @@ Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is sc
 
 - **State:** In Progress  |  **Priority:** medium
 
+CLWX-NO-CAP-EXECUTION-20260908 — Correction6ed95e828eca254d76c3e16eccce65cf26fa6ae0 committed: exact with/despite negation-borrow failures reproduced before fix;60focused tests and12fixture rows now pass. Minimal after-window fact binding retains previous controls. Independent delta review is running, no spending cap. This remains source-fixture evidence only; installed CLWX115 rerun open. Report docs/bugs/CLWX-115-fidelity-validator.md.
+CLWX-SPRINT-CHECKPOINT-20260908-1235 — Independent review at2ee28efa confirms both original false passes fixed and58focused tests plus11fixtures pass, but exact adjacent variant attending with no meal or shirt still falsely passes (also despite). Required correction owns the checker/fixture/test only and is running in w2-negation-finish. Candidate held until independent delta approval; installed fidelity remains NOT_RUN. Report:docs/bugs/CLWX-115-fidelity-validator.md.
+Prior dated status and full acceptance preserved below.
+CLWX-FABLE-EXECUTION-20260908 — Claude W2 is implementing synthetic overlapping-name meal/shirt preference, quantity, negation and requested-action associations with swap/negation mutation controls and a required source-fixture gate row. Original criteria remain below. This card stays open until the exact installed artifact completes the fidelity rerun; PDF P3 belongs to CLWX-77.
 CLWX-HANDOFF-CURRENT-20260908
 SCOPE CORRECTION: this card owns the original overlapping-name meal-preference/shirt-size association and negation fixture in the recurring gate. The P3 PDF excerpt repair is evidence for CLWX-77 and does not satisfy this acceptance. Keep In Progress until the original fixture and fail-closed recurring check are demonstrated on the selected candidate; preserve all original examples below.
 Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
@@ -2505,6 +2543,7 @@ Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is sc
 
 - **State:** In Progress  |  **Priority:** high
 
+CLWX-FABLE-EXECUTION-20260908 — Claude W1 is resolving the test catalog/export mismatch against explicitly selected OpenClaw 2026.9.2. Existing native Ollama source repair remains integrated in f93ac8b3. Installed ordinary local/tool/document acceptance is still required; direct native API timing is insufficient.
 CLWX-HANDOFF-CURRENT-20260908
 ON-DEVICE DEFECT STILL OPEN: native-route/context source repair 0b46e833 is reviewed/integrated in frozen f93ac8b3; full app prompt and offline document behavior are NOT_RUN. Direct native diagnostic confirms API/context feasibility only. Held test repair 24e1cfd3 fails with actual OpenClaw 2026.9.2: canvas policy family expands to show_widget while old fixture supplies literal canvas. Next executor must bind the oracle to the actual tool catalog and dependency version, obtain independent review, then verify bounded terminal/cancel/next-turn behavior in the installed app. CLWX-126 owns engine selection research.
 Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
@@ -2642,6 +2681,41 @@ Evidence: docs/evidence/WINDOWS_STAKEHOLDER_CONNECTION_2026-09-08.md; artifacts/
 - CLWX125-NATIVE-SDK-20260908-0729Z Reviewed SDK patch ba459ef1 passes a native Windows fixture against all 295 installed SDK modules: 296 unchanged writes become zero, all wrapper bytes are preserved, and one stale wrapper is repaired with one write. Warm repeat 357ms baseline / 280ms patched; this is not an app-level speedup claim. No model request or installed-file mutation in the fixture. Driver repair 141841df passes 32 focused tests and three Electron interactions. It waits for hydration and requires a real session-key transition before Send, reproducing and rejecting the old empty-DOM false freshness result. Root review completed. The live stored Online provider probe returns matching account, success/valid true and HTTP200; this narrows provisioning, not response delivery. A separately backed-up SDK-only diagnostic is running. A source integration of reviewed history f5875b54, UI aa398dfb / driver141841df and SDK ba459ef1 is being assembled for VM validation. No repaired installer acceptance or stakeholder handoff; GA RED; CLWX-125 stays In Progress. Documentation: docs/evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md includes flow map, exact timelines, good historical code samples, falsifiers and VM setup history.
 - CLWX125-PROFILE-PROVENANCE-CORRECTION-20260908. Exact-token trajectory and the 07:01:08Z runtime failover record show the diagnostic selected ollama-ollamalo/qwen2.5:3b-instruct in the existing agent:main:main session, although the composer stayed Online. Driver NewSession did not establish a new session; seven displayed messages included earlier history. This diagnostic proves the measured runtime filesystem cost and exposes a session/model mismatch. It is not Online acceptance or a provider-identical comparison with the original06:11 cloud failure. The original06:11 exact-session cloud failure remains unchanged. Session selection/pinning is now under bounded investigation before further response tests. SDK content-idempotence repair ba459ef1 passes29 focused bundle/patch tests, typecheck, comms, bundle verification and actual-diff harness. Root reviewed its narrow behavior; native performance/response acceptance pending. docs/evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md records this correction. GA RED.
 - CLWX125-PROFILE-20260908-0708Z: measured cause and bounded repair. Same installed moe.24 b814f804 / run34189597051; standard-user Server2022 profile; original watchdog, Defender, VM and provider settings retained. CPU capture06:58:03–07:01:03Z (180.796s) identifies loadOpenClawPlugins95.215s inclusive, ensureOpenClawPluginSdkAlias54.133s and writeRuntimeModuleWrapper52.370s. SDK native writeFileUtf8/mkdir self times29.706s/12.395s. Inclusive rows overlap and must not be added. SDK materialization consumes45.277s before observed renderer idle. Repeated unconditional generated-wrapper writes are the bounded performance target; missing/stale wrappers must still regenerate. No global provider disable or timeout increase. Diagnostic prompt06:58:08.144Z, owned run06:58:11.712Z, renderer idle06:59:48.279Z. Original driver ends07:01:09.782Z with ASSISTANT_EMPTY_SILENCE_ON_SEND, inline error and no answer. Seven rendered message elements differ from the earlier zero-message NO_RESPONSE. Auxiliary observer message count used a wrong selector and is excluded; its state attributes remain valid. No renderer WS abort frame was captured, so exact cancellation provenance remains unproved. Original entry restored07:04:02.339Z; original entry and ASAR hashes match; owned app exited and listeners gone. No VM lifecycle or security changes. UI/driver repair aa398dfb (over history repair f5875b54) independently reviewed. Baseline reproduces lost prompt;137 focused tests,2 Electron interactions,typecheck,lint zero errors,comms replay/compare and actual-diff harness pass. Preserves prompt/error and unrelated history; clears hard-deleted snapshot; fails generic errors even with an answer candidate. Installed repair acceptance remains NOT_RUN. Repository RCA includes Mermaid flow map, exact old/new timeline, useful commit-backed code samples, falsifiers, testing criteria and GCP-from-local-Mac setup history: docs/evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md; windows-pilot/vm-testing/README.md. Allowlisted timing artifacts: artifacts/windows-vm/20260908-connection-rca/cpu-hot-paths.json and cpu-summary.json. Raw logs/profiles remain protected. No callable Plane/WhatsApp MCP is exposed in this session; canonical project-scoped Plane API writer/readback is used. Card stays In Progress; GA RED.
+
+### CLWX-129 — Extract verified Windows and FreeRDP lessons through Bedrock history review and reusable skills
+
+- **State:** In Progress  |  **Priority:** medium
+
+CLWX-SPRINT-CHECKPOINT-20260908-1235 — Source checkpoint2b4a3e81 includes script/report/three skill mirrors;44synthetic tests and3skill validations PASS, independent review pending. Known prose-credential class corrected and local63-file pack regenerated without another model call; available old pack already had zero known-class matches and originally affected version was not separately preserved. Historical exposure UNKNOWN; no claim of public leak or full containment. Report:docs/bugs/CLWX-129-history-redaction.md. Keep raw logs/packs private; no repeat paid synthesis needed for source review.
+Prior dated status and full acceptance preserved below.
+CLWX-HISTORY-REVIEW-20260908 — Owner requested JSON/JSONL project history and repo structure review through a Bedrock multi-LLM lane, including FreeRDP lessons, omissions, workflow optimization and reusable skills.
+Acceptance: bounded local extraction excludes reasoning, credentials, private message bodies and unrelated projects; synthetic redaction/coverage tests before model submission; source hashes/line/time references and skipped scope; measured repo/context budget; Fable 5 review plus a separate bounded Bedrock critic with explicit model/usage/error receipts; disagreements retained. Review findings are hypotheses, reconciled with current code/tests and existing CLWX cards before promotion.
+Deliverables: reusable Bedrock-only review script, scoped skill and verified FreeRDP guidance where justified, independent tests/skill validation/behavioral review, redacted report with exact evidence and outstanding hypotheses. No raw logs in git, no automatic integration/release or VM mutation. Current lane is isolated from the product candidate.
+
+### CLWX-130 — [bug/windows] Opening Chrome times out and the assistant gives Mac recovery instructions
+
+- **State:** In Progress  |  **Priority:** high
+
+CLWX-SOURCE-CHECKPOINT-20260908-1240 — Source completion:a091a968b89c5127e41c55ab62bf942c56c08e46 committed and clean. 113focused unit passes retained; typecheck, focused lint, explicit-base harness and comms PASS. Independent review queued under owner budget hold. Full report docs/bugs/CLWX-130-windows-chrome-start.md; source/installed scopes remain distinct.
+CLWX-SPRINT-CHECKPOINT-20260908-1235 — Chrome source author stopped at explicit spending cap, preserving edits and 113 focused test passes; bounded browser-finish now validates and commits. Explicit Ministry open-Chrome routing and Windows session/profile ownership guards are proposed, unreviewed and uninstalled. Exact incident-time stock timeout cause remains UNKNOWN. Next: remaining source checks, independent review, integrated artifact and installed rerun. Full transferable report: docs/bugs/CLWX-130-windows-chrome-start.md.
+Prior dated status and full acceptance preserved below.
+CLWX-RDP-FEEDBACK-20260908-1548
+Owner observed a previously working feature fail on the active Windows FreeRDP session: asking to open Chrome selected stock browser action=start, timed out, then advised OpenClaw.app menubar recovery. Gateway stayed connected. Installed session trace places call at 11:44:02Z and result at 11:44:20Z; screenshot captured 15:48:52 Dubai. Exact current artifact version is not freshly reverified.
+RCA: compare intent/tool routing, stock browser service/default profile, canonical Ministry Host API Chrome CDP path, Windows launch and recovery copy against working history. Root cause remains under investigation; timeout alone does not prove Chrome is absent. Separate from CLWX-54 stale handle and CLWX-73 managed-profile repair unless source evidence connects them.
+Acceptance: reproduce source failure; repair the narrow boundary; explicit open-Chrome request reaches the supported Windows launch path; preserve user tabs/profile; distinguish missing Chrome, unavailable CDP and timeout with actionable Windows guidance; no Mac menubar instructions; negative/failure controls and independent review pass; exact accepted installed build reruns open Chrome then authenticated Outlook/Forms preview. No email send or Forms submit implied.
+Owner: Claude browser-regression lane; root sole VM operator. User is actively testing, so current VM observation is read-only. Private redacted evidence and screenshot hashes: artifacts/ga-fable-20260908/graph-feedback/. GA stays RED until installed rerun. Graph setup/readiness tracked on CLWX-39/40; Forms/files review on CLWX-63/71.
+
+### CLWX-131 — [bug/outlook] Graph availability question queries a nonexistent Gateway configuration path
+
+- **State:** In Progress  |  **Priority:** high
+
+CLWX-SPRINT-CHECKPOINT-20260908-1235 — Graph diagnosis source independently APPROVED:73b77d0c integrated as6ec32807;83 focused tests pass,105 combined with runtime oracle. Existing handler can report actual configured/signed-in/browser readiness without fictional Gateway outlook lookup. Installed assistant rerun and tenant authentication remain open. Report:docs/bugs/CLWX-131-graph-readiness-diagnosis.md.
+Prior dated status and full acceptance preserved below.
+CLWX-GRAPH-DIAGNOSIS-20260908
+Owner RDP screenshot15:40:41Dubai and installed trace show the assistant answering a Graph capability question by gateway config.schema.lookup path=outlook, which does not exist. It inferred possible misconfiguration and asked permission to try the proper Outlook tool. The actual installed Graph status handler exists; configured=false,signedIn=false,grantedScopes=[],mockMailbox=false,effectiveMock=true at11:44:52Z. Gateway is connected. Graph support presence and account configuration are separate facts.
+Root cause supported by sourcef93ac8b3: the Ministry plugin lacks a read-only Outlook readiness tool; status is available to the renderer through msgraph IPC, while outlook.open navigates the browser. Source fix adds a Host API readiness route/tool and accurate state guidance. Parent setup/tenant feature is CLWX-39; Chrome-less transport acceptance is CLWX-40; browser-start incident is CLWX-130.
+Acceptance: a capability question obtains actual Main-owned status without navigation/authentication/mail mutations; distinguish unavailable handler, disabled feature, missing client configuration, unsigned/expired account, real signed-in state, mock and unknown browser state; no fictional Gateway config probing or local Graph API installation claim; meaningful negative regression and independent review; installed same-build unaided rerun. Keep send/submit permissions and confirmation gates unchanged.
+Thorough handoff: docs/bugs/CLWX-131-graph-readiness-diagnosis.md (resolve actual card sequence on creation). Private redacted evidence: artifacts/ga-fable-20260908/graph-feedback/. Source author stopped at its spending cap after edits; root reran83testsPASS, lint0errors/1testwarning, harness dry-run with explicit base and comms PASS. Independent review, packaging and installed acceptance remain pending; no Ready/GA claim.
 
 ## Cancelled
 
