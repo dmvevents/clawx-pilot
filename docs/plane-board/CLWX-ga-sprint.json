@@ -615,20 +615,21 @@
     "end_date": "2026-09-15T23:59:00Z",
     "at": "2026-09-08T13:39:12.377885+00:00",
     "url": "http://localhost:8090/issues-agent/projects/81a2ea23-e060-49b4-a344-1ab0339f46d5/cycles/9a7b9c92-101e-4fd9-bfb7-07bdbdd49b5a",
-    "membershipCount": 32,
-    "membershipReadback": "PASS_EXACT_SET"
+    "membershipCount": 33,
+    "membershipReadback": "PASS_EXACT_SET_ALL32_PRIOR_PRESERVED_PLUS_CLWX136",
+    "membershipEvidence": "artifacts/ga-fable-20260908/moe28-sqlite-sprint-readback.json"
   },
   "newCardMapping": {
     "NEW-1": 133,
     "NEW-2": 134
   },
-  "updatedAt": "2026-09-08T19:41:28.380131+00:00",
+  "updatedAt": "2026-09-08T23:47:32.381334+00:00",
   "snapshotAt": "2026-09-08T17:51:49.120601+00:00",
   "readiness": "RED",
-  "sourceCandidate": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
+  "sourceCandidate": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
   "privateVerification": "artifacts/ga-fable-20260908/sprint-loop/sprint-verification.json",
   "boardExportVerifiedAt": "2026-09-08T18:00:23.817350+00:00",
-  "boardIssueCount": 134,
+  "boardIssueCount": 136,
   "executionCheckpoint": {
     "browserReview": "APPROVE; integrated in1d745567",
     "artifactHarnessReview": "APPROVE; integrated",
@@ -911,6 +912,29 @@
       "status": "in_progress",
       "profile": "keyless-public",
       "installed": "NOT_RUN"
+    },
+    "moe28Acceptance": {
+      "source": "c5e76b5d",
+      "runId": 34288617489,
+      "installIdentityAndLifecycle": "PASS",
+      "startup": "FAIL_SQLITE_WORKER_INVALID_JSON",
+      "startupSamples": 155,
+      "startupBoundMs": 360000,
+      "chat": "NOT_RUN",
+      "activeTask": {
+        "task": "moe28-sqlite-startup-diagnosis",
+        "role": "READ_ONLY_DIAGNOSIS",
+        "card": 136,
+        "worktree": "/private/tmp/clawx-moe28-sqlite-startup-20260909",
+        "branch": "fix/moe28-sqlite-startup",
+        "base": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+        "provider": "bedrock",
+        "requestedModel": "claude-fable-5",
+        "status": "RUNNING",
+        "finalProvenance": "PENDING",
+        "deadlineSeconds": 600,
+        "evidenceRoot": "artifacts/ga-fable-20260908/moe28-sqlite-startup-diagnosis"
+      }
     }
   },
   "addedRegressionCards": [
@@ -923,6 +947,16 @@
       "runId": 34256868050,
       "status": "INSTALLED_STARTUP_FAIL",
       "worktree": "/private/tmp/clawx-moe26-lifecycle-20260908"
+    },
+    {
+      "card": "CLWX-136",
+      "state": "In Progress",
+      "priority": "urgent",
+      "report": "docs/bugs/CLWX-136-openclaw-sqlite-worker-startup.md",
+      "source": "c5e76b5d",
+      "runId": 34288617489,
+      "status": "INSTALLED_SQLITE_WORKER_STARTUP_FAIL",
+      "worktree": "/private/tmp/clawx-moe28-sqlite-startup-20260909"
     }
   ]
 }

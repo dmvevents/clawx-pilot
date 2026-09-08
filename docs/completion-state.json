@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T23:23:47.041511+00:00",
+  "updatedAt": "2026-09-08T23:47:32.381334+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -2101,7 +2101,7 @@
     "clean": true,
     "pushed": true,
     "packaged": true,
-    "installed": false,
+    "installed": true,
     "published": false,
     "fullPreflight": "PASS_NATIVE_HOSTED",
     "buildRunId": 34288617489,
@@ -2124,7 +2124,7 @@
       "endedAt": "2026-09-08T22:59:06.3191831Z",
       "receipt": "artifacts/windows-vm/20260908-moe27/nsis-suite-c1891938-readback-v1.json"
     },
-    "installedAcceptance": "IN_PROGRESS_STANDARD_USER_UPGRADE",
+    "installedAcceptance": "FAIL_STARTUP_SQLITE_WORKER_INVALID_JSON",
     "buildConclusion": "success",
     "manifest": "docs/release-manifests/0.4.3-moe.28.json",
     "artifactIdentityVerified": true,
@@ -2149,7 +2149,42 @@
     "installerBytes": 476771752,
     "appAsarSha256": "730660d9816391b76b0bbb406862bef1764f3b716d8785500d5b042dc30dfa16",
     "appExeSha256": "6055c97a567e95358f430059c5b2443e03b509de59a737b1a94c676901adcbda",
-    "nativeDownload": "PASS_HASH_LENGTH_2026-09-08T23:22:03Z"
+    "nativeDownload": "PASS_HASH_LENGTH_2026-09-08T23:22:03Z",
+    "nativeInstallation": {
+      "startedAt": "2026-09-08T23:24:19.8190455Z",
+      "status": "INSTALLED_HASH_VERIFIED",
+      "sessionId": 2,
+      "username": "ClawXFresh0908",
+      "sourceCommit": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+      "workflowRunId": 34288617489,
+      "scope": "Standard-user existing-profile assisted upgrade from moe.27",
+      "installerSha256": "f74564761651c436141cd6bd0fdfdb25b561a950336f6ce736e400d0ce56994f",
+      "installExit": 0,
+      "appAsarSha256": "730660d9816391b76b0bbb406862bef1764f3b716d8785500d5b042dc30dfa16",
+      "appExeSha256": "6055c97a567e95358f430059c5b2443e03b509de59a737b1a94c676901adcbda",
+      "completedAt": "2026-09-08T23:39:01.3968492Z"
+    },
+    "installedLifecycle": {
+      "pendingMarkerPresent": false,
+      "legacyGuardPresent": false,
+      "priorMarkerPreservedInRollback": true,
+      "receipt": "artifacts/windows-vm/20260908-moe28/native-install-identity-lifecycle-result.json"
+    },
+    "startupFailure": {
+      "card": 136,
+      "reason": "SQLite read-only worker returned invalid JSON",
+      "shortcutLaunchAt": "2026-09-08T23:39:28.0382801Z",
+      "observer": {
+        "at": "2026-09-08T23:46:03.0948072Z",
+        "nativeExit": 1,
+        "lastElapsedMs": 359721,
+        "stableReadyForMs": 0,
+        "samples": 155,
+        "status": "NOT_READY",
+        "maxDurationMs": 360000
+      },
+      "receipt": "artifacts/windows-vm/20260908-moe28/startup-terminal-failure-readback.json"
+    }
   },
   "handoff": {
     "status": "COMPLETE_READY_FOR_NEXT_AGENT",
@@ -2189,7 +2224,7 @@
     "awsProfile": "bedrock",
     "region": "us-east-2",
     "baseSource": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
-    "phase": "MOE28_VERIFIED_ARTIFACT_STANDARD_USER_UPGRADE",
+    "phase": "MOE28_SQLITE_STARTUP_DIAGNOSIS",
     "privateReceipts": "artifacts/ga-fable-20260908",
     "plan": ".omx/plans/prd-ga-fable-20260908.md",
     "testSpec": ".omx/plans/test-spec-ga-fable-20260908.md",
@@ -2364,7 +2399,22 @@
     "statusCheckedAt": "2026-09-08T23:01:36.305430+00:00",
     "epic": "CLWX-22",
     "sprintExit": "Exact candidate passes all required source/artifact/installed/client/tenant/performance/unaided tester and final release checks",
-    "activeCliTasks": [],
+    "activeCliTasks": [
+      {
+        "task": "moe28-sqlite-startup-diagnosis",
+        "role": "READ_ONLY_DIAGNOSIS",
+        "card": 136,
+        "worktree": "/private/tmp/clawx-moe28-sqlite-startup-20260909",
+        "branch": "fix/moe28-sqlite-startup",
+        "base": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+        "provider": "bedrock",
+        "requestedModel": "claude-fable-5",
+        "status": "RUNNING",
+        "finalProvenance": "PENDING",
+        "deadlineSeconds": 600,
+        "evidenceRoot": "artifacts/ga-fable-20260908/moe28-sqlite-startup-diagnosis"
+      }
+    ],
     "budgetAuthorization": {
       "source": "Owner: There is no limit. Execute the work trees.",
       "recordedAt": "2026-09-08T12:36:00.652793+00:00",
@@ -4937,7 +4987,7 @@
       "completedAt": "2026-09-08T23:17:20Z"
     },
     "moe28Upgrade": {
-      "status": "INSTALLER_RUNNING_BACKUP_VERIFIED",
+      "status": "PASS_INSTALL_FAIL_STARTUP",
       "task": "ClawXMoe28Install",
       "observerMinutes": 40,
       "instanceId": "2748349704588098112",
@@ -4948,9 +4998,9 @@
       "vmDownloadReceipt": "artifacts/windows-vm/20260908-moe28/download-verified-moe28-installer.json",
       "source": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
       "runId": 34288617489,
-      "nativeInstallerExit": "PENDING",
-      "startup": "NOT_RUN",
-      "chat": "NOT_RUN",
+      "nativeInstallerExit": 0,
+      "startup": "FAIL_SQLITE_READ_ONLY_WORKER_INVALID_JSON",
+      "chat": "NOT_RUN_STARTUP_BLOCKED",
       "profileBackup": {
         "status": "PASS",
         "appdataFiles": 61,
@@ -4964,7 +5014,34 @@
         "uiObservedAt": "2026-09-08T23:27:59.4175412Z",
         "evidence": "artifacts/windows-vm/20260908-moe28/operator-preinstall-observation.json"
       },
-      "installButtonInvokedAt": "2026-09-08T23:29:03.0855147Z"
+      "installButtonInvokedAt": "2026-09-08T23:29:03.0855147Z",
+      "installedAt": "2026-09-08T23:39:01.3968492Z",
+      "installedEvidence": "artifacts/windows-vm/20260908-moe28/native-install-identity-lifecycle-result.json",
+      "startupTask": "ClawXMoe28FirstShortcut",
+      "failedAppContainment": {
+        "status": "PASS_GRACEFUL_QUIT",
+        "at": "2026-09-08T23:46:53.0574001Z",
+        "appProcesses": 0,
+        "listeners": 0,
+        "qaChromeProcessesPreserved": 10,
+        "receipt": "artifacts/windows-vm/20260908-moe28/failed-app-graceful-quit-readback.json"
+      }
+    },
+    "moe28SqliteStartup": {
+      "task": "moe28-sqlite-startup-diagnosis",
+      "role": "READ_ONLY_DIAGNOSIS",
+      "card": 136,
+      "worktree": "/private/tmp/clawx-moe28-sqlite-startup-20260909",
+      "branch": "fix/moe28-sqlite-startup",
+      "base": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+      "provider": "bedrock",
+      "requestedModel": "claude-fable-5",
+      "status": "CONFIRMED_INSTALLED_FAILURE_DIAGNOSIS_RUNNING",
+      "finalProvenance": "PENDING",
+      "deadlineSeconds": 600,
+      "evidenceRoot": "artifacts/ga-fable-20260908/moe28-sqlite-startup-diagnosis",
+      "report": "docs/bugs/CLWX-136-openclaw-sqlite-worker-startup.md",
+      "next": "Inspect CLI diagnosis; root performs isolated native controls before source repair/review"
     }
   }
 }
