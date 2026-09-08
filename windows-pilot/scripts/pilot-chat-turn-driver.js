@@ -438,6 +438,136 @@ function exitCodeFor(verdict) {
   return 40;
 }
 
+function isFreshSessionKey(value) {
+  return /^agent:[^:]+:session-\d+$/.test(String(value || ''));
+}
+
+function chatReadyBlockersFor(state) {
+  const blockers = [];
+  if (!state?.rootPresent) blockers.push('MISSING_CHAT_ROOT');
+  if (!state?.sessionKey) blockers.push('MISSING_SESSION_KEY');
+  if (state?.loadingHistory !== false) blockers.push('SESSION_HISTORY_STILL_LOADING');
+  if (state?.composerEnabled !== true) blockers.push('COMPOSER_NOT_READY');
+  return blockers;
+}
+
+function freshSessionBlockersFor(before, after) {
+  const blockers = [];
+  if (!after?.rootPresent) blockers.push('MISSING_CHAT_ROOT');
+  if (!before?.sessionKey) blockers.push('MISSING_PREVIOUS_SESSION_KEY');
+  if (!after?.sessionKey) blockers.push('MISSING_SESSION_KEY');
+  if (after?.loadingHistory !== false) blockers.push('SESSION_HISTORY_STILL_LOADING');
+  if (Number(after?.messageCount) !== 0) blockers.push('NEW_SESSION_NOT_EMPTY');
+  if (before?.sessionKey && after?.sessionKey && before.sessionKey === after.sessionKey) {
+    blockers.push('SESSION_KEY_DID_NOT_CHANGE');
+  }
+  if (after?.sessionKey && !isFreshSessionKey(after.sessionKey)) blockers.push('NEW_SESSION_KEY_NOT_FRESH');
+  return blockers;
+}
+
+async function captureChatState(page) {
+  return page.evaluate(({ selectors }) => {
+    const readBool = (value) => {
+      if (value === 'true') return true;
+      if (value === 'false') return false;
+      return null;
+    };
+    const root = document.querySelector(selectors.page);
+    const composer = document.querySelector(selectors.composer);
+    const messages = Array.from(document.querySelectorAll(selectors.message));
+    return {
+      at: new Date().toISOString(),
+      rootPresent: Boolean(root),
+      sessionKey: root?.getAttribute('data-current-session-key') || null,
+      loadingHistory: root ? readBool(root.getAttribute('data-loading-history')) : null,
+      composerEnabled: composer ? !composer.disabled : null,
+      composerPlaceholder: composer?.getAttribute('placeholder') || null,
+      messageCount: messages.length,
+    };
+  }, { selectors: SEL });
+}
+
+async function waitForStableChatReady(page, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let latest = null;
+  let latestBlockers = [];
+  let stableSince = 0;
+  let lastSignature = '';
+
+  while (Date.now() <= deadline) {
+    latest = await captureChatState(page).catch((error) => ({
+      at: new Date().toISOString(),
+      captureError: error instanceof Error ? error.message : String(error),
+    }));
+    latestBlockers = chatReadyBlockersFor(latest);
+    const signature = JSON.stringify({
+      sessionKey: latest.sessionKey,
+      loadingHistory: latest.loadingHistory,
+      composerEnabled: latest.composerEnabled,
+      messageCount: latest.messageCount,
+    });
+
+    if (latestBlockers.length === 0) {
+      if (signature === lastSignature) {
+        if (stableSince === 0) stableSince = Date.now();
+      } else {
+        stableSince = Date.now();
+        lastSignature = signature;
+      }
+      if (Date.now() - stableSince >= 1_000) {
+        return { ok: true, state: latest, blockers: [] };
+      }
+    } else {
+      stableSince = 0;
+      lastSignature = signature;
+    }
+
+    await page.waitForTimeout(500);
+  }
+
+  return { ok: false, state: latest, blockers: latestBlockers };
+}
+
+async function waitForFreshSessionProof(page, before, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let latest = null;
+  let latestBlockers = [];
+  let stableSince = 0;
+  let lastSignature = '';
+
+  while (Date.now() <= deadline) {
+    latest = await captureChatState(page).catch((error) => ({
+      at: new Date().toISOString(),
+      captureError: error instanceof Error ? error.message : String(error),
+    }));
+    latestBlockers = freshSessionBlockersFor(before, latest);
+    const signature = JSON.stringify({
+      sessionKey: latest.sessionKey,
+      loadingHistory: latest.loadingHistory,
+      messageCount: latest.messageCount,
+    });
+
+    if (latestBlockers.length === 0) {
+      if (signature === lastSignature) {
+        if (stableSince === 0) stableSince = Date.now();
+      } else {
+        stableSince = Date.now();
+        lastSignature = signature;
+      }
+      if (Date.now() - stableSince >= 1_000) {
+        return { ok: true, state: latest, blockers: [] };
+      }
+    } else {
+      stableSince = 0;
+      lastSignature = signature;
+    }
+
+    await page.waitForTimeout(500);
+  }
+
+  return { ok: false, state: latest, blockers: latestBlockers };
+}
+
 async function captureTerminalSurface(page) {
   return page.evaluate(({ selectors, semanticMessageTextFunctionSource }) => {
     const textOf = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
@@ -612,6 +742,9 @@ async function main() {
     requestedNewSession: args.newSession,
     expectedChannel: args.expectedChannel || null,
     freshSession: null,
+    newSessionBefore: null,
+    newSessionAfter: null,
+    newSessionBlockers: [],
     composerPlaceholder: null,
     messagesBefore: 0,
     messageTestIdsBefore: [],
@@ -651,6 +784,16 @@ async function main() {
     result.appVersion = await page.evaluate(() => navigator.userAgent).catch(() => null);
 
     if (args.newSession) {
+      const ready = await waitForStableChatReady(page, args.composerTimeout * 1000);
+      result.newSessionBefore = ready.state;
+      result.newSessionBlockers = ready.blockers;
+      if (!ready.ok) {
+        result.freshSession = false;
+        result.composerPlaceholder = ready.state?.composerPlaceholder ?? null;
+        result.verdict = 'BLOCKED_CHAT_NOT_READY';
+        return result;
+      }
+
       const newChat = page.locator(SEL.newChat);
       if (await newChat.count() === 0) {
         result.verdict = 'FAILED_NO_NEW_CHAT_CONTROL';
@@ -658,14 +801,20 @@ async function main() {
         return result;
       }
       await newChat.first().click();
-      await page.waitForTimeout(2_500);
-      const remaining = await page.locator(SEL.message).count();
-      result.freshSession = remaining === 0;
-      if (!result.freshSession) {
-        // Refuse to run: a non-empty session can produce a refusal that echoes
-        // its own history instead of exercising the tool.
-        result.messagesBefore = remaining;
-        result.verdict = 'FAILED_SESSION_NOT_FRESH';
+
+      const proof = await waitForFreshSessionProof(
+        page,
+        ready.state,
+        Math.min(args.composerTimeout * 1000, 30_000),
+      );
+      result.newSessionAfter = proof.state;
+      result.newSessionBlockers = proof.blockers;
+      result.freshSession = proof.ok;
+      if (!proof.ok) {
+        result.messagesBefore = Number(proof.state?.messageCount ?? 0);
+        result.verdict = proof.blockers.includes('NEW_SESSION_NOT_EMPTY')
+          ? 'FAILED_SESSION_NOT_FRESH'
+          : 'FAILED_NEW_SESSION_NOT_PROVEN';
         return result;
       }
     }
@@ -829,6 +978,12 @@ module.exports = {
   extractExecutionGraphEvidenceFromDocument,
   collectExecutionGraphEvidence,
   captureMessageTestIds,
+  captureChatState,
+  chatReadyBlockersFor,
+  freshSessionBlockersFor,
+  isFreshSessionKey,
+  waitForStableChatReady,
+  waitForFreshSessionProof,
   redactTerminalSurface,
   captureTerminalSurface,
 };

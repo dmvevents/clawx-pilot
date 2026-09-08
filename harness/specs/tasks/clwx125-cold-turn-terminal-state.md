@@ -22,6 +22,7 @@ expectedUserBehavior:
   - Late finals from the aborted run do not replace the explicit timed-out state during the same renderer run.
   - The no-response copy stays neutral and does not imply rate limit, quota, or automatic on-device fallback.
   - The Windows pilot chat driver records the generic error banner as a hard failing surface.
+  - A requested fresh-session run waits for chat readiness and proves the session key changed to an empty new session before sending.
 requiredProfiles:
   - fast
   - comms
@@ -40,6 +41,7 @@ acceptance:
   - Empty or late chat.history cannot erase the current session's submitted prompt while the timeout state belongs to that prompt.
   - New sends in the same session supersede the retained timeout snapshot.
   - Driver verdicts remain non-zero for visible run-error, inline-chip, and generic error banners.
+  - Driver `--new-session` refuses to send when the New Chat click leaves the current session key unchanged or history is still hydrating.
 docs:
   required: true
 ---

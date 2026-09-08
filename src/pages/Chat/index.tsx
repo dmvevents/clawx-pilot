@@ -740,6 +740,8 @@ export function Chat() {
       data-degrade-in-progress={channelRecoveryInProgress ? 'true' : 'false'}
       data-run-error-present={runError ? 'true' : 'false'}
       data-error-present={error ? 'true' : 'false'}
+      data-current-session-key={currentSessionKey}
+      data-loading-history={loading ? 'true' : 'false'}
       className={cn(
         'relative flex min-h-0 -m-6 overflow-hidden transition-colors duration-500',
         'bg-background',

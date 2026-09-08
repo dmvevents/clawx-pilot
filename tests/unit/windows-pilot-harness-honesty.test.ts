@@ -39,6 +39,9 @@ const driver = require('../../windows-pilot/scripts/pilot-chat-turn-driver.js') 
     expectedChannel: string;
     terminalQuiet: number;
   };
+  chatReadyBlockersFor: (state: Record<string, unknown>) => string[];
+  freshSessionBlockersFor: (before: Record<string, unknown>, after: Record<string, unknown>) => string[];
+  isFreshSessionKey: (value: string) => boolean;
   semanticMessageTextFromElement: (element: Element) => string;
   semanticAnswerStillLatest: (latestText: string, expectedText: string) => boolean;
   terminalLatestText: (surface: { lastMessageText?: string; lastMessageTextFull?: string }) => string;
@@ -347,6 +350,49 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
     expect(args.terminalQuiet).toBe(12);
   });
 
+  it('does not treat an empty DOM as a fresh session when the session key did not change', () => {
+    const blockers = driver.freshSessionBlockersFor(
+      { rootPresent: true, sessionKey: 'agent:main:main', loadingHistory: false, composerEnabled: true, messageCount: 0 },
+      { rootPresent: true, sessionKey: 'agent:main:main', loadingHistory: false, composerEnabled: true, messageCount: 0 },
+    );
+
+    expect(blockers).toContain('SESSION_KEY_DID_NOT_CHANGE');
+  });
+
+  it('keeps NewSession blocked while chat history is still hydrating', () => {
+    const blockers = driver.chatReadyBlockersFor({
+      rootPresent: true,
+      sessionKey: 'agent:main:main',
+      loadingHistory: true,
+      composerEnabled: true,
+      messageCount: 0,
+    });
+
+    expect(blockers).toEqual(['SESSION_HISTORY_STILL_LOADING']);
+  });
+
+  it('accepts only a stable empty agent session key transition as a fresh session', () => {
+    const before = {
+      rootPresent: true,
+      sessionKey: 'agent:main:main',
+      loadingHistory: false,
+      composerEnabled: true,
+      messageCount: 1,
+    };
+    const after = {
+      rootPresent: true,
+      sessionKey: 'agent:main:session-1788847885527',
+      loadingHistory: false,
+      composerEnabled: true,
+      messageCount: 0,
+    };
+
+    expect(driver.isFreshSessionKey(after.sessionKey)).toBe(true);
+    expect(driver.freshSessionBlockersFor(before, after)).toEqual([]);
+    expect(driver.freshSessionBlockersFor(before, { ...after, messageCount: 1 }))
+      .toContain('NEW_SESSION_NOT_EMPTY');
+  });
+
   it('exits 0 only for a clean answer', () => {
     expect(driver.exitCodeFor('ANSWERED')).toBe(0);
     // Answered, but the principal also saw a red banner: distinct, non-zero.
@@ -360,6 +406,8 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
       'FAILED_UNEXPECTED_DEGRADE',
       'FAILED_UNEXPECTED_CHANNEL',
       'FAILED_GENERIC_ERROR',
+      'BLOCKED_CHAT_NOT_READY',
+      'FAILED_NEW_SESSION_NOT_PROVEN',
       'INCOMPLETE',
     ]) {
       expect(driver.exitCodeFor(verdict)).toBe(40);

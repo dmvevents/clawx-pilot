@@ -395,4 +395,121 @@ test.describe('ClawX pending chat send acknowledgement', () => {
       await closeElectronApp(app);
     }
   });
+
+  test('exposes New Chat no-op during hydration and the later verified session transition', async ({ launchElectronApp }) => {
+    const app = await launchElectronApp({ skipSetup: true });
+
+    try {
+      await installIpcMocks(app, {
+        gatewayStatus: { state: 'running', port: 18789, pid: 12345, connectedAt: Date.now() },
+        gatewayRpc: {},
+        hostApi: {
+          [stableStringify(['/api/gateway/status', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: { state: 'running', port: 18789, pid: 12345, connectedAt: Date.now() } },
+          },
+          [stableStringify(['/api/agents', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: AGENTS_SNAPSHOT },
+          },
+          [stableStringify(['/api/settings', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: { setupComplete: true, preferredChannel: 'online' } },
+          },
+          [stableStringify(['/api/provider-accounts', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: [ONLINE_ACCOUNT, LOCAL_ACCOUNT] },
+          },
+          [stableStringify(['/api/provider-accounts/key-info', 'GET'])]: {
+            ok: true,
+            data: {
+              status: 200,
+              ok: true,
+              json: [
+                { accountId: ONLINE_ACCOUNT.id, hasKey: true, keyMasked: 'sk-***' },
+                { accountId: LOCAL_ACCOUNT.id, hasKey: true, keyMasked: 'local' },
+              ],
+            },
+          },
+          [stableStringify(['/api/provider-vendors', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: [] },
+          },
+          [stableStringify(['/api/provider-accounts/default', 'GET'])]: {
+            ok: true,
+            data: { status: 200, ok: true, json: { accountId: ONLINE_ACCOUNT.id } },
+          },
+        },
+      });
+
+      await app.evaluate(async () => {
+        const { ipcMain } = process.mainModule!.require('electron') as typeof import('electron');
+        let releaseHistory: (() => void) | null = null;
+        let historyRequested = false;
+
+        (globalThis as {
+          __releaseNewChatHistory?: () => void;
+          __newChatHistoryRequested?: () => boolean;
+        }).__releaseNewChatHistory = () => releaseHistory?.();
+        (globalThis as {
+          __newChatHistoryRequested?: () => boolean;
+        }).__newChatHistoryRequested = () => historyRequested;
+
+        ipcMain.removeHandler('gateway:rpc');
+        ipcMain.handle('gateway:rpc', async (_event: unknown, method: string) => {
+          if (method === 'sessions.list') {
+            return { success: true, result: { sessions: [{ key: 'agent:main:main', displayName: 'main' }] } };
+          }
+          if (method === 'chat.history') {
+            historyRequested = true;
+            await new Promise<void>((resolve) => {
+              releaseHistory = resolve;
+            });
+            return {
+              success: true,
+              result: {
+                messages: [{
+                  role: 'user',
+                  id: 'existing-user-message',
+                  timestamp: Date.now() / 1000,
+                  content: [{ type: 'text', text: 'existing hydrated prompt' }],
+                }],
+              },
+            };
+          }
+          return { success: true, result: {} };
+        });
+      });
+
+      const page = await getStableWindow(app);
+      try {
+        await page.reload();
+      } catch (error) {
+        if (!String(error).includes('ERR_FILE_NOT_FOUND')) throw error;
+      }
+
+      await expect(page.getByTestId('main-layout')).toBeVisible();
+      await expect.poll(async () => app.evaluate(() => (
+        (globalThis as { __newChatHistoryRequested?: () => boolean }).__newChatHistoryRequested?.() ?? false
+      ))).toBe(true);
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-current-session-key', 'agent:main:main');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-loading-history', 'true');
+
+      await page.getByTestId('sidebar-new-chat').click();
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-current-session-key', 'agent:main:main');
+
+      await app.evaluate(() => {
+        (globalThis as { __releaseNewChatHistory?: () => void }).__releaseNewChatHistory?.();
+      });
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-loading-history', 'false');
+      await expect(page.getByText('existing hydrated prompt')).toBeVisible();
+
+      await page.getByTestId('sidebar-new-chat').click();
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-loading-history', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-current-session-key', /agent:main:session-\d+/);
+      await expect(page.locator('[data-testid^="chat-message-"]:not([data-testid="chat-message-error-chip"])')).toHaveCount(0);
+    } finally {
+      await closeElectronApp(app);
+    }
+  });
 });
