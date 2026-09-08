@@ -54,6 +54,7 @@ acceptance:
   - document.read_image returns a native image content block plus metadata text/details; harness goldens reject legacy dataUrl-only, text-only or empty-image results.
   - Registration and real staged plugin-host inventories include the discovery tool.
   - A fresh installed Windows session answers the original PDF prompt with actual document.find and document.read_pdf calls and correct source content.
+  - The original PDF prompt's summary preserves distinct actionable deadlines plus required district/form routing and explanations from the source, without collapsing separate obligations into one deadline.
 docs:
   required: true
 ---

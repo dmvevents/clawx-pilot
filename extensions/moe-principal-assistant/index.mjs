@@ -651,7 +651,7 @@ function registerDocumentTools({ registerTool, log }) {
   registerTool({
     name: 'document.read_pdf',
     description:
-      "Extract text from a PDF file WITHOUT invoking Python. Uses the bundled pdf-parse dep, so this works on Windows even if the pdf/nano-pdf skills' Python runtime is unavailable. Args: { path, maxChars? (default 200000) }. Returns { path, bytes, pages, info, text, truncated, totalChars }. Prefer this over the pdf skill when handling emailed attachments or files the principal dropped into chat.",
+      "Extract text from a PDF file WITHOUT invoking Python. Uses the bundled pdf-parse dep, so this works on Windows even if the pdf/nano-pdf skills' Python runtime is unavailable. Args: { path, maxChars? (default 200000) }. Returns { path, bytes, pages, info, text, truncated, totalChars }. Prefer this over the pdf skill when handling emailed attachments or files the principal dropped into chat. When summarising reader output, preserve all actionable deadlines/date ranges and required actions, recipients, submission routes/forms, exceptions affecting requirements, and any explanation the reader is required to provide; keep distinct deadlines separate and shorten background first.",
     parameters: toolParameters(
       { path: readableSchema, maxChars: numberSchema },
       ['path'],
