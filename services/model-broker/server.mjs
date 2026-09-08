@@ -134,7 +134,16 @@ function upstreamUserId(req) {
 }
 
 function upstreamUrl(config, path) {
-  const suffix = config.upstreamBaseUrl.endsWith('/v1') && path.startsWith('/v1/')
+  const basePath = (() => {
+    try {
+      return new URL(config.upstreamBaseUrl).pathname.replace(/\/+$/, '');
+    } catch {
+      return '';
+    }
+  })();
+  const stripsClientV1Prefix =
+    config.upstreamBaseUrl.endsWith('/v1') || /\/endpoints\/openapi$/.test(basePath);
+  const suffix = stripsClientV1Prefix && path.startsWith('/v1/')
     ? path.slice('/v1'.length)
     : path;
   return `${config.upstreamBaseUrl}${suffix}`;
@@ -148,8 +157,7 @@ function resolveModel(body, config) {
   const requestedModel = typeof body.model === 'string' && body.model.trim()
     ? body.model.trim()
     : config.defaultModel || publicModels(config)[0];
-  const upstreamModel = config.modelMap[requestedModel];
-  if (!upstreamModel) {
+  if (!Object.prototype.hasOwnProperty.call(config.modelMap, requestedModel)) {
     return {
       error: {
         code: 'MODEL_NOT_ALLOWED',
@@ -157,7 +165,16 @@ function resolveModel(body, config) {
       },
     };
   }
-  return { requestedModel, upstreamModel };
+  const upstreamModel = config.modelMap[requestedModel];
+  if (typeof upstreamModel !== 'string' || !upstreamModel.trim()) {
+    return {
+      error: {
+        code: 'MODEL_NOT_ALLOWED',
+        message: `Model "${requestedModel}" is not enabled for this gateway.`,
+      },
+    };
+  }
+  return { requestedModel, upstreamModel: upstreamModel.trim() };
 }
 
 async function readBody(req, maxBytes = 1_000_000) {
@@ -195,7 +212,32 @@ async function pipeFetchResponse(upstreamResponse, res) {
     res.end(await upstreamResponse.text().catch(() => ''));
     return;
   }
-  Readable.fromWeb(upstreamResponse.body).pipe(res);
+
+  const stream = Readable.fromWeb(upstreamResponse.body);
+  await new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      stream.off('error', onError);
+      res.off('error', onError);
+      res.off('finish', onFinish);
+      res.off('close', onClose);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onError = (error) => finish(error);
+    const onFinish = () => finish();
+    const onClose = () => {
+      if (!res.writableEnded) stream.destroy();
+      finish();
+    };
+    stream.on('error', onError);
+    res.on('error', onError);
+    res.on('finish', onFinish);
+    res.on('close', onClose);
+    stream.pipe(res);
+  });
 }
 
 function createUpstreamAuthHeaderResolver(config) {
@@ -249,6 +291,10 @@ async function proxyModelRequest(req, res, path, config, resolveUpstreamAuthHead
   const forwardedUserId = upstreamUserId(req);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const abortUpstreamOnClientClose = () => {
+    if (!res.writableEnded) controller.abort();
+  };
+  res.on('close', abortUpstreamOnClientClose);
   try {
     const authHeaders = await resolveUpstreamAuthHeaders();
     const upstreamResponse = await fetch(upstreamUrl(config, path), {
@@ -269,8 +315,12 @@ async function proxyModelRequest(req, res, path, config, resolveUpstreamAuthHead
       usage.meter.recordUsage(usage.userId, consumed.tokens, new Date());
     }
     await pipeFetchResponse(upstreamResponse, res);
+  } catch (error) {
+    if (!res.headersSent) throw error;
+    res.destroy(error instanceof Error ? error : undefined);
   } finally {
     clearTimeout(timeout);
+    res.off('close', abortUpstreamOnClientClose);
   }
 }
 
