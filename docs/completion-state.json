@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T05:32:00Z",
+  "updatedAt": "2026-09-08T06:27:08.152430Z",
   "purpose": "Completion planning only; this file is not a release verdict or a substitute for machine-produced acceptance evidence.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -884,21 +884,78 @@
           "electronTestsPassed": 2,
           "independentUnitRepeat": true,
           "fixesColdLatency": false,
-          "installedAcceptance": "NOT_RUN"
+          "installedAcceptance": "NO_FALSE_FALLBACK_OBSERVED_IN_FAILED_MOE24_TURN_FULL_RECOVERY_UNVERIFIED"
         },
         "moe24Build": {
           "sourceCommit": "b814f804036fc2f9f32d3326c8694f4ae2ef7805",
           "runId": "34189597051",
-          "status": "PASS_HOSTED_BUILD_GUEST_DOWNLOAD_HASH_FULL_PAYLOAD_REVIEW_PENDING",
+          "status": "PASS_HOSTED_BUILD_AND_36_HOST_PAYLOAD_CHECKS",
           "includesTransientFallbackRepair": true,
-          "installedAcceptance": "NOT_RUN",
-          "installerSha256": "83af6d00071992b3e34b5430e3e3eb4c848804054cd90d23afbdc3deafc271dd"
+          "installedAcceptance": "PASS_INSTALLED_IDENTITY_FIRST_ONLINE_TURN_FAIL",
+          "installerSha256": "83af6d00071992b3e34b5430e3e3eb4c848804054cd90d23afbdc3deafc271dd",
+          "installedAt": "2026-09-08T06:03:28.1057584Z",
+          "installedEvidence": "artifacts/windows-vm/20260908-fresh-setup/moe24-install-result.json",
+          "hostEvidence": "artifacts/windows-vm/20260908-fresh-setup/moe24-host-verification.json"
         },
         "privateSetupBundle": {
           "status": "PREPARED_PRIVATE_NOT_SENT",
           "helperCommit": "9d46832f2fce4036f1943c853a0f88049762e07f",
           "distinctClientKeys": true,
           "evidence": "artifacts/windows-vm/20260908-fresh-setup/setup-bundle-preparation.json"
+        },
+        "moe24FirstTurn": {
+          "status": "FAIL_NO_RESPONSE",
+          "sentAt": "2026-09-08T06:11:28.506Z",
+          "finishedAt": "2026-09-08T06:14:29.063Z",
+          "driverVerdict": "NO_RESPONSE",
+          "answerObserved": false,
+          "terminalQuietVerified": false,
+          "degradeNoticeObserved": false,
+          "laterIdleChannel": "online",
+          "laterIdleAt": "2026-09-08T06:16:26.605Z",
+          "transcriptCorrelation": "BLOCKED_CURRENT_TURN_NOT_FOUND",
+          "evidence": "artifacts/windows-vm/20260908-fresh-setup/moe24-first-turn-evidence/chat-turn-2026-09-08T06-11-25-019Z.json"
+        },
+        "historyStartupRepair": {
+          "commit": "f5875b54d5bfcf9e6b134322f560d18468746975",
+          "status": "PASS_SOURCE_REVIEW",
+          "focusedTests": 7,
+          "independentRepeat": true,
+          "installedAcceptance": "NOT_RUN",
+          "scope": "Remove blocking catalog inference from chat.history; actual turn resolution unchanged"
+        },
+        "moe24DefenderTrace": {
+          "status": "RECORDED",
+          "realTimeScans": 49927,
+          "appTriggeredScans": 47162,
+          "appTriggeredScanSeconds": 329.2118,
+          "securitySettingsChanged": false,
+          "rawTraceRetainedOnGuest": true,
+          "evidence": "artifacts/windows-vm/20260908-fresh-setup/moe24-first-turn-evidence/defender-startup-redacted.json",
+          "causality": "Repeated runtime file access is an investigation target; aggregate scan time is not additive startup wall time"
+        },
+        "upstreamAudit": {
+          "upstreamCommit": "6a938757dbe47b74687ec1bf131a674e03ea9e79",
+          "upstreamVersion": "0.5.6",
+          "upstreamOpenClaw": "2026.7.1-2",
+          "pilotOpenClaw": "2026.4.23",
+          "fullFeatureParity": "NOT_VERIFIED",
+          "evidence": "docs/UPSTREAM_MERGE_ASSESSMENT_2026-08-20.md"
+        },
+        "moe24TestTeardown": {
+          "appQuit": "PASS_NO_APP_PROCESSES",
+          "appQuitAt": "2026-09-08T06:20:12.969Z",
+          "localServerRestoration": "PASS_OWNER_LISTENER_AND_API",
+          "initialApiProbe": "TIMED_OUT_RETAINED",
+          "restorationVerifiedAt": "2026-09-08T06:27:03.8805305Z",
+          "evidence": "artifacts/windows-vm/20260908-fresh-setup/moe24-first-turn-evidence/ollama-restoration-verification.json"
+        },
+        "compatibilityBoardCheckpoint": {
+          "card": "CLWX-22",
+          "commentId": "cbbd5013-21fe-4c4b-b266-1f690f9ca64f",
+          "createdAt": "2026-09-08T06:27:08.152430Z",
+          "readback": "PASS_DETAIL_AND_LIST",
+          "cardStatesChanged": false
         }
       }
     }
@@ -1069,7 +1126,7 @@
         "installed_candidate"
       ],
       "evidenceSummary": "Prior installed moe.22 build 34171848832 attempted ollama-ollamalo/qwen2.5:3b-instruct and hit embedded assistant timeout at 02:13:07Z; the app displayed a no-response notice and recovered idle. Actual failed-session metadata records 33,177 system characters plus 33,102 tool-schema characters across 47 tools. Direct API diagnostics: tiny warm first content in 694 ms; a 32,283-character context produced no content by 120,215 ms. Managed OpenAI-compatible catalog metadata advertises contextWindow 200000 while native Ollama metadata is 32768. Ollama v0.32.14 drops top-level options.num_ctx on its OpenAI route, so the catalog value does not prove a 200,000-token allocation. Ordinary app and offline acceptance remain unproved; new candidate a4efc7e4 contains no local-context repair. Selected build policy-only experiment also timed out; exact prior policy restored03:35:08Z, fresh Online turn answered03:38:15Z and actual model correlation passed03:44:22Z. Stakeholder local network failure is separate from this VM context/latency defect.",
-      "nextAction": "Prioritize startup/provider readiness for the stakeholder\u2019s unreachable local endpoint. Retain local-context prototype as unproved source work; verify ordinary/offline behavior after repair.",
+      "nextAction": "Prioritize startup/provider readiness for the stakeholder’s unreachable local endpoint. Retain local-context prototype as unproved source work; verify ordinary/offline behavior after repair.",
       "exitCriterion": "Nonempty terminal answer with the actual local provider and no Gateway/session-administration loop or tool-validation errors; stalled tools terminate visibly; offline document path has no non-loopback egress.",
       "references": [
         "electron/utils/ondevice-tool-policy.ts",
@@ -1213,7 +1270,7 @@
         "microsoft_journeys",
         "representative_windows_asr"
       ],
-      "evidenceSummary": "Karunesh reports no assistant connection on sent moe.21 at03:28\u201303:31Z; screenshots/log confirm unavailable local route. Acknowledgment accepted03:39:18Z. Current moe.22 has not been handed off and does not contain the startup repair. No unaided acceptance.",
+      "evidenceSummary": "Karunesh reports no assistant connection on sent moe.21 at03:28–03:31Z; screenshots/log confirm unavailable local route. Acknowledgment accepted03:39:18Z. Current moe.22 has not been handed off and does not contain the startup repair. No unaided acceptance.",
       "nextAction": "Validate the startup repair and separate client Online setup on Windows, provide the tested handoff, and collect an unaided ordinary-first-turn followed by email rerun.",
       "exitCriterion": "Tester completes formerly failing attach/read workflow on the same artifact; limitations and rollout scope recorded.",
       "references": [

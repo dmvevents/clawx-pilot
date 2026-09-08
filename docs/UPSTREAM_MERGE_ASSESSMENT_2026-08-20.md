@@ -1,4 +1,29 @@
-# Upstream merge assessment — 2026-08-20
+# Upstream merge assessment
+
+## Current comparison — September 8, 2026
+
+Read-only `git fetch --no-tags origin main` confirmed upstream `6a938757dbe47b74687ec1bf131a674e03ea9e79`. Compare it with the installed pilot candidate `b814f804036fc2f9f32d3326c8694f4ae2ef7805` (moe.24), not with an unbuilt development checkout.
+
+| Surface | Current upstream | Installed pilot | Assessment |
+|---|---|---|---|
+| App version | `0.5.6` | `0.4.3-moe.24` | Deliberate fork; version numbers do not establish feature parity |
+| OpenClaw runtime | `2026.7.1-2` | `2026.4.23` | Runtime/plugin migration and compatibility have not been accepted |
+| Electron | `40.10.6` | Lockfile/package artifact resolves `40.8.4` (`^40.6.0` declaration) | Patch-version drift; no upgrade is implied by this audit |
+| Windows plugin cleanup safety | `safeRmSync` | Present in the candidate at all six cleanup call sites | Backported behavior verified in source despite different commit ancestry |
+| Gateway liveness/recovery controller | Upstream controller/refactor exists | Upstream controller absent; pilot has its own recovery changes | Integration still deferred; full pilot recovery acceptance remains open |
+| NSIS upgrade/rollback refactor | Standalone template patches | Pilot retains its own packaging path | Current assisted install PASS does not establish failed-upgrade rollback behavior |
+| IPC / Host API layout | `shared/host-api` refactor | Pilot Main/Host API boundaries | Architectural divergence; not a drop-in merge |
+| Upstream custom-provider timeout removal (`2ab8610a`) | Removed upstream-added timeout injection | No corresponding `requestTimeout`/`timeoutMs` injection in pilot `openclaw-auth.ts` | Do not count a missing commit as a missing fix without checking behavior |
+
+The histories differ by 198 upstream-only and 114 pilot-only commits from their merge base, and their trees differ across 1,625 files including documentation and tests. **These are divergence measurements, not counts of missing features or defects.** Squashed/copied backports make ancestry alone insufficient; the cleanup-safety check above demonstrates this.
+
+The Ministry fork adds its own Outlook/Forms tools and action gates, document handling, Online provisioning/broker integration, Windows helpers and pilot UX. Upstream's tests cannot validate those additions. Conversely, not every observed runtime issue was introduced by Ministry changes: both launchers currently pipe Gateway stdout without consuming it. That is a documented risk, not a proven cause of the measured startup delay.
+
+Current evidence establishes a blocking catalog dependency in the pinned OpenClaw `chat.history` path. Repair `f5875b54d5bfcf9e6b134322f560d18468746975` has a baseline-versus-patched regression using the actual pinned handler and thinking resolver; root independently repeated all seven focused tests. The repair is **source-verified only**, not in moe.24. It does not prove that all startup latency is removed.
+
+This is a bounded version/source comparison, not a full compatibility audit of all 198 upstream-only commits. Use the [workflow matrix](APP_WORKFLOWS_TEST_MATRIX.md) and [completion plan](COMPLETION_PLAN.md) for actual product acceptance. No merge, runtime upgrade or new package build was performed for this comparison.
+
+## Historical assessment — August 20, 2026
 
 Fork: `dmvevents/clawx-pilot` (Ministry of Education). Upstream: `ValueCell-ai/ClawX`
 (`origin`). We are ~102 commits behind (v0.4.15 → v0.5.2). This pass audited the

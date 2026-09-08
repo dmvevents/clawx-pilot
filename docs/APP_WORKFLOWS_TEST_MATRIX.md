@@ -1,5 +1,26 @@
 # App workflows & test matrix — the full toolset, and how we prove it on the laptop
 
+## Current acceptance boundary — September 8, 2026
+
+**GA is RED. The historical green rows below do not establish compatibility or acceptance of the current Windows build.** They mostly describe moe.15-era VM, Mac, helper or test-form evidence. Current decisions are owned by [COMPLETION_PLAN.md](COMPLETION_PLAN.md), [CURRENT_WINDOWS_RC.md](CURRENT_WINDOWS_RC.md) and the [evidence manifest](GA_RELEASE_EVIDENCE_MANIFEST.md).
+
+Current candidate: `0.4.3-moe.24`, source `b814f804036fc2f9f32d3326c8694f4ae2ef7805`, hosted run `34189597051`. The standard-user upgrade on Windows Server 2022 completed at **06:03:28Z**, exit 0, with matching installed EXE/ASAR hashes. This is an existing-profile upgrade; Windows 10/11 fresh-install acceptance is still missing.
+
+| Workflow / compatibility claim | Current evidence | Remaining gap |
+|---|---|---|
+| Installer and packaged runtime | PASS for moe.24 package identity: 36 host checks and matching installed EXE/ASAR; hosted preflight 2,137 tests passed, 11 skipped | Package identity does not prove the principal workflows |
+| Online provisioning and W9 first turn | Standard-user setup: 20 native checks plus actual CMD entrypoint PASS; live broker checks PASS | moe.24 first Online turn FAIL: NO_RESPONSE after 180 seconds; no terminal quiet proof. Prior fresh moe.22 failure remains valid |
+| W10 automatic fallback and on-device chat | Reviewed source fix prevents silence from triggering a local replay and checks fallback-target readiness | No false fallback observed in the failed moe.24 turn; this does not establish recovery acceptance. Ordinary on-device chat retains a FAIL |
+| W1–W4 Outlook and Forms | Historical browser/Graph/helper positives; Chrome attach mechanics available | Current authenticated tenant read/draft/form-preview acceptance requires account-holder sign-in; historic clone/send tests are not current tenant proof |
+| W6–W7 Office and document content | Historical installed Word/Excel write/readback; moe.22 image-content check PASS | Full matrix on moe.24 not run; P3 PDF still misses the August 29 Head Office deadline |
+| W5 reminders / policy | Scoped historical installed positives | Current-candidate end-to-end rerun pending |
+| W8 voice | Packaged recognizer and FFmpeg plus native fixture checks PASS | No actual microphone on this Server VM; representative client microphone/ASR acceptance missing |
+| Startup / recovery / external acceptance | Startup traced; one catalog-blocking path has a reviewed source repair | Startup latency and full recovery/rehearsal remain open; Karunesh has not accepted a repaired build |
+
+Do not total the historical green symbols into a release percentage. Each PASS must name the tested revision, installed artifact, account/environment, actual journey and remaining limits. See the [current upstream comparison](UPSTREAM_MERGE_ASSESSMENT_2026-08-20.md) for version drift and backport boundaries.
+
+## Historical inventory and evidence — September 2–3, 2026
+
 *2026-09-02. The complete enumeration of every function the Ministry app exposes,
 grouped into principal-facing workflows, with a per-workflow test status for Mac
 (dev) and the Windows pilot laptop. Companion to `docs/GRAPH_TEST_PLAN.md` (the

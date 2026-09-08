@@ -1,5 +1,7 @@
 # Windows VM evidence — September 8, 2026
 
+**September 8, 06:22Z update — GA RED:** moe.24 installed identity passes (exit 0, 36 host checks, matching EXE/ASAR), but its ordinary first Online turn fails `NO_RESPONSE` after 180 seconds. No answer or terminal quiet proof; no false fallback observed and later idle UI remains Online. Defender recorded extensive repeated runtime-file scans. The pinned-history repair is source-only. Current workflow/upstream matrix corrections and exact evidence are in the [connection record](WINDOWS_STAKEHOLDER_CONNECTION_2026-09-08.md). No new build, repaired handoff, public release or VM resize resulted from the compatibility audit.
+
 Status: **PARTIAL; GA remains RED.** Current selected and installed artifact is `a4efc7e4a4311d7865bf0c74ab2320289fdadd48` / [build 34180280985](https://github.com/dmvevents/clawx-pilot/actions/runs/34180280985). Its exact identities are in the [candidate pointer](../CURRENT_WINDOWS_RC.md) and [generated manifest](../release-manifests/0.4.3-moe.22.json). Earlier baseline evidence is preserved below.
 
 ## Selected build 34180280985 — installed retests, 03:23 UTC

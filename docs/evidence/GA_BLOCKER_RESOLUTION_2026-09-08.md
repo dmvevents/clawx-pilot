@@ -1,5 +1,7 @@
 # GA blocker resolution record - 2026-09-08
 
+**September 8, 06:22Z update — GA RED:** moe.24 installed identity passes (exit 0, 36 host checks, matching EXE/ASAR), but its ordinary first Online turn fails `NO_RESPONSE` after 180 seconds. No answer or terminal quiet proof; no false fallback observed and later idle UI remains Online. Defender recorded extensive repeated runtime-file scans. The pinned-history repair is source-only. Current workflow/upstream matrix corrections and exact evidence are in the [connection record](WINDOWS_STAKEHOLDER_CONNECTION_2026-09-08.md). No new build, repaired handoff, public release or VM resize resulted from the compatibility audit.
+
 Captured for the Plane board update requested during the release push. The release verdict remains **RED**. This file documents the blockers, how confirmed blockers were removed or narrowed, and what still prevents GA. It does not replace the [completion plan](../COMPLETION_PLAN.md), [current Windows candidate](../CURRENT_WINDOWS_RC.md) or [GA release evidence manifest](../GA_RELEASE_EVIDENCE_MANIFEST.md).
 
 ## Board write scope
