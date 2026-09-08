@@ -62,6 +62,7 @@ function copyVerifierCheckoutFiles(destinationRoot: string) {
     'scripts/verify-openclaw-bundle.mjs',
     'scripts/clwx92-workerenv-check.mjs',
     'scripts/openclaw-bundle-config.mjs',
+    'scripts/openclaw-chat-history-patch.mjs',
     'scripts/openclaw-pricing-cache-patch.mjs',
     'extensions/moe-principal-assistant/doc-tools.mjs',
   ]) {
@@ -84,6 +85,7 @@ async function createFakeOpenClawBundle(destinationRoot: string, options: { incl
   fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(openclawRoot, 'node_modules'), 'junction');
 
   const { transformOpenClawPricingCacheSource } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'openclaw-pricing-cache-patch.mjs')).href);
+  const { transformOpenClawChatHistorySource } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'openclaw-chat-history-patch.mjs')).href);
   const source = `function canonicalizeOpenRouterProvider(provider) {
 \tconst normalized = normalizeModelRef(provider, "placeholder").provider;
 \treturn PROVIDER_ALIAS_TO_OPENROUTER[normalized] ?? normalized;
@@ -101,6 +103,34 @@ function refreshGatewayModelPricingCache() {
 }
 `;
   fs.writeFileSync(path.join(distDir, 'usage-format-test.js'), transformOpenClawPricingCacheSource(source).source, 'utf8');
+  const chatSource = `function resolveThinkingDefault(params) {
+\treturn params;
+}
+const chatHandlers = {
+\t"chat.history": async ({ params, respond, context }) => {
+\t\tconst cfg = {};
+\t\tconst entry = {};
+\t\tconst resolvedSessionModel = { provider: "test", model: "model" };
+\t\tconst bounded = { messages: [], placeholderCount: 0 };
+\t\tlet thinkingLevel = entry?.thinkingLevel;
+\t\tif (!thinkingLevel) {
+\t\t\tconst catalog = await context.loadGatewayModelCatalog();
+\t\t\tthinkingLevel = resolveThinkingDefault({
+\t\t\t\tcfg,
+\t\t\t\tprovider: resolvedSessionModel.provider,
+\t\t\t\tmodel: resolvedSessionModel.model,
+\t\t\t\tcatalog
+\t\t\t});
+\t\t}
+\t\trespond(true, {
+\t\t\tsessionKey: params.sessionKey,
+\t\t\tmessages: bounded.messages,
+\t\t\tthinkingLevel
+\t\t});
+\t},
+};
+`;
+  fs.writeFileSync(path.join(distDir, 'chat-test.js'), transformOpenClawChatHistorySource(chatSource).source, 'utf8');
   return { openclawRoot, bundleNm: path.join(openclawRoot, 'node_modules') };
 }
 

@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
+import { verifyOpenClawChatHistoryPatch } from './openclaw-chat-history-patch.mjs';
 import { verifyOpenClawPricingCachePatch } from './openclaw-pricing-cache-patch.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -94,7 +95,15 @@ try {
   failures.push(`PRICING-CACHE: ${err instanceof Error ? err.message : String(err)}`);
 }
 
-// 5. CLWX-92: PDF parsing must survive the Electron UtilityProcess
+// 5. September 8 Windows startup: chat.history must not wait for the cold
+// model catalog merely to infer an absent thinkingLevel.
+try {
+  verifyOpenClawChatHistoryPatch(path.join(ROOT, 'build', 'openclaw'));
+} catch (err) {
+  failures.push(`CHAT-HISTORY: ${err instanceof Error ? err.message : String(err)}`);
+}
+
+// 6. CLWX-92: PDF parsing must survive the Electron UtilityProcess
 // environment shape (process.versions.electron + process.type='utility'
 // makes pdfjs demand GlobalWorkerOptions.workerSrc). Run the shipped
 // doc-tools against the BUNDLE's pdf-parse in a child process with the

@@ -18,6 +18,7 @@
 
 import 'zx/globals';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
+import { patchOpenClawChatHistory } from './openclaw-chat-history-patch.mjs';
 import { patchExtensionOpenClawSelfImports } from './openclaw-self-import-patch.mjs';
 import { patchOpenClawPricingCache } from './openclaw-pricing-cache-patch.mjs';
 
@@ -992,6 +993,9 @@ if (openclawSelfImportPatch.specifiersPatched > 0) {
 
 const pricingPatch = patchOpenClawPricingCache(OUTPUT);
 echo`   🩹 OpenClaw pricing cache normalization: ${pricingPatch.patched ? 'patched' : 'already patched'}`;
+
+const chatHistoryPatch = patchOpenClawChatHistory(OUTPUT);
+echo`   🩹 OpenClaw chat.history startup catalog block: ${chatHistoryPatch.patched ? 'patched' : 'already patched'}`;
 
 // 8. Verify the bundle
 const entryExists = fs.existsSync(path.join(OUTPUT, 'openclaw.mjs'));
