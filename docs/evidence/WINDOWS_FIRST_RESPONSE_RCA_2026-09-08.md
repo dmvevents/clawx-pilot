@@ -6,11 +6,11 @@ Owner: runtime/release engineering. Plane: **CLWX-125**, In Progress, urgent. Re
 
 Why did an earlier Windows Online turn answer, while the current standard-user turn fails? Restore a reliable first response without losing the submitted prompt, inventing a quota diagnosis or replaying work on an unintended local model.
 
-**Observed:** moe.24 installs correctly but fails the ordinary first-turn test. Its runtime spends approximately 112 seconds before `prompt.submitted`; the attempt immediately records an external cancellation. The configured model idle timeout is 600 seconds and the trajectory says `idleTimedOut:false`. This locates the failure before useful model execution. The cancellation producer still needs direct binding. CPU profiling has identified repeated SDK alias writes as a substantial preparation cost; the bounded repair is under test. `timedOut:true` alone does not prove which timer fired: the pinned runtime classifies some ordinary abort messages as timeouts.
+**Current result:** reviewed source `155e7a73` passes first and next Online turns in a patched-installation diagnostic, with actual cloud transcripts and stable terminal UI. Original moe.24 still has the reproduced failure; the forthcoming installer must prove the combined repairs as shipped. The original 112-second preparation/external-abort timeline and later 75-second failed preparation remain valid evidence below. The configured model idle timeout is 600 seconds; `timedOut:true` alone does not identify the cancellation producer.
 
 ## Product flow and failure map
 
-Solid edges show the implemented path. Red nodes identify a reproduced failure or a source-supported defect. Dashed edges identify evidence that is correlated by time but lacks a propagated turn identifier.
+This diagram records the original `b814f804` failure. Solid edges show its implemented path. Red nodes identify a reproduced failure or a source-supported defect; the repaired diagnostic results are recorded separately below. Dashed edges identify evidence that is correlated by time but lacks a propagated turn identifier.
 
 ```mermaid
 flowchart TD
@@ -139,6 +139,34 @@ The pinned runtime emits `stream:"lifecycle", data.phase:"start"` from the Pi `a
 
 Allowlisted evidence: `integrated-correlation.json`, `integrated-cpu-summary.json`, `integrated-renderer-timeline.jsonl`, `integrated-broker-timeline.json`, `integrated-asar-receipt.json` and `integrated-patch-receipt.json` under `artifacts/windows-vm/20260908-connection-rca/`. Raw profile data stays private.
 
+## Lifecycle repair: first and next Online turns pass in diagnostic
+
+Reviewed commit **`155e7a737c8cde671aa1fefcefb520bebb54148e`** recognizes the actual `stream:lifecycle`, `phase:start` event and refreshes liveness once for its current owned run/session/generation. It keeps the original 90-second silence budget and legacy `started` compatibility. Duplicate, missing-session, foreign, superseded and cancelled starts cannot extend or revive the run. The baseline regression fails before the repair; **101 focused tests, four Electron checks, typecheck, lint and communication checks pass**. Root independently reviewed the code and validated the committed diff against `8ca085f4` with the task harness.
+
+The diagnostic ASAR is **`ef512b4111dd4f3b6b96d97a8b045af184023d42eef24db6046a870eba435c53`**, compiled from a clean checkout. Existing non-renderer bytes/unpacking flags and the same SDK/history patches are verified. The profile was backed up before application at **08:02:37.742Z**. This run excludes the separately reviewed clear-ack repair; that is being integrated for the next installer.
+
+| Boundary / criterion | First turn | Next turn, same running app/session |
+|---|---|---|
+| Send UTC | 08:03:58.276 | 08:07:57.359 |
+| Prompt submitted UTC | 08:05:01.403 | 08:08:08.174 |
+| Preparation | **63.127 s** | **10.815 s** |
+| Runtime completion UTC | 08:05:34.655 | 08:08:13.061 |
+| Model interval | 33.252 s | 4.887 s |
+| Driver accepted-answer time | **109.430 s** | **28.491 s** |
+| Actual provider/model | `custom-moecloud/moe-demo-pro` | Same, transcript verified |
+| Exact synthetic token | Once in answer | Once in answer |
+| Terminal observation | PASS, 30 seconds | PASS, 30 seconds |
+| Generic/run/chip errors or local fallback | None | None |
+| External abort / aborted / timedOut / idleTimedOut | All false | All false |
+
+The actual lifecycle start reaches the renderer at **08:05:01.419Z**, 16 ms after `prompt.submitted`, carrying the same run and session. The lifecycle end arrives at 08:05:34.640Z; the UI is idle with two messages at 08:05:34.719Z. The first driver proves a new empty session (`agent:main:session-1788854636846`); the second exact-token transcript is bound to the same session. This directly verifies that the protocol event exists on the real path.
+
+The 181.131-second first-turn profile records SDK alias work **12.663 s**, plugin loading 33.651 s, `lstat` self time 19.425 s and `readFileUtf8` self time 14.743 s. The unchanged SDK content-comparison path remains a measurable cost; this repair does not claim to eliminate filesystem preparation. Inclusive paths overlap. The raw profile remains private; `cpu-summary.json` contains the allowlisted totals.
+
+The driver’s `answerLatencyMs` records its accepted stable-text candidate, including at least nine seconds of unchanged text and polling delay. It is **not first-token latency**; the subsequent 30-second terminal window is additional. VM/profile/cache history differs from earlier attempts, so the lower preparation times do not isolate the effect of a single patch. The controlled before/after regression proves the lifecycle mismatch; these native turns establish that the combined diagnostic can complete. This is a restarted app with a new conversation on a reused standard-user Server profile, not a fresh Windows 10/11 machine or installer acceptance.
+
+At **08:12:24.743Z**, the original ASAR, runtime entry and both patched bundles were restored with matching hashes; the app exited and its listeners were gone. Other users’ processes and the VM lifecycle remained unchanged. Allowlisted receipts are under `artifacts/windows-vm/20260908-connection-rca/lifecycle/`: `first-correlation.json`, `warm-correlation.json`, `renderer-turn-timeline.jsonl`, `diagnostic-asar.json`, `diagnostic-patch.json` and `profile-backup.json`. The next falsifier is the same first/next-turn check against the reproducible installer, including the reviewed clear-ack repair, followed by the required recovery and stakeholder criteria.
+
 ## Hypotheses and falsifiers
 
 | Hypothesis | Current support | Discriminating experiment |
@@ -163,6 +191,7 @@ No uncontrolled timeout increase, broad rollback, security exclusion or compute 
 | `10449b96`, `7f4b06d3` | `electron/services/providers/channel-router.ts`; `src/stores/chat.ts` | Retain run ownership and avoid false local replay; not a cold-latency cure |
 | `a4efc7e4` | `electron/services/providers/provider-runtime-sync.ts`; `electron/utils/openclaw-auth.ts` | Preserve managed cloud aliases and modality metadata |
 | `f5875b54` | `scripts/openclaw-chat-history-patch.mjs`; actual pinned-handler regression | History can return without loading the entire model catalog; source regression and integrated diagnostic hydration pass |
+| `155e7a73` | `src/stores/gateway.ts`, `src/stores/chat.ts`; lifecycle unit and Electron regressions | Recognize the real execution-start event once, preserving strict ownership and bounded cancellation |
 
 These samples retain their commit and test provenance. `sendGeneration` ownership in `src/stores/chat.ts` prevents an old run from clearing a newer send; the history patch test executes the pinned handler and resolver with only IO/context boundaries stubbed. Keep these protections while correcting the timeout/history race. The user-held trim branch remains held.
 

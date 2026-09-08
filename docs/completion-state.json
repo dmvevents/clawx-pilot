@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T07:48:00Z",
+  "updatedAt": "2026-09-08T08:13:00Z",
   "purpose": "Completion planning only; this file is not a release verdict or a substitute for machine-produced acceptance evidence.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -1027,7 +1027,67 @@
               "vmLifecycleUnchanged": true
             }
           },
-          "nextRepair": "Normalize genuine lifecycle phase:start once for the owned run; reject duplicate/stale/foreign progress; retain timeout. Live event timing and repaired first response pending."
+          "nextRepair": "Package the reviewed combined connection fixes, including clear-ack compatibility, and retest exact installer. Recovery and external stakeholder acceptance remain open.",
+          "lifecycleRepairCommit": "155e7a737c8cde671aa1fefcefb520bebb54148e",
+          "lifecycleRepairStatus": "PASS_SOURCE_CHECKS_INDEPENDENT_REVIEW_AND_NATIVE_DIAGNOSTIC",
+          "lifecycleDiagnostic": {
+            "source": "155e7a737c8cde671aa1fefcefb520bebb54148e",
+            "asarSha256": "ef512b4111dd4f3b6b96d97a8b045af184023d42eef24db6046a870eba435c53",
+            "first": {
+              "at": "2026-09-08T08:06:18.371Z",
+              "mode": "LIFECYCLE_DIAGNOSTIC_NOT_INSTALLER_ACCEPTANCE",
+              "source": "155e7a737c8cde671aa1fefcefb520bebb54148e",
+              "driverExit": 0,
+              "verdict": "ANSWERED",
+              "sentAt": "2026-09-08T08:03:58.276Z",
+              "answerLatencyMs": 109430,
+              "terminalStable": true,
+              "freshSession": true,
+              "sessionBefore": "agent:main:main",
+              "sessionAfter": "agent:main:session-1788854636846",
+              "promptTokenCount": 1,
+              "messagesBefore": 0,
+              "messagesAfter": 2,
+              "genericErrorSeen": false,
+              "errorChipSeen": false,
+              "runErrorSeen": false,
+              "degradeNoticeSeen": false,
+              "terminalBlockers": []
+            },
+            "next": {
+              "at": "2026-09-08T08:08:56.319Z",
+              "mode": "LIFECYCLE_DIAGNOSTIC_NOT_INSTALLER_ACCEPTANCE",
+              "source": "155e7a737c8cde671aa1fefcefb520bebb54148e",
+              "driverExit": 0,
+              "verdict": "ANSWERED",
+              "sentAt": "2026-09-08T08:07:57.359Z",
+              "answerLatencyMs": 28491,
+              "terminalStable": true,
+              "promptTokenCount": 1,
+              "messagesBefore": 2,
+              "messagesAfter": 4,
+              "genericErrorSeen": false,
+              "errorChipSeen": false,
+              "runErrorSeen": false,
+              "degradeNoticeSeen": false,
+              "terminalBlockers": []
+            },
+            "bothCloudAnswersVerified": true,
+            "firstPreparationSeconds": 63.127,
+            "nextPreparationSeconds": 10.815,
+            "artifactAcceptance": false,
+            "restoration": {
+              "at": "2026-09-08T08:12:24.7434010Z",
+              "status": "PASS_ORIGINAL_INSTALLED_FILES_RESTORED",
+              "asarSha256": "656dde43f1a2b3597bd5d35f9bca72dc0ad2527909b0eb499b0f9971d3a56aa5",
+              "entrySha256": "77e5b2f586902a6135cc8f63505195def17191b31cadd604f8407ff8581ec0fa",
+              "runtimeBundlesRestored": 2,
+              "appExited": true,
+              "listenersGone": true,
+              "vmLifecycleUnchanged": true
+            },
+            "limitation": "Driver latency includes stable-text wait; cache/profile history differs; reused Server standard user, not fresh Windows client."
+          }
         }
       }
     }

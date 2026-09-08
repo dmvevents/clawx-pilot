@@ -9,13 +9,13 @@ Current candidate: `0.4.3-moe.24`, source `b814f804036fc2f9f32d3326c8694f4ae2ef7
 | Workflow / compatibility claim | Current evidence | Remaining gap |
 |---|---|---|
 | Installer and packaged runtime | PASS for moe.24 package identity: 36 host checks and matching installed EXE/ASAR; hosted preflight 2,137 tests passed, 11 skipped | Package identity does not prove the principal workflows |
-| Online provisioning and W9 first turn | Standard-user setup: 20 native checks plus actual CMD entrypoint PASS; live broker checks PASS | moe.24 first Online turn FAIL: NO_RESPONSE after 180 seconds; no terminal quiet proof. Prior fresh moe.22 failure remains valid |
+| Online provisioning and W9 first turn | Standard-user setup: 20 native checks plus actual CMD entrypoint PASS; live broker checks PASS | Original moe.24 first turn FAIL. Patched source `155e7a73` first/next Online turns PASS with cloud provenance and terminal quiet; new installer and unaided stakeholder acceptance remain pending |
 | W10 automatic fallback and on-device chat | Reviewed source fix prevents silence from triggering a local replay and checks fallback-target readiness | No false fallback observed in the failed moe.24 turn; this does not establish recovery acceptance. Ordinary on-device chat retains a FAIL |
 | W1–W4 Outlook and Forms | Historical browser/Graph/helper positives; Chrome attach mechanics available | Current authenticated tenant read/draft/form-preview acceptance requires account-holder sign-in; historic clone/send tests are not current tenant proof |
 | W6–W7 Office and document content | Historical installed Word/Excel write/readback; moe.22 image-content check PASS | Full matrix on moe.24 not run; P3 PDF still misses the August 29 Head Office deadline |
 | W5 reminders / policy | Scoped historical installed positives | Current-candidate end-to-end rerun pending |
 | W8 voice | Packaged recognizer and FFmpeg plus native fixture checks PASS | No actual microphone on this Server VM; representative client microphone/ASR acceptance missing |
-| Startup / recovery / external acceptance | Startup traced; one catalog-blocking path has a reviewed source repair | CLWX-125 diagnostic `8ca085f4` proves hydration, fresh Online session and prompt retention; first response still FAIL. Original files restored at 07:47:52Z. Lifecycle-start repair, exact-installer acceptance, recovery and stakeholder rerun remain open |
+| Startup / recovery / external acceptance | Startup traced; one catalog-blocking path has a reviewed source repair | CLWX-125 diagnostic `155e7a73` passes first/next Online response and preserves strict lifecycle ownership. Original files restored at 08:12:24Z. Exact-installer acceptance, recovery and stakeholder rerun remain open |
 
 Do not total the historical green symbols into a release percentage. Each PASS must name the tested revision, installed artifact, account/environment, actual journey and remaining limits. See the [CLWX-125 flow and test criteria](evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md) and the [current upstream comparison](UPSTREAM_MERGE_ASSESSMENT_2026-08-20.md) for version drift and backport boundaries.
 
