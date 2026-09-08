@@ -4,11 +4,13 @@
 
 
 **Local UI acceptance hold:** the owner reproduced the macOS Keychain dialog after the narrow fixture test passed. The resumed suite was stopped; desktop launches remain held. [CLWX-102](bugs/CLWX-102-macos-test-keychain.md) is unresolved; no local desktop test is running. This does not change the installed Windows artifact.
-## Current source candidate — moe.27, reviewed retry building
+## Current candidate — moe.27, verified installer; installed test pending
 
 Clean source `4c023f7ea3d16f4da0205308e93839ac08be26b9` on `release/moe27-lifecycle`, active checkout `/private/tmp/clawx-plan-execution-20260908`, version `0.4.3-moe.27`. Its tree exactly matches independently approved fixture correction `8bdbf91a`; the production lifecycle repair is unchanged. Native Windows before/after moves14 passed/two failed to16 passed/zero failed/zero skipped; independent PDF and guard falsifiers pass.
 
-[Build 34272395270](https://github.com/dmvevents/clawx-pilot/actions/runs/34272395270) began20:01:49UTC, keyless-public with no publication inputs. Full native preflight and packaging are pending. No moe.27 installer hash, installation or release is claimed.
+[Build34272395270](https://github.com/dmvevents/clawx-pilot/actions/runs/34272395270) succeeded20:19:37UTC:2,319 native tests passed/zero failed/57 skipped; all9 artifact rows and new launcher controls passed. Downloaded36 package checks and172 compiled-file receipt checks pass; packaged OpenClaw2026.9.2 has neither lifecycle marker. Keyless/source/profile identity passes. [Manifest](release-manifests/0.4.3-moe.27.json), published=false.
+
+Installer: `a5d080fa02ffe582652f05dc4459bbc439c131a48d44ca3c0f1395edd9ab38f3` (476769020 bytes). ASAR: `83e82f2850d13f97bbac40e6533600111e6023cec4d5ae1ede462420de0986eb`. Packaged EXE: `2749c2fe080a8370690b0968d9c00f355f57cce9129753f6b7238a8cc57c70b6`. Private GCS/Windows transfer is underway; no replacement installed startup or GA release is claimed.
 
 Previous attempt34270069669 at d343f23d failed before packaging:2,317 passed/two failed/57 skipped, missing helper/launcher setup in the isolated PDF-verifier fixture. That failed run and the installed moe26 regression remain preserved in [CLWX-135](bugs/CLWX-135-openclaw-package-lifecycle.md).
 
