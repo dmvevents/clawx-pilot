@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { assertOpenClawWindowsPtyGuard } from './openclaw-windows-pty-guard-patch.mjs';
 
 export const TARGET_OPENCLAW_VERSION = '2026.9.2';
 export const REQUIRED_OPENCLAW_NODE_ENGINE = '>=22.22.3 <23 || >=24.15.0 <25 || >=25.9.0';
@@ -284,12 +285,15 @@ async function assertRuntimeImports(openclawDir) {
   }
 }
 
-export async function verifyOpenClaw20269Upgrade(openclawDir = path.join(process.cwd(), 'build', 'openclaw')) {
+export async function verifyOpenClaw20269Upgrade(openclawDir = path.join(process.cwd(), 'build', 'openclaw'), options = {}) {
   const pkg = assertOpenClawVersion(openclawDir);
   assertNodeEngine(pkg);
   assertChatHistoryUsesNonBlockingStartupProjection(openclawDir);
   assertSdkAliasUsesUpstreamAliasMap(openclawDir);
   assertPricingUsesNativeCatalogPricing(openclawDir);
+  if (options.requireBundlePtyGuard === true) {
+    assertOpenClawWindowsPtyGuard(openclawDir);
+  }
   await assertRuntimeImports(openclawDir);
   await assertMoePluginToolRegistration(openclawDir);
 }

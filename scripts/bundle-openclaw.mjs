@@ -19,6 +19,7 @@
 import 'zx/globals';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
 import { patchExtensionOpenClawSelfImports } from './openclaw-self-import-patch.mjs';
+import { patchOpenClawWindowsPtyGuard } from './openclaw-windows-pty-guard-patch.mjs';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
@@ -887,61 +888,67 @@ function patchBundledRuntime(outputDir) {
     echo`   🩹 Patched ${count} bundled runtime spawn site(s)`;
   }
 
-  const ptyTargets = findFilesByName(
-    path.join(outputDir, 'dist'),
-    /^(subagent-registry|reply|pi-embedded)-.*\.js$/,
-  );
-  const ptyPatches = [
-    {
-      label: 'pty launcher windowsHide',
-      search: `\tconst pty = spawn(params.shell, params.args, {
-\t\tcwd: params.cwd,
-\t\tenv: params.env ? toStringEnv(params.env) : void 0,
-\t\tname: params.name ?? process.env.TERM ?? "xterm-256color",
-\t\tcols: params.cols ?? 120,
-\t\trows: params.rows ?? 30
-\t});`,
-      replace: `\tconst pty = spawn(params.shell, params.args, {
-\t\tcwd: params.cwd,
-\t\tenv: params.env ? toStringEnv(params.env) : void 0,
-\t\tname: params.name ?? process.env.TERM ?? "xterm-256color",
-\t\tcols: params.cols ?? 120,
-\t\trows: params.rows ?? 30,
-\t\twindowsHide: true
-\t});`,
-    },
-    {
-      label: 'disable pty on windows',
-      search: `\t\t\tconst usePty = params.pty === true && !sandbox;`,
-      replace: `\t\t\tconst usePty = params.pty === true && !sandbox && process.platform !== "win32";`,
-    },
-    {
-      label: 'disable approval pty on windows',
-      search: `\t\t\t\t\tpty: params.pty === true && !sandbox,`,
-      replace: `\t\t\t\t\tpty: params.pty === true && !sandbox && process.platform !== "win32",`,
-    },
-  ];
+  const ptyGuardPatch = patchOpenClawWindowsPtyGuard(outputDir);
+  if (ptyGuardPatch.supported) {
+    const relativeTarget = path.relative(outputDir, ptyGuardPatch.filePath);
+    echo`   ${ptyGuardPatch.patched ? '🩹 Patched' : '✓ Verified'} OpenClaw ${ptyGuardPatch.version} Windows PTY guard in ${relativeTarget}`;
+  } else {
+    const ptyTargets = findFilesByName(
+      path.join(outputDir, 'dist'),
+      /^(subagent-registry|reply|pi-embedded)-.*\.js$/,
+    );
+    const ptyPatches = [
+      {
+        label: 'pty launcher windowsHide',
+        search: `	const pty = spawn(params.shell, params.args, {
+		cwd: params.cwd,
+		env: params.env ? toStringEnv(params.env) : void 0,
+		name: params.name ?? process.env.TERM ?? "xterm-256color",
+		cols: params.cols ?? 120,
+		rows: params.rows ?? 30
+	});`,
+        replace: `	const pty = spawn(params.shell, params.args, {
+		cwd: params.cwd,
+		env: params.env ? toStringEnv(params.env) : void 0,
+		name: params.name ?? process.env.TERM ?? "xterm-256color",
+		cols: params.cols ?? 120,
+		rows: params.rows ?? 30,
+		windowsHide: true
+	});`,
+      },
+      {
+        label: 'disable pty on windows',
+        search: `			const usePty = params.pty === true && !sandbox;`,
+        replace: `			const usePty = params.pty === true && !sandbox && process.platform !== "win32";`,
+      },
+      {
+        label: 'disable approval pty on windows',
+        search: `					pty: params.pty === true && !sandbox,`,
+        replace: `					pty: params.pty === true && !sandbox && process.platform !== "win32",`,
+      },
+    ];
 
-  let ptyCount = 0;
-  for (const patch of ptyPatches) {
-    let matchedAny = false;
-    for (const target of ptyTargets) {
-      const current = fs.readFileSync(target, 'utf8');
-      if (!current.includes(patch.search)) continue;
-      matchedAny = true;
-      const next = current.replaceAll(patch.search, patch.replace);
-      if (next !== current) {
-        fs.writeFileSync(target, next, 'utf8');
-        ptyCount++;
+    let ptyCount = 0;
+    for (const patch of ptyPatches) {
+      let matchedAny = false;
+      for (const target of ptyTargets) {
+        const current = fs.readFileSync(target, 'utf8');
+        if (!current.includes(patch.search)) continue;
+        matchedAny = true;
+        const next = current.replaceAll(patch.search, patch.replace);
+        if (next !== current) {
+          fs.writeFileSync(target, next, 'utf8');
+          ptyCount++;
+        }
+      }
+      if (!matchedAny) {
+        echo`   ⚠️  Skipped patch for ${patch.label}: expected source snippet not found`;
       }
     }
-    if (!matchedAny) {
-      echo`   ⚠️  Skipped patch for ${patch.label}: expected source snippet not found`;
-    }
-  }
 
-  if (ptyCount > 0) {
-    echo`   🩹 Patched ${ptyCount} bundled PTY site(s)`;
+    if (ptyCount > 0) {
+      echo`   🩹 Patched ${ptyCount} bundled PTY site(s)`;
+    }
   }
 
   // --- Browser tool hint patch ---

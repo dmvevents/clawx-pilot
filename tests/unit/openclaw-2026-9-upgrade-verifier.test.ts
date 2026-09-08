@@ -11,6 +11,10 @@ import {
   verifyOpenClaw20269Upgrade,
 } from '../../scripts/openclaw-2026-9-upgrade-verifier.mjs';
 import {
+  assertOpenClawWindowsPtyGuard,
+  patchOpenClawWindowsPtyGuard,
+} from '../../scripts/openclaw-windows-pty-guard-patch.mjs';
+import {
   ensureElectronRuntime,
   getElectronPlatformPath,
   isElectronRuntimeInstalled,
@@ -21,6 +25,22 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const ACTUAL_OPENCLAW_DIR = path.join(ROOT, 'node_modules', 'openclaw');
 const ACTUAL_CHAT = path.join(ACTUAL_OPENCLAW_DIR, 'dist', 'chat-IsrqkYID.js');
 const tempDirs: string[] = [];
+
+function bashToolsPtyFixture(guarded: boolean): string {
+  return [
+    'function processGatewayAllowlist(params, sandbox) {',
+    guarded
+      ? '						pty: params.pty === true && !sandbox && process.platform !== "win32",'
+      : '						pty: params.pty === true && !sandbox,',
+    '}',
+    'function runExecProcess(params, sandbox) {',
+    guarded
+      ? '				const usePty = params.pty === true && !sandbox && process.platform !== "win32";'
+      : '				const usePty = params.pty === true && !sandbox;',
+    '	return usePty;',
+    '}',
+  ].join('\n');
+}
 
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
@@ -53,6 +73,9 @@ async function makeOpenClawFixture(overrides: Record<string, string> = {}) {
     'function normalizeOpenRouterModelPricing() {}',
     'const MODEL_PRICING_SOURCES = [];',
   ].join('\n'), 'utf8');
+  if (overrides.pty !== null) {
+    await writeFile(path.join(distDir, 'bash-tools-fixture.js'), overrides.pty ?? bashToolsPtyFixture(true), 'utf8');
+  }
   const moduleFiles = {
     'plugin-sdk/model-catalog-pricing.js': 'export function normalizeOpenRouterModelPricing() {}\nexport function normalizeModelPricingCatalog() {}\n',
     'plugin-sdk/agent-runtime.js': 'export function resolveThinkingDefault() {}\nexport function resolveThinkingDefaultWithRuntimeCatalog() {}\n',
@@ -242,6 +265,44 @@ describe('OpenClaw 2026.9 upgrade verifier', () => {
       expect(Object.keys(mod).length).toBeGreaterThan(0);
     }
     expect(fs.existsSync(path.join(ACTUAL_OPENCLAW_DIR, 'dist', 'plugin-sdk', 'document-extractor.js'))).toBe(true);
+  });
+
+
+
+  it('patches OpenClaw 2026.9 Windows PTY decisions across approval and execution paths idempotently', async () => {
+    const openclawDir = await makeOpenClawFixture({ pty: bashToolsPtyFixture(false) });
+    const first = patchOpenClawWindowsPtyGuard(openclawDir);
+    expect(first).toMatchObject({ supported: true, patched: true, replacements: 2 });
+
+    const target = path.join(openclawDir, 'dist', 'bash-tools-fixture.js');
+    const patched = fs.readFileSync(target, 'utf8');
+    expect(patched).toContain('pty: params.pty === true && !sandbox && process.platform !== "win32",');
+    expect(patched).toContain('const usePty = params.pty === true && !sandbox && process.platform !== "win32";');
+    expect(patched).not.toContain('pty: params.pty === true && !sandbox,');
+    expect(patched).not.toContain('const usePty = params.pty === true && !sandbox;');
+    expect(assertOpenClawWindowsPtyGuard(openclawDir)).toMatchObject({ supported: true });
+
+    const second = patchOpenClawWindowsPtyGuard(openclawDir);
+    expect(second).toMatchObject({ supported: true, patched: false, replacements: 0 });
+  });
+
+  it('fails closed when the OpenClaw 2026.9 PTY shape is only partially recognized', async () => {
+    const openclawDir = await makeOpenClawFixture({
+      pty: [
+        'function processGatewayAllowlist(params, sandbox) {',
+        '						pty: params.pty === true && !sandbox,',
+        '}',
+        'function runExecProcess(params, sandbox) {',
+        '				const usePty = params.pty === true && sandbox;',
+        '}',
+      ].join('\n'),
+    });
+    expect(() => patchOpenClawWindowsPtyGuard(openclawDir)).toThrow(/Unsupported OpenClaw Windows PTY shape/);
+  });
+
+  it('makes the bundle disposition fail when OpenClaw 2026.9 PTY remains unguarded', async () => {
+    const openclawDir = await makeOpenClawFixture({ pty: bashToolsPtyFixture(false) });
+    await expect(verifyOpenClaw20269Upgrade(openclawDir, { requireBundlePtyGuard: true })).rejects.toThrow(/Windows PTY guard missing/);
   });
 
   it('fails closed when the old chat.history catalog await is present', async () => {

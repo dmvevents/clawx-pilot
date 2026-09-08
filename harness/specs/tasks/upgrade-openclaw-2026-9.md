@@ -17,6 +17,7 @@ touchedAreas:
   - resources/cli/win32/openclaw
   - resources/cli/win32/openclaw.cmd
   - scripts/openclaw-2026-9-upgrade-verifier.mjs
+  - scripts/openclaw-windows-pty-guard-patch.mjs
   - tests/unit/openclaw-2026-9-upgrade-verifier.test.ts
   - tests/unit/clwx92-bundle-fixture.test.ts
   - tests/unit/openclaw-chat-history-patch.test.ts

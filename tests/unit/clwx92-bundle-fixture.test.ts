@@ -67,6 +67,7 @@ function copyVerifierCheckoutFiles(destinationRoot: string) {
     'scripts/clwx92-workerenv-check.mjs',
     'scripts/openclaw-bundle-config.mjs',
     'scripts/openclaw-2026-9-upgrade-verifier.mjs',
+    'scripts/openclaw-windows-pty-guard-patch.mjs',
   ]) {
     fs.copyFileSync(path.join(ROOT, file), path.join(destinationRoot, file));
   }
@@ -107,6 +108,15 @@ async function createFakeOpenClawBundle(destinationRoot: string, options: { incl
   fs.writeFileSync(path.join(distDir, 'pricing-test.js'), [
     'function normalizeOpenRouterModelPricing() {}',
     'const MODEL_PRICING_SOURCES = [];',
+  ].join('\n'), 'utf8');
+  fs.writeFileSync(path.join(distDir, 'bash-tools-test.js'), [
+    'function processGatewayAllowlist(params, sandbox) {',
+    '\t\t\t\t\t\tpty: params.pty === true && !sandbox && process.platform !== "win32",',
+    '}',
+    'function runExecProcess(params, sandbox) {',
+    '\t\t\t\tconst usePty = params.pty === true && !sandbox && process.platform !== "win32";',
+    '\treturn usePty;',
+    '}',
   ].join('\n'), 'utf8');
   const moduleFiles = {
     'plugin-sdk/model-catalog-pricing.js': 'export function normalizeOpenRouterModelPricing() {}\nexport function normalizeModelPricingCatalog() {}\n',
