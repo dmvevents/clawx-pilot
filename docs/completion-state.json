@@ -2405,7 +2405,7 @@
     "epic": "CLWX-22",
     "sprintExit": "Exact candidate passes all required source/artifact/installed/client/tenant/performance/unaided tester and final release checks",
     "activeCliTasks": [
-      "moe26-native-preflight-repair"
+      "moe26-native-preflight-resume"
     ],
     "budgetAuthorization": {
       "source": "Owner: There is no limit. Execute the work trees.",
@@ -3628,7 +3628,7 @@
       "privateNativeProof": "artifacts/ga-fable-20260908/windows-lab/native-auth-helper-controls.json"
     },
     "nativePreflightRepair": {
-      "task": "moe26-native-preflight-repair",
+      "task": "moe26-native-preflight-resume",
       "worktree": "/private/tmp/clawx-moe26-native-preflight-20260908",
       "base": "1d745567",
       "VM": "clawx-lab-auto-d-20260908",
@@ -3637,7 +3637,18 @@
         "seed test timeout",
         "verifier owned-temp EPERM"
       ],
-      "status": "ACTIVE_NO_FIX_YET"
+      "status": "CORRECTION_REQUIRED_AFTER_INTERRUPTED_REVIEW",
+      "proposedCommits": [
+        "8fb8bd96",
+        "409bce89"
+      ],
+      "independentReview": "28_MAC_TESTS_PASS_NO_VERDICT_API_INTERRUPTED",
+      "rootFinding": "exhausted cleanup errors must surface, with primary verification error preserved",
+      "nativeSetup": "NODE_SOURCE_VERIFIED_DEPS_NOT_INSTALLED",
+      "priorTasks": {
+        "author": "TIMED_OUT_NO_RESULT",
+        "reviewer": "TIMED_OUT_ERROR_DURING_EXECUTION"
+      }
     }
   }
 }
