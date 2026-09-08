@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 # vm-verify-moe19.sh — the Windows VM installed-verify engine.
 #
-# v3 (version-parameterized, 2026-09-08): the moe.19 installer/version/GCS
-# object names are no longer hardcoded assumptions — they are explicit
-# parameters (--exe/--version/--guest-exe-name/--gcs-dest/--manifest), and the
-# historical moe.19 values apply ONLY when neither --exe nor --version is
-# given (byte-compatible legacy invocation). Version asserts are fixed-string
-# (grep -F), never regex wildcards. A --manifest cross-check refuses any
-# mismatched version/name/sha256 before a single cloud call. --print-config
-# resolves + validates the configuration and exits without touching gcloud,
-# SSH or the evidence tree. Prefer the version-neutral entrypoint
+# v3 (version-parameterized, 2026-09-08; identity binds hardened same day per
+# independent review F1/F2/F3): the moe.19 installer/version/GCS object names
+# are no longer hardcoded assumptions — they are explicit parameters
+# (--exe/--version/--guest-exe-name/--gcs-dest/--manifest), and the historical
+# moe.19 values apply ONLY when neither --exe nor --version appears on the
+# command line at all (byte-compatible legacy invocation; an explicitly empty
+# --exe=/--version= is a config error, never an inherited identity). Identity
+# binds are exact, not blind substrings: the installer basename must carry the
+# delimited "-<version>-win" token, the FileVersion asserts are delimiter-
+# anchored (moe.3 never accepts moe.30), and --manifest is REQUIRED for every
+# non-legacy invocation so version/name/sha256 are equality-checked against
+# the release manifest before a single cloud call. --print-config resolves +
+# validates the configuration and exits without touching gcloud, SSH or the
+# evidence tree. Prefer the version-neutral entrypoint
 # scripts/vm-verify-installed.sh for every post-moe.19 candidate.
 #
 # v2 (Codex-hardened + VLM-desktop directive, 2026-09-06):
@@ -33,8 +38,8 @@
 #
 # Usage: bash scripts/vm-verify-moe19.sh                       # legacy moe.19 defaults
 #        bash scripts/vm-verify-moe19.sh --exe <installer.exe> --version <app-version> \
-#          [--manifest <release-manifest.json>] [--guest-exe-name <name>.exe] \
-#          [--gcs-dest gs://bucket/prefix/] [--expect-file-version <substring>]
+#          --manifest <release-manifest.json> [--guest-exe-name <name>.exe] \
+#          [--gcs-dest gs://bucket/prefix/] [--expect-file-version <token>]
 #          [--print-config]
 # Exit: 0 scripted phases green (or valid --print-config); 2 config/mismatch
 #       (fail-closed); 3 BLOCKED (VM/artifact/prereq); 1 FAIL.
@@ -54,12 +59,14 @@ usage() {
   cat >&2 <<'USAGE'
 usage: bash scripts/vm-verify-moe19.sh                         # legacy moe.19 defaults
        bash scripts/vm-verify-moe19.sh --exe <installer.exe> --version <app-version>
-         [--manifest <release-manifest.json>] [--guest-exe-name <name>.exe]
-         [--gcs-dest gs://bucket/prefix/] [--expect-file-version <substring>]
+         --manifest <release-manifest.json> [--guest-exe-name <name>.exe]
+         [--gcs-dest gs://bucket/prefix/] [--expect-file-version <token>]
          [--print-config]
-Providing exactly one of --exe/--version is a config error (exit 2): the pair
-is what binds the artifact to its expected identity. The legacy moe.19
-defaults apply only when BOTH are omitted.
+Providing exactly one of --exe/--version, or an explicitly empty value for
+either, is a config error (exit 2): the pair binds the artifact to its
+expected identity. --manifest is required for every non-legacy invocation.
+The legacy moe.19 defaults apply only when BOTH --exe and --version are
+entirely absent from the command line.
 USAGE
 }
 
@@ -69,14 +76,19 @@ ARG_GUEST_EXE=""
 ARG_GCS_DEST=""
 ARG_MANIFEST=""
 ARG_EXPECT_FILE_VERSION=""
+# Presence is tracked separately from value: an explicitly supplied --exe= or
+# --version= (e.g. unset shell variables in a CI wrapper) is a config error,
+# NEVER a fall-through to the legacy moe.19 identity (review F2).
+EXE_SET=false
+VERSION_SET=false
 PRINT_CONFIG=false
 need_value() { [ $# -ge 2 ] || { echo "config error: $1 needs a value" >&2; usage; exit 2; }; }
 while [ $# -gt 0 ]; do
   case "$1" in
-    --exe) need_value "$@"; ARG_EXE="$2"; shift 2 ;;
-    --exe=*) ARG_EXE="${1#--exe=}"; shift ;;
-    --version) need_value "$@"; ARG_VERSION="$2"; shift 2 ;;
-    --version=*) ARG_VERSION="${1#--version=}"; shift ;;
+    --exe) need_value "$@"; ARG_EXE="$2"; EXE_SET=true; shift 2 ;;
+    --exe=*) ARG_EXE="${1#--exe=}"; EXE_SET=true; shift ;;
+    --version) need_value "$@"; ARG_VERSION="$2"; VERSION_SET=true; shift 2 ;;
+    --version=*) ARG_VERSION="${1#--version=}"; VERSION_SET=true; shift ;;
     --guest-exe-name) need_value "$@"; ARG_GUEST_EXE="$2"; shift 2 ;;
     --guest-exe-name=*) ARG_GUEST_EXE="${1#--guest-exe-name=}"; shift ;;
     --gcs-dest) need_value "$@"; ARG_GCS_DEST="$2"; shift 2 ;;
@@ -92,19 +104,28 @@ while [ $# -gt 0 ]; do
 done
 
 LEGACY_DEFAULTS=false
-if [ -z "$ARG_EXE" ] && [ -z "$ARG_VERSION" ]; then
+if [ "$EXE_SET" = "false" ] && [ "$VERSION_SET" = "false" ]; then
   # Byte-compatible legacy invocation: the historical moe.19 identity.
   LEGACY_DEFAULTS=true
   ARG_EXE="$REPO_ROOT/release/Ministry of Education-0.4.3-moe.19-win-x64.exe"
   ARG_VERSION="0.4.3-moe.19"
   [ -n "$ARG_GUEST_EXE" ] || ARG_GUEST_EXE="moe19.exe"
   [ -n "$ARG_GCS_DEST" ] || ARG_GCS_DEST="gs://clawx-rc-artifacts-622687731621/moe19/"
-  # The historical asserts matched the "moe.19" substring of the Windows
-  # FileVersion, not the full version string; keep that exact behaviour.
+  # The historical asserts matched "moe.19" within the Windows FileVersion,
+  # not the full version string; keep that expectation value. The matcher is
+  # now delimiter-anchored, which still accepts the real installed
+  # FileVersion "0.4.3-moe.19" ("-" delimits the token) while refusing a
+  # prefix-truncated identity such as "…moe.190".
   [ -n "$ARG_EXPECT_FILE_VERSION" ] || ARG_EXPECT_FILE_VERSION="moe.19"
   VERIFY_TAG="moe19"
-elif [ -z "$ARG_EXE" ] || [ -z "$ARG_VERSION" ]; then
+elif [ "$EXE_SET" = "false" ] || [ "$VERSION_SET" = "false" ]; then
   echo "config error: --exe and --version must be provided together (no partial identity)" >&2
+  usage
+  exit 2
+elif [ -z "$ARG_EXE" ] || [ -z "$ARG_VERSION" ]; then
+  # Explicitly-supplied empty values (--exe= --version=, or unset shell vars)
+  # must not silently resolve the legacy identity (review F2).
+  echo "config error: --exe and --version must be non-empty — an explicitly empty value is a config error, never the legacy moe.19 identity" >&2
   usage
   exit 2
 else
@@ -139,10 +160,34 @@ esac
 case "$EXPECT_FILE_VERSION" in
   ''|*[!A-Za-z0-9.-]*) echo "config error: --expect-file-version must be non-empty and match [A-Za-z0-9.-]+" >&2; exit 2 ;;
 esac
+case "$EXPECT_FILE_VERSION" in
+  *[0-9]*) : ;;
+  # "." or "-" alone would turn the FileVersion assert vacuous (review F3).
+  *) echo "config error: --expect-file-version must contain a digit — a delimiter-only value would match any FileVersion" >&2; exit 2 ;;
+esac
 if [ -n "$ARG_MANIFEST" ] && [ ! -f "$ARG_MANIFEST" ]; then
   echo "config error: --manifest not found: $ARG_MANIFEST" >&2
   exit 2
 fi
+if [ "$LEGACY_DEFAULTS" = "false" ] && [ -z "$ARG_MANIFEST" ]; then
+  # The release manifest is the exact identity contract (version ==, installer
+  # name ==, sha256 ==). Filename and FileVersion binds are delimiter-anchored
+  # but still name-based; every non-legacy run must therefore carry the
+  # manifest so identity is equality-checked, not inferred (review F1).
+  echo "config error: --manifest is required for any non-legacy invocation — bind the candidate to its release manifest (version, installer name, sha256)" >&2
+  exit 2
+fi
+
+# Delimiter-anchored FileVersion matcher (review F1): the expected value must
+# appear as a whole token — preceded by start-of-line or a non-version
+# character (a leading '-' still delimits, so the historical legacy
+# expectation keeps matching its real installed '<semver>-<tag>' FileVersion),
+# and followed by end-of-line or a character outside [A-Za-z0-9.-] (so
+# 'moe.3' can never accept 'moe.30', and '0.4.3' can never accept
+# '0.4.3-moe.30'). Known real installed FileVersions are the full semver
+# string (moe.15/17/18/20 evidence), so the default full-version expectation
+# matches exactly.
+EXPECT_FILE_VERSION_RE='(^|[^A-Za-z0-9.])'"$(printf '%s' "$EXPECT_FILE_VERSION" | sed 's/[.]/\\./g')"'($|[^A-Za-z0-9.-])'
 
 RUN_TAG="$(date +%Y%m%d-%H%M%S)"
 EVIDENCE_DIR="$REPO_ROOT/skills/laptop/evidence/$(date +%F)-$VERIFY_TAG-verify-$RUN_TAG"
@@ -178,13 +223,16 @@ gpwsh() {
 }
 
 # ── Local config validation (shared by --print-config and Phase 0) ──────────
-# The installer basename must literally contain the expected version string:
-# a wrong --exe/--version pairing is refused before any hash, upload or VM
-# call. The optional --manifest cross-check additionally refuses any
+# The installer basename must carry the expected version as the delimited
+# electron-builder token "-<version>-win" (…-0.4.3-moe.30-win-x64.exe), not a
+# bare substring: '0.4.3-moe.3' must never bind '…-0.4.3-moe.30-win-x64.exe'
+# and '0.4.3' must never bind any '0.4.3-*' pre-release (review F1). A wrong
+# --exe/--version pairing is refused before any hash, upload or VM call. The
+# --manifest cross-check (required for non-legacy) additionally refuses any
 # version/name/sha256 disagreement with the release manifest.
 version_name_ok() {
   case "$(basename "$EXE")" in
-    *"$VERSION"*) return 0 ;;
+    *"-$VERSION-win"*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -227,6 +275,7 @@ print_config_json() {
   CFG_VERSION="$VERSION" CFG_GUEST_EXE="$GUEST_EXE_NAME" CFG_GCS_DEST="$GCS_DEST" \
   CFG_VERIFY_TAG="$VERIFY_TAG" CFG_LEGACY="$LEGACY_DEFAULTS" CFG_MANIFEST="$MANIFEST_SUMMARY" \
   CFG_EXPECT_FILE_VERSION="$EXPECT_FILE_VERSION" CFG_EVIDENCE_DIR="$EVIDENCE_DIR" \
+  CFG_EXPECT_FILE_VERSION_RE="$EXPECT_FILE_VERSION_RE" \
   node -e '
 const env = process.env;
 console.log(JSON.stringify({
@@ -244,6 +293,7 @@ console.log(JSON.stringify({
   gcsDest: env.CFG_GCS_DEST,
   verifyTag: env.CFG_VERIFY_TAG,
   expectFileVersion: env.CFG_EXPECT_FILE_VERSION,
+  expectFileVersionPattern: env.CFG_EXPECT_FILE_VERSION_RE,
   evidenceDir: env.CFG_EVIDENCE_DIR,
   manifest: env.CFG_MANIFEST && env.CFG_MANIFEST !== "null" ? JSON.parse(env.CFG_MANIFEST) : null,
 }, null, 2));'
@@ -258,7 +308,7 @@ if [ "$PRINT_CONFIG" = "true" ]; then
     exit 3
   fi
   if ! version_name_ok; then
-    print_config_json "FAIL" "installer filename $(basename "$EXE") does not contain --version $VERSION — refusing mismatched artifact"
+    print_config_json "FAIL" "installer filename $(basename "$EXE") does not contain --version $VERSION as the delimited token -$VERSION-win — refusing mismatched artifact"
     exit 2
   fi
   SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
@@ -394,7 +444,7 @@ trap write_vm_run_json EXIT
 
 # ── Phase 0 — Mac-side artifact + hash + GCS (idempotent) ────────────────────
 [ -f "$EXE" ] || { log "BLOCKED: installer not found: $EXE"; exit 3; }
-version_name_ok || { log "FAIL: installer filename $(basename "$EXE") does not contain --version $VERSION — refusing mismatched artifact"; exit 2; }
+version_name_ok || { log "FAIL: installer filename $(basename "$EXE") does not contain --version $VERSION as the delimited token -$VERSION-win — refusing mismatched artifact"; exit 2; }
 SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
 check_manifest || { log "FAIL: manifest cross-check failed — refusing mismatched version/name/sha256"; exit 2; }
 log "artifact: $(basename "$EXE") bytes=$(stat -f%z "$EXE") sha256=$SHA version=$VERSION"
@@ -527,7 +577,7 @@ log "silent install /S /CURRENTUSER — exit code ENFORCED (Codex HIGH)"
 INSTALL_EXIT=$(gpwsh '$p = Start-Process -FilePath "C:\Users\'"$GUEST_USER"'\Downloads\'"$GUEST_EXE_NAME"'" -ArgumentList "/S","/CURRENTUSER" -Wait -PassThru; $p.ExitCode' | tr -d '\r' | tail -1)
 [ "$INSTALL_EXIT" = "0" ] || { log "FAIL: installer exit=$INSTALL_EXIT"; exit 1; }
 log "installer exit 0"
-gpwsh "(Get-Item '$GUEST_APP\\Ministry of Education.exe').VersionInfo.FileVersion" | tr -d '\r' | tee "$EVIDENCE_DIR/post-version.txt" | grep -qF "$EXPECT_FILE_VERSION" || { log "FAIL: on-disk FileVersion does not contain $EXPECT_FILE_VERSION"; exit 1; }
+gpwsh "(Get-Item '$GUEST_APP\\Ministry of Education.exe').VersionInfo.FileVersion" | tr -d '\r' | tee "$EVIDENCE_DIR/post-version.txt" | grep -Eq "$EXPECT_FILE_VERSION_RE" || { log "FAIL: on-disk FileVersion does not contain the delimited token $EXPECT_FILE_VERSION"; exit 1; }
 record_evidence_file "post-version.txt"
 APP_ASAR_SHA=$(gpwsh "(Get-FileHash '$GUEST_APP\\resources\\app.asar').Hash" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | tail -1)
 log "installed app.asar sha256=$APP_ASAR_SHA"
@@ -615,7 +665,7 @@ if ! RUN_ATTEST=$(gpwsh '$deadline = (Get-Date).AddSeconds(120); do { $p = Get-P
 fi
 echo "$RUN_ATTEST" | tee "$EVIDENCE_DIR/running-binary-attest.txt"
 record_evidence_file "running-binary-attest.txt"
-echo "$RUN_ATTEST" | grep -qF "$EXPECT_FILE_VERSION" || { log "FAIL: running binary attest = $RUN_ATTEST (expected FileVersion containing $EXPECT_FILE_VERSION)"; exit 1; }
+echo "$RUN_ATTEST" | grep -Eq "$EXPECT_FILE_VERSION_RE" || { log "FAIL: running binary attest = $RUN_ATTEST (expected FileVersion containing the delimited token $EXPECT_FILE_VERSION)"; exit 1; }
 RUNNING_APP_VERSION="${RUN_ATTEST%%|*}"
 RUNNING_APP_PATH="${RUN_ATTEST#*|}"
 for probe in "9223 electron-cdp" "18789 gateway" "13210 hostapi"; do

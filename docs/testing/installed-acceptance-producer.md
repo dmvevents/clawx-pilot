@@ -12,8 +12,8 @@ action.
 
 | Command | Use |
 |---|---|
-| `scripts/vm-verify-installed.sh` | Every candidate. **Requires** `--exe` and `--version`; inherits no candidate identity. |
-| `scripts/vm-verify-moe19.sh` | The engine. Retained for the historical moe.19 invocation and existing references; with no arguments it still resolves the moe.19 installer, guest object `moe19.exe`, `…/moe19/` bucket prefix and the `moe.19` FileVersion assert. |
+| `scripts/vm-verify-installed.sh` | Every candidate. **Requires** `--exe`, `--version` and `--manifest`; inherits no candidate identity, and an explicitly empty `--exe=`/`--version=`/`--manifest=` is a config error, never a fall-through. |
+| `scripts/vm-verify-moe19.sh` | The engine. Retained for the historical moe.19 invocation and existing references; with no arguments at all it still resolves the moe.19 installer, guest object `moe19.exe`, `…/moe19/` bucket prefix and the `moe.19` FileVersion assert. Any non-legacy invocation requires `--manifest`. |
 
 Both run the same phases and emit the same evidence layout consumed by
 `scripts/installed-release-evidence.mjs` (`vm-run.json`, `environment.json`,
@@ -25,12 +25,12 @@ current-run `clawx-electron-probe-*.json`).
 
 | Flag | Default | Notes |
 |---|---|---|
-| `--exe <path>` | moe.19 installer (legacy invocation only) | Must be paired with `--version`; a partial identity is a config error. |
-| `--version <app-version>` | `0.4.3-moe.19` (legacy only) | Must appear literally in the installer filename. `[A-Za-z0-9.-]+`. |
-| `--manifest <release-manifest.json>` | none | Cross-checks manifest `version`, installer `name` and installer `sha256` against the local artifact. |
+| `--exe <path>` | moe.19 installer (legacy invocation only) | Must be paired with `--version`; a partial or explicitly empty identity is a config error. |
+| `--version <app-version>` | `0.4.3-moe.19` (legacy only) | Must appear in the installer filename as the delimited token `-<version>-win` (the electron-builder shape `…-<version>-win-x64.exe`); a bare substring never binds, so `0.4.3-moe.3` refuses `…moe.30…` and `0.4.3` refuses any `0.4.3-*` pre-release. `[A-Za-z0-9.-]+`. |
+| `--manifest <release-manifest.json>` | none (legacy); **required otherwise** | The exact identity contract: manifest `version`, installer `name` and installer `sha256` are equality-checked against `--version` and the local artifact before any cloud call. |
 | `--guest-exe-name <name>.exe` | `clawx-installer-<version>.exe` (`moe19.exe` legacy) | Guest `Downloads` object name; also written to `vm-run.json` `installer.guestPath`. |
 | `--gcs-dest gs://bucket/prefix/` | `gs://clawx-rc-artifacts-622687731621/<version>/` | Upload is skipped when the exact installer basename is already listed. |
-| `--expect-file-version <substring>` | `<version>` (`moe.19` legacy) | Fixed-string assert against on-disk and **running-process** FileVersion. `installed-release-evidence.mjs` compares `runningApp.version` to the manifest version exactly, so keep this the full version unless the packaged FileVersion legitimately differs. |
+| `--expect-file-version <token>` | `<version>` (`moe.19` legacy) | Delimiter-anchored token assert against on-disk and **running-process** FileVersion: it must appear whole, not as a prefix of a longer version (`moe.3` never accepts `moe.30`), and must contain a digit. Real installed FileVersions are the full semver string (moe.15/17/18/20 evidence), and `installed-release-evidence.mjs` compares `runningApp.version` to the manifest version exactly, so keep this the full version unless the packaged FileVersion legitimately differs. |
 | `--print-config` | off | Resolve + validate only, print JSON, exit. No gcloud/gsutil/SSH/install action and no evidence directory. |
 
 ## Exit codes
@@ -39,7 +39,7 @@ current-run `clawx-electron-probe-*.json`).
 |---|---|
 | 0 | Scripted phases green, or a valid `--print-config` resolution. |
 | 1 | FAIL — a product/phase assertion failed (guest hash mismatch, installer exit, FileVersion assert, missing bundled package or NSCC pack, producer failure). |
-| 2 | Config or identity mismatch, fail-closed: partial/unknown arguments, unsafe values, filename/version disagreement, or any manifest version/name/sha256 disagreement. Nothing is uploaded or installed. |
+| 2 | Config or identity mismatch, fail-closed: partial/unknown arguments, explicitly empty `--exe=`/`--version=`, unsafe or digit-free assert values, filename/version token disagreement, a missing `--manifest` on a non-legacy invocation, or any manifest version/name/sha256 disagreement. Nothing is uploaded or installed. |
 | 3 | BLOCKED — environment gate (installer absent, expired gcloud credentials, VM not running, tunnel/CDP/interactive-session prerequisites). Never a pass. |
 
 ## Dry-run check before an operator window
@@ -59,8 +59,10 @@ checkout.
 ## Rules that must not be relaxed
 
 - Never accept a mismatched version or hash: the both-hop installer sha256, the
-  `--manifest` cross-check and the running-binary FileVersion assert are the
-  identity binding between source, artifact and receipt.
+  required `--manifest` equality check and the delimiter-anchored running-binary
+  FileVersion assert are the identity binding between source, artifact and
+  receipt. A wrong pairing fails closed (exit 2); it is never inferred from a
+  substring.
 - Missing evidence stays `NOT_RUN`/`BLOCKED`; a synthesized PASS is a defect.
 - `--print-config` is a configuration check, not acceptance. Installed
   acceptance requires the real phases plus the interactive checklist the run
