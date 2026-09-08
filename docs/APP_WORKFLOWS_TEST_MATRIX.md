@@ -4,22 +4,24 @@
 
 **GA is RED. The historical green rows below do not establish compatibility or acceptance of the current Windows build.** They mostly describe moe.15-era VM, Mac, helper or test-form evidence. Current decisions are owned by [COMPLETION_PLAN.md](COMPLETION_PLAN.md), [CURRENT_WINDOWS_RC.md](CURRENT_WINDOWS_RC.md) and the [evidence manifest](GA_RELEASE_EVIDENCE_MANIFEST.md).
 
-Current candidate: `0.4.3-moe.24`, source `b814f804036fc2f9f32d3326c8694f4ae2ef7805`, hosted run `34189597051`. The standard-user upgrade on Windows Server 2022 completed at **06:03:28Z**, exit 0, with matching installed EXE/ASAR hashes. This is an existing-profile upgrade; Windows 10/11 fresh-install acceptance is still missing.
+Current diagnostic candidate: `0.4.3-moe.25`, source `8058e9b5b3050463c72a11c8e5da56616206f6e3`, hosted run `34203201042`. The standard-user assisted upgrade on Windows Server 2022 completed at **08:53:52Z**, exit 0, with matching installed EXE/ASAR hashes. First shortcut startup passed a stable-ready observation at 280.083s; model turns are NOT_RUN. The owner paused implementation/builds for the [source study and improvement plan](research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md). Windows 10/11 fresh-install acceptance remains missing.
 
 | Workflow / compatibility claim | Current evidence | Remaining gap |
 |---|---|---|
-| Installer and packaged runtime | PASS for moe.24 package identity: 36 host checks and matching installed EXE/ASAR; hosted preflight 2,137 tests passed, 11 skipped | Package identity does not prove the principal workflows |
-| Online provisioning and W9 first turn | Standard-user setup: 20 native checks plus actual CMD entrypoint PASS; live broker checks PASS | Original moe.24 first turn FAIL. Patched source `155e7a73` first/next Online turns PASS with cloud provenance and terminal quiet; new installer and unaided stakeholder acceptance remain pending |
+| Installer and packaged runtime | PASS for moe.25 package identity: 36 host checks and matching installed EXE/ASAR; hosted preflight 2,173 tests passed, 11 skipped | Package identity does not prove the principal workflows |
+| Online provisioning and W9 first turn | Standard-user setup: 20 native checks plus actual CMD entrypoint PASS; live broker checks PASS | Original moe.24 first turn FAIL. Patched source `155e7a73` first/next Online turns PASS with cloud provenance and terminal quiet; moe.25 installed model-turn and unaided stakeholder acceptance remain pending |
 | W10 automatic fallback and on-device chat | Reviewed source fix prevents silence from triggering a local replay and checks fallback-target readiness | No false fallback observed in the failed moe.24 turn; this does not establish recovery acceptance. Ordinary on-device chat retains a FAIL |
 | W1–W4 Outlook and Forms | Historical browser/Graph/helper positives; Chrome attach mechanics available | Current authenticated tenant read/draft/form-preview acceptance requires account-holder sign-in; historic clone/send tests are not current tenant proof |
-| W6–W7 Office and document content | Historical installed Word/Excel write/readback; moe.22 image-content check PASS | Full matrix on moe.24 not run; P3 PDF still misses the August 29 Head Office deadline |
+| W6–W7 Office and document content | Historical installed Word/Excel write/readback; moe.22 image-content check PASS | Full matrix on moe.25 not run; P3 PDF still misses the August 29 Head Office deadline |
 | W5 reminders / policy | Scoped historical installed positives | Current-candidate end-to-end rerun pending |
-| W8 voice | Packaged recognizer and FFmpeg plus native fixture checks PASS | No actual microphone on this Server VM; representative client microphone/ASR acceptance missing |
+| W8 voice | DEFERRED from this release by owner; future plan uses memory-efficient whisper.cpp | No actual microphone/ASR pass claimed; helper package integrity remains required. Fresh Windows client acceptance is a separate open gate. |
 | Startup / recovery / external acceptance | Startup traced; one catalog-blocking path has a reviewed source repair | CLWX-125 diagnostic `155e7a73` passes first/next Online response and preserves strict lifecycle ownership. Original files restored at 08:12:24Z. Exact-installer acceptance, recovery and stakeholder rerun remain open |
 
 Do not total the historical green symbols into a release percentage. Each PASS must name the tested revision, installed artifact, account/environment, actual journey and remaining limits. See the [CLWX-125 flow and test criteria](evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md) and the [current upstream comparison](UPSTREAM_MERGE_ASSESSMENT_2026-08-20.md) for version drift and backport boundaries.
 
 ## Historical inventory and evidence — September 2–3, 2026
+
+Historical voice requirements below do not override the September 8 ASR deferral. The current scope and source study above govern the next release.
 
 *2026-09-02. The complete enumeration of every function the Ministry app exposes,
 grouped into principal-facing workflows, with a per-workflow test status for Mac
@@ -149,7 +151,7 @@ fire captured on Windows).
 external-tester validation. Silent `/S` install is diagnostic-only (partial-tree
 failures) — the supported path is the assisted GUI install.
 
-### Gap-closing checklist (to declare the FULL toolset laptop-verified)
+### Archived September 2–3 gap-closing checklist
 
 - [x] **A — Install & smoke moe.15 on Windows.** DONE 2026-09-02 on VM
   `clawx-win-rc-20260609` (over IAP, silent `/S` — no desktop session available

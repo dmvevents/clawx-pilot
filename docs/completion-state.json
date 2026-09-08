@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T08:13:00Z",
+  "updatedAt": "2026-09-08T09:26:46.297498+00:00",
   "purpose": "Completion planning only; this file is not a release verdict or a substitute for machine-produced acceptance evidence.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -148,7 +148,8 @@
     "sourceFixes": [
       "1f2b405e17bd5910fbded09c3a62f8921a8d692f",
       "a4efc7e4a4311d7865bf0c74ab2320289fdadd48"
-    ]
+    ],
+    "scope": "Last broader installed journey baseline (moe.22); not the latest diagnostic artifact. See latestDiagnosticBaseline."
   },
   "baseline": {
     "installedVersion": "0.4.3-moe.22",
@@ -1027,7 +1028,7 @@
               "vmLifecycleUnchanged": true
             }
           },
-          "nextRepair": "Package the reviewed combined connection fixes, including clear-ack compatibility, and retest exact installer. Recovery and external stakeholder acceptance remain open.",
+          "nextRepair": "Paused by owner for source study and improvement planning; exact moe.25 model-turn acceptance remains NOT_RUN.",
           "lifecycleRepairCommit": "155e7a737c8cde671aa1fefcefb520bebb54148e",
           "lifecycleRepairStatus": "PASS_SOURCE_CHECKS_INDEPENDENT_REVIEW_AND_NATIVE_DIAGNOSTIC",
           "lifecycleDiagnostic": {
@@ -1087,6 +1088,19 @@
               "vmLifecycleUnchanged": true
             },
             "limitation": "Driver latency includes stable-text wait; cache/profile history differs; reused Server standard user, not fresh Windows client."
+          },
+          "installedRepairBaseline": {
+            "version": "0.4.3-moe.25",
+            "source": "8058e9b5b3050463c72a11c8e5da56616206f6e3",
+            "buildRunId": 34203201042,
+            "installStatus": "PASS_IDENTITY",
+            "startupStatus": "PASS_STABLE_READY",
+            "readyFromShortcutMs": 258279,
+            "stableVerdictFromShortcutMs": 280083,
+            "stableReadyForMs": 21804,
+            "ordinaryModelTurnStatus": "NOT_RUN",
+            "environment": "Windows Server 2022, standard-user assisted existing-profile upgrade",
+            "evidence": "docs/evidence/WINDOWS_MOE25_PLANNING_BASELINE_2026-09-08.md"
           }
         }
       }
@@ -1128,8 +1142,8 @@
       ],
       "owner": "build engineer",
       "dependsOn": [],
-      "evidenceSummary": "Selected run 34180280985 from a4efc7e4 passed 204 native files / 2,114 tests, with 11 skips. Source/profile/compiled receipts and full artifact verification pass. Prior build evidence is preserved under baseline.previousMoe22Candidate.",
-      "nextAction": "Native build complete; run exact selected artifact through installed acceptance.",
+      "evidenceSummary": "Latest diagnostic moe.25 run 34203201042 from 8058e9b5 passed 206 native test files / 2,173 tests, with 11 skips; 36 host package checks and five manifest entries pass. Completed before the owner pause. Earlier moe.22 evidence remains historical.",
+      "nextAction": "Implementation/builds paused. When resumed, independently review any selected changes before another package; preserve exact-source/artifact evidence.",
       "exitCriterion": "Equivalent package commands and publication guards; focused tests pass; branch SHA read back from GitHub.",
       "references": [
         ".github/workflows/package-win-manual.yml",
@@ -1149,7 +1163,8 @@
         "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/verification.json",
         "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/workflow-summary.json",
         "docs/evidence/GA_BLOCKER_RESOLUTION_2026-09-08.md",
-        "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json"
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json",
+        "docs/evidence/WINDOWS_MOE25_PLANNING_BASELINE_2026-09-08.md"
       ]
     },
     {
@@ -1163,8 +1178,8 @@
       "dependsOn": [
         "build_process"
       ],
-      "evidenceSummary": "Installed moe.22 baseline installer SHA256 eed3d9ec87902d1babcf7906122009ac3a0ec708871db175de52871dc3e5938f, 394,149,483 bytes. Host and VM hashes agree. Five manifest entries, EXE/ASAR, eight helper files, keyless scans, Playwright and blockmap pass.",
-      "nextAction": "Verify the moe.24 repair-target package and installed identity, then rerun connection acceptance. Moe.22 installation is already complete; moe.23 is an intermediate diagnostic upgrade.",
+      "evidenceSummary": "Moe.25 installer SHA256 f8ac20f96f4f4dbfab6498144a989dbf83d61dd98c16459682db8a86460db0b2, 394,151,522 bytes. Assisted standard-user existing-profile upgrade exited 0 at 08:53:52Z; installed EXE/ASAR hashes match. This does not prove a fresh Windows client installation.",
+      "nextAction": "Implementation/testing paused. When resumed, verify ordinary first/next turns on the identified candidate and complete fresh Windows 10/11 acceptance.",
       "exitCriterion": "Native package succeeds from the exact clean reviewed SHA; installer, profile, source and compiled receipts plus manifest validate.",
       "references": [
         "https://github.com/dmvevents/clawx-pilot/actions/runs/34133858590",
@@ -1184,7 +1199,8 @@
         "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/verification.json",
         "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/workflow-summary.json",
         "docs/evidence/GA_BLOCKER_RESOLUTION_2026-09-08.md",
-        "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json"
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json",
+        "docs/evidence/WINDOWS_MOE25_PLANNING_BASELINE_2026-09-08.md"
       ]
     },
     {
@@ -1199,8 +1215,8 @@
       "dependsOn": [
         "native_installer"
       ],
-      "evidenceSummary": "Selected a4efc7e4 / build 34180280985 installed at 03:08:57Z with exit 0 after 1,820-file profile backup and prior-directory preservation. Exact EXE/ASAR/eight helpers/two shortcuts pass. Cold shortcut readiness and native helper execution pass; P5 content passes with a recovered core image path error; P3 final deadline still omitted.",
-      "nextAction": "Complete the remaining installed journey/recovery/client/account checks; keep temporary local configuration diagnostics separate from immutable installer acceptance.",
+      "evidenceSummary": "Latest moe.25 source 8058e9b5 / run 34203201042: 61 app-profile and 265 OpenClaw files backed up with matching hashes; assisted Server 2022 standard-user upgrade and installed identity PASS. Ready began 258.279s after shortcut launch; stable verdict at 280.083s with a 21.804s stable interval. Ordinary chat/email/document journeys NOT_RUN. Moe.22 remains the separate last broader journey baseline.",
+      "nextAction": "Testing paused. When resumed, select the exact candidate and complete ordinary first/next turns, cancellation/recovery, documents, authenticated Microsoft workflows and fresh Windows-client acceptance; do not transfer older journey passes.",
       "exitCriterion": "Installer transfer hash and installed EXE/ASAR match the candidate; complete helpers; zero manual dependency installation; cold and warm observations recorded. Report profile/provisioning prerequisites explicitly; a reused Online profile cannot prove an unaided keyless first run.",
       "references": [
         "windows-pilot/vm-testing/README.md",
@@ -1221,7 +1237,8 @@
         "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/workflow-summary.json",
         "docs/evidence/GA_BLOCKER_RESOLUTION_2026-09-08.md",
         "docs/evidence/WINDOWS_VM_TESTING_2026-09-08.md",
-        "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json"
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json",
+        "docs/evidence/WINDOWS_MOE25_PLANNING_BASELINE_2026-09-08.md"
       ]
     },
     {
@@ -1258,7 +1275,7 @@
         "installed_candidate"
       ],
       "evidenceSummary": "Prior installed moe.22 build 34171848832 attempted ollama-ollamalo/qwen2.5:3b-instruct and hit embedded assistant timeout at 02:13:07Z; the app displayed a no-response notice and recovered idle. Actual failed-session metadata records 33,177 system characters plus 33,102 tool-schema characters across 47 tools. Direct API diagnostics: tiny warm first content in 694 ms; a 32,283-character context produced no content by 120,215 ms. Managed OpenAI-compatible catalog metadata advertises contextWindow 200000 while native Ollama metadata is 32768. Ollama v0.32.14 drops top-level options.num_ctx on its OpenAI route, so the catalog value does not prove a 200,000-token allocation. Ordinary app and offline acceptance remain unproved; new candidate a4efc7e4 contains no local-context repair. Selected build policy-only experiment also timed out; exact prior policy restored03:35:08Z, fresh Online turn answered03:38:15Z and actual model correlation passed03:44:22Z. Stakeholder local network failure is separate from this VM context/latency defect.",
-      "nextAction": "Prioritize startup/provider readiness for the stakeholder\u2019s unreachable local endpoint. Retain local-context prototype as unproved source work; verify ordinary/offline behavior after repair.",
+      "nextAction": "Prioritize startup/provider readiness for the stakeholder’s unreachable local endpoint. Retain local-context prototype as unproved source work; verify ordinary/offline behavior after repair.",
       "exitCriterion": "Nonempty terminal answer with the actual local provider and no Gateway/session-administration loop or tool-validation errors; stalled tools terminate visibly; offline document path has no non-loopback egress.",
       "references": [
         "electron/utils/ondevice-tool-policy.ts",
@@ -1321,20 +1338,18 @@
       ]
     },
     {
-      "id": "representative_windows_asr",
+      "id": "representative_windows_client",
       "status": "BLOCKED",
       "cards": [
-        "CLWX-25",
-        "CLWX-20",
-        "CLWX-87"
+        "CLWX-25"
       ],
       "owner": "root + tester",
       "dependsOn": [
         "native_installer"
       ],
-      "evidenceSummary": "moe.22 now contains the required FFmpeg/native recognizer and notices; extracted package verification passed. Representative Windows 10/11 standard-user/client and actual microphone/ASR acceptance remain blocked. The prior Server 2022/admin/reused-profile VM has no microphone and is not a substitute for those checks.",
-      "nextAction": "Complete selected-candidate Server VM smoke, then obtain representative Windows client/standard-user and physical microphone evidence.",
-      "exitCriterion": "Same installer passes fresh client/standard-user setup and advertised ASR; lane limitations remain explicit until evidenced or an actual scope deferral is accepted.",
+      "evidenceSummary": "Fresh Windows 10/11 standard-user acceptance remains BLOCKED. Moe.25 has assisted existing-profile standard-user upgrade and startup evidence on Server 2022 only.",
+      "nextAction": "After the planning pause, validate the selected candidate on a fresh Windows client.",
+      "exitCriterion": "Same selected installer passes supported fresh client/standard-user setup and declared journeys without development dependencies.",
       "references": [
         "docs/PILOT_LAPTOP_ACCESS.md",
         "windows-pilot/vm-testing/README.md",
@@ -1343,6 +1358,22 @@
         "docs/evidence/GA_BLOCKER_RESOLUTION_2026-09-08.md",
         "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json",
         "docs/evidence/WINDOWS_VM_TESTING_2026-09-08.md"
+      ]
+    },
+    {
+      "id": "microphone_asr",
+      "status": "DEFERRED",
+      "cards": [
+        "CLWX-20",
+        "CLWX-87"
+      ],
+      "owner": "root + future Windows ASR lane",
+      "dependsOn": [],
+      "evidenceSummary": "Owner excluded ASR/microphone from this release; selected whisper.cpp for a future memory-efficient ASR design. No microphone result or implementation claim.",
+      "nextAction": "Complete deferred whisper.cpp design only during current planning pause.",
+      "exitCriterion": "Future ASR release requires memory/quality/CPU/cancellation and actual microphone evidence; current release only retains existing package-integrity/keyless checks.",
+      "references": [
+        "docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md"
       ]
     },
     {
@@ -1400,9 +1431,9 @@
       "owner": "tester + root",
       "dependsOn": [
         "microsoft_journeys",
-        "representative_windows_asr"
+        "representative_windows_client"
       ],
-      "evidenceSummary": "Karunesh reports no assistant connection on sent moe.21 at03:28\u201303:31Z; screenshots/log confirm unavailable local route. Acknowledgment accepted03:39:18Z. Current moe.22 has not been handed off and does not contain the startup repair. No unaided acceptance.",
+      "evidenceSummary": "Karunesh reports no assistant connection on sent moe.21 at03:28–03:31Z; screenshots/log confirm unavailable local route. Acknowledgment accepted03:39:18Z. Current moe.22 has not been handed off and does not contain the startup repair. No unaided acceptance.",
       "nextAction": "Validate the startup repair and separate client Online setup on Windows, provide the tested handoff, and collect an unaided ordinary-first-turn followed by email rerun.",
       "exitCriterion": "Tester completes formerly failing attach/read workflow on the same artifact; limitations and rollout scope recorded.",
       "references": [
@@ -1427,11 +1458,11 @@
         "on_device",
         "documents_policy_reminders",
         "microsoft_journeys",
-        "representative_windows_asr",
+        "representative_windows_client",
         "latency_rehearsal",
         "external_acceptance"
       ],
-      "evidenceSummary": "Selected moe.22 run34180280985 at a4efc7e4 passes native and exact artifact verification, visible installation and installed payload checks. Runtime/content retests are in progress. Account-holder Microsoft sign-in, first-run, representative client/microphone, recovery, rehearsal and external acceptance remain required. No moe.22 publication or stakeholder completion notice has been sent.",
+      "evidenceSummary": "Selected moe.22 run34180280985 at a4efc7e4 passes native and exact artifact verification, visible installation and installed payload checks. Runtime/content retests are in progress. Account-holder Microsoft sign-in, first-run, representative client, recovery, rehearsal and external acceptance remain required. No moe.22 publication or stakeholder completion notice has been sent. Current implementation/build/distribution pause is active; ASR/microphone is explicitly deferred, Windows client acceptance remains required.",
       "nextAction": "Finish required artifact-bound installed/account/client/tester evidence and the strict release gate before publication or completion notification.",
       "exitCriterion": "All required automated and principal-facing pilot criteria PASS on the identified artifact and scope, with no required missing/skipped evidence; published downloads match hashes; completion-notification delivery verified. Release notes explicitly exclude Ministry production identity/APIM/PostgreSQL/backend integration and fleet capacity until the production milestone passes.",
       "references": [
@@ -1480,7 +1511,7 @@
       ]
     }
   ],
-  "releaseScope": "Windows single-school pilot using the existing broker and approved test tenant; no claim of Ministry production connectivity or 450-laptop fleet readiness.",
+  "releaseScope": "Windows single-school pilot using the existing broker and approved test tenant; no claim of Ministry production connectivity or 450-laptop fleet readiness. Microphone/ASR is deferred by owner direction on 2026-09-08; future engine direction is memory-efficient whisper.cpp. Windows client acceptance and package integrity remain required.",
   "scopeBasis": [
     "docs/PROJECT_CONTRACT.md#product-and-completion",
     "docs/MINISTRY_ASKS_2026-09-02.md",
@@ -1535,6 +1566,203 @@
       "from": "e2-standard-4",
       "to": "e2-standard-8",
       "evidence": "artifacts/windows-vm/20260908-fresh-setup/resize-proposal.json"
+    }
+  },
+  "planningPause": {
+    "status": "ACTIVE",
+    "ownerDirected": true,
+    "date": "2026-09-08",
+    "scope": "Research, documentation and improvement planning only; implementation, new builds and distribution paused.",
+    "study": "docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md",
+    "communicationMap": "docs/architecture/OPENCLAW_WINDOWS_COMMUNICATION_MAP.md",
+    "deferredAsrPlan": "docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md",
+    "unreviewedUpgradeWorktree": "/private/tmp/clawx-openclaw-2026-9-upgrade-20260908"
+  },
+  "latestDiagnosticBaseline": {
+    "version": "0.4.3-moe.25",
+    "source": "8058e9b5b3050463c72a11c8e5da56616206f6e3",
+    "buildRunId": 34203201042,
+    "installStatus": "PASS_IDENTITY",
+    "startupStatus": "PASS_STABLE_READY",
+    "readyFromShortcutMs": 258279,
+    "stableVerdictFromShortcutMs": 280083,
+    "stableReadyForMs": 21804,
+    "ordinaryModelTurnStatus": "NOT_RUN",
+    "environment": "Windows Server 2022, standard-user assisted existing-profile upgrade",
+    "evidence": "docs/evidence/WINDOWS_MOE25_PLANNING_BASELINE_2026-09-08.md"
+  },
+  "improvementPlan": {
+    "status": "DOCUMENTED_IMPLEMENTATION_PAUSED",
+    "path": "docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md",
+    "maxConcurrentChildAgents": 6,
+    "integrationOwner": "root",
+    "vmMutationOwner": "root (one at a time)",
+    "acceptanceIds": [
+      "P-KR1",
+      "P-KR2",
+      "P-KR3",
+      "P-KR4",
+      "P-KR5",
+      "P-KR6",
+      "P-KR7",
+      "F-KRs",
+      "D-ASR"
+    ],
+    "workPackages": [
+      {
+        "id": "S0",
+        "name": "Source study, state and Plane criteria",
+        "status": "COMPLETE",
+        "dependsOn": [],
+        "owner": "root + read-only review"
+      },
+      {
+        "id": "S1",
+        "name": "Failure oracles",
+        "status": "PAUSED",
+        "dependsOn": [
+          "S0"
+        ],
+        "owner": "debugger/test-engineer"
+      },
+      {
+        "id": "S2",
+        "name": "Runtime compatibility experiment",
+        "status": "PAUSED_UNREVIEWED_EXPERIMENT_PRESERVED",
+        "dependsOn": [
+          "S0"
+        ],
+        "behavioralOracleRequiredBeforePatchRemoval": "S1",
+        "owner": "dependency-expert / executor"
+      },
+      {
+        "id": "S3",
+        "name": "Document source and fixtures",
+        "status": "PAUSED",
+        "dependsOn": [
+          "S0"
+        ],
+        "owner": "executor (document module)"
+      },
+      {
+        "id": "S4",
+        "name": "Microsoft source and fixtures",
+        "status": "PAUSED",
+        "dependsOn": [
+          "S0"
+        ],
+        "owner": "office_automation_verifier / debugger"
+      },
+      {
+        "id": "S5",
+        "name": "Integration and independent review",
+        "status": "NOT_RUN",
+        "dependsOn": [
+          "S1",
+          "S2",
+          "S3",
+          "S4"
+        ],
+        "owner": "root + independent verifier"
+      },
+      {
+        "id": "S6",
+        "name": "Identified build then sequential Windows acceptance",
+        "status": "NOT_RUN",
+        "dependsOn": [
+          "S5"
+        ],
+        "owner": "windows_build_engineer then sole VM operator"
+      },
+      {
+        "id": "S7",
+        "name": "Gate, distribution and stakeholder acceptance",
+        "status": "NOT_RUN",
+        "dependsOn": [
+          "S6"
+        ],
+        "owner": "root / release conductor"
+      },
+      {
+        "id": "D1",
+        "name": "Deferred whisper.cpp ASR implementation",
+        "status": "DEFERRED",
+        "dependsOn": [
+          "S7"
+        ],
+        "owner": "future Windows ASR lane",
+        "design": "docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md"
+      }
+    ],
+    "completedResearchAt": "2026-09-08T09:26:46.297498+00:00",
+    "planeUpdate": {
+      "projectId": "81a2ea23-e060-49b4-a344-1ab0339f46d5",
+      "marker": "CLWX-STUDY-20260908",
+      "verifiedAt": "2026-09-08T09:26:46.297498+00:00",
+      "descriptionCards": [
+        "CLWX-22",
+        "CLWX-87",
+        "CLWX-125",
+        "CLWX-106"
+      ],
+      "originalAcceptancePreserved": true,
+      "issueStatesChanged": false,
+      "comments": [
+        {
+          "card": "CLWX-22",
+          "commentId": "8d679e2b-693f-4a83-962e-ba13f1d83f5e",
+          "createdAt": "2026-09-08T09:21:39.830503Z",
+          "readback": "PASS_DETAIL_AND_LIST",
+          "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-87",
+          "commentId": "904976d5-bf4a-46b2-aa11-e899ee7f2d4d",
+          "createdAt": "2026-09-08T09:21:40.231929Z",
+          "readback": "PASS_DETAIL_AND_LIST",
+          "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-125",
+          "commentId": "ea2e38a1-50b1-47e0-84b0-d94735dcad72",
+          "createdAt": "2026-09-08T09:21:40.625344Z",
+          "readback": "PASS_DETAIL_AND_LIST",
+          "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-106",
+          "commentId": "cc5295d3-6870-428d-8b44-b4ad35e8065e",
+          "createdAt": "2026-09-08T09:21:41.074075Z",
+          "readback": "PASS_DETAIL_AND_LIST",
+          "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-115",
+          "commentId": "bcf6fd81-5131-471c-bd7f-1e238e73b2b1",
+          "createdAt": "2026-09-08T09:21:41.486977Z",
+          "readback": "PASS_DETAIL_AND_LIST",
+          "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-73",
+          "commentId": "8e621f0e-a1ae-4dee-8243-0fba94e15848",
+          "createdAt": "2026-09-08T09:21:41.891123Z",
+          "readback": "PASS_DETAIL_AND_LIST",
+          "exportReadback": "PASS"
+        }
+      ],
+      "export": "docs/plane-board/CLWX-board-export.json",
+      "issuesExported": 125,
+      "statesExported": 6
+    },
+    "verification": {
+      "independentPlanningReview": "PASS",
+      "reviewer": "email_connection_trace (read-only; root separately reviewed its communication-map contribution)",
+      "receipts": "artifacts/plane/20260908-study/verified-summary.json",
+      "documentationChecks": "artifacts/plane/20260908-study/documentation-validation.json",
+      "mermaidValidation": "Manual source review only; renderer unavailable",
+      "productTestsDuringPlanning": "NOT_RUN (owner pause)",
+      "scope": "Research/documentation completion only; no GA promotion"
     }
   }
 }

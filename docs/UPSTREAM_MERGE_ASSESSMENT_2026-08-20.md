@@ -1,6 +1,10 @@
 # Upstream merge assessment
 
-## Current comparison — September 8, 2026
+## Later research direction — September 8, 2026
+
+The owner paused builds and requested a [source-backed OpenClaw/Outlook/VoltAgent/AionUi improvement study](research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md). It evaluates OpenClaw `2026.9.2` separately from the ClawX upstream snapshot below; no upgrade or broad merge is accepted. Moe.25 is now the latest installed diagnostic baseline, with model-turn acceptance paused.
+
+## Earlier comparison — September 8, 2026
 
 Read-only `git fetch --no-tags origin main` confirmed upstream `6a938757dbe47b74687ec1bf131a674e03ea9e79`. Compare it with the installed pilot candidate `b814f804036fc2f9f32d3326c8694f4ae2ef7805` (moe.24), not with an unbuilt development checkout.
 
