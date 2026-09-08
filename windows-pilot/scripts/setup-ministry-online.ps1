@@ -1,7 +1,7 @@
 # Requires only Windows PowerShell 5.1. The private config and key stay local.
 [CmdletBinding()]
 param(
-  [string] $ConfigPath = (Join-Path $PSScriptRoot 'ministry-online.private.json'),
+  [string] $ConfigPath,
   [switch] $Json
 )
 
@@ -253,6 +253,9 @@ function Invoke-MinistryOnlineSetup([string] $InputConfigPath, [switch] $Diagnos
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
+  if (-not $PSBoundParameters.ContainsKey('ConfigPath')) {
+    $ConfigPath = Join-Path $PSScriptRoot 'ministry-online.private.json'
+  }
   $result = Invoke-MinistryOnlineSetup $ConfigPath
   $messages = @{
     OK = 'Online setup is saved. Open Ministry of Education. If you previously selected On this device, choose Online after opening it.'

@@ -34,6 +34,7 @@ acceptance:
   - Permission updates retain verified current ownership and persist only access-rule changes, including after move and replacement, without requiring administrator privileges.
   - Individual files are replaced atomically and an ordinary partial-write failure restores both previous files. A repeated identical setup preserves file contents and creates no additional backup.
   - The default double-click flow displays only a principal-readable message. Explicit -Json mode emits only allowlisted status fields; neither mode exposes endpoint, key, key hash or exception text.
+  - Native acceptance launches the actual CMD in a fresh built-in PowerShell process from a synthetic bundle path with spaces and isolated APPDATA; it verifies default-path seed creation, explicit-path override and JSON idempotence.
   - Native Windows tests cover initial setup, repeated setup, replacement/backup, invalid input, permissions, running-app refusal and partial-commit recovery before an installed normal-boot seed check.
 docs:
   required: true

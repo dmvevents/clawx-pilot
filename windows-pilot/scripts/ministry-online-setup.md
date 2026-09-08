@@ -54,6 +54,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/windows/stakeholde
 
 The checks use synthetic credentials and a temporary APPDATA directory; they
 do not configure the real app profile or perform network, email or Forms calls.
+The native suite also launches the actual CMD and fresh Windows PowerShell
+processes from a bundle path with spaces, checking default configuration,
+explicit configuration and JSON output through the real script entrypoint.
 The input-only script also runs with developer-host `pwsh`; that does not prove
 Windows ACLs, atomic replacement or normal application startup.
 

@@ -99,6 +99,29 @@ function Write-TestBundle([hashtable] $Changes = @{}, [string] $Key = 'synthetic
   [IO.File]::WriteAllText($config, ($value | ConvertTo-Json -Depth 4), $utf8)
   [IO.File]::WriteAllText($keyFile, $Key, $utf8)
 }
+function Invoke-SetupEntryProcess([string] $Program, [string] $Arguments, [string] $ChildAppData) {
+  $start = New-Object Diagnostics.ProcessStartInfo
+  $start.FileName = $Program; $start.Arguments = $Arguments
+  $start.WorkingDirectory = $testRoot
+  $start.UseShellExecute = $false; $start.CreateNoWindow = $true
+  $start.RedirectStandardInput = $true; $start.RedirectStandardOutput = $true; $start.RedirectStandardError = $true
+  $start.EnvironmentVariables['APPDATA'] = $ChildAppData
+  $process = New-Object Diagnostics.Process
+  $process.StartInfo = $start
+  try {
+    [void] $process.Start()
+    $stdout = $process.StandardOutput.ReadToEndAsync()
+    $stderr = $process.StandardError.ReadToEndAsync()
+    $process.StandardInput.WriteLine(); $process.StandardInput.Close()
+    Assert-Contract ($process.WaitForExit(30000)) 'Fresh setup process must finish within 30 seconds'
+    $result = [pscustomobject]@{ exitCode = $process.ExitCode; stdout = $stdout.Result; stderr = $stderr.Result }
+    $script:lastSetup = @{ phase = 'fresh-process'; exitCode = $result.exitCode; stdoutLength = $result.stdout.Length; stderrLength = $result.stderr.Length }
+    return $result
+  } finally {
+    if (-not $process.HasExited) { $process.Kill(); [void] $process.WaitForExit(5000) }
+    $process.Dispose()
+  }
+}
 function Assert-OwnerOnly([string] $Path) {
   $acl = Get-Acl -LiteralPath $Path
   $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -123,6 +146,46 @@ function Invoke-ContractTest([string] $Name, [scriptblock] $Body) {
 }
 
 try {
+  $entryBundle = Join-Path $testRoot 'private bundle with spaces'
+  [IO.Directory]::CreateDirectory($entryBundle) | Out-Null
+  $entryHelper = Join-Path $entryBundle 'setup-ministry-online.ps1'
+  $entryCmd = Join-Path $entryBundle 'Setup Ministry Online.cmd'
+  [IO.File]::Copy($helper, $entryHelper, $false)
+  [IO.File]::Copy((Join-Path $repo 'windows-pilot\scripts\Setup Ministry Online.cmd'), $entryCmd, $false)
+  [IO.File]::WriteAllText((Join-Path $entryBundle 'ministry-online.private.json'), '{"baseUrl":"https://entrypoint.invalid/v1","apiKeyFile":"client.key"}', $utf8)
+  [IO.File]::WriteAllText((Join-Path $entryBundle 'client.key'), 'synthetic-entrypoint-key', $utf8)
+  $entryAppData = Join-Path $testRoot 'entrypoint appdata'
+  $entryUserData = Join-Path $entryAppData 'Ministry of Education'
+  $entryConfig = Join-Path $entryUserData 'cloud-gateway.json'
+  $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  Invoke-ContractTest 'actual CMD resolves its default config in a fresh process from a bundle path with spaces' {
+    $r = Invoke-SetupEntryProcess $env:ComSpec ('/d /c ""' + $entryCmd + '""') $entryAppData
+    Assert-Contract ($r.exitCode -eq 0 -and -not $r.stderr) 'CMD entrypoint succeeds without stderr'
+    Assert-Contract ($r.stdout.Contains('Online setup is saved.') -and $r.stdout -notmatch 'CLWX_SETUP_RESULT|synthetic|https|backupId') 'CMD displays only friendly setup output'
+    $seed = [IO.File]::ReadAllText($entryConfig) | ConvertFrom-Json
+    Assert-Contract ($seed.baseUrl -ceq 'https://entrypoint.invalid/v1' -and $seed.providerId -ceq 'moe-cloud-gateway') 'CMD consumes the adjacent private config'
+    Assert-Contract ($seed.model -ceq 'moe-demo-pro' -and $seed.apiKeyFile -ceq 'cloud-gateway.key') 'CMD writes the supported seed'
+    $entryKey = Join-Path $entryUserData 'cloud-gateway.key'
+    Assert-Contract ([IO.File]::ReadAllText($entryKey) -ceq 'synthetic-entrypoint-key') 'CMD writes the separate key'
+    Assert-OwnerOnly $entryKey
+  }
+  Invoke-ContractTest 'fresh PowerShell default config preserves JSON output and idempotence' {
+    $r = Invoke-SetupEntryProcess $windowsPowerShell ('-NoProfile -ExecutionPolicy Bypass -File "' + $entryHelper + '" -Json') $entryAppData
+    Assert-Contract ($r.exitCode -eq 0 -and -not $r.stderr) 'Fresh JSON entrypoint succeeds without stderr'
+    $line = $r.stdout.Trim()
+    Assert-Contract ($line.StartsWith('CLWX_SETUP_RESULT=') -and $line -notmatch '[\r\n]|synthetic|https') 'JSON entrypoint emits one private-data-free record'
+    $record = $line.Substring('CLWX_SETUP_RESULT='.Length) | ConvertFrom-Json
+    Assert-Contract ($record.code -eq 'OK' -and $record.status -eq 'UNCHANGED' -and -not $record.changed) 'Fresh default JSON invocation is idempotent'
+    Assert-Contract (($record.PSObject.Properties.Name | Sort-Object) -join ',' -ceq 'backupId,changed,code,status') 'JSON output fields stay allowlisted'
+  }
+  Invoke-ContractTest 'fresh PowerShell honors an explicit config path instead of the adjacent default' {
+    $explicitConfig = Join-Path $entryBundle 'explicit connection.json'
+    [IO.File]::WriteAllText($explicitConfig, '{"baseUrl":"https://explicit-entrypoint.invalid/v1","apiKeyFile":"client.key","model":"moe-demo"}', $utf8)
+    $r = Invoke-SetupEntryProcess $windowsPowerShell ('-NoProfile -ExecutionPolicy Bypass -File "' + $entryHelper + '" -ConfigPath "' + $explicitConfig + '" -Json') $entryAppData
+    Assert-Contract ($r.exitCode -eq 0 -and -not $r.stderr) 'Fresh explicit-path entrypoint succeeds'
+    $seed = [IO.File]::ReadAllText($entryConfig) | ConvertFrom-Json
+    Assert-Contract ($seed.baseUrl -ceq 'https://explicit-entrypoint.invalid/v1' -and $seed.model -ceq 'moe-demo') 'Explicit config overrides the adjacent default'
+  }
   Invoke-ContractTest 'initial setup produces the supported seed without inline key or BOM' {
     Write-TestBundle
     $r = Invoke-TestSetup $config
