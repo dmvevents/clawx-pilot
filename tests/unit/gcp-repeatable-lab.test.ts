@@ -14,6 +14,11 @@ import { describe, expect, it } from 'vitest';
 const repoRoot = path.resolve(__dirname, '..', '..');
 const launcher = path.join(repoRoot, 'windows-pilot', 'vm-testing', 'gcp-repeatable-lab.py');
 const baselinePath = path.join(repoRoot, 'windows-pilot', 'vm-testing', 'lab-baseline.json');
+// Names are derived from the shipped pinned config so a root rename of a lab
+// resource cannot silently desynchronize these assertions (review F2).
+const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8')) as {
+  firewall: { name: string };
+};
 
 function resolvePython(): string {
   for (const candidate of ['python3', 'python']) {
@@ -51,7 +56,7 @@ const SUBNET_OK = {
   region: 'https://compute/projects/p/regions/us-central1',
 };
 const FIREWALL_OK = {
-  name: 'clawx-test-lab-allow-iap', direction: 'INGRESS', disabled: false,
+  name: baseline.firewall.name, direction: 'INGRESS', disabled: false,
   network: 'https://compute/projects/p/global/networks/clawx-test-lab',
   sourceRanges: ['35.235.240.0/20'], targetTags: ['clawx-repeatable-test'],
   allowed: [{ IPProtocol: 'tcp', ports: ['22', '3389'] }],
@@ -264,6 +269,28 @@ describe('gcp-repeatable-lab create fail-closed against gcloud reality', () => {
     expect(readReceipt(lab, 'drift-1').failure).toMatch(/refusing drift/);
   });
 
+  it('refuses PASS when instance create returns a different instance identity', () => {
+    // Numeric ID present but foreign name: the receipt must not attest it.
+    const lab = makeLab(happyRules('some-other-vm-name'));
+    const r = run(lab, ['create', '--run-id', 'adv-wrong-name', '--image', IMG.name, '--receipt-dir', lab.receipts]);
+    expect(r.status).toBe(1);
+    const receipt = readReceipt(lab, 'adv-wrong-name');
+    expect(receipt.result).toBe('FAIL');
+    expect(receipt.failure).toMatch(/identity for a different instance/);
+  });
+
+  it('writes a FAIL receipt (lock consumed) when gcloud stdout is not JSON', () => {
+    const rules = happyRules('clawx-lab-badjson-1');
+    rules[5] = { match: ['instances', 'create'], stdout: 'Created [instance]. Human text, not JSON.' };
+    const lab = makeLab(rules);
+    const r = run(lab, ['create', '--run-id', 'badjson-1', '--image', IMG.name, '--receipt-dir', lab.receipts]);
+    expect(r.status).toBe(1);
+    const receipt = readReceipt(lab, 'badjson-1');
+    expect(receipt.result).toBe('FAIL');
+    expect(receipt.failure).toMatch(/non-JSON stdout/);
+    expect(fs.existsSync(path.join(lab.receipts, 'badjson-1.lock.json'))).toBe(true);
+  });
+
   it('fails closed when any gcloud subprocess fails', () => {
     const rules = happyRules('x');
     rules[3] = { match: ['networks', 'list'], exitCode: 1, stderr: 'ERROR: quota exceeded' };
@@ -350,7 +377,7 @@ describe('gcp-repeatable-lab create success path', () => {
     const flat = calls(lab).map((argv) => argv.join(' '));
     expect(flat.some((c) => c.includes('networks create clawx-test-lab') && c.includes('--subnet-mode=custom'))).toBe(true);
     expect(flat.some((c) => c.includes('subnets create clawx-test-lab-us-central1') && c.includes('--range=10.74.0.0/24'))).toBe(true);
-    expect(flat.some((c) => c.includes('firewall-rules create clawx-test-lab-allow-iap')
+    expect(flat.some((c) => c.includes(`firewall-rules create ${baseline.firewall.name}`)
       && c.includes('--source-ranges=35.235.240.0/20')
       && c.includes('--rules=tcp:22,tcp:3389')
       && c.includes('--target-tags=clawx-repeatable-test'))).toBe(true);

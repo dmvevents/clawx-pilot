@@ -179,7 +179,14 @@ def gcloud_json(prefix: list, argv: list):
         raise LabError(
             f"gcloud failed (exit {proc.returncode}): {' '.join(argv)}\n"
             + proc.stderr.strip()[:2000])
-    return json.loads(proc.stdout) if proc.stdout.strip() else None
+    if not proc.stdout.strip():
+        return None
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise LabError(
+            f"gcloud returned non-JSON stdout (exit 0): {' '.join(argv)}\n"
+            + proc.stdout.strip()[:500]) from exc
 
 
 def check_network(existing: dict, _cfg: dict):
@@ -324,6 +331,11 @@ def cmd_create(args) -> int:
         if not instance_id.isdigit():
             raise LabError("instance create returned no numeric instance ID; "
                            "not claiming PASS")
+        if (instance or {}).get("name") != name:
+            raise LabError(
+                "instance create returned identity for a different instance "
+                f"({(instance or {}).get('name')!r} != {name!r}); "
+                "not claiming PASS")
         receipt["instance"] = {"id": instance_id,
                                "name": (instance or {}).get("name"),
                                "status": (instance or {}).get("status"),
