@@ -323,7 +323,7 @@ Windows 环境信息采集、IAP 连接和应用窗口录制请参阅 [Windows �
 
 ### 前置要求
 
-- **Node.js**：22+（推荐 LTS 版本）
+- **Node.js**：24.x，最低 24.15.0（与选定的 OpenClaw 运行时一致）
 - **包管理器**：使用 `package.json` 固定版本的 pnpm
 
 ### 项目结构

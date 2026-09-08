@@ -323,7 +323,7 @@ Windows environment profiling, IAP access and app-window recording are documente
 
 ### Prerequisites
 
-- **Node.js**: 22+ (LTS recommended)
+- **Node.js**: 24.x, version 24.15.0 or later (matches the selected OpenClaw runtime)
 - **Package Manager**: pnpm, at the version pinned in `package.json`
 
 ### Project Structure
