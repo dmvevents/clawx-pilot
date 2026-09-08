@@ -5,12 +5,19 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import {
   MOE_HOSTAPI_TOOLS,
+  MOE_NO_HOSTAPI_TOOLS,
+  MOE_REGISTRY_CHILD_MAX_BUFFER_BYTES,
+  MOE_REGISTRY_CHILD_TIMEOUT_MS,
+  MOE_REGISTRY_PROOF_PREFIX,
   OWNED_TEMP_RM_OPTIONS,
   TARGET_OPENCLAW_VERSION,
+  assertMoeRegistryChildResult,
   assertSameSet,
   finalizeOwnedVerifierTempRoot,
+  normalizeThrown,
   satisfiesOpenClawNodeEngine,
   verifyOpenClaw20269Upgrade,
 } from '../../scripts/openclaw-2026-9-upgrade-verifier.mjs';
@@ -182,9 +189,95 @@ async function loadActualChatHistoryHandler() {
 describe('OpenClaw 2026.9 upgrade verifier', () => {
   it('accepts the actual installed OpenClaw 2026.9.2 runtime disposition', async () => {
     await verifyOpenClaw20269Upgrade(ACTUAL_OPENCLAW_DIR);
-  // Loads two real plugin registries and executes PDF extraction. Match the
-  // existing artifact transport bound; the unit default is only five seconds.
+  // Loads two real plugin registries and executes PDF extraction inside a
+  // bounded owned child process (the OpenClaw state-DB handle is cached for
+  // the lifetime of the loading process, which made the owned scratch root
+  // undeletable on Windows when the loads ran in-process — hosted34252050616).
+  // Match the existing artifact transport bound; the unit default is 5s.
   }, 120_000);
+
+  it('runs the MoE registry disposition in a bounded child whose payload contract fails closed', () => {
+    const childScript = path.join(ROOT, 'scripts', 'openclaw-2026-9-moe-registry-child.mjs');
+    expect(fs.existsSync(childScript)).toBe(true);
+    // Bounds are real and finite: a hung load cannot outlive the lane and a
+    // runaway child cannot flood the parent.
+    expect(MOE_REGISTRY_CHILD_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(MOE_REGISTRY_CHILD_TIMEOUT_MS).toBeLessThanOrEqual(90_000);
+    expect(MOE_REGISTRY_CHILD_MAX_BUFFER_BYTES).toBeGreaterThan(0);
+
+    // Real negative controls against the actual child entrypoint: malformed
+    // JSON and a missing required field must exit non-zero without ever
+    // printing a proof marker.
+    for (const badPayload of ['{not json', JSON.stringify({ openclawDir: ACTUAL_OPENCLAW_DIR, pluginRoot: 'x', nonce: 'n' })]) {
+      const result = spawnSync(process.execPath, [childScript, badPayload], {
+        encoding: 'utf8',
+        timeout: 30_000,
+        maxBuffer: MOE_REGISTRY_CHILD_MAX_BUFFER_BYTES,
+      });
+      expect(result.status).not.toBe(0);
+      expect(String(result.stdout ?? '')).not.toContain(MOE_REGISTRY_PROOF_PREFIX);
+      expect(String(result.stderr ?? '')).toMatch(/payload/);
+    }
+  }, 60_000);
+
+  it('refuses child results without a proof marker, with failure exits, signals, or spawn errors', () => {
+    const nonce = 'nonce-1234';
+    const ok = { error: undefined, signal: null, status: 0, stdout: `${MOE_REGISTRY_PROOF_PREFIX} ${nonce}\n`, stderr: '' };
+    expect(() => assertMoeRegistryChildResult(ok, nonce)).not.toThrow();
+
+    // Exit 0 with no marker (silent death after stdout flush, stale wrapper,
+    // truncated output) must NOT count as verified.
+    expect(() => assertMoeRegistryChildResult({ ...ok, stdout: 'all good\n' }, nonce))
+      .toThrow(/without the proof marker/);
+    // Marker for a DIFFERENT invocation must not pass (stale/replayed output).
+    expect(() => assertMoeRegistryChildResult({ ...ok, stdout: `${MOE_REGISTRY_PROOF_PREFIX} other-nonce\n` }, nonce))
+      .toThrow(/without the proof marker/);
+    // Marker printed but exit non-zero: failure exit wins.
+    expect(() => assertMoeRegistryChildResult({ ...ok, status: 1, stderr: 'MoE HostAPI runtime toolNames mismatch' }, nonce))
+      .toThrow(/exited 1.*toolNames mismatch/);
+    // Timeout / spawn failure path (spawnSync reports via .error).
+    expect(() => assertMoeRegistryChildResult({ ...ok, error: Object.assign(new Error('spawnSync ETIMEDOUT'), { code: 'ETIMEDOUT' }) }, nonce))
+      .toThrow(/did not complete.*ETIMEDOUT/);
+    // Killed by signal (bounded lifetime enforcement).
+    expect(() => assertMoeRegistryChildResult({ ...ok, status: null, signal: 'SIGTERM' }, nonce))
+      .toThrow(/killed by signal SIGTERM/);
+  });
+
+  it('keeps the child inventory checks pinned to the single reviewed verifier copy', () => {
+    // The child imports MOE_NO_HOSTAPI_TOOLS/MOE_HOSTAPI_TOOLS from the
+    // verifier module rather than keeping a third drifting copy.
+    const childSource = fs.readFileSync(path.join(ROOT, 'scripts', 'openclaw-2026-9-moe-registry-child.mjs'), 'utf8');
+    expect(childSource).toMatch(/from '\.\/openclaw-2026-9-upgrade-verifier\.mjs'/);
+    expect(childSource).not.toMatch(/^const MOE_NO_HOSTAPI_TOOLS\b/m);
+    expect(childSource).not.toMatch(/^const MOE_HOSTAPI_TOOLS\b/m);
+    expect(MOE_NO_HOSTAPI_TOOLS.every((name) => MOE_HOSTAPI_TOOLS.includes(name))).toBe(true);
+  });
+
+  it('normalizes falsy thrown values instead of dropping them into a pass', () => {
+    // F1: `throw false` / `throw 0` / `throw ''` are legal; the previous
+    // truthiness checks at this boundary would have treated them as "no
+    // error". Every one must surface as a cleanup failure...
+    for (const falsy of [false, 0, '', null, undefined]) {
+      expect(() => finalizeOwnedVerifierTempRoot('/tmp/clwx-openclaw-moe-plugin-ctl', null, (() => {
+        throw falsy;
+      }) as never)).toThrow(/owned temp cleanup failed after bounded retries.*non-Error thrown/);
+    }
+    // ...and a falsy non-nullish PRIMARY error must fail even when cleanup
+    // succeeds (nullish alone means "body did not throw").
+    expect(() => finalizeOwnedVerifierTempRoot('/tmp/clwx-openclaw-moe-plugin-ctl', false as never, (() => {}) as never))
+      .toThrow(/non-Error thrown \(boolean\): false/);
+    expect(() => finalizeOwnedVerifierTempRoot('/tmp/clwx-openclaw-moe-plugin-ctl', '' as never, (() => {}) as never))
+      .toThrow(/non-Error thrown \(string\)/);
+
+    // normalizeThrown itself: Errors keep identity; non-Errors are wrapped
+    // with the original value on cause.
+    const error = new Error('kept');
+    expect(normalizeThrown(error)).toBe(error);
+    const wrapped = normalizeThrown(0) as Error & { cause: unknown };
+    expect(wrapped).toBeInstanceOf(Error);
+    expect(wrapped.cause).toBe(0);
+    expect(wrapped.message).toContain('non-Error thrown (number): 0');
+  });
 
   it('pins the MoE tool inventory to the reviewed harness registration contract (no second drifting copy)', async () => {
     // This exact list went stale twice (missed outlook.readiness from

@@ -1,21 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { assertOpenClawWindowsPtyGuard } from './openclaw-windows-pty-guard-patch.mjs';
 
 export const TARGET_OPENCLAW_VERSION = '2026.9.2';
 export const REQUIRED_OPENCLAW_NODE_ENGINE = '>=22.22.3 <23 || >=24.15.0 <25 || >=25.9.0';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const MOE_PLUGIN_ID = 'moe-principal-assistant';
-const MOE_PLUGIN_CONFIG = {
-  principalName: 'Mrs. Test',
-  schoolName: 'Demo Primary',
-  educationDistrict: 'Victoria',
-  schoolType: 'Government',
-};
-const MOE_NO_HOSTAPI_TOOLS = [
+const SCRIPTS_DIR = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(SCRIPTS_DIR, '..');
+const MOE_REGISTRY_CHILD_SCRIPT = path.join(SCRIPTS_DIR, 'openclaw-2026-9-moe-registry-child.mjs');
+// Exported for the child helper (openclaw-2026-9-moe-registry-child.mjs) so
+// the runtime inventory checks stay pinned to this single reviewed copy.
+export const MOE_NO_HOSTAPI_TOOLS = [
   'document.find',
   'document.read_pdf',
   'document.read_docx',
@@ -143,14 +142,22 @@ function assertPricingUsesNativeCatalogPricing(openclawDir) {
 
 // Owned-temp cleanup for the mkdtemp scratch root this verifier creates.
 //
-// hosted34244582967 (clean 1d745567, windows-latest): every disposition
-// assertion passed, then the plain `fs.rmSync(tempRoot, { recursive, force })`
-// in the finally threw `EPERM ... \Temp\clwx-openclaw-moe-plugin-OPDKpz`
-// (syscall 'rm') and failed the suite. The observed code was EPERM; the
-// underlying cause is UNKNOWN — a transient handle on the just-executed
-// plugin state (AV scan / lazy fd release) is a plausible hypothesis, but
-// EPERM can equally mean a permanent permission problem, and the two are
-// indistinguishable from the error alone.
+// hosted34244582967 (clean 1d745567) first surfaced the EPERM; the bounded
+// recursive-rm retries added in 8fb8bd96 did NOT absorb it — hosted34252050616
+// (5785e570) still failed with `EPERM ... \Temp\clwx-openclaw-moe-plugin-7UYvaV`
+// after maxRetries 10 / retryDelay 100. Native auto-d controls (Node 24.20.0,
+// locked OpenClaw 2026.9.2) resolved the ambiguity:
+// - the only content left behind is state-*/state/openclaw.sqlite (+ -shm/-wal);
+// - a short TEMP root (C:\ct) does NOT remove the EPERM (not a path/ACL issue);
+// - a fresh same-user process AFTER the test process exits deletes the same
+//   tree cleanly (not a permanent permission fault).
+// Cause: loading the MoE registry through build-smoke-entry opens the OpenClaw
+// state database and the handle is retained process-wide in the loader's
+// module-level cache (cachedDatabases in the hashed openclaw-state-db-cache
+// chunk); no stable dist/plugin-sdk or dist/plugins surface exports the close
+// API. The registry/PDF checks therefore run in a bounded owned child process
+// (openclaw-2026-9-moe-registry-child.mjs) and this cleanup runs only after
+// the child — and its DB handle — has exited.
 //
 // Policy:
 // 1. Retry with Node's documented recursive-rm backoff (maxRetries/retryDelay
@@ -164,6 +171,10 @@ function assertPricingUsesNativeCatalogPricing(openclawDir) {
 //    the cleanup failure cannot mask the primary verification error (the old
 //    bare `finally { fs.rmSync(...) }` replaced e.g. an inventory mismatch
 //    with the EPERM).
+// 4. All thrown values are normalized to Errors at this boundary: JavaScript
+//    permits `throw false` / `throw 0` / `throw ''`, and the previous
+//    truthiness checks would have silently dropped such a primary or cleanup
+//    failure into a pass.
 export const OWNED_TEMP_RM_OPTIONS = Object.freeze({
   recursive: true,
   force: true,
@@ -171,14 +182,35 @@ export const OWNED_TEMP_RM_OPTIONS = Object.freeze({
   retryDelay: 100,
 });
 
+// Normalizes any thrown value into an Error so falsy throws (false, 0, '',
+// null, undefined) cannot be dropped by truthiness checks at the
+// verification/cleanup boundary. Errors pass through unchanged (identity is
+// preserved for rethrow contracts); everything else is wrapped with the
+// original value retained on `cause`.
+export function normalizeThrown(value) {
+  if (value instanceof Error) return value;
+  let rendered;
+  try {
+    rendered = JSON.stringify(value);
+  } catch {
+    rendered = undefined;
+  }
+  const error = new Error(`non-Error thrown (${typeof value}): ${rendered ?? String(value)}`);
+  error.cause = value;
+  return error;
+}
+
 // Exported (with an injectable rm for deterministic controls in the unit
 // lane) — production callers pass tempRoot and the primary error, if any.
+// A nullish primaryError means "verification body did not throw"; any other
+// value — including falsy non-nullish values — is normalized and surfaced.
 export function finalizeOwnedVerifierTempRoot(tempRoot, primaryError = null, rmImpl = fs.rmSync) {
+  primaryError = primaryError === null || primaryError === undefined ? null : normalizeThrown(primaryError);
   let cleanupError = null;
   try {
     rmImpl(tempRoot, { ...OWNED_TEMP_RM_OPTIONS });
   } catch (error) {
-    cleanupError = error;
+    cleanupError = normalizeThrown(error);
   }
   if (primaryError && cleanupError) {
     throw new AggregateError(
@@ -206,84 +238,37 @@ export function assertSameSet(label, actual, expected) {
   }
 }
 
-function pdfWithText(text) {
-  const stream = `BT /F1 12 Tf 72 720 Td (${text}) Tj ET`;
-  return [
-    '%PDF-1.4',
-    '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
-    '2 0 obj<</Type/Pages/Count 1/Kids [3 0 R]>>endobj',
-    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox [0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj',
-    `4 0 obj<</Length ${stream.length}>>stream\n${stream}\nendstream endobj`,
-    '5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj',
-    'trailer<</Size 6/Root 1 0 R>>',
-    '%%EOF',
-  ].join('\n');
+// Child-process boundary for the MoE registry/PDF disposition. The loads run
+// in scripts/openclaw-2026-9-moe-registry-child.mjs (see the block comment on
+// OWNED_TEMP_RM_OPTIONS for the DB-handle-lifetime evidence): success requires
+// BOTH exit code 0 AND the per-invocation nonce proof marker on stdout, so a
+// child that dies silently, times out, is killed, or prints stale output can
+// never pass. One spawn only — a failed child is a failure, never replayed.
+export const MOE_REGISTRY_PROOF_PREFIX = 'CLWX_MOE_REGISTRY_PROOF';
+export const MOE_REGISTRY_CHILD_TIMEOUT_MS = 90_000;
+export const MOE_REGISTRY_CHILD_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
+
+function boundedTail(text, limit = 2000) {
+  const value = String(text ?? '').trim();
+  return value.length > limit ? `…${value.slice(-limit)}` : value;
 }
 
-async function withProcessEnv(overrides, fn) {
-  const previous = new Map();
-  for (const key of Object.keys(overrides)) previous.set(key, process.env[key]);
-  try {
-    for (const [key, value] of Object.entries(overrides)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = String(value);
-    }
-    return await fn();
-  } finally {
-    for (const [key, value] of previous.entries()) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
+// Exported for the unit lane's refusal controls (spawn-result shaped input).
+export function assertMoeRegistryChildResult(result, nonce) {
+  if (result.error) {
+    throw new Error(`MoE registry child did not complete (timeout/spawn failure): ${normalizeThrown(result.error).message}`);
   }
-}
-
-function buildMoePluginConfig(pluginRoot, hostApi = false) {
-  const config = {
-    plugins: {
-      load: { paths: [pluginRoot] },
-      entries: { [MOE_PLUGIN_ID]: { enabled: true, config: MOE_PLUGIN_CONFIG } },
-    },
-  };
-  if (hostApi) config.tools = {};
-  return config;
-}
-
-async function loadMoeRegistry(openclawDir, pluginRoot, tempRoot, hostApi = false) {
-  const buildSmokeEntry = path.join(openclawDir, 'dist', 'plugins', 'build-smoke-entry.js');
-  if (!fs.existsSync(buildSmokeEntry)) {
-    throw new Error('OpenClaw plugin build-smoke-entry runtime surface missing');
+  if (result.signal) {
+    throw new Error(`MoE registry child was killed by signal ${result.signal} (bounded lifetime ${MOE_REGISTRY_CHILD_TIMEOUT_MS}ms)`);
   }
-  const smoke = await import(`${pathToFileURL(buildSmokeEntry).href}?verify=${Date.now()}-${Math.random()}`);
-  const stateDir = path.join(tempRoot, hostApi ? 'state-hostapi' : 'state-no-hostapi');
-  const homeDir = path.join(tempRoot, hostApi ? 'home-hostapi' : 'home-no-hostapi');
-  fs.mkdirSync(stateDir, { recursive: true });
-  fs.mkdirSync(homeDir, { recursive: true });
-  const configPath = path.join(stateDir, 'openclaw.json');
-  fs.writeFileSync(configPath, JSON.stringify(buildMoePluginConfig(pluginRoot, hostApi), null, 2));
-  const env = {
-    ...process.env,
-    HOME: homeDir,
-    OPENCLAW_STATE_DIR: stateDir,
-    OPENCLAW_CONFIG_PATH: configPath,
-    OPENCLAW_DISABLE_BONJOUR: '1',
-    OPENCLAW_NO_RESPAWN: '1',
-    CLAWX_APP_RESOURCES: path.dirname(openclawDir),
-    ...(hostApi
-      ? { CLAWX_HOST_API_PORT: '1', CLAWX_HOST_API_TOKEN: 'test-token' }
-      : { CLAWX_HOST_API_PORT: undefined, CLAWX_HOST_API_TOKEN: undefined }),
-  };
-  return await withProcessEnv(env, async () => {
-    const workspaceDir = path.join(homeDir, '.openclaw', 'workspace');
-    const context = smoke.resolvePluginRuntimeLoadContext({ env, workspaceDir });
-    return smoke.loadOpenClawPlugins(smoke.buildPluginRuntimeLoadOptions(context, {
-      workspaceDir,
-      env,
-      onlyPluginIds: [MOE_PLUGIN_ID],
-      loadModules: true,
-      activate: false,
-      cache: false,
-    }));
-  });
+  if (result.status !== 0) {
+    throw new Error(`MoE registry child exited ${result.status}: ${boundedTail(result.stderr) || '(no stderr)'}`);
+  }
+  const marker = `${MOE_REGISTRY_PROOF_PREFIX} ${nonce}`;
+  const hasMarker = String(result.stdout ?? '').split(/\r?\n/).some((line) => line.trim() === marker);
+  if (!hasMarker) {
+    throw new Error(`MoE registry child exited 0 without the proof marker "${marker}" — refusing to treat it as verified`);
+  }
 }
 
 async function assertMoePluginToolRegistration(openclawDir) {
@@ -297,36 +282,22 @@ async function assertMoePluginToolRegistration(openclawDir) {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'clwx-openclaw-moe-plugin-'));
   let primaryError = null;
   try {
-    const registry = await loadMoeRegistry(openclawDir, pluginRoot, tempRoot, false);
-    const plugin = registry.plugins?.[0];
-    if (registry.plugins?.length !== 1 || plugin?.id !== MOE_PLUGIN_ID || plugin.status !== 'loaded') {
-      throw new Error(`MoE plugin did not load through OpenClaw 2026.9.2 registry: ${JSON.stringify(plugin ?? null)}`);
-    }
-    assertSameSet('MoE no-HostAPI runtime toolNames', plugin.toolNames ?? [], MOE_NO_HOSTAPI_TOOLS);
-    if (!Array.isArray(registry.tools) || registry.tools.length !== MOE_NO_HOSTAPI_TOOLS.length) {
-      throw new Error(`MoE no-HostAPI runtime registered ${registry.tools?.length ?? 0} executable tool factories`);
-    }
-    const pdfEntry = registry.tools.find((entry) => Array.isArray(entry.names) && entry.names.includes('document.read_pdf'));
-    if (!pdfEntry || typeof pdfEntry.factory !== 'function') {
-      throw new Error('MoE document.read_pdf runtime factory missing from OpenClaw registry');
-    }
-    const pdfTool = pdfEntry.factory({ sessionKey: 'verify-session' });
-    if (pdfTool?.name !== 'document.read_pdf' || typeof pdfTool.execute !== 'function' || pdfTool.parameters?.type !== 'object') {
-      throw new Error('MoE document.read_pdf factory did not produce an execute-based JSON-schema tool');
-    }
-    const pdfFixture = path.join(tempRoot, 'clwx-openclaw-2026-9-plugin-fixture.pdf');
-    fs.writeFileSync(pdfFixture, pdfWithText('OPENCLAW 2026.9 MOE PDF CONTRACT'));
-    const pdfResult = await pdfTool.execute('verify-call-1', { path: pdfFixture, maxChars: 1000 });
-    if (!String(pdfResult?.text ?? '').includes('OPENCLAW 2026.9 MOE PDF CONTRACT')) {
-      throw new Error('MoE document.read_pdf execute call did not return fixture text through the OpenClaw registry');
-    }
-
-    const hostRegistry = await loadMoeRegistry(openclawDir, pluginRoot, tempRoot, true);
-    const hostPlugin = hostRegistry.plugins?.[0];
-    assertSameSet('MoE HostAPI runtime toolNames', hostPlugin?.toolNames ?? [], MOE_HOSTAPI_TOOLS);
-  } catch (error) {
-    primaryError = error;
+    const nonce = randomUUID();
+    const result = spawnSync(process.execPath, [
+      MOE_REGISTRY_CHILD_SCRIPT,
+      JSON.stringify({ openclawDir, pluginRoot, tempRoot, nonce }),
+    ], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: MOE_REGISTRY_CHILD_TIMEOUT_MS,
+      maxBuffer: MOE_REGISTRY_CHILD_MAX_BUFFER_BYTES,
+    });
+    assertMoeRegistryChildResult(result, nonce);
+  } catch (thrown) {
+    primaryError = normalizeThrown(thrown);
   }
+  // The child (and the OpenClaw state-DB handle its loader cached) has exited
+  // before the owned scratch root is removed.
   finalizeOwnedVerifierTempRoot(tempRoot, primaryError);
 }
 
