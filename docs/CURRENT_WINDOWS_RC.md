@@ -4,11 +4,13 @@
 
 
 **Local UI acceptance hold:** the owner reproduced the macOS Keychain dialog after the narrow fixture test passed. The resumed suite was stopped; desktop launches remain held. [CLWX-102](bugs/CLWX-102-macos-test-keychain.md) is unresolved; no local desktop test is running. This does not change the installed Windows artifact.
-## Current source candidate — moe.27, source preflight failed
+## Current source candidate — moe.27, reviewed retry building
 
-Clean source `d343f23d3b1d60bb5fb2dc1941ae277af7713d7b` on `release/moe27-lifecycle`, active checkout `/private/tmp/clawx-plan-execution-20260908`. It integrates independently approved CLWX-135 repair `7ea6969c` plus app version `0.4.3-moe.27`. Ten focused Windows lifecycle tests pass with zero skips; the new gate runs the prepared upstream launcher and rejects an incomplete package. Review F1–F3 are resolved; the private report is excluded from this source history.
+Clean source `4c023f7ea3d16f4da0205308e93839ac08be26b9` on `release/moe27-lifecycle`, active checkout `/private/tmp/clawx-plan-execution-20260908`, version `0.4.3-moe.27`. Its tree exactly matches independently approved fixture correction `8bdbf91a`; the production lifecycle repair is unchanged. Native Windows before/after moves14 passed/two failed to16 passed/zero failed/zero skipped; independent PDF and guard falsifiers pass.
 
-[Hosted build34270069669](https://github.com/dmvevents/clawx-pilot/actions/runs/34270069669) started19:37:43UTC: keyless-public, required credential seeds false, publication inputs absent. Preflight failed at 19:43:11 UTC: 2,317 tests passed, two failed and 57 skipped. The isolated PDF-verifier fixture omitted the newly imported lifecycle helper; a bounded fixture correction is running. Runtime preparation and packaging were skipped. No moe.27 installer hash, installation or release is claimed. [RCA and scoped evidence](bugs/CLWX-135-openclaw-package-lifecycle.md).
+[Build 34272395270](https://github.com/dmvevents/clawx-pilot/actions/runs/34272395270) began20:01:49UTC, keyless-public with no publication inputs. Full native preflight and packaging are pending. No moe.27 installer hash, installation or release is claimed.
+
+Previous attempt34270069669 at d343f23d failed before packaging:2,317 passed/two failed/57 skipped, missing helper/launcher setup in the isolated PDF-verifier fixture. That failed run and the installed moe26 regression remain preserved in [CLWX-135](bugs/CLWX-135-openclaw-package-lifecycle.md).
 
 ## Latest packaged and installed candidate — moe.26, startup FAIL
 
