@@ -61,15 +61,6 @@ export type {
 // between tool-result finals and the next delta.
 let _lastChatEventAt = 0;
 
-// Whether ANY streaming event (delta/final/error/aborted) has arrived for the
-// in-flight send. Reset in `sendMessage`; set in `handleChatEvent` when a
-// useful event lands. The safety-timeout watchdog uses this as the CLWX-78
-// "no bytes / no stream event" unreachability signal: if 90s elapse with the
-// composer still spinning and NOTHING ever streamed, the provider was
-// unreachable (degrade), whereas a turn that streamed and then went quiet is
-// merely slow (surface the generic error, do not false-degrade mid-work).
-let _streamEventSeenThisSend = false;
-
 // Monotonic run-ownership token (CLWX-94). Each `sendMessage` bumps this and
 // stamps `lastSentPayload.generation` with it, so a terminal event from a run
 // that a degrade resend has already superseded cannot clear the newer send's
@@ -3252,10 +3243,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // RPC await) because the gateway's chat.send RPC may block until the
     // entire agentic conversation finishes — the poll must run in parallel.
     _lastChatEventAt = Date.now();
-    // Fresh turn: no stream event has arrived yet. The watchdog reads this to
-    // tell an unreachable provider (nothing ever streamed) from a merely slow
-    // one (streamed, then went quiet) — CLWX-78.
-    _streamEventSeenThisSend = false;
     clearHistoryPoll();
     clearErrorRecoveryTimer();
 
@@ -3311,17 +3298,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
           console.warn('[chat] best-effort abort after stale run watchdog failed:', error);
         });
       }
-      const shouldTryDegrade = Boolean(stalledRunId) && !_streamEventSeenThisSend;
-      const toolsRan = state.streamingTools.length > 0 || state.pendingToolImages.length > 0;
-
-      // CLWX-78 residual: route a stall through the same send-time failover as
-      // the `error`/`final` paths, but ONLY when it is genuine unreachability
-      // evidence — nothing ever streamed for this send (no bytes, no stream
-      // event). A turn that streamed and then went quiet is merely slow; degrading
-      // it mid-work would false-positive and abandon partial progress, so that
-      // case keeps the plain "no response" error. Set the error first so that if
-      // the failover itself cannot even reach the local host API the principal is
-      // left looking at an honest error rather than a dead spinner.
+      // Silence is not proof that the Online provider failed. On fresh Windows
+      // first launch the Gateway can accept `chat.send`, hold the run without
+      // stream events during cold startup, then persist a valid Online final
+      // after this watchdog fires. Only terminal provider errors from the stream
+      // or history paths below may trigger channel degradation; the watchdog's
+      // job is to stop the stuck composer and surface the honest no-response
+      // state without mutating the session to another channel.
       set({
         error: NO_RESPONSE_ERROR,
         sending: false,
@@ -3330,14 +3313,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamingText: '',
         streamingMessage: null,
         streamingTools: [],
-        lastSentPayload: shouldTryDegrade ? state.lastSentPayload : null,
+        lastSentPayload: null,
         lastUserMessageAt: null,
       });
-      if (shouldTryDegrade) {
-        // Synthetic error string chosen to classify as `unreachable` (matches
-        // UNREACHABLE_PATTERNS: "provider unreachable" / "no response from model").
-        void maybeDegradeChannel(set, get, 'provider unreachable: no response from model', toolsRan);
-      }
     };
     setTimeout(checkStuck, 30_000);
 
@@ -3520,10 +3498,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const hadLocalSendInFlight = get().sending;
     if (hasUsefulData) {
       _lastChatEventAt = Date.now();
-      // A real stream event arrived, so the provider was reachable this send.
-      // The stall watchdog reads this to avoid false-degrading a merely-slow
-      // turn that streamed and then went quiet (CLWX-78).
-      _streamEventSeenThisSend = true;
       clearHistoryPoll();
       // Adopt run started from another client (e.g. console at 127.0.0.1:18789):
       // show loading/streaming in the app when this session has an active run.

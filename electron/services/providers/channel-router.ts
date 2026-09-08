@@ -177,7 +177,11 @@ async function filterSelectableAccounts(
   return results.filter((entry) => entry.selectable).map((entry) => entry.account);
 }
 
-async function getProviderAccountRuntime(accountId: string): Promise<{ modelRef: string; channel: ProviderChannel }> {
+async function getProviderAccountRuntime(accountId: string): Promise<{
+  modelRef: string;
+  channel: ProviderChannel;
+  localReadinessProbe?: { baseUrl?: string; modelId: string };
+}> {
   const provider = await getProvider(accountId);
   if (!provider) {
     throw new Error(`Provider account "${accountId}" disappeared mid-transaction`);
@@ -192,10 +196,37 @@ async function getProviderAccountRuntime(accountId: string): Promise<{ modelRef:
     );
   }
 
+  const resolvedModelId = modelRef.startsWith(`${runtimeKey}/`)
+    ? modelRef.slice(runtimeKey.length + 1)
+    : modelRef;
+
   return {
     modelRef,
     channel: classifyAccount({ vendorId: provider.type, baseUrl: provider.baseUrl }),
+    localReadinessProbe: classifyAccount({ vendorId: provider.type, baseUrl: provider.baseUrl }) === 'on-device'
+      ? { baseUrl: provider.baseUrl, modelId: resolvedModelId }
+      : undefined,
   };
+}
+
+async function assertLocalProviderReadyForTransientChange(
+  accountId: string,
+  runtime: Awaited<ReturnType<typeof getProviderAccountRuntime>>,
+): Promise<void> {
+  if (runtime.channel !== 'on-device' || !runtime.localReadinessProbe) return;
+
+  const readiness = await probeLocalProviderReadiness(runtime.localReadinessProbe);
+  if (readiness.ready) return;
+
+  logger.warn('[channel-router] Refusing transient on-device channel change because local model is not ready', {
+    accountId,
+    reason: readiness.reason,
+    status: readiness.status ?? null,
+  });
+  throw new Error(
+    `On-device model is not ready (${readiness.reason}). ` +
+    `Start Ollama and make sure the configured model is available before switching this chat to On this device.`,
+  );
 }
 
 async function applyProviderAccountDefault(
@@ -275,7 +306,9 @@ export async function prepareTransientChannelChange(channel: ProviderChannel): P
     );
   }
 
-  const { modelRef, channel: resolvedChannel } = await getProviderAccountRuntime(picked.accountId);
+  const runtime = await getProviderAccountRuntime(picked.accountId);
+  await assertLocalProviderReadyForTransientChange(picked.accountId, runtime);
+  const { modelRef, channel: resolvedChannel } = runtime;
   await ensureProviderAccountRuntime(picked.accountId);
 
   logger.info('[channel-router] Prepared transient channel change', {

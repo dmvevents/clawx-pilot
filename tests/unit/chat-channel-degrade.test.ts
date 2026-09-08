@@ -1923,6 +1923,49 @@ describe('chat store: send-time channel degradation', () => {
     }
   });
 
+  it('does not transient-degrade a silent accepted Online run when it reaches the watchdog timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [...BOTH_CHANNELS];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-slow-online' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('cloud is cold but reachable');
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      store.getState().handleChatEvent({
+        state: 'final',
+        runId: 'run-slow-online',
+        sessionKey: 'agent:main:main',
+        message: {
+          role: 'assistant',
+          id: 'late-online-final',
+          stopReason: 'stop',
+          content: [{ type: 'text', text: 'Online answer arrived after cold startup.' }],
+        },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toContain('No response received from the model');
+      expect(store.getState().messages.some((message) => message.id === 'late-online-final')).toBe(false);
+      expect(degradeCalls()).toEqual([]);
+      expect(patchCalls()).toEqual([]);
+      expect(store.getState().runtimeChannelPin).toBeNull();
+      expect(store.getState().degradeNotice).toBeNull();
+      expect(gatewayRpcMock.mock.calls.filter((call) => call[0] === 'chat.abort')).toHaveLength(1);
+      expect(gatewayRpcMock.mock.calls.filter((call) => call[0] === 'chat.send')).toHaveLength(1);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps a pending chat.send acknowledgement alive until the send deadline, then adopts the run', async () => {
     vi.useFakeTimers();
     try {

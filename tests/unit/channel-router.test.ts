@@ -257,6 +257,27 @@ describe('channel-router prepareTransientChannelChange', () => {
     expect(mocks.setAllAgentsModel).not.toHaveBeenCalled();
   });
 
+  it('refuses transient on-device fallback before runtime mutation when the local model is not ready', async () => {
+    mocks.listProviderAccounts.mockResolvedValue([
+      makeAccount({ id: 'gemini-1', vendorId: 'google', model: 'gemini-2.5-pro' }),
+      makeAccount({ id: 'ollama-local', vendorId: 'ollama', baseUrl: 'http://localhost:11434/v1', model: 'hermes3:8b' }),
+    ]);
+    mocks.getProvider.mockResolvedValue(
+      makeProvider({ id: 'ollama-local', type: 'ollama', model: 'hermes3:8b', baseUrl: 'http://localhost:11434/v1' }),
+    );
+    mocks.probeLocalProviderReadiness.mockResolvedValue({ ready: false, reason: 'connection-error' });
+
+    await expect(prepareTransientChannelChange('on-device')).rejects.toThrow(/On-device model is not ready/);
+
+    expect(mocks.probeLocalProviderReadiness).toHaveBeenCalledWith({
+      baseUrl: 'http://localhost:11434/v1',
+      modelId: 'hermes3:8b',
+    });
+    expect(mocks.ensureProviderAccountRuntime).not.toHaveBeenCalled();
+    expect(mocks.setDefaultProvider).not.toHaveBeenCalled();
+    expect(mocks.setAllAgentsModel).not.toHaveBeenCalled();
+  });
+
   it('throws before any global write when the transient channel has no account', async () => {
     mocks.listProviderAccounts.mockResolvedValue([
       makeAccount({ id: 'gemini-1', vendorId: 'google', model: 'gemini-2.5-pro' }),
