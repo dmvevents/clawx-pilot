@@ -1,0 +1,12 @@
+# Windows MCP options for the testing lab
+
+September 8, 2026. Advisory source review; neither MCP is installed or smoke-verified on this lab. MCP adoption does not block the GA test loop. Existing authenticated PowerShell, app CDP and fixture scripts remain the default repeatable checks; FreeRDP remains the operator desktop client.
+
+- [CursorTouch Windows-MCP](https://github.com/CursorTouch/Windows-MCP/tree/08ddee78c26182b103d62c1c84c1fbec82a280b2) exposes desktop/UI Automation, input and screenshot tools. Evaluated version 0.8.5, MIT, Python >=3.14 per its pyproject. The README and package metadata disagree on Python minimum, and Server 2022 is not explicitly listed. Run only in a dedicated instrumented test user's interactive session; an SSH service in Session 0 does not see that user's desktop. Validate actual UI and capture behavior before use, including locked/disconnected sessions: a returned black screenshot is not evidence of a usable desktop. Disable optional telemetry (`ANONYMIZED_TELEMETRY=false`) and verify the setting. Tool availability alone does not establish compatibility.
+- [Microsoft Playwright MCP](https://github.com/microsoft/playwright-mcp) can inspect browser structure through an approved test-user Chrome profile or CDP endpoint. It is optional diagnostic tooling, with no change to the app's Main-owned Outlook/Forms execution path or action gates. Its own documentation suggests CLI plus skills for coding agents where token efficiency matters.
+
+Recommended connection: Claude on Bedrock → authenticated IAP/SSH forwarding → loopback MCP endpoint in the **interactive Windows test session** → that test desktop. One operator owns the desktop while tools run. A desktop server's credential grants broad user-level control; keep it private, bind locally and do not publish an MCP port. FreeRDP-specific MCP discovery was intentionally bounded; no claim is made that such a server could not exist.
+
+Keep Python/Node/MCP installation out of the vanilla installer baseline. A future instrumented smoke should demonstrate desktop-state inspection, a synthetic local action, locked-session detection and no unexpected telemetry. Do not add an MCP requirement for end users or use instrumented-machine results as clean-installer proof.
+
+Private independent Claude/Fable source review: `/private/tmp/clawx-windows-mcp-review-20260908/artifacts/WINDOWS_MCP_REVIEW.md`; supervisor metadata at `artifacts/ga-fable-20260908/windows-mcp-review/`. No live account, installation or UI action was performed.

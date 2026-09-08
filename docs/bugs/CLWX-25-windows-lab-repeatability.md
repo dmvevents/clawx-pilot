@@ -1,0 +1,48 @@
+# CLWX-25 — Shared Windows test state and access-contract drift
+
+## Identity and impact
+
+Reported September 8, 2026. Owner CLWX-25, related CLWX-106/125/133. Existing test machine: `clawx-win-rc-20260609`, Server 2022, 4 vCPUs/16 GiB, multiple RDP users, persistent development tools and prior installer state. Source checkout `fix/doc-tooling-steering` at `f4d0d0cb`; this is an environment defect record, not evidence about a new installer. The owner requested a stable repeatable testing environment and faster iteration while preserving their active session.
+
+The single shared VM makes app/Gateway/browser mutations serial and contaminates clean-install claims. Three RDP sessions still share CPU, disk and machine state. An administrator profile, source checkout or source test is not a standard-user Windows 10/11 installer result.
+
+## Reproduction and expected result
+
+Read `windows-pilot/vm-testing/README.md`, then describe the selected instance, installed history and firewall configuration without changing it. The existing guest carries development tools and reused app profiles; no current clean-image recreation procedure was verified before this task. Expected: a versioned baseline, unique fresh machine identity, explicit tooling/user class, readiness checks, artifact-bound evidence and one operator per desktop.
+
+A related access-contract mismatch was observed by a project-scoped firewall GET: `clawx-allow-ssh-iap` allows TCP 22 from `0.0.0.0/0` to tag `clawx-windows-test`. Its name and IAP runbook do not establish IAP-only SSH access. Other ingress rules may also apply on the shared default VPC; this observation is not a complete exposure audit and does not prove an attack. Existing RDP rule is IAP-restricted. Expected: network policy matches the documented access boundary.
+
+## Cause, evidence and decisions
+
+Confidence HIGH: shared VM/profile history and the firewall API response directly establish these facts. No latency percentage or exploit is inferred.
+
+Private receipts: `artifacts/ga-fable-20260908/windows-lab/`. Root created a **separate** custom VPC `clawx-test-lab`, subnet `10.74.0.0/24`, IAP-only TCP 22/3389 firewall and two new instances from exact public image `windows-cloud/windows-server-2022-dc-v20260814`, image ID `8676853931262012812`. Each requests n2-standard-8, 32 GiB and 100 GB SSD with no cloud service account, project SSH keys blocked and no copied stakeholder state. The external address supplies outbound connectivity; the new network has no general public ingress rule. Recorded network/subnet/firewall GETs confirm the intended configuration.
+
+Initial recreation uses the pinned public OS image. It is **not** a snapshot of the owner's installed or signed-in machine. The Google SSH package installed at bootstrap is recorded, not claimed hermetically pinned. Node/Git/Python/Claude/MCP remain absent in the clean lane. Future agent tooling belongs in a separately identified instrumented environment.
+
+Original VM, its firewall rule and its active desktop were not modified. The original rule's wider SSH scope remains unresolved pending an appropriately scoped change that preserves current access; creating the new lane does not claim to repair it.
+
+## Failed probes retained
+
+- Modern default `gcloud compute scp` closed its SFTP connection against this Google Windows OpenSSH setup. Explicit `--scp-flag=-O` transferred the existing environment probe successfully. No server config was loosened. Transfer failure's precise SFTP cause remains UNKNOWN; use the verified compatibility path and verify copied bytes when used for acceptance.
+- A one-off PowerShell probe with `$ErrorActionPreference='Stop'` misclassified `ssh -V` stderr as NativeCommandError. Reading the executable's FileVersion removed this diagnostic error. It was not an SSH authentication failure.
+- Initial Windows activation on A returned `0xC004F074`, LicenseStatus 5. After Google KMS DNS/TCP 1688 passed, the normal `slmgr.vbs /ato` retry reported activation successful and LicenseStatus 1. B independently reported LicenseStatus 1. No licensing bypass or firewall change was used; preserve the first-boot failure as a transient readiness observation.
+
+## Verification and resume
+
+### First real launcher run: restricted firewall falsely rejected
+
+At 14:35:02 UTC, root ran the independently reviewed launcher (`9822832e`) with run ID `auto-c-20260908`. It exited 1 after 13.089 seconds, before creating a VM, and retained its immutable FAIL receipt and consumed lock. The named firewall's actual API response has two `allowed` entries: TCP port `22`, and TCP port `3389`. The launcher required one entry containing both ports. Expected: these equivalent restricted representations pass; extra ports, unrestricted TCP, other protocols, wrong source/target/network still refuse. Actual: the valid split representation was classified as drift.
+
+Confirmed cause, HIGH confidence: `check_firewall` checks `len(allowed) != 1`; the fake-gcloud success fixture only covered Google's combined representation. The real network was not loosened or altered. Bounded correction owns only the comparison and behavioral fixtures; root will run a new unique ID after independent approval. Receipt: `artifacts/ga-fable-20260908/windows-lab/launcher/auto-c-20260908.receipt.json`; actual firewall readback: `lab-firewalls.json` in its parent directory. Do not delete the failed receipt, reuse the lock or modify the valid firewall to accommodate the test fixture.
+
+First VM has authenticated SSH marker, RDP protocol and SSH banner passes plus closed guest-port 9999 IAP rejection. Guest baseline confirms 8 CPUs/32 GiB, no app/OpenClaw state or developer commands; the existing environment probe confirms no installed app or Gateway/Host API/CDP listeners. These probes run as the operator administrator in SSH Session 0. They do not establish an interactive standard-user installer journey.
+
+A second fresh machine passed the same connection/baseline checks after first boot settled. Its first RDP probe returned IAP backend 4003; the later complete RDP/SSH/closed-control probe passed. Both machines have valid Windows activation. These are two manual recreation results; launcher execution is recorded separately below. The Claude launcher author owns only its provisioning script, pinned config, behavior tests and repeatable-lab runbook. First review rejected a numeric-ID response with the wrong VM name (false PASS), a stale test firewall literal after root pinned the config, stale runbook wording and malformed-JSON failure without a receipt. Correction `b57b940b` adds exact response-name verification, config-derived test expectations and a retained FAIL receipt for malformed JSON. Independent re-review APPROVE: 15 tests and three additional adversarial controls. Root integrated as `9822832e` (with prerequisite commits `0aca3e4d`/`969ae25e`). Root owns cloud mutations and Plane. A gcloud subprocess timeout still exits unsuccessfully without a final receipt; retain the consumed lock and supervisor output, inspect cloud state, then choose a new run ID. No automatic retry may create duplicate resources. No GA or clean Windows client result follows from infrastructure readiness. Keep the original owner-session hold and no-send/no-submit constraints.
+
+
+### Corrected live provisioning and owner-window update
+
+Correction `300133e1` (operations integration `d1863164`) accepts the exact union of explicit TCP ports across grouped or split entries. Each entry is checked before union, so an added unrestricted TCP entry cannot disappear during normalization. Root independently inspected the full two-file delta and tested the real Google response plus extra unrestricted/UDP entries; 24 focused tests passed. Real run `auto-d-20260908` then returned PASS with newly created instance ID `4908385059495321872`, name `clawx-lab-auto-d-20260908`. The earlier C failure remains immutable. This establishes actual launcher provisioning; guest readiness is recorded separately.
+
+The owner subsequently stated they are no longer using RDP and authorized its use. The original VM's observation-only desktop hold is lifted for root-controlled testing; the Mac Electron/Keychain hold remains. Existing loopback SSH access initially failed host-key verification because the local port changed. Root compared the current three public keys with the previously trusted localhost:12222 entry and independently matched Ed25519 to `compute.2748349704588098112` in Google known_hosts. The active IAP tunnel PID targeted that exact original VM. Explicit HostKeyAlias plus strict checking produced `CLAWX_VM_ACCESS_OK`; no checking was disabled and no key was replaced.

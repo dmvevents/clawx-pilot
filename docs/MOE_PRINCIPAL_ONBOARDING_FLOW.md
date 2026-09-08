@@ -1,6 +1,8 @@
 # MoE Principal Onboarding Flow
 
-Last updated: 2026-06-10
+Last updated: 2026-09-08
+
+For instructions to give principals, use [Connect your email and forms](USER_GUIDE.md). The sections below describe product and administrator responsibilities. Each user signs into their own Microsoft account; the QA mailbox is only a test fixture.
 
 ## Objective
 
@@ -20,6 +22,8 @@ tasks with minimal setup. The app must not collect or store Microsoft passwords.
   administrator configuration fields in Settings > Microsoft 365 sign-in.
 
 ## Principal First-Run Flow
+
+For the browser workflow, the principal first signs into Outlook in the same Chrome profile and Windows session the app uses, verifies their account and inbox, then requests email automation. Forms access must be checked separately. Signing into Microsoft 365 in the app does not authenticate Chrome. The following Settings flow applies when the organisation has enabled the separate Microsoft 365 connection.
 
 1. Open the installed Ministry assistant.
 2. Go to Settings > Microsoft 365 sign-in.

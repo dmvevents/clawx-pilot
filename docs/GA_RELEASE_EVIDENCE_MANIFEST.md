@@ -6,6 +6,8 @@ The [current handoff](COMPLETION_PLAN.md), [candidate pointer](CURRENT_WINDOWS_R
 
 
 **Local UI acceptance hold:** the owner reproduced the macOS Keychain dialog after the narrow fixture test passed. The resumed suite was stopped; desktop launches remain held. [CLWX-102](bugs/CLWX-102-macos-test-keychain.md) is unresolved and under read-only Claude diagnosis. This does not change the installed Windows artifact.
+**September 8 Windows lab/auth delta:** [verified infrastructure and assisted browser evidence](evidence/WINDOWS_REPEATABLE_LAB_2026-09-08.md) records pinned-image recreation, preserved failures, expected-account sign-in, installed moe.25 inbox read and an ordinary chat with confirmed `outlook.read_inbox` use (95,044 ms, one sample). Root may now use the original RDP desktop. Source assembly `1d745567` now passes 2,327 full-unit tests with zero failures and 29 skips; final independent review APPROVE and source is frozen/pushed as moe.26. [Hosted build 34244582967](https://github.com/dmvevents/clawx-pilot/actions/runs/34244582967) is running; [source evidence](evidence/GA_SOURCE_INTEGRATION_2026-09-08.md) records all checks. The owner Mac Electron hold remains; no GA readiness promotion.
+
 ## Purpose
 
 This is the handoff packet for Codex, Claude Code, Windows VM/laptop operators, and release reviewers. Update this file whenever a release gate gets fresh evidence. Do not call a build GA unless every release-critical row is `GREEN` or has an explicitly accepted `YELLOW` deferral.

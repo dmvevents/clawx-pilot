@@ -1,5 +1,7 @@
 # Microsoft 365 Outlook Login Flow For Teachers
 
+This document describes the Microsoft Graph design and administrator rollout requirements. Give end users [Connect your email and forms](USER_GUIDE.md), which covers their own account, browser sign-in, the separate in-app connection and Forms access. QA uses a designated test mailbox to validate that same workflow; it is not the account supplied to end users. Design targets below are not installed-release acceptance evidence.
+
 ## Target Result
 
 Every teacher or principal can install the Ministry app, open it, sign in with

@@ -4,6 +4,8 @@ Each report gives another agent enough evidence to continue without the original
 
 | Card | Reproducible report | Scope |
 |---|---|---|
+| CLWX-25 | [Windows lab repeatability](CLWX-25-windows-lab-repeatability.md) | Shared state, access-contract drift and isolated lab recovery evidence |
+| CLWX-106 | [Installed verifier identity](CLWX-106-installed-verifier-identity.md) | Wrong-version substring and empty-identity false acceptance; correction under review |
 | CLWX-130 | [Windows Chrome start and recovery](CLWX-130-windows-chrome-start.md) | Owner-observed timeout; source routing gap; Windows-session ownership observations |
 | CLWX-131 | [Graph readiness diagnosis](CLWX-131-graph-readiness-diagnosis.md) | Owner-observed fictional configuration lookup; source fix approved and integrated; installed rerun open |
 | CLWX-39 | [Graph sign-in recovery](CLWX-39-graph-sign-in-recovery.md) | Cancellation/reauthentication gaps and a callback-state defect found in the unmerged repair |

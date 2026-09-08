@@ -50,8 +50,9 @@ lock, image **numeric ID readback** mismatch against `windows-cloud`,
 preexisting instance with the same name (an existing VM is never reused as
 fresh), and **drift** in any existing lab network/subnet/firewall (validated
 against the exact pinned configuration; missing lab resources are created by
-exact name, mismatched ones are refused, never adopted or mutated). Any
-`gcloud` failure aborts; there is no false PASS.
+exact name, mismatched ones are refused, never adopted or mutated). A detected
+`gcloud` failure aborts without marking provisioning successful. Preserve the failure
+receipt; a subprocess timeout can still leave only the lock and supervisor output.
 
 ## One VM, one operator
 
@@ -71,7 +72,7 @@ protocol probes, authenticated access and the negative control — B only after
 its boot settled (initial RDP refusal, later retry succeeded) — and both
 reported Windows activation `LicenseStatus 1`. This is independent manual GCP
 proof that the pinned image/network baseline works; it does **not** exercise
-this launcher, which has never executed a real `create`.
+the launcher. Its separate live run is recorded below.
 
 ## What this does NOT prove
 
@@ -102,9 +103,16 @@ this launcher, which has never executed a real `create`.
    `gcloud compute instances delete clawx-lab-<run-id> --project=gen-lang-client-0649986230 --zone=us-central1-a`.
 3. Instances bill while RUNNING; the receipt records start time so root can
    account for and stop/delete labs deliberately.
-4. First real run needs root's read-only cloud discovery confirming the lab
-   VPC/subnet/firewall names are unclaimed, then an authorized `create`,
-   then `gcp-iap-lane.sh` probes with `CLAWX_WINVM=clawx-lab-<run-id>`.
-5. Independent review (2026-09-08) returned CHANGES_REQUIRED; findings
-   F1/F2/F4 are fixed in this revision and the reviewer follows up on the
-   delta before root's first `create`.
+4. Each new run validates the named VPC/subnet/firewall against the pinned configuration; equivalent grouped/split TCP port entries are accepted, extra or unrestricted entries refused. Existing matching lab infrastructure is reused, never the VM itself.
+5. Independent review approved the initial corrections. The first live `auto-c-20260908` run exposed a split-port representation mismatch and stopped before VM creation. Correction `300133e1` received root's independent delta review and 24 focused passes. New run `auto-d-20260908` successfully provisioned instance ID `4908385059495321872`; its authenticated guest baseline and RDP/SSH/closed-port checks then passed. Preserve both run receipts; never replace the failed one with the successful result.
+
+
+## Guest readiness and the installed test sequence
+
+1. After `create`, verify the returned name and numeric VM ID against its receipt. API provisioning duration is not Windows boot time. First boot can temporarily refuse RDP/SSH while services and instance keys settle. Retain failed attempts, allow a bounded readiness window and rerun the existing probe; do not create another VM to hide a boot failure.
+2. Use free local ports with `CLAWX_WINVM=clawx-lab-<run-id>` when running `gcp-iap-lane.sh probe`. Require RDP protocol, SSH banner and closed guest-port control. Authenticate separately with `gcloud compute ssh clawxlab@clawx-lab-<run-id> --project=gen-lang-client-0649986230 --zone=us-central1-a --tunnel-through-iap --ssh-key-file=<private-lab-key-path> --command="echo CLAWX_VM_ACCESS_OK"`. Keep that operator key private; it is not an end-user requirement.
+3. Record OS/build, CPU/RAM, activation, Google SSH package version, app/profile absence and developer-tool absence. Initial Google KMS activation on A failed; after normal KMS connectivity was established, `slmgr.vbs /ato` succeeded. D was already activated at its successful baseline check. Do not classify a reachable but unready guest as accepted.
+4. Follow [VM access and environment setup](../../windows-pilot/vm-testing/README.md) to establish an interactive FreeRDP desktop and the intended standard-user test account. SSH Session 0 is only the operator context. Verify any changed tunnel's server identity against the trusted VM identity instead of disabling host-key checking. Modern SCP/SFTP closed unexpectedly in this baseline; `gcloud compute scp --scp-flag=-O` transferred the probe successfully. Check copied-file hashes for acceptance.
+5. Select the exact installer and manifest from [the candidate pointer](../CURRENT_WINDOWS_RC.md), then follow [the installed acceptance producer](installed-acceptance-producer.md) and normal installer screens. Do not install development tooling in the clean acceptance profile. Keep resident agent/MCP development in a separately identified instrumented lane.
+6. Validate the real user's sequence in [Connect your email and forms](../USER_GUIDE.md). QA uses a test account; end users use their own. Authenticate the correct Chrome profile/account before mailbox or Forms automation, and verify Forms access separately. Keep credentials out of receipts. Installed app → Host API → browser → authenticated account is the required product path.
+7. Retain source/artifact hashes, environment and command identities, timestamps and PASS/FAIL/BLOCKED outcomes. A/B/D Server results do not satisfy Windows 10/11 or unaided-user acceptance. Stop idle disposable VMs only after a name+numeric-ID check against their receipts; stopped disks still incur storage charges. Reusing a previously tested profile is an upgrade run, not another clean-install result.

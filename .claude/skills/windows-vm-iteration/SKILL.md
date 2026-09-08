@@ -21,6 +21,8 @@ Always start with:
 
 Then read only the domain surface needed for the current failure:
 
+- `docs/testing/WINDOWS_REPEATABLE_LAB.md` for pinned-image recreation into the separate lab; bind each run to its immutable receipt and prove guest readiness before installed tests.
+- `docs/USER_GUIDE.md` for the end-user sign-in journey; each principal uses their own account, while QA uses a test fixture.
 - `windows-pilot/vm-testing/README.md` and `.agents/skills/gcp-iap-windows-lane/SKILL.md` for VM access, lifecycle or IAP tunnel work.
 - `.agents/skills/windows-vm-smoke/SKILL.md` for installed-app smoke, fresh-profile proof or visible Windows evidence.
 - `.agents/skills/windows-runtime-recovery/SKILL.md` for model route, Gateway, local/Ollama, stuck-thinking or provider coherence failures.

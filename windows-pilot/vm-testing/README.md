@@ -21,7 +21,7 @@ The Windows machine runs on GCP; the Mac provides the local checkout, authentica
 
 The reproducible September setup sequence was: verify IAP with protocol/control checks; authenticate to the existing guest; prepare the persistent development checkout; create the standard user and interactive RDP session; bind the installer/source hashes; install through normal screens; run private Online setup; launch the desktop shortcut; collect application and terminal-state evidence. Existing-profile upgrades first preserve both app data and `.openclaw`, with file counts and hashes verified. Credentials, login bundles and signed download URLs remain outside git.
 
-There is one VM and one active root controller for app/Gateway/browser changes. Multiple terminal or RDP connections are not separate compute instances. A pending resize proposal was not executed. Preserve the current lifecycle hold and egress configuration.
+The original stakeholder VM has one active root controller for app/Gateway/browser changes. The owner released its RDP testing hold on September 8; root may use that Windows desktop. Multiple RDP connections still share one machine. Separate fresh lab VMs are documented below; the original resize proposal was not executed. Preserve the original VM egress configuration and distinguish desktop testing from stopping or replacing the machine.
 
 [CLWX-125 investigation](../../docs/evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md) contains the application flow map, historical working/failing comparisons, hypotheses, exact timing boundaries and first-response test criteria. Its diagnostic CPU instrumentation changes a backed-up runtime entry under an environment guard; it must be restored and hash-checked before release acceptance.
 
@@ -83,6 +83,24 @@ pnpm exec vitest run tests/unit/chrome-cdp.test.ts --maxWorkers=2
 An agent can edit source and run these commands over authenticated SSH. Keep one controller responsible for app, Gateway and browser process changes. Use `git diff` to return reviewed fixes to the release checkout. Before a full app development launch, back up user state and stop the installed app and its owned Gateway; the source directory does not isolate `.openclaw`. Run the UI in the interactive desktop. `start-dev.ps1` checks these process/session prerequisites; Electron CDP inspection instead uses `pnpm run build:vite` followed by `pnpm exec electron . --remote-debugging-port=9223` after the same controlled handoff. Source tests and dev compilation do not replace installed-artifact acceptance.
 
 For stakeholder-reported connection/setup failures, use the `windows-vm-iteration` skill in `.agents/skills/windows-vm-iteration` or `.codex/skills/windows-vm-iteration`. It keeps the loop scoped from exact artifact diagnosis through a single VM mutator, fresh standard-user retest, redacted Plane/evidence updates and stakeholder handoff. Do not promote unreviewed setup-helper experiments into this runbook until the scripts land in `windows-pilot/scripts/` and pass review.
+
+## Recreate an isolated test machine
+
+Use [the repeatable Windows lab runbook](../../docs/testing/WINDOWS_REPEATABLE_LAB.md) for a fresh machine from a pinned public image, one run ID and a retained receipt. Keep the existing stakeholder VM separate. The launcher provisions infrastructure; protocol, authenticated guest, interactive standard-user and installed-artifact checks follow sequentially. Windows Server evidence does not replace Windows 10/11 acceptance.
+
+## Microsoft browser sign-in is a test prerequisite
+
+End users follow [Connect your email and forms](../../docs/USER_GUIDE.md) with **their own** Microsoft account. The designated test account below is only a QA fixture. Acceptance includes an unaided user following that guide on the selected Windows artifact; completing operator-assisted sign-in is not that evidence.
+
+After installing the selected artifact, open Chrome through the app's supported user-profile flow. Sign in to the designated Microsoft **test account in that same Chrome profile and Windows interactive session** before running Outlook or Forms automation. Account-holder MFA or consent may be required. MCP availability, VM/RDP credentials, an Outlook URL, a visible Chrome window or a listening CDP port do not establish mailbox authentication.
+
+1. Record the installed artifact hash, Windows session/profile class and intended test-account reference (redacted; credentials stay in the operator's private store).
+2. Verify Chrome ownership and CDP attach, then the authenticated account identity and actual Outlook inbox controls. Reuse a signed-in session only after verifying its account; never copy authentication cookies to another machine or substitute managed Chromium.
+3. Open the designated Forms test destination and verify the expected form questions and account access. An authenticated mailbox does not prove Forms permission. Keep confidential URLs out of published receipts.
+4. Run read-only inbox and Forms list/preview checks, followed by explicitly scoped synthetic draft/preview tests. Preserve existing tabs and drafts. Sending, attachment download and Forms submission retain their action-specific confirmation gates.
+5. If redirected to login, MFA, consent or an access-denied page, record **BLOCKED: authentication/permission**, capture a redacted diagnostic and stop that dependent journey. Do not grade unavailable inbox/form content as a successful test or a product failure without further evidence.
+
+Microsoft Graph is a separate OAuth connection: verify Graph account, granted scopes and API readiness through the app's Microsoft 365 settings. Browser sign-in does not prove Graph readiness; Graph configuration does not sign Chrome in. Follow [the Outlook workflow](../../docs/AGENT_OUTLOOK.md) and the `windows-outlook-forms` skill. Only installed-app execution (renderer → Main/Host API → browser service → the authenticated user Chrome session) establishes the product journey; a standalone browser probe is diagnostic evidence.
 
 ## Installed app checks
 

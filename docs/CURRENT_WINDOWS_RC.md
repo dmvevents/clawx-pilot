@@ -4,9 +4,9 @@
 
 
 **Local UI acceptance hold:** the owner reproduced the macOS Keychain dialog after the narrow fixture test passed. The resumed suite was stopped; desktop launches remain held. [CLWX-102](bugs/CLWX-102-macos-test-keychain.md) is unresolved and under read-only Claude diagnosis. This does not change the installed Windows artifact.
-## Current source candidate — moe.26, not packaged
+## Current source candidate — moe.26, hosted build running
 
-`release/moe26-plan-execution` at `7e1f9417ae3f57096a7799d9a433ea9745604e5f`, checkout `/private/tmp/clawx-plan-execution-20260908`. Reviewed S1–S4, native Ollama, actual-9.2 policy oracle and read-only Graph diagnosis, Graph setup recovery and the curated fidelity fixture are integrated; version is `0.4.3-moe.26`. No push, hosted build, installer, installation or publication exists for this source. The policy oracle now has independent approval and 22 focused passes; Graph diagnosis has 83 focused passes and independent approval. Full preflight awaits the remaining source integrations; held test repair `24e1cfd3` remains excluded. Graph setup also has independent source approval and isolated Electron UI proof; the fidelity fixture has independent approval and 60 focused passes. Browser source is held for review findings. See the exact handoff and remaining gates in the completion plan.
+`release/moe26-plan-execution` at **`1d7455673774fd70c086b41b405c8ece868ce302`**, checkout `/private/tmp/clawx-plan-execution-20260908`, version `0.4.3-moe.26`. Reviewed browser ownership, artifact harness and installed verifier corrections are integrated; independent final integration review APPROVE. Full source units pass 2,327 with zero failures and 29 skips; typecheck/lint, PowerShell checks, agent doctor and the five-prompt direct document harness pass. Source is pushed to the verified pilot repository; [hosted Windows build 34244582967](https://github.com/dmvevents/clawx-pilot/actions/runs/34244582967) is running with `keyless-public` profile. No installer hash, installation or publication exists yet. [Source/build evidence](evidence/GA_SOURCE_INTEGRATION_2026-09-08.md) records the prior failures, review and remaining gates. Held `24e1cfd3` remains excluded; the Mac UI hold remains.
 
 ## Latest installed diagnostic — moe.25
 

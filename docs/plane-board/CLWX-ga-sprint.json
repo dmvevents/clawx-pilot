@@ -14,7 +14,7 @@
       "dependsOn": [],
       "evidenceClass": "source-review \u2192 installed-vm",
       "ownerRole": "source-author (Claude CLI) then independent-reviewer",
-      "executionState": "Independent review APPROVE on41359e1, 240 focused tests; integration and installed proof pending. Non-blocking home-prefix boundary finding retained for CLWX130."
+      "executionState": "Reviewed source integrated at1d745567; hosted34244582967 in progress; final-artifact acceptance pending."
     },
     {
       "number": 121,
@@ -29,7 +29,7 @@
       ],
       "evidenceClass": "source-review \u2192 installed-vm",
       "ownerRole": "same lane as 130",
-      "executionState": "coupled into browser-ownership-repair per 130 dispatch"
+      "executionState": "Reviewed source integrated at1d745567; hosted34244582967 in progress; final-artifact acceptance pending."
     },
     {
       "number": 77,
@@ -44,7 +44,7 @@
       "dependsOn": [],
       "evidenceClass": "source-test \u2192 installed-vm",
       "ownerRole": "source-author (Claude CLI) then reviewer; vm-operator for installed run",
-      "executionState": "Author8bf5d32 committed; independent artifact-matrix-review active; staged execution NOT_RUN and author model-provenance exception recorded."
+      "executionState": "Reviewed source integrated at1d745567; hosted34244582967 in progress; final-artifact acceptance pending."
     },
     {
       "number": 106,
@@ -58,7 +58,7 @@
       "dependsOn": [],
       "evidenceClass": "source-review \u2192 artifact-identity",
       "ownerRole": "source-author (Claude CLI); root-integrator owns ga-gate",
-      "executionState": "Author9bc9221b committed,72 focused tests; independent review active. Author final usage was MODEL_MISMATCH, allBedrock; provenance disposition pending."
+      "executionState": "Reviewed source integrated at1d745567; hosted34244582967 in progress; final-artifact acceptance pending."
     },
     {
       "number": 96,
@@ -172,7 +172,7 @@
       ],
       "evidenceClass": "source-test \u2192 tenant-live",
       "ownerRole": "source-author; account-holder for seed + sign-in",
-      "executionState": "gate/refusal proven; confirm leg NOT_RUN seed-blocked"
+      "executionState": "moe25 assisted authenticated browser inbox and both Forms previews PASS; Graph/draft/finalartifact/unaided gaps remain."
     },
     {
       "number": 63,
@@ -185,7 +185,7 @@
       "dependsOn": [],
       "evidenceClass": "tenant-live",
       "ownerRole": "vm-operator + account-holder session",
-      "executionState": "Forms study corrected in fc19138d, root re-review pending; installed document-to-preview chain still open."
+      "executionState": "moe25 assisted authenticated browser inbox and both Forms previews PASS; Graph/draft/finalartifact/unaided gaps remain."
     },
     {
       "number": 115,
@@ -328,7 +328,7 @@
       ],
       "evidenceClass": "installed-client",
       "ownerRole": "vm-operator + machine gate (no local UTM; GCP is Server, not client)",
-      "executionState": "moe.25 Server-2022 upgrade evidence only; client lane machine-blocked"
+      "executionState": "Pinned8CPU32GiBServer recreation, guest access/protocol/control/activation PASS; actualWindows10/11 standard-user install acceptance remains."
     },
     {
       "number": 107,
@@ -425,7 +425,7 @@
       "priority": "urgent",
       "state": "Todo",
       "whyNoExistingCard": "CLWX106 owns gate behavior,25 installation,85 hash integrity and22 objectives; this card owns the bounded release-run receipt across their checkpoints.",
-      "description_html": "<p>Own one continuous release run under CLWX22. Acceptance: (1) integrate only independently reviewed source; freeze clean revision and unique candidate version; (2) focused checks then one integrated preflight per changed candidate; (3) hosted keyless installer with source/run/profile provenance and installer, ASAR, EXE and runtime/helper hashes; enforce CLWX85 identity contract; (4) installed, Windows10/11 client, Microsoft, document, offline, lifecycle and performance evidence for these exact bytes; (5) verified candidate download for the unaided tester card BEFORE final GA; (6) strict required-evidence verdict, then publish the accepted GA artifact set and verify its downloadable hashes. Any new source fix creates a newly identified candidate and reruns affected acceptance; previous hashes/results never silently transfer. Missing, failed or skipped required rows block publication.</p><p>Owner: root integration/release operator, Claude CLI source/review lanes. Dependencies are phased: source acceptance precedes build, installer identity precedes installed/tester proof, tester proof precedes final verdict/publication. No completed-card dependency cycle is intended. Preserve original card histories and all owner-session, authentication and dispatch gates. Store exact commands/timestamps/results and first causal failures; route a failure to its existing owner and continue within this sprint. Only a human closes Done.</p>",
+      "description_html": "CLWX-GA-CLOSURE-SPRINT-20260908 \u2014 GA closure sprint, September 8\u201315 UTC (planning window, not promised GA date).\nLane: release execution receipt. Owner: root integration/release operator; independent Claude CLI testing. Current checkpoint: Selected; acceptance not yet satisfied.\nEvidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.\nOwn one continuous release run under CLWX22. Acceptance: (1) integrate only independently reviewed source; freeze clean revision and unique candidate version; (2) focused checks then one integrated preflight per changed candidate; (3) hosted keyless installer with source/run/profile provenance and installer, ASAR, EXE and runtime/helper hashes; enforce CLWX85 identity contract; (4) installed, Windows10/11 client, Microsoft, document, offline, lifecycle and performance evidence for these exact bytes; (5) verified candidate download for the unaided tester card BEFORE final GA; (6) strict required-evidence verdict, then publish the accepted GA artifact set and verify its downloadable hashes. Any new source fix creates a newly identified candidate and reruns affected acceptance; previous hashes/results never silently transfer. Missing, failed or skipped required rows block publication.\nOwner: root integration/release operator, Claude CLI source/review lanes. Dependencies are phased: source acceptance precedes build, installer identity precedes installed/tester proof, tester proof precedes final verdict/publication. No completed-card dependency cycle is intended. Preserve original card histories and all owner-session, authentication and dispatch gates. Store exact commands/timestamps/results and first causal failures; route a failure to its existing owner and continue within this sprint. Only a human closes Done.",
       "number": 133,
       "id": "1645f522-d9d2-4ae3-9345-b65aa7e43584"
     },
@@ -436,7 +436,7 @@
       "priority": "high",
       "state": "Todo",
       "whyNoExistingCard": "CLWX107 owns internal rehearsal and110 broader rollout logistics; neither owns the unaided tester receipt bound to a specific installer and each reported failure.",
-      "description_html": "<p>Before final GA approval, give the designated external tester the verified candidate download/hash and a concise reproducible checklist covering reported setup, email/Chrome/Graph, local PDF/Office, Forms preview and response/recovery failures. The candidate can be shared through the authorized test-artifact channel; do not require GA publication first.</p><p>Acceptance: (1) candidate has passed internal acceptance and its downloadable bytes match the immutable manifest; (2) dated unaided Windows10/11 standard-user run records environment, source/artifact identity and PASS/FAIL/BLOCKED for every required journey; (3) tester observations and failure evidence are preserved/redacted; (4) failures reopen their existing owning cards and invalidate the affected candidate verdict; (5) the successful receipt is included in the final strict GA evidence. Account-holder sign-in and action-specific send/download/submit gates remain; no assisted repair is presented as an unaided pass. Tester availability/authentication is an external dependency. This card is part of pilot acceptance; fleet rollout remains separate.</p>",
+      "description_html": "CLWX-WINDOWS-LAB-AUTH-20260908-1436 \u2014 end-user acceptance clarification\nProvide docs/USER_GUIDE.md with the candidate. An unaided principal uses their own Microsoft work/school account, signs into the app-controlled Chrome profile, verifies the correct inbox, opens the authorised Forms destination and follows the documented review/confirmation steps. Verify expired sign-in and wrong-account recovery. The QA mailbox is only a test fixture. Record version/hash, Windows account class, guide revision and PASS/FAIL/BLOCKED outcomes; no passwords or private form URLs in evidence. Preserve all existing acceptance below.\nCLWX-GA-CLOSURE-SPRINT-20260908 \u2014 GA closure sprint, September 8\u201315 UTC (planning window, not promised GA date).\nLane: release execution receipt. Owner: root integration/release operator; independent Claude CLI testing. Current checkpoint: Selected; acceptance not yet satisfied.\nEvidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.\nBefore final GA approval, give the designated external tester the verified candidate download/hash and a concise reproducible checklist covering reported setup, email/Chrome/Graph, local PDF/Office, Forms preview and response/recovery failures. The candidate can be shared through the authorized test-artifact channel; do not require GA publication first.\nAcceptance: (1) candidate has passed internal acceptance and its downloadable bytes match the immutable manifest; (2) dated unaided Windows10/11 standard-user run records environment, source/artifact identity and PASS/FAIL/BLOCKED for every required journey; (3) tester observations and failure evidence are preserved/redacted; (4) failures reopen their existing owning cards and invalidate the affected candidate verdict; (5) the successful receipt is included in the final strict GA evidence. Account-holder sign-in and action-specific send/download/submit gates remain; no assisted repair is presented as an unaided pass. Tester availability/authentication is an external dependency. This card is part of pilot acceptance; fleet rollout remains separate.",
       "number": 134,
       "id": "ec29ab89-d82d-4c5a-a6ff-f006cedcc12e"
     }
@@ -622,20 +622,34 @@
     "NEW-1": 133,
     "NEW-2": 134
   },
-  "updatedAt": "2026-09-08T13:50:00.759686+00:00",
-  "snapshotAt": "2026-09-08T13:55:39.841954+00:00",
+  "updatedAt": "2026-09-08T15:29:29.839720+00:00",
+  "snapshotAt": "2026-09-08T15:29:29.839720+00:00",
   "readiness": "RED",
-  "sourceCandidate": "7e1f9417ae3f57096a7799d9a433ea9745604e5f",
+  "sourceCandidate": "1d7455673774fd70c086b41b405c8ece868ce302",
   "privateVerification": "artifacts/ga-fable-20260908/sprint-loop/sprint-verification.json",
-  "boardExportVerifiedAt": "2026-09-08T13:53:07.389668+00:00",
+  "boardExportVerifiedAt": "2026-09-08T15:29:29.839720+00:00",
   "boardIssueCount": 134,
   "executionCheckpoint": {
-    "browserReview": "APPROVE; integration pending",
-    "artifactHarnessReview": "IN_PROGRESS",
-    "installedVerifierReview": "IN_PROGRESS",
-    "keychainAnalysis": "Timed out; resumed only to capture existing evidence, no further investigation or GUI launches",
-    "sourceCandidate": "7e1f9417ae3f57096a7799d9a433ea9745604e5f",
-    "installedArtifact": "moe.25 only; moe.26 not built",
-    "readiness": "RED"
+    "browserReview": "APPROVE; integrated in1d745567",
+    "artifactHarnessReview": "APPROVE; integrated",
+    "installedVerifierReview": "APPROVE; integrated",
+    "integrationReview": "APPROVE104focused",
+    "sourceCandidate": "1d7455673774fd70c086b41b405c8ece868ce302",
+    "fullUnit": {
+      "passed": 2327,
+      "failed": 0,
+      "skipped": 29
+    },
+    "installedArtifact": "moe.25 only; moe.26 hosted build34244582967 running",
+    "windowsOwnerHold": "RELEASED; sole root operator",
+    "macGuiHold": "HELD",
+    "microsoftBrowser": "moe25 assisted account/inbox and two synthetic Forms previews PASS; Graph unconfigured",
+    "qaMailAuth": "59465b57 correction under independent rereview",
+    "readiness": "RED",
+    "cardCounts": {
+      "In Progress": 18,
+      "Todo": 10,
+      "Ready": 3
+    }
   }
 }

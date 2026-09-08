@@ -27,6 +27,8 @@ This guide is a navigation map for agents and reviewers working in the ClawX / M
 
 ## Documentation and evidence areas
 
+End-user instructions: [Connect your email and forms](USER_GUIDE.md). This guide uses each person's own Microsoft account; test-account setup belongs in the operator runbooks.
+
 | Area | Purpose | Notes |
 |---|---|---|
 | `docs/PROJECT_CONTRACT.md` | Stable cross-agent product and safety contract. | Update only for durable rules that should survive sessions. |

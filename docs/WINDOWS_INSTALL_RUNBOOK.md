@@ -382,3 +382,9 @@ into logs or docs.
 | Chrome opens but Outlook tools 404 | "Conditional Access / managed Chromium" |
 | Forms preview waits 30s for question items | "Forms preview redirects to Microsoft sign-in" |
 | `chflags uchg` urge | NEVER do this on Windows; band-aid is wrong |
+
+## Authentication prerequisite for Microsoft acceptance
+
+Give principals [Connect your email and forms](USER_GUIDE.md). They sign into their own account; this operator procedure uses a test account only for QA.
+
+Before running mailbox or Forms acceptance, follow the [browser sign-in prerequisite](../windows-pilot/vm-testing/README.md#microsoft-browser-sign-in-is-a-test-prerequisite). Use the designated test account in the exact interactive Windows session and user Chrome profile controlled by the app. Verify account identity and real inbox/form controls; a URL or CDP connection alone is insufficient. VM credentials, browser authentication and Graph OAuth are separate. Missing sign-in, MFA or form permission is BLOCKED for the dependent journey, and does not become a passed automation result. Never include passwords or session tokens in evidence.

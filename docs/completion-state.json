@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T13:55:39.841954+00:00",
+  "updatedAt": "2026-09-08T15:29:29.839720+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -1334,7 +1334,7 @@
     },
     {
       "id": "microsoft_journeys",
-      "status": "BLOCKED",
+      "status": "PARTIAL",
       "cards": [
         "CLWX-61",
         "CLWX-73",
@@ -1345,14 +1345,15 @@
         "installed_candidate",
         "turn_lifecycle"
       ],
-      "evidenceSummary": "Recipient/body boundary source tests and one Mac compose check pass. Second clean moe.21 install controlled safeChat forms.list passed on reused Server 2022/admin, but it is not Forms preview evidence. VM Outlook still requires sign-in; external tester attach regression remains open. The Microsoft account-holder question remains unanswered. September 8 selected moe.22: bridge/CDP/Outlook open and Forms configuration pass. Actual bounded Inbox request returns needs_signin; no mail read or sent, no Forms submission. Reviewed9ea0dbd7 fixes Graph draft permission requiring Mail.Send despite draft needing Mail.ReadWrite; integrated as8fa6bc64. Actual tenant proof remains open.",
-      "nextAction": "Next sprint after owner resumes execution: after account-holder sign-in is available, use authenticated user Chrome to prove attach/read/draft/reopen/reply/forward and two Forms previews; preserve send/submit gates.",
+      "evidenceSummary": "Recipient/body boundary source tests and one Mac compose check pass. Second clean moe.21 install controlled safeChat forms.list passed on reused Server 2022/admin, but it is not Forms preview evidence. VM Outlook still requires sign-in; external tester attach regression remains open. The Microsoft account-holder question remains unanswered. September 8 selected moe.22: bridge/CDP/Outlook open and Forms configuration pass. Actual bounded Inbox request returns needs_signin; no mail read or sent, no Forms submission. Reviewed9ea0dbd7 fixes Graph draft permission requiring Mail.Send despite draft needing Mail.ReadWrite; integrated as8fa6bc64. Actual tenant proof remains open. September 8 15:06 UTC: installed moe.25 assisted standard-user Chrome expected-account sign-in, Host API inbox read and ordinary Online inbox chat PASS; Gateway outlook.read_inbox confirmed. Chat one-sample latency 95044ms; final-candidate/Graph/Forms/draft/client/unaided evidence remains open. Installed moe.25 synthetic Forms previews now PASS: DailyReport55filled/2skipped/0errors; Suspensions29/4/0. No submit invoked. Graph status is configured=false/signedIn=false; successful inbox log transport=browser.",
+      "nextAction": "Build the reviewed candidate, rerun authenticated user-Chrome read/draft/reopen and both Forms previews; verify Graph OAuth separately. Preserve action-specific dispatch gates.",
       "exitCriterion": "Correct compose identity, recipient buckets, body and subject; changed/ambiguous review refuses; preview has required coverage and no submission. Separately authorized sandbox dispatch proof is required by the full release gate.",
       "references": [
         "electron/services/outlook-browser-v2",
         "electron/services/forms-browser-v2",
         "docs/PROJECT_CONTRACT.md",
-        "docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md"
+        "docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md",
+        "docs/evidence/WINDOWS_REPEATABLE_LAB_2026-09-08.md"
       ]
     },
     {
@@ -1576,10 +1577,10 @@
     },
     "currentAccess": {
       "status": "PASS",
-      "observedAt": "2026-09-08T01:38:58Z",
-      "scope": "IAP RDP/SSH protocol plus closed guest control; authenticated SSH marker separately passed",
-      "evidence": "artifacts/windows-vm/20260908-moe22/login-refresh.json",
-      "guestMutationPerformed": true
+      "observedAt": "2026-09-08T15:10:09.758196+00:00",
+      "scope": "original IAP SSH host identity matched prior trust; explicit strict HostKeyAlias marker passed; pinned-certificate FreeRDP connected",
+      "guestMutationPerformed": true,
+      "ownerHold": "RELEASED_BY_OWNER_FOR_ROOT_TESTING"
     },
     "iterationSkill": ".agents/skills/windows-vm-iteration/SKILL.md",
     "resizeProposal": {
@@ -2093,15 +2094,15 @@
   },
   "currentSourceCandidate": {
     "version": "0.4.3-moe.26",
-    "source": "7e1f9417ae3f57096a7799d9a433ea9745604e5f",
+    "source": "1d7455673774fd70c086b41b405c8ece868ce302",
     "branch": "release/moe26-plan-execution",
     "worktree": "/private/tmp/clawx-plan-execution-20260908",
     "clean": true,
-    "pushed": false,
+    "pushed": true,
     "packaged": false,
     "installed": false,
     "published": false,
-    "fullPreflight": "PENDING_FINAL_INTEGRATION_POLICY_ORACLE_REPAIRED",
+    "fullPreflight": "PASS_SOURCE_CHECKS_PLATFORM_SKIPS_RETAINED",
     "heldCommit": "24e1cfd3dd1d736d15252f77ef3e305fb5367857",
     "reviewedAdditions": [
       {
@@ -2133,6 +2134,34 @@
         "focusedTests": 60,
         "independentReview": "APPROVE",
         "installedAcceptance": "NOT_RUN"
+      },
+      {
+        "authorCommit": "41359e1",
+        "integratedCommit": "1d7455673774fd70c086b41b405c8ece868ce302",
+        "scope": "Windows Chrome ownership and coupled Outlook draft guards",
+        "independentReview": "APPROVE",
+        "installedAcceptance": "NOT_RUN"
+      },
+      {
+        "authorCommit": "8bf5d32",
+        "integratedCommit": "1d7455673774fd70c086b41b405c8ece868ce302",
+        "scope": "artifact matrix coverage",
+        "independentReview": "APPROVE",
+        "installedAcceptance": "NOT_RUN"
+      },
+      {
+        "authorCommit": "8935bc0a",
+        "integratedCommit": "1d7455673774fd70c086b41b405c8ece868ce302",
+        "scope": "version-bound installed verifier",
+        "independentReview": "APPROVE",
+        "installedAcceptance": "NOT_RUN"
+      },
+      {
+        "authorCommit": "1d745567",
+        "integratedCommit": "1d7455673774fd70c086b41b405c8ece868ce302",
+        "scope": "three integration inventory/evidence deltas",
+        "independentReview": "APPROVE",
+        "installedAcceptance": "NOT_RUN"
       }
     ],
     "combinedFocusedTests": {
@@ -2140,7 +2169,7 @@
       "files": 6,
       "source": "6ec328073f272c538e2e0d653824c1f407b6e6e4"
     },
-    "productSource": "488ebe29d7d16cfec13c08545f5336babc7e5741",
+    "productSource": "1d7455673774fd70c086b41b405c8ece868ce302",
     "latestDocumentationOnlyChange": {
       "source": "9a17b3ee",
       "integrated": "64ae2dc6",
@@ -2151,7 +2180,11 @@
       "scope": "macOS synthetic E2E Keychain isolation",
       "independentReview": "APPROVE",
       "focusedE2e": "PASS_ONE_SPEC_TWO_LAUNCHES"
-    }
+    },
+    "buildRunId": 34244582967,
+    "buildStatus": "in_progress",
+    "profile": "keyless-public",
+    "integrationEvidence": "docs/evidence/GA_SOURCE_INTEGRATION_2026-09-08.md"
   },
   "handoff": {
     "status": "COMPLETE_READY_FOR_NEXT_AGENT",
@@ -2191,7 +2224,7 @@
     "awsProfile": "bedrock",
     "region": "us-east-2",
     "baseSource": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
-    "phase": "GA_CLOSURE_SPRINT_ACTIVE_SOURCE_REVIEW",
+    "phase": "HOSTED_WINDOWS_BUILD_AND_QA_AUTH_REVIEW",
     "privateReceipts": "artifacts/ga-fable-20260908",
     "plan": ".omx/plans/prd-ga-fable-20260908.md",
     "testSpec": ".omx/plans/test-spec-ga-fable-20260908.md",
@@ -2199,7 +2232,7 @@
     "independentPlanReview": "REVISE_CORRECTIONS_APPLIED",
     "monitorImplementation": "REVIEWED_INTEGRATED_ROOT_d1605abf",
     "acceptance": "PENDING",
-    "vmMutationOwner": "root only; owner actively testing, observation only",
+    "vmMutationOwner": "root sole operator; owner released original RDP hold on September 8; Mac Electron GUI hold persists",
     "publication": "BLOCKED_REQUIRED_ACCEPTANCE",
     "monitorCard": "CLWX-128",
     "lanes": [
@@ -2363,13 +2396,11 @@
     "maxConcurrentAuthorClis": 5,
     "concurrencyReason": "Independent source and tooling lanes; no concurrent VM mutations. Source accepts only after independent review.",
     "bugHandoffPolicy": "docs/bugs/TEMPLATE.md required by PROJECT_CONTRACT, AGENTS.md and CLAUDE.md",
-    "statusCheckedAt": "2026-09-08T13:55:39.841954+00:00",
+    "statusCheckedAt": "2026-09-08T15:27:02.475804+00:00",
     "epic": "CLWX-22",
     "sprintExit": "Exact candidate passes all required source/artifact/installed/client/tenant/performance/unaided tester and final release checks",
     "activeCliTasks": [
-      "artifact-matrix-review",
-      "installed-verifier-review",
-      "keychain-recurrence-receipt"
+      "qa-mail-auth-rereview"
     ],
     "budgetAuthorization": {
       "source": "Owner: There is no limit. Execute the work trees.",
@@ -2379,16 +2410,17 @@
       "billing": "CLI metadata is estimated; outcome/ownership/monitoring requirements retained"
     },
     "boardCheckpoint": {
+      "observedAt": "2026-09-08T15:29:29.839720+00:00",
       "issues": 134,
-      "states": 6,
-      "readback": "PASS",
-      "receipt": "artifacts/ga-fable-20260908/sprint-loop/board-export-verification.json",
-      "sprintCardsVerified": 31,
-      "priorIssuesRetained": 132,
-      "createdCards": [
-        133,
-        134
-      ]
+      "sprintCards": 31,
+      "states": {
+        "Ready": 3,
+        "In Progress": 18,
+        "Todo": 10,
+        "Done": 0
+      },
+      "newDone": 0,
+      "evidence": "docs/plane-board/CLWX-board-export.json"
     },
     "releaseCardTally": {
       "at": "2026-09-08T12:39:25.441861+00:00",
@@ -2625,59 +2657,29 @@
       "receipt": "artifacts/ga-fable-20260908/keychain-popup/recurrence/containment.json"
     },
     "currentCliSnapshot": {
-      "browser-ownership-review": {
+      "eval-acceptance-audit": {
         "phase": "CLI_SUCCEEDED",
         "processAlive": false,
-        "toolCalls": 31,
+        "toolCalls": 32,
         "observedModel": "claude-fable-5",
         "observedProviders": [
           "bedrock"
         ],
         "modelMismatch": false,
         "providerMismatch": false,
-        "sessionId": "b8ae0663-ded1-4f5d-b16b-5571e3f6ffc6"
+        "sessionId": "bf0e6876-52b7-4e0a-a210-0e49ab7e6f31"
       },
-      "artifact-matrix-review": {
-        "phase": "RUNNING",
-        "processAlive": true,
-        "toolCalls": 27,
-        "observedModel": "claude-fable-5",
-        "observedProviders": [],
-        "modelMismatch": false,
-        "providerMismatch": false,
-        "sessionId": "ab77da21-c6fe-4435-bb09-0c86ecb2b018"
-      },
-      "installed-verifier-review": {
-        "phase": "RUNNING",
-        "processAlive": true,
-        "toolCalls": 7,
-        "observedModel": "claude-fable-5",
-        "observedProviders": [],
-        "modelMismatch": false,
-        "providerMismatch": false,
-        "sessionId": "1c16088a-4238-4fef-b757-761a10a2ac75"
-      },
-      "keychain-recurrence-receipt": {
-        "phase": "RUNNING",
-        "processAlive": true,
-        "toolCalls": 0,
-        "observedModel": "claude-fable-5",
-        "observedProviders": [],
-        "modelMismatch": false,
-        "providerMismatch": false,
-        "sessionId": "5932f857-dfc0-4b7d-8ae0-5341816d8cb1"
-      },
-      "installed-verifier-repair": {
-        "phase": "MODEL_MISMATCH",
+      "qa-mail-auth-review": {
+        "phase": "CLI_SUCCEEDED",
         "processAlive": false,
-        "toolCalls": 46,
+        "toolCalls": 15,
         "observedModel": "claude-fable-5",
         "observedProviders": [
           "bedrock"
         ],
-        "modelMismatch": true,
+        "modelMismatch": false,
         "providerMismatch": false,
-        "sessionId": "97b6cf6a-2e03-46b1-a5a7-2a12e0e6cbed"
+        "sessionId": "08b26026-8b42-415c-bb70-f94067162513"
       },
       "keychain-recurrence-analysis": {
         "phase": "TIMED_OUT",
@@ -2702,6 +2704,704 @@
         "modelMismatch": false,
         "providerMismatch": false,
         "sessionId": "b3692a23-fc2d-4ded-a37e-f12de511a71c"
+      },
+      "artifact-matrix-repair": {
+        "phase": "MODEL_MISMATCH",
+        "processAlive": false,
+        "toolCalls": 57,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": true,
+        "providerMismatch": false,
+        "sessionId": "712e8e27-97e8-42d6-80a6-e464a11991cd"
+      },
+      "w2-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 14,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "20c962d8-1327-479f-8121-6daa3a74be8b"
+      },
+      "monitor-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 16,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "889781f2-2354-4c2b-abf6-e8cd2ce60bc3"
+      },
+      "repeatable-windows-lab-correction": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 24,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "96226ae1-a982-49be-83d4-22e09603a554"
+      },
+      "history-source-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 27,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "31f53dbb-e30d-4789-86cf-4b316ec1add9"
+      },
+      "graph-readiness": {
+        "phase": "CLI_FAILED",
+        "processAlive": false,
+        "toolCalls": 75,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "8b00673d-60a4-4a07-a33d-2615bb1ea5a9"
+      },
+      "parallel-board-audit": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 12,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "c35da423-659f-4dce-bdd6-77156b04c3b0"
+      },
+      "forms-files-factual-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 27,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "cad66f6c-2349-4980-bfe9-6d0d1fd4eae1"
+      },
+      "forms-files-correction": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 21,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "205dda8c-5234-49bb-a5b5-549f69682371"
+      },
+      "whisper-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 22,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "57409df5-4cea-43bb-9722-4eb3b721784b"
+      },
+      "artifact-matrix-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 33,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "ab77da21-c6fe-4435-bb09-0c86ecb2b018"
+      },
+      "ui-release-acceptance": {
+        "phase": "CLI_FAILED",
+        "processAlive": false,
+        "toolCalls": 51,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "60f59904-4d3a-430a-b377-7233622f082a"
+      },
+      "repeatable-windows-lab-rereview": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 13,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "d67622cb-5384-4d9a-bbd7-74a6f7698fef"
+      },
+      "w2-binding-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 16,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "81194292-c82a-4e7a-a476-c3553fad37a3"
+      },
+      "recovery-acceptance-trace": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 47,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "70315334-2443-4fe7-a205-3d9e42bda5fc"
+      },
+      "graph-connection": {
+        "phase": "CLI_FAILED",
+        "processAlive": false,
+        "toolCalls": 56,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "4ae50b3c-b98a-4732-87c5-80242b3a80fe"
+      },
+      "browser-findings": {
+        "phase": "CLI_FAILED",
+        "processAlive": false,
+        "toolCalls": 0,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "6d29522b-4dbb-4ca7-b398-33b2b6bb4050"
+      },
+      "w1-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 19,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "a0d2fe3e-cf5f-4163-9756-46e7cd50597d"
+      },
+      "installed-verifier-rereview": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 16,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "9c92e774-ec6c-4370-89d4-3afa017aa802"
+      },
+      "history-finish": {
+        "phase": "CLI_FAILED",
+        "processAlive": false,
+        "toolCalls": 34,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "0b5813f8-1292-4288-a0e2-20f104754aa3"
+      },
+      "w2-delta-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 13,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "e01cd4e8-95c9-4e4f-99a9-e85f2757a6c5"
+      },
+      "artifact-acceptance-audit": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 55,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "bd6d698a-c055-4fc8-9599-9d074e8c00d8"
+      },
+      "graph-readiness-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 18,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "47c792d2-8ec0-43df-94d9-f59484dd156a"
+      },
+      "ui-release-resume": {
+        "phase": "CLI_FAILED",
+        "processAlive": false,
+        "toolCalls": 8,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "60f59904-4d3a-430a-b377-7233622f082a"
+      },
+      "installed-verifier-finish": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 4,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "6ee1f59a-db81-4fd7-8fed-338583018eeb"
+      },
+      "windows-mcp-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 16,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "064983c0-1d27-40ec-b414-0f683c29ad66"
+      },
+      "repeatable-windows-lab": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 28,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "3620557a-4c42-48e1-a6ab-3aeb545cf8ca"
+      },
+      "installed-verifier-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 23,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "1c16088a-4238-4fef-b757-761a10a2ac75"
+      },
+      "ga-integration-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 29,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "c87d95e3-3b81-4dd3-9948-dd009a4d2fc4"
+      },
+      "repeatable-windows-lab-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 14,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "942035c4-f319-4a7d-85d8-4b675e508def"
+      },
+      "browser-ownership-repair": {
+        "phase": "TIMED_OUT",
+        "processAlive": false,
+        "toolCalls": 78,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "d135aa7d-37a5-4552-8022-d6c6f6e21e27"
+      },
+      "monitor-fix": {
+        "phase": "CLI_FAILED",
+        "processAlive": false,
+        "toolCalls": 19,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "42b37423-19b7-496f-957b-3b871053da54"
+      },
+      "whisper-backlog": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 51,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "ed6a9c16-a118-4547-96bd-c1b61eae9745"
+      },
+      "browser-review": {
+        "phase": "MODEL_MISMATCH",
+        "processAlive": false,
+        "toolCalls": 42,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": true,
+        "providerMismatch": false,
+        "sessionId": "984784c4-47ac-4176-9292-e46a3a5a532e"
+      },
+      "graph-ui-proof": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 26,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "5cfbe245-0c36-456b-9065-14e1c7790f6e"
+      },
+      "w2-negation-finish": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 19,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "27973e2d-8ca7-4be9-a9e0-68c8f9b22e42"
+      },
+      "browser-finish": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 24,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "81c6462a-375a-4ac8-9ad9-fe06449b5172"
+      },
+      "monitor-final-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 3,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "1358694d-daeb-4c34-b414-4a616ba876e4"
+      },
+      "graph-connection-finish": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 42,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "4abbec2e-a740-4a64-a209-f943f9dbead6"
+      },
+      "graph-connection-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 12,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "4a767f17-5b1d-4fa7-b4c4-dd7ccf48e9b5"
+      },
+      "browser-regression": {
+        "phase": "CLI_FAILED",
+        "processAlive": false,
+        "toolCalls": 45,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "6d29522b-4dbb-4ca7-b398-33b2b6bb4050"
+      },
+      "keychain-isolation-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 25,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "78575c41-83f5-4953-9267-e4c317733292"
+      },
+      "repeatable-windows-firewall-correction": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 13,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "a4671583-5f00-4b86-9be4-4b75129bb2f4"
+      },
+      "ga-integration-fixture-finish": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 21,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "b94597c0-7640-41b6-b9e6-0daa470fe8f4"
+      },
+      "w2-fix": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 27,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "e33a0a41-1c4e-4e10-8e3d-4a50fb423557"
+      },
+      "keychain-recurrence-receipt": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 1,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "5932f857-dfc0-4b7d-8ae0-5341816d8cb1"
+      },
+      "w1-policy": {
+        "phase": "CLI_FAILED",
+        "processAlive": false,
+        "toolCalls": 39,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "47cf334a-cf9a-4f6c-8e62-3ca2f163a8ce"
+      },
+      "ga-source-integration": {
+        "phase": "TIMED_OUT",
+        "processAlive": false,
+        "toolCalls": 84,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "b94597c0-7640-41b6-b9e6-0daa470fe8f4"
+      },
+      "qa-mail-auth": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 23,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "8cffd0c7-94da-4667-b786-85061e75906b"
+      },
+      "qa-mail-auth-correction": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 22,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "8cffd0c7-94da-4667-b786-85061e75906b"
+      },
+      "installed-verifier-repair": {
+        "phase": "MODEL_MISMATCH",
+        "processAlive": false,
+        "toolCalls": 46,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": true,
+        "providerMismatch": false,
+        "sessionId": "97b6cf6a-2e03-46b1-a5a7-2a12e0e6cbed"
+      },
+      "qa-mail-auth-rereview": {
+        "phase": "RUNNING",
+        "processAlive": true,
+        "toolCalls": 5,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "08b26026-8b42-415c-bb70-f94067162513"
+      },
+      "installed-verifier-correction": {
+        "phase": "TIMED_OUT",
+        "processAlive": false,
+        "toolCalls": 50,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "6ee1f59a-db81-4fd7-8fed-338583018eeb"
+      },
+      "w1-policy-resume": {
+        "phase": "CLI_FAILED",
+        "processAlive": false,
+        "toolCalls": 14,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "47cf334a-cf9a-4f6c-8e62-3ca2f163a8ce"
+      },
+      "monitor-implementation": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 29,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "42b37423-19b7-496f-957b-3b871053da54"
+      },
+      "forms-files-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 27,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "c087df49-54db-476e-8ae7-d92325d9f509"
+      },
+      "browser-ownership-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 31,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "b8ae0663-ded1-4f5d-b16b-5571e3f6ffc6"
+      },
+      "plan-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 4,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "0f3720fe-8392-423c-9c15-b99d7b71c829"
+      },
+      "history-skills": {
+        "phase": "CLI_FAILED",
+        "processAlive": false,
+        "toolCalls": 81,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "7d5cbb82-8ca5-4263-abfc-c1084d93e84d"
+      },
+      "w2-fidelity": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 34,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "9bf03e2f-9288-4e2f-a1ba-d71f800f920c"
+      },
+      "monitor-delta-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 12,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "6f2888d7-ab7a-49ee-95b0-f8eeef12a676"
+      },
+      "browser-repair-finish": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 18,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "d135aa7d-37a5-4552-8022-d6c6f6e21e27"
+      },
+      "browser-fix": {
+        "phase": "CLI_FAILED",
+        "processAlive": false,
+        "toolCalls": 61,
+        "observedModel": "claude-fable-5",
+        "observedProviders": null,
+        "modelMismatch": null,
+        "providerMismatch": null,
+        "sessionId": "4862340e-5b2b-4845-8018-475330af2742"
       }
     },
     "sprint": {
@@ -2745,7 +3445,8 @@
       ],
       "independentReviewTask": "artifact-matrix-review",
       "stagedExecution": "NOT_RUN",
-      "disposition": "Source review and provenance disposition pending; do not relabel CLI as clean success."
+      "disposition": "Author MODEL_MISMATCH preserved; independent source review APPROVE. Integrated into isolated 44dad46d assembly, with inventory reconciliation requiring final review; staged execution not run.",
+      "independentReview": "APPROVE"
     },
     "browserOwnershipReview": {
       "source": "41359e121c808ecb42ecc9e307e12892fb895fc8",
@@ -2760,8 +3461,129 @@
       "phase": "MODEL_MISMATCH",
       "provider": "bedrock",
       "independentReviewTask": "installed-verifier-review",
-      "focusedTests": 72,
-      "installed": "NOT_RUN"
+      "focusedTests": 76,
+      "installed": "NOT_RUN",
+      "correctedSource": "8935bc0a",
+      "independentReview": "APPROVE",
+      "operationsIntegration": "69f983c0"
+    },
+    "windowsLab": {
+      "status": "PROVISIONING_AND_GUEST_READINESS_PASS",
+      "runbook": "docs/testing/WINDOWS_REPEATABLE_LAB.md",
+      "evidence": "docs/evidence/WINDOWS_REPEATABLE_LAB_2026-09-08.md",
+      "source": "d1863164",
+      "manualRuns": 2,
+      "failedLauncherRun": "auto-c-20260908",
+      "successfulLauncherRun": "auto-d-20260908",
+      "successfulInstanceId": "4908385059495321872",
+      "cpu": 8,
+      "ramGiB": 32,
+      "OS": "Windows Server 2022 Datacenter build20348",
+      "imageId": "8676853931262012812",
+      "activation": "LicenseStatus 1",
+      "protocolAndAuthenticatedAccess": "PASS",
+      "rootLatestFocusedTests": 24,
+      "idleManualInstances": "STOPPED_AFTER_ID_MATCH",
+      "cleanClientInstall": "NOT_RUN",
+      "providerPackagesHermetic": false
+    },
+    "browserAuthentication": {
+      "artifact": "0.4.3-moe.25",
+      "environment": "GCP Server 2022 existing standard-user Session2",
+      "status": "EXPECTED_ACCOUNT_AND_INBOX_VERIFIED",
+      "assisted": true,
+      "credentialSource": "historical QA fixture recovered privately; one successful attempt",
+      "endUserPolicy": "each principal signs into own Microsoft account; QA mailbox is test fixture only",
+      "guide": "docs/USER_GUIDE.md",
+      "chromeProfileOwnership": "PASS Session2 expected user profile; not managed Chromium",
+      "installedOutlookOpenMs": 5421,
+      "installedInboxRead": {
+        "status": "PASS",
+        "messages": 3,
+        "durationMs": 8702,
+        "path": "renderer Host API browser",
+        "transportEvidence": "PASS_INSTALLED_LOG_BROWSER"
+      },
+      "normalChat": {
+        "status": "ANSWERED_TERMINALLY_STABLE",
+        "answerLatencyMs": 95044,
+        "toolProvenance": "PASS_GATEWAY_SESSION_CONFIRMED",
+        "rendererToolNames": [],
+        "tool": "outlook.read_inbox",
+        "toolTimestamp": "2026-09-08T15:05:42.350Z",
+        "gatewaySession": "de46b8e9-8206-48ef-8fdf-60a48012c072",
+        "samples": 1,
+        "transportEvidence": "PASS_INSTALLED_LOG_BROWSER"
+      },
+      "graph": "BLOCKED_NOT_CONFIGURED_NOT_SIGNED_IN",
+      "forms": {
+        "status": "ASSISTED_INSTALLED_PREVIEWS_PASS",
+        "dailyReport": {
+          "filled": 55,
+          "skipped": 2,
+          "errors": 0,
+          "durationMs": 19703
+        },
+        "suspensions": {
+          "filled": 29,
+          "skipped": 4,
+          "errors": 0,
+          "durationMs": 16512
+        },
+        "submitInvoked": false
+      },
+      "unaidedUser": "NOT_RUN",
+      "evidence": "docs/evidence/WINDOWS_REPEATABLE_LAB_2026-09-08.md"
+    },
+    "integrationAssembly": {
+      "source": "1d7455673774fd70c086b41b405c8ece868ce302",
+      "worktree": "/private/tmp/clawx-ga-integration-20260908",
+      "status": "APPROVED_FROZEN_AND_BUILDING",
+      "sourceFocused": {
+        "browser": 240,
+        "harnessAndDocument": 122,
+        "installedVerifier": 76
+      },
+      "typecheck": "PASS",
+      "lint": "PASS",
+      "comms": "PASS",
+      "fullUnit": {
+        "passed": 2327,
+        "failed": 0,
+        "skipped": 29
+      },
+      "failedSuites": [
+        "clwx92-bundle-fixture",
+        "openclaw-2026-9-upgrade-verifier"
+      ],
+      "failureReproducedOnBaseline": "7e1f9417",
+      "newInstaller": "BUILD_IN_PROGRESS",
+      "finalDeltaReview": "APPROVE",
+      "reviewTask": "ga-integration-review",
+      "priorFullUnit": {
+        "passed": 2323,
+        "failed": 2,
+        "skipped": 29,
+        "correction": "stale verifier inventory: outlook.readiness and integrated browser.open_chrome"
+      },
+      "independentFocusedTests": 104,
+      "buildRunId": 34244582967
+    },
+    "qaMailAuthHelper": {
+      "authorSource": "5e3d1d06",
+      "review": "CORRECTION_REREVIEW_ACTIVE",
+      "findings": [
+        "substring account false PASS",
+        "actual account menu not opened",
+        "display name misclassified as wrong account",
+        "hidden identity accepted"
+      ],
+      "correctionTask": "qa-mail-auth-correction",
+      "liveCorrection": "NOT_RUN",
+      "privateReview": "/private/tmp/clawx-qa-mail-auth-review-20260908/artifacts/REVIEW.md",
+      "correctionSource": "59465b57",
+      "correctionDossier": "6d47b879",
+      "correctionTests": 25
     }
   }
 }
