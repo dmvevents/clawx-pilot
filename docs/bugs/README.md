@@ -5,6 +5,7 @@ Each report gives another agent enough evidence to continue without the original
 | Card | Reproducible report | Scope |
 |---|---|---|
 | CLWX-25 | [Windows lab repeatability](CLWX-25-windows-lab-repeatability.md) | Shared state, access-contract drift and isolated lab recovery evidence |
+| CLWX-43 | [Slow inbox response](CLWX-43-inbox-latency.md) | Installed successful turn takes 95 seconds to driver stability; Gateway/tool intervals and measurement limits preserved |
 | CLWX-61 | [QA mailbox identity](CLWX-61-test-mail-auth-identity.md) | URL-only/substring false acceptance repaired; independent review and native expected/wrong-account controls pass |
 | CLWX-106 | [Installed verifier identity](CLWX-106-installed-verifier-identity.md) | Identity/inventory corrections reviewed; two native preflight failures under repair |
 | CLWX-130 | [Windows Chrome start and recovery](CLWX-130-windows-chrome-start.md) | Owner-observed timeout; source routing gap; Windows-session ownership observations |

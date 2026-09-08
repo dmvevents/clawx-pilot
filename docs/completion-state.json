@@ -3531,7 +3531,17 @@
         "toolTimestamp": "2026-09-08T15:05:42.350Z",
         "gatewaySession": "de46b8e9-8206-48ef-8fdf-60a48012c072",
         "samples": 1,
-        "transportEvidence": "PASS_INSTALLED_LOG_BROWSER"
+        "transportEvidence": "PASS_INSTALLED_LOG_BROWSER",
+        "measurement": "driver Send-click completion to nine-second stable-answer recognition; subsequent terminal check excluded",
+        "gatewayTimingMs": {
+          "userRecordToToolUse": 41414,
+          "toolUseToResult": 6137,
+          "toolResultToFinal": 4223,
+          "userRecordToFinal": 51774
+        },
+        "crossClockAttribution": "NOT_ESTABLISHED",
+        "tokenUsage": "UNKNOWN_ZERO_REPORTED",
+        "bugReport": "docs/bugs/CLWX-43-inbox-latency.md"
       },
       "graph": "BLOCKED_NOT_CONFIGURED_NOT_SIGNED_IN",
       "forms": {
