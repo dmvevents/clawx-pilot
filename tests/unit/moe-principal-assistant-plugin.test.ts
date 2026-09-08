@@ -297,6 +297,97 @@ describe('moe-principal-assistant plugin registration', () => {
     }
   });
 
+  it('routes explicit Chrome opening to the Main repair route through browser.open_chrome (CLWX-130)', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+    const calls: Array<{ url: string; method: string }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, init = {}) => {
+      // Skip the CLWX-86 registration handshake GETs — POST sequence only.
+      if (((init as RequestInit).method ?? 'GET') !== 'GET') {
+        calls.push({ url: String(url), method: String((init as RequestInit).method) });
+      }
+      return jsonResponse({ success: true, data: { state: 'cdp_ready', action: 'none' } });
+    }));
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+      expect(byName['browser.open_chrome']).toBeDefined();
+
+      // Executing the tool must hit Main over the EXISTING repair/ensure route —
+      // not a new parallel service, and never a stock managed-browser start.
+      const result = await byName['browser.open_chrome'].execute('call-open-chrome', {});
+
+      expect(calls).toHaveLength(1);
+      expect(new URL(calls[0].url).pathname).toBe('/api/browser/repair-chrome-cdp');
+      expect(calls[0].method).toBe('POST');
+      expect(result).toMatchObject({ state: 'cdp_ready' });
+
+      // Model-facing routing: opening Chrome and Windows recovery point at the
+      // Ministry path; the stock managed browser is forbidden for Ministry
+      // journeys and macOS menu-bar guidance never surfaces.
+      const { SYSTEM_PROMPT } = await loadPersona();
+      const modelFacingText = [
+        SYSTEM_PROMPT,
+        ...tools.map((tool) => `${tool.name}\n${String((tool as { description?: unknown }).description ?? '')}`),
+      ].join('\n');
+      expect(modelFacingText).toMatch(/browser\.open_chrome/);
+      expect(modelFacingText).toMatch(/never .*(?:generic\/stock|stock) browser start/i);
+      expect(modelFacingText).toMatch(/foreign_endpoint_owner/);
+      expect(modelFacingText).toMatch(/endpoint_owner_unverified/);
+      expect(modelFacingText).toMatch(/never mention a mac menu bar/i);
+      expect(modelFacingText).not.toMatch(/restart .*openclaw\.app/i);
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;
+      else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN;
+      else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+    }
+  });
+
+  it('does not register browser.open_chrome without Host API credentials and keeps tenant gates intact (negative control)', async () => {
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    delete process.env.CLAWX_HOST_API_PORT;
+    delete process.env.CLAWX_HOST_API_TOKEN;
+
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+
+      register({
+        pluginConfig,
+        registerTool: (tool: RegisteredTool) => tools.push(tool),
+        log: { info() {}, warn() {} },
+      });
+
+      const names = tools.map((tool) => tool.name);
+      // No Host API → no browser tools at all; the plugin never substitutes a
+      // stock managed-browser fallback for the Ministry Chrome path.
+      expect(names).not.toContain('browser.open_chrome');
+      expect(names).not.toContain('browser.diagnose');
+      expect(names).not.toContain('browser.repair_chrome_cdp');
+
+      // Preserved tenant gate wording: the new tool must not weaken the
+      // managed-profile prohibition anywhere in the plugin source.
+      const src = await readFile('extensions/moe-principal-assistant/index.mjs', 'utf8');
+      expect(src).not.toMatch(/managed (?:chromium|profile) fallback/i);
+    } finally {
+      if (previousPort !== undefined) process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken !== undefined) process.env.CLAWX_HOST_API_TOKEN = previousToken;
+    }
+  });
+
   it('invokes representative OpenClaw tools with execute(toolCallId, params)', async () => {
     const previousPort = process.env.CLAWX_HOST_API_PORT;
     const previousToken = process.env.CLAWX_HOST_API_TOKEN;

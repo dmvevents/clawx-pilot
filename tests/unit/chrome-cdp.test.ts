@@ -22,6 +22,16 @@ const home = 'C:\\Users\\Teacher';
 // Chrome M136+ refuses --remote-debugging-port on the OS-default dir (CLWX-73).
 const cdpProfileDir = defaultChromeCdpProfileDir('win32', env, home);
 
+// CLWX-130: deterministic Windows loopback ownership fixtures. The "ours"
+// owner is a same-session Chrome on OUR dedicated automation profile.
+const oursOwner = {
+  status: 'ok' as const,
+  pid: 4444,
+  sessionId: 2,
+  currentSessionId: 2,
+  commandLine: `"${chromeExecutable}" --remote-debugging-port=18792 --user-data-dir=${cdpProfileDir}`,
+};
+
 function baseRuntime(overrides: Partial<ChromeCdpRuntime> = {}): ChromeCdpRuntime {
   return {
     platform: 'win32',
@@ -32,6 +42,9 @@ function baseRuntime(overrides: Partial<ChromeCdpRuntime> = {}): ChromeCdpRuntim
     // Deterministic, no real process spawn for the diagnosis version probe.
     chromeProductVersion: vi.fn(async () => '136.0.7103.93'),
     sleep: vi.fn(async () => undefined),
+    // Deterministic ownership probe — tests on macOS/Linux must never run the
+    // real PowerShell query (CLWX-130).
+    describeLoopbackPortOwner: vi.fn(async () => oursOwner),
     ...overrides,
   };
 }
@@ -245,5 +258,201 @@ describe('chrome-cdp diagnostics', () => {
       '--remote-debugging-port=18793',
       `--user-data-dir=${cdpProfileDir}`,
     ]));
+  });
+});
+
+describe('chrome-cdp Windows endpoint ownership (CLWX-130)', () => {
+  const readyFetch = () =>
+    vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: { Browser: 'Chrome/136.0.0.0', 'User-Agent': 'Chrome' },
+    }));
+
+  it('SUCCESS control: same-session Chrome on our automation profile is cdp_ready', async () => {
+    const describeLoopbackPortOwner = vi.fn(async () => oursOwner);
+    const runtime = baseRuntime({ fetchJson: readyFetch(), describeLoopbackPortOwner });
+
+    const result = await diagnoseChromeCdp({ userDataDir, chromeExecutable }, runtime);
+
+    expect(result.state).toBe('cdp_ready');
+    expect(result.endpointOwnerPid).toBe(4444);
+    expect(result.endpointOwnerSessionId).toBe(2);
+    expect(result.currentSessionId).toBe(2);
+    expect(describeLoopbackPortOwner).toHaveBeenCalledWith(18792);
+  });
+
+  it('WRONG SESSION: a responding endpoint owned by another Windows session is refused, not ready, and never launched over', async () => {
+    const spawnDetached = vi.fn(() => ({ pid: 1, kill: vi.fn() }));
+    const runtime = baseRuntime({
+      fetchJson: readyFetch(),
+      spawnDetached,
+      describeLoopbackPortOwner: vi.fn(async () => ({
+        status: 'ok' as const,
+        pid: 4860,
+        sessionId: 1,
+        currentSessionId: 2,
+        commandLine: `"${chromeExecutable}" --remote-debugging-port=18792 --user-data-dir=C:\\Users\\OtherUser\\SomeProfile`,
+      })),
+    });
+
+    const result = await ensureChromeCdpReady({ userDataDir, chromeExecutable }, runtime);
+
+    expect(result.state).toBe('foreign_endpoint_owner');
+    expect(result.action).toBe('resolve_port_conflict');
+    expect(result.endpointOwnerSessionId).toBe(1);
+    expect(result.currentSessionId).toBe(2);
+    // Windows-appropriate, truthful guidance — never a Mac menu bar, never a kill.
+    expect(result.message).toMatch(/different user session or browser profile/i);
+    expect(result.message).not.toMatch(/menu ?bar|macos|mac\b/i);
+    expect(spawnDetached).not.toHaveBeenCalled();
+  });
+
+  it('WRONG PROFILE, same session: a Chrome outside our automation profile is refused as foreign', async () => {
+    const runtime = baseRuntime({
+      fetchJson: readyFetch(),
+      describeLoopbackPortOwner: vi.fn(async () => ({
+        status: 'ok' as const,
+        pid: 8056,
+        sessionId: 2,
+        currentSessionId: 2,
+        commandLine: `"${chromeExecutable}" --remote-debugging-port=18792 --user-data-dir=${userDataDir}`,
+      })),
+    });
+
+    const result = await diagnoseChromeCdp({ userDataDir, chromeExecutable }, runtime);
+
+    expect(result.state).toBe('foreign_endpoint_owner');
+    expect(result.action).toBe('resolve_port_conflict');
+  });
+
+  it('UNKNOWN IDENTITY: an unattributable endpoint owner is reported truthfully, never as ready', async () => {
+    const spawnDetached = vi.fn(() => ({ pid: 1, kill: vi.fn() }));
+    const runtime = baseRuntime({
+      fetchJson: readyFetch(),
+      spawnDetached,
+      describeLoopbackPortOwner: vi.fn(async () => ({
+        status: 'unknown' as const,
+        error: 'Get-NetTCPConnection timed out',
+      })),
+    });
+
+    const result = await ensureChromeCdpReady({ userDataDir, chromeExecutable }, runtime);
+
+    expect(result.state).toBe('endpoint_owner_unverified');
+    expect(result.action).toBe('retry');
+    expect(result.message).toMatch(/could not confirm/i);
+    expect(result.message).not.toMatch(/menu ?bar|macos/i);
+    // Unknown is not permission to launch a duplicate or pick another port.
+    expect(spawnDetached).not.toHaveBeenCalled();
+  });
+
+  it('a probe that throws degrades to endpoint_owner_unverified instead of a false ready', async () => {
+    const runtime = baseRuntime({
+      fetchJson: readyFetch(),
+      describeLoopbackPortOwner: vi.fn(async () => {
+        throw new Error('powershell missing');
+      }),
+    });
+
+    const result = await diagnoseChromeCdp({ userDataDir, chromeExecutable }, runtime);
+
+    expect(result.state).toBe('endpoint_owner_unverified');
+  });
+
+  it('POST-LAUNCH control: a port answering after our launch but owned by a foreign session kills OUR spawn and refuses', async () => {
+    const kill = vi.fn();
+    const spawnDetached = vi.fn(() => ({ pid: 9099, kill }));
+    const fetchJson = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+      .mockResolvedValue({ ok: true, status: 200, json: { Browser: 'Chrome/136.0.0.0' } });
+    const runtime = baseRuntime({
+      spawnDetached,
+      fetchJson,
+      describeLoopbackPortOwner: vi.fn(async () => ({
+        status: 'ok' as const,
+        pid: 4860,
+        sessionId: 1,
+        currentSessionId: 2,
+        commandLine: `"${chromeExecutable}" --user-data-dir=C:\\Users\\OtherUser\\SomeProfile`,
+      })),
+    });
+
+    const result = await ensureChromeCdpReady({ userDataDir, chromeExecutable, waitMs: 1_000 }, runtime);
+
+    expect(result.state).toBe('foreign_endpoint_owner');
+    // We kill only the Chrome WE spawned (no-orphan rule); the foreign PID is untouched.
+    expect(kill).toHaveBeenCalledTimes(1);
+  });
+
+  it('MISSING CHROME control: an unreachable endpoint with no Chrome installed still says install_chrome, no ownership query', async () => {
+    const describeLoopbackPortOwner = vi.fn(async () => oursOwner);
+    const runtime = baseRuntime({
+      existsSync: () => false,
+      describeLoopbackPortOwner,
+      fetchJson: vi.fn(async () => {
+        throw new Error('ECONNREFUSED');
+      }),
+    });
+
+    const result = await diagnoseChromeCdp({ userDataDir, chromeExecutable }, runtime);
+
+    expect(result.state).toBe('chrome_not_found');
+    expect(result.action).toBe('install_chrome');
+    expect(describeLoopbackPortOwner).not.toHaveBeenCalled();
+  });
+
+  it('TIMEOUT control: a never-binding launch still reports port_bind_timeout, not an ownership state', async () => {
+    let now = 0;
+    const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const kill = vi.fn();
+    const runtime = baseRuntime({
+      spawnDetached: vi.fn(() => ({ pid: 1, kill })),
+      fetchJson: vi.fn(async () => {
+        throw new Error('ECONNREFUSED');
+      }),
+      sleep: vi.fn(async (ms: number) => {
+        now += ms;
+      }),
+    });
+
+    try {
+      const result = await ensureChromeCdpReady({ userDataDir, chromeExecutable, waitMs: 1 }, runtime);
+      expect(result.state).toBe('port_bind_timeout');
+      expect(kill).toHaveBeenCalledTimes(1);
+    } finally {
+      dateNow.mockRestore();
+    }
+  });
+
+  it('PLATFORM control: macOS never runs the Windows ownership query and keeps its existing ready contract', async () => {
+    const describeLoopbackPortOwner = vi.fn(async () => oursOwner);
+    const runtime = baseRuntime({
+      platform: 'darwin',
+      homedir: '/Users/teacher',
+      env: {} as NodeJS.ProcessEnv,
+      existsSync: () => true,
+      fetchJson: readyFetch(),
+      describeLoopbackPortOwner,
+    });
+
+    const result = await diagnoseChromeCdp({}, runtime);
+
+    expect(result.state).toBe('cdp_ready');
+    expect(describeLoopbackPortOwner).not.toHaveBeenCalled();
+  });
+
+  it('EXPLICIT NON-LOOPBACK endpoint keeps its existing contract without a loopback ownership claim', async () => {
+    const describeLoopbackPortOwner = vi.fn(async () => oursOwner);
+    const runtime = baseRuntime({ fetchJson: readyFetch(), describeLoopbackPortOwner });
+
+    const result = await diagnoseChromeCdp(
+      { cdpEndpoint: 'http://192.168.7.20:18792', userDataDir, chromeExecutable },
+      runtime,
+    );
+
+    expect(result.state).toBe('cdp_ready');
+    expect(describeLoopbackPortOwner).not.toHaveBeenCalled();
   });
 });

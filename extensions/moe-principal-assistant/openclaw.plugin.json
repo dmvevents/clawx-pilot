@@ -98,6 +98,7 @@
       "principal.find_school",
       "principal.nscc_lookup",
       "browser.diagnose",
+      "browser.open_chrome",
       "browser.repair_chrome_cdp",
       "outlook.readiness",
       "outlook.open",
