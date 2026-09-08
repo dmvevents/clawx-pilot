@@ -1,7 +1,7 @@
 # CLWX-135/25 (moe27) native upgrade-preparation behavioral suite.
 #
 # Runs the compiled silent NSIS fixture (fixture.nsi built against the ACTUAL
-# production ClawXPrepareInstallDirectory macro, commit 2841f8c0) sequentially
+# production ClawXPrepareInstallDirectory macro, commit c5c8590b) sequentially
 # against synthetic layouts inside ONE newly created fixture root. Windows
 # PowerShell 5.1 compatible. No app execution, no registry/process mutation,
 # no broad cleanup: evidence and fixture trees are left in place; only
@@ -90,12 +90,24 @@ function Read-FixtureResult([string] $Path) {
   New-Object psobject -Property @{ Lines = $lines; Phases = $phases; Values = $values }
 }
 
-function Invoke-Fixture([string] $ScenarioDir, [string] $TargetDir, [string] $Mode = '') {
+function Invoke-Fixture([string] $ScenarioDir, [string] $TargetDir, [string] $Mode = '', [bool] $ForceRootTarget = $false) {
   if ($TargetDir -match '\s') { throw "Scenario target must not contain whitespace: $TargetDir" }
   $resultPath = Join-Path $ScenarioDir 'fixture-result.txt'
   $env:CLAWX_FIXTURE_RESULT = $resultPath
   $env:CLAWX_FIXTURE_TARGET = $TargetDir
   if ($Mode) { $env:CLAWX_FIXTURE_MODE = $Mode }
+  if ($ForceRootTarget) {
+    # Unsafe-root probe only: NSIS exehead startup validates the /D= value
+    # before .onInit and reverts an invalid bare root (unmapped drive; roots
+    # are also invalid without AllowRootDirInstall) to the compiled
+    # placeholder InstallDir — natively proven 2026-09-08 (instdirAtInit was
+    # "$TEMP\clawx-upgrade-fixture-unset" for /D=Q:\). The fixture binds
+    # $INSTDIR to this exact intended path only under its strict .onInit
+    # guards (byte-match to CLAWX_FIXTURE_TARGET, bare "<letter>:\" shape,
+    # root OS-absent); the normal mismatch guard still runs afterwards.
+    if ($TargetDir -notmatch '^[A-Za-z]:\\$') { throw "ForceRootTarget only accepts a bare drive root: $TargetDir" }
+    $env:CLAWX_FIXTURE_FORCE_ROOT_TARGET = $TargetDir
+  }
   $proc = $null
   $timedOut = $false
   $exitCode = $null
@@ -113,6 +125,7 @@ function Invoke-Fixture([string] $ScenarioDir, [string] $TargetDir, [string] $Mo
     Remove-Item Env:CLAWX_FIXTURE_RESULT -ErrorAction SilentlyContinue
     Remove-Item Env:CLAWX_FIXTURE_TARGET -ErrorAction SilentlyContinue
     Remove-Item Env:CLAWX_FIXTURE_MODE -ErrorAction SilentlyContinue
+    Remove-Item Env:CLAWX_FIXTURE_FORCE_ROOT_TARGET -ErrorAction SilentlyContinue
   }
   New-Object psobject -Property @{
     ExitCode = $exitCode
@@ -210,8 +223,17 @@ function Invoke-UnsafeRootScenario {
   }
   Add-Assertion $s 'drive-letter-unmapped' (-not (Test-Path -LiteralPath ("${letter}:\"))) ("probe drive ${letter}: is not mapped")
   $s.TargetDir = "${letter}:\"
-  $run = Invoke-Fixture $s.Dir $s.TargetDir
+  # /D= cannot deliver a bare root: NSIS startup validation reverts it to the
+  # compiled placeholder before .onInit (natively proven 2026-09-08). Request
+  # the fixture's strictly guarded test-only binding of $INSTDIR to this
+  # exact OS-confirmed-unmapped root so the ACTUAL macro sees the root target.
+  $run = Invoke-Fixture $s.Dir $s.TargetDir '' $true
+  $forcedTo = ''; $beforeForce = ''
+  if ($run.Result.Values.ContainsKey('forcedTarget')) { $forcedTo = $run.Result.Values['forcedTarget'] }
+  if ($run.Result.Values.ContainsKey('instdirBeforeForce')) { $beforeForce = $run.Result.Values['instdirBeforeForce'] }
+  Add-Assertion $s 'root-target-bound-exactly' (($run.Result.Phases -contains 'target-forced') -and ($forcedTo -ceq $s.TargetDir)) ("fixture bound `$INSTDIR to the exact intended root '" + $forcedTo + "' (instdirBeforeForce='" + $beforeForce + "', NSIS startup had discarded /D=)")
   Assert-RejectedRun $s $run
+  Add-Assertion $s 'macro-rejection-exit-2' ($run.ExitCode -eq 2) ("exit=" + $run.ExitCode + " (SetErrorLevel 2 from ClawXFailInstallPrep, not a fixture guard code 3/4/6)")
   return (Complete-Scenario $s $run)
 }
 

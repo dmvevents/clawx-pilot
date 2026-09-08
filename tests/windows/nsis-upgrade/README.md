@@ -17,7 +17,8 @@ live process capability.
 - `fixture.nsi` — minimal silent installer: guards → `!insertmacro
   ClawXPrepareInstallDirectory` → simulated new-payload copy on success.
   Exit codes: 0 success; 2 macro rejection (`SetErrorLevel 2` + `Quit`);
-  3/4 fixture-guard failures; 5 payload-copy failure.
+  3/4 fixture-guard failures; 5 payload-copy failure; 6 rejected
+  `CLAWX_FIXTURE_FORCE_ROOT_TARGET` request (unsafe-root probe only).
 - `compile-fixture.sh` — macOS compile with the pinned electron-builder
   NSIS 3.0.4.1 (`makensis` reports v3.04) and explicit `NSISDIR`.
 - `run-upgrade-suite.ps1` — sequential Windows runner (PowerShell 5.1),
@@ -53,7 +54,21 @@ cleanup, no retries.
 
 1. `unsafe-root-target` — drive-root rejection, run FIRST as safety gate;
    uses only an OS-confirmed UNMAPPED drive letter; suite stops unless it
-   passes.
+   passes. `/D=` alone cannot deliver this target: NSIS exehead startup
+   validates the `/D=` value before `.onInit` and reverts an invalid bare
+   root (unmapped drive; roots are also invalid without
+   `AllowRootDirInstall`) to the compiled placeholder `InstallDir` — proven
+   natively 2026-09-08 22:33 UTC (`instdirAtInit` was
+   `$TEMP\clawx-upgrade-fixture-unset` for `/D=Q:\`, fixture exit 4, macro
+   never reached). The runner therefore sets
+   `CLAWX_FIXTURE_FORCE_ROOT_TARGET` for this probe only; `.onInit` binds
+   `$INSTDIR` to that path only when it byte-matches
+   `CLAWX_FIXTURE_TARGET`, is exactly `<letter>:\` and the root is OS-absent
+   (a mapped/system root can never be forced — exit 6 otherwise), then the
+   normal target-mismatch guard re-checks the bound value. The scenario
+   asserts the exact binding (`target-forced`/`forcedTarget`), macro reach
+   (`prepare-start`) and the macro's own rejection (exit 2), so a
+   target-mismatch exit never counts as a pass.
 2. `reparse-target` — junction rejected; decoy destination untouched.
 3. `plain-file-target` — file at destination rejected and preserved.
 4. `unrecognized-nonempty-target` — foreign nonempty directory preserved.
@@ -105,10 +120,12 @@ cleanup, no retries.
 
 ## Status
 
-Compiled locally against the frozen content of production commit bc561eb3
-(source file sha256 71dbad1e620b14d2ce11a11bd5b1f34b1bc3b02cdcdb0f4b273d0ba0b618cc19)
+Compiled locally against the frozen content of production commit c5c8590b
+(source file sha256 168ef803093120d8f77d712e44f6e6e2e7a0bcb8f70f6268582234d83428a167)
 with NSIS 3.0.4.1 (v3.04, mac makensis). `compile-fixture.sh` prints the
 prepare-source hash so runs are tied to frozen content, not a moving
-worktree. All Windows scenario executions are NOT_RUN here; root executes
-them (as a standard QA user for the ACL case) and owns the verdict. No
-GA/Windows-pass claim.
+worktree. Root's 2026-09-08 22:33 UTC run (assembly b8423f22) honestly
+stopped in `unsafe-root-target` because NSIS startup discarded `/D=Q:\`;
+this revision adds the guarded root binding above, so all eleven Windows
+scenarios are again NOT_RUN here; root executes them (as a standard QA user
+for the ACL case) and owns the verdict. No GA/Windows-pass claim.
