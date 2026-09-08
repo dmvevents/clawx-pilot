@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T23:01:36.305430+00:00",
+  "updatedAt": "2026-09-08T23:23:47.041511+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -2100,12 +2100,12 @@
     "worktree": "/private/tmp/clawx-plan-execution-20260908",
     "clean": true,
     "pushed": true,
-    "packaged": false,
+    "packaged": true,
     "installed": false,
     "published": false,
-    "fullPreflight": "RUNNING_NATIVE_HOSTED",
+    "fullPreflight": "PASS_NATIVE_HOSTED",
     "buildRunId": 34288617489,
-    "buildStatus": "in_progress",
+    "buildStatus": "completed",
     "buildUrl": "https://github.com/dmvevents/clawx-pilot/actions/runs/34288617489",
     "profile": "keyless-public",
     "reviewedSource": "c5c8590b",
@@ -2124,7 +2124,32 @@
       "endedAt": "2026-09-08T22:59:06.3191831Z",
       "receipt": "artifacts/windows-vm/20260908-moe27/nsis-suite-c1891938-readback-v1.json"
     },
-    "installedAcceptance": "NOT_RUN"
+    "installedAcceptance": "IN_PROGRESS_STANDARD_USER_UPGRADE",
+    "buildConclusion": "success",
+    "manifest": "docs/release-manifests/0.4.3-moe.28.json",
+    "artifactIdentityVerified": true,
+    "nativePreflight": {
+      "runId": 34288617489,
+      "source": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+      "passed": 2319,
+      "failed": 0,
+      "skipped": 57,
+      "testFilesPassed": 211,
+      "testFilesSkipped": 3
+    },
+    "artifactChecks": {
+      "package": 36,
+      "compiledFiles": 172,
+      "status": "PASS",
+      "credentialSeeds": false,
+      "lifecycleMarkersPresent": false,
+      "evidenceRoot": "artifacts/windows-vm/20260908-moe28/hosted-package-34288617489"
+    },
+    "installerSha256": "f74564761651c436141cd6bd0fdfdb25b561a950336f6ce736e400d0ce56994f",
+    "installerBytes": 476771752,
+    "appAsarSha256": "730660d9816391b76b0bbb406862bef1764f3b716d8785500d5b042dc30dfa16",
+    "appExeSha256": "6055c97a567e95358f430059c5b2443e03b509de59a737b1a94c676901adcbda",
+    "nativeDownload": "PASS_HASH_LENGTH_2026-09-08T23:22:03Z"
   },
   "handoff": {
     "status": "COMPLETE_READY_FOR_NEXT_AGENT",
@@ -2164,7 +2189,7 @@
     "awsProfile": "bedrock",
     "region": "us-east-2",
     "baseSource": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
-    "phase": "MOE28_HOSTED_BUILD",
+    "phase": "MOE28_VERIFIED_ARTIFACT_STANDARD_USER_UPGRADE",
     "privateReceipts": "artifacts/ga-fable-20260908",
     "plan": ".omx/plans/prd-ga-fable-20260908.md",
     "testSpec": ".omx/plans/test-spec-ga-fable-20260908.md",
@@ -4899,16 +4924,47 @@
       "installedEnvironment": "Assisted existing-profile standard-user Windows Server 2022"
     },
     "moe28Build": {
-      "conclusion": "",
+      "conclusion": "success",
       "createdAt": "2026-09-08T23:00:09Z",
       "databaseId": 34288617489,
       "headSha": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
-      "status": "in_progress",
+      "status": "completed",
       "url": "https://github.com/dmvevents/clawx-pilot/actions/runs/34288617489",
       "source": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
       "profile": "keyless-public",
       "publicationInputs": false,
-      "stage": "HOSTED_PREFLIGHT"
+      "stage": "VERIFIED_ARTIFACT_NATIVE_UPGRADE_STARTED",
+      "completedAt": "2026-09-08T23:17:20Z"
+    },
+    "moe28Upgrade": {
+      "status": "INSTALLER_RUNNING_BACKUP_VERIFIED",
+      "task": "ClawXMoe28Install",
+      "observerMinutes": 40,
+      "instanceId": "2748349704588098112",
+      "account": "ClawXFresh0908",
+      "scope": "Existing-profile standard-user Server2022 upgrade from moe27",
+      "artifact": "docs/release-manifests/0.4.3-moe.28.json",
+      "privateGcs": "gs://clawx-rc-artifacts-622687731621/private-validation/moe28-34288617489/moe28.exe",
+      "vmDownloadReceipt": "artifacts/windows-vm/20260908-moe28/download-verified-moe28-installer.json",
+      "source": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+      "runId": 34288617489,
+      "nativeInstallerExit": "PENDING",
+      "startup": "NOT_RUN",
+      "chat": "NOT_RUN",
+      "profileBackup": {
+        "status": "PASS",
+        "appdataFiles": 61,
+        "openclawFiles": 634,
+        "allHashesMatch": true,
+        "at": "2026-09-08T23:24:42.3763708Z"
+      },
+      "rdpRecovery": {
+        "initialUi": "FAIL_INVALID_HANDLE_DISCONNECTED_SESSION",
+        "sameSessionRecovered": true,
+        "uiObservedAt": "2026-09-08T23:27:59.4175412Z",
+        "evidence": "artifacts/windows-vm/20260908-moe28/operator-preinstall-observation.json"
+      },
+      "installButtonInvokedAt": "2026-09-08T23:29:03.0855147Z"
     }
   }
 }
