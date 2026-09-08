@@ -25,19 +25,30 @@
 ;     trimmed.
 ;   - /D=<target> sets $INSTDIR (silent NSIS convention; last argument,
 ;     no quotes, therefore no spaces in the target path).
-;   - env CLAWX_FIXTURE_FORCE_ROOT_TARGET (unsafe-root probe ONLY): the NSIS
-;     exehead validates the /D= value BEFORE .onInit (Ui.c is_valid_instpath)
-;     and reverts an invalid path to the compiled-in InstallDir placeholder.
-;     A bare drive root is always invalid there: roots are refused without
-;     AllowRootDirInstall, and an unmapped drive's root does not exist
-;     (proven natively 2026-09-08 22:33 UTC: /D=Q:\ arrived in .onInit as
-;     "$TEMP\clawx-upgrade-fixture-unset", exit 4). So /D= can never deliver
-;     the root probe target to the ACTUAL macro. When this variable is set it
-;     must byte-match CLAWX_FIXTURE_TARGET, be exactly "<letter>:\" and name
-;     an OS-absent (unmapped) root; only then does .onInit bind $INSTDIR to
-;     that exact intended path, and the normal target-mismatch guard below
-;     still runs against the result. Any guard violation exits 6. Unset (all
-;     other scenarios): behavior is unchanged and mismatch protection stands.
+;   - Test-only exact-target bindings: the NSIS exehead validates the /D=
+;     value BEFORE .onInit (Ui.c is_valid_instpath) and reverts an invalid
+;     path to the compiled-in InstallDir placeholder. Root's startup-only
+;     native control (2026-09-08 22:43 UTC, NSIS 3.0.4.1) proved BOTH
+;     rejection-probe shapes are reverted: a bare drive root (/D=Q:\) AND an
+;     existing plain file at the destination path; a new directory under an
+;     existing parent arrives verbatim. So /D= can never deliver those two
+;     probe targets to the ACTUAL macro. Two env variables therefore request
+;     a strictly guarded .onInit binding of $INSTDIR to the runner's exact
+;     intended target; the normal target-mismatch guard below still runs
+;     against the bound value, any guard violation exits 6, and when both
+;     variables are unset behavior is unchanged.
+;     - CLAWX_FIXTURE_FORCE_ROOT_TARGET (unsafe-root probe ONLY): must
+;       byte-match CLAWX_FIXTURE_TARGET, be exactly "<letter>:\", and that
+;       letter must be UNMAPPED per the OS GetLogicalDrives mask (a failed
+;       query refuses; enumeration/IfFileExists cannot prove absence — the
+;       B2 lesson — and a mapped/system root can never be forced).
+;     - CLAWX_FIXTURE_FORCE_FILE_TARGET (plain-file probe ONLY): must
+;       byte-match CLAWX_FIXTURE_TARGET, be exactly
+;       "<directory of CLAWX_FIXTURE_RESULT>\install-dir" (pinned inside the
+;       runner-created scenario directory, which itself sits >=3 components
+;       deep — no escaped/shallow/mapped-root path), and currently be an
+;       existing PLAIN file (exists, not a directory, not a reparse point)
+;       per GetFileAttributes.
 ;   - env CLAWX_FIXTURE_MODE selects the invocation path. "direct" (default):
 ;     one direct prep insertion. "hooks": direct prep, then the ACTUAL
 ;     customUnInstallCheck and customUnInstallCheckCurrentUser hooks (repeated
@@ -49,9 +60,10 @@
 ; Exit codes: 0 success; 2 macro rejection/failure path (ClawXFailInstallPrep
 ;   uses SetErrorLevel 2 + Quit); 3 missing CLAWX_FIXTURE_RESULT;
 ;   4 CLAWX_FIXTURE_TARGET/$INSTDIR mismatch; 5 simulated payload copy failed
-;   after successful preparation; 6 CLAWX_FIXTURE_FORCE_ROOT_TARGET guard
-;   violation (not the runner's exact target, not a bare drive root, or the
-;   root exists/is mapped).
+;   after successful preparation; 6 rejected CLAWX_FIXTURE_FORCE_ROOT_TARGET /
+;   CLAWX_FIXTURE_FORCE_FILE_TARGET binding request (not the runner's exact
+;   target, wrong shape/location, mapped or unqueryable drive letter, or not
+;   an existing plain file).
 
 !ifndef CLAWX_PREPARE_SOURCE
   !error "Pass /DCLAWX_PREPARE_SOURCE=<absolute path to the reviewed .nsh defining ClawXPrepareInstallDirectory> (e.g. scripts/installer.nsh once the author lands the macro, or contract-compile-check.nsh for compile validation only)."
@@ -118,6 +130,29 @@ Function TrimTrailingBackslash
   Pop $1
 FunctionEnd
 
+; Parent directory of the path on the stack: strips the final "\component";
+; returns "" when no backslash remains (standard NSIS GetParent shape).
+Function GetParentPath
+  Exch $R0
+  Push $R1
+  Push $R2
+  Push $R3
+  StrCpy $R1 0
+  StrLen $R2 $R0
+  gppLoop:
+    IntOp $R1 $R1 + 1
+    IntCmp $R1 $R2 gppGet 0 gppGet
+    StrCpy $R3 $R0 1 -$R1
+    StrCmp $R3 "\" gppGet
+    Goto gppLoop
+  gppGet:
+    StrCpy $R0 $R0 -$R1
+    Pop $R3
+    Pop $R2
+    Pop $R1
+    Exch $R0
+FunctionEnd
+
 Function .onInit
   ReadEnvStr $0 "CLAWX_FIXTURE_RESULT"
   StrCmp $0 "" 0 haveResult
@@ -129,17 +164,14 @@ Function .onInit
   ReadEnvStr $2 "CLAWX_FIXTURE_TARGET"
   StrCmp $2 "" badTarget
 
-  ; Test-only unmapped-root binding (unsafe-root probe only; see header).
-  ; Real NSIS startup already replaced an invalid /D= root with the compiled
-  ; placeholder, so bind $INSTDIR to the runner's exact intended path — but
-  ; only under ALL of these guards; anything else refuses with exit 6:
-  ;   1. byte-identical (case-sensitive) to CLAWX_FIXTURE_TARGET;
-  ;   2. exactly a bare drive root "<letter>:\" (length 3);
-  ;   3. that root does not exist for this process (unmapped drive), so a
-  ;      mapped/system drive root can never be forced.
-  ; The ordinary mismatch guard below still verifies the bound value.
+  ; Test-only exact-target bindings (see header): real NSIS startup already
+  ; replaced BOTH confirmed probe shapes (bare drive root; existing plain
+  ; file) with the compiled placeholder, so bind $INSTDIR to the runner's
+  ; exact intended path — but only under ALL of the per-kind guards below;
+  ; anything else refuses with exit 6. The ordinary mismatch guard at the
+  ; end still verifies the bound value.
   ReadEnvStr $3 "CLAWX_FIXTURE_FORCE_ROOT_TARGET"
-  StrCmp $3 "" noForce
+  StrCmp $3 "" checkFileForce
     !insertmacro ClawXFixtureResultLine "instdirBeforeForce=$INSTDIR"
     StrCmpS $3 $2 0 badForce             ; guard 1: runner's exact intent
     StrLen $4 $3
@@ -156,9 +188,56 @@ Function .onInit
       IntOp $6 $6 + 1
       Goto forceLetterLoop
     forceLetterOk:
-    IfFileExists "$3*.*" badForce        ; guard 3: root must be OS-absent
+    ; guard 3: the letter must be UNMAPPED per the OS drive mask. A failed
+    ; query (0) is a refusal; enumeration/IfFileExists cannot prove absence
+    ; (the B2 lesson: an unenumerable path is not an absent path).
+    System::Call `kernel32::GetLogicalDrives() i .r5`
+    IntCmp $5 0 badForce badForce
+    IntCmp $6 26 0 +2 0                  ; lowercase letter -> drive index
+      IntOp $6 $6 - 26
+    IntOp $7 $5 >> $6
+    IntOp $7 $7 & 1
+    IntCmp $7 0 0 badForce badForce      ; mapped drive: refuse
     StrCpy $INSTDIR $3
     !insertmacro ClawXFixtureResultLine "phase=target-forced"
+    !insertmacro ClawXFixtureResultLine "forcedKind=unmapped-root"
+    !insertmacro ClawXFixtureResultLine "forcedTarget=$3"
+    Goto noForce
+
+  checkFileForce:
+  ReadEnvStr $3 "CLAWX_FIXTURE_FORCE_FILE_TARGET"
+  StrCmp $3 "" noForce
+    !insertmacro ClawXFixtureResultLine "instdirBeforeForce=$INSTDIR"
+    StrCmpS $3 $2 0 badForce             ; guard 1: runner's exact intent
+    ; guard 2: exactly "<result-file directory>\install-dir" — pinned inside
+    ; the runner-created scenario directory (no escaped/shallow/mapped-root
+    ; path); the scenario directory itself must sit >=3 components deep.
+    Push $FixtureResultPath
+    Call GetParentPath
+    Pop $4
+    StrCmp $4 "" badForce
+    StrCmpS $3 "$4\install-dir" 0 badForce
+    Push $4
+    Call GetParentPath
+    Pop $5
+    StrCmp $5 "" badForce
+    Push $5
+    Call GetParentPath
+    Pop $5
+    StrCmp $5 "" badForce
+    ; guard 3: the destination must currently be an existing PLAIN file —
+    ; present, not a directory, not a reparse point.
+    System::Call `kernel32::GetFileAttributes(t "$3") i .r5`
+    IntCmp $5 -1 badForce                ; INVALID_FILE_ATTRIBUTES: refuse
+    IntOp $6 $5 & 16                     ; FILE_ATTRIBUTE_DIRECTORY
+    IntCmp $6 0 +2 0 0
+      Goto badForce
+    IntOp $6 $5 & 1024                   ; FILE_ATTRIBUTE_REPARSE_POINT
+    IntCmp $6 0 +2 0 0
+      Goto badForce
+    StrCpy $INSTDIR $3
+    !insertmacro ClawXFixtureResultLine "phase=target-forced"
+    !insertmacro ClawXFixtureResultLine "forcedKind=plain-file"
     !insertmacro ClawXFixtureResultLine "forcedTarget=$3"
     Goto noForce
   badForce:
@@ -186,7 +265,7 @@ Function .onInit
 FunctionEnd
 
 Section "PrepareAndSimulateUpgrade"
-  !insertmacro ClawXFixtureResultLine "fixtureVersion=3"
+  !insertmacro ClawXFixtureResultLine "fixtureVersion=4"
   !insertmacro ClawXFixtureResultLine "prepareSource=${CLAWX_PREPARE_SOURCE}"
   !insertmacro ClawXFixtureResultLine "instdir=$INSTDIR"
 

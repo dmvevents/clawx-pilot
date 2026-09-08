@@ -90,23 +90,30 @@ function Read-FixtureResult([string] $Path) {
   New-Object psobject -Property @{ Lines = $lines; Phases = $phases; Values = $values }
 }
 
-function Invoke-Fixture([string] $ScenarioDir, [string] $TargetDir, [string] $Mode = '', [bool] $ForceRootTarget = $false) {
+function Invoke-Fixture([string] $ScenarioDir, [string] $TargetDir, [string] $Mode = '', [string] $ForceTargetKind = '') {
   if ($TargetDir -match '\s') { throw "Scenario target must not contain whitespace: $TargetDir" }
   $resultPath = Join-Path $ScenarioDir 'fixture-result.txt'
   $env:CLAWX_FIXTURE_RESULT = $resultPath
   $env:CLAWX_FIXTURE_TARGET = $TargetDir
   if ($Mode) { $env:CLAWX_FIXTURE_MODE = $Mode }
-  if ($ForceRootTarget) {
-    # Unsafe-root probe only: NSIS exehead startup validates the /D= value
-    # before .onInit and reverts an invalid bare root (unmapped drive; roots
-    # are also invalid without AllowRootDirInstall) to the compiled
-    # placeholder InstallDir — natively proven 2026-09-08 (instdirAtInit was
-    # "$TEMP\clawx-upgrade-fixture-unset" for /D=Q:\). The fixture binds
-    # $INSTDIR to this exact intended path only under its strict .onInit
-    # guards (byte-match to CLAWX_FIXTURE_TARGET, bare "<letter>:\" shape,
-    # root OS-absent); the normal mismatch guard still runs afterwards.
-    if ($TargetDir -notmatch '^[A-Za-z]:\\$') { throw "ForceRootTarget only accepts a bare drive root: $TargetDir" }
+  # NSIS exehead startup validates the /D= value before .onInit and reverts
+  # an invalid destination to the compiled placeholder InstallDir. Root's
+  # startup-only native control (2026-09-08 22:43 UTC) proved BOTH rejection
+  # probe shapes are reverted: a bare unmapped drive root AND an existing
+  # plain file at the destination; a new directory arrives verbatim. For
+  # exactly those two probes the fixture binds $INSTDIR to the runner's
+  # exact intended path under its strict .onInit guards (byte-match to
+  # CLAWX_FIXTURE_TARGET plus per-kind shape/OS-state checks; violation
+  # exits 6); the normal mismatch guard still runs afterwards.
+  if ($ForceTargetKind -eq 'root') {
+    if ($TargetDir -notmatch '^[A-Za-z]:\\$') { throw "ForceTargetKind 'root' only accepts a bare drive root: $TargetDir" }
     $env:CLAWX_FIXTURE_FORCE_ROOT_TARGET = $TargetDir
+  } elseif ($ForceTargetKind -eq 'file') {
+    if ($TargetDir -cne (Join-Path $ScenarioDir 'install-dir')) { throw "ForceTargetKind 'file' only accepts this scenario's own install-dir path: $TargetDir" }
+    if (-not (Test-Path -LiteralPath $TargetDir -PathType Leaf)) { throw "ForceTargetKind 'file' requires an existing plain file: $TargetDir" }
+    $env:CLAWX_FIXTURE_FORCE_FILE_TARGET = $TargetDir
+  } elseif ($ForceTargetKind) {
+    throw "Unknown ForceTargetKind: $ForceTargetKind"
   }
   $proc = $null
   $timedOut = $false
@@ -126,6 +133,7 @@ function Invoke-Fixture([string] $ScenarioDir, [string] $TargetDir, [string] $Mo
     Remove-Item Env:CLAWX_FIXTURE_TARGET -ErrorAction SilentlyContinue
     Remove-Item Env:CLAWX_FIXTURE_MODE -ErrorAction SilentlyContinue
     Remove-Item Env:CLAWX_FIXTURE_FORCE_ROOT_TARGET -ErrorAction SilentlyContinue
+    Remove-Item Env:CLAWX_FIXTURE_FORCE_FILE_TARGET -ErrorAction SilentlyContinue
   }
   New-Object psobject -Property @{
     ExitCode = $exitCode
@@ -227,7 +235,7 @@ function Invoke-UnsafeRootScenario {
   # compiled placeholder before .onInit (natively proven 2026-09-08). Request
   # the fixture's strictly guarded test-only binding of $INSTDIR to this
   # exact OS-confirmed-unmapped root so the ACTUAL macro sees the root target.
-  $run = Invoke-Fixture $s.Dir $s.TargetDir '' $true
+  $run = Invoke-Fixture $s.Dir $s.TargetDir '' 'root'
   $forcedTo = ''; $beforeForce = ''
   if ($run.Result.Values.ContainsKey('forcedTarget')) { $forcedTo = $run.Result.Values['forcedTarget'] }
   if ($run.Result.Values.ContainsKey('instdirBeforeForce')) { $beforeForce = $run.Result.Values['instdirBeforeForce'] }
@@ -263,8 +271,15 @@ function Invoke-PlainFileScenario {
   $target = Join-Path $s.Dir 'install-dir'
   Write-Utf8NoBom $target 'plain-file-not-a-directory'
   $s.TargetDir = $target
-  $run = Invoke-Fixture $s.Dir $s.TargetDir
+  # NSIS startup also discards a /D= destination that is an existing plain
+  # file (startup-only control, 2026-09-08 22:43 UTC); request the fixture's
+  # guarded binding of $INSTDIR to this scenario's own install-dir file so
+  # the ACTUAL macro sees the plain-file destination.
+  $run = Invoke-Fixture $s.Dir $s.TargetDir '' 'file'
+  $forcedTo = ''; if ($run.Result.Values.ContainsKey('forcedTarget')) { $forcedTo = $run.Result.Values['forcedTarget'] }
+  Add-Assertion $s 'file-target-bound-exactly' (($run.Result.Phases -contains 'target-forced') -and ($forcedTo -ceq $s.TargetDir)) ("fixture bound `$INSTDIR to the exact intended plain-file destination '" + $forcedTo + "' (NSIS startup had discarded /D=)")
   Assert-RejectedRun $s $run
+  Add-Assertion $s 'macro-rejection-exit-2' ($run.ExitCode -eq 2) ("exit=" + $run.ExitCode + " (SetErrorLevel 2 from ClawXFailInstallPrep, not a fixture guard code 3/4/6)")
   Add-Assertion $s 'file-preserved' (Test-FileContent $target 'plain-file-not-a-directory') 'the preexisting file is intact at the destination path'
   return (Complete-Scenario $s $run)
 }

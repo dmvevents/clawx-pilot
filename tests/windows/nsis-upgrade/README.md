@@ -18,7 +18,8 @@ live process capability.
   ClawXPrepareInstallDirectory` → simulated new-payload copy on success.
   Exit codes: 0 success; 2 macro rejection (`SetErrorLevel 2` + `Quit`);
   3/4 fixture-guard failures; 5 payload-copy failure; 6 rejected
-  `CLAWX_FIXTURE_FORCE_ROOT_TARGET` request (unsafe-root probe only).
+  `CLAWX_FIXTURE_FORCE_ROOT_TARGET` / `CLAWX_FIXTURE_FORCE_FILE_TARGET`
+  binding request (unsafe-root / plain-file probes only).
 - `compile-fixture.sh` — macOS compile with the pinned electron-builder
   NSIS 3.0.4.1 (`makensis` reports v3.04) and explicit `NSISDIR`.
 - `run-upgrade-suite.ps1` — sequential Windows runner (PowerShell 5.1),
@@ -60,17 +61,28 @@ cleanup, no retries.
    `AllowRootDirInstall`) to the compiled placeholder `InstallDir` — proven
    natively 2026-09-08 22:33 UTC (`instdirAtInit` was
    `$TEMP\clawx-upgrade-fixture-unset` for `/D=Q:\`, fixture exit 4, macro
-   never reached). The runner therefore sets
-   `CLAWX_FIXTURE_FORCE_ROOT_TARGET` for this probe only; `.onInit` binds
-   `$INSTDIR` to that path only when it byte-matches
-   `CLAWX_FIXTURE_TARGET`, is exactly `<letter>:\` and the root is OS-absent
-   (a mapped/system root can never be forced — exit 6 otherwise), then the
+   never reached) and reconfirmed by the startup-only control at 22:43 UTC.
+   The runner therefore sets `CLAWX_FIXTURE_FORCE_ROOT_TARGET` for this
+   probe only; `.onInit` binds `$INSTDIR` to that path only when it
+   byte-matches `CLAWX_FIXTURE_TARGET`, is exactly `<letter>:\` and that
+   letter is UNMAPPED per the OS `GetLogicalDrives` mask (a failed query
+   refuses; enumeration cannot prove absence — the B2 lesson; a
+   mapped/system root can never be forced — exit 6 otherwise), then the
    normal target-mismatch guard re-checks the bound value. The scenario
    asserts the exact binding (`target-forced`/`forcedTarget`), macro reach
    (`prepare-start`) and the macro's own rejection (exit 2), so a
    target-mismatch exit never counts as a pass.
 2. `reparse-target` — junction rejected; decoy destination untouched.
-3. `plain-file-target` — file at destination rejected and preserved.
+3. `plain-file-target` — file at destination rejected and preserved. The
+   same startup-only control proved NSIS also discards a `/D=` destination
+   that is an existing plain file, so the runner sets
+   `CLAWX_FIXTURE_FORCE_FILE_TARGET`; `.onInit` binds `$INSTDIR` only when
+   the value byte-matches `CLAWX_FIXTURE_TARGET`, equals exactly
+   `<result-file directory>\install-dir` (pinned inside the runner-created
+   scenario directory, itself ≥3 components deep) and is currently an
+   existing plain file (not a directory/reparse point) — exit 6 otherwise.
+   The scenario asserts the exact binding, macro reach and the macro's own
+   exit 2.
 4. `unrecognized-nonempty-target` — foreign nonempty directory preserved.
 5. `empty-existing-destination` — existing empty dir accepted; no rename.
 6. `fresh-install` — nonexistent destination; payload lands; no stale dir.
@@ -126,6 +138,8 @@ with NSIS 3.0.4.1 (v3.04, mac makensis). `compile-fixture.sh` prints the
 prepare-source hash so runs are tied to frozen content, not a moving
 worktree. Root's 2026-09-08 22:33 UTC run (assembly b8423f22) honestly
 stopped in `unsafe-root-target` because NSIS startup discarded `/D=Q:\`;
-this revision adds the guarded root binding above, so all eleven Windows
-scenarios are again NOT_RUN here; root executes them (as a standard QA user
-for the ACL case) and owns the verdict. No GA/Windows-pass claim.
+root's 22:43 UTC startup-only control proved the same reversion for an
+existing plain-file destination. This revision adds the guarded root and
+plain-file bindings above, so all eleven Windows scenarios are again
+NOT_RUN here; root executes them (as a standard QA user for the ACL case)
+and owns the verdict. No GA/Windows-pass claim.
