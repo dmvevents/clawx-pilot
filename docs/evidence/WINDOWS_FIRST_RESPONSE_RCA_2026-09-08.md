@@ -108,9 +108,36 @@ Driver follow-up **`141841df`** now waits for composer/history readiness and req
 
 A read-only live probe at **07:21:34Z** confirms an enabled/default Online account, available key and a matching `default/probe` result (`success:true`, `valid:true`, HTTP 200). The default runtime configuration is Online, but the existing Main session retains local model metadata. This narrows the mismatch; it does not identify which pre-send reconciliation gate ran in the failed diagnostic. The pinned clear response can retain runtime model fields when already aligned with the default, while the renderer currently rejects such acknowledgements; that adjacent contract mismatch needs its own regression and is not established as the cause of the observed local route.
 
-An SDK-only diagnostic was prepared at **07:19:49Z** with original loader/entry backups and unchanged ASAR/provider settings. It has not produced an accepted response or a second CPU result. It will be restored or superseded by a separately hash-bound integrated diagnostic; neither counts as a released installer.
+An SDK-only diagnostic was prepared at **07:19:49Z**, then restored before the integrated diagnostic at 07:39Z. It produced no response test or second CPU result. Its receipt remains separate; neither diagnostic counts as a released installer.
 
 Allowlisted receipts: `artifacts/windows-vm/20260908-connection-rca/cpu-hot-paths.json`, `cpu-summary.json`, `profile-completed.json`, `retrospective-turn-correlation-v4.json` and the restoration receipt. Raw CPU/log/diagnostic UI files remain protected and untracked.
+
+## Integrated diagnostic: measured improvement, response still fails
+
+Source **`8ca085f4`** integrates reviewed history `f5875b54`, UI `aa398dfb`, driver `141841df` and SDK `ba459ef1`. It excludes the separate clear-ack contract repair. The diagnostic ASAR is **`f1e2ef540bb84fd0e98c5ec6ad52d37b5fdbd84c74156c6b02666a9ee2e85e1f`**. Native assembly verifies every one of **12,658 existing non-renderer files** and their unpacking flags; six already-missing foreign-platform references were omitted. Only compiled renderer content and the two separately hash-bound OpenClaw bundles changed. This is a patched-installation diagnostic, not an installer or release artifact.
+
+The standard-user profile was backed up and hash-verified before applying the diagnostic at **07:39:13Z**. History hydrated to eight existing Main messages by **07:40:27.581Z**. The driver then proved a new empty session, **`agent:main:session-1788853229825`**, before Send. Exact-token transcript and trajectory bind this attempt to **`custom-moecloud/moe-demo-pro`**.
+
+| Boundary | UTC / result |
+|---|---|
+| Send | 07:40:31.088 |
+| Runtime prompt submitted | 07:41:46.149: **75.061 s preparation** |
+| Model completion | 07:42:11.082: externalAbort/aborted/timedOut true, idleTimedOut false; no assistant text |
+| Renderer terminal error | 07:42:11.288; **submitted prompt preserved**, one visible message, Online unchanged |
+| Driver end | 07:43:31.913; `FAILED_GENERIC_ERROR`, freshSession true, no chip/run/degrade error, no answer |
+| Broker access metadata | GET models HTTP 200 / 0.430 s; POST chat starts 07:41:46.237, HTTP 200 / **34.108 s**. Route/time correlation only |
+
+This attempt reaches the model earlier than the original 112-second failure, but leaves only **24.933 seconds** between `prompt.submitted` and cancellation. The temporally correlated broker request lasts about nine seconds beyond that cancellation. HTTP 200 still does not establish an answer delivered to the app. The renderer cancellation and external-abort timestamps now align within about 0.2 seconds; direct cancellation-RPC capture remains absent.
+
+The 181.050-second CPU capture records **SDK alias materialization 12.838 s**, plugin loading 41.459 s, registry resolution 34.197 s, native `readFileUtf8` self time 21.768 s and `lstat` self time 20.320 s. Inclusive paths overlap. The earlier SDK profile was 54.133 s but used the wrong local session/provider; cache and source changes also differ. These are observed profiles, not a controlled single-variable speedup claim.
+
+**Passed diagnostic criteria:** history hydration; actual fresh session; actual Online provider; visible prompt retained after timeout; neutral generic error; no silent local replay. **Failed:** stable first response. Next isolate repeated filesystem preparation and check whether an existing owned preparation/model-start event is dropped before the renderer watchdog. Do not declare success from the faster preparation or extend a timeout without tracing actual progress ownership.
+
+Original ASAR, entry and both runtime bundles were restored at **07:47:52.657Z**, with matching original hashes, the owned app exited and its listeners gone. The VM lifecycle and other users’ processes remained unchanged. Receipt: `integrated-restored.json`.
+
+The pinned runtime emits `stream:"lifecycle", data.phase:"start"` from the Pi `agent_start` subscription. `prompt.submitted` immediately precedes `activeSession.prompt`, and the Gateway broadcasts the lifecycle with the mapped run/session. In source `8ca085f4`, renderer `src/stores/gateway.ts` only normalizes phase `started`, while `hasMeaningfulChatEventProgress` excludes bare lifecycle events. The next regression must prove one owned execution-start refreshes liveness, wrong/duplicate/stale events do not, and the original timeout remains bounded. Live lifecycle timing still needs capture.
+
+Allowlisted evidence: `integrated-correlation.json`, `integrated-cpu-summary.json`, `integrated-renderer-timeline.jsonl`, `integrated-broker-timeline.json`, `integrated-asar-receipt.json` and `integrated-patch-receipt.json` under `artifacts/windows-vm/20260908-connection-rca/`. Raw profile data stays private.
 
 ## Hypotheses and falsifiers
 
@@ -135,7 +162,7 @@ No uncontrolled timeout increase, broad rollback, security exclusion or compute 
 | `38085ba3` | `electron/main/cloud-gateway-provider-seed.ts`; `electron/utils/channel-config.ts` | Preserve explicit channel choice and use existing atomic Windows configuration writes |
 | `10449b96`, `7f4b06d3` | `electron/services/providers/channel-router.ts`; `src/stores/chat.ts` | Retain run ownership and avoid false local replay; not a cold-latency cure |
 | `a4efc7e4` | `electron/services/providers/provider-runtime-sync.ts`; `electron/utils/openclaw-auth.ts` | Preserve managed cloud aliases and modality metadata |
-| `f5875b54` | `scripts/openclaw-chat-history-patch.mjs`; actual pinned-handler regression | History can return without loading the entire model catalog; source-verified, not yet installed |
+| `f5875b54` | `scripts/openclaw-chat-history-patch.mjs`; actual pinned-handler regression | History can return without loading the entire model catalog; source regression and integrated diagnostic hydration pass |
 
 These samples retain their commit and test provenance. `sendGeneration` ownership in `src/stores/chat.ts` prevents an old run from clearing a newer send; the history patch test executes the pinned handler and resolver with only IO/context boundaries stubbed. Keep these protections while correcting the timeout/history race. The user-held trim branch remains held.
 
@@ -173,7 +200,7 @@ git show 38085ba3 -- electron/main/cloud-gateway-provider-seed.ts electron/utils
 git show f5875b54 -- scripts/openclaw-chat-history-patch.mjs tests/unit/openclaw-chat-history-patch.test.ts
 ```
 
-The first two repairs address historical boot defects. The history helper addresses the measured history/catalog wait and still requires installed validation. None of these snippets establishes that cold first-turn preparation is repaired.
+The first two repairs address historical boot defects. The history helper addresses the measured history/catalog wait; hydration passes in the patched installation, while exact-installer acceptance remains pending. None of these snippets establishes that cold first-turn preparation is repaired.
 
 ## Test criteria and experiment discipline
 

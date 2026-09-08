@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T07:22:00Z",
+  "updatedAt": "2026-09-08T07:48:00Z",
   "purpose": "Completion planning only; this file is not a release verdict or a substitute for machine-produced acceptance evidence.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -969,7 +969,7 @@
           "measurementLimit": "Inclusive paths overlap; cancellation producer not directly captured; instrumented diagnostic is not artifact acceptance.",
           "uiRepairCommit": "aa398dfb",
           "uiRepairStatus": "PASS_SOURCE_TESTS_AND_INDEPENDENT_REVIEW",
-          "sdkWriteRepair": "PASS_SOURCE_CHECKS_REVIEW_AND_NATIVE_FIXTURE; INSTALLED_RESPONSE_PENDING",
+          "sdkWriteRepair": "PASS_SOURCE_REVIEW_AND_NATIVE_FIXTURE; INTEGRATED_FIRST_RESPONSE_FAIL",
           "instrumentationRestoredAt": "2026-09-08T07:04:02.339Z",
           "installedRepairAcceptance": "NOT_RUN",
           "sdkWriteRepairCommit": "ba459ef1",
@@ -995,21 +995,39 @@
             "limitation": "Single warm fixture timings; not app-level latency proof.",
             "modelRequests": 0
           },
-          "activeDiagnostic": {
-            "at": "2026-09-08T07:19:49.868Z",
-            "mode": "SDK_ONLY_DIAGNOSTIC_NOT_ARTIFACT_ACCEPTANCE",
-            "patch": "ba459ef1",
-            "originalFilesBackedUp": true,
-            "historyPatchApplied": false,
-            "providerConfigModified": false,
-            "restoration": "PENDING_END_OF_DIAGNOSTIC"
-          },
+          "activeDiagnostic": null,
           "driverFreshnessRepair": {
             "commit": "141841df",
             "status": "PASS_SOURCE_TESTS_AND_REVIEW",
             "focusedTests": 32,
             "electronInteractions": 3
-          }
+          },
+          "integratedDiagnostic": {
+            "source": "8ca085f4ffc855f250cbd233e7ac82b864219568",
+            "asarSha256": "f1e2ef540bb84fd0e98c5ec6ad52d37b5fdbd84c74156c6b02666a9ee2e85e1f",
+            "sentAt": "2026-09-08T07:40:31.088Z",
+            "freshSession": true,
+            "actualProvider": "custom-moecloud",
+            "actualModel": "moe-demo-pro",
+            "preparationSeconds": 75.061,
+            "modelWindowBeforeAbortSeconds": 24.933,
+            "result": "FAILED_GENERIC_ERROR",
+            "promptRetained": true,
+            "silentLocalReplay": false,
+            "sdkAliasInclusiveSeconds": 12.838,
+            "artifactAcceptance": false,
+            "restoration": {
+              "at": "2026-09-08T07:47:52.6577117Z",
+              "status": "PASS_ORIGINAL_INSTALLED_FILES_RESTORED",
+              "asarSha256": "656dde43f1a2b3597bd5d35f9bca72dc0ad2527909b0eb499b0f9971d3a56aa5",
+              "entrySha256": "77e5b2f586902a6135cc8f63505195def17191b31cadd604f8407ff8581ec0fa",
+              "runtimeBundlesRestored": 2,
+              "appExited": true,
+              "listenersGone": true,
+              "vmLifecycleUnchanged": true
+            }
+          },
+          "nextRepair": "Normalize genuine lifecycle phase:start once for the owned run; reject duplicate/stale/foreign progress; retain timeout. Live event timing and repaired first response pending."
         }
       }
     }
@@ -1180,7 +1198,7 @@
         "installed_candidate"
       ],
       "evidenceSummary": "Prior installed moe.22 build 34171848832 attempted ollama-ollamalo/qwen2.5:3b-instruct and hit embedded assistant timeout at 02:13:07Z; the app displayed a no-response notice and recovered idle. Actual failed-session metadata records 33,177 system characters plus 33,102 tool-schema characters across 47 tools. Direct API diagnostics: tiny warm first content in 694 ms; a 32,283-character context produced no content by 120,215 ms. Managed OpenAI-compatible catalog metadata advertises contextWindow 200000 while native Ollama metadata is 32768. Ollama v0.32.14 drops top-level options.num_ctx on its OpenAI route, so the catalog value does not prove a 200,000-token allocation. Ordinary app and offline acceptance remain unproved; new candidate a4efc7e4 contains no local-context repair. Selected build policy-only experiment also timed out; exact prior policy restored03:35:08Z, fresh Online turn answered03:38:15Z and actual model correlation passed03:44:22Z. Stakeholder local network failure is separate from this VM context/latency defect.",
-      "nextAction": "Prioritize startup/provider readiness for the stakeholder’s unreachable local endpoint. Retain local-context prototype as unproved source work; verify ordinary/offline behavior after repair.",
+      "nextAction": "Prioritize startup/provider readiness for the stakeholder\u2019s unreachable local endpoint. Retain local-context prototype as unproved source work; verify ordinary/offline behavior after repair.",
       "exitCriterion": "Nonempty terminal answer with the actual local provider and no Gateway/session-administration loop or tool-validation errors; stalled tools terminate visibly; offline document path has no non-loopback egress.",
       "references": [
         "electron/utils/ondevice-tool-policy.ts",
@@ -1324,7 +1342,7 @@
         "microsoft_journeys",
         "representative_windows_asr"
       ],
-      "evidenceSummary": "Karunesh reports no assistant connection on sent moe.21 at03:28–03:31Z; screenshots/log confirm unavailable local route. Acknowledgment accepted03:39:18Z. Current moe.22 has not been handed off and does not contain the startup repair. No unaided acceptance.",
+      "evidenceSummary": "Karunesh reports no assistant connection on sent moe.21 at03:28\u201303:31Z; screenshots/log confirm unavailable local route. Acknowledgment accepted03:39:18Z. Current moe.22 has not been handed off and does not contain the startup repair. No unaided acceptance.",
       "nextAction": "Validate the startup repair and separate client Online setup on Windows, provide the tested handoff, and collect an unaided ordinary-first-turn followed by email rerun.",
       "exitCriterion": "Tester completes formerly failing attach/read workflow on the same artifact; limitations and rollout scope recorded.",
       "references": [

@@ -15,7 +15,7 @@ Current candidate: `0.4.3-moe.24`, source `b814f804036fc2f9f32d3326c8694f4ae2ef7
 | W6–W7 Office and document content | Historical installed Word/Excel write/readback; moe.22 image-content check PASS | Full matrix on moe.24 not run; P3 PDF still misses the August 29 Head Office deadline |
 | W5 reminders / policy | Scoped historical installed positives | Current-candidate end-to-end rerun pending |
 | W8 voice | Packaged recognizer and FFmpeg plus native fixture checks PASS | No actual microphone on this Server VM; representative client microphone/ASR acceptance missing |
-| Startup / recovery / external acceptance | Startup traced; one catalog-blocking path has a reviewed source repair | CLWX-125 measures repeated SDK alias writes and owns first-response repair; source history/UI fixes await installed validation. Full recovery/rehearsal and stakeholder acceptance remain open |
+| Startup / recovery / external acceptance | Startup traced; one catalog-blocking path has a reviewed source repair | CLWX-125 diagnostic `8ca085f4` proves hydration, fresh Online session and prompt retention; first response still FAIL. Original files restored at 07:47:52Z. Lifecycle-start repair, exact-installer acceptance, recovery and stakeholder rerun remain open |
 
 Do not total the historical green symbols into a release percentage. Each PASS must name the tested revision, installed artifact, account/environment, actual journey and remaining limits. See the [CLWX-125 flow and test criteria](evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md) and the [current upstream comparison](UPSTREAM_MERGE_ASSESSMENT_2026-08-20.md) for version drift and backport boundaries.
 
