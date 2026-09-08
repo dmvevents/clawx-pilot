@@ -1,0 +1,12 @@
+{
+  "baseUrl": "",
+  "apiKeyFile": "cloud-gateway.key",
+  "providerId": "moe-cloud-gateway",
+  "label": "Ministry Online",
+  "model": "moe-demo-pro",
+  "models": ["moe-demo-pro", "moe-demo"],
+  "apiProtocol": "openai-completions",
+  "enabled": true,
+  "setDefault": true,
+  "setPreferredChannel": true
+}
