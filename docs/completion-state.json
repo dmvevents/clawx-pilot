@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T06:27:08.152430Z",
+  "updatedAt": "2026-09-08T07:22:00Z",
   "purpose": "Completion planning only; this file is not a release verdict or a substitute for machine-produced acceptance evidence.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -776,7 +776,7 @@
     "whatsappAccess": "configured bridge storage, SQLite read-only; no callable WhatsApp MCP in this session",
     "refreshedAt": "2026-09-08T03:39:18Z",
     "latestRelevantStakeholderMessage": "2026-09-08T03:31:46Z",
-    "boardIssueCount": 124,
+    "boardIssueCount": 125,
     "latestRelevantStakeholderSummary": "Karunesh reports the sent moe.21 build cannot connect to the assistant and prevents all functionality tests. Two screenshots and actual log show local default selection/connection errors; source startup import order gap confirmed. Acknowledgment accepted03:39:18Z, no repaired handoff or acceptance.",
     "evidence": "docs/evidence/WINDOWS_STAKEHOLDER_CONNECTION_2026-09-08.md",
     "september8StakeholderRefresh": {
@@ -956,6 +956,60 @@
           "createdAt": "2026-09-08T06:27:08.152430Z",
           "readback": "PASS_DETAIL_AND_LIST",
           "cardStatesChanged": false
+        },
+        "firstResponseRca": {
+          "card": "CLWX-125",
+          "status": "IN_PROGRESS",
+          "evidence": "docs/evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md",
+          "source": "b814f804036fc2f9f32d3326c8694f4ae2ef7805",
+          "buildRunId": 34189597051,
+          "sdkAliasInclusiveSeconds": 54.133,
+          "sdkAliasBeforeRendererIdleSeconds": 45.277,
+          "profileDurationSeconds": 180.796,
+          "measurementLimit": "Inclusive paths overlap; cancellation producer not directly captured; instrumented diagnostic is not artifact acceptance.",
+          "uiRepairCommit": "aa398dfb",
+          "uiRepairStatus": "PASS_SOURCE_TESTS_AND_INDEPENDENT_REVIEW",
+          "sdkWriteRepair": "PASS_SOURCE_CHECKS_REVIEW_AND_NATIVE_FIXTURE; INSTALLED_RESPONSE_PENDING",
+          "instrumentationRestoredAt": "2026-09-08T07:04:02.339Z",
+          "installedRepairAcceptance": "NOT_RUN",
+          "sdkWriteRepairCommit": "ba459ef1",
+          "profiledTurn": {
+            "uiChannel": "online",
+            "actualProvider": "ollama-ollamalo",
+            "actualModel": "qwen2.5:3b-instruct",
+            "actualSession": "agent:main:main",
+            "newSessionProven": false,
+            "onlineAcceptance": false,
+            "result": "ASSISTANT_EMPTY_SILENCE_ON_SEND",
+            "limitation": "Existing Main session reused despite driver NewSession action; provider-identical comparison not established."
+          },
+          "nativeSdkFixture": {
+            "at": "2026-09-08T07:13:43.331Z",
+            "status": "PASS",
+            "sdkModules": 295,
+            "baselineRepeatWrites": 296,
+            "patchedRepeatWrites": 0,
+            "wrapperBytesPreserved": true,
+            "baselineRepeatMs": 357,
+            "patchedRepeatMs": 280,
+            "limitation": "Single warm fixture timings; not app-level latency proof.",
+            "modelRequests": 0
+          },
+          "activeDiagnostic": {
+            "at": "2026-09-08T07:19:49.868Z",
+            "mode": "SDK_ONLY_DIAGNOSTIC_NOT_ARTIFACT_ACCEPTANCE",
+            "patch": "ba459ef1",
+            "originalFilesBackedUp": true,
+            "historyPatchApplied": false,
+            "providerConfigModified": false,
+            "restoration": "PENDING_END_OF_DIAGNOSTIC"
+          },
+          "driverFreshnessRepair": {
+            "commit": "141841df",
+            "status": "PASS_SOURCE_TESTS_AND_REVIEW",
+            "focusedTests": 32,
+            "electronInteractions": 3
+          }
         }
       }
     }

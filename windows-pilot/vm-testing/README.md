@@ -2,6 +2,27 @@
 
 Start with [the project contract](../../docs/PROJECT_CONTRACT.md), [completion plan](../../docs/COMPLETION_PLAN.md) and [current Windows candidate](../../docs/CURRENT_WINDOWS_RC.md). This is the current testing entrypoint. EC2 and sandbox bootstrap files in this folder are historical alternatives, not prerequisites for the GCP lane.
 
+## How this test environment was established
+
+The Windows machine runs on GCP; the Mac provides the local checkout, authenticated SSH/IAP control and RDP client. A local hypervisor VM was not created for these September tests. Compute metadata records the existing guest's creation as **2026-06-09T16:52:00.210Z**. The [August access report](../../skills/laptop/evidence/2026-08-19-gcp-iap-windows-lane/REPORT.md) documents rediscovering and starting that existing machine, establishing IAP access and retiring the inaccessible EC2 alternative. It does not contain a verified original instance-creation command; do not invent one as execution history.
+
+| Layer | Verified setup / role |
+|---|---|
+| Cloud guest | `clawx-win-rc-20260609`, `gen-lang-client-0649986230`, `us-central1-a`; Server 2022 build 20348, `e2-standard-4`, 4 vCPUs, 16 GiB RAM, 100 GB persistent boot disk |
+| Local operator | macOS repository checkout; Google Cloud CLI for IAP; OpenSSH/SCP for bounded commands/files; FreeRDP for the actual Windows desktop |
+| Current controller tunnels, September 8 | Local SSH `35222` → guest `22`; local RDP `35389` → guest `3389`. These are run-specific overrides, not a replacement for the script defaults below |
+| Established account | `clawxtest`; persistent Windows development workspace and previous administrator-profile acceptance |
+| Standard-user account | `ClawXFresh0908`; created for September 8 first-run testing, normal user/RDP membership; its later moe.23/moe.24 installs are **upgrades of that profile**, not new clean profiles |
+| Guest development tools | Portable Git, Node and pinned pnpm plus dependency cache under `C:\Users\clawxtest\ClawXDev`; [setup/build evidence](../../docs/evidence/WINDOWS_VM_DEVELOPMENT_2026-09-07.md) |
+| Installed app runtime | `resources\bin\node.exe`, OpenClaw, native document helpers, FFmpeg and recognizer from the identified installer. Operator development tools do not establish that the product needs developer installations |
+| Account setup | Private Online provisioning bundle is applied through its actual CMD entrypoint as the standard user. Microsoft sign-in in user Chrome is a separate step; MCP availability does not sign the principal into Outlook |
+
+The reproducible September setup sequence was: verify IAP with protocol/control checks; authenticate to the existing guest; prepare the persistent development checkout; create the standard user and interactive RDP session; bind the installer/source hashes; install through normal screens; run private Online setup; launch the desktop shortcut; collect application and terminal-state evidence. Existing-profile upgrades first preserve both app data and `.openclaw`, with file counts and hashes verified. Credentials, login bundles and signed download URLs remain outside git.
+
+There is one VM and one active root controller for app/Gateway/browser changes. Multiple terminal or RDP connections are not separate compute instances. A pending resize proposal was not executed. Preserve the current lifecycle hold and egress configuration.
+
+[CLWX-125 investigation](../../docs/evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md) contains the application flow map, historical working/failing comparisons, hypotheses, exact timing boundaries and first-response test criteria. Its diagnostic CPU instrumentation changes a backed-up runtime entry under an environment guard; it must be restored and hash-checked before release acceptance.
+
 ## Access to the existing GCP VM
 
 Target: `clawx-win-rc-20260609`, project `gen-lang-client-0649986230`, zone `us-central1-a`. The VM is Windows Server 2022 Datacenter, four virtual CPUs and approximately 16 GiB RAM. Its disk and user profiles persist across stops.

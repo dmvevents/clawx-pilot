@@ -2,6 +2,10 @@
 
 **OPEN: Karunesh cannot complete an ordinary assistant turn.** This is the current release priority. His report supersedes the earlier dated “no stored reply” observation. Email and document acceptance cannot proceed until this connection works.
 
+## CLWX-125: cause, flow map and repair criteria
+
+The owner requested a dedicated bug, scientific flow map, upstream/working-commit comparison and reproducible VM/testing documentation. **CLWX-125** is created In Progress/urgent with verified Plane detail/list readback. The [first-response investigation](WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md) now owns this diagnosis. New retrospective trajectory evidence locates an external cancellation at the first model attempt after approximately 112 seconds of preparation; the configured 600-second idle timeout did not fire. The exact cancellation producer and cold preparation cost are being tested. Current source also explains the misleading generic busy banner and loss of the optimistic prompt after a late empty history refresh. These are not claims of an installed fix.
+
 ## moe.24 installed first turn FAIL; compatibility audit — September 8, 06:22Z
 
 The [moe.24 installation receipt](../../artifacts/windows-vm/20260908-fresh-setup/moe24-install-result.json) confirms standard-user upgrade exit 0 at **06:03:28.105Z**, source `b814f804036fc2f9f32d3326c8694f4ae2ef7805`, run `34189597051`, matching EXE `7cdf1dde10cdd073695d4fceac35068e6bd52e3712f3fa5b2a66432d50ff9c90` and ASAR `656dde43f1a2b3597bd5d35f9bca72dc0ad2527909b0eb499b0f9971d3a56aa5`. All 36 host package checks pass. This remains Server 2022, a standard user with an existing profile; it is not fresh Windows 10/11 proof.
