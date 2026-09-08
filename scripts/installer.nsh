@@ -7,6 +7,189 @@
   !include "nsProcess.nsh"
 !endif
 
+; Exact rollback directory created by the current ClawXPrepareInstallDirectory
+; invocation. Empty when no previous installation tree was moved aside.
+Var /GLOBAL ClawXStaleInstallDir
+
+; Abort the installation with a nonzero exit code while leaving the previous
+; installation tree untouched. Silent installs (auto-update) take the /SD
+; default and fail without UI. LogicLib/label-free so it can be inserted
+; multiple times.
+!macro ClawXFailInstallPrep MESSAGE
+  SetDetailsPrint both
+  DetailPrint "${MESSAGE}"
+  MessageBox MB_OK|MB_ICONSTOP "${MESSAGE}$\r$\n$\r$\nThe existing installation was left in place; nothing was removed." /SD IDOK
+  SetErrorLevel 2
+  Quit
+!macroend
+
+; ClawXPrepareInstallDirectory
+;
+; Filesystem-only preparation of $INSTDIR immediately before payload
+; extraction (no process kills, no registry writes, no user-profile writes).
+;
+; Contract on normal return:
+;   - $INSTDIR exists, is a real directory (not a reparse point) and contains
+;     no files, so electron-builder's `CopyFiles /SILENT "$PLUGINSDIR\7z-out\*"`
+;     copies the new payload into a clean destination and a finished install
+;     cannot retain stale runtime files from the previous version.
+;   - $ClawXStaleInstallDir is "" when no previous tree was moved, otherwise
+;     the exact sibling directory ("$INSTDIR._stale_<n>") that THIS invocation
+;     atomically renamed the old installation into (recoverable rollback).
+; On any condition where a clean destination cannot be guaranteed the
+; installer aborts with a nonzero exit code and the previous tree is
+; preserved (either in place or, post-rename, in $ClawXStaleInstallDir).
+;
+; Safety rules:
+;   - Rejects an empty/root-like $INSTDIR.
+;   - Rejects a reparse-point destination (junction/symlink) instead of
+;     renaming or writing through it.
+;   - Rejects a plain file at $INSTDIR.
+;   - Rejects a nonempty directory that carries no recognized ClawX
+;     installation anchor (user-selected folders with foreign content are
+;     never moved, deleted or overlaid).
+;   - Preexisting "._stale_*" siblings from earlier runs are preserved; a
+;     fresh unused name is chosen for this invocation's rename.
+;   - Never falls back to recursive deletion of the old tree: replacement is
+;     rename-or-abort. History (CLWX-135/25): the previous trailing-backslash
+;     directory checks (IfFileExists "$INSTDIR\") evaluate ABSENT on native
+;     NSIS 3.0.4.1 for an existing installed directory, silently skipping the
+;     rename and overlaying stale runtime state; the unchecked `cmd rd`
+;     fallback could also partially delete and still report success.
+!macro ClawXPrepareInstallDirectory
+  StrCpy $ClawXStaleInstallDir ""
+
+  ; Release the installer's own working directory so NSIS cannot hold a lock
+  ; on $INSTDIR during the rename (NSIS sets CWD to $INSTDIR in .onInit).
+  SetOutPath $TEMP
+
+  ${If} $INSTDIR == ""
+    !insertmacro ClawXFailInstallPrep "Installation failed: no installation directory was resolved."
+  ${EndIf}
+
+  ; Reject unsafe filesystem roots such as "C:\", "D:" or "\".
+  StrLen $0 $INSTDIR
+  ${If} $0 < 4
+    !insertmacro ClawXFailInstallPrep "Installation failed: refusing to use filesystem root '$INSTDIR' as the installation directory."
+  ${EndIf}
+
+  System::Call `kernel32::GetFileAttributes(t "$INSTDIR") i .r0`
+  ${If} $0 = -1
+    ; Nothing exists at the destination: fresh install.
+    ClearErrors
+    CreateDirectory "$INSTDIR"
+    System::Call `kernel32::GetFileAttributes(t "$INSTDIR") i .r0`
+    ${If} $0 = -1
+      !insertmacro ClawXFailInstallPrep "Installation failed: could not create the installation directory '$INSTDIR'."
+    ${EndIf}
+  ${Else}
+    ; FILE_ATTRIBUTE_REPARSE_POINT (0x400): junction/symlink destinations are
+    ; rejected rather than renamed or written through.
+    IntOp $1 $0 & 0x400
+    ${If} $1 <> 0
+      !insertmacro ClawXFailInstallPrep "Installation failed: '$INSTDIR' is a reparse point (junction or symbolic link). Choose a real directory."
+    ${EndIf}
+    ; FILE_ATTRIBUTE_DIRECTORY (0x10): a plain file at the destination.
+    IntOp $1 $0 & 0x10
+    ${If} $1 = 0
+      !insertmacro ClawXFailInstallPrep "Installation failed: a file already exists at '$INSTDIR'."
+    ${EndIf}
+
+    ; Scan whether the existing directory has any entry ($2 = "1" when nonempty).
+    StrCpy $2 "0"
+    ClearErrors
+    FindFirst $4 $5 "$INSTDIR\*"
+    ${DoWhile} $5 != ""
+      ${If} $5 != "."
+      ${AndIf} $5 != ".."
+        StrCpy $2 "1"
+        ${ExitDo}
+      ${EndIf}
+      FindNext $4 $5
+    ${Loop}
+    FindClose $4
+    ClearErrors
+
+    ${If} $2 == "1"
+      ; Nonempty destination: only a recognized previous ClawX installation
+      ; may be moved aside. Anchors are bounded to the actual app layout —
+      ; the launcher, the Electron app payload, or the bundled OpenClaw
+      ; runtime left by a partially removed install.
+      StrCpy $3 "0"
+      ${If} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+        StrCpy $3 "1"
+      ${ElseIf} ${FileExists} "$INSTDIR\resources\app.asar"
+        StrCpy $3 "1"
+      ${ElseIf} ${FileExists} "$INSTDIR\resources\openclaw\*.*"
+        StrCpy $3 "1"
+      ${EndIf}
+      ${If} $3 != "1"
+        !insertmacro ClawXFailInstallPrep "Installation failed: '$INSTDIR' already contains files that do not belong to a previous ${PRODUCT_NAME} installation. Choose an empty directory."
+      ${EndIf}
+
+      ; Pick the first unused "._stale_<n>" sibling name. Preexisting stale
+      ; directories from earlier runs are preserved, never reused or deleted.
+      StrCpy $6 0
+      ${Do}
+        System::Call `kernel32::GetFileAttributes(t "$INSTDIR._stale_$6") i .r0`
+        ${If} $0 = -1
+          ${ExitDo}
+        ${EndIf}
+        IntOp $6 $6 + 1
+        ${If} $6 > 99
+          !insertmacro ClawXFailInstallPrep "Installation failed: too many leftover '$INSTDIR._stale_*' directories. Remove them manually and retry."
+        ${EndIf}
+      ${Loop}
+
+      ; Atomic same-volume rename of the whole old tree, with bounded retries
+      ; for transient locks (antivirus / indexer). On persistent failure the
+      ; old installation is preserved in place and the installer aborts —
+      ; no unchecked recursive-delete fallback.
+      DetailPrint "Moving previous installation to $INSTDIR._stale_$6 ..."
+      StrCpy $7 0
+      ${Do}
+        ClearErrors
+        Rename "$INSTDIR" "$INSTDIR._stale_$6"
+        ${IfNot} ${Errors}
+          StrCpy $ClawXStaleInstallDir "$INSTDIR._stale_$6"
+          ${ExitDo}
+        ${EndIf}
+        IntOp $7 $7 + 1
+        ${If} $7 >= 5
+          !insertmacro ClawXFailInstallPrep "Installation failed: the previous installation in '$INSTDIR' is still in use and could not be moved aside. It was preserved unchanged. Close programs using it (or reboot) and run the installer again."
+        ${EndIf}
+        Sleep 2000
+      ${Loop}
+
+      ClearErrors
+      CreateDirectory "$INSTDIR"
+
+      ; Verify the destination is now a real, empty directory. If not, abort:
+      ; the old tree stays recoverable in $ClawXStaleInstallDir.
+      System::Call `kernel32::GetFileAttributes(t "$INSTDIR") i .r0`
+      ${If} $0 = -1
+        !insertmacro ClawXFailInstallPrep "Installation failed: could not recreate '$INSTDIR' after moving the previous installation to '$ClawXStaleInstallDir' (previous files are preserved there)."
+      ${EndIf}
+      StrCpy $2 "0"
+      FindFirst $4 $5 "$INSTDIR\*"
+      ${DoWhile} $5 != ""
+        ${If} $5 != "."
+        ${AndIf} $5 != ".."
+          StrCpy $2 "1"
+          ${ExitDo}
+        ${EndIf}
+        FindNext $4 $5
+      ${Loop}
+      FindClose $4
+      ClearErrors
+      ${If} $2 == "1"
+        !insertmacro ClawXFailInstallPrep "Installation failed: '$INSTDIR' is not empty after preparing it. The previous installation is preserved in '$ClawXStaleInstallDir'."
+      ${EndIf}
+      DetailPrint "Previous installation moved aside; installing into a clean directory."
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 !macro customHeader
   ; Show install details by default so users can see what stage is running.
   ShowInstDetails show
@@ -109,65 +292,15 @@
   ; Brief wait for handle release (main wait was already done above if app was running)
   Sleep 2000
 
-  ; Release NSIS's CWD on $INSTDIR BEFORE the rename check.
-  ; NSIS sets CWD to $INSTDIR in .onInit; Windows refuses to rename a directory
-  ; that any process (including NSIS itself) has as its CWD.
-  SetOutPath $TEMP
-
-  ; Pre-emptively clear the old installation directory so that the 7z
-  ; extraction `CopyFiles` step in extractAppPackage.nsh won't fail on
-  ; locked files.  electron-builder's extractUsing7za macro extracts to a
-  ; temp folder first, then uses `CopyFiles /SILENT` to copy into $INSTDIR.
-  ; If ANY file in $INSTDIR is still locked, CopyFiles fails and triggers a
-  ; "Can't modify ClawX's files" retry loop -> "ClawX 无法关闭" dialog.
-  ;
-  ; Strategy: rename (move) the old $INSTDIR out of the way.  Rename works
-  ; even when AV/indexer have files open for reading (they use
-  ; FILE_SHARE_DELETE sharing mode), whereas CopyFiles fails because it
-  ; needs write/overwrite access which some AV products deny.
-  ; Check if a previous installation exists ($INSTDIR is a directory).
-  ; Use trailing backslash — the correct NSIS idiom for directory existence.
-  ; (IfFileExists "$INSTDIR\*.*" only matches files containing a dot and
-  ;  would fail for extensionless files or pure-subdirectory layouts.)
-  IfFileExists "$INSTDIR\" 0 _instdir_clean
-    ; Find the first available stale directory name (e.g. $INSTDIR._stale_0)
-    ; This ensures we NEVER have to synchronously delete old leftovers before
-    ; renaming the current $INSTDIR. We just move it out of the way instantly.
-    StrCpy $R8 0
-  _find_free_stale:
-    IfFileExists "$INSTDIR._stale_$R8\" 0 _found_free_stale
-    IntOp $R8 $R8 + 1
-    Goto _find_free_stale
-
-  _found_free_stale:
-    ClearErrors
-    Rename "$INSTDIR" "$INSTDIR._stale_$R8"
-    IfErrors 0 _stale_moved
-      ; Rename still failed — a process reopened a file or holds CWD in $INSTDIR.
-      ; We must delete forcibly and synchronously to make room for CopyFiles.
-      ; This can be slow (~1-3 minutes) if there are 10,000+ files and AV is active.
-      nsExec::ExecToStack 'cmd.exe /c rd /s /q "$INSTDIR"'
-      Pop $0
-      Pop $1
-      Sleep 2000
-      CreateDirectory "$INSTDIR"
-      Goto _instdir_clean
-  _stale_moved:
-    CreateDirectory "$INSTDIR"
-  _instdir_clean:
-
-  ; During overwrite installs, stale files can still survive if the old
-  ; installation directory was only partially removed after a locked-file
-  ; fallback. Explicitly remove the bundled skills subtree so old skills
-  ; (apple-notes, discord, etc.) do not remain under resources\openclaw\skills.
-  IfFileExists "$INSTDIR\resources\openclaw\skills\" 0 _openclaw_skills_clean
-    DetailPrint "Removing stale bundled OpenClaw skills from previous install..."
-    RMDir /r "$INSTDIR\resources\openclaw\skills"
-    IfFileExists "$INSTDIR\resources\openclaw\skills\" 0 _openclaw_skills_clean
-      nsExec::ExecToStack 'cmd.exe /c rd /s /q "$INSTDIR\resources\openclaw\skills"'
-      Pop $0
-      Pop $1
-  _openclaw_skills_clean:
+  ; Prepare a verified clean destination for the 7z extraction `CopyFiles`
+  ; step in extractAppPackage.nsh. This replaces the previous unverified
+  ; trailing-backslash checks (which native NSIS 3.0.4.1 evaluates ABSENT for
+  ; an existing directory, silently skipping the rename and overlaying stale
+  ; runtime files) and the unchecked `cmd rd /s /q` fallback. The macro either
+  ; leaves $INSTDIR empty and real, or aborts with a nonzero exit preserving
+  ; the previous tree. It also removes the now-redundant skills-subtree
+  ; deletion: a clean destination cannot retain any stale bundled file.
+  !insertmacro ClawXPrepareInstallDirectory
 
   ; Pre-emptively remove the old uninstall registry entry so that
   ; electron-builder's uninstallOldVersion skips the old uninstaller entirely.
@@ -202,12 +335,12 @@
 ; aborts with a non-zero exit code.  The default handler retries 5× then shows
 ; a blocking MessageBox.
 ;
-; This macro clears the error and lets the new installer proceed — it will
-; simply overwrite / extract new files on top of the (partially cleaned) old
-; installation directory.  This is safe because:
-;   1. Processes have already been force-killed in customCheckAppRunning.
-;   2. The new installer extracts a complete, self-contained file tree.
-;   3. Any leftover old files that weren't removed are harmless.
+; This macro clears the error and lets the new installer proceed. This is
+; safe only because ClawXPrepareInstallDirectory already ran in
+; customCheckAppRunning: $INSTDIR is a verified-empty directory (or the
+; installer has aborted), so a failing old uninstaller cannot leave stale
+; runtime files inside the new installation. Leftovers of the old tree live
+; only in the exact $ClawXStaleInstallDir rollback directory.
 !macro customUnInstallCheck
   ${if} $R0 != 0
     DetailPrint "Old uninstaller exited with code $R0. Continuing with overwrite install..."
@@ -225,16 +358,19 @@
 !macroend
 
 !macro customInstall
-  ; Async cleanup of old dirs left by the rename loop in customCheckAppRunning.
+  ; Async cleanup of the EXACT directory moved aside by this invocation of
+  ; ClawXPrepareInstallDirectory (never a wildcard over arbitrary siblings —
+  ; preexisting ._stale_* directories and other sibling installs are
+  ; preserved). Tradeoff: deleting the moved tree after a successful payload
+  ; install trades rollback retention for disk space, matching the previous
+  ; release behavior; on any aborted install customInstall never runs, so the
+  ; moved tree remains recoverable.
   ; Wait 60s before starting deletion to avoid I/O contention with ClawX's
   ; first launch (Windows Defender scan, ASAR mapping, etc.).
   ; ExecShell SW_HIDE is completely detached from NSIS and avoids pipe blocking.
-  IfFileExists "$INSTDIR._stale_0\" 0 _ci_stale_cleaned
-    ; Use PowerShell to extract the basename of $INSTDIR so the glob works
-    ; even when the user picked a custom install folder name.
-    ; E.g. $INSTDIR = D:\Apps\MyClaw → glob = MyClaw._stale_*
-    ExecShell "" "cmd.exe" `/c ping -n 61 127.0.0.1 >nul & cd /d "$INSTDIR\.." & for /d %D in ("$INSTDIR._stale_*") do rd /s /q "%D"` SW_HIDE
-  _ci_stale_cleaned:
+  ${If} $ClawXStaleInstallDir != ""
+    ExecShell "" "cmd.exe" `/c ping -n 61 127.0.0.1 >nul & rd /s /q "$ClawXStaleInstallDir"` SW_HIDE
+  ${EndIf}
   DetailPrint "Core files extracted. Finalizing system integration..."
 
   ; Enable Windows long path support (Windows 10 1607+ / Windows 11).
