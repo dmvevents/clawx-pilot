@@ -56,10 +56,21 @@ async function readAuthProfiles(agentId: string): Promise<Record<string, unknown
   return JSON.parse(content) as Record<string, unknown>;
 }
 
+async function readAgentModels(agentId: string): Promise<Record<string, unknown>> {
+  const content = await readFile(join(testHome, '.openclaw', 'agents', agentId, 'agent', 'models.json'), 'utf8');
+  return JSON.parse(content) as Record<string, unknown>;
+}
+
 async function writeAgentAuthProfiles(agentId: string, store: Record<string, unknown>): Promise<void> {
   const agentDir = join(testHome, '.openclaw', 'agents', agentId, 'agent');
   await mkdir(agentDir, { recursive: true });
   await writeFile(join(agentDir, 'auth-profiles.json'), JSON.stringify(store, null, 2), 'utf8');
+}
+
+async function writeAgentModels(agentId: string, store: Record<string, unknown>): Promise<void> {
+  const agentDir = join(testHome, '.openclaw', 'agents', agentId, 'agent');
+  await mkdir(agentDir, { recursive: true });
+  await writeFile(join(agentDir, 'models.json'), JSON.stringify(store, null, 2), 'utf8');
 }
 
 describe('saveProviderKeyToOpenClaw', () => {
@@ -1044,6 +1055,220 @@ describe('setOpenClawDefaultModel', () => {
     expect(providers.google).toBeUndefined();
     expect(defaultModel.primary).toBe('google/gemini-2.5-pro');
     expect(logSpy).toHaveBeenCalledWith('Removed stale models.providers.google (built-in provider)');
+  });
+});
+
+describe('managed cloud gateway vision metadata', () => {
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.restoreAllMocks();
+    await rm(testHome, { recursive: true, force: true });
+    await rm(testUserData, { recursive: true, force: true });
+  });
+
+  it('writes explicit vision metadata on the managed cloud gateway default override', async () => {
+    await writeOpenClawJson({
+      models: {
+        providers: {
+          'custom-moecloud': {
+            baseUrl: 'https://gateway.example.run.app/v1',
+            api: 'openai-completions',
+            models: [
+              {
+                id: 'moe-demo-pro',
+                name: 'moe-demo-pro',
+                cost: { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0 },
+                input: ['text'],
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const { setOpenClawDefaultModelWithOverride } = await import('@electron/utils/openclaw-auth');
+
+    await setOpenClawDefaultModelWithOverride(
+      'custom-moecloud',
+      'custom-moecloud/moe-demo-pro',
+      {
+        baseUrl: 'https://gateway.example.run.app/v1',
+        api: 'openai-completions',
+        authHeader: true,
+        models: [
+          {
+            id: 'moe-demo-pro',
+            name: 'moe-demo-pro',
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            input: ['text', 'image'],
+          },
+          {
+            id: 'moe-demo',
+            name: 'moe-demo',
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            input: ['text', 'image'],
+          },
+        ],
+      },
+      ['custom-moecloud/moe-demo'],
+    );
+
+    const result = await readOpenClawJson();
+    const providers = ((result.models as Record<string, unknown>).providers as Record<string, unknown>);
+    const entry = providers['custom-moecloud'] as Record<string, unknown>;
+    const models = entry.models as Array<Record<string, unknown>>;
+
+    expect(models).toEqual([
+      expect.objectContaining({
+        id: 'moe-demo-pro',
+        input: ['text', 'image'],
+        cost: { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0 },
+      }),
+      expect.objectContaining({ id: 'moe-demo', input: ['text', 'image'] }),
+    ]);
+  });
+
+  it('writes explicit vision metadata when syncing managed cloud gateway provider config', async () => {
+    await writeOpenClawJson({
+      models: {
+        providers: {
+          'custom-moecloud': {
+            baseUrl: 'https://gateway.example.run.app/v1',
+            api: 'openai-completions',
+            models: [
+              {
+                id: 'moe-demo-pro',
+                name: 'moe-demo-pro',
+                cost: { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0 },
+                input: ['text'],
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const { syncProviderConfigToOpenClaw } = await import('@electron/utils/openclaw-auth');
+
+    await syncProviderConfigToOpenClaw('custom-moecloud', 'moe-demo-pro', {
+      baseUrl: 'https://gateway.example.run.app/v1',
+      api: 'openai-completions',
+      authHeader: true,
+      models: [
+        {
+          id: 'moe-demo-pro',
+          name: 'moe-demo-pro',
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          input: ['text', 'image'],
+        },
+        {
+          id: 'moe-demo',
+          name: 'moe-demo',
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          input: ['text', 'image'],
+        },
+      ],
+    });
+
+    const result = await readOpenClawJson();
+    const providers = ((result.models as Record<string, unknown>).providers as Record<string, unknown>);
+    const entry = providers['custom-moecloud'] as Record<string, unknown>;
+    const models = entry.models as Array<Record<string, unknown>>;
+
+    expect(models).toEqual([
+      expect.objectContaining({
+        id: 'moe-demo-pro',
+        input: ['text', 'image'],
+        cost: { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0 },
+      }),
+      expect.objectContaining({ id: 'moe-demo', input: ['text', 'image'] }),
+    ]);
+  });
+
+  it('leaves arbitrary custom default overrides text-only when no input metadata is provided', async () => {
+    await writeOpenClawJson({
+      models: {
+        providers: {},
+      },
+    });
+
+    const { setOpenClawDefaultModelWithOverride } = await import('@electron/utils/openclaw-auth');
+
+    await setOpenClawDefaultModelWithOverride(
+      'custom-district',
+      'custom-district/text-model',
+      {
+        baseUrl: 'https://district.example/v1',
+        api: 'openai-completions',
+        authHeader: true,
+      },
+      ['custom-district/backup-model'],
+    );
+
+    const result = await readOpenClawJson();
+    const providers = ((result.models as Record<string, unknown>).providers as Record<string, unknown>);
+    const entry = providers['custom-district'] as Record<string, unknown>;
+    const models = entry.models as Array<Record<string, unknown>>;
+
+    expect(models).toEqual([
+      expect.not.objectContaining({ input: expect.anything() }),
+      expect.not.objectContaining({ input: expect.anything() }),
+    ]);
+  });
+
+  it('replaces stale text-only per-agent rows when explicit managed vision metadata is synced', async () => {
+    await writeOpenClawJson({
+      agents: {
+        list: [
+          { id: 'main', name: 'Main', default: true, workspace: '~/.openclaw/workspace', agentDir: '~/.openclaw/agents/main/agent' },
+        ],
+      },
+    });
+    await writeAgentModels('main', {
+      providers: {
+        'custom-moecloud': {
+          baseUrl: 'https://gateway.example.run.app/v1',
+          api: 'openai-completions',
+          models: [
+            {
+              id: 'moe-demo-pro',
+              name: 'moe-demo-pro',
+              cost: { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0 },
+              input: ['text'],
+            },
+          ],
+        },
+      },
+    });
+
+    const { updateAgentModelProvider } = await import('@electron/utils/openclaw-auth');
+
+    await updateAgentModelProvider('custom-moecloud', {
+      baseUrl: 'https://gateway.example.run.app/v1',
+      api: 'openai-completions',
+      models: [
+        {
+          id: 'moe-demo-pro',
+          name: 'moe-demo-pro',
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          input: ['text', 'image'],
+        },
+      ],
+      authHeader: true,
+    });
+
+    const result = await readAgentModels('main');
+    const providers = result.providers as Record<string, unknown>;
+    const entry = providers['custom-moecloud'] as Record<string, unknown>;
+    const models = entry.models as Array<Record<string, unknown>>;
+
+    expect(models).toEqual([
+      expect.objectContaining({
+        id: 'moe-demo-pro',
+        input: ['text', 'image'],
+        cost: { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0 },
+      }),
+    ]);
   });
 });
 

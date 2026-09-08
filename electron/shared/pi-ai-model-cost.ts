@@ -18,6 +18,19 @@ export type PiAiModelCostRates = {
   cacheWrite: number;
 };
 
+export type PiAiModelInputCapability = 'text' | 'image';
+
+export type PiAiModelsJsonModelEntry = {
+  id: string;
+  name: string;
+  cost: PiAiModelCostRates;
+  input?: PiAiModelInputCapability[];
+};
+
+type PiAiModelsJsonModelEntryOptions = {
+  input?: PiAiModelInputCapability[];
+};
+
 export function normalizePiAiModelCost(existing: unknown): PiAiModelCostRates {
   if (!existing || typeof existing !== 'object') {
     return { ...PI_AI_MODEL_ZERO_COST };
@@ -38,6 +51,11 @@ export function normalizePiAiModelCost(existing: unknown): PiAiModelCostRates {
 export function piAiModelsJsonModelEntry(
   id: string,
   name: string = id,
-): { id: string; name: string; cost: PiAiModelCostRates } {
-  return { id, name, cost: normalizePiAiModelCost(undefined) };
+  options: PiAiModelsJsonModelEntryOptions = {},
+): PiAiModelsJsonModelEntry {
+  const entry: PiAiModelsJsonModelEntry = { id, name, cost: normalizePiAiModelCost(undefined) };
+  if (options.input?.length) {
+    entry.input = [...options.input];
+  }
+  return entry;
 }

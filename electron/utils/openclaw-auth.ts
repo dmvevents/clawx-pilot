@@ -26,7 +26,11 @@ import {
   isOAuthProviderType,
   isOpenClawOAuthPluginProviderKey,
 } from './provider-keys';
-import { normalizePiAiModelCost, type PiAiModelCostRates } from '../shared/pi-ai-model-cost';
+import {
+  normalizePiAiModelCost,
+  type PiAiModelCostRates,
+  type PiAiModelsJsonModelEntry,
+} from '../shared/pi-ai-model-cost';
 import { withConfigLock } from './config-mutex';
 
 const AUTH_STORE_VERSION = 1;
@@ -1175,6 +1179,7 @@ interface RuntimeProviderConfigOverride {
   apiKeyEnv?: string;
   headers?: Record<string, string>;
   authHeader?: boolean;
+  models?: PiAiModelsJsonModelEntry[];
 }
 
 type ProviderEntryBuildOptions = {
@@ -1184,6 +1189,7 @@ type ProviderEntryBuildOptions = {
   headers?: Record<string, string>;
   authHeader?: boolean;
   modelIds?: string[];
+  models?: PiAiModelsJsonModelEntry[];
   includeRegistryModels?: boolean;
   mergeExistingModels?: boolean;
 };
@@ -1217,6 +1223,23 @@ function mergeProviderModels(
       seen.add(id);
       merged.push(item);
     }
+  }
+  return merged;
+}
+
+function mergeSyncedModelEntry(
+  previous: Record<string, unknown> | undefined,
+  next: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!previous) return { ...next };
+
+  const merged: Record<string, unknown> = {
+    ...previous,
+    id: next.id,
+    name: next.name,
+  };
+  if ('input' in next) {
+    merged.input = next.input;
   }
   return merged;
 }
@@ -1267,13 +1290,22 @@ function upsertOpenClawProviderEntry(
       : {}
   );
 
-  const existingModels = options.mergeExistingModels && Array.isArray(existingProvider.models)
+  const allExistingModels = Array.isArray(existingProvider.models)
     ? (existingProvider.models as Array<Record<string, unknown>>)
     : [];
+  const existingModels = options.mergeExistingModels ? allExistingModels : [];
   const registryModels = options.includeRegistryModels
     ? ((getProviderConfig(provider)?.models ?? []).map((m) => ({ ...m })) as Array<Record<string, unknown>>)
     : [];
-  const runtimeModels = (options.modelIds ?? []).map((id) => ({ id, name: id }));
+  const runtimeModels = options.models
+    ? options.models.map((model) => mergeSyncedModelEntry(
+      allExistingModels.find((existing) => existing.id === model.id),
+      model as Record<string, unknown>,
+    ))
+    : (options.modelIds ?? []).map((id) => ({ id, name: id }));
+  const mergedModels = options.models
+    ? mergeProviderModels(registryModels, runtimeModels, existingModels)
+    : mergeProviderModels(registryModels, existingModels, runtimeModels);
 
   const nextProvider: Record<string, unknown> = {
     ...existingProvider,
@@ -1281,7 +1313,7 @@ function upsertOpenClawProviderEntry(
     api: options.api,
     models: applyEndpointModelCompatDefaults(
       options.baseUrl,
-      mergeProviderModels(registryModels, existingModels, runtimeModels),
+      mergedModels,
     ),
   };
   if (options.apiKeyEnv) nextProvider.apiKey = options.apiKeyEnv;
@@ -1400,6 +1432,7 @@ export async function syncProviderConfigToOpenClaw(
         apiKeyEnv: override.apiKeyEnv,
         headers: override.headers,
         modelIds: modelId ? [modelId] : [],
+        models: override.models,
       });
     }
 
@@ -1451,6 +1484,7 @@ export async function setOpenClawDefaultModelWithOverride(
         headers: override.headers,
         authHeader: override.authHeader,
         modelIds: [modelId, ...fallbackModelIds],
+        models: override.models,
       });
     }
 
@@ -2092,7 +2126,7 @@ function disableNonWhatsAppChannels(config: Record<string, unknown>): boolean {
 type AgentModelProviderEntry = {
   baseUrl?: string;
   api?: string;
-  models?: Array<{ id: string; name: string; cost?: PiAiModelCostRates }>;
+  models?: Array<PiAiModelsJsonModelEntry | { id: string; name: string; cost?: PiAiModelCostRates }>;
   apiKey?: string;
   /** When true, pi-ai sends Authorization: Bearer instead of x-api-key */
   authHeader?: boolean;
@@ -2127,7 +2161,7 @@ async function updateModelsJsonProviderEntriesForAgents(
 
     const mergedModels = (entry.models ?? []).map((m) => {
       const prev = existingModels.find((e) => e.id === m.id);
-      const base = prev ? { ...prev, id: m.id, name: m.name } : { ...m };
+      const base = mergeSyncedModelEntry(prev, m as Record<string, unknown>);
       return {
         ...base,
         cost: normalizePiAiModelCost((base as { cost?: unknown }).cost),

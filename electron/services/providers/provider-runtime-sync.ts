@@ -16,8 +16,9 @@ import {
   updateSingleAgentModelProvider,
 } from '../../utils/openclaw-auth';
 import {
+  type PiAiModelInputCapability,
+  type PiAiModelsJsonModelEntry,
   piAiModelsJsonModelEntry,
-  type PiAiModelCostRates,
 } from '../../shared/pi-ai-model-cost';
 import { logger } from '../../utils/logger';
 import { listAgentsSnapshot } from '../../utils/agent-config';
@@ -26,6 +27,10 @@ const GOOGLE_OAUTH_RUNTIME_PROVIDER = 'google-gemini-cli';
 const GOOGLE_OAUTH_DEFAULT_MODEL_REF = `${GOOGLE_OAUTH_RUNTIME_PROVIDER}/gemini-3-pro-preview`;
 const OPENAI_OAUTH_RUNTIME_PROVIDER = 'openai-codex';
 const OPENAI_OAUTH_DEFAULT_MODEL_REF = `${OPENAI_OAUTH_RUNTIME_PROVIDER}/gpt-5.4`;
+const MANAGED_CLOUD_GATEWAY_RUNTIME_PROVIDER = 'custom-moecloud';
+const MANAGED_CLOUD_GATEWAY_PROVIDER_IDS = new Set(['moe-cloud-gateway', MANAGED_CLOUD_GATEWAY_RUNTIME_PROVIDER]);
+const MANAGED_CLOUD_GATEWAY_VISION_MODELS = new Set(['moe-demo-pro', 'moe-demo']);
+const TEXT_AND_IMAGE_INPUT: PiAiModelInputCapability[] = ['text', 'image'];
 
 /**
  * Provider types that are not in the built-in provider registry (no `providerConfig.api`).
@@ -365,6 +370,68 @@ function shouldUseBearerAuthHeader(config: ProviderConfig, api: string | undefin
   return api === 'openai-completions' || api === 'openai-responses';
 }
 
+function shouldStampManagedCloudGatewayVision(
+  config: ProviderConfig,
+  runtimeProviderKey: string,
+  modelId: string,
+): boolean {
+  return config.type === 'custom'
+    && MANAGED_CLOUD_GATEWAY_PROVIDER_IDS.has(config.id)
+    && runtimeProviderKey === MANAGED_CLOUD_GATEWAY_RUNTIME_PROVIDER
+    && MANAGED_CLOUD_GATEWAY_VISION_MODELS.has(modelId);
+}
+
+function runtimeModelEntryForProvider(
+  config: ProviderConfig,
+  runtimeProviderKey: string,
+  modelId: string,
+): PiAiModelsJsonModelEntry {
+  if (shouldStampManagedCloudGatewayVision(config, runtimeProviderKey, modelId)) {
+    return piAiModelsJsonModelEntry(modelId, modelId, { input: TEXT_AND_IMAGE_INPUT });
+  }
+  return piAiModelsJsonModelEntry(modelId);
+}
+
+function runtimeModelIdForProvider(runtimeProviderKey: string, modelId: string | undefined): string | undefined {
+  const trimmed = modelId?.trim();
+  if (!trimmed) return undefined;
+  const prefix = `${runtimeProviderKey}/`;
+  return trimmed.startsWith(prefix) ? trimmed.slice(prefix.length) : trimmed;
+}
+
+function runtimeModelRefForProvider(runtimeProviderKey: string, modelId: string | undefined): string | undefined {
+  const stripped = runtimeModelIdForProvider(runtimeProviderKey, modelId);
+  return stripped ? `${runtimeProviderKey}/${stripped}` : undefined;
+}
+
+function runtimeModelIdsForProvider(config: ProviderConfig, runtimeProviderKey: string): string[] {
+  return [config.model, ...(config.fallbackModels ?? [])]
+    .map((modelId) => runtimeModelIdForProvider(runtimeProviderKey, modelId))
+    .filter((modelId): modelId is string => Boolean(modelId));
+}
+
+function runtimeModelEntriesForProvider(
+  config: ProviderConfig,
+  runtimeProviderKey: string,
+): PiAiModelsJsonModelEntry[] {
+  return runtimeModelIdsForProvider(config, runtimeProviderKey)
+    .map((modelId) => runtimeModelEntryForProvider(config, runtimeProviderKey, modelId));
+}
+
+function managedRuntimeModelEntriesForProvider(
+  config: ProviderConfig,
+  runtimeProviderKey: string,
+): PiAiModelsJsonModelEntry[] | undefined {
+  if (
+    config.type !== 'custom'
+    || !MANAGED_CLOUD_GATEWAY_PROVIDER_IDS.has(config.id)
+    || runtimeProviderKey !== MANAGED_CLOUD_GATEWAY_RUNTIME_PROVIDER
+  ) {
+    return undefined;
+  }
+  return runtimeModelEntriesForProvider(config, runtimeProviderKey);
+}
+
 async function resolveRuntimeSyncContext(config: ProviderConfig): Promise<RuntimeProviderSyncContext | null> {
   const runtimeProviderKey = await resolveRuntimeProviderKey(config);
   const meta = getProviderConfig(config.type);
@@ -385,12 +452,14 @@ async function syncRuntimeProviderConfig(
   config: ProviderConfig,
   context: RuntimeProviderSyncContext,
 ): Promise<void> {
-  await syncProviderConfigToOpenClaw(context.runtimeProviderKey, config.model, {
+  const modelIds = runtimeModelIdsForProvider(config, context.runtimeProviderKey);
+  await syncProviderConfigToOpenClaw(context.runtimeProviderKey, modelIds[0], {
     baseUrl: normalizeProviderBaseUrl(config, config.baseUrl || context.meta?.baseUrl, context.api),
     api: context.api,
     apiKeyEnv: context.meta?.apiKeyEnv,
     headers: config.headers ?? context.meta?.headers,
     authHeader: shouldUseBearerAuthHeader(config, context.api),
+    models: managedRuntimeModelEntriesForProvider(config, context.runtimeProviderKey),
   });
 }
 
@@ -408,13 +477,12 @@ async function syncCustomProviderAgentModel(
     return;
   }
 
-  const modelIds = [config.model, ...(config.fallbackModels ?? [])]
-    .filter((modelId): modelId is string => Boolean(modelId?.trim()));
+  const modelIds = runtimeModelIdsForProvider(config, runtimeProviderKey);
   const api = normalizeRuntimeApi(config.apiProtocol, 'openai-completions') ?? 'openai-completions';
   await updateAgentModelProvider(runtimeProviderKey, {
     baseUrl: normalizeProviderBaseUrl(config, config.baseUrl, api),
     api,
-    models: modelIds.map((modelId) => piAiModelsJsonModelEntry(modelId)),
+    models: modelIds.map((modelId) => runtimeModelEntryForProvider(config, runtimeProviderKey, modelId)),
     apiKey: resolvedKey,
     authHeader: shouldUseBearerAuthHeader(config, api),
   });
@@ -480,11 +548,12 @@ async function buildRuntimeProviderConfigMap(): Promise<Map<string, ProviderConf
 
 async function buildAgentModelProviderEntry(
   config: ProviderConfig,
+  runtimeProviderKey: string,
   modelId: string,
 ): Promise<{
   baseUrl?: string;
   api?: string;
-  models?: Array<{ id: string; name: string; cost: PiAiModelCostRates }>;
+  models?: PiAiModelsJsonModelEntry[];
   apiKey?: string;
   authHeader?: boolean;
 } | null> {
@@ -514,7 +583,7 @@ async function buildAgentModelProviderEntry(
   return {
     baseUrl,
     api,
-    models: [piAiModelsJsonModelEntry(modelId)],
+    models: [runtimeModelEntryForProvider(config, runtimeProviderKey, modelId)],
     apiKey,
     authHeader,
   };
@@ -544,7 +613,7 @@ async function syncAgentModelsToRuntime(agentIds?: Set<string>): Promise<void> {
       continue;
     }
 
-    const entry = await buildAgentModelProviderEntry(providerConfig, parsed.modelId);
+    const entry = await buildAgentModelProviderEntry(providerConfig, parsed.providerKey, parsed.modelId);
     if (!entry) {
       continue;
     }
@@ -594,7 +663,7 @@ export async function syncUpdatedProviderToRuntime(
 
   const defaultProviderId = await getDefaultProvider();
   if (defaultProviderId === config.id) {
-    const modelOverride = config.model ? `${ock}/${config.model}` : undefined;
+    const modelOverride = runtimeModelRefForProvider(ock, config.model);
     if (!isUnregisteredProviderType(config.type)) {
       if (shouldUseExplicitDefaultOverride(config, ock, context.meta)) {
         await setOpenClawDefaultModelWithOverride(ock, modelOverride, {
@@ -622,6 +691,7 @@ export async function syncUpdatedProviderToRuntime(
         api: normalizedApi,
         headers: config.headers,
         authHeader: shouldUseBearerAuthHeader(config, normalizedApi),
+        models: managedRuntimeModelEntriesForProvider(config, ock),
       }, fallbackModels);
     }
   }
@@ -710,9 +780,7 @@ export async function syncDefaultProviderToRuntime(
   const isOAuthProvider = (oauthTypes.includes(provider.type) && !providerKey) || Boolean(browserOAuthRuntimeProvider);
 
   if (!isOAuthProvider) {
-    const modelOverride = provider.model
-      ? (provider.model.startsWith(`${ock}/`) ? provider.model : `${ock}/${provider.model}`)
-      : undefined;
+    const modelOverride = runtimeModelRefForProvider(ock, provider.model);
 
     if (isUnregisteredProviderType(provider.type)) {
       const normalizedApi = normalizeRuntimeApi(provider.apiProtocol, 'openai-completions') ?? 'openai-completions';
@@ -721,6 +789,7 @@ export async function syncDefaultProviderToRuntime(
         api: normalizedApi,
         headers: provider.headers,
         authHeader: shouldUseBearerAuthHeader(provider, normalizedApi),
+        models: managedRuntimeModelEntriesForProvider(provider, ock),
       }, fallbackModels);
     } else {
       const meta = getProviderConfig(provider.type);
@@ -836,11 +905,11 @@ export async function syncDefaultProviderToRuntime(
     providerKey &&
     provider.baseUrl
   ) {
-    const modelId = provider.model;
+    const modelId = runtimeModelIdForProvider(ock, provider.model);
     await updateAgentModelProvider(ock, {
       baseUrl: normalizeProviderBaseUrl(provider, provider.baseUrl, provider.apiProtocol || 'openai-completions'),
       api: provider.apiProtocol || 'openai-completions',
-      models: modelId ? [piAiModelsJsonModelEntry(modelId)] : [],
+      models: modelId ? [runtimeModelEntryForProvider(provider, ock, modelId)] : [],
       apiKey: providerKey,
     });
   }

@@ -290,6 +290,48 @@ describe('provider-runtime-sync refresh strategy', () => {
     );
   });
 
+  it('syncs managed MOE cloud gateway agent overrides with vision metadata', async () => {
+    mocks.getAllProviders.mockResolvedValue([
+      createProvider({
+        id: 'moe-cloud-gateway',
+        type: 'custom',
+        name: 'MOE Cloud Gateway',
+        model: 'moe-demo-pro',
+        fallbackModels: ['moe-demo'],
+        baseUrl: 'https://gateway.example.run.app/v1',
+        apiProtocol: 'openai-completions',
+      }),
+    ]);
+    mocks.getProviderConfig.mockReturnValue(undefined);
+    mocks.getApiKey.mockResolvedValue('sk-clawx-client');
+    mocks.listAgentsSnapshot.mockResolvedValue({
+      agents: [
+        {
+          id: 'main',
+          modelRef: 'custom-moecloud/moe-demo-pro',
+        },
+      ],
+    });
+
+    await syncAgentModelOverrideToRuntime('main');
+
+    expect(mocks.updateSingleAgentModelProvider).toHaveBeenCalledWith(
+      'main',
+      'custom-moecloud',
+      expect.objectContaining({
+        baseUrl: 'https://gateway.example.run.app/v1',
+        api: 'openai-completions',
+        authHeader: true,
+        models: [
+          expect.objectContaining({
+            id: 'moe-demo-pro',
+            input: ['text', 'image'],
+          }),
+        ],
+      }),
+    );
+  });
+
   it('syncs Ollama provider config to runtime without adding model prefix', async () => {
     const ollamaProvider = createProvider({
       id: 'ollamafd',
@@ -340,6 +382,10 @@ describe('provider-runtime-sync refresh strategy', () => {
         baseUrl: 'https://gateway.example.run.app/v1',
         api: 'openai-completions',
         authHeader: true,
+        models: expect.arrayContaining([
+          expect.objectContaining({ id: 'moe-demo-pro', input: ['text', 'image'] }),
+          expect.objectContaining({ id: 'moe-demo', input: ['text', 'image'] }),
+        ]),
       }),
     );
     expect(mocks.updateAgentModelProvider).toHaveBeenCalledWith(
@@ -350,12 +396,102 @@ describe('provider-runtime-sync refresh strategy', () => {
         apiKey: 'sk-clawx-client',
         authHeader: true,
         models: expect.arrayContaining([
-          expect.objectContaining({ id: 'moe-demo-pro' }),
-          expect.objectContaining({ id: 'moe-demo' }),
+          expect.objectContaining({ id: 'moe-demo-pro', input: ['text', 'image'] }),
+          expect.objectContaining({ id: 'moe-demo', input: ['text', 'image'] }),
         ]),
       }),
     );
     expect(gateway.debouncedReload).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes already-prefixed managed cloud gateway model refs during saved sync', async () => {
+    const cloudProvider = createProvider({
+      id: 'custom-moecloud',
+      type: 'custom',
+      name: 'MOE Cloud Gateway',
+      model: 'custom-moecloud/moe-demo-pro',
+      fallbackModels: ['custom-moecloud/moe-demo'],
+      baseUrl: 'https://gateway.example.run.app/v1',
+      apiProtocol: 'openai-completions',
+    });
+
+    mocks.getProviderConfig.mockReturnValue(undefined);
+    mocks.getApiKey.mockResolvedValue('sk-clawx-client');
+
+    const gateway = createGateway('running');
+    await syncSavedProviderToRuntime(cloudProvider, 'sk-clawx-client', gateway as GatewayManager);
+
+    expect(mocks.syncProviderConfigToOpenClaw).toHaveBeenCalledWith(
+      'custom-moecloud',
+      'moe-demo-pro',
+      expect.objectContaining({
+        models: expect.arrayContaining([
+          expect.objectContaining({ id: 'moe-demo-pro', input: ['text', 'image'] }),
+          expect.objectContaining({ id: 'moe-demo', input: ['text', 'image'] }),
+        ]),
+      }),
+    );
+    expect(mocks.updateAgentModelProvider).toHaveBeenCalledWith(
+      'custom-moecloud',
+      expect.objectContaining({
+        models: expect.arrayContaining([
+          expect.objectContaining({ id: 'moe-demo-pro', input: ['text', 'image'] }),
+          expect.objectContaining({ id: 'moe-demo', input: ['text', 'image'] }),
+        ]),
+      }),
+    );
+  });
+
+  it('does not add vision metadata to arbitrary custom provider models', async () => {
+    const customProvider = createProvider({
+      id: 'district-proxy',
+      type: 'custom',
+      name: 'District Proxy',
+      model: 'text-model',
+      fallbackModels: ['backup-model'],
+      baseUrl: 'https://district.example/v1',
+      apiProtocol: 'openai-completions',
+    });
+
+    mocks.getProviderConfig.mockReturnValue(undefined);
+    mocks.getApiKey.mockResolvedValue('sk-district');
+
+    const gateway = createGateway('running');
+    await syncSavedProviderToRuntime(customProvider, 'sk-district', gateway as GatewayManager);
+
+    const call = mocks.updateAgentModelProvider.mock.calls.find(([providerKey]) => providerKey === 'custom-district');
+    expect(call).toBeTruthy();
+    const entry = call?.[1] as { models?: Array<Record<string, unknown>> };
+    expect(entry.models).toEqual([
+      expect.not.objectContaining({ input: expect.anything() }),
+      expect.not.objectContaining({ input: expect.anything() }),
+    ]);
+  });
+
+  it('does not add vision metadata to unmanaged model ids on the managed cloud gateway provider', async () => {
+    const cloudProvider = createProvider({
+      id: 'moe-cloud-gateway',
+      type: 'custom',
+      name: 'MOE Cloud Gateway',
+      model: 'district-text-model',
+      fallbackModels: ['moe-demo'],
+      baseUrl: 'https://gateway.example.run.app/v1',
+      apiProtocol: 'openai-completions',
+    });
+
+    mocks.getProviderConfig.mockReturnValue(undefined);
+    mocks.getApiKey.mockResolvedValue('sk-clawx-client');
+
+    const gateway = createGateway('running');
+    await syncSavedProviderToRuntime(cloudProvider, 'sk-clawx-client', gateway as GatewayManager);
+
+    const call = mocks.updateAgentModelProvider.mock.calls.find(([providerKey]) => providerKey === 'custom-moecloud');
+    expect(call).toBeTruthy();
+    const entry = call?.[1] as { models?: Array<Record<string, unknown>> };
+    expect(entry.models).toEqual([
+      expect.not.objectContaining({ input: expect.anything() }),
+      expect.objectContaining({ id: 'moe-demo', input: ['text', 'image'] }),
+    ]);
   });
 
   it('syncs Ollama as default provider with correct baseUrl and api protocol', async () => {
@@ -454,8 +590,8 @@ describe('provider-runtime-sync refresh strategy', () => {
       id: 'moe-cloud-gateway',
       type: 'custom',
       name: 'MOE Cloud Gateway',
-      model: 'moe-demo-pro',
-      fallbackModels: ['moe-demo'],
+      model: 'custom-moecloud/moe-demo-pro',
+      fallbackModels: ['custom-moecloud/moe-demo'],
       baseUrl: 'https://gateway.example.run.app/v1',
       apiProtocol: 'openai-completions',
     });
@@ -475,8 +611,23 @@ describe('provider-runtime-sync refresh strategy', () => {
         baseUrl: 'https://gateway.example.run.app/v1',
         api: 'openai-completions',
         authHeader: true,
+        models: expect.arrayContaining([
+          expect.objectContaining({ id: 'moe-demo-pro', input: ['text', 'image'] }),
+          expect.objectContaining({ id: 'moe-demo', input: ['text', 'image'] }),
+        ]),
       }),
       ['custom-moecloud/moe-demo'],
+    );
+    expect(mocks.updateAgentModelProvider).toHaveBeenCalledWith(
+      'custom-moecloud',
+      expect.objectContaining({
+        baseUrl: 'https://gateway.example.run.app/v1',
+        api: 'openai-completions',
+        apiKey: 'sk-clawx-client',
+        models: [
+          expect.objectContaining({ id: 'moe-demo-pro', input: ['text', 'image'] }),
+        ],
+      }),
     );
     expect(mocks.saveProviderKeyToOpenClaw).toHaveBeenCalledWith('custom-moecloud', 'sk-clawx-client');
     expect(gateway.debouncedReload).toHaveBeenCalledTimes(1);
