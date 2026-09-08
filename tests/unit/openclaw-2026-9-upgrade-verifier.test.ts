@@ -4,13 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   MOE_HOSTAPI_TOOLS,
   OWNED_TEMP_RM_OPTIONS,
   TARGET_OPENCLAW_VERSION,
   assertSameSet,
-  removeOwnedVerifierTempRoot,
+  finalizeOwnedVerifierTempRoot,
   satisfiesOpenClawNodeEngine,
   verifyOpenClaw20269Upgrade,
 } from '../../scripts/openclaw-2026-9-upgrade-verifier.mjs';
@@ -215,53 +215,82 @@ describe('OpenClaw 2026.9 upgrade verifier', () => {
     expect(() => assertSameSet('ctl', [...MOE_HOSTAPI_TOOLS].reverse(), MOE_HOSTAPI_TOOLS)).not.toThrow();
   });
 
-  it('removes the verifier-owned temp root when no handle contention exists', async () => {
+  it('removes the verifier-owned temp root and requests exactly the bounded recursive-rm retry options', async () => {
+    // Happy path against the real fs: the owned scratch root is gone and
+    // nothing is thrown.
     const dir = await mkdtemp(path.join(os.tmpdir(), 'clwx-openclaw-moe-plugin-ctl-'));
     await writeFile(path.join(dir, 'scratch.txt'), 'scratch', 'utf8');
-    expect(removeOwnedVerifierTempRoot(dir)).toEqual({ removed: true, preservedPath: null, code: null });
+    expect(() => finalizeOwnedVerifierTempRoot(dir)).not.toThrow();
     expect(fs.existsSync(dir)).toBe(false);
-  });
 
-  it('retries owned temp cleanup with the Windows backoff pattern and preserves the scratch dir on residual EPERM instead of failing a passed verification', () => {
-    // hosted34244582967: all disposition assertions passed, then the finally
-    // rm of the owned mkdtemp root threw EPERM (Windows handle contention on
-    // just-executed plugin state) and failed the suite. The cleanup must
-    // (a) request Node's documented Windows rm retry options and
-    // (b) downgrade only residual contention codes to a preserve-and-warn,
-    // never the verification verdict itself.
+    // Retry configuration: the rm request must carry Node's documented
+    // recursive backoff bounds (these apply to EBUSY/EMFILE/ENFILE/ENOTEMPTY/
+    // EPERM), not an unbounded or absent retry.
     const calls: Array<{ target: string; options: Record<string, unknown> }> = [];
-    const eperm = Object.assign(new Error('EPERM, Permission denied'), { code: 'EPERM', syscall: 'rm' });
-    const rmImpl = (target: string, options: Record<string, unknown>) => {
+    finalizeOwnedVerifierTempRoot('/tmp/clwx-openclaw-moe-plugin-ctl', null, ((target: string, options: Record<string, unknown>) => {
       calls.push({ target, options });
-      throw eperm;
-    };
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      const result = removeOwnedVerifierTempRoot('/tmp/clwx-openclaw-moe-plugin-ctl', rmImpl as never);
-      expect(result).toEqual({
-        removed: false,
-        preservedPath: '/tmp/clwx-openclaw-moe-plugin-ctl',
-        code: 'EPERM',
-      });
-      expect(calls).toHaveLength(1);
-      expect(calls[0].options).toMatchObject({ ...OWNED_TEMP_RM_OPTIONS });
-      expect(OWNED_TEMP_RM_OPTIONS).toMatchObject({ recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
-      // The preserved path stays discoverable in diagnostics.
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('/tmp/clwx-openclaw-moe-plugin-ctl'));
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('EPERM'));
-    } finally {
-      warnSpy.mockRestore();
-    }
+    }) as never);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].target).toBe('/tmp/clwx-openclaw-moe-plugin-ctl');
+    expect(calls[0].options).toEqual({ recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    expect(OWNED_TEMP_RM_OPTIONS).toEqual({ recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
-  it('still throws owned temp cleanup errors outside the Windows contention set (no blanket permission-error swallow)', () => {
+  it('surfaces exhausted-retry EPERM as a failure instead of converting it into success', () => {
+    // hosted34244582967 observed EPERM on the owned temp root after all
+    // assertions passed. The observed code alone cannot distinguish a
+    // transient handle from a permanent permission fault, so once the bounded
+    // retries are exhausted the error must fail the verification — with the
+    // preserved scratch path attached for diagnostics, not a warn-and-pass.
+    const eperm = Object.assign(new Error('EPERM, Permission denied'), { code: 'EPERM', syscall: 'rm' });
+    expect(() => finalizeOwnedVerifierTempRoot('/tmp/clwx-openclaw-moe-plugin-ctl', null, (() => {
+      throw eperm;
+    }) as never)).toThrow(/owned temp cleanup failed after bounded retries.*clwx-openclaw-moe-plugin-ctl.*EPERM/);
+  });
+
+  it('propagates EACCES cleanup failures unchanged in kind', () => {
     const eacces = Object.assign(new Error('EACCES, permission denied'), { code: 'EACCES', syscall: 'rm' });
-    expect(() => removeOwnedVerifierTempRoot('/tmp/clwx-openclaw-moe-plugin-ctl', (() => {
-      throw eacces;
-    }) as never)).toThrow(/EACCES/);
-    expect(() => removeOwnedVerifierTempRoot('/tmp/clwx-openclaw-moe-plugin-ctl', (() => {
-      throw new Error('unclassified cleanup failure');
-    }) as never)).toThrow(/unclassified cleanup failure/);
+    let thrown: unknown;
+    try {
+      finalizeOwnedVerifierTempRoot('/tmp/clwx-openclaw-moe-plugin-ctl', null, (() => {
+        throw eacces;
+      }) as never);
+    } catch (error) {
+      thrown = error;
+    }
+    expect((thrown as NodeJS.ErrnoException).code).toBe('EACCES');
+    expect(String((thrown as Error).message)).toContain('EACCES');
+  });
+
+  it('reports both causes when an assertion failure and a cleanup failure happen together', () => {
+    // The pre-fix `finally { fs.rmSync(...) }` REPLACED a primary
+    // verification error with the cleanup error. Both must surface, and a
+    // cleanup success must rethrow the primary error unchanged — never a
+    // false pass in any combination.
+    const primary = new Error('MoE HostAPI runtime toolNames mismatch; missing=[outlook.readiness] extra=[]');
+    const eperm = Object.assign(new Error('EPERM, Permission denied'), { code: 'EPERM', syscall: 'rm' });
+
+    let thrown: unknown;
+    try {
+      finalizeOwnedVerifierTempRoot('/tmp/clwx-openclaw-moe-plugin-ctl', primary, (() => {
+        throw eperm;
+      }) as never);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(AggregateError);
+    expect((thrown as AggregateError).errors).toEqual([primary, eperm]);
+    expect((thrown as Error).message).toMatch(/toolNames mismatch.*missing=\[outlook\.readiness\]/);
+    expect((thrown as Error).message).toContain('EPERM');
+
+    // Cleanup succeeded, primary present -> primary is rethrown as-is.
+    let rethrown: unknown;
+    try {
+      finalizeOwnedVerifierTempRoot('/tmp/clwx-openclaw-moe-plugin-ctl', primary, (() => {}) as never);
+    } catch (error) {
+      rethrown = error;
+    }
+    expect(rethrown).toBe(primary);
   });
 
   it('matches the exact OpenClaw node engine floor used by the Windows wrappers', () => {

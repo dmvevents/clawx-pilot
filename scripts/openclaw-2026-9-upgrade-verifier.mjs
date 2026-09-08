@@ -146,47 +146,52 @@ function assertPricingUsesNativeCatalogPricing(openclawDir) {
 // hosted34244582967 (clean 1d745567, windows-latest): every disposition
 // assertion passed, then the plain `fs.rmSync(tempRoot, { recursive, force })`
 // in the finally threw `EPERM ... \Temp\clwx-openclaw-moe-plugin-OPDKpz`
-// (syscall 'rm') and failed the suite. On Windows a handle on just-executed
-// plugin state (state/home dirs written by the two registry loads) can outlive
-// the call briefly — AV scans and lazy fd release are the usual holders.
+// (syscall 'rm') and failed the suite. The observed code was EPERM; the
+// underlying cause is UNKNOWN — a transient handle on the just-executed
+// plugin state (AV scan / lazy fd release) is a plausible hypothesis, but
+// EPERM can equally mean a permanent permission problem, and the two are
+// indistinguishable from the error alone.
 //
-// Policy (mirrors tests/unit/harness-git.test.ts cleanupRepo and
-// scripts/bundle-openclaw.mjs removeDirRobust):
-// 1. Retry with Node's documented Windows rm backoff (maxRetries/retryDelay
-//    apply to exactly EBUSY/EMFILE/ENFILE/ENOTEMPTY/EPERM when recursive).
-// 2. If one of those contention codes still survives ~5.5s of backoff,
-//    preserve ONLY this verifier-owned scratch dir, warn with the path for
-//    diagnostics, and let the verification verdict stand — the assertions
-//    above are the contract, the scratch dir is housekeeping. This also stops
-//    a cleanup throw in `finally` from masking a real inventory error.
-// 3. Any other code (e.g. EACCES on POSIX, a real access-control signal)
-//    still throws; this is not a blanket swallow of permission errors.
+// Policy:
+// 1. Retry with Node's documented recursive-rm backoff (maxRetries/retryDelay
+//    apply to exactly EBUSY/EMFILE/ENFILE/ENOTEMPTY/EPERM when recursive),
+//    which absorbs a briefly-held handle without hiding anything.
+// 2. If the error survives the bounded retries, SURFACE it as a failure —
+//    exhaustion is never converted into success, because a residual EPERM
+//    may be a real permission fault. The preserved scratch dir path rides on
+//    the thrown error for diagnostics.
+// 3. When the verification body ALSO failed, throw both causes together so
+//    the cleanup failure cannot mask the primary verification error (the old
+//    bare `finally { fs.rmSync(...) }` replaced e.g. an inventory mismatch
+//    with the EPERM).
 export const OWNED_TEMP_RM_OPTIONS = Object.freeze({
   recursive: true,
   force: true,
   maxRetries: 10,
   retryDelay: 100,
 });
-// Exactly the codes Node itself classifies as transient for recursive rm
-// retries on Windows — no wider.
-const WINDOWS_RM_CONTENTION_CODES = new Set(['EBUSY', 'EMFILE', 'ENFILE', 'ENOTEMPTY', 'EPERM']);
 
-// Exported (with an injectable rm for deterministic negative controls in the
-// unit lane) — production callers pass only tempRoot.
-export function removeOwnedVerifierTempRoot(tempRoot, rmImpl = fs.rmSync) {
+// Exported (with an injectable rm for deterministic controls in the unit
+// lane) — production callers pass tempRoot and the primary error, if any.
+export function finalizeOwnedVerifierTempRoot(tempRoot, primaryError = null, rmImpl = fs.rmSync) {
+  let cleanupError = null;
   try {
     rmImpl(tempRoot, { ...OWNED_TEMP_RM_OPTIONS });
-    return { removed: true, preservedPath: null, code: null };
   } catch (error) {
-    const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
-    if (!WINDOWS_RM_CONTENTION_CODES.has(code)) {
-      throw error;
-    }
-    console.warn(
-      `[openclaw-2026-9-upgrade-verifier] owned temp cleanup hit ${code} after ${OWNED_TEMP_RM_OPTIONS.maxRetries} retries; `
-      + `preserving verifier-owned scratch dir for diagnostics: ${tempRoot}`,
+    cleanupError = error;
+  }
+  if (primaryError && cleanupError) {
+    throw new AggregateError(
+      [primaryError, cleanupError],
+      `${primaryError.message}; owned temp cleanup also failed after bounded retries `
+      + `(scratch dir preserved: ${tempRoot}): ${cleanupError.message}`,
     );
-    return { removed: false, preservedPath: tempRoot, code };
+  }
+  if (primaryError) throw primaryError;
+  if (cleanupError) {
+    cleanupError.message = `owned temp cleanup failed after bounded retries `
+      + `(scratch dir preserved: ${tempRoot}): ${cleanupError.message}`;
+    throw cleanupError;
   }
 }
 
@@ -290,6 +295,7 @@ async function assertMoePluginToolRegistration(openclawDir) {
   assertSameSet('MoE manifest contracts.tools', manifest.contracts?.tools ?? [], MOE_HOSTAPI_TOOLS);
 
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'clwx-openclaw-moe-plugin-'));
+  let primaryError = null;
   try {
     const registry = await loadMoeRegistry(openclawDir, pluginRoot, tempRoot, false);
     const plugin = registry.plugins?.[0];
@@ -318,9 +324,10 @@ async function assertMoePluginToolRegistration(openclawDir) {
     const hostRegistry = await loadMoeRegistry(openclawDir, pluginRoot, tempRoot, true);
     const hostPlugin = hostRegistry.plugins?.[0];
     assertSameSet('MoE HostAPI runtime toolNames', hostPlugin?.toolNames ?? [], MOE_HOSTAPI_TOOLS);
-  } finally {
-    removeOwnedVerifierTempRoot(tempRoot);
+  } catch (error) {
+    primaryError = error;
   }
+  finalizeOwnedVerifierTempRoot(tempRoot, primaryError);
 }
 
 async function assertRuntimeImports(openclawDir) {
