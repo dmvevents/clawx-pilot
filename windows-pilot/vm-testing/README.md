@@ -48,6 +48,19 @@ It records OS/build, CPU/RAM/disk, graphics/audio presence, token elevation and 
 
 Back up both `%APPDATA%\Ministry of Education` and `%USERPROFILE%\.openclaw` before installation, restart or configuration repair. Record copy success and inventory counts. An absent state directory is an observation, not a clean-image attestation.
 
+## Develop and iterate on the VM
+
+The September 7 development workspace is `C:\Users\clawxtest\ClawXDev\source`. Its portable tools and dependency cache persist across tests. See the [development evidence](../../docs/evidence/WINDOWS_VM_DEVELOPMENT_2026-09-07.md) for the exact source, environment and validation.
+
+```powershell
+. C:\Users\clawxtest\ClawXDev\enter-dev.ps1
+pnpm exec vitest run tests/unit/chrome-cdp.test.ts --maxWorkers=2
+```
+
+An agent can edit source and run these commands over authenticated SSH. Keep one controller responsible for app, Gateway and browser process changes. Use `git diff` to return reviewed fixes to the release checkout. Before a full app development launch, back up user state and stop the installed app and its owned Gateway; the source directory does not isolate `.openclaw`. Run the UI in the interactive desktop. `start-dev.ps1` checks these process/session prerequisites; Electron CDP inspection instead uses `pnpm run build:vite` followed by `pnpm exec electron . --remote-debugging-port=9223` after the same controlled handoff. Source tests and dev compilation do not replace installed-artifact acceptance.
+
+For stakeholder-reported connection/setup failures, use the `windows-vm-iteration` skill in `.agents/skills/windows-vm-iteration` or `.codex/skills/windows-vm-iteration`. It keeps the loop scoped from exact artifact diagnosis through a single VM mutator, fresh standard-user retest, redacted Plane/evidence updates and stakeholder handoff. Do not promote unreviewed setup-helper experiments into this runbook until the scripts land in `windows-pilot/scripts/` and pass review.
+
 ## Installed app checks
 
 Use `pilot-check-install-artifacts.ps1`, `pilot-office-runtime-check.ps1`, `pilot-office-write-smoke.ps1`, and `pilot-run-electron-cdp-probe.ps1`. Launch the actual installed app in the interactive user session; the test launch may expose Electron CDP on loopback port `9223`. Run plain Electron/Host API inspection before model-driven journeys. A probe without `-SafeChat` can validate the bridge while Gateway is disconnected, so do not promote its verdict to chat readiness.
