@@ -264,6 +264,23 @@ function prefixScopeBlockers(currentScope, preSendScope) {
   return blockers;
 }
 
+function browserTurnDriverHelpersSource() {
+  return `(() => {
+    const normalize = ${normalize.toString()};
+    const semanticMessageTextFromElement = ${semanticMessageTextFromElement.toString()};
+    const stableTextFingerprint = ${stableTextFingerprint.toString()};
+    const messageFingerprintFromElement = ${messageFingerprintFromElement.toString()};
+    const collectMessageScopeFromDocument = ${collectMessageScopeFromDocument.toString()};
+    const prefixScopeBlockers = ${prefixScopeBlockers.toString()};
+    const collectCurrentTurnErrorChipEvidenceFromDocument = ${collectCurrentTurnErrorChipEvidenceFromDocument.toString()};
+    return {
+      semanticMessageTextFromElement,
+      collectMessageScopeFromDocument,
+      collectCurrentTurnErrorChipEvidenceFromDocument,
+    };
+  })()`;
+}
+
 function collectCurrentTurnErrorChipEvidenceFromDocument(doc, options = {}) {
   const selectors = options.selectors || SEL;
   const textOf = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
@@ -698,39 +715,25 @@ async function waitForFreshSessionProof(page, before, timeoutMs) {
 }
 
 async function captureCurrentTurnErrorChipEvidence(page, preSendMessageScope = null) {
-  return page.evaluate(({ selectors, collectorSource, scopeSource, fingerprintSource, stableFingerprintSource, semanticSource, normalizeSource, preSendScope }) => {
-    const normalize = (0, eval)(`(${normalizeSource})`);
-    const stableTextFingerprint = (0, eval)(`(${stableFingerprintSource})`);
-    const semanticMessageTextFromElement = (0, eval)(`(${semanticSource})`);
-    const messageFingerprintFromElement = (0, eval)(`(${fingerprintSource})`);
-    const collectMessageScopeFromDocument = (0, eval)(`(${scopeSource})`);
-    const collect = (0, eval)(`(${collectorSource})`);
-    return collect(document, {
+  return page.evaluate(({ selectors, helpersSource, preSendScope }) => {
+    const helpers = (0, eval)(helpersSource);
+    return helpers.collectCurrentTurnErrorChipEvidenceFromDocument(document, {
       selectors,
       preSendMessageScope: preSendScope,
     });
   }, {
     selectors: SEL,
-    collectorSource: collectCurrentTurnErrorChipEvidenceFromDocument.toString(),
-    scopeSource: collectMessageScopeFromDocument.toString(),
-    fingerprintSource: messageFingerprintFromElement.toString(),
-    stableFingerprintSource: stableTextFingerprint.toString(),
-    semanticSource: semanticMessageTextFromElement.toString(),
-    normalizeSource: normalize.toString(),
+    helpersSource: browserTurnDriverHelpersSource(),
     preSendScope: preSendMessageScope,
   });
 }
 
 async function captureTerminalSurface(page, preSendMessageScope = null) {
-  return page.evaluate(({ selectors, semanticMessageTextFunctionSource, collectorSource, scopeSource, fingerprintSource, stableFingerprintSource, normalizeSource, preSendScope }) => {
+  return page.evaluate(({ selectors, helpersSource, preSendScope }) => {
     const textOf = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
-    const normalize = (0, eval)(`(${normalizeSource})`);
-    const stableTextFingerprint = (0, eval)(`(${stableFingerprintSource})`);
-    const semanticMessageTextFromElement = (0, eval)(`(${semanticMessageTextFunctionSource})`);
-    const semanticMessageText = semanticMessageTextFromElement;
-    const messageFingerprintFromElement = (0, eval)(`(${fingerprintSource})`);
-    const collectMessageScopeFromDocument = (0, eval)(`(${scopeSource})`);
-    const collectErrorChips = (0, eval)(`(${collectorSource})`);
+    const helpers = (0, eval)(helpersSource);
+    const semanticMessageText = helpers.semanticMessageTextFromElement;
+    const collectErrorChips = helpers.collectCurrentTurnErrorChipEvidenceFromDocument;
     const readBool = (value) => {
       if (value === 'true') return true;
       if (value === 'false') return false;
@@ -778,13 +781,7 @@ async function captureTerminalSurface(page, preSendMessageScope = null) {
     };
   }, {
     selectors: SEL,
-    semanticMessageTextFunctionSource: semanticMessageTextFromElement.toString(),
-    collectorSource: collectCurrentTurnErrorChipEvidenceFromDocument.toString(),
-    scopeSource: collectMessageScopeFromDocument.toString(),
-    fingerprintSource: messageFingerprintFromElement.toString(),
-    stableFingerprintSource: stableTextFingerprint.toString(),
-    semanticSource: semanticMessageTextFromElement.toString(),
-    normalizeSource: normalize.toString(),
+    helpersSource: browserTurnDriverHelpersSource(),
     preSendScope: preSendMessageScope,
   });
 }
@@ -861,20 +858,12 @@ async function captureMessageTestIds(page) {
 }
 
 async function captureMessageScope(page) {
-  return page.evaluate(({ selectors, collectorSource, fingerprintSource, stableFingerprintSource, semanticSource, normalizeSource }) => {
-    const normalize = (0, eval)(`(${normalizeSource})`);
-    const stableTextFingerprint = (0, eval)(`(${stableFingerprintSource})`);
-    const semanticMessageTextFromElement = (0, eval)(`(${semanticSource})`);
-    const messageFingerprintFromElement = (0, eval)(`(${fingerprintSource})`);
-    const collect = (0, eval)(`(${collectorSource})`);
-    return collect(document, { selectors });
+  return page.evaluate(({ selectors, helpersSource }) => {
+    const helpers = (0, eval)(helpersSource);
+    return helpers.collectMessageScopeFromDocument(document, { selectors });
   }, {
     selectors: SEL,
-    collectorSource: collectMessageScopeFromDocument.toString(),
-    fingerprintSource: messageFingerprintFromElement.toString(),
-    stableFingerprintSource: stableTextFingerprint.toString(),
-    semanticSource: semanticMessageTextFromElement.toString(),
-    normalizeSource: normalize.toString(),
+    helpersSource: browserTurnDriverHelpersSource(),
   });
 }
 

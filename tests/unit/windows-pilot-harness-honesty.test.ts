@@ -50,6 +50,18 @@ const driver = require('../../windows-pilot/scripts/pilot-chat-turn-driver.js') 
     messageCount: number;
     messages: Array<Record<string, unknown>>;
   };
+  captureMessageScope: (page: { evaluate: (fn: (arg: unknown) => unknown, arg: unknown) => Promise<unknown> | unknown }) => Promise<{
+    sessionKey: string | null;
+    messageCount: number;
+    messages: Array<Record<string, unknown>>;
+  }>;
+  captureCurrentTurnErrorChipEvidence: (page: { evaluate: (fn: (arg: unknown) => unknown, arg: unknown) => Promise<unknown> | unknown }, preSendMessageScope?: Record<string, unknown> | null) => Promise<{
+    errorChipSeen: boolean;
+    errorChipScopeValid: boolean;
+    historicalErrorChipCount: number;
+    messageTestIds: string[];
+  }>;
+  captureTerminalSurface: (page: { evaluate: (fn: (arg: unknown) => unknown, arg: unknown) => Promise<unknown> | unknown }, preSendMessageScope?: Record<string, unknown> | null) => Promise<Record<string, unknown>>;
   collectCurrentTurnErrorChipEvidenceFromDocument: (doc: Document, options?: {
     selectors?: Record<string, string>;
     preSendMessageTestIds?: string[];
@@ -76,6 +88,20 @@ const PROMPT = 'What is the deadline for the daily report?';
 
 function shape(text: string, chipText = '') {
   return driver.classifyTurnText({ text, promptNormalized: PROMPT, chipText });
+}
+
+function fakePageFor(dom: JSDOM) {
+  return {
+    async evaluate(fn: (arg: unknown) => unknown, arg: unknown) {
+      const previousDocument = globalThis.document;
+      try {
+        globalThis.document = dom.window.document;
+        return await fn(arg);
+      } finally {
+        globalThis.document = previousDocument;
+      }
+    },
+  };
 }
 
 describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
@@ -367,6 +393,58 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
     expect(evidence.errorChipText).toBe(CHIP);
     expect(evidence.messageTestIds).toEqual(['chat-message-3']);
     expect(blockers).toContain('ERROR_CHIP_VISIBLE');
+  });
+
+  it('executes exported browser capture helpers with self-contained evaluate payloads', async () => {
+    const before = new JSDOM(`
+      <main
+        data-testid="chat-page"
+        data-current-session-key="agent:main:main"
+        data-sending="false"
+        data-pending-final="false"
+        data-active-run-id-present="false"
+        data-active-execution-graph="false"
+        data-degrade-in-progress="false"
+        data-run-error-present="false"
+      >
+        <div data-testid="runtime-channel" data-channel="online">Online</div>
+        <textarea data-testid="chat-composer-input"></textarea>
+        <div data-testid="chat-message-0"><p class="whitespace-pre-wrap">Old prompt</p></div>
+        <div data-testid="chat-message-1"><div class="prose"><p>Old answer.</p></div></div>
+      </main>
+    `);
+    const current = new JSDOM(`
+      <main
+        data-testid="chat-page"
+        data-current-session-key="agent:main:main"
+        data-sending="false"
+        data-pending-final="false"
+        data-active-run-id-present="false"
+        data-active-execution-graph="false"
+        data-degrade-in-progress="false"
+        data-run-error-present="false"
+      >
+        <div data-testid="runtime-channel" data-channel="online">Online</div>
+        <textarea data-testid="chat-composer-input"></textarea>
+        <div data-testid="chat-message-0"><p class="whitespace-pre-wrap">Old prompt</p></div>
+        <div data-testid="chat-message-1"><div class="prose"><p>Old answer.</p></div></div>
+        <div data-testid="chat-message-2"><p class="whitespace-pre-wrap">${PROMPT}</p></div>
+        <div data-testid="chat-message-3"><div class="prose"><p>Done.</p></div></div>
+      </main>
+    `);
+
+    const scope = await driver.captureMessageScope(fakePageFor(before));
+    const chipEvidence = await driver.captureCurrentTurnErrorChipEvidence(fakePageFor(current), scope);
+    const surface = await driver.captureTerminalSurface(fakePageFor(current), scope);
+
+    expect(scope.sessionKey).toBe('agent:main:main');
+    expect(scope.messageCount).toBe(2);
+    expect(chipEvidence.errorChipSeen).toBe(false);
+    expect(chipEvidence.errorChipScopeValid).toBe(true);
+    expect(surface.rootPresent).toBe(true);
+    expect(surface.messageCount).toBe(4);
+    expect(surface.errorChipSeen).toBe(false);
+    expect(surface.errorChipScopeValid).toBe(true);
   });
 
   it('fails closed when same-session history replacement reuses pre-send message ids', () => {
