@@ -52,7 +52,9 @@ describe('Microsoft Graph send safety', () => {
     });
 
     expect(result).toMatchObject({ status: 'refused' });
-    expect(result.reason).toMatch(/read-only/i);
+    expect(result.reason).toMatch(/denied sending.*403 ErrorAccessDenied/i);
+    expect(result.reason).toContain('Mail.Send');
+    expect(result.reason).toContain('Outlook browser');
     expect(mockGraphCalls.sendMail).toHaveBeenCalledTimes(1);
   });
 });

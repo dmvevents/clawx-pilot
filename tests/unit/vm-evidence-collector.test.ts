@@ -59,28 +59,39 @@ function gatewaySystemPresenceProbeScript(): string {
   return match[1];
 }
 
-async function bundledGatewayClientContract(): Promise<{ ids: string[]; modes: string[] }> {
+async function bundledNamedContract(prefix: string, requiredExports: string[]): Promise<Record<string, unknown>> {
   const distDir = dirname(require.resolve('openclaw'));
-  const contractFile = readdirSync(distDir).find((name) => /^message-channel-.*\.js$/.test(name));
-  if (!contractFile) throw new Error('OpenClaw message-channel contract module not found');
-  const contract = await import(pathToFileURL(join(distDir, contractFile)).href) as {
-    m?: Record<string, string>;
-    h?: Record<string, string>;
-  };
+  const candidates = readdirSync(distDir).filter((name) => {
+    if (!name.startsWith(prefix) || !name.endsWith('.js')) return false;
+    const source = readFileSync(join(distDir, name), 'utf8');
+    const exports = [...source.matchAll(/export\s*\{([^}]+)\}/g)]
+      .flatMap((match) => match[1].split(','))
+      .map((entry) => entry.trim().split(/\s+as\s+/).at(-1));
+    return requiredExports.every((name) => exports.includes(name));
+  });
+  if (candidates.length !== 1) {
+    throw new Error(`Expected one OpenClaw ${prefix} named contract, found ${candidates.length}`);
+  }
+  return await import(pathToFileURL(join(distDir, candidates[0])).href);
+}
+
+async function bundledGatewayClientContract(): Promise<{ ids: string[]; modes: string[] }> {
+  const contract = await bundledNamedContract('client-info-', ['GATEWAY_CLIENT_IDS', 'GATEWAY_CLIENT_MODES']);
+  if (!contract.GATEWAY_CLIENT_IDS || !contract.GATEWAY_CLIENT_MODES) {
+    throw new Error('OpenClaw Gateway client constants missing');
+  }
   return {
-    ids: Object.values(contract.m ?? {}),
-    modes: Object.values(contract.h ?? {}),
+    ids: Object.values(contract.GATEWAY_CLIENT_IDS),
+    modes: Object.values(contract.GATEWAY_CLIENT_MODES),
   };
 }
 
 async function bundledSystemPresenceScopes(): Promise<string[]> {
-  const distDir = dirname(require.resolve('openclaw'));
-  const contractFile = readdirSync(distDir).find((name) => /^method-scopes-.*\.js$/.test(name));
-  if (!contractFile) throw new Error('OpenClaw method-scopes contract module not found');
-  const contract = await import(pathToFileURL(join(distDir, contractFile)).href) as {
-    a?: (method: string) => string[];
-  };
-  const scopes = contract.a?.('system-presence');
+  const contract = await bundledNamedContract('method-scopes-', ['resolveLeastPrivilegeOperatorScopesForMethod']);
+  if (typeof contract.resolveLeastPrivilegeOperatorScopesForMethod !== 'function') {
+    throw new Error('OpenClaw system-presence scope resolver not found');
+  }
+  const scopes = contract.resolveLeastPrivilegeOperatorScopesForMethod('system-presence');
   if (!Array.isArray(scopes)) throw new Error('OpenClaw system-presence scope resolver not found');
   return scopes;
 }

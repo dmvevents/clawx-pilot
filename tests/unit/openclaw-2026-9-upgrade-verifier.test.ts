@@ -178,7 +178,9 @@ async function loadActualChatHistoryHandler() {
 describe('OpenClaw 2026.9 upgrade verifier', () => {
   it('accepts the actual installed OpenClaw 2026.9.2 runtime disposition', async () => {
     await verifyOpenClaw20269Upgrade(ACTUAL_OPENCLAW_DIR);
-  });
+  // Loads two real plugin registries and executes PDF extraction. Match the
+  // existing artifact transport bound; the unit default is only five seconds.
+  }, 120_000);
 
   it('matches the exact OpenClaw node engine floor used by the Windows wrappers', () => {
     expect(satisfiesOpenClawNodeEngine('22.22.2')).toBe(false);
