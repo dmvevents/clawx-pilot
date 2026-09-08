@@ -21,6 +21,8 @@ The Windows machine runs on GCP; the Mac provides the local checkout, authentica
 
 The reproducible September setup sequence was: verify IAP with protocol/control checks; authenticate to the existing guest; prepare the persistent development checkout; create the standard user and interactive RDP session; bind the installer/source hashes; install through normal screens; run private Online setup; launch the desktop shortcut; collect application and terminal-state evidence. Existing-profile upgrades first preserve both app data and `.openclaw`, with file counts and hashes verified. Credentials, login bundles and signed download URLs remain outside git.
 
+For the separate 8-vCPU lab, the [verified native development loop](../../docs/testing/WINDOWS_REPEATABLE_LAB.md#verified-native-development-loop) records portable tool/source pinning, the failed detached install, kept-live SSH recovery and before/after test receipts.
+
 The original stakeholder VM has one active root controller for app/Gateway/browser changes. The owner released its RDP testing hold on September 8; root may use that Windows desktop. Multiple RDP connections still share one machine. Separate fresh lab VMs are documented below; the original resize proposal was not executed. Preserve the original VM egress configuration and distinguish desktop testing from stopping or replacing the machine.
 
 [CLWX-125 investigation](../../docs/evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md) contains the application flow map, historical working/failing comparisons, hypotheses, exact timing boundaries and first-response test criteria. Its diagnostic CPU instrumentation changes a backed-up runtime entry under an environment guard; it must be restored and hash-checked before release acceptance.
