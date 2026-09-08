@@ -21,6 +21,7 @@ import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
 import { patchOpenClawChatHistory } from './openclaw-chat-history-patch.mjs';
 import { patchExtensionOpenClawSelfImports } from './openclaw-self-import-patch.mjs';
 import { patchOpenClawPricingCache } from './openclaw-pricing-cache-patch.mjs';
+import { patchOpenClawSdkAlias } from './openclaw-sdk-alias-patch.mjs';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
@@ -996,6 +997,9 @@ echo`   🩹 OpenClaw pricing cache normalization: ${pricingPatch.patched ? 'pat
 
 const chatHistoryPatch = patchOpenClawChatHistory(OUTPUT);
 echo`   🩹 OpenClaw chat.history startup catalog block: ${chatHistoryPatch.patched ? 'patched' : 'already patched'}`;
+
+const sdkAliasPatch = patchOpenClawSdkAlias(OUTPUT);
+echo`   🩹 OpenClaw SDK alias idempotent materialization: ${sdkAliasPatch.patched ? 'patched' : 'already patched'}`;
 
 // 8. Verify the bundle
 const entryExists = fs.existsSync(path.join(OUTPUT, 'openclaw.mjs'));

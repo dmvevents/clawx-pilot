@@ -64,6 +64,7 @@ function copyVerifierCheckoutFiles(destinationRoot: string) {
     'scripts/openclaw-bundle-config.mjs',
     'scripts/openclaw-chat-history-patch.mjs',
     'scripts/openclaw-pricing-cache-patch.mjs',
+    'scripts/openclaw-sdk-alias-patch.mjs',
     'extensions/moe-principal-assistant/doc-tools.mjs',
   ]) {
     fs.copyFileSync(path.join(ROOT, file), path.join(destinationRoot, file));
@@ -86,6 +87,7 @@ async function createFakeOpenClawBundle(destinationRoot: string, options: { incl
 
   const { transformOpenClawPricingCacheSource } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'openclaw-pricing-cache-patch.mjs')).href);
   const { transformOpenClawChatHistorySource } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'openclaw-chat-history-patch.mjs')).href);
+  const { transformOpenClawSdkAliasSource } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'openclaw-sdk-alias-patch.mjs')).href);
   const source = `function canonicalizeOpenRouterProvider(provider) {
 \tconst normalized = normalizeModelRef(provider, "placeholder").provider;
 \treturn PROVIDER_ALIAS_TO_OPENROUTER[normalized] ?? normalized;
@@ -131,6 +133,11 @@ const chatHandlers = {
 };
 `;
   fs.writeFileSync(path.join(distDir, 'chat-test.js'), transformOpenClawChatHistorySource(chatSource).source, 'utf8');
+  fs.writeFileSync(
+    path.join(distDir, 'loader-test.js'),
+    transformOpenClawSdkAliasSource(fs.readFileSync(path.join(ROOT, 'node_modules', 'openclaw', 'dist', 'loader-DeOtDUYt.js'), 'utf8')).source,
+    'utf8',
+  );
   return { openclawRoot, bundleNm: path.join(openclawRoot, 'node_modules') };
 }
 

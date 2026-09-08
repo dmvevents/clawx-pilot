@@ -28,6 +28,7 @@ import { spawnSync } from 'node:child_process';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
 import { verifyOpenClawChatHistoryPatch } from './openclaw-chat-history-patch.mjs';
 import { verifyOpenClawPricingCachePatch } from './openclaw-pricing-cache-patch.mjs';
+import { verifyOpenClawSdkAliasPatch } from './openclaw-sdk-alias-patch.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BUNDLE_NM = path.join(ROOT, 'build', 'openclaw', 'node_modules');
@@ -103,7 +104,16 @@ try {
   failures.push(`CHAT-HISTORY: ${err instanceof Error ? err.message : String(err)}`);
 }
 
-// 6. CLWX-92: PDF parsing must survive the Electron UtilityProcess
+// 6. CLWX-125: repeated plugin loader passes must not rewrite the
+// OpenClaw plugin-sdk alias package and wrapper modules when generated
+// content is already current.
+try {
+  verifyOpenClawSdkAliasPatch(path.join(ROOT, 'build', 'openclaw'));
+} catch (err) {
+  failures.push(`SDK-ALIAS: ${err instanceof Error ? err.message : String(err)}`);
+}
+
+// 7. CLWX-92: PDF parsing must survive the Electron UtilityProcess
 // environment shape (process.versions.electron + process.type='utility'
 // makes pdfjs demand GlobalWorkerOptions.workerSrc). Run the shipped
 // doc-tools against the BUNDLE's pdf-parse in a child process with the
