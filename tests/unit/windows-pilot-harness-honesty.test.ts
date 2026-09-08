@@ -45,6 +45,18 @@ const driver = require('../../windows-pilot/scripts/pilot-chat-turn-driver.js') 
   semanticMessageTextFromElement: (element: Element) => string;
   semanticAnswerStillLatest: (latestText: string, expectedText: string) => boolean;
   terminalLatestText: (surface: { lastMessageText?: string; lastMessageTextFull?: string }) => string;
+  collectCurrentTurnErrorChipEvidenceFromDocument: (doc: Document, options?: {
+    selectors?: Record<string, string>;
+    preSendMessageTestIds?: string[];
+    preSendMessageCount?: number;
+  }) => {
+    errorChipSeen: boolean;
+    errorChipText: string;
+    errorChipCount: number;
+    historicalErrorChipCount: number;
+    messageTestIds: string[];
+    hasPreSendScope: boolean;
+  };
   SEL: Record<string, string>;
 };
 const channel = require('../../windows-pilot/scripts/pilot-set-channel.js') as {
@@ -247,6 +259,101 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
       terminalStable: true,
       terminalBlockers: blockers,
     })).toBe('TIMED_OUT_MID_TURN');
+  });
+
+
+  it('ignores inline error chips owned by pre-send history when checking terminal blockers', () => {
+    const answer = 'The current Online turn completed with token CLWX125-CURRENT-ANSWER-0042.';
+    const dom = new JSDOM(`
+      <main data-testid="chat-page">
+        <div data-testid="chat-message-0"><p class="whitespace-pre-wrap">Old prompt</p></div>
+        <div data-testid="chat-message-1">
+          <div class="prose"><p>Old failed answer.</p></div>
+          <div data-testid="chat-message-error-chip">${CHIP}</div>
+        </div>
+        <div data-testid="chat-message-2"><p class="whitespace-pre-wrap">${PROMPT}</p></div>
+        <div data-testid="chat-message-3"><div class="prose"><p>${answer}</p></div></div>
+      </main>
+    `);
+
+    const evidence = driver.collectCurrentTurnErrorChipEvidenceFromDocument(dom.window.document, {
+      selectors: driver.SEL,
+      preSendMessageTestIds: ['chat-message-0', 'chat-message-1'],
+    });
+
+    expect(evidence.errorChipSeen).toBe(false);
+    expect(evidence.errorChipCount).toBe(0);
+    expect(evidence.historicalErrorChipCount).toBe(1);
+    expect(driver.terminalBlockersFor({
+      rootPresent: true,
+      channel: 'online',
+      degradeNoticeSeen: false,
+      degradeInProgress: false,
+      sending: false,
+      pendingFinal: false,
+      activeRunIdPresent: false,
+      activeExecutionGraph: false,
+      runErrorSeen: false,
+      genericErrorSeen: false,
+      errorChipSeen: evidence.errorChipSeen,
+    }, 'online')).toEqual([]);
+  });
+
+  it('keeps a post-send inline error chip as a terminal blocker for the current turn', () => {
+    const dom = new JSDOM(`
+      <main data-testid="chat-page">
+        <div data-testid="chat-message-0"><p class="whitespace-pre-wrap">Old prompt</p></div>
+        <div data-testid="chat-message-1"><div class="prose"><p>Old answer.</p></div></div>
+        <div data-testid="chat-message-2"><p class="whitespace-pre-wrap">${PROMPT}</p></div>
+        <div data-testid="chat-message-3">
+          <div class="prose"><p>New failed answer.</p></div>
+          <div data-testid="chat-message-error-chip">${CHIP}</div>
+        </div>
+      </main>
+    `);
+
+    const evidence = driver.collectCurrentTurnErrorChipEvidenceFromDocument(dom.window.document, {
+      selectors: driver.SEL,
+      preSendMessageTestIds: ['chat-message-0', 'chat-message-1'],
+    });
+    const blockers = driver.terminalBlockersFor({
+      rootPresent: true,
+      channel: 'online',
+      degradeNoticeSeen: false,
+      degradeInProgress: false,
+      sending: false,
+      pendingFinal: false,
+      activeRunIdPresent: false,
+      activeExecutionGraph: false,
+      runErrorSeen: false,
+      genericErrorSeen: false,
+      errorChipSeen: evidence.errorChipSeen,
+    }, 'online');
+
+    expect(evidence.errorChipSeen).toBe(true);
+    expect(evidence.errorChipText).toBe(CHIP);
+    expect(evidence.messageTestIds).toEqual(['chat-message-3']);
+    expect(blockers).toContain('ERROR_CHIP_VISIBLE');
+  });
+
+  it('fails closed for inline error chips when no pre-send history scope is available', () => {
+    const dom = new JSDOM(`
+      <main data-testid="chat-page">
+        <div data-testid="chat-message-4">
+          <div class="prose"><p>Unknown turn owner.</p></div>
+          <div data-testid="chat-message-error-chip">${CHIP}</div>
+        </div>
+      </main>
+    `);
+
+    const evidence = driver.collectCurrentTurnErrorChipEvidenceFromDocument(dom.window.document, {
+      selectors: driver.SEL,
+      preSendMessageTestIds: [],
+    });
+
+    expect(evidence.hasPreSendScope).toBe(false);
+    expect(evidence.errorChipSeen).toBe(true);
+    expect(evidence.errorChipText).toBe(CHIP);
   });
 
   it('rejects a later terminal run error or error chip even after stable answer text', () => {

@@ -443,4 +443,25 @@ describe('channel-router runChannelPreflight', () => {
     expect(mocks.setDefaultProvider).not.toHaveBeenCalledWith('gemini-1');
     expect(mocks.setAllAgentsModel).not.toHaveBeenCalled();
   });
+
+  it('preserves explicit Online intent instead of silently applying a ready local account during boot', async () => {
+    mocks.listProviderAccounts.mockResolvedValue([
+      makeAccount({
+        id: 'ollama-local',
+        vendorId: 'ollama',
+        baseUrl: 'http://localhost:11434/v1',
+        model: 'qwen2.5:3b-instruct',
+      }),
+    ]);
+    mocks.probeLocalProviderReadiness.mockResolvedValue({ ready: true, reason: 'ok', status: 200 });
+
+    const result = await runChannelPreflight('online', undefined, {
+      allowChannelFallback: false,
+      requireLocalReadiness: true,
+    });
+
+    expect(result).toMatchObject({ ran: false, reason: 'desired-unavailable', desired: 'online' });
+    expect(mocks.setDefaultProvider).not.toHaveBeenCalledWith('ollama-local');
+    expect(mocks.setAllAgentsModel).not.toHaveBeenCalled();
+  });
 });

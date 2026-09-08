@@ -130,4 +130,39 @@ describe('gateway boot convergence', () => {
     expect(mocks.storeApiKey).not.toHaveBeenCalled();
     expect(mocks.setDefaultProviderAccount).not.toHaveBeenCalled();
   });
+
+  it('adds the local fallback without taking default ownership from an existing cloud account', async () => {
+    mocks.listProviderAccounts.mockResolvedValue([
+      {
+        id: 'custom-moecloud',
+        vendorId: 'custom',
+        label: 'MOE Cloud Gateway',
+        authMode: 'api_key',
+        baseUrl: 'https://gateway.example.run.app/v1',
+        apiProtocol: 'openai-completions',
+        model: 'moe-demo-pro',
+        enabled: true,
+        isDefault: true,
+        createdAt: '2026-09-08T00:00:00.000Z',
+        updatedAt: '2026-09-08T00:00:00.000Z',
+      },
+    ]);
+    mocks.getDefaultProviderAccountId.mockResolvedValue('custom-moecloud');
+
+    await seedDefaultLocalProvider({} as never, { skipGatewayRefresh: true });
+
+    expect(mocks.saveProviderAccount).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'ollama-local-qwen2.5-3b-instruct',
+      vendorId: 'ollama',
+      model: 'qwen2.5:3b-instruct',
+      isDefault: false,
+    }));
+    expect(mocks.storeApiKey).toHaveBeenCalledWith('ollama-local-qwen2.5-3b-instruct', 'ollama-local');
+    expect(mocks.setDefaultProviderAccount).not.toHaveBeenCalledWith('ollama-local-qwen2.5-3b-instruct');
+    expect(mocks.syncSavedProviderToRuntime).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'ollama-local-qwen2.5-3b-instruct',
+      type: 'ollama',
+      model: 'qwen2.5:3b-instruct',
+    }), 'ollama-local', undefined);
+  });
 });

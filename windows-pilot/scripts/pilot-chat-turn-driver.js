@@ -191,6 +191,42 @@ function terminalLatestText(surface) {
   return normalize(surface?.lastMessageTextFull || surface?.lastMessageText || '');
 }
 
+
+function collectCurrentTurnErrorChipEvidenceFromDocument(doc, options = {}) {
+  const selectors = options.selectors || SEL;
+  const textOf = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
+  const preSendMessageTestIds = new Set(Array.isArray(options.preSendMessageTestIds) ? options.preSendMessageTestIds : []);
+  const inferredPreSendCount = preSendMessageTestIds.size;
+  const explicitPreSendCount = Number(options.preSendMessageCount);
+  const preSendMessageCount = Number.isFinite(explicitPreSendCount) && explicitPreSendCount >= 0
+    ? explicitPreSendCount
+    : inferredPreSendCount;
+  const hasPreSendScope = preSendMessageTestIds.size > 0 || preSendMessageCount > 0;
+  const messages = Array.from(doc.querySelectorAll(selectors.message)).map((el, domOrdinal) => {
+    const testId = el.getAttribute('data-testid') || '';
+    const presentBeforeSend = preSendMessageTestIds.has(testId) || (hasPreSendScope && domOrdinal < preSendMessageCount);
+    const chips = Array.from(el.querySelectorAll(selectors.errorChip)).map((chip) => ({
+      text: textOf(chip),
+      ownerTestId: testId || null,
+      ownerDomOrdinal: domOrdinal,
+      presentBeforeSend,
+    }));
+    return { testId, domOrdinal, presentBeforeSend, chips };
+  });
+  const chips = messages.flatMap((message) => message.chips);
+  const currentChips = hasPreSendScope ? chips.filter((chip) => !chip.presentBeforeSend) : chips;
+  const chipText = currentChips.map((chip) => chip.text).filter(Boolean).at(-1) || '';
+
+  return {
+    errorChipSeen: currentChips.length > 0,
+    errorChipText: chipText,
+    errorChipCount: currentChips.length,
+    historicalErrorChipCount: hasPreSendScope ? chips.length - currentChips.length : 0,
+    messageTestIds: currentChips.map((chip) => chip.ownerTestId).filter(Boolean),
+    hasPreSendScope,
+  };
+}
+
 function extractExecutionGraphEvidenceFromDocument(doc, options) {
   const selectors = options?.selectors || SEL;
   const normalizeText = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -568,10 +604,26 @@ async function waitForFreshSessionProof(page, before, timeoutMs) {
   return { ok: false, state: latest, blockers: latestBlockers };
 }
 
-async function captureTerminalSurface(page) {
-  return page.evaluate(({ selectors, semanticMessageTextFunctionSource }) => {
+async function captureCurrentTurnErrorChipEvidence(page, preSendMessageTestIds = []) {
+  return page.evaluate(({ selectors, collectorSource, preSendIds }) => {
+    const collect = (0, eval)(`(${collectorSource})`);
+    return collect(document, {
+      selectors,
+      preSendMessageTestIds: preSendIds,
+      preSendMessageCount: Array.isArray(preSendIds) ? preSendIds.length : 0,
+    });
+  }, {
+    selectors: SEL,
+    collectorSource: collectCurrentTurnErrorChipEvidenceFromDocument.toString(),
+    preSendIds: preSendMessageTestIds,
+  });
+}
+
+async function captureTerminalSurface(page, preSendMessageTestIds = []) {
+  return page.evaluate(({ selectors, semanticMessageTextFunctionSource, collectorSource, preSendIds }) => {
     const textOf = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
     const semanticMessageText = (0, eval)(`(${semanticMessageTextFunctionSource})`);
+    const collectErrorChips = (0, eval)(`(${collectorSource})`);
     const readBool = (value) => {
       if (value === 'true') return true;
       if (value === 'false') return false;
@@ -583,7 +635,11 @@ async function captureTerminalSurface(page) {
     const composer = document.querySelector(selectors.composer);
     const runError = document.querySelector(selectors.runError);
     const genericError = document.querySelector(selectors.genericError);
-    const errorChip = document.querySelector(selectors.errorChip);
+    const currentErrorChips = collectErrorChips(document, {
+      selectors,
+      preSendMessageTestIds: preSendIds,
+      preSendMessageCount: Array.isArray(preSendIds) ? preSendIds.length : 0,
+    });
     const messages = Array.from(document.querySelectorAll(selectors.message)).map((el) => semanticMessageText(el));
     const runErrorState = root ? readBool(root.getAttribute('data-run-error-present')) : null;
 
@@ -598,7 +654,7 @@ async function captureTerminalSurface(page) {
       activeExecutionGraph: root ? readBool(root.getAttribute('data-active-execution-graph')) : null,
       degradeInProgress: root ? readBool(root.getAttribute('data-degrade-in-progress')) : null,
       runErrorSeen: runErrorState === true || (runErrorState === false ? false : Boolean(runError)),
-      errorChipSeen: Boolean(errorChip),
+      errorChipSeen: currentErrorChips.errorChipSeen,
       errorPresent: root ? readBool(root.getAttribute('data-error-present')) : null,
       degradeNoticeSeen: Boolean(degrade),
       degradeNoticeInProgressAttr: degrade ? degrade.getAttribute('data-in-progress') === 'true' : false,
@@ -606,15 +662,21 @@ async function captureTerminalSurface(page) {
       runErrorText: runError ? textOf(runError).slice(0, 300) : null,
       genericErrorSeen: Boolean(genericError),
       genericErrorText: genericError ? textOf(genericError).slice(0, 300) : null,
-      errorChipText: errorChip ? textOf(errorChip).slice(0, 300) : null,
+      errorChipText: currentErrorChips.errorChipText ? currentErrorChips.errorChipText.slice(0, 300) : null,
+      historicalErrorChipCount: currentErrorChips.historicalErrorChipCount,
       messageCount: messages.length,
       lastMessageText: messages.length ? messages[messages.length - 1].slice(0, 800) : '',
       lastMessageTextFull: messages.length ? messages[messages.length - 1] : '',
     };
-  }, { selectors: SEL, semanticMessageTextFunctionSource: semanticMessageTextFromElement.toString() });
+  }, {
+    selectors: SEL,
+    semanticMessageTextFunctionSource: semanticMessageTextFromElement.toString(),
+    collectorSource: collectCurrentTurnErrorChipEvidenceFromDocument.toString(),
+    preSendIds: preSendMessageTestIds,
+  });
 }
 
-async function waitForTerminalAcceptance(page, args, answerText) {
+async function waitForTerminalAcceptance(page, args, answerText, preSendMessageTestIds = []) {
   const quietMs = args.terminalQuiet * 1000;
   const deadline = Date.now() + Math.max(quietMs + 10_000, 10_000);
   const startedAt = new Date().toISOString();
@@ -624,7 +686,7 @@ async function waitForTerminalAcceptance(page, args, answerText) {
   let finalBlockers = [];
 
   while (Date.now() <= deadline) {
-    const surface = await captureTerminalSurface(page).catch((error) => ({
+    const surface = await captureTerminalSurface(page, preSendMessageTestIds).catch((error) => ({
       at: new Date().toISOString(),
       captureError: error instanceof Error ? error.message : String(error),
     }));
@@ -855,12 +917,15 @@ async function main() {
     while (Date.now() < deadline) {
       await page.waitForTimeout(2_000);
       result.messagesAfter = await page.locator(SEL.message).count();
-      // Read the inline chip every poll: the container's innerText INCLUDES its
-      // chip's text, so the chip string is needed to tell "assistant answered"
-      // from "assistant rendered nothing but an error".
-      if (await page.locator(SEL.errorChip).count() > 0) {
+      // Read only post-send inline chips. Historical Main errors remain visible
+      // in reused sessions and must not invalidate the current turn, but a new
+      // chip in the current turn still blocks acceptance. The container's
+      // innerText includes its chip text, so the current chip string is needed
+      // to distinguish an answer from a bare inline failure.
+      const chipEvidence = await captureCurrentTurnErrorChipEvidence(page, result.messageTestIdsBefore).catch(() => null);
+      if (chipEvidence?.errorChipSeen) {
         result.errorChipSeen = true;
-        chipTextRaw = normalize(await page.locator(SEL.errorChip).last().innerText().catch(() => ''));
+        chipTextRaw = normalize(chipEvidence.errorChipText || '');
         result.errorChipText = truncate(chipTextRaw, 300);
       }
       if (await page.locator(SEL.degrade).count() > 0) {
@@ -907,7 +972,7 @@ async function main() {
     }
 
     if (result.settled) {
-      const terminal = await waitForTerminalAcceptance(page, args, lastText);
+      const terminal = await waitForTerminalAcceptance(page, args, lastText, result.messageTestIdsBefore);
       result.terminalStable = terminal.stable;
       result.terminalBlockers = terminal.blockers;
       result.terminalState = terminal.finalSurface;
@@ -938,7 +1003,11 @@ async function main() {
         diagnostics: [`CAPTURE_FAILED:${error && error.message ? error.message : error}`],
       };
     }
-    if (await page.locator(SEL.errorChip).count() > 0) result.errorChipSeen = true;
+    const finalChipEvidence = await captureCurrentTurnErrorChipEvidence(page, result.messageTestIdsBefore).catch(() => null);
+    if (finalChipEvidence?.errorChipSeen) {
+      result.errorChipSeen = true;
+      result.errorChipText = truncate(finalChipEvidence.errorChipText || result.errorChipText || '', 300);
+    }
     if (await page.locator(SEL.genericError).count() > 0) result.genericErrorSeen = true;
 
     result.verdict = verdictFor(result);
@@ -985,5 +1054,7 @@ module.exports = {
   waitForStableChatReady,
   waitForFreshSessionProof,
   redactTerminalSurface,
+  collectCurrentTurnErrorChipEvidenceFromDocument,
+  captureCurrentTurnErrorChipEvidence,
   captureTerminalSurface,
 };
