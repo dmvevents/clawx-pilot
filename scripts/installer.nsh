@@ -11,16 +11,66 @@
 ; invocation. Empty when no previous installation tree was moved aside.
 Var /GLOBAL ClawXStaleInstallDir
 
-; Abort the installation with a nonzero exit code while leaving the previous
-; installation tree untouched. Silent installs (auto-update) take the /SD
-; default and fail without UI. LogicLib/label-free so it can be inserted
-; multiple times.
+; Abort the installation with a nonzero exit code. Each call site's MESSAGE
+; states accurately where the previous files are (left in place before a
+; rename; preserved in $ClawXStaleInstallDir after one). Silent installs
+; (auto-update) take the /SD default and fail without UI. LogicLib/label-free
+; so it can be inserted multiple times.
 !macro ClawXFailInstallPrep MESSAGE
   SetDetailsPrint both
   DetailPrint "${MESSAGE}"
-  MessageBox MB_OK|MB_ICONSTOP "${MESSAGE}$\r$\n$\r$\nThe existing installation was left in place; nothing was removed." /SD IDOK
+  MessageBox MB_OK|MB_ICONSTOP "${MESSAGE}" /SD IDOK
   SetErrorLevel 2
   Quit
+!macroend
+
+; Verify that $INSTDIR now exists and is a real directory (directory bit set,
+; reparse bit clear). MESSAGE must state where previous files are preserved.
+!macro ClawXVerifyRealDirectory MESSAGE
+  System::Call `kernel32::GetFileAttributes(t "$INSTDIR") i .r0`
+  ${If} $0 = -1
+    !insertmacro ClawXFailInstallPrep "${MESSAGE}"
+  ${EndIf}
+  IntOp $1 $0 & 0x400
+  ${If} $1 <> 0
+    !insertmacro ClawXFailInstallPrep "${MESSAGE}"
+  ${EndIf}
+  IntOp $1 $0 & 0x10
+  ${If} $1 = 0
+    !insertmacro ClawXFailInstallPrep "${MESSAGE}"
+  ${EndIf}
+!macroend
+
+; Scan whether $INSTDIR contains any real entry. Sets $2 to "1" (nonempty) or
+; "0" (verified empty). An enumeration FAILURE is never classified as empty:
+; if FindFirst errors on an existing directory (which always yields at least
+; "."), the destination cannot be verified and the installer aborts with
+; MESSAGE. End-of-enumeration from FindNext (documented: error flag set, name
+; left empty) is normal termination, distinguished from the FindFirst failure.
+!macro ClawXScanDirectoryEmpty MESSAGE
+  StrCpy $2 "0"
+  ClearErrors
+  FindFirst $4 $5 "$INSTDIR\*"
+  ${If} ${Errors}
+    FindClose $4
+    ClearErrors
+    !insertmacro ClawXFailInstallPrep "${MESSAGE}"
+  ${EndIf}
+  ${DoWhile} $5 != ""
+    ${If} $5 != "."
+    ${AndIf} $5 != ".."
+      StrCpy $2 "1"
+      ${ExitDo}
+    ${EndIf}
+    ClearErrors
+    FindNext $4 $5
+    ${If} ${Errors}
+      ; Normal end-of-enumeration; ensure loop termination.
+      StrCpy $5 ""
+    ${EndIf}
+  ${Loop}
+  FindClose $4
+  ClearErrors
 !macroend
 
 ; ClawXPrepareInstallDirectory
@@ -33,9 +83,11 @@ Var /GLOBAL ClawXStaleInstallDir
 ;     no files, so electron-builder's `CopyFiles /SILENT "$PLUGINSDIR\7z-out\*"`
 ;     copies the new payload into a clean destination and a finished install
 ;     cannot retain stale runtime files from the previous version.
-;   - $ClawXStaleInstallDir is "" when no previous tree was moved, otherwise
-;     the exact sibling directory ("$INSTDIR._stale_<n>") that THIS invocation
-;     atomically renamed the old installation into (recoverable rollback).
+;   - $ClawXStaleInstallDir is "" when no previous tree was moved in this
+;     installer process, otherwise the exact sibling directory
+;     ("$INSTDIR._stale_<n>") most recently created by a rename in this
+;     process (recoverable rollback). Repeated invocations on an already
+;     clean destination retain the pointer; they never reset it.
 ; On any condition where a clean destination cannot be guaranteed the
 ; installer aborts with a nonzero exit code and the previous tree is
 ; preserved (either in place or, post-rename, in $ClawXStaleInstallDir).
@@ -57,7 +109,16 @@ Var /GLOBAL ClawXStaleInstallDir
 ;     rename and overlaying stale runtime state; the unchecked `cmd rd`
 ;     fallback could also partially delete and still report success.
 !macro ClawXPrepareInstallDirectory
-  StrCpy $ClawXStaleInstallDir ""
+  ; NOTE: $ClawXStaleInstallDir is intentionally NOT reset here. NSIS
+  ; initializes variables to "" at process start; the macro is invoked more
+  ; than once per install (customCheckAppRunning on non-elevated instances,
+  ; then unconditionally from customUnInstallCheck / …CurrentUser), and a
+  ; later invocation that finds the destination already clean must retain the
+  ; exact rollback pointer set by the invocation that performed the move so
+  ; customInstall cleanup targets the right tree. Every invocation re-runs
+  ; all checks; a destination modified between invocations is re-verified and
+  ; re-prepared (a further move updates the pointer to the newest rollback
+  ; directory; earlier ._stale_* trees are preserved).
 
   ; Release the installer's own working directory so NSIS cannot hold a lock
   ; on $INSTDIR during the rename (NSIS sets CWD to $INSTDIR in .onInit).
@@ -75,13 +136,16 @@ Var /GLOBAL ClawXStaleInstallDir
 
   System::Call `kernel32::GetFileAttributes(t "$INSTDIR") i .r0`
   ${If} $0 = -1
-    ; Nothing exists at the destination: fresh install.
+    ; Nothing exists at the destination: fresh install. Honor the
+    ; CreateDirectory error flag and verify a real, non-reparse directory
+    ; actually resulted (a plain file or junction racing into place must not
+    ; pass).
     ClearErrors
     CreateDirectory "$INSTDIR"
-    System::Call `kernel32::GetFileAttributes(t "$INSTDIR") i .r0`
-    ${If} $0 = -1
-      !insertmacro ClawXFailInstallPrep "Installation failed: could not create the installation directory '$INSTDIR'."
+    ${If} ${Errors}
+      !insertmacro ClawXFailInstallPrep "Installation failed: could not create the installation directory '$INSTDIR'. No existing files were modified."
     ${EndIf}
+    !insertmacro ClawXVerifyRealDirectory "Installation failed: '$INSTDIR' could not be created as a real directory. No existing files were modified."
   ${Else}
     ; FILE_ATTRIBUTE_REPARSE_POINT (0x400): junction/symlink destinations are
     ; rejected rather than renamed or written through.
@@ -95,20 +159,10 @@ Var /GLOBAL ClawXStaleInstallDir
       !insertmacro ClawXFailInstallPrep "Installation failed: a file already exists at '$INSTDIR'."
     ${EndIf}
 
-    ; Scan whether the existing directory has any entry ($2 = "1" when nonempty).
-    StrCpy $2 "0"
-    ClearErrors
-    FindFirst $4 $5 "$INSTDIR\*"
-    ${DoWhile} $5 != ""
-      ${If} $5 != "."
-      ${AndIf} $5 != ".."
-        StrCpy $2 "1"
-        ${ExitDo}
-      ${EndIf}
-      FindNext $4 $5
-    ${Loop}
-    FindClose $4
-    ClearErrors
+    ; Scan whether the existing directory has any entry ($2 = "1" when
+    ; nonempty). An unenumerable directory aborts instead of being classified
+    ; empty and overlaid.
+    !insertmacro ClawXScanDirectoryEmpty "Installation failed: the existing directory '$INSTDIR' could not be read, so a clean installation cannot be guaranteed. The directory was left in place; nothing was removed."
 
     ${If} $2 == "1"
       ; Nonempty destination: only a recognized previous ClawX installation
@@ -124,7 +178,7 @@ Var /GLOBAL ClawXStaleInstallDir
         StrCpy $3 "1"
       ${EndIf}
       ${If} $3 != "1"
-        !insertmacro ClawXFailInstallPrep "Installation failed: '$INSTDIR' already contains files that do not belong to a previous ${PRODUCT_NAME} installation. Choose an empty directory."
+        !insertmacro ClawXFailInstallPrep "Installation failed: '$INSTDIR' already contains files that do not belong to a previous ${PRODUCT_NAME} installation. They were left in place; nothing was removed. Choose an empty directory."
       ${EndIf}
 
       ; Pick the first unused "._stale_<n>" sibling name. Preexisting stale
@@ -161,29 +215,19 @@ Var /GLOBAL ClawXStaleInstallDir
         Sleep 2000
       ${Loop}
 
+      ; Recreate and verify the destination as a real, empty, non-reparse
+      ; directory. On any failure the installer aborts and the old tree stays
+      ; recoverable in $ClawXStaleInstallDir. Failure text states the rollback
+      ; location because at this point the previous files HAVE been moved.
       ClearErrors
       CreateDirectory "$INSTDIR"
-
-      ; Verify the destination is now a real, empty directory. If not, abort:
-      ; the old tree stays recoverable in $ClawXStaleInstallDir.
-      System::Call `kernel32::GetFileAttributes(t "$INSTDIR") i .r0`
-      ${If} $0 = -1
-        !insertmacro ClawXFailInstallPrep "Installation failed: could not recreate '$INSTDIR' after moving the previous installation to '$ClawXStaleInstallDir' (previous files are preserved there)."
+      ${If} ${Errors}
+        !insertmacro ClawXFailInstallPrep "Installation failed: could not recreate '$INSTDIR' after moving the previous installation. Your previous files are preserved in '$ClawXStaleInstallDir'."
       ${EndIf}
-      StrCpy $2 "0"
-      FindFirst $4 $5 "$INSTDIR\*"
-      ${DoWhile} $5 != ""
-        ${If} $5 != "."
-        ${AndIf} $5 != ".."
-          StrCpy $2 "1"
-          ${ExitDo}
-        ${EndIf}
-        FindNext $4 $5
-      ${Loop}
-      FindClose $4
-      ClearErrors
+      !insertmacro ClawXVerifyRealDirectory "Installation failed: '$INSTDIR' is not a real directory after moving the previous installation. Your previous files are preserved in '$ClawXStaleInstallDir'."
+      !insertmacro ClawXScanDirectoryEmpty "Installation failed: '$INSTDIR' could not be verified as empty after moving the previous installation. Your previous files are preserved in '$ClawXStaleInstallDir'."
       ${If} $2 == "1"
-        !insertmacro ClawXFailInstallPrep "Installation failed: '$INSTDIR' is not empty after preparing it. The previous installation is preserved in '$ClawXStaleInstallDir'."
+        !insertmacro ClawXFailInstallPrep "Installation failed: '$INSTDIR' is not empty after preparing it. Your previous files are preserved in '$ClawXStaleInstallDir'."
       ${EndIf}
       DetailPrint "Previous installation moved aside; installing into a clean directory."
     ${EndIf}
@@ -292,14 +336,22 @@ Var /GLOBAL ClawXStaleInstallDir
   ; Brief wait for handle release (main wait was already done above if app was running)
   Sleep 2000
 
-  ; Prepare a verified clean destination for the 7z extraction `CopyFiles`
-  ; step in extractAppPackage.nsh. This replaces the previous unverified
-  ; trailing-backslash checks (which native NSIS 3.0.4.1 evaluates ABSENT for
-  ; an existing directory, silently skipping the rename and overlaying stale
-  ; runtime files) and the unchecked `cmd rd /s /q` fallback. The macro either
-  ; leaves $INSTDIR empty and real, or aborts with a nonzero exit preserving
-  ; the previous tree. It also removes the now-redundant skills-subtree
-  ; deletion: a clean destination cannot retain any stale bundled file.
+  ; Early preparation of a verified clean destination for the 7z extraction
+  ; `CopyFiles` step in extractAppPackage.nsh. This replaces the previous
+  ; unverified trailing-backslash checks (which native NSIS 3.0.4.1 evaluates
+  ; ABSENT for an existing directory, silently skipping the rename and
+  ; overlaying stale runtime files) and the unchecked `cmd rd /s /q`
+  ; fallback. The macro either leaves $INSTDIR empty and real, or aborts with
+  ; a nonzero exit preserving the previous tree; the redundant skills-subtree
+  ; deletion is gone because a clean destination cannot retain stale files.
+  ;
+  ; This invocation runs only on non-elevated instances (the template skips
+  ; customCheckAppRunning for UAC inner instances). Coverage for EVERY
+  ; enabled path — including elevated all-users installs — comes from the
+  ; unconditional re-invocation in customUnInstallCheck /
+  ; customUnInstallCheckCurrentUser immediately before SetOutPath $INSTDIR +
+  ; installApplicationFiles; the macro is idempotent and keeps the rollback
+  ; pointer of the invocation that actually moved the old tree.
   !insertmacro ClawXPrepareInstallDirectory
 
   ; Pre-emptively remove the old uninstall registry entry so that
@@ -335,26 +387,49 @@ Var /GLOBAL ClawXStaleInstallDir
 ; aborts with a non-zero exit code.  The default handler retries 5× then shows
 ; a blocking MessageBox.
 ;
-; This macro clears the error and lets the new installer proceed. This is
-; safe only because ClawXPrepareInstallDirectory already ran in
-; customCheckAppRunning: $INSTDIR is a verified-empty directory (or the
-; installer has aborted), so a failing old uninstaller cannot leave stale
-; runtime files inside the new installation. Leftovers of the old tree live
-; only in the exact $ClawXStaleInstallDir rollback directory.
+; This macro clears the error and lets the new installer proceed, then runs
+; ClawXPrepareInstallDirectory so the destination is verified clean (or the
+; installer aborts) regardless of how the old uninstaller behaved.
+;
+; Actual ordering in app-builder-lib 26.8.1 installSection.nsh:
+;   1. CHECK_APP_RUNNING -> customCheckAppRunning — ONLY on non-elevated
+;      (outer / ONE_CLICK) instances; a UAC inner instance (all-users choice
+;      or a per-machine upgrade elevated from a non-admin user — enabled
+;      today because allowElevation is unset) skips it entirely, including
+;      its prep invocation and UninstallString pre-clean.
+;   2. uninstallOldVersion SHELL_CONTEXT -> handleUninstallResult SHELL_CONTEXT
+;      -> customUnInstallCheck (THIS macro) — unconditional on every enabled
+;      install path, inner instance included.
+;   3. When $installMode == "all": uninstallOldVersion HKEY_CURRENT_USER ->
+;      handleUninstallResult HKEY_CURRENT_USER -> customUnInstallCheckCurrentUser
+;      — the old per-user uninstaller runs AFTER step 2 and may touch the
+;      payload destination again, so prep re-verifies there too.
+;   4. SetOutPath $INSTDIR, installApplicationFiles (extraction CopyFiles).
+; The prep macro is idempotent: an already-clean destination short-circuits
+; and RETAINS the rollback pointer from the invocation that moved the old
+; tree; a destination modified since the last invocation is fully re-checked
+; and re-prepared. Whatever a failing old uninstaller leaves behind is either
+; moved to the exact $ClawXStaleInstallDir rollback directory or the
+; installer aborts with a nonzero exit — stale runtime files can never ride
+; into a reported-success install.
 !macro customUnInstallCheck
   ${if} $R0 != 0
-    DetailPrint "Old uninstaller exited with code $R0. Continuing with overwrite install..."
+    DetailPrint "Old uninstaller exited with code $R0. Continuing with verified replacement..."
   ${endIf}
   ClearErrors
+  !insertmacro ClawXPrepareInstallDirectory
 !macroend
 
-; Same safety net for the HKEY_CURRENT_USER uninstall path.
-; Without this, handleUninstallResult would show a fatal error and Quit.
+; Same safety net for the HKEY_CURRENT_USER uninstall path (step 3 above).
+; Without the ClearErrors, handleUninstallResult would show a fatal error and
+; Quit; the prep re-run guarantees the old per-user uninstaller cannot leave
+; the payload destination unverified between step 2 and extraction.
 !macro customUnInstallCheckCurrentUser
   ${if} $R0 != 0
     DetailPrint "Old uninstaller (current user) exited with code $R0. Continuing..."
   ${endIf}
   ClearErrors
+  !insertmacro ClawXPrepareInstallDirectory
 !macroend
 
 !macro customInstall
