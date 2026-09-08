@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T22:35:14.356188+00:00",
+  "updatedAt": "2026-09-08T23:01:36.305430+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -2093,159 +2093,38 @@
     }
   },
   "currentSourceCandidate": {
-    "version": "0.4.3-moe.27",
-    "source": "4c023f7ea3d16f4da0205308e93839ac08be26b9",
-    "productSource": "4c023f7ea3d16f4da0205308e93839ac08be26b9",
-    "branch": "release/moe27-lifecycle",
+    "version": "0.4.3-moe.28",
+    "source": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+    "productSource": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+    "branch": "release/moe28-upgrade",
     "worktree": "/private/tmp/clawx-plan-execution-20260908",
     "clean": true,
     "pushed": true,
-    "packaged": true,
-    "installed": true,
+    "packaged": false,
+    "installed": false,
     "published": false,
-    "fullPreflight": "PASS_NATIVE_HOSTED",
-    "nativePreflight": {
-      "status": "PASS",
-      "source": "4c023f7ea3d16f4da0205308e93839ac08be26b9",
-      "runId": 34272395270,
-      "passed": 2319,
-      "failed": 0,
-      "skipped": 57,
-      "testFilesPassed": 211,
-      "testFilesSkipped": 3,
-      "artifactRowsPassed": 9
-    },
-    "buildRunId": 34272395270,
-    "buildStatus": "completed",
+    "fullPreflight": "RUNNING_NATIVE_HOSTED",
+    "buildRunId": 34288617489,
+    "buildStatus": "in_progress",
+    "buildUrl": "https://github.com/dmvevents/clawx-pilot/actions/runs/34288617489",
     "profile": "keyless-public",
-    "reviewedAdditions": [
-      {
-        "authorCommit": "babc1bdc",
-        "integratedCommit": "1c387821",
-        "scope": "actual OpenClaw9.2 policy oracle",
-        "focusedTests": 22,
-        "independentReview": "APPROVE"
-      },
-      {
-        "authorCommit": "73b77d0c",
-        "integratedCommit": "6ec32807",
-        "scope": "read-only Outlook/Graph readiness diagnosis",
-        "focusedTests": 83,
-        "independentReview": "APPROVE"
-      },
-      {
-        "authorCommit": "7a129570",
-        "integratedCommit": "f520d2cc",
-        "scope": "Graph setup/cancellation/reauthentication",
-        "focusedTests": 63,
-        "independentReview": "APPROVE",
-        "localMockedElectronUi": "PASS_AT_7a129570"
-      },
-      {
-        "authorCommit": "6ed95e82",
-        "integratedCommit": "488ebe29",
-        "scope": "curated association/negation source-fixture gate",
-        "focusedTests": 60,
-        "independentReview": "APPROVE",
-        "installedAcceptance": "NOT_RUN"
-      },
-      {
-        "authorCommit": "41359e1",
-        "integratedCommit": "1d7455673774fd70c086b41b405c8ece868ce302",
-        "scope": "Windows Chrome ownership and coupled Outlook draft guards",
-        "independentReview": "APPROVE",
-        "installedAcceptance": "NOT_RUN"
-      },
-      {
-        "authorCommit": "8bf5d32",
-        "integratedCommit": "1d7455673774fd70c086b41b405c8ece868ce302",
-        "scope": "artifact matrix coverage",
-        "independentReview": "APPROVE",
-        "installedAcceptance": "NOT_RUN"
-      },
-      {
-        "authorCommit": "8935bc0a",
-        "integratedCommit": "1d7455673774fd70c086b41b405c8ece868ce302",
-        "scope": "version-bound installed verifier",
-        "independentReview": "APPROVE",
-        "installedAcceptance": "NOT_RUN"
-      },
-      {
-        "authorCommit": "1d745567",
-        "integratedCommit": "1d7455673774fd70c086b41b405c8ece868ce302",
-        "scope": "three integration inventory/evidence deltas",
-        "independentReview": "APPROVE",
-        "installedAcceptance": "NOT_RUN"
-      },
-      {
-        "authorCommit": "5785e570",
-        "integratedCommit": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
-        "scope": "native seed dependency isolation and truthful bounded verifier cleanup",
-        "focusedTests": 29,
-        "neighborAuthorTests": 6,
-        "independentReview": "APPROVE",
-        "remainingFinding": "F1 present at5785; corrected and independently verified at99468423",
-        "installedAcceptance": "NOT_RUN"
-      },
-      {
-        "authorCommit": "99468423e78d90ef75a49ac5d7b52939caf9e808",
-        "integratedCommit": "99468423e78d90ef75a49ac5d7b52939caf9e808",
-        "scope": "Owned child registry/PDF verifier lifetime and falsy-error capture",
-        "independentReview": "APPROVE",
-        "focusedTests": 33,
-        "nativeNormalTempTests": 33,
-        "nativeShortTempTests": 23,
-        "installedAcceptance": "NOT_RUN"
-      },
-      {
-        "authorCommit": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
-        "integratedCommit": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
-        "scope": "One missing helper in isolated bundle-verifier checkout copy",
-        "focusedTests": 6,
-        "independentReview": "APPROVE",
-        "nativeAcceptance": "HOSTED_FULL_PREFLIGHT_PASS; FULL_VM_NOT_RUN_AUTH_BLOCKED"
-      },
-      {
-        "authorCommit": "7ea6969c29993f5eda99e55d5fe9366c355505a7",
-        "integratedCommit": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
-        "scope": "CLWX-135 upstream package lifecycle completion and shipped launcher controls; moe27 version",
-        "independentReview": "APPROVE_AFTER_F1_F2_F3",
-        "focusedTests": 10,
-        "nativeFocusedTests": 10,
-        "nativeSkipped": 0,
-        "installedAcceptance": "NOT_RUN"
-      },
-      {
-        "authorCommit": "8bdbf91aad34b6215c9617089418f1a9f373e78b",
-        "integratedCommit": "4c023f7ea3d16f4da0205308e93839ac08be26b9",
-        "scope": "Complete isolated PDF-verifier fixture helper and real launcher contract",
-        "focusedTests": 16,
-        "nativeFocusedTests": 16,
-        "nativeSkipped": 0,
-        "independentReview": "APPROVE_WITH_FALSIFIERS",
-        "installedAcceptance": "NOT_RUN"
-      }
-    ],
-    "differenceFromReviewed": "None: exact tree equality to8bdbf91a",
-    "privateReportInSource": false,
-    "previousCandidateSource": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
-    "integrationEvidence": "docs/bugs/CLWX-135-openclaw-package-lifecycle.md",
-    "heldCommit": "24e1cfd3dd1d736d15252f77ef3e305fb5367857",
-    "buildConclusion": "success",
-    "artifactVerification": {
+    "reviewedSource": "c5c8590b",
+    "reviewedHarness": "08f0aea0",
+    "reviewAssembly": "c1891938",
+    "priorProductSource": "4c023f7e",
+    "priorAcceptance": "See execution.previousMoe27InstalledCandidate; not moe.28 acceptance",
+    "nativeUpgradePreparation": {
       "status": "PASS",
-      "hostChecks": 36,
-      "compiledFileCount": 172,
-      "openclawVersion": "2026.9.2",
-      "lifecycleMarkersAbsent": true,
-      "keyless": true,
-      "manifest": "docs/release-manifests/0.4.3-moe.27.json"
+      "cases": 11,
+      "assertions": 93,
+      "skipped": 0,
+      "timedOut": false,
+      "nativeRunnerExit": 0,
+      "startedAt": "2026-09-08T22:58:52.4038114Z",
+      "endedAt": "2026-09-08T22:59:06.3191831Z",
+      "receipt": "artifacts/windows-vm/20260908-moe27/nsis-suite-c1891938-readback-v1.json"
     },
-    "installerSha256": "a5d080fa02ffe582652f05dc4459bbc439c131a48d44ca3c0f1395edd9ab38f3",
-    "appAsarSha256": "83e82f2850d13f97bbac40e6533600111e6023cec4d5ae1ede462420de0986eb",
-    "appExeSha256": "2749c2fe080a8370690b0968d9c00f355f57cce9129753f6b7238a8cc57c70b6",
-    "installedAcceptance": "FAIL_UPGRADE_GATEWAY_STARTUP",
-    "installedEnvironment": "Assisted existing-profile standard-user Windows Server 2022"
+    "installedAcceptance": "NOT_RUN"
   },
   "handoff": {
     "status": "COMPLETE_READY_FOR_NEXT_AGENT",
@@ -2285,7 +2164,7 @@
     "awsProfile": "bedrock",
     "region": "us-east-2",
     "baseSource": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
-    "phase": "MOE27_NATIVE_HARNESS_TARGET_CORRECTION",
+    "phase": "MOE28_HOSTED_BUILD",
     "privateReceipts": "artifacts/ga-fable-20260908",
     "plan": ".omx/plans/prd-ga-fable-20260908.md",
     "testSpec": ".omx/plans/test-spec-ga-fable-20260908.md",
@@ -2457,12 +2336,10 @@
     "maxConcurrentAuthorClis": 5,
     "concurrencyReason": "Independent source and tooling lanes; no concurrent VM mutations. Source accepts only after independent review.",
     "bugHandoffPolicy": "docs/bugs/TEMPLATE.md required by PROJECT_CONTRACT, AGENTS.md and CLAUDE.md",
-    "statusCheckedAt": "2026-09-08T22:35:14.356188+00:00",
+    "statusCheckedAt": "2026-09-08T23:01:36.305430+00:00",
     "epic": "CLWX-22",
     "sprintExit": "Exact candidate passes all required source/artifact/installed/client/tenant/performance/unaided tester and final release checks",
-    "activeCliTasks": [
-      "moe27-upgrade-target-fixture-fix"
-    ],
+    "activeCliTasks": [],
     "budgetAuthorization": {
       "source": "Owner: There is no limit. Execute the work trees.",
       "recordedAt": "2026-09-08T12:36:00.652793+00:00",
@@ -3617,16 +3494,46 @@
         "elapsedSeconds": 586.68
       },
       "moe27-upgrade-target-fixture-fix": {
-        "phase": "RUNNING",
-        "processAlive": true,
-        "toolCalls": 7,
+        "phase": "TIMED_OUT",
+        "processAlive": false,
+        "toolCalls": 39,
         "observedModel": "claude-fable-5",
-        "observedProviders": [],
-        "providerEvidence": "env-pinned-unobserved",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "providerEvidence": "result-usage",
         "modelMismatch": false,
         "providerMismatch": false,
         "sessionId": "503540bc-73a2-4362-921a-1851b02b225e",
-        "elapsedSeconds": 38.16
+        "elapsedSeconds": 602.73
+      },
+      "moe27-upgrade-target-fixture-finish": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 20,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "providerEvidence": "result-usage",
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "503540bc-73a2-4362-921a-1851b02b225e",
+        "elapsedSeconds": 480.28
+      },
+      "moe27-upgrade-target-review": {
+        "phase": "CLI_SUCCEEDED",
+        "processAlive": false,
+        "toolCalls": 13,
+        "observedModel": "claude-fable-5",
+        "observedProviders": [
+          "bedrock"
+        ],
+        "providerEvidence": "result-usage",
+        "modelMismatch": false,
+        "providerMismatch": false,
+        "sessionId": "3c9c8cb7-5e8d-4e83-b606-dd2a08b8313d",
+        "elapsedSeconds": 267.12
       }
     },
     "sprint": {
@@ -4588,7 +4495,7 @@
       "qaChromeProcessesPreserved": 11
     },
     "moe27UpgradeRepair": {
-      "status": "SOURCE_APPROVED_NATIVE_SUITE_HARNESS_FAIL",
+      "status": "INTEGRATED_NATIVE11_PASS_MOE28_BUILDING",
       "task": "moe27-upgrade-source-correction",
       "worktree": "/private/tmp/clawx-moe27-upgrade-20260908",
       "branch": "fix/moe27-upgrade-replacement",
@@ -4602,7 +4509,7 @@
       "scope": "Installer replacement and failure handling; behavioral stale-runtime and locked-path regressions",
       "independentReview": "APPROVE_FABLE5_BEDROCK",
       "nativeAfterProof": "ACL_CASE_PASS_FULL_SUITE_PENDING",
-      "installedRetest": "PENDING",
+      "installedRetest": "PENDING_MOE28_BUILD",
       "rootNativeDirectoryControl": {
         "status": "PASS_DEFECT_REPRODUCED",
         "at": "2026-09-08T21:02:51.1641893Z",
@@ -4710,7 +4617,7 @@
         "receipt": "artifacts/ga-fable-20260908/windows-lab/native-moe27-upgrade/owned-child-lock-rename-control-v1.json"
       },
       "reviewAssembly": "b8423f22",
-      "nativeFullSuite": "FAIL_TARGET_MISMATCH_BEFORE_MACRO",
+      "nativeFullSuite": "PASS_11_CASES_93_ASSERTIONS_NO_SKIPS_TIMEOUTS",
       "retentionAuthorInterruption": {
         "task": "moe27-upgrade-retain-rollback",
         "phase": "CLI_FAILED",
@@ -4772,12 +4679,236 @@
         "receipt": "artifacts/windows-vm/20260908-moe27/nsis-suite-b8423f22-readback-v1.json"
       },
       "targetFixtureCorrection": {
-        "task": "moe27-upgrade-target-fixture-fix",
+        "task": "moe27-upgrade-target-fixture-finish",
         "worktree": "/private/tmp/clawx-moe27-upgrade-tests-20260909",
         "scope": "Harness target binding only; actual macro safety gate retained",
-        "status": "RUNNING",
-        "required": "Independent review, fresh identified native fixture, full11 cases, then integration/build/installed acceptance"
+        "status": "INDEPENDENTLY_APPROVED_NATIVE11_PASS",
+        "required": "Independent review, fresh identified native fixture, full11 cases, then integration/build/installed acceptance",
+        "previousTask": "moe27-upgrade-target-fixture-fix",
+        "previousStatus": "TIMED_OUT",
+        "previousElapsedSeconds": 602.73,
+        "startupControl": "artifacts/windows-vm/20260908-moe27/nsis-startup-target-control-result.json",
+        "confirmedTargetsReplacedByPlaceholder": [
+          "unmapped-root",
+          "plain-file"
+        ],
+        "normalNewDirectoryArrivesIntact": true,
+        "commit": "08f0aea017b78747efcddb49aa7386e7e2ac15f4",
+        "previousRetainedCommit": "f5184e6d92f22a71800900e3404f23fdafff2475",
+        "reviewTask": "moe27-upgrade-target-review",
+        "reviewAssembly": "c1891938ab15d270d826eb91dd65427c466c95a5",
+        "nativeStage": "EXECUTED_PASS",
+        "nativeParser": {
+          "version": "5.1.20348.5499",
+          "runnerErrors": 0,
+          "observerErrors": 0,
+          "receipt": "artifacts/windows-vm/20260908-moe27/nsis-suite-c1891938-parser.json"
+        },
+        "identity": {
+          "at": "2026-09-08T22:52:42.708201+00:00",
+          "sourceRevision": "c5c8590b",
+          "authorCommits": [
+            "f5184e6d92f22a71800900e3404f23fdafff2475",
+            "08f0aea017b78747efcddb49aa7386e7e2ac15f4"
+          ],
+          "harnessRevision": "08f0aea017b78747efcddb49aa7386e7e2ac15f4",
+          "reviewAssembly": "c1891938ab15d270d826eb91dd65427c466c95a5",
+          "compileExit": 0,
+          "hashes": {
+            "installer": "168ef803093120d8f77d712e44f6e6e2e7a0bcb8f70f6268582234d83428a167",
+            "fixture": "43056b0cb064f3985461ac20d064f91a6bb531b68472cdac5b0519cebeb905b9",
+            "runner": "1b8c991f0b2820389255f5132a7aaaa5e35741314eb4592ac547eed91d5dc15b",
+            "executable": "da862eb5fecc4fb0a8eff981e48a30ac6ba12697cd38a2b3442f1378cba94cb8"
+          },
+          "nativeExecution": "NOT_RUN_PENDING_REVIEW"
+        },
+        "reviewStatus": "APPROVE_FABLE5_BEDROCK"
+      },
+      "integratedSource": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+      "nativeFullSuiteReceipt": "artifacts/windows-vm/20260908-moe27/nsis-suite-c1891938-readback-v1.json",
+      "finalNativeSuite": {
+        "source": "c5c8590b",
+        "harness": "08f0aea0",
+        "assembly": "c1891938",
+        "exeSha256": "da862eb5fecc4fb0a8eff981e48a30ac6ba12697cd38a2b3442f1378cba94cb8",
+        "nativeRunnerExit": 0,
+        "taskResult": 0,
+        "cases": 11,
+        "assertions": 93,
+        "skipped": 0,
+        "timedOut": false,
+        "allStreamsClosed": true,
+        "startedAt": "2026-09-08T22:58:52.4038114Z",
+        "endedAt": "2026-09-08T22:59:06.3191831Z",
+        "receipt": "artifacts/windows-vm/20260908-moe27/nsis-suite-c1891938-readback-v1.json"
       }
+    },
+    "previousMoe27InstalledCandidate": {
+      "version": "0.4.3-moe.27",
+      "source": "4c023f7ea3d16f4da0205308e93839ac08be26b9",
+      "productSource": "4c023f7ea3d16f4da0205308e93839ac08be26b9",
+      "branch": "release/moe27-lifecycle",
+      "worktree": "/private/tmp/clawx-plan-execution-20260908",
+      "clean": true,
+      "pushed": true,
+      "packaged": true,
+      "installed": true,
+      "published": false,
+      "fullPreflight": "PASS_NATIVE_HOSTED",
+      "nativePreflight": {
+        "status": "PASS",
+        "source": "4c023f7ea3d16f4da0205308e93839ac08be26b9",
+        "runId": 34272395270,
+        "passed": 2319,
+        "failed": 0,
+        "skipped": 57,
+        "testFilesPassed": 211,
+        "testFilesSkipped": 3,
+        "artifactRowsPassed": 9
+      },
+      "buildRunId": 34272395270,
+      "buildStatus": "completed",
+      "profile": "keyless-public",
+      "reviewedAdditions": [
+        {
+          "authorCommit": "babc1bdc",
+          "integratedCommit": "1c387821",
+          "scope": "actual OpenClaw9.2 policy oracle",
+          "focusedTests": 22,
+          "independentReview": "APPROVE"
+        },
+        {
+          "authorCommit": "73b77d0c",
+          "integratedCommit": "6ec32807",
+          "scope": "read-only Outlook/Graph readiness diagnosis",
+          "focusedTests": 83,
+          "independentReview": "APPROVE"
+        },
+        {
+          "authorCommit": "7a129570",
+          "integratedCommit": "f520d2cc",
+          "scope": "Graph setup/cancellation/reauthentication",
+          "focusedTests": 63,
+          "independentReview": "APPROVE",
+          "localMockedElectronUi": "PASS_AT_7a129570"
+        },
+        {
+          "authorCommit": "6ed95e82",
+          "integratedCommit": "488ebe29",
+          "scope": "curated association/negation source-fixture gate",
+          "focusedTests": 60,
+          "independentReview": "APPROVE",
+          "installedAcceptance": "NOT_RUN"
+        },
+        {
+          "authorCommit": "41359e1",
+          "integratedCommit": "1d7455673774fd70c086b41b405c8ece868ce302",
+          "scope": "Windows Chrome ownership and coupled Outlook draft guards",
+          "independentReview": "APPROVE",
+          "installedAcceptance": "NOT_RUN"
+        },
+        {
+          "authorCommit": "8bf5d32",
+          "integratedCommit": "1d7455673774fd70c086b41b405c8ece868ce302",
+          "scope": "artifact matrix coverage",
+          "independentReview": "APPROVE",
+          "installedAcceptance": "NOT_RUN"
+        },
+        {
+          "authorCommit": "8935bc0a",
+          "integratedCommit": "1d7455673774fd70c086b41b405c8ece868ce302",
+          "scope": "version-bound installed verifier",
+          "independentReview": "APPROVE",
+          "installedAcceptance": "NOT_RUN"
+        },
+        {
+          "authorCommit": "1d745567",
+          "integratedCommit": "1d7455673774fd70c086b41b405c8ece868ce302",
+          "scope": "three integration inventory/evidence deltas",
+          "independentReview": "APPROVE",
+          "installedAcceptance": "NOT_RUN"
+        },
+        {
+          "authorCommit": "5785e570",
+          "integratedCommit": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
+          "scope": "native seed dependency isolation and truthful bounded verifier cleanup",
+          "focusedTests": 29,
+          "neighborAuthorTests": 6,
+          "independentReview": "APPROVE",
+          "remainingFinding": "F1 present at5785; corrected and independently verified at99468423",
+          "installedAcceptance": "NOT_RUN"
+        },
+        {
+          "authorCommit": "99468423e78d90ef75a49ac5d7b52939caf9e808",
+          "integratedCommit": "99468423e78d90ef75a49ac5d7b52939caf9e808",
+          "scope": "Owned child registry/PDF verifier lifetime and falsy-error capture",
+          "independentReview": "APPROVE",
+          "focusedTests": 33,
+          "nativeNormalTempTests": 33,
+          "nativeShortTempTests": 23,
+          "installedAcceptance": "NOT_RUN"
+        },
+        {
+          "authorCommit": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+          "integratedCommit": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+          "scope": "One missing helper in isolated bundle-verifier checkout copy",
+          "focusedTests": 6,
+          "independentReview": "APPROVE",
+          "nativeAcceptance": "HOSTED_FULL_PREFLIGHT_PASS; FULL_VM_NOT_RUN_AUTH_BLOCKED"
+        },
+        {
+          "authorCommit": "7ea6969c29993f5eda99e55d5fe9366c355505a7",
+          "integratedCommit": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
+          "scope": "CLWX-135 upstream package lifecycle completion and shipped launcher controls; moe27 version",
+          "independentReview": "APPROVE_AFTER_F1_F2_F3",
+          "focusedTests": 10,
+          "nativeFocusedTests": 10,
+          "nativeSkipped": 0,
+          "installedAcceptance": "NOT_RUN"
+        },
+        {
+          "authorCommit": "8bdbf91aad34b6215c9617089418f1a9f373e78b",
+          "integratedCommit": "4c023f7ea3d16f4da0205308e93839ac08be26b9",
+          "scope": "Complete isolated PDF-verifier fixture helper and real launcher contract",
+          "focusedTests": 16,
+          "nativeFocusedTests": 16,
+          "nativeSkipped": 0,
+          "independentReview": "APPROVE_WITH_FALSIFIERS",
+          "installedAcceptance": "NOT_RUN"
+        }
+      ],
+      "differenceFromReviewed": "None: exact tree equality to8bdbf91a",
+      "privateReportInSource": false,
+      "previousCandidateSource": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
+      "integrationEvidence": "docs/bugs/CLWX-135-openclaw-package-lifecycle.md",
+      "heldCommit": "24e1cfd3dd1d736d15252f77ef3e305fb5367857",
+      "buildConclusion": "success",
+      "artifactVerification": {
+        "status": "PASS",
+        "hostChecks": 36,
+        "compiledFileCount": 172,
+        "openclawVersion": "2026.9.2",
+        "lifecycleMarkersAbsent": true,
+        "keyless": true,
+        "manifest": "docs/release-manifests/0.4.3-moe.27.json"
+      },
+      "installerSha256": "a5d080fa02ffe582652f05dc4459bbc439c131a48d44ca3c0f1395edd9ab38f3",
+      "appAsarSha256": "83e82f2850d13f97bbac40e6533600111e6023cec4d5ae1ede462420de0986eb",
+      "appExeSha256": "2749c2fe080a8370690b0968d9c00f355f57cce9129753f6b7238a8cc57c70b6",
+      "installedAcceptance": "FAIL_UPGRADE_GATEWAY_STARTUP",
+      "installedEnvironment": "Assisted existing-profile standard-user Windows Server 2022"
+    },
+    "moe28Build": {
+      "conclusion": "",
+      "createdAt": "2026-09-08T23:00:09Z",
+      "databaseId": 34288617489,
+      "headSha": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+      "status": "in_progress",
+      "url": "https://github.com/dmvevents/clawx-pilot/actions/runs/34288617489",
+      "source": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+      "profile": "keyless-public",
+      "publicationInputs": false,
+      "stage": "HOSTED_PREFLIGHT"
     }
   }
 }

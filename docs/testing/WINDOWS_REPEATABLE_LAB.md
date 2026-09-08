@@ -243,3 +243,5 @@ Alternatives considered:
 The controller approach is preferred for this project's unattended test loop;
 this recommendation does not promise uninterrupted network service or remove
 Windows/Microsoft authentication.
+
+Native suite checkpoint (September8,22:58:52–22:59:06UTC): sourcec5c8590b/harness08f0aea0/assemblyc1891938 passed11cases/93assertions as the standard QA user, native exit0, no skips/timeouts. The earlier suite stopped honestly before the product macro because NSIS startup replaces invalid `/D=` root and existing-file targets with its default directory. The harness now binds only those two test cases under explicit OS mapping/exact owned-file guards, while retaining actual-macro entry and exit2 assertions. Use the corrected harness; parser/compile success alone did not catch this startup boundary. Both failed and corrected receipts are preserved under `artifacts/windows-vm/20260908-moe27/`.

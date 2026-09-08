@@ -140,3 +140,31 @@ Frozen review assembly `b8423f22` combines sourcec5c8590b and harness6a6a4268. R
 Fresh final review APPROVE with final-usage Fable 5 / Bedrock proof resolves B3 and approves the eleven-case harness for a standard-user run. Root started the hash-bound assembly `b8423f22` fixture under `ClawXFresh0908` at22:33:32.669 UTC. The first case selected an OS-confirmed unmapped `Q:\` root; fixture native exit4 recorded only `target-mismatch`. The `macro-was-reached` assertion failed, suite native exit3, task result1, no timeout, streams closed, and ten remaining scenarios were NOT_RUN. The suite stopped safely; this is a harness failure before product execution, not a source regression result. The original failed moe.27 app and Chrome profile were untouched.
 
 Receipt: `artifacts/windows-vm/20260908-moe27/nsis-suite-b8423f22-readback-v1.json`; exact scenario output is retained in the sibling root-mismatch detail receipt. Target normalization/argument handling is under diagnosis, not yet a confirmed cause. CLI `moe27-upgrade-target-fixture-fix` owns only the existing harness and its task spec in `/private/tmp/clawx-moe27-upgrade-tests-20260909`. Keep production source unchanged; retain the actual macro rejection assertion, unmapped-root boundary and honest safety stop. Exit: reviewed minimal harness correction, new fixture hashes and eleven native outcomes, then source integration and a new identified installer. No blind replay or accepted target-mismatch fallback.
+
+Native startup isolation at **22:43:39 UTC** identifies the shared fixture failure: NSIS substitutes its compiled placeholder before `.onInit` for both an OS-unmapped drive root and an existing file target; a new-directory target arrives unchanged. All three diagnostic native exits0, no timeout, owned sentinel preserved, no production macro executed. Receipt: `artifacts/windows-vm/20260908-moe27/nsis-startup-target-control-result.json`. The initial detail-read SSH timed out90s; exact `fixture-result.txt` SCP succeeded and captured the placeholder. Root did not replay the failed suite.
+
+The first target-correction author reached its600s limit (`TIMED_OUT`,602.73s,39tools, Fable5/Bedrock final proof) with retained uncommitted source and successful compiler/spec work. Root found the same startup behavior would leave the plain-file scenario failing, and required an OS mapping check instead of treating failed wildcard enumeration as proof of an unmapped drive. `moe27-upgrade-target-fixture-finish` resumes that inspected session with these native facts; it must complete only the two guarded fixture bindings and existing checks/commit before independent review. This timeout is retained, not counted as a completed correction.
+
+The initial timed-out run retained commit `f5184e6d` before termination (the earlier inspection had seen only uncommitted edits). The resumed author completed `08f0aea0` at22:51:53UTC; final `CLI_SUCCEEDED` receipt480.28s/20tools confirms Fable5/Bedrock with no mismatch. It adds the existing-file binding confined to the result scenario's exact `install-dir` file, replaces root wildcard absence with `GetLogicalDrives`, and retains actual-macro entry/exit2 assertions. Four owned harness/spec files changed; product source is unchanged.
+
+Frozen review assembly `c1891938ab15d270d826eb91dd65427c466c95a5` compiles against source `c5c8590b`. Corrected fixture SHA256 `da862eb5fecc4fb0a8eff981e48a30ac6ba12697cd38a2b3442f1378cba94cb8`; runner SHA256 `1b8c991f0b2820389255f5132a7aaaa5e35741314eb4592ac547eed91d5dc15b`. Native PowerShell5.1.20348.5499 parses the staged runner and observer with zero errors at22:53:23UTC. Identity/compiler/staging receipts: `artifacts/ga-fable-20260908/nsis-upgrade-target-corrected/`; parser receipt: `artifacts/windows-vm/20260908-moe27/nsis-suite-c1891938-parser.json`. CLI `moe27-upgrade-target-review` reviews only the new harness delta; corrected full suite remains NOT_RUN until approval.
+
+### Corrected native suite PASS; moe.28 build started
+
+Independent delta review APPROVE (`moe27-upgrade-target-review`,267.12s/13tools, final Fable5/Bedrock proof) covered the exact combined harness change. At **22:58:52–22:59:06UTC**, root ran reviewed assembly `c1891938` as standard QA user. **11/11 scenarios,93/93 assertions PASS; zero NOT_RUN, zero timeouts; native runner exit0, task result0, both streams closed.** Exact source/harness and fixture hashes are above; complete private receipt: `artifacts/windows-vm/20260908-moe27/nsis-suite-c1891938-readback-v1.json`.
+
+| Scenario | Result | Native fixture exit |
+|---|---|---|
+| unsafe-root-target | PASS | 2 |
+| reparse-target | PASS | 2 |
+| plain-file-target | PASS | 2 |
+| unrecognized-nonempty-target | PASS | 2 |
+| empty-existing-destination | PASS | 0 |
+| fresh-install | PASS | 0 |
+| upgrade-with-stale-markers | PASS | 0 |
+| upgrade-hooks-repeated-prep | PASS | 0 |
+| inner-hook-only-prep | PASS | 0 |
+| locked-old-file | PASS | 2 |
+| acl-denied-listing | PASS | 2 |
+
+Both expected success and rejection outcomes are proven. Old-tree recovery, stale-marker removal, collision preservation, actual inner/repeated hooks, real locked-file refusal and enforced standard-user ACL denial pass. Source `c5e76b5dd69d43a632b8ac817b7f253ab76ec614` integrates the exact reviewed/tested tree plus the version-only bump to `0.4.3-moe.28`. [Build34288617489](https://github.com/dmvevents/clawx-pilot/actions/runs/34288617489) started23:00:09UTC, keyless-public, no publication inputs. The full native preflight precedes packaging. No moe.28 installer/installed startup proof exists yet; retain the unchanged moe.27 failure, perform the normal upgrade only after new artifact verification, and keep GA RED.

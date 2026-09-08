@@ -1,12 +1,16 @@
 # Current Windows RC
 
-**September 8 execution resumed: GA RED.** The owner has started supervised Claude Fable 5/Bedrock worktrees for source repairs, CLI monitoring, history/skills review and a separate Whisper.cpp backlog branch. [COMPLETION_PLAN.md](COMPLETION_PLAN.md) owns execution and dependencies; [execution evidence](evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md) owns the scoped product proofs. ASR remains outside this release; helper/keyless integrity remains required. The latest packaged and installed artifact is moe.26 below; moe.25 retains the preceding completed startup/Online baseline.
+**September 8 execution resumed: GA RED.** The owner has started supervised Claude Fable 5/Bedrock worktrees for source repairs, CLI monitoring, history/skills review and a separate Whisper.cpp backlog branch. [COMPLETION_PLAN.md](COMPLETION_PLAN.md) owns execution and dependencies; [execution evidence](evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md) owns the scoped product proofs. ASR remains outside this release; helper/keyless integrity remains required. The latest packaged and installed artifact is moe.27 below; moe.25 retains the preceding completed startup/Online baseline.
 
 
 **Local UI acceptance hold:** the owner reproduced the macOS Keychain dialog after the narrow fixture test passed. The resumed suite was stopped; desktop launches remain held. [CLWX-102](bugs/CLWX-102-macos-test-keychain.md) is unresolved; no local desktop test is running. This does not change the installed Windows artifact.
+## Next source — moe.28, build in progress
+
+Source `c5e76b5dd69d43a632b8ac817b7f253ab76ec614` on `release/moe28-upgrade`, checkout `/private/tmp/clawx-plan-execution-20260908`. Reviewed installer/harness bytes passed all11 native standard-user scenarios and93 assertions without skips/timeouts. [Build34288617489](https://github.com/dmvevents/clawx-pilot/actions/runs/34288617489) started23:00:09UTC, full native preflight then keyless-public packaging, no publication inputs. No moe.28 installer hash or installed acceptance is claimed yet.
+
 ## Current candidate — moe.27, native install PASS; upgrade startup FAIL
 
-Clean source `4c023f7ea3d16f4da0205308e93839ac08be26b9` on `release/moe27-lifecycle`, active checkout `/private/tmp/clawx-plan-execution-20260908`, version `0.4.3-moe.27`. Its tree exactly matches independently approved fixture correction `8bdbf91a`; the production lifecycle repair is unchanged. Native Windows before/after moves14 passed/two failed to16 passed/zero failed/zero skipped; independent PDF and guard falsifiers pass.
+Clean source `4c023f7ea3d16f4da0205308e93839ac08be26b9` on `release/moe27-lifecycle`, retained source reference, version `0.4.3-moe.27`. Its tree exactly matches independently approved fixture correction `8bdbf91a`; the production lifecycle repair is unchanged. Native Windows before/after moves14 passed/two failed to16 passed/zero failed/zero skipped; independent PDF and guard falsifiers pass.
 
 [Build34272395270](https://github.com/dmvevents/clawx-pilot/actions/runs/34272395270) succeeded20:19:37UTC:2,319 native tests passed/zero failed/57 skipped; all9 artifact rows and new launcher controls passed. Downloaded36 package checks and172 compiled-file receipt checks pass; packaged OpenClaw2026.9.2 has neither lifecycle marker. Keyless/source/profile identity passes. [Manifest](release-manifests/0.4.3-moe.27.json), published=false.
 
