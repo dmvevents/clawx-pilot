@@ -158,6 +158,11 @@ describe('MATRIX shape', () => {
     for (const row of MATRIX) {
       // registration rows call register(), transport rows use the scoped OpenClaw loader — neither uses a doc-tools fn
       if (row.mode === 'register' || row.mode === 'transport') continue;
+      if (row.mode === 'write-reopen') {
+        expect(known.has(row.write?.fn)).toBe(true);
+        expect(known.has(row.reopen?.fn)).toBe(true);
+        continue;
+      }
       expect(known.has(row.fn)).toBe(true);
     }
   });
@@ -182,7 +187,7 @@ describe('MATRIX shape', () => {
   it('covers every slice-1 doc type from the card scope', async () => {
     const { MATRIX } = await load();
     const ids = MATRIX.map((r: { id: string }) => r.id).join(' ');
-    for (const type of ['pdf-text', 'pdf-corrupt', 'pdf-password', 'pdf-large', 'docx', 'doc-legacy', 'rtf', 'odt', 'docx-badxml', 'docx-password', 'xlsx', 'csv', 'png', 'png-sharp-binding', 'pptx']) {
+    for (const type of ['pdf-text', 'pdf-corrupt', 'pdf-password', 'pdf-large', 'docx', 'doc-legacy', 'rtf', 'odt', 'docx-badxml', 'docx-password', 'xlsx', 'xlsx-typed', 'csv', 'png', 'png-sharp-binding', 'jpg', 'jpg-sharp-binding', 'docx-out-reopen', 'xlsx-out-reopen', 'pptx']) {
       expect(ids).toContain(type);
     }
   });
@@ -223,11 +228,12 @@ describe('MATRIX shape', () => {
     for (const row of MATRIX) {
       expect(['ok', 'refusal', 'no-tool']).toContain(row.expectation);
       if (row.expectation !== 'no-tool') {
-        // Doc rows need an input (fixture or args); registration/transport
-        // rows need their mode spec instead.
+        // Doc rows need an input (fixture or args); registration/transport/
+        // write-reopen rows need their mode spec instead.
         const input = row.mode === 'register' ? row.register
           : row.mode === 'transport' ? row.transport
-            : (row.fixture || row.args);
+            : row.mode === 'write-reopen' ? (row.write && row.reopen)
+              : (row.fixture || row.args);
         expect(input).toBeTruthy();
       }
     }
@@ -330,7 +336,7 @@ describe('registration-inventory fast-lane drift guard (Claude lens 2026-09-06)'
   // must also fail in the UNIT lane: parse the registerTool name literals
   // straight out of index.mjs source and set-compare with the exported
   // constants. Same discipline as the CLWX-86 route-literal drift guard.
-  it('the 33 hardcoded names match the registerTool literals in index.mjs', async () => {
+  it('the 34 hardcoded names match the registerTool literals in index.mjs', async () => {
     const { readFile } = await import('node:fs/promises');
     const src = await readFile('extensions/moe-principal-assistant/index.mjs', 'utf8');
     const found = new Set<string>();
@@ -340,7 +346,7 @@ describe('registration-inventory fast-lane drift guard (Claude lens 2026-09-06)'
     const { DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES, BROWSER_TOOL_NAMES, OUTLOOK_TOOL_NAMES, FORMS_TOOL_NAMES, inventoryDiff } = await load();
     const expected = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES];
     expect(inventoryDiff(expected, [...found])).toBe(true);
-    expect(found.size).toBe(33);
+    expect(found.size).toBe(34);
   });
 
   it('inventoryDiff flags duplicate registrations — set semantics cannot hide a double register', async () => {
@@ -356,9 +362,14 @@ describe('registration-inventory fast-lane drift guard (Claude lens 2026-09-06)'
     expect(row.register.host.skillAllowlist).toEqual([]);
     const withoutOutlook = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...FORMS_TOOL_NAMES];
     expect(row.check({ names: withoutOutlook })).toBe(true);
-    const leak = row.check({ names: [...withoutOutlook, OUTLOOK_TOOL_NAMES[0]] });
-    expect(leak).not.toBe(true);
-    expect(String(leak)).toContain('outlook.open');
+    // Every member of the suppressed family must be flagged by NAME if it
+    // leaks — asserting one hardcoded member made the guard depend on the
+    // list's order (broke when outlook.readiness landed first, 2026-09-08).
+    for (const leaked of OUTLOOK_TOOL_NAMES) {
+      const leak = row.check({ names: [...withoutOutlook, leaked] });
+      expect(leak).not.toBe(true);
+      expect(String(leak)).toContain(`unexpected: ${leaked}`);
+    }
   });
 });
 
@@ -460,6 +471,196 @@ describe('foldRepeatVerdicts — K8 intermittence bar (trail 2026-09-06)', () =>
   });
 });
 
+
+describe('artifact-matrix repair rows — jpg / typed-xlsx / write-reopen (audit G1/G2/G4, 2026-09-08)', () => {
+  it('jpg.read_image row exists with a .jpg fixture and demands image/jpeg blocks (G1)', async () => {
+    const { MATRIX } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'jpg.read_image');
+    expect(row).toBeTruthy();
+    expect(row.fn).toBe('readImage');
+    expect(row.expectation).toBe('ok');
+    expect(row.fixture.name.endsWith('.jpg')).toBe(true);
+    const good = {
+      content: [
+        { type: 'text', text: '{"mimeType":"image/jpeg"}' },
+        { type: 'image', data: 'aGVsbG8=', mimeType: 'image/jpeg' },
+      ],
+      details: { mimeType: 'image/jpeg', bytes: 268 },
+    };
+    expect(row.check(good)).toBe(true);
+    // A png-typed or octet-stream answer for a .jpg input must FAIL — the
+    // whole point of the row is that the jpeg path (mime mapping + sharp
+    // jpeg codec) is exercised, not the png one.
+    const wrongMime = { ...good, content: [good.content[0], { ...good.content[1], mimeType: 'application/octet-stream' }], details: { mimeType: 'application/octet-stream' } };
+    expect(row.check(wrongMime)).not.toBe(true);
+    expect(row.check({ content: [], details: {} })).not.toBe(true);
+    // base64 payload leaking into the metadata details is the same hygiene
+    // bar the png row pins.
+    const leaky = { ...good, details: { mimeType: 'image/jpeg', preview: 'data:image/jpeg;base64,AAAA' } };
+    expect(row.check(leaky)).not.toBe(true);
+  });
+
+  it('jpg-sharp-binding.read_image row demands decoded 1x1 jpeg metadata — a broken native binding cannot pass (G1)', async () => {
+    const { MATRIX } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'jpg-sharp-binding.read_image');
+    expect(row).toBeTruthy();
+    expect(row.fn).toBe('readImage');
+    expect(row.check({ details: { width: 1, height: 1, format: 'jpeg' } })).toBe(true);
+    // sharp soft-dep fallthrough: width stays null when the binding is
+    // missing/broken — exactly the moe.15 class this row exists to catch.
+    expect(row.check({ details: { width: null, height: null, format: null } })).not.toBe(true);
+    // decoding as the WRONG codec must also fail (a png-decoded answer for a
+    // jpeg fixture would mean the fixture or codec path is lying).
+    expect(row.check({ details: { width: 1, height: 1, format: 'png' } })).not.toBe(true);
+  });
+
+  it('the jpg fixture bytes are a real decodable 1x1 JPEG (fixture integrity, workspace sharp)', async () => {
+    const { MATRIX } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'jpg.read_image');
+    const bytes = row.fixture.bytes();
+    expect(Buffer.isBuffer(bytes)).toBe(true);
+    expect(bytes.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff])); // SOI marker
+    expect(bytes.subarray(bytes.length - 2)).toEqual(Buffer.from([0xff, 0xd9])); // EOI marker
+    const sharp = (await import('sharp')).default;
+    const meta = await sharp(bytes).metadata();
+    expect(meta.format).toBe('jpeg');
+    expect(meta.width).toBe(1);
+    expect(meta.height).toBe(1);
+  });
+
+  it('xlsx-typed row check pins numeric vs numeric-looking-string vs cached-formula cells (G2)', async () => {
+    const { MATRIX } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'xlsx-typed.read_xlsx');
+    expect(row).toBeTruthy();
+    expect(row.fn).toBe('readXlsx');
+    const good = { rows: [['student', 'marks', 'code', 'weighted'], ['A. Charran', '87', '087', '174']] };
+    expect(row.check(good)).toBe(true);
+    // Typing collapse: the '087' STRING coerced through a number loses its
+    // leading zero — must FAIL, not pass by substring luck.
+    expect(row.check({ rows: [['student', 'marks', 'code', 'weighted'], ['A. Charran', '87', '87', '174']] })).not.toBe(true);
+    // Cached formula value dropped (reader recalculated to nothing or
+    // skipped the cell) — must FAIL.
+    expect(row.check({ rows: [['student', 'marks', 'code', 'weighted'], ['A. Charran', '87', '087', '']] })).not.toBe(true);
+    // Numeric cell dropped — must FAIL.
+    expect(row.check({ rows: [['student', 'marks', 'code', 'weighted'], ['A. Charran', '', '087', '174']] })).not.toBe(true);
+    expect(row.check({ rows: [] })).not.toBe(true);
+  });
+
+  it('the hand-rolled typed xlsx fixture really carries typed cells and a cached formula (fixture integrity, workspace xlsx)', async () => {
+    const { MATRIX } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'xlsx-typed.read_xlsx');
+    const bytes = row.fixture.bytes();
+    const xlsxNS = await import('xlsx');
+    const xlsx = (xlsxNS as { default?: typeof xlsxNS }).default ?? xlsxNS;
+    const wb = xlsx.read(bytes, { type: 'buffer', cellDates: true });
+    expect(wb.SheetNames).toEqual(['Marks']);
+    const ws = wb.Sheets.Marks;
+    expect(ws.B2.t).toBe('n'); // numeric TYPE, not a string that prints like one
+    expect(ws.B2.v).toBe(87);
+    expect(ws.C2.t).toBe('s'); // numeric-LOOKING string keeps its type
+    expect(ws.C2.v).toBe('087');
+    expect(ws.D2.f).toBe('B2*2'); // real formula cell …
+    expect(ws.D2.v).toBe(174); // … with a CACHED value (readers never recalc)
+  });
+
+  it('unescapeMarkdown unwraps escaped punctuation without eating real backslashes or content', async () => {
+    const { unescapeMarkdown } = await load();
+    expect(unescapeMarkdown('tabled\\. Item \\- one \\#1 \\*star\\*')).toBe('tabled. Item - one #1 *star*');
+    expect(unescapeMarkdown('C:\\\\path stays')).toBe('C:\\path stays');
+    expect(unescapeMarkdown('')).toBe('');
+    expect(unescapeMarkdown(undefined)).toBe('');
+    // It must not manufacture a match out of nothing: absent text stays absent.
+    expect(unescapeMarkdown('completely different text')).not.toContain('tabled');
+  });
+
+  it('foldWriteReopen names the failing step and never grades a reopen that ran on a failed write (G4)', async () => {
+    const { foldWriteReopen } = await load();
+    const writeFail = foldWriteReopen({ ok: false, message: 'disk full', env: { electron: null, type: null } }, null);
+    expect(writeFail.ok).toBe(false);
+    expect(writeFail.message).toContain('write step');
+    expect(writeFail.message).toContain('disk full');
+    const writeInfra = foldWriteReopen({ ok: false, infra: true, message: 'row timed out after 60000ms' }, null);
+    expect(writeInfra.infra).toBe(true);
+    expect(writeInfra.message).toContain('write step');
+    const reopenFail = foldWriteReopen(
+      { ok: true, result: { bytes: 10 }, env: { electron: null, type: null } },
+      { ok: false, message: 'file appears damaged', env: { electron: null, type: null } },
+    );
+    expect(reopenFail.ok).toBe(false);
+    expect(reopenFail.message).toContain('reopen step');
+    // write ok but no reopen outcome supplied = harness plumbing bug, infra FAIL
+    const missing = foldWriteReopen({ ok: true, result: { bytes: 10 } }, null);
+    expect(missing.ok).toBe(false);
+    expect(missing.infra).toBe(true);
+    const ok = foldWriteReopen(
+      { ok: true, result: { bytes: 10 }, env: { electron: '35.0.0', type: 'utility' } },
+      { ok: true, result: { markdown: 'x' }, env: { electron: '35.0.0', type: 'utility' } },
+    );
+    expect(ok.ok).toBe(true);
+    expect(ok.result.write.bytes).toBe(10);
+    expect(ok.result.reopen.markdown).toBe('x');
+  });
+
+  it('foldWriteReopen env echo reports the WEAKEST child — an electronlike row where either child ran plain node must fail the shape gate', async () => {
+    const { foldWriteReopen, checkEnvShapeApplied } = await load();
+    const fake = { electron: '35.0.0', type: 'utility' };
+    const plain = { electron: null, type: null };
+    const bothFake = foldWriteReopen({ ok: true, result: {}, env: fake }, { ok: true, result: {}, env: fake });
+    expect(checkEnvShapeApplied('electronlike', bothFake.env)).toBe(true);
+    const writePlain = foldWriteReopen({ ok: true, result: {}, env: plain }, { ok: true, result: {}, env: fake });
+    expect(checkEnvShapeApplied('electronlike', writePlain.env)).not.toBe(true);
+    const reopenPlain = foldWriteReopen({ ok: true, result: {}, env: fake }, { ok: true, result: {}, env: plain });
+    expect(checkEnvShapeApplied('electronlike', reopenPlain.env)).not.toBe(true);
+  });
+
+  it('docx write-reopen row demands the reopened markdown carry the written title AND paragraph (G4)', async () => {
+    const { MATRIX } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'docx-out-reopen.write_docx');
+    expect(row).toBeTruthy();
+    expect(row.mode).toBe('write-reopen');
+    expect(row.write.fn).toBe('writeDocx');
+    expect(row.reopen.fn).toBe('readDocx');
+    // write and reopen must target the SAME file in the row work dir
+    expect(row.write.args('/w').path).toBe(row.reopen.args('/w').path);
+    const good = { write: { bytes: 4096 }, reopen: { markdown: '# Minutes\n\nMeeting opened at 9:05 and the ICT audit was tabled.' } };
+    expect(row.check(good)).toBe(true);
+    // The SHIPPED mammoth markdown writer escapes punctuation — verified
+    // output for this exact fixture is "tabled\\." (2026-09-08). The row must
+    // accept it: escaping style is not a content failure.
+    expect(row.check({ write: { bytes: 4096 }, reopen: { markdown: '# Minutes\n\nMeeting opened at 9:05 and the ICT audit was tabled\\.\n\n' } })).toBe(true);
+    expect(row.check({ write: { bytes: 4096 }, reopen: { markdown: '# Minutes\n\n' } })).not.toBe(true); // body lost
+    expect(row.check({ write: { bytes: 4096 }, reopen: { markdown: 'Meeting opened at 9:05 and the ICT audit was tabled.' } })).not.toBe(true); // title lost
+    expect(row.check({ write: { bytes: 0 }, reopen: good.reopen })).not.toBe(true); // empty write can't pass on reopen alone
+  });
+
+  it('xlsx write-reopen row demands exact cell round-trip including the numeric-looking string (G4+G2 writer side)', async () => {
+    const { MATRIX } = await load();
+    const row = MATRIX.find((r: { id: string }) => r.id === 'xlsx-out-reopen.write_xlsx');
+    expect(row).toBeTruthy();
+    expect(row.mode).toBe('write-reopen');
+    expect(row.write.fn).toBe('writeXlsx');
+    expect(row.reopen.fn).toBe('readXlsx');
+    expect(row.write.args('/w').path).toBe(row.reopen.args('/w').path);
+    const good = { write: { bytes: 4096 }, reopen: { sheet: 'Daily', rows: [['metric', 'value'], ['present', '412'], ['code', '0412']] } };
+    expect(row.check(good)).toBe(true);
+    // Writer coerced the '0412' STRING through a number → reopen shows '412'
+    // → typing collapsed on the WRITE side. Must FAIL.
+    expect(row.check({ write: { bytes: 4096 }, reopen: { ...good.reopen, rows: [['metric', 'value'], ['present', '412'], ['code', '412']] } })).not.toBe(true);
+    expect(row.check({ write: { bytes: 4096 }, reopen: { ...good.reopen, rows: [['metric', 'value'], ['present', ''], ['code', '0412']] } })).not.toBe(true);
+    expect(row.check({ write: { bytes: 4096 }, reopen: { ...good.reopen, sheet: 'Sheet1' } })).not.toBe(true); // sheet name lost
+    expect(row.check({ write: { bytes: 4096 }, reopen: { sheet: 'Daily', rows: [] } })).not.toBe(true);
+  });
+
+  it('write-reopen rows are honest matrix members: expanded with @electronlike twins, not in the fast subset by stealth', async () => {
+    const { MATRIX, expandMatrix, FAST_ROW_IDS } = await load();
+    const expanded = expandMatrix(MATRIX);
+    for (const id of ['docx-out-reopen.write_docx', 'xlsx-out-reopen.write_xlsx']) {
+      expect(expanded.some((r: { id: string }) => r.id === id)).toBe(true);
+      expect(expanded.some((r: { id: string }) => r.id === `${id}@electronlike`)).toBe(true);
+      expect(FAST_ROW_IDS).not.toContain(id); // fast-lane scope unchanged this pass
+    }
+  });
+});
 
 type FakeTransportStage = {
   dir: string;
@@ -620,10 +821,10 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
     expect(String(wrongPlugin)).toContain('moe-principal-assistant');
   });
 
-  it('transport contract inventories: 15 tools without host-API, 33 with (matches the register-mode rows)', async () => {
+  it('transport contract inventories: 15 tools without host-API, 34 with (matches the register-mode rows)', async () => {
     const { TRANSPORT_NO_HOSTAPI_EXPECTED, TRANSPORT_FULL_EXPECTED, DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES } = await load();
     expect(TRANSPORT_NO_HOSTAPI_EXPECTED.length).toBe(15);
-    expect(TRANSPORT_FULL_EXPECTED.length).toBe(33);
+    expect(TRANSPORT_FULL_EXPECTED.length).toBe(34);
     expect(TRANSPORT_NO_HOSTAPI_EXPECTED).toEqual([...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES]);
   });
 

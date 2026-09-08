@@ -72,6 +72,17 @@
  *     and is wired into the `package` script right after
  *     verify-openclaw-bundle, so package:mac / build:win cannot ship a bundle
  *     that fails the fast lane.
+ * Landed 2026-09-08 (artifact-acceptance audit gaps G1/G2/G4):
+ *   - jpg rows (`jpg.read_image` + `jpg-sharp-binding.read_image`): the
+ *     image/jpeg mime mapping and the sharp jpeg CODEC, which the png rows
+ *     never touched despite the card scope saying "png/jpg".
+ *   - `xlsx-typed.read_xlsx`: hand-rolled workbook with a numeric cell, a
+ *     numeric-looking STRING ("087" — leading-zero type witness) and a
+ *     formula cell whose CACHED value must be surfaced.
+ *   - write-then-reopen rows (`docx-out-reopen` / `xlsx-out-reopen`,
+ *     mode 'write-reopen'): write in one fresh child, reopen the same file
+ *     through the staged reader in a second fresh child, grade content
+ *     round-trip — bytes>0 alone proved a file, not a document.
  * Remaining sub-steps (tracked on CLWX-77): Windows-lane run (true packaged
  * node.exe + real utility-env gateway), in-app K10 drag-gesture cell.
  */
@@ -270,6 +281,39 @@ const PNG_1PX = Buffer.from(
   '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c626001000000050001aaaaaa00000000049454e44ae426082',
   'hex',
 );
+// 1×1 baseline JPEG (sharp-generated once, embedded so seeding never depends
+// on a workspace native binding). Decodes to format=jpeg 1×1 — the jpg rows
+// exercise the image/jpeg mime mapping + sharp jpeg codec path the png rows
+// cannot reach (audit gap G1, 2026-09-08).
+const JPEG_1PX = Buffer.from(
+  'ffd8ffdb00430006040506050406060506070706080a100a0a09090a140e0f0c1017141818171416161a1d251f1a1b231c1616202c20232627292a29191f2d302d283025282928'
+  + 'ffdb0043010707070a080a130a0a13281a161a2828282828282828282828282828282828282828282828282828282828282828282828282828282828282828282828282828'
+  + 'ffc00011080001000103012200021101031101ffc4001500010100000000000000000000000000000004ffc40014100100000000000000000000000000000000'
+  + 'ffc40014010100000000000000000000000000000006ffc40014110100000000000000000000000000000000ffda000c03010002110311003f00a4002367ffd9',
+  'hex',
+);
+
+/**
+ * Hand-rolled typed xlsx fixture (audit gap G2, 2026-09-08): a STORED-zip
+ * workbook whose data row carries a numeric cell (B2 t="n" v=87), a
+ * numeric-LOOKING string cell (C2 inlineStr "087" — the leading zero is the
+ * type witness: coerced through a number it becomes "87"), and a REAL
+ * formula cell with a cached value (D2 f="B2*2" v=174 — spreadsheet readers
+ * never recalculate, so the cached value is exactly what the staged reader
+ * must surface). Hand-rolled via buildStoredZip so the fixture cannot
+ * inherit workspace-xlsx write behavior; inline strings avoid sharedStrings.
+ * Verified against the workspace xlsx reader (fixture-integrity unit guard).
+ */
+export function buildXlsxTypedFixture() {
+  const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  return buildStoredZip([
+    ['[Content_Types].xml', `${XML}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`],
+    ['_rels/.rels', `${XML}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
+    ['xl/workbook.xml', `${XML}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Marks" sheetId="1" r:id="rId1"/></sheets></workbook>`],
+    ['xl/_rels/workbook.xml.rels', `${XML}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`],
+    ['xl/worksheets/sheet1.xml', `${XML}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>student</t></is></c><c r="B1" t="inlineStr"><is><t>marks</t></is></c><c r="C1" t="inlineStr"><is><t>code</t></is></c><c r="D1" t="inlineStr"><is><t>weighted</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>A. Charran</t></is></c><c r="B2"><v>87</v></c><c r="C2" t="inlineStr"><is><t>087</t></is></c><c r="D2"><f>B2*2</f><v>174</v></c></row></sheetData></worksheet>`],
+  ]);
+}
 
 // ── registration-smoke contract (CLWX-77 outlook/forms registration leg)
 //
@@ -289,6 +333,11 @@ export const PRINCIPAL_TOOL_NAMES = [
 ];
 export const BROWSER_TOOL_NAMES = ['browser.diagnose', 'browser.repair_chrome_cdp'];
 export const OUTLOOK_TOOL_NAMES = [
+  // outlook.readiness landed in 6ec32807 (read-only capability diagnosis)
+  // inside the same host-API + skillAllowlist gate as the rest of the
+  // family — contract updated 2026-09-08 when the unit drift guard caught
+  // the missing matrix update.
+  'outlook.readiness',
   'outlook.open', 'outlook.read_inbox', 'outlook.draft_email', 'outlook.send_email',
   'outlook.search_inbox', 'outlook.read_email', 'outlook.reply', 'outlook.forward',
   'outlook.mark_read', 'outlook.list_attachments', 'outlook.download_attachment',
@@ -611,6 +660,26 @@ export const MATRIX = [
     check: (r) => (JSON.stringify(r.rows ?? []).includes('Charran') ? true : 'seed row missing'),
   },
   {
+    // Typed-cell + cached-formula bar (audit G2, 2026-09-08): the plain xlsx
+    // row only proves a string lands SOMEWHERE in the rows JSON. readXlsx's
+    // contract is formatted display strings (sheet_to_json raw:false), so
+    // typing is proven by DISTINGUISHING witnesses: numeric 87 → "87",
+    // numeric-looking STRING "087" keeps its leading zero (a number
+    // coercion anywhere in the read path collapses it to "87"), and the
+    // formula cell surfaces its CACHED value "174" (readers never
+    // recalculate — a dropped cache reads as empty).
+    id: 'xlsx-typed.read_xlsx', fn: 'readXlsx', expectation: 'ok',
+    fixture: { name: 'typed-marks.xlsx', bytes: () => buildXlsxTypedFixture() },
+    check: (r) => {
+      const data = (r.rows ?? [])[1] ?? [];
+      if (data[0] !== 'A. Charran') return `data row missing (rows=${JSON.stringify(r.rows ?? []).slice(0, 120)})`;
+      if (data[1] !== '87') return `numeric cell did not read as "87" (got ${JSON.stringify(data[1])})`;
+      if (data[2] !== '087') return `numeric-looking STRING lost its leading zero (got ${JSON.stringify(data[2])}) — string/number typing collapsed in the read path`;
+      if (data[3] !== '174') return `cached formula value not surfaced (got ${JSON.stringify(data[3])}) — the reader must return the cached result, never blank/recalculate`;
+      return true;
+    },
+  },
+  {
     id: 'csv.read_xlsx', fn: 'readXlsx', expectation: 'ok',
     fixture: { name: 'roster.csv', bytes: () => 'student,marks\nB. Mohammed,91\n' },
     check: (r) => (JSON.stringify(r.rows ?? []).includes('Mohammed') ? true : 'csv row missing'),
@@ -619,6 +688,50 @@ export const MATRIX = [
     id: 'xlsx-out.write_xlsx', fn: 'writeXlsx', expectation: 'ok', kLedger: 'K8', repeat: 3,
     args: (workDir) => ({ path: path.join(workDir, 'out.xlsx'), sheets: [{ name: 'Daily', rows: [['present', 412]] }] }),
     check: (r) => (r.bytes > 0 && existsSync(r.path) ? true : 'no bytes written'),
+  },
+  {
+    // Write-then-reopen (audit G4, 2026-09-08): bytes>0 + existsSync proves a
+    // file happened, not a document — a truncated/garbage writer output
+    // passed the write rows forever. This row writes in one FRESH child and
+    // reopens the SAME file through the staged readDocx in a second fresh
+    // child; the bar is content round-trip (title + paragraph both survive),
+    // mirroring the moe.21 ad-hoc parseback as a repeatable matrix row.
+    id: 'docx-out-reopen.write_docx', mode: 'write-reopen', expectation: 'ok',
+    write: {
+      fn: 'writeDocx',
+      args: (workDir) => ({ path: path.join(workDir, 'reopen.docx'), title: 'Minutes', paragraphs: ['Meeting opened at 9:05 and the ICT audit was tabled.'] }),
+    },
+    reopen: { fn: 'readDocx', args: (workDir) => ({ path: path.join(workDir, 'reopen.docx') }) },
+    check: (r) => {
+      if (!(r.write?.bytes > 0)) return `write step reported no bytes (${JSON.stringify(r.write)})`;
+      // The markdown reader ESCAPES punctuation ("tabled\." — verified
+      // against the shipped mammoth, 2026-09-08), so compare on unescaped
+      // text: this row grades content survival, not markdown escaping style.
+      const md = unescapeMarkdown(r.reopen?.markdown);
+      if (!md.includes('Meeting opened at 9:05 and the ICT audit was tabled.')) return `reopened docx lost the written paragraph (markdown=${md.slice(0, 120)})`;
+      if (!md.includes('Minutes')) return `reopened docx lost the written title (markdown=${md.slice(0, 120)})`;
+      return true;
+    },
+  },
+  {
+    // Write-then-reopen for xlsx (audit G4 + writer-side G2): exact cell
+    // round-trip through the staged readXlsx, including the sheet name and a
+    // numeric-looking STRING ("0412") whose leading zero dies if writeXlsx
+    // ever coerces strings through numbers.
+    id: 'xlsx-out-reopen.write_xlsx', mode: 'write-reopen', expectation: 'ok',
+    write: {
+      fn: 'writeXlsx',
+      args: (workDir) => ({ path: path.join(workDir, 'reopen.xlsx'), sheets: [{ name: 'Daily', rows: [['metric', 'value'], ['present', 412], ['code', '0412']] }] }),
+    },
+    reopen: { fn: 'readXlsx', args: (workDir) => ({ path: path.join(workDir, 'reopen.xlsx') }) },
+    check: (r) => {
+      if (!(r.write?.bytes > 0)) return `write step reported no bytes (${JSON.stringify(r.write)})`;
+      if (r.reopen?.sheet !== 'Daily') return `sheet name did not round-trip (got ${JSON.stringify(r.reopen?.sheet)})`;
+      const rows = r.reopen?.rows ?? [];
+      if (rows[1]?.[0] !== 'present' || rows[1]?.[1] !== '412') return `numeric cell did not round-trip (row=${JSON.stringify(rows[1])})`;
+      if (rows[2]?.[1] !== '0412') return `numeric-looking STRING lost its leading zero on write (row=${JSON.stringify(rows[2])}) — writer coerced string through number`;
+      return true;
+    },
   },
   {
     id: 'png.read_image', fn: 'readImage', expectation: 'ok',
@@ -646,14 +759,43 @@ export const MATRIX = [
     check: (r) => (r.details?.width === 1 && r.details?.height === 1 ? true : `sharp did not decode metadata (width=${r.details?.width}) — binding missing or broken in the staged bundle`),
   },
   {
+    // The card scope says "images (png/jpg via VLM)" but only png rows
+    // existed (audit gap G1, 2026-09-08). jpg exercises the image/jpeg mime
+    // mapping and, in the sharp-binding twin below, the jpeg CODEC — a
+    // bundle can ship a sharp build whose png path works while jpeg decode
+    // is broken, and the png rows would stay green.
+    id: 'jpg.read_image', fn: 'readImage', expectation: 'ok',
+    fixture: { name: 'staff-photo.jpg', bytes: () => JPEG_1PX },
+    check: (r) => {
+      const imageBlock = Array.isArray(r.content) ? r.content.find((block) => block?.type === 'image') : null;
+      const textBlock = Array.isArray(r.content) ? r.content.find((block) => block?.type === 'text') : null;
+      return imageBlock?.mimeType === 'image/jpeg'
+        && (typeof imageBlock.data === 'string' || imageBlock.dataOmitted === true)
+        && typeof textBlock?.text === 'string'
+        && r.details?.mimeType === 'image/jpeg'
+        && !JSON.stringify(r.details).includes('base64,')
+        ? true
+        : `native image/jpeg content block with metadata-only details not produced (imageMime=${imageBlock?.mimeType}, detailsMime=${r.details?.mimeType})`;
+    },
+  },
+  {
+    // jpeg-codec twin of png-sharp-binding: width/height come back non-null
+    // ONLY when sharp's native jpeg decode worked, and format must say
+    // 'jpeg' — a png answer for a jpeg fixture means the codec path lied.
+    id: 'jpg-sharp-binding.read_image', fn: 'readImage', expectation: 'ok',
+    fixture: { name: 'probe.jpg', bytes: () => JPEG_1PX },
+    check: (r) => (r.details?.width === 1 && r.details?.height === 1 && r.details?.format === 'jpeg'
+      ? true : `sharp did not decode jpeg metadata (width=${r.details?.width}, format=${r.details?.format}) — jpeg codec missing or broken in the staged bundle`),
+  },
+  {
     id: 'pptx.read', fn: null, expectation: 'no-tool',
     // No document.read_pptx exists; the persona carves .pptx out honestly
     // (CLWX-80 fix). This row keeps the gap visible in every matrix run.
   },
   {
     // Registration smoke, full activation: complete config + host-API env →
-    // the ENTIRE 33-tool inventory must register from the STAGED PLUGIN copy
-    // (outlook 11 + forms 5 + browser 2 + principal 8 + document 7). Pins the
+    // the ENTIRE 34-tool inventory must register from the STAGED PLUGIN copy
+    // (outlook 12 + forms 5 + browser 2 + principal 8 + document 7). Pins the
     // env/config gates and entry-file integrity. Honest coverage note: index
     // .mjs's static import graph today is builtins + local files (doc deps
     // load lazily at call time — the doc rows cover those), so this row
@@ -723,7 +865,7 @@ export const MATRIX = [
   {
     // Gateway-process transport, full activation: with host-API env present
     // (fake port/token; fetch stubbed via preload so the CLWX-86 probe fails
-    // open without a socket) the ENTIRE 33-tool inventory must register
+    // open without a socket) the ENTIRE 34-tool inventory must register
     // through the real gateway host.
     id: 'gateway-transport.full', mode: 'transport', expectation: 'ok',
     transport: { pluginConfig: FULL_PLUGIN_CONFIG, hostApi: FAKE_HOST_API },
@@ -784,6 +926,44 @@ export function foldRepeatVerdicts(verdicts) {
     };
   }
   return { ...verdicts[0], note: `${verdicts[0].note ? `${verdicts[0].note} ` : ''}(${verdicts.length}× consistent)`.trim() };
+}
+
+/**
+ * Undo markdown punctuation escaping for content comparison (pure;
+ * unit-tested). mammoth's markdown writer escapes `.`, `-`, `#`, `*`, `_`
+ * and brackets, so a literal sentence check against reopened markdown fails
+ * on escaping alone — which grades the writer's style, not whether the
+ * principal's text survived the write→reopen round trip (2026-09-08).
+ */
+export function unescapeMarkdown(markdown) {
+  return String(markdown ?? '').replace(/\\([\\.\-*_#()[\]!+`>])/g, '$1');
+}
+
+/**
+ * Fold a write child + reopen child into ONE row outcome (pure; unit-tested;
+ * audit gap G4, 2026-09-08). The failing step is NAMED so a red row says
+ * whether the writer or the reader broke. A missing reopen outcome after a
+ * successful write is a harness plumbing bug (infra FAIL). The env echo
+ * reports the WEAKEST child: an @electronlike row where EITHER child ran as
+ * plain node must fail checkEnvShapeApplied — two children mean two chances
+ * for the fake to silently not apply.
+ */
+export function foldWriteReopen(writeOutcome, reopenOutcome) {
+  if (!writeOutcome.ok) {
+    return { ...writeOutcome, message: `write step: ${writeOutcome.message}` };
+  }
+  if (!reopenOutcome) {
+    return { ok: false, infra: true, message: 'write step succeeded but no reopen outcome was produced (harness bug)' };
+  }
+  if (!reopenOutcome.ok) {
+    return { ...reopenOutcome, message: `reopen step: ${reopenOutcome.message}` };
+  }
+  const applied = (e) => Boolean(e && e.type === 'utility' && e.electron);
+  return {
+    ok: true,
+    result: { write: writeOutcome.result, reopen: reopenOutcome.result },
+    env: applied(writeOutcome.env) ? reopenOutcome.env : writeOutcome.env,
+  };
 }
 
 // ── fast subset (package preflight wiring, CLWX-77 trail)
@@ -1194,6 +1374,32 @@ async function main() {
     } else if (row.mode === 'transport') {
       const outcome = await runTransport(row, staged, stageDir, { nodeBin: args.nodeBin });
       verdict = classifyRow(row.expectation, outcome, row.check, row.refusalCheck);
+    } else if (row.mode === 'write-reopen') {
+      const iterVerdicts = [];
+      for (let i = 0; i < iterations; i += 1) {
+        const dirName = `${row.id.replace(/[^a-z0-9_.-]/gi, '_')}${iterations > 1 ? `-i${i + 1}` : ''}`;
+        const workDir = path.join(stageDir, 'work', dirName);
+        await mkdir(workDir, { recursive: true });
+        // Two FRESH children against the staged runtime: write, then reopen
+        // the same file through the staged reader (audit gap G4). The reopen
+        // child only spawns when the write step produced an ok outcome — a
+        // failed write is graded as the write step's failure, never as a
+        // reader complaint about a missing file.
+        const writeOutcome = await runChild(
+          { docToolsPath, fn: row.write.fn, args: row.write.args(workDir), envShape: row.envShape },
+          resources,
+          { nodeBin: args.nodeBin },
+        );
+        const reopenOutcome = writeOutcome.ok
+          ? await runChild(
+            { docToolsPath, fn: row.reopen.fn, args: row.reopen.args(workDir), envShape: row.envShape },
+            resources,
+            { nodeBin: args.nodeBin },
+          )
+          : null;
+        iterVerdicts.push(gradeOutcome(row, foldWriteReopen(writeOutcome, reopenOutcome)));
+      }
+      verdict = foldRepeatVerdicts(iterVerdicts);
     } else if (row.mode === 'register') {
       const iterVerdicts = [];
       for (let i = 0; i < iterations; i += 1) {
