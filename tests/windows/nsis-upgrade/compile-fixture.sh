@@ -30,6 +30,8 @@ OUT_DIR="$(cd "$OUT_DIR" && pwd)" # OutFile must be absolute regardless of CWD
 
 echo "compiler: $MAKENSIS ($("$MAKENSIS" -VERSION 2>/dev/null || true))"
 echo "prepare source: $PREPARE_SOURCE"
+# Tie the build to frozen content, not a moving worktree revision claim.
+echo "prepare source sha256: $(shasum -a 256 "$PREPARE_SOURCE" | cut -d' ' -f1)"
 exec "$MAKENSIS" -V3 \
   -DCLAWX_PREPARE_SOURCE="$PREPARE_SOURCE" \
   -DCLAWX_FIXTURE_OUTFILE="$OUT_DIR/clawx-upgrade-prepare-fixture.exe" \

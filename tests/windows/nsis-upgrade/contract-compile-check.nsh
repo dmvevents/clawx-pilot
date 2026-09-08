@@ -19,3 +19,13 @@ Var /GLOBAL ClawXStaleInstallDir
   StrCpy $ClawXStaleInstallDir ""
   Abort "ClawXPrepareInstallDirectory: compile-check placeholder linked; rebuild the fixture against the reviewed production macro source"
 !macroend
+
+; Compile-check stand-ins for the actual post-uninstall hooks inserted by the
+; fixture's hook modes. Same rule as above: no behavior, always abort.
+!macro customUnInstallCheck
+  Abort "customUnInstallCheck: compile-check placeholder linked; rebuild the fixture against the reviewed production macro source"
+!macroend
+
+!macro customUnInstallCheckCurrentUser
+  Abort "customUnInstallCheckCurrentUser: compile-check placeholder linked; rebuild the fixture against the reviewed production macro source"
+!macroend

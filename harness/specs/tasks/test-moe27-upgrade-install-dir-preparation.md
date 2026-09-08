@@ -10,8 +10,12 @@ intent: >-
   startup then failed for 360s; root's native NSIS 3.0.4.1 probe showed
   IfFileExists "$INSTDIR\" erroneously reporting an existing directory as
   absent. The production fix is !macro ClawXPrepareInstallDirectory
-  (scripts/installer.nsh, author worktree commit 2841f8c0; zero parameters,
-  rename-or-abort, Var /GLOBAL ClawXStaleInstallDir). This task delivers a
+  (scripts/installer.nsh, author worktree commit bc561eb3 — source review
+  rejected 2841f8c0 on the B1 UAC inner-instance hook bypass and B2
+  FindFirst-errors-classified-empty; bc561eb3 keeps the zero-parameter
+  macro/rollback variable, re-invokes the prep from the actual
+  customUnInstallCheck / customUnInstallCheckCurrentUser hooks and aborts on
+  unverifiable enumeration). This task delivers a
   native behavioral harness that exercises the ACTUAL macro — never a
   reimplementation — through a minimal silent fixture installer plus a
   sequential Windows runner, so root can prove upgrade outcomes on real
@@ -32,8 +36,10 @@ requiredRules:
 acceptance:
   - fixture.nsi compiles with the pinned electron-builder NSIS 3.0.4.1 (mac makensis, explicit NSISDIR) against the ACTUAL production installer.nsh defining the zero-parameter macro; a compile against a source lacking the macro fails with an explicit !error; the contract-compile-check.nsh stand-in always aborts at runtime and never counts as acceptance.
   - The fixture inserts only ClawXPrepareInstallDirectory (never customCheckAppRunning); the nsProcess include is satisfied by an inert compile-time placeholder so the built fixture has no process-kill capability.
-  - run-upgrade-suite.ps1 executes eight sequential scenarios in one newly created, pre-validated fixture root with bounded process waits, native exit codes and per-scenario structured JSON plus a suite summary that survives scenario exceptions; failed cases are never blindly retried and fixture trees are left as evidence.
+  - run-upgrade-suite.ps1 executes eleven sequential scenarios in one newly created, pre-validated fixture root with bounded process waits, native exit codes and per-scenario structured JSON plus a suite summary that survives scenario exceptions; failed cases are never blindly retried and fixture trees are left as evidence.
   - The unsafe/root probe (unmapped drive letter only) runs first and gates the rest of the suite; the locked-old-file scenario proves the Windows rename refusal with an owned negative-control rename (child-file handle, directory-handle fallback, restore on unexpected success) before asserting the macro fails closed.
+  - The hook scenarios insert the ACTUAL customUnInstallCheck / customUnInstallCheckCurrentUser macros (never customCheckAppRunning/customInstall) with an explicit harmless $R0, covering both the repeated direct-prep path and the inner-hook-only path, and prove the exact rollback pointer is retained across invocations with no stale files copied.
+  - The acl-denied-listing scenario applies root's proven deny-ListDirectory pattern to an owned recognized tree, requires both a denied managed enumeration control and the fixture's native FindFirst error diagnostic (an unenforced denial is a FAILED/invalid control, never a silent pass), asserts nonzero exit with the old tree retained, and restores the saved ACL in finally with an exact owned rollback on unexpected rename.
   - The upgrade scenario proves stale markers absent after the simulated payload copy, preexisting install-dir._stale_0/._stale_1 collision siblings and external .openclaw/AppData sentinels preserved, and the prior tree recoverable at the exact recorded $ClawXStaleInstallDir path; success paths prove the new payload landed and no rollback dir is claimed.
   - Windows execution results are recorded by root as PASS/FAIL/BLOCKED/NOT_RUN per scenario; local compile evidence alone never becomes a Windows pass or GA claim.
 docs:

@@ -60,7 +60,9 @@ $script:Scenarios = @()
 $ExpectedScenarios = @(
   'unsafe-root-target', 'reparse-target', 'plain-file-target',
   'unrecognized-nonempty-target', 'empty-existing-destination',
-  'fresh-install', 'upgrade-with-stale-markers', 'locked-old-file')
+  'fresh-install', 'upgrade-with-stale-markers',
+  'upgrade-hooks-repeated-prep', 'inner-hook-only-prep',
+  'locked-old-file', 'acl-denied-listing')
 
 function Write-Utf8NoBom([string] $Path, [string] $Text) {
   [IO.File]::WriteAllText($Path, $Text, (New-Object Text.UTF8Encoding($false)))
@@ -88,11 +90,12 @@ function Read-FixtureResult([string] $Path) {
   New-Object psobject -Property @{ Lines = $lines; Phases = $phases; Values = $values }
 }
 
-function Invoke-Fixture([string] $ScenarioDir, [string] $TargetDir) {
+function Invoke-Fixture([string] $ScenarioDir, [string] $TargetDir, [string] $Mode = '') {
   if ($TargetDir -match '\s') { throw "Scenario target must not contain whitespace: $TargetDir" }
   $resultPath = Join-Path $ScenarioDir 'fixture-result.txt'
   $env:CLAWX_FIXTURE_RESULT = $resultPath
   $env:CLAWX_FIXTURE_TARGET = $TargetDir
+  if ($Mode) { $env:CLAWX_FIXTURE_MODE = $Mode }
   $proc = $null
   $timedOut = $false
   $exitCode = $null
@@ -109,6 +112,7 @@ function Invoke-Fixture([string] $ScenarioDir, [string] $TargetDir) {
     if ($proc) { $proc.Dispose() }
     Remove-Item Env:CLAWX_FIXTURE_RESULT -ErrorAction SilentlyContinue
     Remove-Item Env:CLAWX_FIXTURE_TARGET -ErrorAction SilentlyContinue
+    Remove-Item Env:CLAWX_FIXTURE_MODE -ErrorAction SilentlyContinue
   }
   New-Object psobject -Property @{
     ExitCode = $exitCode
@@ -401,6 +405,118 @@ function Invoke-LockedFileScenario {
   return (Complete-Scenario $s $run)
 }
 
+
+# Shared post-success checks for the upgrade-shaped scenarios: stale markers
+# gone, rollback recorded inside the fixture root, old tree recoverable there.
+function Assert-UpgradeOutcome($Scenario, $Run, [string] $Target) {
+  $staleLeft = @(Get-ChildItem -LiteralPath $Target -Recurse -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'stale-runtime.sentinel' -or $_.Name -eq '.openclaw-lifecycle-pending' })
+  Add-Assertion $Scenario 'stale-markers-absent' ($staleLeft.Count -eq 0) 'stale sentinel and lifecycle marker absent from the upgraded destination'
+  $stale = Get-StaleValue $Run
+  Add-Assertion $Scenario 'stale-dir-recorded' ($stale -ne '') ("staleInstallDir='" + $stale + "'")
+  $staleInsideRoot = ($stale -ne '') -and $stale.TrimEnd('\').StartsWith($FixtureRoot + '\', [StringComparison]::OrdinalIgnoreCase)
+  Add-Assertion $Scenario 'stale-dir-inside-fixture-root' $staleInsideRoot 'recorded moved-aside directory stays inside the owned fixture root'
+  $recoverable = $false
+  if ($staleInsideRoot -and (Test-Path -LiteralPath $stale -PathType Container)) {
+    $recoverable = (Test-FileContent (Join-Path $stale 'ClawX.exe') 'clawx-fixture-old-payload-executable') -and
+                   (Test-FileContent (Join-Path $stale 'resources\openclaw\.openclaw-lifecycle-pending') 'lifecycle-pending-marker')
+  }
+  Add-Assertion $Scenario 'old-tree-recoverable-at-recorded-path' $recoverable 'the exact recorded path holds the prior tree'
+  return $stale
+}
+
+# Scenario 9 (bc561eb3): non-elevated path — direct prep, then the ACTUAL
+# customUnInstallCheck and customUnInstallCheckCurrentUser hooks repeat the
+# prep. The rollback pointer set by the moving invocation must be retained
+# verbatim and no stale files may ride in through the repeated invocations.
+function Invoke-HooksRepeatedPrepScenario {
+  $s = New-Scenario 'upgrade-hooks-repeated-prep' 'Direct prep then actual post-uninstall hooks: rollback pointer retained across repeated invocations'
+  $target = Join-Path $s.Dir 'install-dir'
+  New-OldInstall $target
+  $s.TargetDir = $target
+  $run = Invoke-Fixture $s.Dir $s.TargetDir 'hooks'
+  Assert-SuccessRun $s $run $target
+  Add-Assertion $s 'all-invocations-ran' (($run.Result.Phases -contains 'direct-prep-success') -and ($run.Result.Phases -contains 'hook-uninstall-success') -and ($run.Result.Phases -contains 'hook-currentuser-success')) 'direct prep plus both actual hooks completed'
+  $stale = Assert-UpgradeOutcome $s $run $target
+  $d = ''; $h1 = ''; $h2 = ''
+  if ($run.Result.Values.ContainsKey('staleAfterDirect')) { $d = $run.Result.Values['staleAfterDirect'] }
+  if ($run.Result.Values.ContainsKey('staleAfterHook1')) { $h1 = $run.Result.Values['staleAfterHook1'] }
+  if ($run.Result.Values.ContainsKey('staleAfterHook2')) { $h2 = $run.Result.Values['staleAfterHook2'] }
+  Add-Assertion $s 'rollback-pointer-retained' (($d -ne '') -and ($d -ceq $h1) -and ($d -ceq $h2) -and ($d -ceq $stale)) ("direct='" + $d + "' hook1='" + $h1 + "' hook2='" + $h2 + "' (exact prior pointer kept, never reset)")
+  return (Complete-Scenario $s $run)
+}
+
+# Scenario 10 (bc561eb3 B1 boundary): UAC inner instance — no direct prep
+# (customCheckAppRunning skipped by the template); the actual hooks are the
+# ONLY preparation before the payload copy and must fully clean the target.
+function Invoke-InnerHookOnlyScenario {
+  $s = New-Scenario 'inner-hook-only-prep' 'Inner-instance path: actual post-uninstall hooks alone prepare the destination'
+  $target = Join-Path $s.Dir 'install-dir'
+  New-OldInstall $target
+  $s.TargetDir = $target
+  $run = Invoke-Fixture $s.Dir $s.TargetDir 'inner-hooks'
+  Assert-SuccessRun $s $run $target
+  Add-Assertion $s 'both-hooks-ran' (($run.Result.Phases -contains 'hook-uninstall-success') -and ($run.Result.Phases -contains 'hook-currentuser-success')) 'both actual hooks completed'
+  Add-Assertion $s 'no-direct-prep' (-not ($run.Result.Phases -contains 'direct-prep-success')) 'customCheckAppRunning path was not simulated (inner instance)'
+  $stale = Assert-UpgradeOutcome $s $run $target
+  $h1 = ''; $h2 = ''
+  if ($run.Result.Values.ContainsKey('staleAfterHook1')) { $h1 = $run.Result.Values['staleAfterHook1'] }
+  if ($run.Result.Values.ContainsKey('staleAfterHook2')) { $h2 = $run.Result.Values['staleAfterHook2'] }
+  Add-Assertion $s 'pointer-set-by-hook-and-retained' (($h1 -ne '') -and ($h1 -ceq $h2) -and ($h1 -ceq $stale)) ("hook1='" + $h1 + "' hook2='" + $h2 + "' (first hook moved the tree; second retained the pointer)")
+  return (Complete-Scenario $s $run)
+}
+
+# Scenario 11 (bc561eb3 B2 boundary): the destination exists but LISTING is
+# denied by a real ACL for the current user. Root reproduced the original
+# defect as STANDARD user ClawXFresh0908 (22:07:09 UTC): native FindFirst
+# errored and the 2841f8c0 macro returned exit 0, copied the payload and
+# retained the stale sentinel. The corrected macro must abort instead. The
+# same deny rule did NOT block enumeration for the lab admin operator, so an
+# unenforced denial is recorded as a FAILED/invalid control — never silently
+# accepted as an ordinary upgrade nor skipped.
+function Invoke-AclDeniedListingScenario {
+  $s = New-Scenario 'acl-denied-listing' 'Unenumerable recognized old tree: abort, no payload, tree retained (never classified empty)'
+  $target = Join-Path $s.Dir 'install-dir'
+  New-OldInstall $target
+  $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+  $aclOriginal = Get-Acl -LiteralPath $target   # immutable readback for restore
+  $aclMutable = Get-Acl -LiteralPath $target    # separate object to mutate
+  $denyRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+    $sid, [System.Security.AccessControl.FileSystemRights]::ListDirectory,
+    [System.Security.AccessControl.InheritanceFlags]::None,
+    [System.Security.AccessControl.PropagationFlags]::None,
+    [System.Security.AccessControl.AccessControlType]::Deny)
+  $run = $null
+  try {
+    $aclMutable.AddAccessRule($denyRule)
+    Set-Acl -LiteralPath $target -AclObject $aclMutable
+    # Managed negative control: enumeration by THIS user must now be denied.
+    $controlDenied = $false
+    try { [void]@([IO.Directory]::EnumerateFileSystemEntries($target) | Select-Object -First 1) }
+    catch { $controlDenied = $true }
+    Add-Assertion $s 'acl-denial-enforced' $controlDenied 'deny ListDirectory ACL actually blocks enumeration for the current user (invalid control otherwise, e.g. admin operator)'
+    if (-not $controlDenied) {
+      # Unenforced denial (root observed this under lab operator clawxlab):
+      # FAIL the control instead of accepting ordinary upgrade behavior.
+      return (Complete-Scenario $s $null)
+    }
+    $s.TargetDir = $target
+    $run = Invoke-Fixture $s.Dir $s.TargetDir
+  } finally {
+    # Restore the saved ACL; if an unexpected rename moved the tree aside,
+    # roll back exactly the sibling this scenario produced first.
+    if (-not (Test-Path -LiteralPath $target)) {
+      $moved = @(Get-ChildItem -LiteralPath $s.Dir -Directory -Filter 'install-dir._stale_*' -Force -ErrorAction SilentlyContinue)
+      if ($moved.Count -eq 1) { [IO.Directory]::Move($moved[0].FullName, $target) }
+    }
+    if (Test-Path -LiteralPath $target) { Set-Acl -LiteralPath $target -AclObject $aclOriginal }
+  }
+  Add-Assertion $s 'native-findfirst-errored' (($run.Result.Values.ContainsKey('diagFindFirstErrors')) -and ($run.Result.Values['diagFindFirstErrors'] -eq '1')) 'fixture-recorded native FindFirst diagnostic reported Errors before the macro ran'
+  Assert-RejectedRun $s $run
+  Add-Assertion $s 'no-stale-dir-recorded' ((Get-StaleValue $run) -eq '') 'no rollback directory claimed on the failure path'
+  Add-Assertion $s 'old-tree-retained' ((Test-FileContent (Join-Path $target 'ClawX.exe') 'clawx-fixture-old-payload-executable') -and (Test-FileContent (Join-Path $target 'stale-runtime.sentinel') 'stale-runtime-marker') -and (Test-FileContent (Join-Path $target 'resources\openclaw\.openclaw-lifecycle-pending') 'lifecycle-pending-marker')) 'previous installation intact at its original path (checked after ACL restore)'
+  return (Complete-Scenario $s $run)
+}
+
 # ---------------------------------------------------------------------------
 # Sequential execution (single guest); never retry a failed case blindly.
 # The summary JSON is written even when a scenario throws.
@@ -426,7 +542,10 @@ try {
     [void](Invoke-ScenarioSafely 'empty-existing-destination' { Invoke-EmptyExistingScenario })
     [void](Invoke-ScenarioSafely 'fresh-install' { Invoke-FreshInstallScenario })
     [void](Invoke-ScenarioSafely 'upgrade-with-stale-markers' { Invoke-UpgradeStaleScenario })
+    [void](Invoke-ScenarioSafely 'upgrade-hooks-repeated-prep' { Invoke-HooksRepeatedPrepScenario })
+    [void](Invoke-ScenarioSafely 'inner-hook-only-prep' { Invoke-InnerHookOnlyScenario })
     [void](Invoke-ScenarioSafely 'locked-old-file' { Invoke-LockedFileScenario })
+    [void](Invoke-ScenarioSafely 'acl-denied-listing' { Invoke-AclDeniedListingScenario })
   }
 } finally {
   $ranNames = @($script:Scenarios | Select-Object -ExpandProperty Name)

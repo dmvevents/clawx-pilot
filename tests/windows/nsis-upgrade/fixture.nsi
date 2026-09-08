@@ -25,6 +25,13 @@
 ;     trimmed.
 ;   - /D=<target> sets $INSTDIR (silent NSIS convention; last argument,
 ;     no quotes, therefore no spaces in the target path).
+;   - env CLAWX_FIXTURE_MODE selects the invocation path. "direct" (default):
+;     one direct prep insertion. "hooks": direct prep, then the ACTUAL
+;     customUnInstallCheck and customUnInstallCheckCurrentUser hooks (repeated
+;     prep; rollback pointer must be retained). "inner-hooks": NO direct prep
+;     (UAC inner instance skips customCheckAppRunning), only the two actual
+;     hooks before the payload copy. $R0 is set to the harmless flag 1 before
+;     each hook (exercises only its DetailPrint/error-report branch).
 ;
 ; Exit codes: 0 success; 2 macro rejection/failure path (ClawXFailInstallPrep
 ;   uses SetErrorLevel 2 + Quit); 3 missing CLAWX_FIXTURE_RESULT;
@@ -63,6 +70,15 @@ InstallDir "$TEMP\clawx-upgrade-fixture-unset"
 
 !ifmacrondef ClawXPrepareInstallDirectory
   !error "CLAWX_PREPARE_SOURCE does not define !macro ClawXPrepareInstallDirectory - refusing to build a fixture that cannot exercise the actual macro."
+!endif
+; The hook modes insert the ACTUAL post-uninstall hooks (bc561eb3: filesystem
+; preparation/error reporting only). customCheckAppRunning / customInstall
+; (process kills, registry writes) are NEVER inserted.
+!ifmacrondef customUnInstallCheck
+  !error "CLAWX_PREPARE_SOURCE does not define !macro customUnInstallCheck (needed for the hook-path scenarios)."
+!endif
+!ifmacrondef customUnInstallCheckCurrentUser
+  !error "CLAWX_PREPARE_SOURCE does not define !macro customUnInstallCheckCurrentUser (needed for the hook-path scenarios)."
 !endif
 
 Var FixtureResultPath
@@ -113,16 +129,64 @@ Function .onInit
 FunctionEnd
 
 Section "PrepareAndSimulateUpgrade"
-  !insertmacro ClawXFixtureResultLine "fixtureVersion=1"
+  !insertmacro ClawXFixtureResultLine "fixtureVersion=2"
   !insertmacro ClawXFixtureResultLine "prepareSource=${CLAWX_PREPARE_SOURCE}"
   !insertmacro ClawXFixtureResultLine "instdir=$INSTDIR"
+
+  ; Native pre-macro diagnostic: does FindFirst on the destination report an
+  ; error? Recorded for every run; the ACL-denied-listing scenario requires
+  ; "1" here to prove the denial was actually enforced for this process (the
+  ; B2 boundary: enumeration failure must never be classified as empty).
+  ClearErrors
+  FindFirst $R4 $R5 "$INSTDIR\*"
+  ${If} ${Errors}
+    !insertmacro ClawXFixtureResultLine "diagFindFirstErrors=1"
+  ${Else}
+    !insertmacro ClawXFixtureResultLine "diagFindFirstErrors=0"
+  ${EndIf}
+  FindClose $R4
+  ClearErrors
+
+  ReadEnvStr $R2 "CLAWX_FIXTURE_MODE"
+  StrCmp $R2 "" 0 +2
+    StrCpy $R2 "direct"
+  !insertmacro ClawXFixtureResultLine "mode=$R2"
   !insertmacro ClawXFixtureResultLine "phase=prepare-start"
 
-  ; THE actual macro under test (zero parameters; reads $INSTDIR and
-  ; ${APP_EXECUTABLE_FILENAME}). On failure it quits this installer with
-  ; SetErrorLevel 2; nothing below this line runs on the failure path, so no
-  ; simulated payload copy or success marker can appear.
-  !insertmacro ClawXPrepareInstallDirectory
+  ; THE actual macro/hooks under test (zero parameters; read $INSTDIR and
+  ; ${APP_EXECUTABLE_FILENAME}). On failure they quit this installer with
+  ; SetErrorLevel 2; nothing after the dispatch runs on the failure path, so
+  ; no simulated payload copy or success marker can appear.
+  ${If} $R2 == "inner-hooks"
+    ; UAC inner instance: customCheckAppRunning (and its direct prep) is
+    ; skipped by the template; the actual post-uninstall hooks are the only
+    ; preparation before extraction.
+    StrCpy $R0 1
+    !insertmacro customUnInstallCheck
+    !insertmacro ClawXFixtureResultLine "phase=hook-uninstall-success"
+    !insertmacro ClawXFixtureResultLine "staleAfterHook1=$ClawXStaleInstallDir"
+    StrCpy $R0 1
+    !insertmacro customUnInstallCheckCurrentUser
+    !insertmacro ClawXFixtureResultLine "phase=hook-currentuser-success"
+    !insertmacro ClawXFixtureResultLine "staleAfterHook2=$ClawXStaleInstallDir"
+  ${ElseIf} $R2 == "hooks"
+    ; Non-elevated instance: direct prep first (customCheckAppRunning's
+    ; invocation), then both actual hooks re-run the prep; the rollback
+    ; pointer set by the invocation that moved the tree must be retained.
+    !insertmacro ClawXPrepareInstallDirectory
+    !insertmacro ClawXFixtureResultLine "phase=direct-prep-success"
+    !insertmacro ClawXFixtureResultLine "staleAfterDirect=$ClawXStaleInstallDir"
+    StrCpy $R0 1
+    !insertmacro customUnInstallCheck
+    !insertmacro ClawXFixtureResultLine "phase=hook-uninstall-success"
+    !insertmacro ClawXFixtureResultLine "staleAfterHook1=$ClawXStaleInstallDir"
+    StrCpy $R0 1
+    !insertmacro customUnInstallCheckCurrentUser
+    !insertmacro ClawXFixtureResultLine "phase=hook-currentuser-success"
+    !insertmacro ClawXFixtureResultLine "staleAfterHook2=$ClawXStaleInstallDir"
+  ${Else}
+    !insertmacro ClawXPrepareInstallDirectory
+  ${EndIf}
 
   !insertmacro ClawXFixtureResultLine "phase=prepare-success"
   !insertmacro ClawXFixtureResultLine "staleInstallDir=$ClawXStaleInstallDir"

@@ -64,10 +64,31 @@ cleanup, no retries.
    fresh `._stale_<n>` name; preexisting `._stale_0`/`._stale_1` collision
    siblings, an `install-dir-old` sibling and external `.openclaw`/`AppData`
    sentinels preserved; old tree recoverable at the exact recorded path.
-8. `locked-old-file` — rename refusal PROVEN by a negative-control rename
+8. `upgrade-hooks-repeated-prep` — direct prep then the ACTUAL
+   `customUnInstallCheck` / `customUnInstallCheckCurrentUser` hooks
+   (bc561eb3: filesystem prep/error reporting only; `$R0` set to a harmless
+   flag) repeat the prep; the exact rollback pointer must be retained and no
+   stale files copied. `customCheckAppRunning`/`customInstall` are never
+   inserted.
+9. `inner-hook-only-prep` — UAC inner-instance shape: NO direct prep, the two
+   actual hooks alone must clean the destination before the payload copy
+   (the B1 bypass boundary).
+10. `locked-old-file` — rename refusal PROVEN by a negative-control rename
    under an owned no-Delete-share handle (child file first, held directory
    handle fallback; restore on unexpected success) before the fixture runs;
    macro must exit nonzero and preserve the old tree in place.
+11. `acl-denied-listing` — the B2 boundary root reproduced as standard user
+   ClawXFresh0908 (native FindFirst errors were classified "empty"; exit 0
+   overlay retained the stale sentinel): an explicit deny-ListDirectory ACL
+   for the current user (no inheritance) is applied to a recognized old tree,
+   a managed enumeration control must be DENIED (an unenforced denial — e.g.
+   lab admin operator clawxlab — is recorded as FAILED/invalid control, never
+   silently passed or downgraded to an ordinary upgrade), the fixture's
+   native pre-macro FindFirst diagnostic must report Errors, and the macro
+   must exit nonzero with no payload and the old tree retained. The saved
+   ACL is restored in `finally`, including an exact owned rollback if an
+   unexpected rename occurred. Run the suite as a standard (non-admin) user
+   in an owned fixture folder for this control to be enforceable.
 
 ## Safety boundaries
 
@@ -84,6 +105,10 @@ cleanup, no retries.
 
 ## Status
 
-Compiled locally against production commit 2841f8c0 with NSIS 3.0.4.1
-(v3.04, mac makensis). All Windows scenario executions are NOT_RUN here;
-root executes them and owns the verdict. No GA/Windows-pass claim.
+Compiled locally against the frozen content of production commit bc561eb3
+(source file sha256 71dbad1e620b14d2ce11a11bd5b1f34b1bc3b02cdcdb0f4b273d0ba0b618cc19)
+with NSIS 3.0.4.1 (v3.04, mac makensis). `compile-fixture.sh` prints the
+prepare-source hash so runs are tied to frozen content, not a moving
+worktree. All Windows scenario executions are NOT_RUN here; root executes
+them (as a standard QA user for the ACL case) and owns the verdict. No
+GA/Windows-pass claim.
