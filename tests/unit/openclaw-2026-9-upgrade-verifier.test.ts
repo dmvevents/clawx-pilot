@@ -6,7 +6,9 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  MOE_HOSTAPI_TOOLS,
   TARGET_OPENCLAW_VERSION,
+  assertSameSet,
   satisfiesOpenClawNodeEngine,
   verifyOpenClaw20269Upgrade,
 } from '../../scripts/openclaw-2026-9-upgrade-verifier.mjs';
@@ -181,6 +183,35 @@ describe('OpenClaw 2026.9 upgrade verifier', () => {
   // Loads two real plugin registries and executes PDF extraction. Match the
   // existing artifact transport bound; the unit default is only five seconds.
   }, 120_000);
+
+  it('pins the MoE tool inventory to the reviewed harness registration contract (no second drifting copy)', async () => {
+    // This exact list went stale twice (missed outlook.readiness from
+    // 6ec32807, then browser.open_chrome from 41359e12) because it was a
+    // silent second copy of the registration inventory. Pin it to the
+    // harness-artifact contract that the source-literal drift guard already
+    // ties to index.mjs, so one landing cannot leave the other copy behind.
+    const harness = await import('../../scripts/harness-artifact.mjs');
+    expect([...MOE_HOSTAPI_TOOLS].sort()).toEqual([...harness.TRANSPORT_FULL_EXPECTED].sort());
+    expect(MOE_HOSTAPI_TOOLS.length).toBe(35);
+    expect(MOE_HOSTAPI_TOOLS).toContain('outlook.readiness');
+    expect(MOE_HOSTAPI_TOOLS).toContain('browser.open_chrome');
+  });
+
+  it('rejects extra and missing tools instead of accepting a near-match inventory', () => {
+    // Meaningful negative controls for the manifest/runtime set assert: the
+    // inventory update must not have weakened mismatch rejection.
+    expect(() => assertSameSet('ctl', [...MOE_HOSTAPI_TOOLS, 'browser.unreviewed_tool'], MOE_HOSTAPI_TOOLS))
+      .toThrow(/extra=\[browser\.unreviewed_tool\]/);
+    expect(() => assertSameSet('ctl', MOE_HOSTAPI_TOOLS.filter((name) => name !== 'outlook.readiness'), MOE_HOSTAPI_TOOLS))
+      .toThrow(/missing=\[outlook\.readiness\]/);
+    expect(() => assertSameSet('ctl', MOE_HOSTAPI_TOOLS.filter((name) => name !== 'browser.open_chrome'), MOE_HOSTAPI_TOOLS))
+      .toThrow(/missing=\[browser\.open_chrome\]/);
+    // Duplicate of one name while another is absent must not pass on length luck.
+    expect(() => assertSameSet('ctl', ['outlook.open', ...MOE_HOSTAPI_TOOLS.filter((name) => name !== 'outlook.readiness')], MOE_HOSTAPI_TOOLS))
+      .toThrow(/missing=\[outlook\.readiness\]/);
+    // Order-insensitive acceptance stays intact.
+    expect(() => assertSameSet('ctl', [...MOE_HOSTAPI_TOOLS].reverse(), MOE_HOSTAPI_TOOLS)).not.toThrow();
+  });
 
   it('matches the exact OpenClaw node engine floor used by the Windows wrappers', () => {
     expect(satisfiesOpenClawNodeEngine('22.22.2')).toBe(false);

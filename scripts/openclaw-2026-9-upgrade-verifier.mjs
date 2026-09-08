@@ -32,10 +32,17 @@ const MOE_NO_HOSTAPI_TOOLS = [
   'principal.find_school',
   'principal.nscc_lookup',
 ];
-const MOE_HOSTAPI_TOOLS = [
+// Exported so the unit lane can pin this copy of the inventory against the
+// harness-artifact contract (TRANSPORT_FULL_EXPECTED) — this list drifted
+// silently when outlook.readiness landed (6ec32807) and again when
+// browser.open_chrome landed (41359e12); both register inside the same
+// host-API + skillAllowlist gate as the rest of their families.
+export const MOE_HOSTAPI_TOOLS = [
   ...MOE_NO_HOSTAPI_TOOLS,
+  'browser.open_chrome',
   'browser.diagnose',
   'browser.repair_chrome_cdp',
+  'outlook.readiness',
   'outlook.open',
   'outlook.read_inbox',
   'outlook.draft_email',
@@ -134,7 +141,8 @@ function assertPricingUsesNativeCatalogPricing(openclawDir) {
   }
 }
 
-function assertSameSet(label, actual, expected) {
+// Exported for the unit lane's missing/extra rejection controls only.
+export function assertSameSet(label, actual, expected) {
   const actualSorted = [...actual].sort();
   const expectedSorted = [...expected].sort();
   const missing = expectedSorted.filter((name) => !actualSorted.includes(name));
