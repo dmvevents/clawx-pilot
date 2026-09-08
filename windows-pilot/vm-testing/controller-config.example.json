@@ -1,0 +1,52 @@
+{
+  "schema": "clawx-test-controller-config/1",
+  "_note": "Example only. Root supplies the resolved config privately; bootstrap/probe refuse any PLACEHOLDER value. No secrets belong in this file: key/known_hosts entries are controller-local PATHS and the operator SSH key is the PUBLIC half only.",
+  "project": "PLACEHOLDER-project-id",
+  "projectNumber": "PLACEHOLDER-numeric-project-number",
+  "region": "us-central1",
+  "zone": "us-central1-a",
+  "network": "clawx-test-lab",
+  "subnet": "clawx-test-lab-us-central1",
+  "iapRange": "35.235.240.0/20",
+  "controller": {
+    "name": "PLACEHOLDER-controller-name",
+    "machineType": "e2-medium",
+    "bootDiskSizeGb": 20,
+    "bootDiskType": "pd-balanced",
+    "tag": "clawx-test-controller",
+    "firewallName": "clawx-test-controller-iap-ssh",
+    "operatorUsername": "PLACEHOLDER-operator",
+    "operatorSshPublicKey": "PLACEHOLDER ssh-ed25519 public key line supplied by root",
+    "image": {
+      "name": "PLACEHOLDER-pinned-linux-image-name",
+      "project": "PLACEHOLDER-image-project",
+      "id": "PLACEHOLDER-numeric-image-id"
+    }
+  },
+  "serviceAccount": {
+    "id": "PLACEHOLDER-sa-id",
+    "displayName": "ClawX test controller"
+  },
+  "discoveryRole": {
+    "id": "PLACEHOLDER_roleId",
+    "permissions": ["compute.instances.get", "compute.instances.list"]
+  },
+  "iamMode": "apply",
+  "targets": [
+    {
+      "name": "PLACEHOLDER-target-vm-name",
+      "zone": "us-central1-a",
+      "instanceId": "PLACEHOLDER-numeric-instance-id",
+      "sshUsername": "PLACEHOLDER-guest-user"
+    }
+  ],
+  "probe": {
+    "privateKeyPath": "PLACEHOLDER-/home/operator/.ssh/clawx-lab-guest-key",
+    "knownHostsPath": "PLACEHOLDER-/home/operator/.ssh/clawx-lab-known-hosts",
+    "deniedControlPort": 3389,
+    "marker": "CLAWX_CONTROLLER_ACCESS_OK",
+    "tunnelWaitSeconds": 45,
+    "authTimeoutSeconds": 60
+  },
+  "protectedInstances": ["clawx-win-rc-20260609"]
+}
