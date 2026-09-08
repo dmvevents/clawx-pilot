@@ -19,3 +19,5 @@ Each report gives another agent enough evidence to continue without the original
 | CLWX-87 | [Whisper.cpp cancellation window](CLWX-87-whisper-cancellation.md) | Backlog adapter reports cancellation accepted before cancellation can take effect |
 
 Earlier defects remain in [the defect register](../DEFECT_REGISTER_2026-09-02.md), [the blocker collection](../BLOCKER_BUG_COLLECTION_2026-09-03.md) and their linked evidence. Extend their existing records when sufficient; avoid copying the entire historical ledger here. New findings need the current template's handoff detail and an index link.
+
+- [CLWX-135 — moe.26 packaged OpenClaw lifecycle blocks Gateway startup](CLWX-135-openclaw-package-lifecycle.md).

@@ -1,14 +1,14 @@
 # Current Windows RC
 
-**September 8 execution resumed: GA RED.** The owner has started supervised Claude Fable 5/Bedrock worktrees for source repairs, CLI monitoring, history/skills review and a separate Whisper.cpp backlog branch. [COMPLETION_PLAN.md](COMPLETION_PLAN.md) owns execution and dependencies; [execution evidence](evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md) owns the scoped product proofs. ASR remains outside this release; helper/keyless integrity remains required. The latest packaged artifact is moe.26 below; moe.25 remains the latest installed diagnostic.
+**September 8 execution resumed: GA RED.** The owner has started supervised Claude Fable 5/Bedrock worktrees for source repairs, CLI monitoring, history/skills review and a separate Whisper.cpp backlog branch. [COMPLETION_PLAN.md](COMPLETION_PLAN.md) owns execution and dependencies; [execution evidence](evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md) owns the scoped product proofs. ASR remains outside this release; helper/keyless integrity remains required. The latest packaged and installed artifact is moe.26 below; moe.25 retains the preceding completed startup/Online baseline.
 
 
 **Local UI acceptance hold:** the owner reproduced the macOS Keychain dialog after the narrow fixture test passed. The resumed suite was stopped; desktop launches remain held. [CLWX-102](bugs/CLWX-102-macos-test-keychain.md) is unresolved; no local desktop test is running. This does not change the installed Windows artifact.
-## Current packaged candidate — moe.26, build and payload verification PASS
+## Current packaged candidate — moe.26, installed startup FAIL
 
-`release/moe26-plan-execution` at **`8bb7a77907faf35fb8fc4136073ce340ea9a9aaa`**, checkout `/private/tmp/clawx-plan-execution-20260908`, version `0.4.3-moe.26`. One copy-list entry repairs the isolated bundle test's missing registry child. Root's six tests/lint pass; independent Fable/Bedrock APPROVE reproduces six passes and checks adjacent copy lists. [Hosted build 34256868050](https://github.com/dmvevents/clawx-pilot/actions/runs/34256868050) started at **17:24:08 UTC**, `keyless-public`, no required credential seeds or publication inputs. Full Windows preflight PASS at17:29:19UTC, runtime preparation PASS at17:30:06UTC and compilation/bundling PASS at17:33:49UTC. Installer packaging completed successfully at17:41UTC. Native units:2,309 PASS/zero FAIL/57 SKIP in210 passed files/three skipped; nine artifact harness rows PASS. GitHub artifact10068872044 downloaded and matched its archive digest/length. All36 extracted package checks and172 compiled ASAR file comparisons pass; clean source/profile and OpenClaw9.2 are verified. Moe.26 installed acceptance NOT_RUN; publication false.
+`release/moe26-plan-execution` at **`8bb7a77907faf35fb8fc4136073ce340ea9a9aaa`**, checkout `/private/tmp/clawx-plan-execution-20260908`, version `0.4.3-moe.26`. One copy-list entry repairs the isolated bundle test's missing registry child. Root's six tests/lint pass; independent Fable/Bedrock APPROVE reproduces six passes and checks adjacent copy lists. [Hosted build 34256868050](https://github.com/dmvevents/clawx-pilot/actions/runs/34256868050) started at **17:24:08 UTC**, `keyless-public`, no required credential seeds or publication inputs. Full Windows preflight PASS at17:29:19UTC, runtime preparation PASS at17:30:06UTC and compilation/bundling PASS at17:33:49UTC. Installer packaging completed successfully at17:41UTC. Native units:2,309 PASS/zero FAIL/57 SKIP in210 passed files/three skipped; nine artifact harness rows PASS. GitHub artifact10068872044 downloaded and matched its archive digest/length. All36 extracted package checks and172 compiled ASAR file comparisons pass; clean source/profile and OpenClaw9.2 are verified. Moe.26 assisted GUI completion and installed identity now pass; native install exit was not captured after observer termination. Installed startup FAIL: Gateway repeatedly exits1 with incomplete package lifecycle; chat stays disabled through360s. CLWX-135 repair is active; publication false.
 
-Native SQLite lifetime proof remains bound to parent99468423: normal TEMP33/33 and short TEMP23/23 pass, plus exact cached-handle/targeted-close control. The attempted full VM unit run at8bb7a779 did not start because transfer authentication failed; account-holder GCP reauthentication is pending. Hosted native validation is the available full-run path.
+Native SQLite lifetime proof remains bound to parent99468423: normal TEMP33/33 and short TEMP23/23 pass, plus exact cached-handle/targeted-close control. The attempted full VM unit run at8bb7a779 did not start because transfer authentication failed; that access failure is historical and fresh authenticated IAP SSH/RDP now pass. Hosted native validation supplies the completed full-run proof.
 
 Preserved failures:34255425275 at99468423 (2,308 PASS/one FAIL/57 SKIP, missing child in isolated fixture);34252050616 at5785e570 (2,304/one/57, cleanup EPERM);34244582967 at1d745567 (2,297/two/57). Full Mac2,327-test evidence belongs to1d745567. [Source/build evidence](evidence/GA_SOURCE_INTEGRATION_2026-09-08.md) keeps these scopes separate. Held24e1cfd3 and private8db5bc5f remain excluded.
 
@@ -20,10 +20,10 @@ Preserved failures:34255425275 at99468423 (2,308 PASS/one FAIL/57 SKIP, missing 
 | Installer bytes / SHA256 | `476768641` / `5de74d6d1ce40b5c4c5d963f66bc74dd6c880c4972a6dbf82cd88c1ac5beb620` |
 | ASAR SHA256 | `a81d7dd0cf030df2ab934068aaacf8d5d9edcb70d984c2a07dce72854b7c62bd` |
 | Packaged EXE SHA256 | `44ff6a6f90fc5872b38626f544e7f19166185ecf2e5bb607f66dc3ddf386f902` |
-| Scope | Host extraction/manifest/provenance/172 compiled files/eight helpers/keyless PASS; Windows execution NOT_RUN |
-| Next | Restore authenticated command access, back up test-user state, install these exact bytes and execute the required same-candidate matrix |
+| Scope | Host package/source proof PASS; normal assisted Windows completion screen and installed ASAR/EXE match; native exit UNKNOWN; startup FAIL; journeys BLOCKED_CLWX135 |
+| Next | Repair CLWX-135, independently review and build a newly identified candidate; preserve failedmoe26 and observer exit gap |
 
-## Latest installed diagnostic — moe.25
+## Preceding installed diagnostic — moe.25
 
 | Field | Verified value |
 |---|---|

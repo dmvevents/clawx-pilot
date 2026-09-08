@@ -105,3 +105,9 @@ results, malformed results, model mismatch, deadline escalation past an
 ignored SIGINT, whole-process-tree termination scoping, partial JSON line
 reassembly, and result-before-exit visibility. Intervals are configurable so
 the suite finishes in well under 15 seconds.
+
+## Bounded execution effort and partial tool generation
+
+For small implementation/review slices, the September8 controller run uses the supported Claude `--effort medium` option through a private wrapper passed as `--claude-bin`; the wrapper forwards all original supervisor arguments. Model/provider remain pinned to Fable5/Bedrock and final usage metadata still supplies provider evidence. This does not set a spending cap or alter global settings. [Official model/effort configuration](https://code.claude.com/docs/en/model-config).
+
+A live heartbeat is not an accepted patch, but an unchanged worktree alone is also insufficient evidence of a stalled session. `input_json_delta` events can be the model generating a large pending Write/Bash tool argument before that tool executes; `toolCalls` counts completed assistant-message tool declarations and may stay unchanged during generation. Inspect event types and byte counts without dumping source/credential content before deciding whether to interrupt. Retain exact owned-PID receipts and the initial outcome, then explicitly resume the inspected session when justified. The initial controller attempt ended after804.6s of reasoning without edits; the resumed medium-effort pass subsequently emitted a pending implementation tool argument.
