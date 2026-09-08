@@ -141,6 +141,55 @@ function assertPricingUsesNativeCatalogPricing(openclawDir) {
   }
 }
 
+// Owned-temp cleanup for the mkdtemp scratch root this verifier creates.
+//
+// hosted34244582967 (clean 1d745567, windows-latest): every disposition
+// assertion passed, then the plain `fs.rmSync(tempRoot, { recursive, force })`
+// in the finally threw `EPERM ... \Temp\clwx-openclaw-moe-plugin-OPDKpz`
+// (syscall 'rm') and failed the suite. On Windows a handle on just-executed
+// plugin state (state/home dirs written by the two registry loads) can outlive
+// the call briefly — AV scans and lazy fd release are the usual holders.
+//
+// Policy (mirrors tests/unit/harness-git.test.ts cleanupRepo and
+// scripts/bundle-openclaw.mjs removeDirRobust):
+// 1. Retry with Node's documented Windows rm backoff (maxRetries/retryDelay
+//    apply to exactly EBUSY/EMFILE/ENFILE/ENOTEMPTY/EPERM when recursive).
+// 2. If one of those contention codes still survives ~5.5s of backoff,
+//    preserve ONLY this verifier-owned scratch dir, warn with the path for
+//    diagnostics, and let the verification verdict stand — the assertions
+//    above are the contract, the scratch dir is housekeeping. This also stops
+//    a cleanup throw in `finally` from masking a real inventory error.
+// 3. Any other code (e.g. EACCES on POSIX, a real access-control signal)
+//    still throws; this is not a blanket swallow of permission errors.
+export const OWNED_TEMP_RM_OPTIONS = Object.freeze({
+  recursive: true,
+  force: true,
+  maxRetries: 10,
+  retryDelay: 100,
+});
+// Exactly the codes Node itself classifies as transient for recursive rm
+// retries on Windows — no wider.
+const WINDOWS_RM_CONTENTION_CODES = new Set(['EBUSY', 'EMFILE', 'ENFILE', 'ENOTEMPTY', 'EPERM']);
+
+// Exported (with an injectable rm for deterministic negative controls in the
+// unit lane) — production callers pass only tempRoot.
+export function removeOwnedVerifierTempRoot(tempRoot, rmImpl = fs.rmSync) {
+  try {
+    rmImpl(tempRoot, { ...OWNED_TEMP_RM_OPTIONS });
+    return { removed: true, preservedPath: null, code: null };
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+    if (!WINDOWS_RM_CONTENTION_CODES.has(code)) {
+      throw error;
+    }
+    console.warn(
+      `[openclaw-2026-9-upgrade-verifier] owned temp cleanup hit ${code} after ${OWNED_TEMP_RM_OPTIONS.maxRetries} retries; `
+      + `preserving verifier-owned scratch dir for diagnostics: ${tempRoot}`,
+    );
+    return { removed: false, preservedPath: tempRoot, code };
+  }
+}
+
 // Exported for the unit lane's missing/extra rejection controls only.
 export function assertSameSet(label, actual, expected) {
   const actualSorted = [...actual].sort();
@@ -270,7 +319,7 @@ async function assertMoePluginToolRegistration(openclawDir) {
     const hostPlugin = hostRegistry.plugins?.[0];
     assertSameSet('MoE HostAPI runtime toolNames', hostPlugin?.toolNames ?? [], MOE_HOSTAPI_TOOLS);
   } finally {
-    fs.rmSync(tempRoot, { recursive: true, force: true });
+    removeOwnedVerifierTempRoot(tempRoot);
   }
 }
 
