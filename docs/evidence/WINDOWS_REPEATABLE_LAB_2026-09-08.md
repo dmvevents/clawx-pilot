@@ -11,7 +11,7 @@ The root operator created an isolated custom VPC/subnet with IAP-only ingress fo
 | Manual A, `clawx-lab-a-20260908`, ID `7401981722240067778` | Authenticated SSH, RDP protocol, SSH banner, closed guest-port control and guest baseline PASS. Initial activation failed; normal Google KMS connectivity plus `slmgr.vbs /ato` succeeded. Stopped after name/ID verification. |
 | Manual B, `clawx-lab-b-20260908`, ID `8516818648026687851` | Same baseline/access/activation PASS. Initial RDP IAP 4003 was retained; later complete readiness probe passed after boot settled. Stopped after name/ID verification. |
 | Launcher `auto-c-20260908` | FAIL in 13.089s before VM creation: valid split firewall port entries falsely rejected. Immutable receipt and lock retained. |
-| Corrected launcher `auto-d-20260908`, ID `4908385059495321872` | Real provisioning PASS in 35.135s, reusing the exact validated lab network. First SSH attempt hit boot/key-propagation refusal; retained retry succeeded. Guest baseline, authenticated access and full RDP/SSH/closed-port control PASS; activated. Retained as the available clean lab machine. |
+| Corrected launcher `auto-d-20260908`, ID `4908385059495321872` | Real provisioning PASS in 35.135s, reusing the exact validated lab network. First SSH attempt hit boot/key-propagation refusal; retained retry succeeded. Guest baseline, authenticated access and full RDP/SSH/closed-port control PASS; activated. Baseline receipt retained; later assigned to the native preflight development lane. Recreate a fresh instance for future clean-machine acceptance. |
 
 Provisioning durations include launcher API checks and are not Windows boot, app startup or product latency measurements. All guest baseline probes used the operator administrator through SSH Session 0. These results do not establish interactive standard-user installation or Windows 10/11 acceptance. Stopped VM disks still incur storage charges.
 
@@ -46,6 +46,10 @@ On the same installed moe.25 and user Chrome session, `/api/forms/list` returned
 Both calls returned HTTP 200. An independent read-only observation found filled controls on both live form pages, the expected synthetic student/PIN on Suspensions, no sign-in obstruction and no submission receipt (`forms-visible-readback.json`). No submit route was invoked; these are assisted synthetic previews, not statutory reports or submission acceptance. Private receipts: `owner-form-daily-report-private.json` and `owner-form-suspensions-private.json`. The same final-candidate rerun and unaided principal flow remain required.
 
 The installed `msgraph:status` separately reports `configured:false`, `signedIn:false`, no account and no granted scopes. Its `effectiveMock:true` derives from the missing Graph secret; this does **not** make the inbox checks mock evidence: actual installed app logs show both successful three-message reads as **`transport=browser status=ok`**, alongside the earlier `needs_signin`. Private allowlisted proof: `inbox-chat/installed-transport-proof.json`; Graph/configuration receipt: `owner-installed-forms-graph-private.json`. No successful Graph connection is claimed.
+
+## Repeatable login-helper result
+
+Reviewed helper `59465b57` now passes native Windows controls using the installed moe.25 runtime: wrong expected account refuses with child exit 11; exact account verifies with child exit 0. The account menu is opened only as needed and restored. Root retained and corrected an SSH-wrapper exit-code capture issue; the distributed laptop copy now matches the reviewed script. [CLWX-61 handoff](../bugs/CLWX-61-test-mail-auth-identity.md) records exact hashes, source/review, commands and limits. The controls used an already-authenticated inbox; signed-out entry remains separate.
 
 ## End-user documentation and next validation
 

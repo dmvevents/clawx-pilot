@@ -159,3 +159,16 @@ on real OWA (menu animation/focus handling), and that `#owa-me-control-container
 `#mectrl_currentAccount_secondary` remain the live selectors. The `skills/laptop` duplicate remains
 outside scope and still defective — reported separately, not edited. All live work stays
 root-owned; this helper ran only against fake DOM fixtures in this lane (live: NOT_RUN).
+
+## Root integration and native controls — September 8, 15:34 UTC
+
+Independent corrective review APPROVE at `59465b57` / `6d47b879` reproduced all 25 tests and its own wrong/superstring account, visible delayed-menu, restricted-click and menu-restore controls. Root integrated the four reviewed commits as `a39dae76`, `605eb29b`, `1ab55df8` and `bbc23ad3`. The separately distributed `skills/laptop/scripts/pilot-login-outlook-cdp.js` now matches the reviewed canonical helper byte-for-byte, SHA256 `aeb85a19f8b1fca112382ba56616133eb91fceb415db21a6cd14044bff824978`; syntax check passes. This operations repair is separate from the already frozen moe.26 build source.
+
+Root copied the helper into an owned test directory on the original Windows VM, verified its hash, and ran it using **the installed moe.25 Node and Playwright runtime**. The SSH operator called it against the verified standard-user Session 2 user Chrome endpoint; this is not a standard-user process-launch attestation. Credential values were supplied privately through SSH stdin/environment and omitted from logs, arguments, board and git.
+
+| Native control | Result | Duration |
+|---|---|---|
+| Existing signed-in inbox, deliberately different expected account | `OUTLOOK_WRONG_ACCOUNT_BLOCKED`; actual child exit 11 | 18,401 ms |
+| Same inbox, exact expected QA account | `OUTLOOK_SIGNED_IN_VERIFIED`; actual child exit 0 | 18,085 ms |
+
+The first root wrapper reported SSH exit 1 for the correctly refused child, so it stopped before the positive control. That failed receipt is retained. Root then recorded `$LASTEXITCODE` explicitly: Windows' outer SSH/PowerShell invocation collapses the nonzero child to SSH 1, while the helper's actual code is 11. No source assertion or exit behavior was weakened. Private proof: `artifacts/ga-fable-20260908/windows-lab/native-auth-helper-controls.json`, `attempt1-native-auth-helper-controls.json`, and the corresponding private native output receipts. The live account-menu behavior now works on actual Outlook. Signed-out credential entry, MFA/consent and final-artifact/end-user acceptance remain separate; these two controls exercised already-authenticated state.

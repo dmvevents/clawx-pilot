@@ -14,7 +14,7 @@
       "dependsOn": [],
       "evidenceClass": "source-review \u2192 installed-vm",
       "ownerRole": "source-author (Claude CLI) then independent-reviewer",
-      "executionState": "Reviewed source integrated at1d745567; hosted34244582967 in progress; final-artifact acceptance pending."
+      "executionState": "Reviewed source integrated at1d745567; build34244582967 failed native preflight, two-test native repair active; final-artifact acceptance pending."
     },
     {
       "number": 121,
@@ -29,7 +29,7 @@
       ],
       "evidenceClass": "source-review \u2192 installed-vm",
       "ownerRole": "same lane as 130",
-      "executionState": "Reviewed source integrated at1d745567; hosted34244582967 in progress; final-artifact acceptance pending."
+      "executionState": "Reviewed source integrated at1d745567; build34244582967 failed native preflight, two-test native repair active; final-artifact acceptance pending."
     },
     {
       "number": 77,
@@ -44,7 +44,7 @@
       "dependsOn": [],
       "evidenceClass": "source-test \u2192 installed-vm",
       "ownerRole": "source-author (Claude CLI) then reviewer; vm-operator for installed run",
-      "executionState": "Reviewed source integrated at1d745567; hosted34244582967 in progress; final-artifact acceptance pending."
+      "executionState": "Reviewed source integrated at1d745567; build34244582967 failed native preflight, two-test native repair active; final-artifact acceptance pending."
     },
     {
       "number": 106,
@@ -58,7 +58,7 @@
       "dependsOn": [],
       "evidenceClass": "source-review \u2192 artifact-identity",
       "ownerRole": "source-author (Claude CLI); root-integrator owns ga-gate",
-      "executionState": "Reviewed source integrated at1d745567; hosted34244582967 in progress; final-artifact acceptance pending."
+      "executionState": "Reviewed source integrated at1d745567; build34244582967 failed native preflight, two-test native repair active; final-artifact acceptance pending."
     },
     {
       "number": 96,
@@ -622,12 +622,12 @@
     "NEW-1": 133,
     "NEW-2": 134
   },
-  "updatedAt": "2026-09-08T15:29:29.839720+00:00",
-  "snapshotAt": "2026-09-08T15:29:29.839720+00:00",
+  "updatedAt": "2026-09-08T15:38:02.222174+00:00",
+  "snapshotAt": "2026-09-08T15:40:04.348123+00:00",
   "readiness": "RED",
   "sourceCandidate": "1d7455673774fd70c086b41b405c8ece868ce302",
   "privateVerification": "artifacts/ga-fable-20260908/sprint-loop/sprint-verification.json",
-  "boardExportVerifiedAt": "2026-09-08T15:29:29.839720+00:00",
+  "boardExportVerifiedAt": "2026-09-08T15:40:04.348123+00:00",
   "boardIssueCount": 134,
   "executionCheckpoint": {
     "browserReview": "APPROVE; integrated in1d745567",
@@ -640,16 +640,22 @@
       "failed": 0,
       "skipped": 29
     },
-    "installedArtifact": "moe.25 only; moe.26 hosted build34244582967 running",
+    "installedArtifact": "moe.25 only; moe.26 build34244582967 failed native preflight",
     "windowsOwnerHold": "RELEASED; sole root operator",
     "macGuiHold": "HELD",
     "microsoftBrowser": "moe25 assisted account/inbox and two synthetic Forms previews PASS; Graph unconfigured",
-    "qaMailAuth": "59465b57 correction under independent rereview",
+    "qaMailAuth": "Reviewed59465b57 integrated; native expected/wrong account controls PASS",
     "readiness": "RED",
     "cardCounts": {
       "In Progress": 18,
       "Todo": 10,
       "Ready": 3
-    }
+    },
+    "nativePreflight": {
+      "passed": 2297,
+      "failed": 2,
+      "skipped": 57
+    },
+    "nativeRepair": "Claude owns isolated auto-d development VM and two failing suites"
   }
 }
