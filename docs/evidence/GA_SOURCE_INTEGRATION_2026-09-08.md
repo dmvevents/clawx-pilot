@@ -1,8 +1,18 @@
 # Reviewed moe.26 source and hosted build — September 8, 2026
 
-**Reviewed source PASS; hosted Windows retry FAIL; artifact acceptance NOT_RUN; GA RED.** Current source is clean **`5785e570f8c04d0f3f16b541c99e0c273afc85c4`**, version `0.4.3-moe.26`, on `release/moe26-plan-execution`. Root verified the same remote SHA on `dmvevents/clawx-pilot` and dispatched [hosted run 34252050616](https://github.com/dmvevents/clawx-pilot/actions/runs/34252050616) at 16:36:04 UTC. Profile is `keyless-public`; required credential-seed inputs are false and publication inputs are absent. No installer hash, installation, release tag or GA publication is claimed.
+**Reviewed source PASS; native focused proof PASS; hosted build RUNNING; artifact acceptance NOT_RUN; GA RED.** Current source is clean **`99468423e78d90ef75a49ac5d7b52939caf9e808`**, version `0.4.3-moe.26`, on `release/moe26-plan-execution`. Root verified the same remote SHA and dispatched [run 34255425275](https://github.com/dmvevents/clawx-pilot/actions/runs/34255425275) at 17:09:49 UTC. Profile `keyless-public`, required credential seeds false, publication inputs absent. No installer hash, installation or GA publication is claimed.
 
-## Native repair and reviewed retry
+## Owned child lifetime repair — 17:09 UTC
+
+Commit `99468423` moves the real registry/PDF checks into a bounded owned Node child. Parent cleanup runs after child exit; success requires exit 0 and a per-invocation nonce proof. Permanent cleanup errors and primary-plus-cleanup failures still surface; F1 falsy throws are normalized at the real catch boundary. Independent Fable/Bedrock review APPROVE: verifier 23 + seed 10 passes, scoped lint and marker/error/real-child controls; root typecheck exit 0. Review receipt: `/private/tmp/clawx-moe26-db-lifetime-review-20260908/artifacts/REVIEW_FINAL.md`.
+
+Root's native proof on auto-d (Server2022, Node24.20.0, locked OpenClaw9.2) binds all changed files plus seed/package/lock hashes. Control A observes the exact temporary SQLite DB cached/open and reproduces rm EPERM. Diagnostic control B closes only that DB (returns true), then rm passes and the temporary root is absent. Product code does not import hashed close APIs. Control C: actual repaired suites PASS **33/33 normal TEMP** (16.22s suite time) and **23/23 short TEMP** (16.35s), each native exit 0. Private command/hash/control receipts: `artifacts/ga-fable-20260908/windows-lab/native-db-root/`.
+
+The author was stopped after an unscoped process-kill command during transfer recovery; its source checkpoint remained clean and independently reviewed. Root reused legacy SCP `-O`, stopped only the exact surviving transfer PID and executed the long script via a transferred file after an encoded-command length failure. These failed attempts and restored original CDP forwards are retained in [CLWX-25](../bugs/CLWX-25-windows-lab-repeatability.md). No new Claude session or repeat dependency installation was needed.
+
+Review N3 corrects an earlier broad inventory claim: pre-existing `assertSameSet` accepts a duplicate name when the expected set is still covered; HostAPI has no additional count guard. This is unchanged by the move and was approved as non-blocking for this delta, but remains recorded on CLWX-106. N2 is a possible POSIX marker-flush false failure (0/300 observed); marker absence fails closed. No false-PASS or native-cleanup finding remains open for this delta.
+
+## Earlier native repair and reviewed retry at 5785e570
 
 Three source-only commits follow `1d745567`: `8fb8bd96`, `409bce89`, then required correction `5785e570`. The final diff touches only the upgrade verifier and its two affected unit suites. The Graph account boundary is mocked while real seed orchestration and three account states remain tested; root found the original hosted log's **15:29:34.603 UTC** stdout explicitly attributes “Downloading Electron binary...” to the timed-out seed case. Exact time inside the synchronous install/download path remains unmeasured. Cleanup now uses bounded recursive-rm retries, surfaces exhausted errors and preserves primary verification errors alongside cleanup failures. The underlying native handle/permission cause remains UNKNOWN.
 
@@ -20,7 +30,7 @@ The assembly preserves the approved browser `41359e1`, artifact harness `8bf5d32
 
 - `c4a85343`: correct the evidence row name to the actual fast packaging check, `plugin-registration.full`.
 - `44dad46d`: reconcile the harness with the reviewed `browser.open_chrome` registration, raising the exact inventory from 34 to 35.
-- `1d745567`: correct the separately stale upgrade-verifier inventory, including existing `outlook.readiness`; preserve missing/extra/duplicate rejection and bind the positive check to actual reviewed plugin registration/manifest.
+- `1d745567`: correct the separately stale upgrade-verifier inventory, including existing `outlook.readiness`; retain existing inventory checks (see the later N3 duplicate caveat) and bind the positive check to actual reviewed plugin registration/manifest.
 
 The final independent Claude Fable 5 / Bedrock reviewer passed 104 focused tests across the harness and two verifier suites. Its report is `/private/tmp/clawx-ga-integration-review-20260908/artifacts/REVIEW.md`; provider/model provenance matched. The author receipt is `/private/tmp/clawx-ga-integration-20260908/artifacts/INTEGRATION_RECEIPT.md`. Both are private operational evidence.
 

@@ -133,3 +133,9 @@ The September 8 auto-d development setup used portable **Node 24.20.0**, **pnpm 
 6. Return code through an isolated worktree, focused checks and independent review. Record source/tool versions, paths, timestamps, native exit/counts and limitations in a private receipt; commit sanitized findings to the existing bug report. A development test still does not prove the installed package, Windows 10/11 or the principal's unaided workflow.
 
 Evidence: [native source/blocker handoff](../bugs/CLWX-106-installed-verifier-identity.md), [setup failure and recovery](../bugs/CLWX-25-windows-lab-repeatability.md). The remaining SQLite lifetime repair has its own source owner; this procedure does not declare its result green.
+
+### September 8 transfer and process-recovery controls
+
+Use legacy SCP `-O` through the known-host IAP SSH route for this Server image. It copied the four native verifier/control files in 6.8s after the default SCP protocol failed. A piped base64/PowerShell `Console.In.ReadToEnd()` fallback stalled and left a guest PowerShell process; do not use it as the default transfer. Bind the received source with SHA256 before execution. When an encoded command exceeds Windows command-length limits, copy the `.ps1` and use `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <owned-path>`; retain the failed command receipt separately.
+
+Process recovery is limited to verified owned PIDs/process groups. Never use broad `pkill -f` patterns for `gcloud`, `ssh`, `tunnel-through-iap`, `node` or app names. An author violated this boundary; root stopped that author group, checked existing tunnels, restored the original CDP forwards and stopped only the surviving guest transfer PID whose command line matched this task. Root then completed native proof without reinstalling dependencies. See [CLWX-25](../bugs/CLWX-25-windows-lab-repeatability.md) for receipts and the exact-source results.

@@ -622,26 +622,26 @@
     "NEW-1": 133,
     "NEW-2": 134
   },
-  "updatedAt": "2026-09-08T16:46:51.453457+00:00",
+  "updatedAt": "2026-09-08T17:11:42.526488Z",
   "snapshotAt": "2026-09-08T15:40:04.348123+00:00",
   "readiness": "RED",
-  "sourceCandidate": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
+  "sourceCandidate": "99468423e78d90ef75a49ac5d7b52939caf9e808",
   "privateVerification": "artifacts/ga-fable-20260908/sprint-loop/sprint-verification.json",
-  "boardExportVerifiedAt": "2026-09-08T15:40:04.348123+00:00",
+  "boardExportVerifiedAt": "2026-09-08T17:13:04.833483+00:00",
   "boardIssueCount": 134,
   "executionCheckpoint": {
     "browserReview": "APPROVE; integrated in1d745567",
     "artifactHarnessReview": "APPROVE; integrated",
     "installedVerifierReview": "APPROVE; integrated",
     "integrationReview": "APPROVE104focused",
-    "sourceCandidate": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
+    "sourceCandidate": "99468423e78d90ef75a49ac5d7b52939caf9e808",
     "fullUnit": {
       "passed": 2327,
       "failed": 0,
       "skipped": 29,
       "source": "1d7455673774fd70c086b41b405c8ece868ce302"
     },
-    "installedArtifact": "moe.25 only; moe.26 build34252050616 failed native preflight",
+    "installedArtifact": "moe.25 only; moe.26 build34255425275 running after native lifetime repair",
     "windowsOwnerHold": "RELEASED; sole root operator",
     "macGuiHold": "HELD",
     "microsoftBrowser": "moe25 assisted account/inbox and two synthetic Forms previews PASS; Graph unconfigured",
@@ -652,20 +652,50 @@
       "Todo": 10,
       "Ready": 3
     },
-    "nativeRepair": "seed fixed; sole Claude db-lifetime lane on prepared auto-d investigates remaining SQLite teardown",
-    "nativeRepairReview": "APPROVE_29_FOCUSED_TESTS_AT_5785E570",
-    "priorNativePreflight": {
-      "passed": 2297,
-      "failed": 2,
-      "skipped": 57,
-      "source": "1d745567"
-    },
+    "nativeRepair": "99468423 owned child fix PASS on actual Windows; root native operator after author containment",
+    "nativeRepairReview": "APPROVE_33_FOCUSED_PLUS_FALSIFIERS_AT_99468423",
     "nativePreflight": {
-      "status": "FAIL",
-      "runId": 34252050616,
-      "passed": 2304,
-      "failed": 1,
-      "skipped": 57
+      "status": "RUNNING",
+      "runId": 34255425275,
+      "source": "99468423e78d90ef75a49ac5d7b52939caf9e808"
+    },
+    "priorNativePreflights": [
+      {
+        "passed": 2297,
+        "failed": 2,
+        "skipped": 57,
+        "source": "1d745567"
+      },
+      {
+        "status": "FAIL",
+        "runId": 34252050616,
+        "passed": 2304,
+        "failed": 1,
+        "skipped": 57
+      }
+    ],
+    "nativeFocusedProof": {
+      "source": "99468423e78d90ef75a49ac5d7b52939caf9e808",
+      "environment": "auto-d Windows Server2022; Node24.20.0; pnpm10.33.4; locked OpenClaw2026.9.2",
+      "normalTemp": {
+        "passed": 33,
+        "failed": 0,
+        "exit": 0,
+        "suiteSeconds": 16.22
+      },
+      "shortTemp": {
+        "passed": 23,
+        "failed": 0,
+        "exit": 0,
+        "suiteSeconds": 16.35
+      },
+      "controlA": "IN_PROCESS_EPERM",
+      "controlB": "EXACT_TEMP_DB_CLOSED_TRUE_THEN_RM_OK",
+      "controlC": "CHILD_LIFETIME_VERIFIER_PASS",
+      "rootTypecheckExit": 0,
+      "independentReview": "APPROVE_33_FOCUSED_PLUS_FALSIFIERS",
+      "reviewTask": "moe26-db-lifetime-review",
+      "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/native-db-root/"
     }
   }
 }
