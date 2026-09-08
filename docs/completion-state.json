@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T18:57:53.318826+00:00",
+  "updatedAt": "2026-09-08T19:20:26.379216+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -2531,15 +2531,6 @@
         "card": "CLWX-135",
         "model": "claude-fable-5",
         "provider": "bedrock"
-      },
-      {
-        "task": "durable-controller-review",
-        "phase": "RUNNING",
-        "worktree": "/private/tmp/clawx-controller-review-20260908",
-        "source": "5b051f4c",
-        "card": "CLWX-25",
-        "model": "claude-fable-5",
-        "provider": "bedrock"
       }
     ],
     "budgetAuthorization": {
@@ -3964,8 +3955,52 @@
       "model": "claude-fable-5",
       "provider": "bedrock",
       "testsPassed": 23,
-      "independentReview": "RUNNING",
-      "deployed": false
+      "independentReview": "APPROVE_23_TESTS_AND_MUTATION_CONTROLS",
+      "deployed": true,
+      "integrated": "2afde150"
+    },
+    "durableControllerDeployment": {
+      "source": "5b051f4c",
+      "integrated": "2afde150",
+      "status": "BOOTSTRAP_AND_AUTHENTICATED_PROBE_PASS_DURABILITY_PENDING",
+      "instance": "clawx-test-controller-20260908",
+      "instanceId": "1706114158640883022",
+      "targets": [
+        "clawx-lab-auto-d-20260908"
+      ],
+      "attachedIdentity": "dedicated scoped service account",
+      "privateReceipt": "artifacts/ga-fable-20260908/windows-lab/controller-live/bootstrap-controller-a-20260908.receipt.json",
+      "guestHostkeyBootstrap": "API guest attributes remained404 after restart; first-trust accept-new through IAP to pinned controller ID, subsequent strict checking; guest key pinned from previous trusted host record",
+      "originalVmTouched": false,
+      "probe": {
+        "result": "PASS",
+        "endedAt": "2026-09-08T19:14:42+00:00",
+        "targetIdentity": "PASS",
+        "sshBanner": "PASS",
+        "authenticatedMarker": "PASS_EXIT0",
+        "denied3389": "BLOCKED_IAM_4033",
+        "credentialSource": "expected attached service account, fresh isolated Cloud SDK config",
+        "privateReceipt": "artifacts/ga-fable-20260908/windows-lab/controller-live/controller-first-probe-readback.json"
+      },
+      "guestPublicKeyAuthorization": "dedicated public key appended to auto-d metadata; prior metadata and keys preserved; verified readback",
+      "durability": {
+        "operatorSshDisconnect": {
+          "result": "PASS",
+          "endedAt": "2026-09-08T19:16:55+00:00",
+          "receipt": "artifacts/ga-fable-20260908/windows-lab/controller-live/operator-disconnect-probe-readback.json"
+        },
+        "controllerGracefulStopStart": {
+          "result": "PASS",
+          "endedAt": "2026-09-08T19:19:32+00:00",
+          "receipt": "artifacts/ga-fable-20260908/windows-lab/controller-live/controller-after-restart-probe-readback.json"
+        },
+        "identityRenewal": "NOT_RUN",
+        "macSleep": "NOT_RUN",
+        "guestReboot": "NOT_RUN",
+        "overnight": "NOT_RUN",
+        "iamRevocation": "NOT_RUN"
+      },
+      "scheduler": "OUT_OF_SCOPE_FIRST_CLI"
     }
   }
 }

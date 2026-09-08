@@ -32,7 +32,7 @@ and installer acceptance remain their own workflows.
 | Identity | NEW dedicated service account attached with `--scopes=cloud-platform`; effective permissions controlled entirely by IAM |
 | IAM | NEW custom role with exactly `compute.instances.get` + `compute.instances.list`, plus per-target `roles/iap.tunnelResourceAccessor` conditioned on `destination.port == 22`. No Editor/Owner/InstanceAdmin, no project metadata writes, no key files |
 | SSH keys | `block-project-ssh-keys=TRUE`; the root-supplied operator **public** key is provisioned via instance metadata. Private keys and tokens never enter cloud metadata, plans or receipts |
-| Windows guests | unchanged: no service account attached, guest SSH identities untouched |
+| Windows guests | no service account attached; root authorizes a dedicated controller SSH public key on the allowlisted guest while preserving prior keys |
 
 ### Why the IAP grant uses REST, not a gcloud command
 
@@ -67,10 +67,10 @@ grant is missing.
    /SA/role/firewall names, allowlisted targets with exact numeric instance
    IDs and guest SSH usernames, operator PUBLIC SSH key.
 3. Controller guest tools: `gcloud` and OpenSSH client must exist on the
-   controller (Debian GCE images ship neither Cloud SDK nor guarantee the
-   ssh client version you need — root installs/verifies via apt as a
-   documented prerequisite, e.g. `google-cloud-cli openssh-client`). The
-   probe fails with an explicit status if either tool is absent.
+   controller. Inspect the pinned image instead of assuming tools are absent:
+   this deployment already had `/usr/bin/gcloud` and `/usr/bin/ssh`. Install
+   missing tools through the documented package manager only if needed.
+   The probe fails with an explicit status if either tool is absent.
 4. Root places the Windows guest **private** key and a pinned known_hosts
    file on the controller privately. The known_hosts entry must use the
    target VM name (the probe pins `HostKeyAlias=<target-name>`), e.g.
@@ -142,16 +142,11 @@ tunnel/ssh processes remain (owned PIDs from the receipt only — never
 pattern-kill `gcloud`/`ssh`), read the newest receipt and tunnel log, then
 remove `locks/<target>.lock.json` deliberately.
 
-## What is NOT proven yet (live acceptance NOT_RUN)
+## Remaining durability acceptance
 
-Source-level tests pass; no cloud resource has been touched by this CLI.
-Remaining live evidence, owned by root after independent review:
-
-- `bootstrap` PASS receipt with readback IDs; controller cost acknowledged
-  (e2-medium bills while RUNNING).
-- Controller `probe` PASS against `clawx-lab-auto-d-20260908` with **no
-  personal user credentials available** (fresh attached-SA proof), including
-  the denied-port control.
+Live bootstrap and the first controller-side authenticated probe now pass
+(see dated evidence below). The e2-medium controller bills while RUNNING.
+Remaining evidence, owned by root:
 - Durability sequence from the runbook: probe after operator-credential
   expiry/renewal, after Mac disconnect/sleep, after controller restart, after
   a disposable guest reboot; overnight soak beside product acceptance; and
@@ -161,3 +156,18 @@ Remaining live evidence, owned by root after independent review:
 - IAP's documented ~1h inactivity timeout still applies per tunnel; this
   controller changes the *identity* durability, not network invariants.
   Microsoft/tenant sign-in remains a separate account-holder concern.
+
+
+## First live deployment — September 8, 2026
+
+Independently reviewed source `5b051f4c` (23 behavioral tests plus two mutation falsifiers) integrated as `2afde150`. Root bootstrap `controller-a-20260908` passed all resource readbacks at19:02:02UTC: controller ID1706114158640883022, dedicated service account, the two discovery permissions, per-auto-d SSH-port IAP condition and isolated controller firewall. The original Windows VM was excluded. Private receipt: `artifacts/ga-fable-20260908/windows-lab/controller-live/bootstrap-controller-a-20260908.receipt.json`.
+
+Operator host-key retrieval returned HTTP 404, including after enabling guest attributes and gracefully stopping/starting only the new controller. Host-key publication through the API remains unproven. Root made one first-trust SSH connection through authenticated IAP to the API-pinned new instance, with a dedicated empty private known_hosts file and `accept-new`; all later operator connections used that recorded key with strict checking. This is recorded first trust, not an API-retrieved host-key proof. No product job or stakeholder state was on the restarted controller. [Google guest-attributes documentation](https://cloud.google.com/compute/docs/metadata/manage-guest-attributes) describes the API channel that did not produce a key here.
+
+The restricted service account cannot write Google guest-agent telemetry to Cloud Logging. The serial log records that denial; it is not an SSH or product failure and no broader IAM role was added merely to silence it. Local private operator/probe receipts remain the evidence source.
+
+At **19:14:42 UTC**, the deployed CLI passed its first real controller-side probe against auto-d (instance ID4908385059495321872): exact target identity, Windows SSH protocol, authenticated marker with native exit 0, and unauthorized port3389 denied by IAP4033. The CLI verified the attached dedicated service account and used a fresh isolated Cloud SDK configuration with personal credential overrides excluded. Reviewed CLI/config transfer hashes and private key permissions also passed. The dedicated guest public key was appended only to auto-d instance metadata with prior entries preserved; the original Windows VM was untouched. Private receipt: `artifacts/ga-fable-20260908/windows-lab/controller-live/controller-first-probe-readback.json`.
+
+This proves independent authenticated access, not a completed job scheduler or long-term durability. Detached operator-SSH disconnect and controller restart checks also pass below; identity renewal, Mac sleep, guest reboot, overnight and IAM revocation acceptance remain separate checks. The product still fails moe.26 Gateway startup under CLWX-135.
+
+At **19:16:55 UTC**, a detached probe finished PASS after its controlling operator SSH session returned and disconnected. At **19:19:32 UTC**, another probe passed after a graceful stop/start of only the new controller, using the same strict host-key pin and retained private configuration. All four checks passed on both runs; unauthorized port3389 remained denied. These are separate observed recovery tests, not simulated credential expiry or overnight proof. Private readbacks: `operator-disconnect-probe-readback.json` and `controller-after-restart-probe-readback.json` in the controller-live evidence directory.
