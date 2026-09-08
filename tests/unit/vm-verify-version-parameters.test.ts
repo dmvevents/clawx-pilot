@@ -9,6 +9,13 @@
  * (upload, install, probes) are never invoked here; installed execution stays
  * NOT_RUN in this lane. Every positive assertion is paired with a negative
  * control so a permanently-passing validator cannot masquerade as coverage.
+ *
+ * Review hardening (2026-09-08, F1/F2/F3): identity binds are exact —
+ * `--manifest` is required for every non-legacy invocation, the installer
+ * filename bind and the FileVersion assert are delimiter-anchored (moe.3 must
+ * never bind moe.30), explicitly empty `--exe=`/`--version=` are refused at
+ * both entrypoints, and a digit-free `--expect-file-version` is refused. The
+ * falsifiers below are pinned from the independent review of 9bc9221b.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -36,6 +43,7 @@ type Config = {
   gcsDest: string;
   verifyTag: string;
   expectFileVersion: string;
+  expectFileVersionPattern: string;
   evidenceDir: string;
   manifest: null | { path: string; version: string; installerName: string; installerSha256: string };
 };
@@ -55,10 +63,26 @@ function fakeInstaller(dir: string, name: string, body = 'not-a-real-installer')
   return { path, sha256: createHash('sha256').update(body).digest('hex') };
 }
 
+function writeManifest(dir: string, version: string, installerName: string, sha256: string): string {
+  const path = join(dir, `release-manifest-${Math.random().toString(36).slice(2)}.json`);
+  writeFileSync(path, JSON.stringify({
+    version,
+    artifacts: [{ name: installerName, kind: 'installer', sha256 }],
+  }));
+  return path;
+}
+
 function runPrintConfig(script: string, args: string[]) {
   // PATH is stripped of nothing: --print-config exits before any network tool
   // is reachable, so a hermetic run proves the ordering rather than mocking it.
   return spawnSync('bash', [script, '--print-config', ...args], { encoding: 'utf8' });
+}
+
+// Evaluate the engine-resolved ERE with the SAME consumer the phases use
+// (grep -E), not a JS RegExp approximation.
+function grepMatches(pattern: string, input: string): boolean {
+  const result = spawnSync('grep', ['-Eq', pattern], { encoding: 'utf8', input });
+  return result.status === 0;
 }
 
 function parseConfig(stdout: string): Config {
@@ -74,7 +98,8 @@ describe('vm-verify installed-acceptance producer: version parameters', () => {
   posixControllerIt('resolves an explicit candidate identity with no moe.19 residue', () => {
     withTempDir((dir) => {
       const installer = fakeInstaller(dir, 'Ministry of Education-0.4.3-moe.30-win-x64.exe');
-      const result = runPrintConfig(enginePath, ['--exe', installer.path, '--version', '0.4.3-moe.30']);
+      const manifestPath = writeManifest(dir, '0.4.3-moe.30', 'Ministry of Education-0.4.3-moe.30-win-x64.exe', installer.sha256);
+      const result = runPrintConfig(enginePath, ['--exe', installer.path, '--version', '0.4.3-moe.30', '--manifest', manifestPath]);
 
       expect(result.status).toBe(0);
       const config = parseConfig(result.stdout);
@@ -87,7 +112,7 @@ describe('vm-verify installed-acceptance producer: version parameters', () => {
         gcsDest: 'gs://clawx-rc-artifacts-622687731621/0.4.3-moe.30/',
         verifyTag: '0.4.3-moe.30',
         expectFileVersion: '0.4.3-moe.30',
-        manifest: null,
+        manifest: { version: '0.4.3-moe.30', installerSha256: installer.sha256 },
       });
       expect(config.installer.sha256).toBe(installer.sha256);
       expect(JSON.stringify(config)).not.toContain('moe.19');
@@ -99,9 +124,11 @@ describe('vm-verify installed-acceptance producer: version parameters', () => {
   posixControllerIt('honours explicit guest object and bucket overrides', () => {
     withTempDir((dir) => {
       const installer = fakeInstaller(dir, 'Ministry of Education-0.4.3-moe.30-win-x64.exe');
+      const manifestPath = writeManifest(dir, '0.4.3-moe.30', 'Ministry of Education-0.4.3-moe.30-win-x64.exe', installer.sha256);
       const result = runPrintConfig(enginePath, [
         '--exe', installer.path,
         '--version', '0.4.3-moe.30',
+        '--manifest', manifestPath,
         '--guest-exe-name', 'moe30.exe',
         '--gcs-dest', 'gs://example-bucket/moe30/',
         '--expect-file-version', 'moe.30',
@@ -143,7 +170,8 @@ describe('vm-verify installed-acceptance producer: version parameters', () => {
   posixControllerIt('refuses a version whose string is absent from the installer filename', () => {
     withTempDir((dir) => {
       const installer = fakeInstaller(dir, 'Ministry of Education-0.4.3-moe.19-win-x64.exe');
-      const result = runPrintConfig(enginePath, ['--exe', installer.path, '--version', '0.4.3-moe.30']);
+      const manifestPath = writeManifest(dir, '0.4.3-moe.30', 'Ministry of Education-0.4.3-moe.30-win-x64.exe', installer.sha256);
+      const result = runPrintConfig(enginePath, ['--exe', installer.path, '--version', '0.4.3-moe.30', '--manifest', manifestPath]);
 
       expect(result.status).toBe(2);
       const config = parseConfig(result.stdout);
@@ -151,6 +179,67 @@ describe('vm-verify installed-acceptance producer: version parameters', () => {
       expect(config.reason).toContain('does not contain --version');
       expect(config.installer.sha256).toBeNull();
     });
+  });
+
+  posixControllerIt('refuses a prefix-truncated identity: moe.3 never binds moe.30, 0.4.3 never binds a 0.4.3-* pre-release', () => {
+    // Pinned falsifiers from the independent review of 9bc9221b (F1): the old
+    // substring bind accepted both of these against the moe.30 installer.
+    withTempDir((dir) => {
+      const installer = fakeInstaller(dir, 'Ministry of Education-0.4.3-moe.30-win-x64.exe');
+      for (const version of ['0.4.3-moe.3', '0.4.3']) {
+        const manifestPath = writeManifest(dir, version, `Ministry of Education-${version}-win-x64.exe`, installer.sha256);
+        const result = runPrintConfig(enginePath, ['--exe', installer.path, '--version', version, '--manifest', manifestPath]);
+
+        expect(result.status, version).toBe(2);
+        const config = parseConfig(result.stdout);
+        expect(config.status).toBe('FAIL');
+        expect(config.reason).toContain(`-${version}-win`);
+        expect(config.installer.sha256).toBeNull();
+      }
+    });
+  });
+
+  posixControllerIt('requires the release manifest for every non-legacy invocation (both entrypoints)', () => {
+    withTempDir((dir) => {
+      const installer = fakeInstaller(dir, 'Ministry of Education-0.4.3-moe.30-win-x64.exe');
+
+      const engineRun = runPrintConfig(enginePath, ['--exe', installer.path, '--version', '0.4.3-moe.30']);
+      expect(engineRun.status).toBe(2);
+      expect(engineRun.stdout).toBe('');
+      expect(engineRun.stderr).toContain('--manifest is required for any non-legacy invocation');
+
+      const wrapperRun = runPrintConfig(wrapperPath, ['--exe', installer.path, '--version', '0.4.3-moe.30']);
+      expect(wrapperRun.status).toBe(2);
+      expect(wrapperRun.stderr).toContain('--manifest');
+      // Negative control: the legacy no-argument engine invocation stays
+      // manifest-free (covered above: exit 0/3, never the manifest config error).
+    });
+  });
+
+  posixControllerIt('refuses explicitly empty --exe/--version instead of inheriting the moe.19 identity (both entrypoints)', () => {
+    // Pinned falsifier from the independent review of 9bc9221b (F2):
+    // `--exe= --version=` (unset CI variables) previously resolved
+    // legacyDefaults: true through BOTH entrypoints.
+    const engineEquals = runPrintConfig(enginePath, ['--exe=', '--version=']);
+    expect(engineEquals.status).toBe(2);
+    expect(engineEquals.stdout).toBe('');
+    expect(engineEquals.stderr).toContain('must be non-empty');
+
+    const engineBare = runPrintConfig(enginePath, ['--exe', '', '--version', '']);
+    expect(engineBare.status).toBe(2);
+    expect(engineBare.stdout).toBe('');
+    expect(engineBare.stderr).toContain('must be non-empty');
+
+    const wrapperEquals = runPrintConfig(wrapperPath, ['--exe=', '--version=']);
+    expect(wrapperEquals.status).toBe(2);
+    expect(wrapperEquals.stdout).toBe('');
+    expect(wrapperEquals.stderr).toContain('non-empty value');
+
+    // Bare-flag empty values pass the wrapper's presence check but are
+    // refused by the engine's explicit-empty check before any cloud action.
+    const wrapperBare = runPrintConfig(wrapperPath, ['--exe', '', '--version', '', '--manifest', 'unused.json']);
+    expect(wrapperBare.status).toBe(2);
+    expect(wrapperBare.stderr).toContain('must be non-empty');
   });
 
   posixControllerIt('refuses a partial identity instead of inheriting moe.19 defaults', () => {
@@ -178,6 +267,9 @@ describe('vm-verify installed-acceptance producer: version parameters', () => {
         { args: ['--exe', installer.path, '--version', '0.4.3-moe.30', '--manifest', join(dir, 'absent.json')], expect: '--manifest not found' },
         { args: ['--exe', installer.path, '--version', '0.4.3-moe.30', '--upload-everything'], expect: 'unknown argument' },
         { args: ['--exe'], expect: '--exe needs a value' },
+        // Review F3: a delimiter-only expectation would match ANY FileVersion.
+        { args: ['--exe', installer.path, '--version', '0.4.3-moe.30', '--expect-file-version', '.'], expect: '--expect-file-version must contain a digit' },
+        { args: ['--exe', installer.path, '--version', '0.4.3-moe.30', '--expect-file-version', '-'], expect: '--expect-file-version must contain a digit' },
       ];
 
       for (const testCase of cases) {
@@ -254,7 +346,8 @@ describe('vm-verify installed-acceptance producer: version parameters', () => {
 
   posixControllerIt('reports BLOCKED, never PASS, when the named installer is absent', () => {
     withTempDir((dir) => {
-      const result = runPrintConfig(enginePath, ['--exe', join(dir, 'Ministry of Education-0.4.3-moe.30-win-x64.exe'), '--version', '0.4.3-moe.30']);
+      const manifestPath = writeManifest(dir, '0.4.3-moe.30', 'Ministry of Education-0.4.3-moe.30-win-x64.exe', 'a'.repeat(64));
+      const result = runPrintConfig(enginePath, ['--exe', join(dir, 'Ministry of Education-0.4.3-moe.30-win-x64.exe'), '--version', '0.4.3-moe.30', '--manifest', manifestPath]);
 
       expect(result.status).toBe(3);
       const config = parseConfig(result.stdout);
@@ -278,7 +371,8 @@ describe('vm-verify installed-acceptance producer: version parameters', () => {
         chmodSync(toolPath, 0o755);
       }
 
-      const result = spawnSync('bash', [enginePath, '--print-config', '--exe', installer.path, '--version', '0.4.3-moe.30'], {
+      const manifestPath = writeManifest(dir, '0.4.3-moe.30', 'Ministry of Education-0.4.3-moe.30-win-x64.exe', installer.sha256);
+      const result = spawnSync('bash', [enginePath, '--print-config', '--exe', installer.path, '--version', '0.4.3-moe.30', '--manifest', manifestPath], {
         encoding: 'utf8',
         env: { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ''}` },
       });
@@ -291,9 +385,10 @@ describe('vm-verify installed-acceptance producer: version parameters', () => {
     });
   });
 
-  posixControllerIt('version-neutral wrapper requires an explicit identity and forwards it unchanged', () => {
+  posixControllerIt('version-neutral wrapper requires an explicit identity plus manifest and forwards them unchanged', () => {
     withTempDir((dir) => {
       const installer = fakeInstaller(dir, 'Ministry of Education-0.4.3-moe.30-win-x64.exe');
+      const manifestPath = writeManifest(dir, '0.4.3-moe.30', 'Ministry of Education-0.4.3-moe.30-win-x64.exe', installer.sha256);
 
       const missing = runPrintConfig(wrapperPath, []);
       expect(missing.status).toBe(2);
@@ -304,13 +399,47 @@ describe('vm-verify installed-acceptance producer: version parameters', () => {
       expect(partial.status).toBe(2);
       expect(partial.stderr).toContain('requires BOTH --exe and --version');
 
-      const forwarded = runPrintConfig(wrapperPath, ['--exe', installer.path, '--version', '0.4.3-moe.30', '--guest-exe-name', 'moe30.exe']);
+      const forwarded = runPrintConfig(wrapperPath, ['--exe', installer.path, '--version', '0.4.3-moe.30', '--manifest', manifestPath, '--guest-exe-name', 'moe30.exe']);
       expect(forwarded.status).toBe(0);
       expect(parseConfig(forwarded.stdout)).toMatchObject({
         legacyDefaults: false,
         version: '0.4.3-moe.30',
         guestExeName: 'moe30.exe',
+        manifest: { version: '0.4.3-moe.30' },
       });
+    });
+  });
+
+  posixControllerIt('delimiter-anchors the FileVersion assert against the real installed format', () => {
+    // The pattern under test is the one the engine resolved and will feed to
+    // grep -E in Phase 4 (on-disk FileVersion) and Phase 6 (running-binary
+    // attest); it is evaluated here with grep itself, not a JS approximation.
+    // Real installed FileVersions are the full semver string (moe.15/17/18/20
+    // evidence: e.g. "0.4.3-moe.20").
+    withTempDir((dir) => {
+      const installer = fakeInstaller(dir, 'Ministry of Education-0.4.3-moe.30-win-x64.exe');
+      const manifestPath = writeManifest(dir, '0.4.3-moe.30', 'Ministry of Education-0.4.3-moe.30-win-x64.exe', installer.sha256);
+      const result = runPrintConfig(enginePath, ['--exe', installer.path, '--version', '0.4.3-moe.30', '--manifest', manifestPath]);
+      expect(result.status).toBe(0);
+      const pattern = parseConfig(result.stdout).expectFileVersionPattern;
+
+      expect(grepMatches(pattern, '0.4.3-moe.30')).toBe(true);
+      // Phase-6 attest line shape: "<FileVersion>|<path>".
+      expect(grepMatches(pattern, '0.4.3-moe.30|C:\\Users\\clawxtest\\AppData\\Local\\Programs\\Ministry of Education\\Ministry of Education.exe')).toBe(true);
+      // Pinned falsifiers (review F1): truncated/extended identities must not bind.
+      expect(grepMatches(pattern, '0.4.3-moe.300')).toBe(false);
+      expect(grepMatches(pattern, '10.4.3-moe.30')).toBe(false);
+      expect(grepMatches(pattern, '0.4.3-moe.30.1')).toBe(false);
+      expect(grepMatches(pattern, '0.4.3-moe.3')).toBe(false);
+
+      // Legacy negative control: the historical "moe.19" expectation still
+      // accepts the real moe.19 FileVersion, but no longer a superstring.
+      const legacy = runPrintConfig(enginePath, []);
+      const legacyPattern = parseConfig(legacy.stdout).expectFileVersionPattern;
+      expect(grepMatches(legacyPattern, '0.4.3-moe.19')).toBe(true);
+      expect(grepMatches(legacyPattern, '0.4.3-moe.19|C:\\x')).toBe(true);
+      expect(grepMatches(legacyPattern, '0.4.3-moe.190')).toBe(false);
+      expect(grepMatches(legacyPattern, '0.4.3-moe.191')).toBe(false);
     });
   });
 
@@ -322,8 +451,8 @@ describe('vm-verify installed-acceptance producer: version parameters', () => {
     expect(engine).toContain('scp -P "$SSH_PORT" "$EXE" "$GUEST_USER@localhost:Downloads/$GUEST_EXE_NAME"');
     expect(engine).toContain('GUEST_SHA=$(gpwsh "(Get-FileHash \'$GUEST_DL\\\\$GUEST_EXE_NAME\').Hash"');
     expect(engine).toContain('[ "$GUEST_SHA" = "$SHA" ] || { log "FAIL: guest sha mismatch ($GUEST_SHA)"; exit 1; }');
-    expect(engine).toContain('grep -qF "$EXPECT_FILE_VERSION" || { log "FAIL: on-disk FileVersion does not contain $EXPECT_FILE_VERSION"; exit 1; }');
-    expect(engine).toContain('echo "$RUN_ATTEST" | grep -qF "$EXPECT_FILE_VERSION"');
+    expect(engine).toContain('grep -Eq "$EXPECT_FILE_VERSION_RE" || { log "FAIL: on-disk FileVersion does not contain the delimited token $EXPECT_FILE_VERSION"; exit 1; }');
+    expect(engine).toContain('echo "$RUN_ATTEST" | grep -Eq "$EXPECT_FILE_VERSION_RE"');
     expect(engine).toContain('guestPath: env.GUEST_DL && env.GUEST_EXE_NAME ? `${env.GUEST_DL}\\\\${env.GUEST_EXE_NAME}` : null');
     expect(engine).toContain('gsutil ls "${GCS_DEST}" 2>/dev/null | grep -qF "$(basename "$EXE")"');
 
