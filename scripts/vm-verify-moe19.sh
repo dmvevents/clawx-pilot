@@ -1,5 +1,21 @@
 #!/usr/bin/env bash
-# vm-verify-moe19.sh — THE single command for the moe.19 Windows VM verify.
+# vm-verify-moe19.sh — the Windows VM installed-verify engine.
+#
+# v3 (version-parameterized, 2026-09-08; identity binds hardened same day per
+# independent review F1/F2/F3): the moe.19 installer/version/GCS object names
+# are no longer hardcoded assumptions — they are explicit parameters
+# (--exe/--version/--guest-exe-name/--gcs-dest/--manifest), and the historical
+# moe.19 values apply ONLY when neither --exe nor --version appears on the
+# command line at all (byte-compatible legacy invocation; an explicitly empty
+# --exe=/--version= is a config error, never an inherited identity). Identity
+# binds are exact, not blind substrings: the installer basename must carry the
+# delimited "-<version>-win" token, the FileVersion asserts are delimiter-
+# anchored (moe.3 never accepts moe.30), and --manifest is REQUIRED for every
+# non-legacy invocation so version/name/sha256 are equality-checked against
+# the release manifest before a single cloud call. --print-config resolves +
+# validates the configuration and exits without touching gcloud, SSH or the
+# evidence tree. Prefer the version-neutral entrypoint
+# scripts/vm-verify-installed.sh for every post-moe.19 candidate.
 #
 # v2 (Codex-hardened + VLM-desktop directive, 2026-09-06):
 #  - HIGH fix: installer exit is ENFORCED (Start-Process -Wait -PassThru);
@@ -20,8 +36,13 @@
 # never runs release:manifest:publish; never touches the running Mac app;
 # guest launches are VISIBLE scheduled tasks, never Hidden (atlas §16).
 #
-# Usage: bash scripts/vm-verify-moe19.sh
-# Exit: 0 scripted phases green; 3 BLOCKED (VM/artifact/prereq); 1 FAIL.
+# Usage: bash scripts/vm-verify-moe19.sh                       # legacy moe.19 defaults
+#        bash scripts/vm-verify-moe19.sh --exe <installer.exe> --version <app-version> \
+#          --manifest <release-manifest.json> [--guest-exe-name <name>.exe] \
+#          [--gcs-dest gs://bucket/prefix/] [--expect-file-version <token>]
+#          [--print-config]
+# Exit: 0 scripted phases green (or valid --print-config); 2 config/mismatch
+#       (fail-closed); 3 BLOCKED (VM/artifact/prereq); 1 FAIL.
 set -euo pipefail
 
 VM="clawx-win-rc-20260609"
@@ -33,10 +54,143 @@ IAP_PROBE_SSH_PORT="${CLAWX_IAP_PROBE_SSH_PORT:-25322}"
 IAP_PROBE_CONTROL_PORT="${CLAWX_IAP_PROBE_CONTROL_PORT:-25399}"
 GUEST_USER="${CLAWX_VM_USER:-clawxtest}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-EXE="$REPO_ROOT/release/Ministry of Education-0.4.3-moe.19-win-x64.exe"
-GCS_DEST="gs://clawx-rc-artifacts-622687731621/moe19/"
+
+usage() {
+  cat >&2 <<'USAGE'
+usage: bash scripts/vm-verify-moe19.sh                         # legacy moe.19 defaults
+       bash scripts/vm-verify-moe19.sh --exe <installer.exe> --version <app-version>
+         --manifest <release-manifest.json> [--guest-exe-name <name>.exe]
+         [--gcs-dest gs://bucket/prefix/] [--expect-file-version <token>]
+         [--print-config]
+Providing exactly one of --exe/--version, or an explicitly empty value for
+either, is a config error (exit 2): the pair binds the artifact to its
+expected identity. --manifest is required for every non-legacy invocation.
+The legacy moe.19 defaults apply only when BOTH --exe and --version are
+entirely absent from the command line.
+USAGE
+}
+
+ARG_EXE=""
+ARG_VERSION=""
+ARG_GUEST_EXE=""
+ARG_GCS_DEST=""
+ARG_MANIFEST=""
+ARG_EXPECT_FILE_VERSION=""
+# Presence is tracked separately from value: an explicitly supplied --exe= or
+# --version= (e.g. unset shell variables in a CI wrapper) is a config error,
+# NEVER a fall-through to the legacy moe.19 identity (review F2).
+EXE_SET=false
+VERSION_SET=false
+PRINT_CONFIG=false
+need_value() { [ $# -ge 2 ] || { echo "config error: $1 needs a value" >&2; usage; exit 2; }; }
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --exe) need_value "$@"; ARG_EXE="$2"; EXE_SET=true; shift 2 ;;
+    --exe=*) ARG_EXE="${1#--exe=}"; EXE_SET=true; shift ;;
+    --version) need_value "$@"; ARG_VERSION="$2"; VERSION_SET=true; shift 2 ;;
+    --version=*) ARG_VERSION="${1#--version=}"; VERSION_SET=true; shift ;;
+    --guest-exe-name) need_value "$@"; ARG_GUEST_EXE="$2"; shift 2 ;;
+    --guest-exe-name=*) ARG_GUEST_EXE="${1#--guest-exe-name=}"; shift ;;
+    --gcs-dest) need_value "$@"; ARG_GCS_DEST="$2"; shift 2 ;;
+    --gcs-dest=*) ARG_GCS_DEST="${1#--gcs-dest=}"; shift ;;
+    --manifest) need_value "$@"; ARG_MANIFEST="$2"; shift 2 ;;
+    --manifest=*) ARG_MANIFEST="${1#--manifest=}"; shift ;;
+    --expect-file-version) need_value "$@"; ARG_EXPECT_FILE_VERSION="$2"; shift 2 ;;
+    --expect-file-version=*) ARG_EXPECT_FILE_VERSION="${1#--expect-file-version=}"; shift ;;
+    --print-config) PRINT_CONFIG=true; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "config error: unknown argument: $1" >&2; usage; exit 2 ;;
+  esac
+done
+
+LEGACY_DEFAULTS=false
+if [ "$EXE_SET" = "false" ] && [ "$VERSION_SET" = "false" ]; then
+  # Byte-compatible legacy invocation: the historical moe.19 identity.
+  LEGACY_DEFAULTS=true
+  ARG_EXE="$REPO_ROOT/release/Ministry of Education-0.4.3-moe.19-win-x64.exe"
+  ARG_VERSION="0.4.3-moe.19"
+  [ -n "$ARG_GUEST_EXE" ] || ARG_GUEST_EXE="moe19.exe"
+  [ -n "$ARG_GCS_DEST" ] || ARG_GCS_DEST="gs://clawx-rc-artifacts-622687731621/moe19/"
+  # The historical asserts matched "moe.19" within the Windows FileVersion,
+  # not the full version string; keep that expectation value. The matcher is
+  # now delimiter-anchored, which still accepts the real installed
+  # FileVersion "0.4.3-moe.19" ("-" delimits the token) while refusing a
+  # prefix-truncated identity such as "…moe.190".
+  [ -n "$ARG_EXPECT_FILE_VERSION" ] || ARG_EXPECT_FILE_VERSION="moe.19"
+  VERIFY_TAG="moe19"
+elif [ "$EXE_SET" = "false" ] || [ "$VERSION_SET" = "false" ]; then
+  echo "config error: --exe and --version must be provided together (no partial identity)" >&2
+  usage
+  exit 2
+elif [ -z "$ARG_EXE" ] || [ -z "$ARG_VERSION" ]; then
+  # Explicitly-supplied empty values (--exe= --version=, or unset shell vars)
+  # must not silently resolve the legacy identity (review F2).
+  echo "config error: --exe and --version must be non-empty — an explicitly empty value is a config error, never the legacy moe.19 identity" >&2
+  usage
+  exit 2
+else
+  VERIFY_TAG="$ARG_VERSION"
+  [ -n "$ARG_GUEST_EXE" ] || ARG_GUEST_EXE="clawx-installer-$ARG_VERSION.exe"
+  [ -n "$ARG_GCS_DEST" ] || ARG_GCS_DEST="gs://clawx-rc-artifacts-622687731621/$ARG_VERSION/"
+  # installed-release-evidence.mjs compares runningApp.version to the manifest
+  # version exactly, so the whole version string is the default assert.
+  [ -n "$ARG_EXPECT_FILE_VERSION" ] || ARG_EXPECT_FILE_VERSION="$ARG_VERSION"
+fi
+EXE="$ARG_EXE"
+VERSION="$ARG_VERSION"
+GUEST_EXE_NAME="$ARG_GUEST_EXE"
+GCS_DEST="$ARG_GCS_DEST"
+EXPECT_FILE_VERSION="$ARG_EXPECT_FILE_VERSION"
+
+# Fail-closed input validation: these values are spliced into PowerShell
+# strings, Windows paths, grep -F patterns and gsutil URIs. Reject anything
+# outside the known-safe alphabet instead of quoting our way around it.
+case "$VERSION" in
+  ''|*[!A-Za-z0-9.-]*) echo "config error: --version must be non-empty and match [A-Za-z0-9.-]+" >&2; exit 2 ;;
+esac
+case "$GUEST_EXE_NAME" in
+  ''|*[!A-Za-z0-9._-]*) echo "config error: --guest-exe-name must be non-empty and match [A-Za-z0-9._-]+" >&2; exit 2 ;;
+  *.exe) : ;;
+  *) echo "config error: --guest-exe-name must end in .exe" >&2; exit 2 ;;
+esac
+case "$GCS_DEST" in
+  gs://*/) : ;;
+  *) echo "config error: --gcs-dest must look like gs://bucket/prefix/" >&2; exit 2 ;;
+esac
+case "$EXPECT_FILE_VERSION" in
+  ''|*[!A-Za-z0-9.-]*) echo "config error: --expect-file-version must be non-empty and match [A-Za-z0-9.-]+" >&2; exit 2 ;;
+esac
+case "$EXPECT_FILE_VERSION" in
+  *[0-9]*) : ;;
+  # "." or "-" alone would turn the FileVersion assert vacuous (review F3).
+  *) echo "config error: --expect-file-version must contain a digit — a delimiter-only value would match any FileVersion" >&2; exit 2 ;;
+esac
+if [ -n "$ARG_MANIFEST" ] && [ ! -f "$ARG_MANIFEST" ]; then
+  echo "config error: --manifest not found: $ARG_MANIFEST" >&2
+  exit 2
+fi
+if [ "$LEGACY_DEFAULTS" = "false" ] && [ -z "$ARG_MANIFEST" ]; then
+  # The release manifest is the exact identity contract (version ==, installer
+  # name ==, sha256 ==). Filename and FileVersion binds are delimiter-anchored
+  # but still name-based; every non-legacy run must therefore carry the
+  # manifest so identity is equality-checked, not inferred (review F1).
+  echo "config error: --manifest is required for any non-legacy invocation — bind the candidate to its release manifest (version, installer name, sha256)" >&2
+  exit 2
+fi
+
+# Delimiter-anchored FileVersion matcher (review F1): the expected value must
+# appear as a whole token — preceded by start-of-line or a non-version
+# character (a leading '-' still delimits, so the historical legacy
+# expectation keeps matching its real installed '<semver>-<tag>' FileVersion),
+# and followed by end-of-line or a character outside [A-Za-z0-9.-] (so
+# 'moe.3' can never accept 'moe.30', and '0.4.3' can never accept
+# '0.4.3-moe.30'). Known real installed FileVersions are the full semver
+# string (moe.15/17/18/20 evidence), so the default full-version expectation
+# matches exactly.
+EXPECT_FILE_VERSION_RE='(^|[^A-Za-z0-9.])'"$(printf '%s' "$EXPECT_FILE_VERSION" | sed 's/[.]/\\./g')"'($|[^A-Za-z0-9.-])'
+
 RUN_TAG="$(date +%Y%m%d-%H%M%S)"
-EVIDENCE_DIR="$REPO_ROOT/skills/laptop/evidence/$(date +%F)-moe19-verify-$RUN_TAG"
+EVIDENCE_DIR="$REPO_ROOT/skills/laptop/evidence/$(date +%F)-$VERIFY_TAG-verify-$RUN_TAG"
 VM_RUN_JSON="$EVIDENCE_DIR/vm-run.json"
 GUEST_DL='C:\Users\'"$GUEST_USER"'\Downloads'
 GUEST_APP='C:\Users\'"$GUEST_USER"'\AppData\Local\Programs\Ministry of Education'
@@ -56,7 +210,7 @@ APP_ASAR_SHA=""
 EVIDENCE_FILES=""
 GUEST_BACKUP_DIR="$GUEST_DL\\clawx-preinstall-backup-$RUN_TAG"
 
-log() { printf '[vm-verify-moe19 %s] %s\n' "$(date +%H:%M:%S)" "$*"; }
+log() { printf '[vm-verify %s %s] %s\n' "$VERIFY_TAG" "$(date +%H:%M:%S)" "$*"; }
 guest() { ssh -o ConnectTimeout=10 -p "$SSH_PORT" "$GUEST_USER@localhost" "$@"; }
 # PowerShell via -EncodedCommand: the bash -> ssh -> Windows-OpenSSH -> cmd
 # quoting stack eats `$` variables in inline -Command strings (live failure
@@ -67,6 +221,104 @@ gpwsh() {
   b64=$(printf '%s' "$1" | iconv -f utf-8 -t utf-16le | base64 | tr -d '\n')
   guest "powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $b64"
 }
+
+# ── Local config validation (shared by --print-config and Phase 0) ──────────
+# The installer basename must carry the expected version as the delimited
+# electron-builder token "-<version>-win" (…-0.4.3-moe.30-win-x64.exe), not a
+# bare substring: '0.4.3-moe.3' must never bind '…-0.4.3-moe.30-win-x64.exe'
+# and '0.4.3' must never bind any '0.4.3-*' pre-release (review F1). A wrong
+# --exe/--version pairing is refused before any hash, upload or VM call. The
+# --manifest cross-check (required for non-legacy) additionally refuses any
+# version/name/sha256 disagreement with the release manifest.
+version_name_ok() {
+  case "$(basename "$EXE")" in
+    *"-$VERSION-win"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+MANIFEST_SUMMARY="null"
+check_manifest() {
+  [ -n "$ARG_MANIFEST" ] || return 0
+  MANIFEST_SUMMARY=$(EXE_NAME="$(basename "$EXE")" LOCAL_SHA="$SHA" EXPECTED_VERSION="$VERSION" MANIFEST_PATH="$ARG_MANIFEST" node -e '
+const fs = require("node:fs");
+const env = process.env;
+let manifest;
+try {
+  manifest = JSON.parse(fs.readFileSync(env.MANIFEST_PATH, "utf8"));
+} catch (error) {
+  console.error(`manifest unreadable: ${error.message}`);
+  process.exit(2);
+}
+const problems = [];
+if (manifest?.version !== env.EXPECTED_VERSION) problems.push(`manifest version ${manifest?.version ?? "(missing)"} != --version ${env.EXPECTED_VERSION}`);
+const artifacts = Array.isArray(manifest?.artifacts) ? manifest.artifacts : [];
+const installer = artifacts.find((a) => a && a.kind === "installer" && /\.exe$/i.test(String(a.name)));
+if (!installer) {
+  problems.push("manifest has no Windows installer artifact");
+} else {
+  if (installer.name !== env.EXE_NAME) problems.push(`manifest installer name ${installer.name} != local ${env.EXE_NAME}`);
+  const manifestSha = String(installer.sha256 ?? "").toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(manifestSha)) problems.push("manifest installer sha256 missing or invalid");
+  else if (manifestSha !== String(env.LOCAL_SHA).toLowerCase()) problems.push(`manifest installer sha256 does not match the local artifact (expected ${manifestSha})`);
+}
+if (problems.length > 0) {
+  console.error(problems.join("; "));
+  process.exit(2);
+}
+console.log(JSON.stringify({ path: env.MANIFEST_PATH, version: manifest.version, installerName: installer.name, installerSha256: String(installer.sha256).toLowerCase() }));
+') || return 2
+}
+
+print_config_json() {
+  CFG_STATUS="$1" CFG_REASON="${2:-}" CFG_EXE="$EXE" CFG_SHA="${SHA:-}" \
+  CFG_VERSION="$VERSION" CFG_GUEST_EXE="$GUEST_EXE_NAME" CFG_GCS_DEST="$GCS_DEST" \
+  CFG_VERIFY_TAG="$VERIFY_TAG" CFG_LEGACY="$LEGACY_DEFAULTS" CFG_MANIFEST="$MANIFEST_SUMMARY" \
+  CFG_EXPECT_FILE_VERSION="$EXPECT_FILE_VERSION" CFG_EVIDENCE_DIR="$EVIDENCE_DIR" \
+  CFG_EXPECT_FILE_VERSION_RE="$EXPECT_FILE_VERSION_RE" \
+  node -e '
+const env = process.env;
+console.log(JSON.stringify({
+  mode: "print-config",
+  status: env.CFG_STATUS,
+  reason: env.CFG_REASON || null,
+  legacyDefaults: env.CFG_LEGACY === "true",
+  installer: {
+    localPath: env.CFG_EXE,
+    name: require("node:path").basename(env.CFG_EXE),
+    sha256: env.CFG_SHA || null,
+  },
+  version: env.CFG_VERSION,
+  guestExeName: env.CFG_GUEST_EXE,
+  gcsDest: env.CFG_GCS_DEST,
+  verifyTag: env.CFG_VERIFY_TAG,
+  expectFileVersion: env.CFG_EXPECT_FILE_VERSION,
+  expectFileVersionPattern: env.CFG_EXPECT_FILE_VERSION_RE,
+  evidenceDir: env.CFG_EVIDENCE_DIR,
+  manifest: env.CFG_MANIFEST && env.CFG_MANIFEST !== "null" ? JSON.parse(env.CFG_MANIFEST) : null,
+}, null, 2));'
+}
+
+# ── --print-config: resolve + validate, then exit. NO cloud, SSH, install or
+# evidence-tree side effects; a failed validation exits nonzero (fail-closed)
+# with the resolved config on stdout for diagnosis.
+if [ "$PRINT_CONFIG" = "true" ]; then
+  if [ ! -f "$EXE" ]; then
+    print_config_json "BLOCKED" "installer not found: $EXE"
+    exit 3
+  fi
+  if ! version_name_ok; then
+    print_config_json "FAIL" "installer filename $(basename "$EXE") does not contain --version $VERSION as the delimited token -$VERSION-win — refusing mismatched artifact"
+    exit 2
+  fi
+  SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
+  if ! check_manifest; then
+    print_config_json "FAIL" "manifest cross-check failed — refusing mismatched version/name/sha256 (see stderr)"
+    exit 2
+  fi
+  print_config_json "OK" ""
+  exit 0
+fi
 
 mkdir -p "$EVIDENCE_DIR"
 
@@ -123,7 +375,7 @@ write_vm_run_json() {
     *) [ "$VM_RUN_RESULT" = "NOT_RUN" ] && VM_RUN_RESULT="FAIL" ;;
   esac
   export VM_RUN_JSON RUN_TAG STARTED_AT COMPLETED_AT VM_RUN_RESULT VM_RUN_EXIT_CODE
-  export EXE SHA GUEST_DL GUEST_SHA GUEST_APP INSTALL_EXIT RUNNING_APP_VERSION RUNNING_APP_PATH
+  export EXE SHA GUEST_DL GUEST_EXE_NAME GUEST_SHA GUEST_APP INSTALL_EXIT RUNNING_APP_VERSION RUNNING_APP_PATH
   export GATEWAY_PORT_READY HOSTAPI_PORT_READY APP_ASAR_SHA
   export EVIDENCE_FILES
   node <<'NODE'
@@ -162,7 +414,7 @@ const data = {
     name: env.EXE ? require('node:path').basename(env.EXE) : null,
     sha256: env.SHA || null,
     localPath: env.EXE || null,
-    guestPath: env.GUEST_DL ? `${env.GUEST_DL}\\moe19.exe` : null,
+    guestPath: env.GUEST_DL && env.GUEST_EXE_NAME ? `${env.GUEST_DL}\\${env.GUEST_EXE_NAME}` : null,
     guestSha256: env.GUEST_SHA || null,
   },
   install: {
@@ -192,8 +444,10 @@ trap write_vm_run_json EXIT
 
 # ── Phase 0 — Mac-side artifact + hash + GCS (idempotent) ────────────────────
 [ -f "$EXE" ] || { log "BLOCKED: installer not found: $EXE"; exit 3; }
+version_name_ok || { log "FAIL: installer filename $(basename "$EXE") does not contain --version $VERSION as the delimited token -$VERSION-win — refusing mismatched artifact"; exit 2; }
 SHA=$(shasum -a 256 "$EXE" | awk '{print $1}')
-log "artifact: $(basename "$EXE") bytes=$(stat -f%z "$EXE") sha256=$SHA"
+check_manifest || { log "FAIL: manifest cross-check failed — refusing mismatched version/name/sha256"; exit 2; }
+log "artifact: $(basename "$EXE") bytes=$(stat -f%z "$EXE") sha256=$SHA version=$VERSION"
 
 # ── Phase 0b — credential gate (before ANY cloud call that costs time) ───────
 # Credentials are proven before the VM status is believed and before the 430MB
@@ -214,7 +468,7 @@ if grep -qiE 'reauthentication|invalid_grant|refreshing your current auth|do(es)
 fi
 rm -f "$GC_ERR"
 
-if ! gsutil ls "${GCS_DEST}" 2>/dev/null | grep -q "moe.19-win-x64.exe"; then
+if ! gsutil ls "${GCS_DEST}" 2>/dev/null | grep -qF "$(basename "$EXE")"; then
   log "uploading to $GCS_DEST ..."
   gsutil cp "$EXE" "$GCS_DEST"
 fi
@@ -243,7 +497,7 @@ if ! nc -z -w3 localhost "$SSH_PORT" 2>/dev/null; then
   log "opening IAP sshd tunnel -> localhost:$SSH_PORT"
   nohup gcloud compute start-iap-tunnel "$VM" 22 \
     --local-host-port="localhost:$SSH_PORT" --zone "$ZONE" --project "$PROJECT" \
-    >/tmp/moe19-tunnel.log 2>&1 & disown
+    >"/tmp/clawx-vm-verify-tunnel-$VERIFY_TAG.log" 2>&1 & disown
   for i in $(seq 1 20); do nc -z -w2 localhost "$SSH_PORT" 2>/dev/null && break; sleep 2; done
 fi
 # nc only proves the LOCAL listener is bound. A tunnel whose credentials have
@@ -271,11 +525,11 @@ scp -P "$SSH_PORT" "$GUEST_USER@localhost:Downloads/clawx-environment-$RUN_TAG.j
 record_evidence_file "environment.json"
 
 # ── Phase 3 — installer to guest + both-hop hash ────────────────────────────
-if ! gpwsh "(Get-FileHash '$GUEST_DL\\moe19.exe' -ErrorAction SilentlyContinue).Hash" | tr -d '\r' | grep -qi "$SHA"; then
+if ! gpwsh "(Get-FileHash '$GUEST_DL\\$GUEST_EXE_NAME' -ErrorAction SilentlyContinue).Hash" | tr -d '\r' | grep -qi "$SHA"; then
   log "copying installer to guest (430MB over IAP — minutes) ..."
-  scp -P "$SSH_PORT" "$EXE" "$GUEST_USER@localhost:Downloads/moe19.exe"
+  scp -P "$SSH_PORT" "$EXE" "$GUEST_USER@localhost:Downloads/$GUEST_EXE_NAME"
 fi
-GUEST_SHA=$(gpwsh "(Get-FileHash '$GUEST_DL\\moe19.exe').Hash" | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+GUEST_SHA=$(gpwsh "(Get-FileHash '$GUEST_DL\\$GUEST_EXE_NAME').Hash" | tr -d '\r' | tr '[:upper:]' '[:lower:]')
 [ "$GUEST_SHA" = "$SHA" ] || { log "FAIL: guest sha mismatch ($GUEST_SHA)"; exit 1; }
 log "sha256 verified BOTH hops"
 
@@ -320,10 +574,10 @@ log "stopping app + gateway processes for a genuinely fresh install/launch"
 gpwsh 'Get-Process | Where-Object { $_.ProcessName -match "Ministry|openclaw" } | Stop-Process -Force -ErrorAction SilentlyContinue; "stopped"' | tr -d '\r'
 sleep 5
 log "silent install /S /CURRENTUSER — exit code ENFORCED (Codex HIGH)"
-INSTALL_EXIT=$(gpwsh '$p = Start-Process -FilePath "C:\Users\'"$GUEST_USER"'\Downloads\moe19.exe" -ArgumentList "/S","/CURRENTUSER" -Wait -PassThru; $p.ExitCode' | tr -d '\r' | tail -1)
+INSTALL_EXIT=$(gpwsh '$p = Start-Process -FilePath "C:\Users\'"$GUEST_USER"'\Downloads\'"$GUEST_EXE_NAME"'" -ArgumentList "/S","/CURRENTUSER" -Wait -PassThru; $p.ExitCode' | tr -d '\r' | tail -1)
 [ "$INSTALL_EXIT" = "0" ] || { log "FAIL: installer exit=$INSTALL_EXIT"; exit 1; }
 log "installer exit 0"
-gpwsh "(Get-Item '$GUEST_APP\\Ministry of Education.exe').VersionInfo.FileVersion" | tr -d '\r' | tee "$EVIDENCE_DIR/post-version.txt" | grep -q "moe.19" || { log "FAIL: on-disk FileVersion not moe.19"; exit 1; }
+gpwsh "(Get-Item '$GUEST_APP\\Ministry of Education.exe').VersionInfo.FileVersion" | tr -d '\r' | tee "$EVIDENCE_DIR/post-version.txt" | grep -Eq "$EXPECT_FILE_VERSION_RE" || { log "FAIL: on-disk FileVersion does not contain the delimited token $EXPECT_FILE_VERSION"; exit 1; }
 record_evidence_file "post-version.txt"
 APP_ASAR_SHA=$(gpwsh "(Get-FileHash '$GUEST_APP\\resources\\app.asar').Hash" | tr -d '\r' | tr '[:upper:]' '[:lower:]' | tail -1)
 log "installed app.asar sha256=$APP_ASAR_SHA"
@@ -364,7 +618,7 @@ for pkg in $PKGS; do
 done
 if [ -n "$MISSING" ]; then log "FAIL: excluded/missing bundled packages:$MISSING"; exit 1; fi
 log "bundled packages all present ($(echo "$PKGS" | wc -w | tr -d ' ') checked -> $PRESENCE)"
-log "NSCC pack present (CLWX-42 — moe.18 probed NONE, moe.19 must be PRESENT)"
+log "NSCC pack present (CLWX-42 — moe.18 probed NONE; every later candidate must be PRESENT)"
 if gpwsh "Test-Path '$GUEST_APP\\resources\\extensions\\moe-principal-assistant\\data\\nscc-2026.txt'" | tr -d '\r' | grep -qi true; then
   echo "nscc-2026.txt=True" >> "$PRESENCE"
 else
@@ -411,7 +665,7 @@ if ! RUN_ATTEST=$(gpwsh '$deadline = (Get-Date).AddSeconds(120); do { $p = Get-P
 fi
 echo "$RUN_ATTEST" | tee "$EVIDENCE_DIR/running-binary-attest.txt"
 record_evidence_file "running-binary-attest.txt"
-echo "$RUN_ATTEST" | grep -q "moe.19" || { log "FAIL: running binary attest = $RUN_ATTEST"; exit 1; }
+echo "$RUN_ATTEST" | grep -Eq "$EXPECT_FILE_VERSION_RE" || { log "FAIL: running binary attest = $RUN_ATTEST (expected FileVersion containing the delimited token $EXPECT_FILE_VERSION)"; exit 1; }
 RUNNING_APP_VERSION="${RUN_ATTEST%%|*}"
 RUNNING_APP_PATH="${RUN_ATTEST#*|}"
 for probe in "9223 electron-cdp" "18789 gateway" "13210 hostapi"; do
@@ -470,14 +724,15 @@ record_evidence_file "$PROBE_JSON"
 # ── Phase 7 — REAL desktop screenshots + VLM grading (owner directive) ──────
 log "desktop capture (interactive session; ~2000px — Bedrock cap)"
 scp -P "$SSH_PORT" "$REPO_ROOT/windows-pilot/scripts/pilot-desktop-screenshot.ps1" "$GUEST_USER@localhost:Downloads/" >/dev/null
-SHOT="$GUEST_DL\\moe19-desktop-$RUN_TAG.png"
+SHOT_NAME="clawx-desktop-$RUN_TAG.png"
+SHOT="$GUEST_DL\\$SHOT_NAME"
 if guest "schtasks /create /f /tn ClawXShot /sc once /st 23:59 /it /tr \"powershell -NoProfile -ExecutionPolicy Bypass -File $GUEST_DL\\pilot-desktop-screenshot.ps1 -OutPath $SHOT\"" >/dev/null 2>&1 \
   && guest "schtasks /run /tn ClawXShot" >/dev/null 2>&1; then
   sleep 15
   if gpwsh "Test-Path '$SHOT'" | tr -d '\r' | grep -qi true; then
-    scp -P "$SSH_PORT" "$GUEST_USER@localhost:Downloads/moe19-desktop-$RUN_TAG.png" "$EVIDENCE_DIR/"
+    scp -P "$SSH_PORT" "$GUEST_USER@localhost:Downloads/$SHOT_NAME" "$EVIDENCE_DIR/"
     cat > "$EVIDENCE_DIR/vlm-shots.json" <<SHOTS
-{ "shots": [ { "id": "post-install-desktop", "imagePath": "$EVIDENCE_DIR/moe19-desktop-$RUN_TAG.png", "check": "The Ministry of Education desktop app is visible on the Windows desktop as a stakeholder would see it: real app shell (sidebar + chat composer), NOT a setup wizard, NOT a blank/white window, no crash or error dialog anywhere on the desktop; the header/channel pill reads Online or On this device (never a raw model id); overall the machine looks like a working pilot laptop." } ] }
+{ "shots": [ { "id": "post-install-desktop", "imagePath": "$EVIDENCE_DIR/$SHOT_NAME", "check": "The Ministry of Education desktop app is visible on the Windows desktop as a stakeholder would see it: real app shell (sidebar + chat composer), NOT a setup wizard, NOT a blank/white window, no crash or error dialog anywhere on the desktop; the header/channel pill reads Online or On this device (never a raw model id); overall the machine looks like a working pilot laptop." } ] }
 SHOTS
     node "$REPO_ROOT/scripts/clwx-vlm-grade-screens.mjs" --manifest "$EVIDENCE_DIR/vlm-shots.json" --report "$EVIDENCE_DIR/vlm-grading.md" || { log "FAIL: VLM desktop grading failed"; exit 1; }
   else
@@ -502,7 +757,7 @@ fi
 
 # ── Phase 9 — interactive checklist for the in-app visual legs ──────────────
 cat <<CHECKLIST | tee "$EVIDENCE_DIR/INTERACTIVE_CHECKLIST.md"
-# moe.19 interactive verify checklist (scripted phases above must be green first)
+# $VERSION interactive verify checklist (scripted phases above must be green first)
 Acceptance criteria source: docs/STAKEHOLDER_GAP_ANALYSIS_2026-09-06.md §4.
 - [ ] K10 pdf: fresh session, attach a pdf, real summary, read_pdf toolCall, no workerSrc errors
 - [ ] K13 dir1+dir2 degrade: anonymised notice; CLWX-104 bar — no stacked/stale banners, no raw "Connection error." incl. expanders
