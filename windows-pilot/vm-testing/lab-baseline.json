@@ -1,0 +1,30 @@
+{
+  "schema": "clawx-repeatable-lab-config/1",
+  "_note": "Pinned repeatable Windows lab baseline (CLWX-25/106/133). Isolated from the owner VM clawx-win-rc-20260609 and its network. The image block stays a placeholder until root supplies the exact resolved Google public Windows Server 2022 image name + numeric ID; the launcher refuses create while any placeholder remains. No image family references — moving families break repeatability.",
+  "project": "gen-lang-client-0649986230",
+  "region": "us-central1",
+  "zone": "us-central1-a",
+  "machineType": "n2-standard-8",
+  "bootDiskSizeGb": 100,
+  "bootDiskType": "pd-ssd",
+  "network": "clawx-test-lab",
+  "subnet": "clawx-test-lab-us-central1",
+  "subnetCidr": "10.74.0.0/24",
+  "tag": "clawx-repeatable-test",
+  "iapRange": "35.235.240.0/20",
+  "firewall": {
+    "name": "clawx-test-lab-allow-iap",
+    "ports": ["22", "3389"]
+  },
+  "image": {
+    "name": "PLACEHOLDER-PENDING-ROOT-EXACT-WINDOWS-2022-IMAGE-NAME",
+    "project": "windows-cloud",
+    "id": "PLACEHOLDER-PENDING-ROOT-EXACT-NUMERIC-IMAGE-ID"
+  },
+  "metadata": {
+    "sysprep-specialize-script-cmd": "googet -noconfirm=true install google-compute-engine-ssh",
+    "enable-windows-ssh": "TRUE",
+    "block-project-ssh-keys": "TRUE"
+  },
+  "protectedInstances": ["clawx-win-rc-20260609"]
+}
