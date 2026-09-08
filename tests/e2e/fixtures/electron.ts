@@ -128,7 +128,15 @@ async function launchClawXElectron(
     : {};
   return await electron.launch({
     executablePath: electronBinaryPath,
-    args: [electronEntry],
+    args: [
+      // Isolated UI profiles must not access the operator's macOS Keychain.
+      // Electron 42.0.0 eagerly initializes async safeStorage on ESM import;
+      // that provider is separate from Chromium's synchronous mock keychain.
+      ...(process.platform === 'darwin'
+        ? ['--use-mock-keychain', '--disable-features=UseKeychainKeyProvider']
+        : []),
+      electronEntry,
+    ],
     env: {
       ...process.env,
       ...electronEnv,
