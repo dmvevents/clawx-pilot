@@ -16,6 +16,8 @@ import {
   shouldPromptSwitchToOnline,
 } from '@/lib/channel-degrade';
 import { classifyProvider, pickAccountForChannel, type ProviderClass } from '@/lib/provider-display';
+import { resolveRuntimeProviderKey } from '@/lib/model-options';
+import type { ProviderAccount } from '@/lib/providers';
 import { buildBaselineRunKey, captureBaseline, clearBaselines } from './baseline-cache';
 import { buildCronSessionHistoryPath, isCronSessionKey } from './chat/cron-session-utils';
 import {
@@ -1983,26 +1985,20 @@ type SessionModelClearTarget = {
   provider?: string;
 };
 
-function splitModelRef(value: string): { provider: string; model: string } | null {
-  const slash = value.indexOf('/');
-  if (slash <= 0 || slash >= value.length - 1) return null;
-  return {
-    provider: value.slice(0, slash).trim(),
-    model: value.slice(slash + 1).trim(),
-  };
-}
-
 function getSessionModelClearTarget(
-  account: { model?: string; vendorId?: string; baseUrl?: string } | null | undefined,
+  account: ProviderAccount | null | undefined,
 ): SessionModelClearTarget | null {
   if (!account || classifyProvider(account) !== 'online') return null;
   const rawModel = String(account.model ?? '').trim();
   if (!rawModel) return null;
-  const parsed = splitModelRef(rawModel);
-  if (parsed) {
-    return { channel: 'online', provider: parsed.provider, model: parsed.model };
-  }
-  return { channel: 'online', model: rawModel };
+  const runtimeProviderKey = resolveRuntimeProviderKey(account).trim();
+  if (!runtimeProviderKey) return null;
+  const runtimePrefix = `${runtimeProviderKey}/`;
+  const model = rawModel.toLowerCase().startsWith(runtimePrefix.toLowerCase())
+    ? rawModel.slice(runtimePrefix.length).trim()
+    : rawModel;
+  if (!model) return null;
+  return { channel: 'online', provider: runtimeProviderKey, model };
 }
 
 function modelMatchesClearTarget(resolvedModel: string, target: SessionModelClearTarget): boolean {

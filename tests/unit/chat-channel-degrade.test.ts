@@ -1358,6 +1358,81 @@ describe('chat store: send-time channel degradation', () => {
     expect(store.getState().runtimeChannelPin).toBe(stalePin);
   });
 
+  it('rejects retained runtime fields with the default model id on the wrong Online provider', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    gatewayRpcMock.mockImplementation((method: string) => {
+      if (method === 'sessions.patch') {
+        return Promise.resolve(retainedRuntimeClearAck({
+          modelProvider: 'anthropic',
+          model: 'gemini-2.5-pro',
+        }));
+      }
+      if (method === 'chat.send') return Promise.resolve({ runId: 'run-after-wrong-provider-clear' });
+      return Promise.resolve(undefined);
+    });
+    const store = await loadStore();
+    const stalePin = { sessionKey: 'agent:main:main', channel: 'on-device' as const };
+    store.setState({
+      sending: false,
+      activeRunId: null,
+      lastSentPayload: null,
+      runtimeChannelPin: stalePin,
+    });
+
+    await store.getState().sendMessage('retry while clear resolves same model on wrong provider');
+
+    expect(storedProviderProbeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toBe(stalePin);
+  });
+
+  it('does not treat a namespaced bare model id prefix as the runtime provider', async () => {
+    providerState.accounts = [
+      {
+        id: 'custom-deadbeef',
+        vendorId: 'custom',
+        label: 'District Gateway',
+        authMode: 'api_key',
+        baseUrl: 'https://gateway.example.test/v1',
+        apiProtocol: 'openai-completions',
+        model: 'meta-llama/Llama-3.3-70B-Instruct',
+        enabled: true,
+        isDefault: true,
+        createdAt: '2026-09-08T00:00:00.000Z',
+        updatedAt: '2026-09-08T00:00:00.000Z',
+      },
+    ];
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/provider-accounts/default/probe'
+      ? Promise.resolve({ success: true, valid: true, accountId: 'custom-deadbeef', channel: 'online', status: 200, reason: 'ok' })
+      : Promise.resolve({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' })));
+    gatewayRpcMock.mockImplementation((method: string) => {
+      if (method === 'sessions.patch') {
+        return Promise.resolve(retainedRuntimeClearAck({
+          modelProvider: 'meta-llama',
+          model: 'Llama-3.3-70B-Instruct',
+        }));
+      }
+      if (method === 'chat.send') return Promise.resolve({ runId: 'run-after-namespaced-clear' });
+      return Promise.resolve(undefined);
+    });
+    const store = await loadStore();
+    const stalePin = { sessionKey: 'agent:main:main', channel: 'on-device' as const };
+    store.setState({
+      sending: false,
+      activeRunId: null,
+      lastSentPayload: null,
+      runtimeChannelPin: stalePin,
+    });
+
+    await store.getState().sendMessage('retry while clear misreads namespace as provider');
+
+    expect(storedProviderProbeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toBe(stalePin);
+  });
+
   it('rejects retained runtime fields when explicit override fields remain after clear', async () => {
     providerState.accounts = [...ONLINE_DEFAULT];
     gatewayRpcMock.mockImplementation((method: string) => {
