@@ -122,7 +122,12 @@ export function MicrosoftGraphSection() {
     try {
       await microsoftGraph.signIn({ promptSelectAccount: true });
     } catch (err) {
-      toast.error(`Sign-in failed: ${(err as Error).message}`);
+      if ((err as Error & { code?: string }).code === 'CANCELLED') {
+        // The user closed/declined on Microsoft's page — a normal outcome.
+        toast('Microsoft sign-in was cancelled — nothing was changed');
+      } else {
+        toast.error(`Sign-in failed: ${(err as Error).message}`);
+      }
     } finally {
       setSigningIn(false);
       setManualPrompt(null);
@@ -167,6 +172,17 @@ export function MicrosoftGraphSection() {
 
       {showConfigForm && (
         <div className="space-y-4 mb-6">
+          {!status?.configured && (
+            <div
+              data-testid="msgraph-connection-state"
+              data-state="unconfigured"
+              className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-sm text-foreground max-w-prose"
+            >
+              Not connected. Until your IT administrator's values below are
+              saved and you sign in, email tools answer from a built-in demo
+              mailbox — not your real Outlook inbox.
+            </div>
+          )}
           <p className="text-meta text-muted-foreground max-w-prose">
             Administrator setup is needed only when tenant defaults were not
             packaged with the installer. Your IT administrator provides the
@@ -229,14 +245,29 @@ export function MicrosoftGraphSection() {
         <div className="space-y-4">
           <div className="flex items-center justify-between p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
             <div className="flex flex-col gap-1">
-              <span className="text-sm font-medium flex items-center gap-2">
+              <span
+                data-testid="msgraph-connection-state"
+                data-state={status.connectionState}
+                className="text-sm font-medium flex items-center gap-2"
+              >
                 {status.signedIn ? status.account?.email ?? 'Signed in' : 'Not signed in'}
+                {status.connectionState === 'expired' && (
+                  <span className="text-meta px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                    Session expired
+                  </span>
+                )}
                 {status.effectiveMock && (
                   <span className="text-meta px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
                     Mock mailbox
                   </span>
                 )}
               </span>
+              {status.connectionState === 'expired' && (
+                <span className="text-meta text-muted-foreground">
+                  The connection renews automatically when used. If Outlook
+                  actions keep asking you to sign in, sign in again below.
+                </span>
+              )}
               <span className="text-meta text-muted-foreground">
                 Tenant: {status.account?.tenantId ?? config.tenantId}
               </span>
@@ -251,9 +282,21 @@ export function MicrosoftGraphSection() {
             </div>
             <div className="flex gap-2">
               {status.signedIn ? (
-                <Button onClick={signOut} variant="outline" className="rounded-full">
-                  Sign out
-                </Button>
+                <>
+                  {status.connectionState === 'expired' && (
+                    <Button
+                      data-testid="msgraph-signin-again-btn"
+                      onClick={signIn}
+                      disabled={signingIn}
+                      className="rounded-full"
+                    >
+                      {signingIn ? 'Signing in…' : 'Sign in again'}
+                    </Button>
+                  )}
+                  <Button onClick={signOut} variant="outline" className="rounded-full">
+                    Sign out
+                  </Button>
+                </>
               ) : (
                 <Button
                   data-testid="msgraph-signin-btn"

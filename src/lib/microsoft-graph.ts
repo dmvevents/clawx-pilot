@@ -26,6 +26,18 @@ export interface MicrosoftGraphAccount {
   tenantId: string;
 }
 
+/**
+ * Deterministic connection state derived in the main process from persisted
+ * facts (config presence, token presence, token expiry). "authenticating" is
+ * renderer-local while the sign-in invoke is pending; a cancelled sign-in
+ * resolves that invoke with error code `CANCELLED`.
+ */
+export type MicrosoftGraphConnectionState =
+  | 'unconfigured'
+  | 'signed_out'
+  | 'signed_in'
+  | 'expired';
+
 export interface MicrosoftGraphStatus {
   configured: boolean;
   signedIn: boolean;
@@ -35,6 +47,7 @@ export interface MicrosoftGraphStatus {
   effectiveMock: boolean;
   /** Delegated scopes granted at sign-in; empty when signed out. */
   grantedScopes: string[];
+  connectionState: MicrosoftGraphConnectionState;
 }
 
 export interface ManualCodePrompt {
