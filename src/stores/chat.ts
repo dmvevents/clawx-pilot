@@ -70,6 +70,7 @@ let _lastChatEventAt = 0;
 let _sendGeneration = 0;
 const _runGenerationById = new Map<string, number>();
 const _watchdogTerminatedRunIds = new Set<string>();
+const _lifecycleStartLivenessRunIds = new Set<string>();
 
 type TerminalTurnSnapshot = {
   runId: string | null;
@@ -2348,6 +2349,31 @@ async function maybeDegradeChannel(
   }
 }
 
+function isLifecycleStartEvent(event: Record<string, unknown>, resolvedState: string): boolean {
+  if (resolvedState !== 'started') return false;
+  if (String(event.stream ?? '') !== 'lifecycle') return false;
+  const phase = String(event.phase ?? '');
+  return phase === 'start' || phase === 'started';
+}
+
+function shouldRefreshOwnedLifecycleStart(
+  event: Record<string, unknown>,
+  resolvedState: string,
+  state: ChatState,
+): boolean {
+  if (!isLifecycleStartEvent(event, resolvedState)) return false;
+  const runId = String(event.runId || '');
+  if (!runId || _lifecycleStartLivenessRunIds.has(runId)) return false;
+  if (!state.sending || state.activeRunId !== runId) return false;
+
+  const eventSessionKey = event.sessionKey != null ? String(event.sessionKey) : null;
+  if (eventSessionKey == null || eventSessionKey !== state.currentSessionKey) return false;
+
+  const payloadGeneration = state.lastSentPayload?.generation;
+  const runGeneration = _runGenerationById.get(runId);
+  return payloadGeneration != null && runGeneration === payloadGeneration;
+}
+
 function hasMeaningfulChatEventProgress(event: Record<string, unknown>, resolvedState: string): boolean {
   if (resolvedState === 'final' || resolvedState === 'error' || resolvedState === 'aborted') return true;
   if (resolvedState !== 'delta') return false;
@@ -3362,6 +3388,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const stalledRunId = state.activeRunId;
       if (stalledRunId) {
         _runGenerationById.delete(stalledRunId);
+        _lifecycleStartLivenessRunIds.delete(stalledRunId);
         _watchdogTerminatedRunIds.add(stalledRunId);
         void useGatewayStore.getState().rpc('chat.abort', { sessionKey: currentSessionKey, runId: stalledRunId }).catch((error: unknown) => {
           console.warn('[chat] best-effort abort after stale run watchdog failed:', error);
@@ -3467,6 +3494,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           || stateAfterSend.currentSessionKey !== currentSessionKey
           || (stateAfterSend.lastSentPayload?.generation ?? -1) !== sendGeneration
         ) {
+          _lifecycleStartLivenessRunIds.delete(result.result.runId);
           _watchdogTerminatedRunIds.add(result.result.runId);
           void useGatewayStore.getState().rpc('chat.abort', {
             sessionKey: currentSessionKey,
@@ -3479,6 +3507,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // Bind this run to the generation that issued it so a terminal event
         // can tell whether it still owns lastSentPayload (CLWX-94).
         _runGenerationById.set(result.result.runId, sendGeneration);
+        _lifecycleStartLivenessRunIds.delete(result.result.runId);
         _lastChatEventAt = Date.now();
         set({ activeRunId: result.result.runId });
       }
@@ -3557,9 +3586,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     // Only pause the history poll when we receive actual streaming data.
-    // The gateway sends "agent" events with { phase, startedAt } that carry
-    // no message — these must NOT kill the poll, since the poll is our only
-    // way to track progress when the gateway doesn't stream intermediate turns.
+    // OpenClaw lifecycle-start events carry no message, but they do prove the
+    // active owned run reached the real agent/model execution boundary after
+    // cold Gateway preparation. Count that once for liveness without treating
+    // generic agent lifecycle chatter as stream output.
+    const stateForLifecycleStart = get();
+    const hasOwnedLifecycleStart = shouldRefreshOwnedLifecycleStart(event, resolvedState, stateForLifecycleStart);
     const hasUsefulData = hasMeaningfulChatEventProgress(event, resolvedState);
     // Whether THIS client had a send in flight, read before the adoption block
     // below can set `sending` for a run we never started. The `error` case uses
@@ -3567,6 +3599,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // turn typed in another client (the console at 127.0.0.1:18789) would resend
     // whatever stale payload we happen to be holding.
     const hadLocalSendInFlight = get().sending;
+    if (hasOwnedLifecycleStart) {
+      _lifecycleStartLivenessRunIds.add(runId);
+      _lastChatEventAt = Date.now();
+    }
     if (hasUsefulData) {
       _lastChatEventAt = Date.now();
       clearHistoryPoll();
@@ -3580,6 +3616,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     switch (resolvedState) {
       case 'started': {
         // Run just started (e.g. from console); show loading immediately.
+        // OpenClaw lifecycle-start events are liveness signals for an owned
+        // active run only; they must never adopt or revive a cancelled run.
+        if (isLifecycleStartEvent(event, resolvedState)) {
+          break;
+        }
         const { sending: currentSending } = get();
         if (!currentSending && runId) {
           set({ sending: true, activeRunId: runId, error: null, runError: null });
@@ -3648,7 +3689,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 lastSentPayload: null,
                 degradeNotice: s.degradeNotice?.inProgress ? null : s.degradeNotice,
               }));
-              if (runId) _runGenerationById.delete(runId);
+              if (runId) {
+                _runGenerationById.delete(runId);
+                _lifecycleStartLivenessRunIds.delete(runId);
+              }
             }
           }
         }
@@ -3916,6 +3960,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           pendingToolImages: [],
         }));
 
+        if (runId) {
+          _runGenerationById.delete(runId);
+          _lifecycleStartLivenessRunIds.delete(runId);
+        }
         clearHistoryPoll();
         clearErrorRecoveryTimer();
         if (wasSending) {
@@ -3939,6 +3987,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         break;
       }
       case 'aborted': {
+        if (runId) {
+          _runGenerationById.delete(runId);
+          _lifecycleStartLivenessRunIds.delete(runId);
+        }
         clearHistoryPoll();
         clearErrorRecoveryTimer();
         set({

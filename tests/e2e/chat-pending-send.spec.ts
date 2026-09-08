@@ -236,6 +236,149 @@ test.describe('ClawX pending chat send acknowledgement', () => {
     }
   });
 
+  test('keeps an accepted Online run alive when Gateway reports lifecycle start after cold preparation', async ({ launchElectronApp }) => {
+    const app = await launchElectronApp({ skipSetup: true });
+
+    try {
+      await installIpcMocks(app, {
+        gatewayStatus: { state: 'running', port: 18789, pid: 12345, connectedAt: Date.now() },
+        gatewayRpc: {},
+        hostApi: {},
+      });
+
+      await app.evaluate(async ({ app: _app }, mockData) => {
+        const { ipcMain } = process.mainModule!.require('electron') as typeof import('electron');
+        const aborts: Array<Record<string, unknown>> = [];
+        let sendCount = 0;
+
+        Object.assign(globalThis, {
+          __lifecycleStartAborts: aborts,
+          __lifecycleStartSendCount: () => sendCount,
+        });
+
+        ipcMain.removeHandler('hostapi:fetch');
+        ipcMain.handle('hostapi:fetch', async (_event: unknown, request: { path?: string }) => {
+          const path = String(request?.path ?? '');
+          if (path === '/api/gateway/status') {
+            return { ok: true, data: { status: 200, ok: true, json: { state: 'running', port: 18789, pid: 12345, connectedAt: Date.now() } } };
+          }
+          if (path === '/api/settings') {
+            return { ok: true, data: { status: 200, ok: true, json: { setupComplete: true, preferredChannel: 'online' } } };
+          }
+          if (path === '/api/agents') {
+            return { ok: true, data: { status: 200, ok: true, json: mockData.agentsSnapshot } };
+          }
+          if (path === '/api/provider-accounts') {
+            return { ok: true, data: { status: 200, ok: true, json: [mockData.onlineAccount] } };
+          }
+          if (path === '/api/provider-accounts/key-info') {
+            return { ok: true, data: { status: 200, ok: true, json: [{ accountId: mockData.onlineAccount.id, hasKey: true, keyMasked: 'sk-***' }] } };
+          }
+          if (path === '/api/provider-vendors') {
+            return { ok: true, data: { status: 200, ok: true, json: [] } };
+          }
+          if (path === '/api/provider-accounts/default') {
+            return { ok: true, data: { status: 200, ok: true, json: { accountId: mockData.onlineAccount.id } } };
+          }
+          if (path === '/api/provider-accounts/default/probe') {
+            return { ok: true, data: { status: 200, ok: true, json: { success: true, valid: true, accountId: mockData.onlineAccount.id, channel: 'online', status: 200, reason: 'ok' } } };
+          }
+          return { ok: true, data: { status: 200, ok: true, json: {} } };
+        });
+
+        ipcMain.removeHandler('gateway:rpc');
+        ipcMain.handle('gateway:rpc', async (_event: unknown, method: string, payload: unknown) => {
+          if (method === 'sessions.list') {
+            return { success: true, result: { sessions: [{ key: 'agent:main:main', displayName: 'main' }] } };
+          }
+          if (method === 'sessions.patch') {
+            return { success: true, result: { ok: true, key: 'agent:main:main', resolved: {} } };
+          }
+          if (method === 'chat.history') {
+            return { success: true, result: { messages: [] } };
+          }
+          if (method === 'chat.abort') {
+            aborts.push((payload ?? {}) as Record<string, unknown>);
+            return { success: true, result: {} };
+          }
+          if (method === 'chat.send') {
+            sendCount += 1;
+            return { success: true, result: { runId: 'run-lifecycle-start' } };
+          }
+          return { success: true, result: {} };
+        });
+      }, {
+        onlineAccount: ONLINE_ACCOUNT,
+        agentsSnapshot: AGENTS_SNAPSHOT,
+      });
+
+      const page = await getStableWindow(app);
+      try {
+        await page.reload();
+      } catch (error) {
+        if (!String(error).includes('ERR_FILE_NOT_FOUND')) throw error;
+      }
+
+      await expect(page.getByTestId('main-layout')).toBeVisible();
+      await page.clock.install();
+      await expect(page.getByTestId('chat-composer-input')).toBeEnabled();
+      await page.getByTestId('chat-composer-input').fill('cloud starts after cold setup');
+      await page.getByTestId('chat-composer-send').click();
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-active-run-id-present', 'true');
+
+      await page.clock.fastForward(80_000);
+      await app.evaluate(() => {
+        const { BrowserWindow } = process.mainModule!.require('electron') as typeof import('electron');
+        BrowserWindow.getAllWindows().forEach((window) => {
+          window.webContents.send('gateway:notification', {
+            method: 'agent',
+            params: {
+              runId: 'run-lifecycle-start',
+              sessionKey: 'agent:main:main',
+              stream: 'lifecycle',
+              data: { phase: 'start', startedAt: Date.now() },
+            },
+          });
+        });
+      });
+      await page.waitForTimeout(100);
+      await page.clock.fastForward(80_000);
+
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-sending', 'true');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-active-run-id-present', 'true');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-error-present', 'false');
+
+      await app.evaluate(() => {
+        const { BrowserWindow } = process.mainModule!.require('electron') as typeof import('electron');
+        BrowserWindow.getAllWindows().forEach((window) => {
+          window.webContents.send('gateway:notification', {
+            method: 'agent',
+            params: {
+              runId: 'run-lifecycle-start',
+              sessionKey: 'agent:main:main',
+              stream: 'lifecycle',
+              data: { phase: 'start', startedAt: Date.now() },
+            },
+          });
+        });
+      });
+      await page.clock.fastForward(11_000);
+
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-sending', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-active-run-id-present', 'false');
+      await expect(page.getByTestId('chat-page')).toHaveAttribute('data-error-present', 'true');
+
+      const counters = await app.evaluate(() => ({
+        aborts: (globalThis as { __lifecycleStartAborts?: Array<Record<string, unknown>> }).__lifecycleStartAborts ?? [],
+        sendCount: (globalThis as { __lifecycleStartSendCount?: () => number }).__lifecycleStartSendCount?.() ?? 0,
+      }));
+      expect(counters.aborts).toEqual([expect.objectContaining({ runId: 'run-lifecycle-start' })]);
+      expect(counters.sendCount).toBe(1);
+    } finally {
+      await closeElectronApp(app);
+    }
+  });
+
   test('keeps a slow current chat.send acknowledgement alive and adopts the answered run', async ({ launchElectronApp }) => {
     const app = await launchElectronApp({ skipSetup: true });
 

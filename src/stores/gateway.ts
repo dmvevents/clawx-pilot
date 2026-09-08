@@ -119,6 +119,7 @@ function handleGatewayNotification(notification: { method?: string; params?: Rec
   const p = payload.params;
   const data = (p.data && typeof p.data === 'object') ? (p.data as Record<string, unknown>) : {};
   const phase = data.phase ?? p.phase;
+  const stream = p.stream ?? data.stream;
   const hasChatData = (p.state ?? data.state) || (p.message ?? data.message);
 
   if (hasChatData) {
@@ -142,7 +143,9 @@ function handleGatewayNotification(notification: { method?: string; params?: Rec
 
   const runId = p.runId ?? data.runId;
   const sessionKey = p.sessionKey ?? data.sessionKey;
-  if (phase === 'started' && runId != null && sessionKey != null) {
+  const isLifecycleStart = stream === 'lifecycle' && phase === 'start';
+  const isLegacyStarted = phase === 'started';
+  if ((isLifecycleStart || isLegacyStarted) && runId != null && sessionKey != null) {
     import('./chat')
       .then(({ useChatStore }) => {
         const state = useChatStore.getState();
@@ -158,6 +161,8 @@ function handleGatewayNotification(notification: { method?: string; params?: Rec
           state: 'started',
           runId,
           sessionKey: resolvedSessionKey,
+          stream,
+          phase,
         });
       })
       .catch(() => {});

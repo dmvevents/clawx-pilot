@@ -1898,6 +1898,210 @@ describe('chat store: send-time channel degradation', () => {
     }
   });
 
+  it('preserves legacy non-lifecycle started adoption without treating it as lifecycle liveness', async () => {
+    const store = await loadStore();
+    store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+    store.getState().handleChatEvent({
+      state: 'started',
+      runId: 'legacy-started-run',
+      sessionKey: 'agent:main:main',
+    });
+
+    expect(store.getState().sending).toBe(true);
+    expect(store.getState().activeRunId).toBe('legacy-started-run');
+    expect(store.getState().error).toBeNull();
+  });
+
+  it('extends an active owned run once when the Gateway reports OpenClaw lifecycle start', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-lifecycle-start' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('cloud model starts after cold preparation');
+      await vi.advanceTimersByTimeAsync(80_000);
+      store.getState().handleChatEvent({
+        state: 'started',
+        runId: 'run-lifecycle-start',
+        sessionKey: 'agent:main:main',
+        stream: 'lifecycle',
+        phase: 'start',
+      });
+      await vi.advanceTimersByTimeAsync(80_000);
+
+      expect(store.getState().sending).toBe(true);
+      expect(store.getState().activeRunId).toBe('run-lifecycle-start');
+      expect(store.getState().error).toBeNull();
+      expect(gatewayRpcMock.mock.calls.filter((call) => call[0] === 'chat.abort')).toHaveLength(0);
+
+      store.getState().handleChatEvent({
+        state: 'started',
+        runId: 'run-lifecycle-start',
+        sessionKey: 'agent:main:main',
+        stream: 'lifecycle',
+        phase: 'start',
+      });
+      await vi.advanceTimersByTimeAsync(11_000);
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toContain('No response received from the model');
+      expect(gatewayRpcMock.mock.calls.filter((call) => call[0] === 'chat.abort')).toEqual([
+        ['chat.abort', { sessionKey: 'agent:main:main', runId: 'run-lifecycle-start' }],
+      ]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    ['wrong run', { runId: 'run-other', sessionKey: 'agent:main:main' }],
+    ['wrong session', { runId: 'run-lifecycle-negative', sessionKey: 'agent:main:other' }],
+    ['missing session', { runId: 'run-lifecycle-negative' }],
+  ])('does not extend an active run from a %s lifecycle start', async (_label, event) => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-lifecycle-negative' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('unowned lifecycle start');
+      await vi.advanceTimersByTimeAsync(80_000);
+      store.getState().handleChatEvent({
+        state: 'started',
+        ...event,
+        stream: 'lifecycle',
+        phase: 'start',
+      });
+      await vi.advanceTimersByTimeAsync(20_000);
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toContain('No response received from the model');
+      expect(gatewayRpcMock.mock.calls).toContainEqual(['chat.abort', {
+        sessionKey: 'agent:main:main',
+        runId: 'run-lifecycle-negative',
+      }]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not revive a user-aborted run from a late lifecycle start', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-user-aborted' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('abort before lifecycle start');
+      await store.getState().abortRun();
+      store.getState().handleChatEvent({
+        state: 'started',
+        runId: 'run-user-aborted',
+        sessionKey: 'agent:main:main',
+        stream: 'lifecycle',
+        phase: 'start',
+      });
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBe('run-user-aborted');
+      expect(gatewayRpcMock.mock.calls.filter((call) => call[0] === 'chat.abort')).toHaveLength(1);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not let a superseded run lifecycle start refresh a newer generation', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      let sendIndex = 0;
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') {
+          sendIndex += 1;
+          return { runId: sendIndex === 1 ? 'run-old-generation' : 'run-current-generation' };
+        }
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('first generation');
+      await store.getState().sendMessage('second generation');
+      await vi.advanceTimersByTimeAsync(80_000);
+      store.getState().handleChatEvent({
+        state: 'started',
+        runId: 'run-old-generation',
+        sessionKey: 'agent:main:main',
+        stream: 'lifecycle',
+        phase: 'start',
+      });
+      await vi.advanceTimersByTimeAsync(20_000);
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toContain('No response received from the model');
+      expect(gatewayRpcMock.mock.calls).toContainEqual(['chat.abort', {
+        sessionKey: 'agent:main:main',
+        runId: 'run-current-generation',
+      }]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not revive a watchdog-terminated run from a late lifecycle start', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-late-lifecycle' };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('late lifecycle start');
+      await vi.advanceTimersByTimeAsync(120_000);
+      const terminalError = store.getState().error;
+
+      store.getState().handleChatEvent({
+        state: 'started',
+        runId: 'run-late-lifecycle',
+        sessionKey: 'agent:main:main',
+        stream: 'lifecycle',
+        phase: 'start',
+      });
+
+      expect(store.getState().sending).toBe(false);
+      expect(store.getState().activeRunId).toBeNull();
+      expect(store.getState().error).toBe(terminalError);
+      expect(gatewayRpcMock.mock.calls.filter((call) => call[0] === 'chat.abort')).toHaveLength(1);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it('makes an accepted send with no events visible through the terminal watchdog', async () => {
     vi.useFakeTimers();
     try {
