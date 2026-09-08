@@ -44,6 +44,7 @@ import {
   defaultChromeUserDataDir,
   ensureChromeCdpReady,
   resolveChromeExecutable,
+  verifyCdpEndpointOwnershipForAttach,
 } from '../chrome-cdp';
 
 /**
@@ -186,6 +187,21 @@ export class PlaywrightDriver {
     // it is conservative: ensureOutlookTab re-finds a real Outlook tab, or opens
     // one. (The createdPages grants are per-Page-object and lapse for free.)
     this.page = null;
+
+    // Attach boundary (CLWX-130): a REACHABLE loopback endpoint is not proof it
+    // is this user's Chrome — on a multi-session Windows server the port can be
+    // answered by a Chrome in another user's session, and connecting first
+    // would drive it. Verify ownership BEFORE any connectOverCDP; a refusal
+    // here must not be "repaired" into an attach either.
+    const attachGate = await verifyCdpEndpointOwnershipForAttach({
+      cdpEndpoint: this.cfg.cdpEndpoint,
+      debugPort: this.cfg.selfLaunchDebugPort,
+      userDataDir: this.cfg.userDataDir,
+      chromeExecutable: this.cfg.chromeExecutable,
+    });
+    if (!attachGate.allowed) {
+      throw new Error(`[${attachGate.status.state}] ${attachGate.status.message}`);
+    }
 
     // Path 1: CDP attach — cheapest, preserves user's running session.
     try {
@@ -430,14 +446,41 @@ export class PlaywrightDriver {
   }
 
   /**
-   * Return all live Outlook tabs in the attached Chrome context.
+   * The ONLY compose surface the send/draft gates may trust: the tab this
+   * driver is currently bound to (`this.page`), re-validated as live, still a
+   * member of the current context, and still on Outlook (CLWX-121, MEDIUM-7).
+   *
+   * Compose state — "is a draft open", "does the pane carry the reviewed
+   * subject" — is meaningful only on the tab the driver drives. A pane on any
+   * OTHER tab is the principal's own work: matching a subject there, or
+   * counting their half-written email as "our draft is still open", binds the
+   * send contract to a pane nobody reviewed. Returns null rather than ever
+   * silently re-binding to some other Outlook tab.
+   */
+  composeSurface(): Page | null {
+    const bound = this.page;
+    if (!bound || bound.isClosed()) return null;
+    if (!this.context || !this.context.pages().includes(bound)) return null;
+    return isOutlookUrl(bound.url()) ? bound : null;
+  }
+
+  /**
+   * The pages the draft-visibility scan may inspect.
    *
    * READ-ONLY by contract: the only caller is outlook-actions'
    * `hasAnyVisibleOpenDraft`, which evaluates a visibility predicate to protect
-   * the two-gate send. It used to install our dialog handler on every Outlook tab
-   * it saw — including tabs of the principal's that this driver never drives — so
-   * the reduced surface is worth keeping. Handlers are installed where a tab is
-   * actually attached (attachTo), and nowhere else.
+   * the two-gate send.
+   *
+   * NARROWED to the bound tab (CLWX-121, MEDIUM-8) and deliberately DERIVED
+   * from `composeSurface()` — the subject-match binding — so the scan cannot be
+   * narrowed without that binding being in place; the coupling the card names
+   * is structural, not conventional. It used to return every Outlook tab in
+   * the context, which made the principal's own compose pane in another tab
+   * count as compose state of ours: it blocked legitimate drafting ("a draft
+   * is already open" about a pane we do not drive) and it was the only thing
+   * accidentally masking the unbound subject match. When the driver holds no
+   * usable bound tab this returns [] — the caller falls back to the page it
+   * already holds, never to someone else's tab.
    *
    * What this does NOT buy, stated plainly because the first version of this
    * comment claimed it (Claude correctness lens, 2026-09-07): it does not hand the
@@ -452,10 +495,8 @@ export class PlaywrightDriver {
    */
   async outlookPages(): Promise<Page[]> {
     await this.ensureBrowser();
-    if (!this.context) return [];
-    return this.context
-      .pages()
-      .filter((page) => !page.isClosed() && isOutlookUrl(page.url()));
+    const surface = this.composeSurface();
+    return surface ? [surface] : [];
   }
 
   /** Take a PNG screenshot of the visible viewport. Used by the VLM grounder. */

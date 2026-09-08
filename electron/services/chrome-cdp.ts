@@ -16,7 +16,20 @@ export type ChromeCdpState =
   | 'cdp_down_chrome_closed'
   | 'profile_locked_close_chrome'
   | 'launch_failed'
-  | 'port_bind_timeout';
+  | 'port_bind_timeout'
+  /**
+   * The loopback debug port answers HTTP but is CONFIRMED to be owned by a
+   * process in another Windows session or on a different profile (CLWX-130).
+   * We must not attach to, kill, or restart another user's Chrome, and we must
+   * not silently pick a different port.
+   */
+  | 'foreign_endpoint_owner'
+  /**
+   * The loopback debug port answers HTTP but its owner could not be identified
+   * on Windows. Truthfully NOT ready — a bare version probe is not proof the
+   * current user's automation profile is attached (CLWX-130).
+   */
+  | 'endpoint_owner_unverified';
 
 export interface ChromeProcessInfo {
   pid?: number;
@@ -35,8 +48,14 @@ export interface ChromeCdpStatus {
   browser?: string;
   userAgent?: string;
   message: string;
-  action: 'none' | 'launch_chrome' | 'close_chrome_then_retry' | 'install_chrome' | 'retry';
+  action: 'none' | 'launch_chrome' | 'close_chrome_then_retry' | 'install_chrome' | 'retry' | 'resolve_port_conflict';
   error?: string;
+  /** PID that owns the loopback debug port, when Windows ownership was checked. */
+  endpointOwnerPid?: number;
+  /** Windows session of the port owner, when identified. */
+  endpointOwnerSessionId?: number;
+  /** Windows session of the ClawX app itself, when identified. */
+  currentSessionId?: number;
 }
 
 /** Handle to a Chrome process WE spawned, so we can kill it on attach timeout. */
@@ -66,6 +85,21 @@ export interface ChromeCdpOptions {
   allowManagedProfileFallback?: boolean;
 }
 
+/**
+ * Identity of the process listening on the loopback CDP port, as observed by a
+ * bounded same-session Windows query (CLWX-130). `status: 'unknown'` means the
+ * query itself failed or was inconclusive — it is never treated as ownership.
+ */
+export interface LoopbackPortOwner {
+  status: 'ok' | 'no_listener' | 'unknown';
+  pid?: number;
+  sessionId?: number;
+  /** Windows session of the querying (ClawX) process itself. */
+  currentSessionId?: number;
+  commandLine?: string;
+  error?: string;
+}
+
 export interface ChromeCdpRuntime {
   platform?: NodeJS.Platform;
   env?: NodeJS.ProcessEnv;
@@ -76,6 +110,11 @@ export interface ChromeCdpRuntime {
   spawnDetached?: (file: string, args: string[]) => SpawnedChrome | void;
   chromeProductVersion?: (chromeExecutable: string, platform: NodeJS.Platform) => Promise<string | undefined>;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Injectable Windows loopback ownership probe for deterministic tests.
+   * Only consulted on win32 for loopback endpoints; never on macOS/Linux.
+   */
+  describeLoopbackPortOwner?: (port: number) => Promise<LoopbackPortOwner>;
 }
 
 interface ChromeCdpConfig extends Required<ChromeCdpOptions> {
@@ -206,7 +245,20 @@ function resolveConfig(opts: ChromeCdpOptions = {}, runtime: ChromeCdpRuntime = 
   const existsSync = runtime.existsSync ?? fsExistsSync;
   const cdpEndpoint = opts.cdpEndpoint ?? env.CLAWX_CHROME_CDP_ENDPOINT;
   const envDebugPort = Number.parseInt(String(env.CLAWX_CHROME_DEBUG_PORT ?? ''), 10);
-  const debugPort = opts.debugPort ?? debugPortFromEndpoint(cdpEndpoint) ?? (Number.isFinite(envDebugPort) ? envDebugPort : CHROME_CDP_PORT);
+  // ONE endpoint identity (CLWX-130 review finding): the ownership probe, the
+  // launch args and the readiness probe must all describe the SAME endpoint.
+  // When the endpoint URL carries a port, that port IS the identity — an
+  // explicit debugPort option that disagrees is a config incoherence, and
+  // silently honoring it let ownership be "verified" on one port while
+  // readiness was probed on another. The endpoint-derived port wins; the
+  // mismatch is logged so the caller's config error is visible, not masked.
+  const endpointPort = debugPortFromEndpoint(cdpEndpoint);
+  if (endpointPort !== undefined && opts.debugPort !== undefined && opts.debugPort !== endpointPort) {
+    logger.warn(
+      `[chrome-cdp] debugPort option (${opts.debugPort}) disagrees with the CDP endpoint port (${endpointPort}); using the endpoint port for launch, ownership and readiness`,
+    );
+  }
+  const debugPort = endpointPort ?? opts.debugPort ?? (Number.isFinite(envDebugPort) ? envDebugPort : CHROME_CDP_PORT);
   const envWaitMs = Number.parseInt(String(env.CLAWX_CHROME_CDP_WAIT_MS ?? ''), 10);
   return {
     cdpEndpoint: cdpEndpoint ?? `http://127.0.0.1:${debugPort}`,
@@ -339,6 +391,256 @@ async function defaultChromeProductVersion(
   }
 }
 
+function isLoopbackEndpoint(cdpEndpoint: string): boolean {
+  try {
+    const host = new URL(cdpEndpoint).hostname;
+    return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Default Windows loopback ownership probe (CLWX-130). One bounded PowerShell
+ * invocation; the only interpolated value is a validated integer port, so no
+ * shell interpolation of untrusted strings is possible. Logs no secrets — the
+ * command line is inspected in-process and only PID/session numbers surface.
+ *
+ * Exported so its real error/malformed/no-listener/invalid-port paths are
+ * testable against a controlled `powershell.exe` process fixture, not only via
+ * injected ownership results (CLWX-130 review finding 5).
+ */
+export async function defaultDescribeLoopbackPortOwner(port: number): Promise<LoopbackPortOwner> {
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    return { status: 'unknown', error: 'invalid port' };
+  }
+  const command = [
+    `$c = Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -First 1;`,
+    `if (-not $c) { @{ status = 'no_listener' } | ConvertTo-Json -Compress } else {`,
+    `$o = [int]$c.OwningProcess;`,
+    `$p = Get-CimInstance Win32_Process -Filter "ProcessId=$o" -ErrorAction SilentlyContinue;`,
+    `$cur = (Get-Process -Id $Global:PID).SessionId;`,
+    `@{ status = 'ok'; pid = $o; sessionId = $p.SessionId; currentSessionId = $cur; commandLine = $p.CommandLine } | ConvertTo-Json -Compress }`,
+  ].join(' ');
+  try {
+    const { stdout } = await execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+      timeout: 5_000,
+      windowsHide: true,
+    });
+    const parsed = JSON.parse(stdout.trim()) as {
+      status?: string;
+      pid?: number;
+      sessionId?: number;
+      currentSessionId?: number;
+      commandLine?: string | null;
+    };
+    if (parsed.status === 'no_listener') return { status: 'no_listener' };
+    if (parsed.status !== 'ok') return { status: 'unknown', error: 'unrecognized probe payload' };
+    return {
+      status: 'ok',
+      pid: typeof parsed.pid === 'number' ? parsed.pid : undefined,
+      sessionId: typeof parsed.sessionId === 'number' ? parsed.sessionId : undefined,
+      currentSessionId: typeof parsed.currentSessionId === 'number' ? parsed.currentSessionId : undefined,
+      commandLine: typeof parsed.commandLine === 'string' ? parsed.commandLine : undefined,
+    };
+  } catch (error) {
+    return { status: 'unknown', error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+type OwnershipRefusalVerdict = 'foreign_session' | 'profile_conflict' | 'unverified';
+type EndpointOwnershipVerdict =
+  | { verdict: 'ours' | 'skipped'; owner?: LoopbackPortOwner }
+  | { verdict: OwnershipRefusalVerdict; owner: LoopbackPortOwner; reason: string };
+
+/**
+ * PIDs of Chrome processes THIS ClawX process spawned for CDP, keyed by debug
+ * port. Positive spawn ownership (CLWX-130 review finding 1): on a hardened box
+ * where `Get-NetTCPConnection` works but `Win32_Process` metadata is denied,
+ * the probe can attribute the port to a PID without session/command-line
+ * details. If that PID is the Chrome WE launched, the endpoint is ours by
+ * construction — refusing (and worse, killing our own spawn) turned a working
+ * launch into a permanent denial loop. Entries are removed when we kill the
+ * spawn; process-lifetime memory only, never persisted.
+ */
+const spawnOwnedPortPids = new Map<number, number>();
+
+/** Test seam only: clears the positive-spawn-ownership memory between cases. */
+export function resetChromeCdpSpawnOwnershipForTests(): void {
+  spawnOwnedPortPids.clear();
+}
+
+function isPositivelyOurSpawn(port: number, ownerPid: number | undefined, spawnedPid?: number): boolean {
+  if (typeof ownerPid !== 'number') return false;
+  if (typeof spawnedPid === 'number' && ownerPid === spawnedPid) return true;
+  return spawnOwnedPortPids.get(port) === ownerPid;
+}
+
+/**
+ * CLWX-130 boundary: a successful `/json/version` probe alone does not prove
+ * the responding Chrome belongs to the current Windows session and a profile
+ * we may drive — on a multi-session server the port can be owned by a Chrome
+ * in another user's session. Verify ownership before claiming ready.
+ * Windows loopback only; macOS/Linux and non-loopback endpoints keep their
+ * existing contract.
+ *
+ * Verdicts are split by EVIDENCE, not lumped (review finding 2):
+ * - `ours`            — our own spawn (PID match), our dedicated automation
+ *                       profile, or the principal's own user-profile Chrome
+ *                       deliberately started with this debug port (the
+ *                       documented pilot launch; profile=user is the hard rule,
+ *                       so that Chrome is MORE legitimate, not less).
+ * - `foreign_session` — CONFIRMED owned by a different Windows session.
+ * - `profile_conflict`— same/unknown session, but confirmed not a Chrome we
+ *                       may drive (managed profile, no debug flag, or not
+ *                       Chrome at all).
+ * - `unverified`      — identity unreadable. Truthfully not ready; NEVER a
+ *                       reason to kill anything.
+ */
+async function verifyEndpointOwnership(
+  cfg: ChromeCdpConfig,
+  runtime: ChromeCdpRuntime,
+  spawnedPid?: number,
+): Promise<EndpointOwnershipVerdict> {
+  if (cfg.platform !== 'win32' || !isLoopbackEndpoint(cfg.cdpEndpoint)) {
+    return { verdict: 'skipped' };
+  }
+  const describe = runtime.describeLoopbackPortOwner ?? defaultDescribeLoopbackPortOwner;
+  const probeOnce = async (): Promise<LoopbackPortOwner> => {
+    try {
+      return await describe(cfg.debugPort);
+    } catch (error) {
+      return { status: 'unknown', error: error instanceof Error ? error.message : String(error) };
+    }
+  };
+  let owner = await probeOnce();
+  // One bounded re-probe before concluding anything negative: a transient
+  // PowerShell/CIM hiccup must not demote a working endpoint (review finding 1).
+  if (owner.status !== 'ok' || (typeof owner.commandLine !== 'string' && !isPositivelyOurSpawn(cfg.debugPort, owner.pid, spawnedPid))) {
+    const retried = await probeOnce();
+    if (retried.status === 'ok') owner = retried;
+  }
+  if (owner.status !== 'ok') {
+    return {
+      verdict: 'unverified',
+      owner,
+      reason: owner.status === 'no_listener'
+        ? 'the CDP endpoint answered but no loopback listener could be attributed'
+        : `port owner query failed: ${owner.error ?? 'unknown error'}`,
+    };
+  }
+  // Positive spawn ownership beats unreadable metadata: the PID owning the
+  // port is the Chrome THIS process launched, so no session/command-line
+  // evidence is needed (and none may be readable on a hardened box).
+  if (isPositivelyOurSpawn(cfg.debugPort, owner.pid, spawnedPid)) {
+    return { verdict: 'ours', owner };
+  }
+  if (
+    typeof owner.sessionId === 'number' &&
+    typeof owner.currentSessionId === 'number' &&
+    owner.sessionId !== owner.currentSessionId
+  ) {
+    return {
+      verdict: 'foreign_session',
+      owner,
+      reason: `port ${cfg.debugPort} is owned by PID ${owner.pid ?? 'unknown'} in Windows session ${owner.sessionId}, not this session (${owner.currentSessionId})`,
+    };
+  }
+  if (typeof owner.commandLine !== 'string' || owner.commandLine.length === 0) {
+    return {
+      verdict: 'unverified',
+      owner,
+      reason: `the command line of PID ${owner.pid ?? 'unknown'} owning port ${cfg.debugPort} could not be read`,
+    };
+  }
+  const sameSessionConfirmed = typeof owner.sessionId === 'number'
+    && typeof owner.currentSessionId === 'number'
+    && owner.sessionId === owner.currentSessionId;
+  // The managed / "Ministry of Education" profile is NEVER attachable —
+  // Conditional Access blocks managed sessions (CLWX-73, AADSTS53003). Checked
+  // BEFORE the user-profile acceptance because that dir also lives under the
+  // user's home.
+  if (normalizedPathForCompare(owner.commandLine, cfg.platform)
+    .includes(normalizedPathForCompare(cfg.fallbackUserDataDir, cfg.platform))) {
+    return {
+      verdict: 'profile_conflict',
+      owner,
+      reason: `port ${cfg.debugPort} is owned by PID ${owner.pid ?? 'unknown'} on the deprecated managed profile, which ClawX must not drive`,
+    };
+  }
+  if (commandUsesCdpProfile(owner.commandLine, cfg)) {
+    return { verdict: 'ours', owner };
+  }
+  // The principal's OWN Chrome, deliberately started with this debug port
+  // (windows-pilot/scripts/pilot-attach-chrome-cdp.ps1 launches system Chrome
+  // with --remote-debugging-port on the real user profile). profile=user is
+  // the hard rule — that Chrome is the PREFERRED attach target, not a foreign
+  // one. Accepted when the session is confirmed ours, or when the explicit
+  // --user-data-dir provably lives under this user's own home directory.
+  if (
+    !owner.commandLine.toLowerCase().includes('--type=')
+    && commandUsesRemoteDebugPort(owner.commandLine, cfg.debugPort)
+    && (sameSessionConfirmed || commandUsesUserOwnedProfileDir(owner.commandLine, cfg))
+  ) {
+    return { verdict: 'ours', owner };
+  }
+  if (sameSessionConfirmed) {
+    return {
+      verdict: 'profile_conflict',
+      owner,
+      reason: `port ${cfg.debugPort} is owned by PID ${owner.pid ?? 'unknown'} in this Windows session, but that process was not started for ClawX browser automation`,
+    };
+  }
+  return {
+    verdict: 'unverified',
+    owner,
+    reason: `port ${cfg.debugPort} is owned by PID ${owner.pid ?? 'unknown'} whose Windows session and automation profile could not both be confirmed`,
+  };
+}
+
+function ownershipRefusalStatus(
+  cfg: ChromeCdpConfig,
+  check: Extract<EndpointOwnershipVerdict, { verdict: OwnershipRefusalVerdict }>,
+): ChromeCdpStatus {
+  const ownerExtras: Partial<ChromeCdpStatus> = {
+    endpointOwnerPid: check.owner.pid,
+    endpointOwnerSessionId: check.owner.sessionId,
+    currentSessionId: check.owner.currentSessionId,
+    error: check.reason,
+  };
+  // Wrong Windows session and same-session profile conflict are DIFFERENT
+  // facts and need different guidance (CLWX-130 review finding 2). A principal
+  // already signed into their own session must never be told to sign into it.
+  if (check.verdict === 'foreign_session') {
+    return buildStatus(
+      cfg,
+      'foreign_endpoint_owner',
+      [],
+      'The Chrome automation connection on this computer is in use by a different Windows user\'s session. ClawX will not use or close another user\'s Chrome. Ask your administrator to close Chrome in the other session, then retry from ClawX; if this keeps happening, contact support.',
+      'resolve_port_conflict',
+      ownerExtras,
+    );
+  }
+  if (check.verdict === 'profile_conflict') {
+    return buildStatus(
+      cfg,
+      'foreign_endpoint_owner',
+      [],
+      'Another Chrome window or program in this Windows session is using ClawX\'s browser automation connection, and it is not one ClawX can safely drive. Close extra Chrome windows, then retry from ClawX so it can reopen Chrome in automation mode. Your own tabs and sign-in are preserved.',
+      'resolve_port_conflict',
+      ownerExtras,
+    );
+  }
+  return buildStatus(
+    cfg,
+    'endpoint_owner_unverified',
+    [],
+    'ClawX found a Chrome automation connection but could not confirm it belongs to your Windows session, so it will not report Chrome as ready. Close any extra Chrome windows, then retry from ClawX.',
+    'retry',
+    ownerExtras,
+  );
+}
+
 function normalizedPathForCompare(pathValue: string, platform: NodeJS.Platform): string {
   const normalized = pathValue.replace(/\//g, '\\').toLowerCase();
   return platform === 'win32' ? normalized : pathValue;
@@ -357,6 +659,19 @@ function commandUsesCdpProfile(commandLine: string, cfg: ChromeCdpConfig): boole
   return normalizedPathForCompare(commandLine, cfg.platform).includes(
     normalizedPathForCompare(cfg.cdpProfileDir, cfg.platform),
   );
+}
+
+/**
+ * True when the command line carries an explicit `--user-data-dir` that lives
+ * under THIS user's own home directory (an ordinary user-owned profile — the
+ * documented pilot launch target). Callers must exclude the managed dir first.
+ */
+function commandUsesUserOwnedProfileDir(commandLine: string, cfg: ChromeCdpConfig): boolean {
+  const match = /--user-data-dir=(?:"([^"]+)"|([^\s"]+))/i.exec(commandLine);
+  const dir = match?.[1] ?? match?.[2];
+  if (!dir) return false;
+  return normalizedPathForCompare(dir, cfg.platform)
+    .startsWith(normalizedPathForCompare(cfg.homedir, cfg.platform));
 }
 
 function commandUsesRemoteDebugPort(commandLine: string, debugPort: number): boolean {
@@ -396,9 +711,23 @@ export async function diagnoseChromeCdp(
   const cfg = resolveConfig(opts, runtime);
   const ready = await probeVersion(cfg, runtime);
   if (ready.ok) {
+    // CLWX-130: on Windows, an HTTP-responsive loopback port is not proof the
+    // listener is OUR Chrome in OUR session. Verify before claiming ready.
+    const ownership = await verifyEndpointOwnership(cfg, runtime);
+    if (
+      ownership.verdict === 'foreign_session'
+      || ownership.verdict === 'profile_conflict'
+      || ownership.verdict === 'unverified'
+    ) {
+      logger.warn(`[chrome-cdp] endpoint ownership ${ownership.verdict}: ${ownership.reason}`);
+      return ownershipRefusalStatus(cfg, ownership);
+    }
     return buildStatus(cfg, 'cdp_ready', [], 'Chrome browser automation is reachable.', 'none', {
       browser: ready.version.Browser,
       userAgent: ready.version['User-Agent'],
+      endpointOwnerPid: ownership.owner?.pid,
+      endpointOwnerSessionId: ownership.owner?.sessionId,
+      currentSessionId: ownership.owner?.currentSessionId,
     });
   }
 
@@ -497,6 +826,12 @@ async function launchChromeForCdp(
   try {
     logger.info(`[chrome-cdp] launching Chrome for CDP at ${cfg.cdpEndpoint} (dedicated automation profile)`);
     spawned = (runtime.spawnDetached ?? defaultSpawnDetached)(cfg.chromeExecutable, args);
+    // Positive spawn ownership (CLWX-130): remember which PID WE launched for
+    // this port, so later ownership probes that can read the PID but not the
+    // process metadata still recognize our own Chrome instead of refusing it.
+    if (spawned && typeof spawned.pid === 'number') {
+      spawnOwnedPortPids.set(cfg.debugPort, spawned.pid);
+    }
   } catch (error) {
     return buildStatus(
       cfg,
@@ -514,9 +849,40 @@ async function launchChromeForCdp(
   while (Date.now() < deadline) {
     const ready = await probeVersion(cfg, runtime);
     if (ready.ok) {
+      // CLWX-130: even after our own launch, confirm the responding listener is
+      // OUR Chrome — on a multi-session Windows server another session's Chrome
+      // may already hold the port while our spawn silently failed to bind.
+      // The spawned PID is positive ownership: unreadable process metadata on a
+      // hardened box must not demote (or worse, kill) our own working launch.
+      const ownership = await verifyEndpointOwnership(cfg, runtime, spawned && typeof spawned.pid === 'number' ? spawned.pid : undefined);
+      if (ownership.verdict === 'foreign_session' || ownership.verdict === 'profile_conflict') {
+        logger.warn(`[chrome-cdp] post-launch endpoint ownership ${ownership.verdict}: ${ownership.reason}`);
+        // The port is CONFIRMED held by someone else, so our spawn never bound
+        // it. Kill the Chrome WE spawned (no-orphan rule); never touch theirs.
+        if (spawned && typeof spawned.kill === 'function') {
+          try {
+            spawned.kill();
+          } catch {
+            /* already exited */
+          }
+        }
+        spawnOwnedPortPids.delete(cfg.debugPort);
+        return ownershipRefusalStatus(cfg, ownership);
+      }
+      if (ownership.verdict === 'unverified') {
+        // Unknown identity is NOT a kill authorization (CLWX-130 review
+        // finding 1): the listener may well be the Chrome we just launched,
+        // holding the principal's restored tabs. Refuse readiness truthfully
+        // and leave the browser alone.
+        logger.warn(`[chrome-cdp] post-launch endpoint ownership unverified (browser left running): ${ownership.reason}`);
+        return ownershipRefusalStatus(cfg, ownership);
+      }
       return buildStatus(cfg, 'cdp_ready', [], 'Chrome browser automation is reachable after launch.', 'none', {
         browser: ready.version.Browser,
         userAgent: ready.version['User-Agent'],
+        endpointOwnerPid: ownership.owner?.pid,
+        endpointOwnerSessionId: ownership.owner?.sessionId,
+        currentSessionId: ownership.owner?.currentSessionId,
       });
     }
     lastError = ready.error;
@@ -533,6 +899,7 @@ async function launchChromeForCdp(
     } catch (error) {
       logger.warn(`[chrome-cdp] could not kill our spawned Chrome after timeout: ${error instanceof Error ? error.message : String(error)}`);
     }
+    spawnOwnedPortPids.delete(cfg.debugPort);
   }
 
   const processes = await listChromeProcesses(runtime, cfg.platform);
@@ -544,6 +911,50 @@ async function launchChromeForCdp(
     'retry',
     { error: lastError },
   );
+}
+
+/**
+ * Attach-boundary gate (CLWX-130 review finding 3): the Outlook and Forms
+ * drivers call `chromium.connectOverCDP` FIRST and only fall back to
+ * `ensureChromeCdpReady` when the connect fails — so a REACHABLE endpoint owned
+ * by another Windows session bypassed the diagnosis-time ownership check
+ * entirely. Callers must consult this gate BEFORE attaching to a loopback
+ * endpoint on Windows.
+ *
+ * `allowed: true` means "no confirmed objection": non-Windows platforms,
+ * non-loopback endpoints and a port with no attributable listener (the connect
+ * itself will then fail honestly and route into repair) all proceed. A
+ * confirmed foreign session, a profile conflict or an unverifiable owner
+ * refuses the attach — fail closed, with the same typed status the diagnose
+ * path reports.
+ */
+export type ChromeCdpAttachDecision =
+  | { allowed: true }
+  | { allowed: false; status: ChromeCdpStatus };
+
+export async function verifyCdpEndpointOwnershipForAttach(
+  opts: ChromeCdpOptions = {},
+  runtime: ChromeCdpRuntime = {},
+): Promise<ChromeCdpAttachDecision> {
+  const cfg = resolveConfig(opts, runtime);
+  if (cfg.platform !== 'win32' || !isLoopbackEndpoint(cfg.cdpEndpoint)) {
+    return { allowed: true };
+  }
+  const ownership = await verifyEndpointOwnership(cfg, runtime);
+  if (
+    ownership.verdict !== 'foreign_session'
+    && ownership.verdict !== 'profile_conflict'
+    && ownership.verdict !== 'unverified'
+  ) {
+    return { allowed: true };
+  }
+  if (ownership.owner.status === 'no_listener') {
+    // Nothing owns the port: there is no one to protect, and the CDP connect
+    // that follows will fail honestly and route into the repair path.
+    return { allowed: true };
+  }
+  logger.warn(`[chrome-cdp] attach refused — endpoint ownership ${ownership.verdict}: ${ownership.reason}`);
+  return { allowed: false, status: ownershipRefusalStatus(cfg, ownership) };
 }
 
 export async function ensureChromeCdpReady(

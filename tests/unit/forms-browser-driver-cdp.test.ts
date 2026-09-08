@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { chromium } from 'playwright-core';
 import { FormsDriver } from '../../electron/services/forms-browser-v2/forms-driver';
-import { ensureChromeCdpReady } from '../../electron/services/chrome-cdp';
+import { ensureChromeCdpReady, verifyCdpEndpointOwnershipForAttach } from '../../electron/services/chrome-cdp';
 
 vi.mock('playwright-core', () => ({
   chromium: {
@@ -13,6 +13,7 @@ vi.mock('playwright-core', () => ({
 vi.mock('../../electron/services/chrome-cdp', () => ({
   CHROME_CDP_ENDPOINT: 'http://127.0.0.1:18792',
   ensureChromeCdpReady: vi.fn(),
+  verifyCdpEndpointOwnershipForAttach: vi.fn(async () => ({ allowed: true })),
 }));
 
 function fakeBrowser({ connected, contexts }: { connected: boolean; contexts: unknown[] }) {
@@ -41,6 +42,46 @@ describe('FormsDriver CDP connection lifecycle', () => {
   beforeEach(() => {
     vi.mocked(chromium.connectOverCDP).mockReset();
     vi.mocked(ensureChromeCdpReady).mockReset();
+    vi.mocked(verifyCdpEndpointOwnershipForAttach).mockReset();
+    vi.mocked(verifyCdpEndpointOwnershipForAttach).mockResolvedValue({ allowed: true });
+  });
+
+  // CLWX-130 attach boundary: this driver used to call connectOverCDP first and
+  // only consulted the ownership-verified repair when the connect FAILED — so a
+  // reachable endpoint owned by another Windows session was attached and driven.
+  it('refuses to connect when the loopback endpoint is not this user\'s Chrome — connectOverCDP never runs', async () => {
+    vi.mocked(verifyCdpEndpointOwnershipForAttach).mockResolvedValue({
+      allowed: false,
+      status: {
+        state: 'foreign_endpoint_owner',
+        cdpEndpoint: 'http://127.0.0.1:18792',
+        debugPort: 18792,
+        userDataDir: 'x',
+        chromeExecutable: 'x',
+        chromeProcessCount: 0,
+        targetProfileProcessCount: 0,
+        remoteDebugProcessCount: 0,
+        message: 'in use by a different Windows user\'s session',
+        action: 'resolve_port_conflict',
+      },
+    } as never);
+
+    const driver = new FormsDriver({ cdpEndpoint: 'http://127.0.0.1:18792' });
+
+    await expect(driver.ensureBrowser()).rejects.toThrow('[foreign_endpoint_owner]');
+    expect(chromium.connectOverCDP).not.toHaveBeenCalled();
+    expect(ensureChromeCdpReady).not.toHaveBeenCalled();
+  });
+
+  it('runs the ownership gate BEFORE the first connect, on the same endpoint identity it attaches to', async () => {
+    const browser = fakeBrowser({ connected: true, contexts: [{}] });
+    vi.mocked(chromium.connectOverCDP).mockResolvedValue(browser as never);
+
+    await new FormsDriver({ cdpEndpoint: 'http://127.0.0.1:18792' }).ensureBrowser();
+
+    expect(verifyCdpEndpointOwnershipForAttach).toHaveBeenCalledWith({ cdpEndpoint: 'http://127.0.0.1:18792' });
+    expect(vi.mocked(verifyCdpEndpointOwnershipForAttach).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(chromium.connectOverCDP).mock.invocationCallOrder[0]);
   });
 
   it('reconnects when the cached CDP browser has no contexts', async () => {

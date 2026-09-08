@@ -1503,11 +1503,20 @@ export function register(api) {
           {
             diagnose: 'POST /api/browser/diagnose',
             repairChromeCdp: 'POST /api/browser/repair-chrome-cdp',
+            openChrome: 'POST /api/browser/repair-chrome-cdp',
           },
           capabilityGate,
         )
       : null;
   if (browser) {
+    registerTool({
+      name: 'browser.open_chrome',
+      description:
+        'Open Google Chrome for the principal. ALWAYS use this tool when the principal asks to open Chrome, open the browser, or get the browser working again — never the generic/stock browser start tool, which launches a separate managed browser that breaks Microsoft sign-in and can fail with instructions for the wrong operating system. This tool opens the principal\'s system Chrome through ClawX\'s supported Windows path and preserves their tabs, drafts, and sign-in. It never force-closes Chrome, never touches another Windows user\'s Chrome, and reports a typed truthful state: cdp_ready (Chrome is open and connected), chrome_not_found (install Chrome), profile_locked_close_chrome (ask the principal to close all Chrome windows and retry from ClawX), foreign_endpoint_owner (the automation connection belongs to a different Windows session/profile — relay the message exactly; do not retry into another user\'s Chrome), endpoint_owner_unverified (could not confirm ownership — close extra Chrome windows and retry), or a launch/timeout state with a next step. Relay the returned message in plain terms. Never give manual Chrome setup, flags-page, command-line, or macOS menu-bar instructions — recovery guidance must match the principal\'s Windows environment.',
+      parameters: emptyParameters,
+      execute: async (_toolCallId, _params = {}) => browser.openChrome(),
+    });
+
     registerTool({
       name: 'browser.diagnose',
       description:
@@ -1969,6 +1978,9 @@ function createHostApiBrowserFacade(port, token) {
   return {
     diagnose: () => call('/diagnose'),
     repairChromeCdp: () => call('/repair-chrome-cdp'),
+    // CLWX-130: explicit "open Chrome" intent reuses the SAME Main
+    // repair/ensure service and route — same behavior, no parallel service.
+    openChrome: () => call('/repair-chrome-cdp'),
   };
 }
 

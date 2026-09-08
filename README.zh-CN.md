@@ -319,6 +319,8 @@ Ministry 校长助手在读取内容前使用 `document.find` 解析本地文档
 
 关于邮件能力的问题（"Microsoft Graph 是否已安装/已登录，邮件走哪条通道"）由只读的 `outlook.readiness` 工具通过 `POST /api/outlook/readiness` 回答：它报告类型化的 Graph 状态（已登录、未登录、未配置或未知），以及读取/撰写两条通道的实际选择结果，与真实邮件调用使用同一套选择代码。该工具不打开任何窗口、不调用任何邮箱 API；Outlook 窗口自身的登录状态在 `outlook.open` 观察到之前保持"未知"。状态读取失败时报告"未知"——绝不报告"未配置"；缺失的配置文件也绝不被当作 Graph 支持不存在的证据。
 
+当校长要求打开 Chrome 或浏览器时，助手调用显式的 `browser.open_chrome` 工具：它通过既有的主进程修复服务（`POST /api/browser/repair-chrome-cdp`）打开校长的系统 Chrome；Ministry 流程绝不使用内置托管浏览器。在 Windows 上，CDP 端点即使有 HTTP 响应，也必须先通过有界的回环端口归属检查，确认监听进程是 ClawX 可以驱动的 Chrome：ClawX 自己启动的进程（PID 正向归属）、ClawX 专用自动化配置目录、或校长本人有意带调试端口启动的用户配置 Chrome，才会报告就绪。Outlook 和 Forms 驱动在通过 CDP 连接之前也执行同一归属检查；归属、启动与就绪从端点推导出同一个端口标识。确认属于其他 Windows 用户会话与同会话冲突会返回不同的真实指引（`foreign_endpoint_owner`），无法识别归属则以 `endpoint_owner_unverified` 拒绝而不是虚假就绪——绝不要求校长登录他们已经在用的 Windows 会话，未知归属绝不触发终止进程，ClawX 也绝不关闭或接管其他用户的 Chrome、绝不悄悄改用其他端口。
+
 Windows 打包会在 Windows 上运行完整预检。请保留 `.gitattributes`：可执行源码使用 LF，`.cmd`/`.bat` 使用 CRLF，PDF 保持原始二进制字节。
 
 Windows 环境信息采集、IAP 连接和应用窗口录制请参阅 [Windows 测试指南](windows-pilot/vm-testing/README.md)。服务器虚拟机检查与校长笔记本验收的覆盖范围分别记录。
