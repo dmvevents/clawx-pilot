@@ -8,9 +8,10 @@ Root owns board/current-doc syncing; this file is the dated raw evidence.
 
 - Reported/last verified: 2026-09-08T12:15Z (UTC), local operator TZ UTC-4.
 - Owning card: CLWX-39 (Graph connection setup). Related: Outlook Graph transport cards.
-- Status: three defects **source verified** (fix + regression tests at this revision).
-  Remaining gates: installed-build proof, live-tenant sign-in (account holder only),
-  independent review of this diff.
+- Status: three defects **source verified** (fix + regression tests at this revision);
+  independent review of `7a129570` APPROVED; local mocked Electron UI E2E PASS
+  (see "E2E unblock"). Remaining gates: installed-build proof, live-tenant sign-in
+  (account holder only).
 - Environment: macOS dev checkout, source SHA base `f93ac8b3` + this working tree
   (committed on this lane). No installer/artifact — installed behavior is **unknown**,
   not inferred from this checkout.
@@ -74,7 +75,38 @@ Root owns board/current-doc syncing; this file is the dated raw evidence.
 | Harness spec | `pnpm harness validate --spec harness/specs/tasks/graph-connection-setup-states.md --since f93ac8b3` | PASS ("Spec is valid") |
 | Harness dry-run | `pnpm harness run --spec … --since f93ac8b3 --dry-run` | PASS (`artifacts/harness/latest.md`; fast/comms steps executed manually above) |
 | Comms | `pnpm comms:replay` + `pnpm comms:compare` | PASS (0 order violations; qps/p95 delta 0.00%) |
-| E2E `tests/e2e/settings-msgraph-connection.spec.ts` | `pnpm run build:vite && pnpm exec playwright test tests/e2e/settings-msgraph-connection.spec.ts` | **BLOCKED** — build:vite PASS; Playwright launch failed: `Error: ENOENT … node_modules/.pnpm/electron@42.0.0/node_modules/electron/path.txt` (Electron binary absent from shared store; downloading it is a prohibited dependency install this session). Spec is authored and lint/typecheck-clean; not claimed as passing. |
+| E2E `tests/e2e/settings-msgraph-connection.spec.ts` | `pnpm run build:vite && pnpm exec playwright test tests/e2e/settings-msgraph-connection.spec.ts` | **PASS** — see "E2E unblock" below. build:vite PASS earlier this revision (dist/ + dist-electron/ dated 2026-09-08 16:15 local, reused unchanged); Playwright rerun 2026-09-08 ~16:45 local with an isolated official Electron binary: `1 passed (11.5s)`. |
+
+### E2E unblock (2026-09-08, environment-only, source unchanged at `7a129570`)
+
+- Root cause (diagnosed, not assumed): the shared read-only pnpm store's
+  `electron@42.0.0` package has **no `path.txt`** and its `dist/Electron.app` is a
+  hollow 236K stub (Resources/lproj only, **no `Contents/Frameworks/`**). Direct launch
+  fails: `dyld: Library not loaded: @rpath/Electron Framework.framework/Electron
+  Framework`. Without `path.txt`, `node_modules/electron/index.js` would attempt
+  `downloadElectron()` — a write into the read-only shared store.
+- Remedy: the package's `index.js` supports `ELECTRON_OVERRIDE_DIST_PATH`, which
+  returns `join($OVERRIDE, path.txt-contents || 'electron')` with **no store write**.
+  Prepared an isolated cache (no lockfile/store/dependency change, no installer run):
+  - `curl -fsSL https://github.com/electron/electron/releases/download/v42.0.0/electron-v42.0.0-darwin-arm64.zip` → `/private/tmp/clawx-graph-e2e-electron42/`
+  - SHA-256 `3c619bb8ec6a243142e392335382a3383739a9977ca85067cb1f31599ff993e5` — matches
+    `node_modules/electron/checksums.json["electron-v42.0.0-darwin-arm64.zip"]` exactly.
+  - `ditto -x -k … dist/`; symlink `dist/electron → Electron.app/Contents/MacOS/Electron`
+    (matches the override's `'electron'` fallback since `path.txt` is absent).
+  - Sanity: `dist/electron --version` → `v42.0.0` (darwin-arm64 host);
+    `ELECTRON_OVERRIDE_DIST_PATH=… node -e "console.log(require('electron'))"` resolves
+    the isolated path, shared store untouched (post-run: still no `path.txt`, stub still 236K).
+- Command: `ELECTRON_OVERRIDE_DIST_PATH=/private/tmp/clawx-graph-e2e-electron42/dist
+  pnpm exec playwright test tests/e2e/settings-msgraph-connection.spec.ts`
+- Output: `✓ 1 … vanilla install shows unconfigured, saving config yields signed_out
+  with Sign in (11.1s)` → `1 passed (11.5s)`. Real Electron-rendered Settings showed
+  `data-state=unconfigured` ("Not connected", demo-mailbox copy, no Sign in button),
+  then after saving synthetic `moe.gov.tt` / `11111111-2222-3333-4444-555555555555`
+  transitioned to `data-state=signed_out` ("Not signed in", enabled Sign in, "Mock
+  mailbox" badge). Mocked/local only: no sign-in, no account, no Graph API traffic.
+  Fixture temp home/user-data dirs self-cleaned; none left behind.
+- `tests/e2e/fixtures/electron.ts` unchanged — it already honors the package override
+  via `import electronBinaryPath from 'electron'`; no source change, no new review round.
 
 ## Known limits / not proven here
 
@@ -83,13 +115,17 @@ Root owns board/current-doc syncing; this file is the dated raw evidence.
   redirects, Conditional Access `interaction_required`) is asserted from OAuth 2.0 /
   Microsoft identity-platform documented behavior, not observed against the tenant.
 - `connectionState` is derived, not persisted; `effectiveMock` stays a separate fact
-  and never renders as a live connection (unit-tested; E2E assertion authored but blocked).
+  and never renders as a live connection (unit-tested; E2E assertion now passing, see above).
+- The E2E pass is dev-tree Electron UI evidence (mocked, local, synthetic tenant/client
+  values), not installed-artifact, live-tenant or signed-in evidence.
 - No tenant/client IDs invented; no new dependency; scopes/permissions unchanged.
 
 ## Resume here
 
-- Branch `lane/graph-connection-20260908`; this commit contains fix + tests + spec + this doc.
-- Next: independent review of this diff; then run the blocked E2E where the Electron
-  binary exists (any lane with a hydrated store); then installed-build + live-tenant
-  acceptance per CLWX-39 gates.
+- Branch `lane/graph-connection-20260908`; `7a129570` contains fix + tests + spec.
+  Independent review of `7a129570`: APPROVED (root
+  `artifacts/ga-fable-20260908/graph-connection-review/result.md`). The E2E is now
+  green at that revision (environment-only unblock above; no source delta since review).
+- Next: installed-build + live-tenant acceptance per CLWX-39 gates (account holder
+  required for sign-in).
 - Do not repeat: the unit/typecheck/lint/harness/comms evidence above for an unchanged diff.
