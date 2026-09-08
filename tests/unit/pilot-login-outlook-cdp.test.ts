@@ -11,13 +11,20 @@ const helper = require('../../windows-pilot/scripts/pilot-login-outlook-cdp.js')
   STATE_EXIT_CODES: Record<string, number>;
   TERMINAL_BLOCKED_STATES: Set<string>;
   accountLabelMatches: (labels: string[], expectedEmail: string) => boolean;
+  classifyIdentityEvidence: (labels: string[], expectedEmail: string) => string;
+  extractEmailTokens: (value: string) => string[];
   classifySignInState: (
     url: string,
     facts: Record<string, unknown> | null,
     expectedEmail: string,
-  ) => { state: string; reasons: string[] };
+  ) => { state: string; reasons: string[]; identity?: string };
+  settleAndVerify: (
+    page: unknown,
+    expectedEmail: string,
+  ) => Promise<{ state: string; reasons: string[] }>;
   collectOutlookPageFactsInPage: () => {
     accountLabels: string[];
+    hasMeControlButton: boolean;
     hasEmailInput: boolean;
     hasPasswordInput: boolean;
     hasMessageList: boolean;
@@ -36,12 +43,15 @@ const helper = require('../../windows-pilot/scripts/pilot-login-outlook-cdp.js')
 const {
   STATE_EXIT_CODES,
   accountLabelMatches,
+  classifyIdentityEvidence,
   classifySignInState,
   collectOutlookPageFactsInPage,
+  extractEmailTokens,
   isMicrosoftLoginUrl,
   isOutlookMailUrl,
   redactUrl,
   selectOwnedPage,
+  settleAndVerify,
 } = helper;
 
 // Deliberately fake fixture identity - never a real credential.
@@ -123,7 +133,7 @@ describe('wrong account', () => {
     );
     const verdict = classifySignInState(MAIL_URL, facts, EXPECTED_EMAIL);
     expect(verdict.state).toBe('OUTLOOK_WRONG_ACCOUNT_BLOCKED');
-    expect(verdict.reasons).toContain('identity=mismatch');
+    expect(verdict.reasons).toContain('identity=different_account');
     expect(STATE_EXIT_CODES[verdict.state]).not.toBe(0);
     // Output hygiene: reasons must never leak account values.
     expect(verdict.reasons.join(' ')).not.toMatch(/@/);
@@ -135,6 +145,41 @@ describe('wrong account', () => {
     expect(accountLabelMatches(['Account manager for qa.fixture'], EXPECTED_EMAIL)).toBe(false);
     expect(accountLabelMatches([], EXPECTED_EMAIL)).toBe(false);
     expect(accountLabelMatches([`Account manager for ${EXPECTED_EMAIL}`], '')).toBe(false);
+  });
+
+  it('F1: superstring local-part and domain accounts are DIFFERENT accounts, never a PASS', () => {
+    // Review controls A3/A4: substring matching passed both of these.
+    const superLocal = `x${EXPECTED_EMAIL}`; // xqa.fixture@example.edu.tt
+    const superDomain = `${EXPECTED_EMAIL}.attacker.example`;
+    for (const account of [superLocal, superDomain]) {
+      expect(accountLabelMatches([`Account manager for ${account}`], EXPECTED_EMAIL)).toBe(false);
+      const facts = factsFromBody(SIGNED_IN_INBOX_HTML.replace(EXPECTED_EMAIL, account));
+      const verdict = classifySignInState(MAIL_URL, facts, EXPECTED_EMAIL);
+      expect(verdict.state).toBe('OUTLOOK_WRONG_ACCOUNT_BLOCKED');
+      expect(STATE_EXIT_CODES[verdict.state]).not.toBe(0);
+    }
+    // Exact token embedded in surrounding punctuation still matches exactly.
+    expect(accountLabelMatches([`Account manager for ${EXPECTED_EMAIL}.`], EXPECTED_EMAIL)).toBe(true);
+    expect(extractEmailTokens(`a ${EXPECTED_EMAIL} b`)).toEqual([EXPECTED_EMAIL]);
+    expect(extractEmailTokens(`${EXPECTED_EMAIL}.attacker.example`)).toEqual([
+      `${EXPECTED_EMAIL}.attacker.example`,
+    ]);
+  });
+
+  it('F3: display-name-only labels are insufficient identity, NOT a wrong-account claim', () => {
+    // Review control E2: the live me-control accessible name is display-name-only.
+    const facts = factsFromBody(
+      SIGNED_IN_INBOX_HTML.replace(
+        `aria-label="Account manager for ${EXPECTED_EMAIL}"`,
+        'aria-label="Account manager for Dana Q. Fixture"',
+      ),
+    );
+    const verdict = classifySignInState(MAIL_URL, facts, EXPECTED_EMAIL);
+    expect(verdict.state).toBe('OUTLOOK_SIGNIN_UNVERIFIED_AMBIGUOUS');
+    expect(verdict.reasons).toContain('identity=insufficient');
+    // Non-terminal: the settle loop may still resolve identity (account dialog).
+    expect(helper.TERMINAL_BLOCKED_STATES.has(verdict.state)).toBe(false);
+    expect(classifyIdentityEvidence(['Dana Q. Fixture'], EXPECTED_EMAIL)).toBe('insufficient');
   });
 });
 
@@ -220,5 +265,167 @@ describe('output hygiene', () => {
       'https://outlook.office.com/mail/inbox',
     );
     expect(redactUrl('login?code=SECRET')).toBe('unparseable-url');
+  });
+});
+
+describe('F4: visible identity nodes only', () => {
+  const HIDDEN_DIALOG = (style: string) => `
+    <div role="dialog" ${style}>
+      <div id="mectrl_main_body">
+        <div id="mectrl_currentAccount_secondary">${EXPECTED_EMAIL}</div>
+      </div>
+    </div>`;
+
+  it('ignores display:none, hidden-attribute and aria-hidden identity nodes (review C3)', () => {
+    for (const style of ['style="display:none"', 'hidden', 'aria-hidden="true"', 'style="visibility:hidden"']) {
+      const facts = factsFromBody(
+        `<div role="listbox" aria-label="Message list"></div>
+         <div aria-label="Folder pane"></div>
+         <button aria-label="New mail"></button>` + HIDDEN_DIALOG(style),
+      );
+      expect(facts.accountLabels).toEqual([]);
+      const verdict = classifySignInState(MAIL_URL, facts, EXPECTED_EMAIL);
+      expect(verdict.state).toBe('OUTLOOK_SIGNIN_UNVERIFIED_AMBIGUOUS');
+      expect(STATE_EXIT_CODES[verdict.state]).not.toBe(0);
+    }
+  });
+
+  it('accepts the same identity node once visible (root-verified evidence shape)', () => {
+    const facts = factsFromBody(
+      `<div role="listbox" aria-label="Message list"></div>
+       <div aria-label="Folder pane"></div>` + HIDDEN_DIALOG(''),
+    );
+    const verdict = classifySignInState(MAIL_URL, facts, EXPECTED_EMAIL);
+    expect(verdict.state).toBe('OUTLOOK_SIGNED_IN_VERIFIED');
+  });
+
+  it('never accepts whole-body text as identity', () => {
+    const facts = factsFromBody(
+      `<div role="listbox" aria-label="Message list"></div>
+       <div aria-label="Folder pane"></div>
+       <p>Signed in as ${EXPECTED_EMAIL}</p>`,
+    );
+    expect(facts.accountLabels).toEqual([]);
+    expect(classifySignInState(MAIL_URL, facts, EXPECTED_EMAIL).state).toBe(
+      'OUTLOOK_SIGNIN_UNVERIFIED_AMBIGUOUS',
+    );
+  });
+});
+
+describe('F2: root-observed OWA account control (artifacts/ROOT_AUTH_DOM_UPDATE.md)', () => {
+  // Actual observed DOM: header is #owa-me-control-container button with a
+  // display-name-only accessible name; the exact email renders async inside
+  // role=dialog/#mectrl_main_body as #mectrl_currentAccount_secondary.
+  const INBOX_CONTROLS = `
+    <div role="listbox" aria-label="Message list"></div>
+    <div aria-label="Folder pane"></div>
+    <button aria-label="New mail"></button>`;
+  const ME_CONTROL_CLOSED = `${INBOX_CONTROLS}
+    <div id="owa-me-control-container"><button aria-label="Dana Fixture"></button></div>`;
+  const dialog = (email: string, hidden: boolean) => `
+    <div role="dialog"${hidden ? ' style="display:none"' : ''}>
+      <div id="mectrl_main_body">
+        <div id="mectrl_currentAccount_primary">Dana Fixture</div>
+        <div id="mectrl_currentAccount_secondary">${email}</div>
+      </div>
+    </div>`;
+
+  it('closed menu: identity insufficient (not wrong-account), me-control button reported', () => {
+    const facts = factsFromBody(ME_CONTROL_CLOSED);
+    expect(facts.hasMeControlButton).toBe(true);
+    const verdict = classifySignInState(MAIL_URL, facts, EXPECTED_EMAIL);
+    expect(verdict.state).toBe('OUTLOOK_SIGNIN_UNVERIFIED_AMBIGUOUS');
+    expect(verdict.identity).toBe('insufficient');
+  });
+
+  it('open dialog with the expected email verifies; different email blocks as wrong account', () => {
+    const good = classifySignInState(
+      MAIL_URL,
+      factsFromBody(ME_CONTROL_CLOSED + dialog(EXPECTED_EMAIL, false)),
+      EXPECTED_EMAIL,
+    );
+    expect(good.state).toBe('OUTLOOK_SIGNED_IN_VERIFIED');
+    const bad = classifySignInState(
+      MAIL_URL,
+      factsFromBody(ME_CONTROL_CLOSED + dialog('someone.else@example.edu.tt', false)),
+      EXPECTED_EMAIL,
+    );
+    expect(bad.state).toBe('OUTLOOK_WRONG_ACCOUNT_BLOCKED');
+  });
+
+  // Fake page driving settleAndVerify: menu starts closed, the dialog renders
+  // hidden first (delayed async content), then becomes visible. No live
+  // requests, no browser.
+  class FakeMailPage {
+    clicks: string[] = [];
+    keys: string[] = [];
+    private opened = false;
+    private waitsSinceOpen = 0;
+    constructor(private readonly dialogEmail: string, private readonly identityVisibleFromStart = false) {}
+    private currentHtml(): string {
+      if (this.identityVisibleFromStart) return ME_CONTROL_CLOSED + dialog(this.dialogEmail, false);
+      if (!this.opened) return ME_CONTROL_CLOSED;
+      // One settle iteration of hidden (still-loading) dialog before visible.
+      return ME_CONTROL_CLOSED + dialog(this.dialogEmail, this.waitsSinceOpen < 2);
+    }
+    private render() {
+      document.body.innerHTML = this.currentHtml();
+    }
+    url() {
+      return MAIL_URL;
+    }
+    async waitForTimeout() {
+      if (this.opened) this.waitsSinceOpen += 1;
+    }
+    async evaluate<T>(fn: () => T): Promise<T> {
+      this.render();
+      return fn();
+    }
+    locator(selector: string) {
+      return {
+        first: () => ({
+          isVisible: async () => {
+            this.render();
+            return document.querySelector(selector) !== null;
+          },
+          click: async () => {
+            this.clicks.push(selector);
+            if (selector === '#owa-me-control-container button') this.opened = true;
+          },
+        }),
+      };
+    }
+    keyboard = {
+      press: async (key: string) => {
+        this.keys.push(key);
+      },
+    };
+  }
+
+  it('settle flow opens ONLY the observed me-control button, waits out delayed dialog visibility, verifies, then restores menu state', async () => {
+    const page = new FakeMailPage(EXPECTED_EMAIL);
+    const verdict = await settleAndVerify(page, EXPECTED_EMAIL);
+    expect(verdict.state).toBe('OUTLOOK_SIGNED_IN_VERIFIED');
+    // Bounded, exclusive click scope: the account control once, nothing else -
+    // never sign out / switch account / #idSIButton9 / generic approvals.
+    expect(page.clicks).toEqual(['#owa-me-control-container button']);
+    // Menu it opened is closed afterwards via Escape only.
+    expect(page.keys).toEqual(['Escape']);
+  });
+
+  it('settle flow reports WRONG_ACCOUNT from the opened dialog and still restores menu state', async () => {
+    const page = new FakeMailPage('someone.else@example.edu.tt');
+    const verdict = await settleAndVerify(page, EXPECTED_EMAIL);
+    expect(verdict.state).toBe('OUTLOOK_WRONG_ACCOUNT_BLOCKED');
+    expect(page.clicks).toEqual(['#owa-me-control-container button']);
+    expect(page.keys).toEqual(['Escape']);
+  });
+
+  it('settle flow never touches the account control when identity is already visible', async () => {
+    const page = new FakeMailPage(EXPECTED_EMAIL, true);
+    const verdict = await settleAndVerify(page, EXPECTED_EMAIL);
+    expect(verdict.state).toBe('OUTLOOK_SIGNED_IN_VERIFIED');
+    expect(page.clicks).toEqual([]);
+    expect(page.keys).toEqual([]);
   });
 });

@@ -22,6 +22,26 @@
 //   - closes only its own CDP connection; it creates no contexts and closes
 //     no tabs, so the operator's browser state is preserved.
 //
+// Independent-review corrections (artifacts/INDEPENDENT_REVIEW.md, F1-F4),
+// against the root-observed live DOM (artifacts/ROOT_AUTH_DOM_UPDATE.md):
+//   - F1: identity is exact email-token equality (case-insensitive), never a
+//     substring test; superstring local parts ("x<expected>") and superstring
+//     domains ("<expected>.attacker.example") are different accounts.
+//   - F2: on the live OWA header the accessible name of
+//     #owa-me-control-container button is display-name-only; the exact email
+//     renders asynchronously as a visible #mectrl_currentAccount_secondary
+//     inside the role=dialog/#mectrl_main_body account card only after that
+//     button is opened. When the verified mail origin shows insufficient
+//     identity, the settle loop opens ONLY that observed button, once,
+//     bounded by its existing 12x5s budget, then reads the visible dialog
+//     identity. It restores menu state via a single Escape if it opened the
+//     menu, and never clicks sign out / switch account / any approval.
+//   - F3: OUTLOOK_WRONG_ACCOUNT_BLOCKED requires positive evidence of a
+//     DIFFERENT full email token; display-name-only or absent labels are
+//     insufficient identity (AMBIGUOUS), not a wrong-account claim.
+//   - F4: identity labels are collected from visible nodes only; whole-body
+//     text and display names are never accepted as identity.
+//
 // This is a QA fixture helper for the designated test mailbox. It does NOT
 // establish installed-app acceptance, and no source test may claim a real
 // principal's authentication works: principals sign into their own accounts
@@ -132,18 +152,59 @@ function redactUrl(url) {
   }
 }
 
-// True only when a collected label positively contains the full expected
-// address. Empty/absent labels are NOT a match - unknown identity must stay
-// unknown.
-function accountLabelMatches(labels, expectedEmail) {
+// Review F1: identity comparison must be EXACT email-token equality, never a
+// substring test. A substring match passed superstring accounts such as
+// "x<expected>" and "<expected>.attacker.example" - both are different
+// accounts. Tokens are extracted as whole email atoms; the greedy domain tail
+// means a superstring domain extracts as one longer token that fails equality.
+function extractEmailTokens(value) {
+  const text = String(value || '').toLowerCase();
+  return text.match(/[a-z0-9._%+'-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+/g) || [];
+}
+
+// Review F1+F3: tri-state identity evidence.
+//   'match'             - some collected label carries a token exactly equal
+//                         to the expected address (case-insensitive)
+//   'different_account' - labels carry at least one full email token and NONE
+//                         equals the expected address (positive evidence of a
+//                         different account - the only WRONG_ACCOUNT trigger)
+//   'insufficient'      - no email token at all (e.g. display-name-only
+//                         labels, empty labels): unknown identity, never a
+//                         match and never a wrong-account claim
+function classifyIdentityEvidence(labels, expectedEmail) {
   const expected = String(expectedEmail || '').trim().toLowerCase();
-  if (!expected || !expected.includes('@')) return false;
-  return (labels || []).some((label) => String(label || '').toLowerCase().includes(expected));
+  const expectedTokens = extractEmailTokens(expected);
+  // The expected value must itself be exactly one clean email atom; otherwise
+  // no label can ever "match" (fail closed, never loosen the comparison).
+  const expectedValid = expectedTokens.length === 1 && expectedTokens[0] === expected;
+  const observedTokens = [];
+  for (const label of labels || []) {
+    for (const token of extractEmailTokens(label)) observedTokens.push(token);
+  }
+  if (observedTokens.length === 0) return 'insufficient';
+  if (expectedValid && observedTokens.some((token) => token === expected)) return 'match';
+  return 'different_account';
+}
+
+// True only on exact-token identity match. Display names, partial addresses
+// and superstrings never match.
+function accountLabelMatches(labels, expectedEmail) {
+  return classifyIdentityEvidence(labels, expectedEmail) === 'match';
 }
 
 // Runs INSIDE the page via page.evaluate: must stay self-contained (no outer
 // closures). Also exercised directly against fake DOM fixtures in
 // tests/unit/pilot-login-outlook-cdp.test.ts.
+// Review F2 (root-observed 2026-09-08 DOM, artifacts/ROOT_AUTH_DOM_UPDATE.md):
+// the live header control is `#owa-me-control-container button` whose
+// accessible name is display-name-only; the exact email renders async inside
+// role=dialog / #mectrl_main_body as #mectrl_currentAccount_secondary AFTER
+// that button is opened. The collector therefore also reports whether the
+// account control button is visible so the flow can boundedly open it.
+// Review F4: identity is read from VISIBLE nodes only (hidden mectrl content
+// is not root's evidence bar). The rect/offsetParent leg applies only in
+// layout-capable environments (real browser); style/hidden/aria-hidden walks
+// apply everywhere including jsdom fixtures.
 function collectOutlookPageFactsInPage() {
   const doc = document;
   const q = (selector) => {
@@ -156,16 +217,56 @@ function collectOutlookPageFactsInPage() {
   const present = (selector) => q(selector).length > 0;
   const clip = (value) => String(value || '').trim().slice(0, 200);
 
+  let layoutCapable = false;
+  try {
+    layoutCapable = Boolean(doc.body && doc.body.getClientRects().length > 0);
+  } catch {
+    layoutCapable = false;
+  }
+  const isVisibleNode = (el) => {
+    if (!el) return false;
+    const win = doc.defaultView;
+    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+      if (node.hidden) return false;
+      if (node.getAttribute && node.getAttribute('aria-hidden') === 'true') return false;
+      if (win && typeof win.getComputedStyle === 'function') {
+        let style = null;
+        try {
+          style = win.getComputedStyle(node);
+        } catch {
+          style = null;
+        }
+        if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
+      }
+    }
+    if (layoutCapable) {
+      try {
+        return el.getClientRects().length > 0 || el.offsetParent !== null;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  };
+  const visibleOnly = (selector) => q(selector).filter(isVisibleNode);
+
   const accountLabels = [];
   const pushLabel = (value) => {
     const text = clip(value);
     if (text && accountLabels.length < 8 && !accountLabels.includes(text)) accountLabels.push(text);
   };
-  for (const el of q('#meInitialsButton, #O365_MainLink_Me, [aria-label*="Account manager" i]')) {
+  for (const el of visibleOnly(
+    '#meInitialsButton, #O365_MainLink_Me, #owa-me-control-container button, [aria-label*="Account manager" i]',
+  )) {
     pushLabel(el.getAttribute('aria-label'));
     pushLabel(el.getAttribute('title'));
   }
-  for (const el of q('[id^="mectrl_currentAccount"]')) pushLabel(el.textContent);
+  // Account-dialog identity nodes (root-verified evidence shape): visible
+  // mectrl current-account entries, including #mectrl_currentAccount_secondary
+  // which carries the exact email once the dialog has rendered.
+  for (const el of visibleOnly('[id^="mectrl_currentAccount"]')) pushLabel(el.textContent);
+
+  const hasMeControlButton = visibleOnly('#owa-me-control-container button').length > 0;
 
   const headingText = q('[role="heading"], h1, h2, .text-title, #loginHeader')
     .map((el) => clip(el.textContent))
@@ -174,6 +275,7 @@ function collectOutlookPageFactsInPage() {
 
   return {
     accountLabels,
+    hasMeControlButton,
     hasEmailInput: present('input[type="email"], input[name="loginfmt"], #i0116'),
     hasPasswordInput: present('input[type="password"], input[name="passwd"], #i0118'),
     hasMessageList: present('[aria-label="Message list" i], [data-app-section="MessageList"], #MailList'),
@@ -219,20 +321,25 @@ function classifySignInState(url, facts, expectedEmail) {
       Boolean,
     ).length;
     const reasons = [`inbox_controls=${inboxControlCount}/3`];
-    if (!facts.accountLabels || facts.accountLabels.length === 0) {
-      reasons.push('identity=absent');
-      return { state: 'OUTLOOK_SIGNIN_UNVERIFIED_AMBIGUOUS', reasons };
+    const labels = facts.accountLabels || [];
+    const identity = classifyIdentityEvidence(labels, expectedEmail);
+    if (identity === 'different_account') {
+      // Review F3: only a positive DIFFERENT full email token means wrong
+      // account. Display-name-only or absent labels are insufficient
+      // identity, never a wrong-account claim.
+      reasons.push('identity=different_account');
+      return { state: 'OUTLOOK_WRONG_ACCOUNT_BLOCKED', reasons, identity };
     }
-    if (!accountLabelMatches(facts.accountLabels, expectedEmail)) {
-      reasons.push('identity=mismatch');
-      return { state: 'OUTLOOK_WRONG_ACCOUNT_BLOCKED', reasons };
+    if (identity === 'match') {
+      reasons.push('identity=match');
+      if (inboxControlCount >= 2) {
+        return { state: 'OUTLOOK_SIGNED_IN_VERIFIED', reasons, identity };
+      }
+      reasons.push('inbox_controls_insufficient');
+      return { state: 'OUTLOOK_SIGNIN_UNVERIFIED_AMBIGUOUS', reasons, identity };
     }
-    reasons.push('identity=match');
-    if (inboxControlCount >= 2) {
-      return { state: 'OUTLOOK_SIGNED_IN_VERIFIED', reasons };
-    }
-    reasons.push('inbox_controls_insufficient');
-    return { state: 'OUTLOOK_SIGNIN_UNVERIFIED_AMBIGUOUS', reasons };
+    reasons.push(labels.length === 0 ? 'identity=absent' : 'identity=insufficient');
+    return { state: 'OUTLOOK_SIGNIN_UNVERIFIED_AMBIGUOUS', reasons, identity };
   }
   return { state: 'LOGIN_AMBIGUOUS', reasons: ['unrecognized_origin'] };
 }
@@ -312,16 +419,50 @@ async function performCredentialEntry(page, email, password) {
 // return only a positively classified terminal verdict. MFA/consent prompts
 // are reported, never clicked. Only the positively identified KMSI prompt is
 // confirmed, once.
+// Review F2: on the live OWA DOM the exact email is hidden until the account
+// control is opened (see collector note). When the verified mail origin shows
+// insufficient/absent identity and the root-observed #owa-me-control-container
+// button is visible, this loop opens THAT BUTTON ONLY, once, then keeps
+// polling (bounded by the same 12x5s budget) for the visible account-dialog
+// identity (#mectrl_currentAccount_secondary). It never clicks sign out,
+// switch account, approval or any other menu item, and it restores the user's
+// menu state afterwards with a single best-effort Escape - only if it opened
+// the menu itself.
 async function settleAndVerify(page, expectedEmail) {
   let kmsiConfirmed = false;
+  let meControlOpened = false;
   let last = { state: 'LOGIN_AMBIGUOUS', reasons: ['no_settle_observation'] };
   for (let attempt = 0; attempt < 12; attempt += 1) {
     await page.waitForTimeout(5000);
-    last = classifySignInState(page.url(), await collectPageFacts(page), expectedEmail);
+    const facts = await collectPageFacts(page);
+    last = classifySignInState(page.url(), facts, expectedEmail);
     if (last.state === 'OUTLOOK_SIGNED_IN_VERIFIED' || TERMINAL_BLOCKED_STATES.has(last.state)) break;
     if (last.state === 'KMSI_CONFIRM_PENDING' && !kmsiConfirmed) {
       kmsiConfirmed = true;
       await clickIfVisible(page, ['#idSIButton9'], 5000);
+      continue;
+    }
+    if (
+      !meControlOpened &&
+      last.state === 'OUTLOOK_SIGNIN_UNVERIFIED_AMBIGUOUS' &&
+      last.identity === 'insufficient' &&
+      facts &&
+      facts.hasMeControlButton &&
+      isOutlookMailUrl(page.url())
+    ) {
+      meControlOpened = true;
+      console.log('ME_CONTROL_OPENED: yes');
+      await clickIfVisible(page, ['#owa-me-control-container button'], 5000);
+    }
+  }
+  if (meControlOpened) {
+    // Preserve the user's menu state: close only the menu this helper opened,
+    // via Escape (never a click that could land on sign-out/switch-account).
+    try {
+      await page.keyboard.press('Escape');
+      console.log('ME_CONTROL_CLOSED: escape_sent');
+    } catch {
+      console.log('ME_CONTROL_CLOSED: escape_failed_menu_may_remain_open');
     }
   }
   console.log(`URL_AFTER: ${redactUrl(page.url())}`);
@@ -415,12 +556,15 @@ module.exports = {
   STATE_EXIT_CODES,
   TERMINAL_BLOCKED_STATES,
   accountLabelMatches,
+  classifyIdentityEvidence,
   classifySignInState,
   collectOutlookPageFactsInPage,
+  extractEmailTokens,
   isMicrosoftLoginUrl,
   isOutlookMailUrl,
   redactUrl,
   selectOwnedPage,
+  settleAndVerify,
 };
 
 if (require.main === module) {
