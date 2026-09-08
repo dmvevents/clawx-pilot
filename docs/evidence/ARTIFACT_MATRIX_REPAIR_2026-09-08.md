@@ -31,7 +31,7 @@ workspace-`xlsx` writer behavior.
    the family. The unit drift guard caught it (`unexpected: outlook.readiness`).
    Contract updated to 34 tools (outlook 12 + forms 5 + browser 2 + principal 8
    + document 7); comments and count assertions updated with it. Without this,
-   `plugin-registration.full` / `gateway-transport.full` — both fast-lane rows
+   `plugin-registration.full` — a fast-lane row
    in the `package` script — would FAIL on the next packaging attempt.
    Confidence: high (source read at `extensions/moe-principal-assistant/index.mjs:1561`
    plus the source-literal drift guard).
