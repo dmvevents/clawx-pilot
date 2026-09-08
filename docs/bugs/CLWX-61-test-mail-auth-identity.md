@@ -89,3 +89,73 @@ Corrected revision: **`02ff4b99b939153c197a1aabf5cca96921fbbb37`** (branch `lane
 about real principals, who sign into their own accounts per `docs/USER_GUIDE.md` (root-owned).
 No source test may claim their authentication works, and this lane does not establish
 installed-app acceptance.
+
+## 6. Independent review round 1 (artifacts/INDEPENDENT_REVIEW.md, 2026-09-08): CHANGES_REQUIRED
+
+The review of `02ff4b99` confirmed the original defect class was killed (baseline repro, tab/context
+ownership, MFA restraint, fail-closed exit contract, redaction all verified sound) but found four
+residual defects via adversarial controls against the exported functions. Retained verbatim as the
+exact failing checks:
+
+| Review control | Behavior at 02ff4b99 | Finding |
+|---|---|---|
+| A3: superstring account `x<expected>` in label + full inbox | `OUTLOOK_SIGNED_IN_VERIFIED` exit 0 | **F1 false PASS** — `accountLabelMatches` used substring `includes` |
+| A4: superstring domain `<expected>.attacker.example` | `OUTLOOK_SIGNED_IN_VERIFIED` exit 0 | **F1 false PASS** |
+| C3: hidden (`display:none`) `#mectrl_currentAccount_secondary` w/ expected email, dialog closed | `OUTLOOK_SIGNED_IN_VERIFIED` exit 0 | **F4** — no visibility gate on identity nodes |
+| E1: root-observed live shape — `#owa-me-control-container button` with display-name-only accessible name, dialog closed, full inbox | AMBIGUOUS exit 12 forever | **F2** — the only PASS unreachable on the actually observed live DOM (collector never opened the account control) |
+| E2: `"Account manager for <Display Name>"` label (no email) | `OUTLOOK_WRONG_ACCOUNT_BLOCKED` exit 11, terminal | **F3** — wrong-account overclaim on insufficient identity |
+
+Root's live observation (artifacts/ROOT_AUTH_DOM_UPDATE.md, 2026-09-08 15:01 UTC): the current OWA
+header control is `#owa-me-control-container button` (accessible name = display name only); the
+exact expected email appears as a **visible `#mectrl_currentAccount_secondary` inside
+`role=dialog`/`#mectrl_main_body` only after opening that button** and letting its async content
+render. Root sanctioned boundedly opening only that observed control, and forbade loosening
+identity to whole-body text or display names.
+
+## 7. Corrections (this revision; fix commit referenced in artifacts/CORRECTION_RECEIPT.md)
+
+- **F1 — exact email-token equality.** `extractEmailTokens` pulls whole email atoms
+  (greedy domain tail, so `<expected>.attacker.example` extracts as one longer token);
+  `classifyIdentityEvidence` requires a token case-insensitively **equal** to
+  `PILOT_TEST_EMAIL`, which must itself normalize to exactly one clean email atom (else nothing
+  can match — fail closed). Superstring local/domain labels are now positive *different accounts*
+  → exit 11, never 0. Negative controls A3/A4 are unit-pinned.
+- **F2 — bounded open of only the observed account control.** New collector fact
+  `hasMeControlButton` (visible `#owa-me-control-container button`). When the verified mail origin
+  classifies `identity=insufficient`, the settle loop clicks **only that selector, once**, within
+  the existing 12×5s budget, then keeps polling for the visible dialog identity
+  (`#mectrl_currentAccount_secondary`, root's E3 evidence shape). It never clicks sign out /
+  switch account / any approval, and restores menu state afterwards with a single Escape —
+  only if it opened the menu itself (`ME_CONTROL_OPENED`/`ME_CONTROL_CLOSED` log lines, no values).
+- **F3 — WRONG_ACCOUNT needs positive evidence.** Tri-state identity: `match` /
+  `different_account` (≥1 full email token, none equal) / `insufficient` (no email token, e.g.
+  display-name-only). Only `different_account` yields `OUTLOOK_WRONG_ACCOUNT_BLOCKED`;
+  `insufficient` is AMBIGUOUS and non-terminal so the settle loop can open the account dialog.
+  Reason tokens: `identity=match|different_account|insufficient|absent` (never account values).
+- **F4 — visible identity nodes only.** The in-page collector filters identity sources through a
+  visibility walk (hidden attribute, `aria-hidden`, computed `display:none`/`visibility:hidden` on
+  the node and ancestors) plus a rects/offsetParent leg that applies only in layout-capable
+  environments (real browser; jsdom fixtures exercise the style walk). Whole-body text and display
+  names are never accepted as identity (unit-pinned).
+
+## 8. Test evidence for the corrections
+
+- `pnpm exec vitest run tests/unit/pilot-login-outlook-cdp.test.ts` → **25/25 PASS** (was 15).
+  New pins: A3/A4 superstrings (F1), display-name-only ≠ wrong account + non-terminal (F3),
+  hidden/aria-hidden/visibility-hidden identity ignored + whole-body text never identity (F4),
+  root-observed closed-menu/open-dialog shapes, and a fake-page `settleAndVerify` drive with
+  **delayed dialog visibility**: opens exactly `['#owa-me-control-container button']`, presses
+  exactly `['Escape']`, verifies expected account; wrong-account-in-dialog variant still restores
+  menu state; identity-visible-from-start variant clicks nothing. No live requests, no browser.
+- Mutation checks: F1 reverted to substring `includes` → 2 tests fail; F4 visibility gate removed
+  → 1 test fails; restored → 25/25.
+- Adjacent suites unaffected (108/108 across this + electron-cdp-probe + harness-honesty).
+- `pnpm exec eslint` on both owned files: clean. Repo `tsc` lanes still do not cover these paths.
+
+## 9. Remaining verification after round 1 (root-owned, still OPEN)
+
+Unchanged from §5, plus: live confirmation that the bounded me-control open/Escape-restore behaves
+on real OWA (menu animation/focus handling), and that `#owa-me-control-container button` +
+`#mectrl_currentAccount_secondary` remain the live selectors. The `skills/laptop` duplicate remains
+outside scope and still defective — reported separately, not edited. All live work stays
+root-owned; this helper ran only against fake DOM fixtures in this lane (live: NOT_RUN).
