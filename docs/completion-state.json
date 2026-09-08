@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T17:27:10.586903+00:00",
+  "updatedAt": "2026-09-08T17:51:49.120601+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -2099,10 +2099,10 @@
     "worktree": "/private/tmp/clawx-plan-execution-20260908",
     "clean": true,
     "pushed": true,
-    "packaged": false,
+    "packaged": true,
     "installed": false,
     "published": false,
-    "fullPreflight": "RUNNING_NATIVE_HOSTED",
+    "fullPreflight": "PASS_NATIVE_HOSTED",
     "heldCommit": "24e1cfd3dd1d736d15252f77ef3e305fb5367857",
     "reviewedAdditions": [
       {
@@ -2189,7 +2189,7 @@
         "scope": "One missing helper in isolated bundle-verifier checkout copy",
         "focusedTests": 6,
         "independentReview": "APPROVE",
-        "nativeAcceptance": "FULL_VM_NOT_RUN_AUTH_BLOCKED; HOSTED_RUNNING"
+        "nativeAcceptance": "HOSTED_FULL_PREFLIGHT_PASS; FULL_VM_NOT_RUN_AUTH_BLOCKED"
       }
     ],
     "combinedFocusedTests": {
@@ -2210,13 +2210,27 @@
       "focusedTests": 6
     },
     "buildRunId": 34256868050,
-    "buildStatus": "in_progress",
+    "buildStatus": "success",
     "profile": "keyless-public",
     "integrationEvidence": "docs/evidence/GA_SOURCE_INTEGRATION_2026-09-08.md",
     "nativePreflight": {
+      "status": "PASS",
       "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
       "runId": 34256868050,
-      "status": "RUNNING"
+      "passed": 2309,
+      "failed": 0,
+      "skipped": 57,
+      "passedFiles": 210,
+      "skippedFiles": 3,
+      "suiteSeconds": 140.11,
+      "runtimePreparation": "PASS",
+      "compileAndBundle": "PASS",
+      "artifactHarness": {
+        "passed": 9,
+        "failed": 0
+      },
+      "installerBuild": "PASS",
+      "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/build-34256868050-complete.log"
     },
     "priorNativeBuilds": [
       {
@@ -2269,7 +2283,31 @@
       "independentReview": "APPROVE_33_FOCUSED_PLUS_FALSIFIERS",
       "reviewTask": "moe26-db-lifetime-review",
       "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/native-db-root/"
-    }
+    },
+    "artifactVerification": {
+      "status": "PASS",
+      "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+      "runId": 34256868050,
+      "version": "0.4.3-moe.26",
+      "profile": "keyless-public",
+      "hostChecks": 36,
+      "compiledAsarFiles": 172,
+      "openclawVersion": "2026.9.2",
+      "artifactId": 10068872044,
+      "archiveSha256": "aab9744390313f004b8c7438bd7c45b9dae45547bb39b179f020634c975509d2",
+      "archiveBytes": 473565450,
+      "installerSha256": "5de74d6d1ce40b5c4c5d963f66bc74dd6c880c4972a6dbf82cd88c1ac5beb620",
+      "installerBytes": 476768641,
+      "asarSha256": "a81d7dd0cf030df2ab934068aaacf8d5d9edcb70d984c2a07dce72854b7c62bd",
+      "packagedExeSha256": "44ff6a6f90fc5872b38626f544e7f19166185ecf2e5bb607f66dc3ddf386f902",
+      "manifest": "docs/release-manifests/0.4.3-moe.26.json",
+      "privateEvidence": "/private/tmp/clawx-moe26-run-34256868050",
+      "installedAcceptance": "NOT_RUN",
+      "published": false,
+      "verifiedAt": "2026-09-08T17:51:49.120601+00:00"
+    },
+    "artifactId": 10068872044,
+    "artifactArchiveSha256": "aab9744390313f004b8c7438bd7c45b9dae45547bb39b179f020634c975509d2"
   },
   "handoff": {
     "status": "COMPLETE_READY_FOR_NEXT_AGENT",
@@ -2309,7 +2347,7 @@
     "awsProfile": "bedrock",
     "region": "us-east-2",
     "baseSource": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
-    "phase": "HOSTED_BUILD_VM_REAUTH_BLOCKED",
+    "phase": "INSTALLED_ACCEPTANCE_VM_REAUTH_BLOCKED",
     "privateReceipts": "artifacts/ga-fable-20260908",
     "plan": ".omx/plans/prd-ga-fable-20260908.md",
     "testSpec": ".omx/plans/test-spec-ga-fable-20260908.md",
@@ -3820,7 +3858,7 @@
         "lintExit": 0
       },
       "reviewTask": "moe26-fixture-copy-review",
-      "status": "APPROVED_INTEGRATED_HOSTED_RUNNING",
+      "status": "APPROVED_INTEGRATED_HOSTED_BUILD_PASS",
       "independentReview": "APPROVE_6_TESTS_AND_ADJACENT_COPY_SCAN",
       "buildRunId": 34256868050,
       "fullNativeVmUnit": "NOT_RUN: SCP transfer rejected by GCP reauthentication before test launch"
@@ -3834,7 +3872,30 @@
       "fullNativeVmSuite": "NOT_RUN_BEFORE_TRANSFER",
       "ownerReauthenticationRequested": true,
       "requiredAction": "gcloud auth login by account holder",
-      "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/adc-refresh-status.json"
+      "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/adc-refresh-status.json",
+      "existingCdp": "Windows Chrome and Electron HTTP200/websocket endpoint at2026-09-08T17:39:04Z; new SSH still requires reauthentication"
+    },
+    "artifactVerification": {
+      "status": "PASS",
+      "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+      "runId": 34256868050,
+      "version": "0.4.3-moe.26",
+      "profile": "keyless-public",
+      "hostChecks": 36,
+      "compiledAsarFiles": 172,
+      "openclawVersion": "2026.9.2",
+      "artifactId": 10068872044,
+      "archiveSha256": "aab9744390313f004b8c7438bd7c45b9dae45547bb39b179f020634c975509d2",
+      "archiveBytes": 473565450,
+      "installerSha256": "5de74d6d1ce40b5c4c5d963f66bc74dd6c880c4972a6dbf82cd88c1ac5beb620",
+      "installerBytes": 476768641,
+      "asarSha256": "a81d7dd0cf030df2ab934068aaacf8d5d9edcb70d984c2a07dce72854b7c62bd",
+      "packagedExeSha256": "44ff6a6f90fc5872b38626f544e7f19166185ecf2e5bb607f66dc3ddf386f902",
+      "manifest": "docs/release-manifests/0.4.3-moe.26.json",
+      "privateEvidence": "/private/tmp/clawx-moe26-run-34256868050",
+      "installedAcceptance": "NOT_RUN",
+      "published": false,
+      "verifiedAt": "2026-09-08T17:51:49.120601+00:00"
     }
   }
 }

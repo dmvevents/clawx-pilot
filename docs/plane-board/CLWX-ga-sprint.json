@@ -622,12 +622,12 @@
     "NEW-1": 133,
     "NEW-2": 134
   },
-  "updatedAt": "2026-09-08T17:27:10.586903+00:00",
-  "snapshotAt": "2026-09-08T15:40:04.348123+00:00",
+  "updatedAt": "2026-09-08T17:51:49.120601+00:00",
+  "snapshotAt": "2026-09-08T17:51:49.120601+00:00",
   "readiness": "RED",
   "sourceCandidate": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
   "privateVerification": "artifacts/ga-fable-20260908/sprint-loop/sprint-verification.json",
-  "boardExportVerifiedAt": "2026-09-08T17:28:12.629740+00:00",
+  "boardExportVerifiedAt": "2026-09-08T17:53:45.037457+00:00",
   "boardIssueCount": 134,
   "executionCheckpoint": {
     "browserReview": "APPROVE; integrated in1d745567",
@@ -641,23 +641,37 @@
       "skipped": 29,
       "source": "1d7455673774fd70c086b41b405c8ece868ce302"
     },
-    "installedArtifact": "moe25 only; moe26 build34256868050 running",
+    "installedArtifact": "moe25 only; moe26 downloaded package/source/profile/compiled receipts PASS, installed acceptance NOT_RUN",
     "windowsOwnerHold": "RELEASED; sole root operator",
     "macGuiHold": "HELD",
     "microsoftBrowser": "moe25 assisted account/inbox and two synthetic Forms previews PASS; Graph unconfigured",
     "qaMailAuth": "Reviewed59465b57 integrated; native expected/wrong account controls PASS",
     "readiness": "RED",
     "cardCounts": {
-      "In Progress": 18,
       "Todo": 10,
+      "In Progress": 18,
       "Ready": 3
     },
     "nativeRepair": "99468423 native lifetime proof PASS;8bb7a779 fixture omission corrected/reviewed",
     "nativeRepairReview": "APPROVE_33_AT99468423_PLUS6_AT8BB7A779",
     "nativePreflight": {
-      "status": "RUNNING",
+      "status": "PASS",
       "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
-      "runId": 34256868050
+      "runId": 34256868050,
+      "passed": 2309,
+      "failed": 0,
+      "skipped": 57,
+      "passedFiles": 210,
+      "skippedFiles": 3,
+      "suiteSeconds": 140.11,
+      "runtimePreparation": "PASS",
+      "compileAndBundle": "PASS",
+      "artifactHarness": {
+        "passed": 9,
+        "failed": 0
+      },
+      "installerBuild": "PASS",
+      "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/build-34256868050-complete.log"
     },
     "priorNativePreflights": [
       {
@@ -706,6 +720,28 @@
       "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/native-db-root/"
     },
     "vmAuthentication": "BLOCKED_NEW_CONNECTIONS_OWNER_REAUTH_REQUIRED",
-    "fullNativeVmAt8bb7a779": "NOT_RUN_TRANSFER_AUTH_FAILED"
+    "fullNativeVmAt8bb7a779": "NOT_RUN_TRANSFER_AUTH_FAILED",
+    "artifactVerification": {
+      "status": "PASS",
+      "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+      "runId": 34256868050,
+      "version": "0.4.3-moe.26",
+      "profile": "keyless-public",
+      "hostChecks": 36,
+      "compiledAsarFiles": 172,
+      "openclawVersion": "2026.9.2",
+      "artifactId": 10068872044,
+      "archiveSha256": "aab9744390313f004b8c7438bd7c45b9dae45547bb39b179f020634c975509d2",
+      "archiveBytes": 473565450,
+      "installerSha256": "5de74d6d1ce40b5c4c5d963f66bc74dd6c880c4972a6dbf82cd88c1ac5beb620",
+      "installerBytes": 476768641,
+      "asarSha256": "a81d7dd0cf030df2ab934068aaacf8d5d9edcb70d984c2a07dce72854b7c62bd",
+      "packagedExeSha256": "44ff6a6f90fc5872b38626f544e7f19166185ecf2e5bb607f66dc3ddf386f902",
+      "manifest": "docs/release-manifests/0.4.3-moe.26.json",
+      "privateEvidence": "/private/tmp/clawx-moe26-run-34256868050",
+      "installedAcceptance": "NOT_RUN",
+      "published": false,
+      "verifiedAt": "2026-09-08T17:51:49.120601+00:00"
+    }
   }
 }

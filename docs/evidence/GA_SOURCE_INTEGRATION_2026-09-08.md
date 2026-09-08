@@ -1,6 +1,22 @@
 # Reviewed moe.26 source and hosted build — September 8, 2026
 
-**Current source `8bb7a77907faf35fb8fc4136073ce340ea9a9aaa` reviewed/integrated/pushed; hosted build 34256868050 RUNNING; artifact acceptance NOT_RUN; GA RED.** Root confirmed exact pilot-remote SHA and dispatched the keyless build at17:24:08UTC. Required credential-seed inputs are false; publication inputs are absent.
+**Current source `8bb7a77907faf35fb8fc4136073ce340ea9a9aaa` reviewed/integrated/pushed; hosted build34256868050 PASS; downloaded-payload verification PASS; installed acceptance NOT_RUN; GA RED.** Root confirmed exact pilot-remote SHA and dispatched the keyless build at17:24:08UTC. Required credential-seed inputs are false; publication inputs are absent.
+
+## Downloaded moe.26 payload verification — 17:50 UTC
+
+Root independently downloaded the exact successful run's three artifacts. Source/profile/manifest agreement passes the canonical `scripts/release-build-profile.mjs check-public-release` with exit0. Installer archive10068872044 matches GitHub metadata:473,565,450bytes, SHA256`aab9744390313f004b8c7438bd7c45b9dae45547bb39b179f020634c975509d2`. The original serial transfer was slow; a four-range probe passed, then64 concurrent bounded1MiB ranges completed all452chunks in227.21s and the assembled full digest matched. Only the exact superseded driver/child PIDs were stopped; its partial file and exit143 are retained rather than recorded as a successful download.
+
+All **36 extracted host package checks PASS**: installer and ASAR hashes/lengths, ASAR version, all five manifest entries, bin/extensions/OpenClaw-plugin tree hashes/counts, all eight required helpers/notices, blocked seed absence and blockmap structure. The independent compiled-output check extracts **172 files** from the downloaded ASAR and uses canonical `assertSameBuildOutputReceipt` to match dist/dist-electron hashes and counts. Source identity agrees with the receipt; OpenClaw2026.9.2 is present and ASAR seed-filename scan passes. These are host artifact checks, not Windows execution or a comprehensive secret scan. Differential updates were not exercised.
+
+[The checked-in generated manifest](../release-manifests/0.4.3-moe.26.json) remains `published:false`. Installer SHA256`5de74d6d1ce40b5c4c5d963f66bc74dd6c880c4972a6dbf82cd88c1ac5beb620`; ASAR`a81d7dd0cf030df2ab934068aaacf8d5d9edcb70d984c2a07dce72854b7c62bd`; packaged EXE`44ff6a6f90fc5872b38626f544e7f19166185ecf2e5bb607f66dc3ddf386f902`. Reproducible private download/checker scripts and JSON receipts are under `/private/tmp/clawx-moe26-run-34256868050/`. Root has not installed or handed off this candidate. New authenticated Windows command access remains blocked pending account-holder GCP reauthentication; existing app/Chrome endpoint liveness is separately retained.
+
+## Completed Windows build — 17:41 UTC
+
+Run34256868050 completed SUCCESS at exact8bb7a779. Full native units: **2,309 PASS, zero FAIL,57 SKIP**;210 passed files,three skipped,140.11s suite time. Typecheck, non-mutating lint, PowerShell lint, agent doctor and the direct five-prompt document harness passed in preflight. The bundled runtime gate verified19 extra packages,three shipping platform binding sets and four parsers loadable on the Windows host; the artifact harness passed all nine rows. Compilation, installer packaging and staged keyless scan passed. Publication was skipped. The installer artifact is10068872044; native provenance/profile check independently exits0 and binds a clean8bb7a779 keyless-public source. The large artifact download and payload extraction remain pending. Private complete log: `artifacts/ga-fable-20260908/windows-lab/build-34256868050-complete.log`; private download/profile receipts: `/private/tmp/clawx-moe26-run-34256868050/`.
+
+## Hosted full preflight pass — 17:29–17:33 UTC
+
+Exact8bb7a779 passed full Windows preflight at17:29:19UTC, runtime preparation at17:30:06UTC and compilation/bundling at17:33:49UTC. Installer packaging is running. The completed native log is still needed for exact test counts; no installer bytes, extracted payload or installed acceptance is claimed. Private GitHub job/step receipt: `artifacts/ga-fable-20260908/windows-lab/build-34256868050-status.json`. Existing original Windows Chrome and Electron CDP endpoints both returned HTTP200 and websocket metadata at17:39:04UTC. This establishes continued endpoint liveness while new SSH authentication is blocked; it does not restore command access or establish a user-journey pass.
 
 ## Isolated checkout fixture correction — 17:24 UTC
 
