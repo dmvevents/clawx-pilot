@@ -2,6 +2,8 @@
 
 Start with [the project contract](../../docs/PROJECT_CONTRACT.md), [completion plan](../../docs/COMPLETION_PLAN.md) and [current Windows candidate](../../docs/CURRENT_WINDOWS_RC.md). This is the current testing entrypoint. EC2 and sandbox bootstrap files in this folder are historical alternatives, not prerequisites for the GCP lane.
 
+For a local hypervisor guest on the Mac, use the [local Windows VM runbook](../../docs/testing/WINDOWS_LOCAL_VM_TESTING.md) and `windows-local-vm-testing` skill. September 8 discovery found UTM/QEMU tooling but no usable registered Windows guest; the verified installed test lane below remains the GCP VM.
+
 ## How this test environment was established
 
 The Windows machine runs on GCP; the Mac provides the local checkout, authenticated SSH/IAP control and RDP client. A local hypervisor VM was not created for these September tests. Compute metadata records the existing guest's creation as **2026-06-09T16:52:00.210Z**. The [August access report](../../skills/laptop/evidence/2026-08-19-gcp-iap-windows-lane/REPORT.md) documents rediscovering and starting that existing machine, establishing IAP access and retiring the inaccessible EC2 alternative. It does not contain a verified original instance-creation command; do not invent one as execution history.

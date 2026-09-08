@@ -1,6 +1,6 @@
 # Agent And Skill Interoperability
 
-Last reconciled: 2026-09-07.
+Last reconciled: 2026-09-08.
 
 ## Purpose
 
@@ -56,6 +56,7 @@ No user-global memory, MCP credentials or tool installation was changed. The exi
 | Windows build/package | `.agents/skills/windows-build-package` | use `.agents/skills/windows-build-package` | `.claude/skills/windows-build-package` | `docs/WINDOWS_INSTALL_RUNBOOK.md` |
 | Windows VM/laptop smoke | `.agents/skills/windows-vm-smoke` | `.codex/skills/windows-vm-smoke` | `.claude/skills/windows-vm-smoke` | `docs/WINDOWS_INSTALL_RUNBOOK.md`, `windows-pilot/scripts/` |
 | Windows VM iteration from stakeholder failure | `.agents/skills/windows-vm-iteration` | `.codex/skills/windows-vm-iteration` | use `.claude/skills/windows-vm-smoke` + `.claude/skills/gcp-iap-windows-lane` until mirrored | `windows-pilot/vm-testing/README.md` |
+| Local Windows VM discovery and testing | `.agents/skills/windows-local-vm-testing` | `.codex/skills/windows-local-vm-testing` | `.claude/skills/windows-local-vm-testing` | [Local VM runbook](testing/WINDOWS_LOCAL_VM_TESTING.md); distinguishes UTM guest, Mac harness and GCP lane |
 | SSH laptop operations | `.agents/skills/pilot-ssh-ops` | use `.agents/skills/pilot-ssh-ops` | `.claude/skills/pilot-ssh-ops` | `docs/PILOT_LAPTOP_ACCESS.md` |
 | Form prefill | `.agents/skills/moe-form-prefill` | `.codex/skills/moe-form-prefill` | `.claude/skills/moe-form-prefill` | `docs/MOE_FORM_PREFILL_STRATEGY.md` |
 | GA readiness | `.agents/skills/ga-release-readiness` | `.codex/skills/ga-release-readiness` | `.claude/skills/ga-release-readiness` | `docs/COMPLETION_PLAN.md` |
@@ -84,6 +85,8 @@ No user-global memory, MCP credentials or tool installation was changed. The exi
 7. Use `windows-vm-smoke` for clean Windows VM/laptop install evidence after a package is built.
 8. Use `pilot-ssh-ops` before touching the laptop over SSH.
 9. Use `windows-vm-iteration` when stakeholder feedback, VM access, fresh standard-user setup, model provisioning and exact-artifact retesting must be coordinated before another handoff.
+
+10. Use `windows-local-vm-testing` to discover and test an actual local Windows guest, or document its missing prerequisites. Local Mac approximations and GCP evidence do not prove that lane.
 
 ## Shared Safety Invariants
 
