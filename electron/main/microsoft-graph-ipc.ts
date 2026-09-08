@@ -32,6 +32,8 @@ import {
   MicrosoftGraphAuthRequired,
   MicrosoftGraphNotConfigured,
 } from '../services/microsoft-graph/manager';
+import { deriveGraphConnectionState } from '../services/microsoft-graph/connection-state';
+import { MicrosoftGraphSignInDeclined } from '../utils/microsoft-graph-oauth';
 
 let mainWindow: BrowserWindow | null = null;
 let pendingManualCodeResolve: ((value: string) => void) | null = null;
@@ -55,6 +57,9 @@ function classifyError(err: unknown): { code: string; message: string } {
   if (err instanceof MicrosoftGraphAuthRequired) {
     return { code: 'AUTH_REQUIRED', message: err.message };
   }
+  if (err instanceof MicrosoftGraphSignInDeclined) {
+    return { code: 'CANCELLED', message: err.message };
+  }
   return {
     code: 'UNKNOWN',
     message: err instanceof Error ? err.message : String(err),
@@ -68,7 +73,10 @@ export function setMicrosoftGraphWindow(window: BrowserWindow): void {
 export function registerMicrosoftGraphHandlers(): void {
   ipcMain.handle('msgraph:status', async () => {
     try {
-      return { ok: true, data: await getStatus() };
+      const status = await getStatus();
+      // Derived here (not persisted) so every renderer surface shows the same
+      // deterministic connection state from the same persisted facts.
+      return { ok: true, data: { ...status, connectionState: deriveGraphConnectionState(status) } };
     } catch (err) {
       return { ok: false, error: classifyError(err) };
     }
@@ -113,6 +121,12 @@ export function registerMicrosoftGraphHandlers(): void {
         return { ok: true, data: account };
       } catch (err) {
         const classified = classifyError(err);
+        if (classified.code === 'CANCELLED') {
+          // The user chose to stop on Microsoft's page — a normal outcome,
+          // not an error. The invoke result carries the code; no error toast.
+          logger.info('[msgraph] sign-in cancelled by user');
+          return { ok: false, error: classified };
+        }
         logger.error('[msgraph] sign-in failed:', classified.message);
         emit('msgraph:error', { message: classified.message });
         return { ok: false, error: classified };

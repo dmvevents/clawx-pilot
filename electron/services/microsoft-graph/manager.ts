@@ -80,6 +80,20 @@ export async function getAccessToken(): Promise<string> {
       });
       await persistCredentials(refreshed);
       return refreshed.access;
+    } catch (err) {
+      // A refresh token Microsoft rejected outright (expired/revoked
+      // refresh token, or Conditional Access demanding interaction) can only
+      // be repaired by the account holder signing in again. Surface that as
+      // AUTH_REQUIRED instead of an opaque failure so the UI and tools say
+      // "sign in again" rather than retrying blindly. Tokens are left in
+      // place; sign-in overwrites them and sign-out clears them explicitly.
+      const oauthError = (err as Error & { oauthError?: string }).oauthError;
+      if (oauthError === 'invalid_grant' || oauthError === 'interaction_required') {
+        throw new MicrosoftGraphAuthRequired(
+          'Microsoft session expired — sign in again',
+        );
+      }
+      throw err;
     } finally {
       inFlightRefresh = null;
     }

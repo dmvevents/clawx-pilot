@@ -70,9 +70,54 @@ export interface MicrosoftGraphAuthorizationFlow {
   url: string;
 }
 
+/**
+ * The user ended sign-in on Microsoft's page (Cancel / "No, don't allow" /
+ * consent declined). Entra redirects to the loopback with `error=access_denied`
+ * (OAuth 2.0 authorization error response). A distinct type lets callers show
+ * a neutral "cancelled" outcome instead of an error toast or a 10-minute wait.
+ */
+export class MicrosoftGraphSignInDeclined extends Error {
+  constructor(message = 'Microsoft sign-in was cancelled') {
+    super(message);
+    this.name = 'MicrosoftGraphSignInDeclined';
+  }
+}
+
+export type OAuthCallbackResult =
+  | { kind: 'code'; code: string }
+  | { kind: 'error'; error: string; description: string }
+  | { kind: 'state_mismatch' }
+  | { kind: 'missing_code' }
+  | { kind: 'not_callback' };
+
+/**
+ * Pure interpretation of one loopback request against the expected CSRF
+ * state. Exported for tests; the local HTTP server delegates here.
+ */
+export function interpretOAuthCallback(rawUrl: string, expectedState: string): OAuthCallbackResult {
+  const url = new URL(rawUrl || '', 'http://localhost');
+  if (url.pathname !== REDIRECT_PATH) return { kind: 'not_callback' };
+  // CSRF state first: a callback that does not carry the pending request's
+  // state is not part of our flow, so neither its code nor its error may be
+  // attributed to it. Entra echoes `state` on both success and error
+  // redirects (OAuth 2.0 §4.1.2 / §4.1.2.1), so genuine cancels still match.
+  // Without this ordering, anything able to reach the loopback could cancel
+  // the real sign-in by sending error=access_denied with no/forged state.
+  if (url.searchParams.get('state') !== expectedState) return { kind: 'state_mismatch' };
+  const error = url.searchParams.get('error');
+  if (error) {
+    return { kind: 'error', error, description: url.searchParams.get('error_description') || '' };
+  }
+  const code = url.searchParams.get('code');
+  if (!code) return { kind: 'missing_code' };
+  return { kind: 'code', code };
+}
+
 interface LocalServer {
   close: () => void;
-  waitForCode: () => Promise<{ code: string } | null>;
+  waitForCode: () => Promise<
+    { code: string } | { error: string; description: string } | null
+  >;
 }
 
 function toBase64Url(buffer: Buffer): string {
@@ -160,41 +205,42 @@ function createAuthorizationFlow(params: CreateAuthorizationFlowParams): Microso
 
 function startLocalOAuthServer(state: string): Promise<LocalServer | null> {
   let lastCode: string | null = null;
+  let lastError: { error: string; description: string } | null = null;
 
   const server = createServer((req, res) => {
     try {
-      const url = new URL(req.url || '', 'http://localhost');
-      if (url.pathname !== REDIRECT_PATH) {
-        res.statusCode = 404;
-        res.end('Not found');
-        return;
+      const result = interpretOAuthCallback(req.url || '', state);
+      switch (result.kind) {
+        case 'not_callback':
+          res.statusCode = 404;
+          res.end('Not found');
+          return;
+        case 'error':
+          // Entra redirected back with an OAuth error (e.g. access_denied when
+          // the user cancels). Record it so waitForCode resolves immediately
+          // instead of waiting out the 10-minute window.
+          lastError = { error: result.error, description: result.description };
+          res.statusCode = 400;
+          // Plain text so a crafted error_description is never interpreted
+          // as HTML by the browser (no content sniffing).
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          res.end(`Microsoft sign-in error: ${result.error}\n${result.description}`);
+          return;
+        case 'state_mismatch':
+          res.statusCode = 400;
+          res.end('State mismatch');
+          return;
+        case 'missing_code':
+          res.statusCode = 400;
+          res.end('Missing authorization code');
+          return;
+        case 'code':
+          lastCode = result.code;
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.end(SUCCESS_HTML);
+          return;
       }
-
-      const error = url.searchParams.get('error');
-      if (error) {
-        res.statusCode = 400;
-        const description = url.searchParams.get('error_description') || '';
-        res.end(`Microsoft sign-in error: ${error}\n${description}`);
-        return;
-      }
-
-      if (url.searchParams.get('state') !== state) {
-        res.statusCode = 400;
-        res.end('State mismatch');
-        return;
-      }
-
-      const code = url.searchParams.get('code');
-      if (!code) {
-        res.statusCode = 400;
-        res.end('Missing authorization code');
-        return;
-      }
-
-      lastCode = code;
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.end(SUCCESS_HTML);
     } catch {
       res.statusCode = 500;
       res.end('Internal error');
@@ -211,6 +257,7 @@ function startLocalOAuthServer(state: string): Promise<LocalServer | null> {
             // Wait up to 10 minutes for the user to complete sign-in.
             for (let i = 0; i < 6000; i += 1) {
               if (lastCode) return { code: lastCode };
+              if (lastError) return lastError;
               await sleep();
             }
             return null;
@@ -268,7 +315,18 @@ export async function refreshMicrosoftGraphToken(
   });
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`Microsoft token refresh failed (${response.status}): ${text}`);
+    // Attach the OAuth error code (e.g. invalid_grant when the refresh token
+    // is expired/revoked, interaction_required under Conditional Access) so
+    // callers can distinguish "sign in again" from transient failures.
+    let oauthError: string | undefined;
+    try {
+      oauthError = (JSON.parse(text) as { error?: string }).error;
+    } catch {
+      // non-JSON body: leave the code unset
+    }
+    const err = new Error(`Microsoft token refresh failed (${response.status}): ${text}`);
+    (err as Error & { oauthError?: string }).oauthError = oauthError;
+    throw err;
   }
   const json = (await response.json()) as TokenResponse;
   return finalizeCredentials(json);
@@ -347,6 +405,18 @@ export async function loginMicrosoftGraphOAuth(
     let code: string | undefined;
     if (server) {
       const result = await server.waitForCode();
+      if (result && 'error' in result) {
+        // The user completed the redirect with an OAuth error instead of a
+        // code. access_denied means they cancelled/declined on Microsoft's
+        // page — a normal user decision, surfaced as a typed outcome. Other
+        // errors (consent policy, tenant restrictions) fail loud with detail.
+        if (result.error === 'access_denied') {
+          throw new MicrosoftGraphSignInDeclined();
+        }
+        throw new Error(
+          `Microsoft sign-in failed (${result.error})${result.description ? `: ${result.description}` : ''}`,
+        );
+      }
       code = result?.code ?? undefined;
       if (!code && options.onManualCodeInput) {
         options.onManualCodeRequired?.({ authorizationUrl: url, reason: 'callback_timeout' });

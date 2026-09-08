@@ -173,6 +173,21 @@ run('lint', 'T0', 'hygiene', 'pnpm lint:check', { criteria: ['t0-lint'] });
 run('pwsh lint (CLWX-83)', 'T0', 'hygiene', 'pnpm lint:ps', { criteria: ['t0-pwsh-lint'] });
 run('agent model pins (CLWX-83)', 'T0', 'hygiene', 'pnpm doctor:agents', { criteria: ['t0-agent-model-pins'] });
 run('unit-suite', 'T0', 'hygiene', 'pnpm exec vitest run tests/unit --silent', { criteria: ['t0-unit-suite'] });
+// CLWX-115: the RAJ-2 misinterpretation class (meal preferences read back as
+// shirt sizes) previously lived ONLY in scripts/raj2-reply-fidelity-check.ts —
+// a standalone live n=1 probe whose word/entity MEMBERSHIP assertions cannot
+// see a swapped association ("Keisha gets chicken, Marcus gets vegetarian"
+// against the opposite source is 100% sourced words) or a dropped negation
+// ("Anil is attending" is a strict subset of "Anil is NOT attending"). This
+// row runs the deterministic association/negation checker over its synthetic
+// fixture INCLUDING mutation controls: the swap, attribute-swap and
+// negation-drop outputs must FAIL or the runner exits 1 — a weakened checker
+// reds the gate rather than going quietly vacuous. Fail-closed: a missing or
+// hollow fixture also exits 1, and there is deliberately no laneContract, so
+// every non-zero is a product FAIL, never BLOCKED. Evidence class: source
+// fixture only — this row cannot stand in for installed-agent fidelity and
+// does not close CLWX-115 by itself.
+run('raj2 association-fidelity fixture (CLWX-115)', 'T0', 'ExtValA-fixture', 'node scripts/raj2-association-fidelity-gate.mjs', { criteria: ['t0-raj2-association-fixture'] });
 run('bundle-verify (CLWX-72 gate)', 'T0', 'hygiene+KR1', 'pnpm exec zx scripts/bundle-openclaw.mjs >/dev/null 2>&1 && node scripts/verify-openclaw-bundle.mjs', { criteria: ['t0-bundle-verify'] });
 run('doc-tooling harness (KR1 proxy)', 'T0', 'KR1', 'pnpm run harness:doc-tooling-e2e', { criteria: ['t0-doc-tooling-harness'] });
 // Renderer e2e (Playwright + Electron). Opt-in: each spec boots a real

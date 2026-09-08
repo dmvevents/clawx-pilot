@@ -23,6 +23,17 @@
  *   - No email body content is printed. Output carries subjects truncated to
  *     120 chars, extracted keyword lists, entity lists, and verdicts only.
  *
+ * KNOWN BLIND SPOT (CLWX-115): both assertions are MEMBERSHIP checks over
+ * unordered token/entity sets, so they cannot see a swapped person→fact
+ * association (every word of the swap is still sourced) or a dropped
+ * negation ("is attending" ⊂ "is NOT attending"). The deterministic
+ * recurring counterpart that does assert bindings, negation, quantities and
+ * the requested action — with mutation controls — is
+ * scripts/raj2-association-fidelity-gate.mjs over
+ * eval/fixtures/raj2-association-fidelity.json (wired into ga:gate at T0).
+ * That row is source-fixture evidence only; this live probe and the
+ * installed-app rerun remain the agent-level proofs.
+ *
  * Exit codes: 0 PASS, 1 FAIL, 2 lane/fatal, 3 BLOCKED-SEEDING, 4 BLOCKED-INFRA.
  *
  * Run:
