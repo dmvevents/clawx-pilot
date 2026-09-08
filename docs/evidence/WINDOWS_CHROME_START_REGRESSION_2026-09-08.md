@@ -36,3 +36,33 @@ Preserved unchanged: `chrome_not_found`, `profile_locked_close_chrome`, `port_bi
 - The precise 11:44 stock-launch failure cause remains BLOCKED on incident-time Gateway logs; this fix removes the false-ready ownership boundary and the routing gap, not that unknown.
 - Automatic per-user CDP port allocation beyond the existing narrow endpoint contract is a named follow-up, not implemented.
 - Default PowerShell probe behavior on a real multi-session Windows Server (permissions to read another session's `Win32_Process.CommandLine` vary) is exercised only via the injected runtime in tests; unknown identity degrades to `endpoint_owner_unverified`, never a false ready. Requires installed Windows verification.
+
+## Ownership-repair follow-up — review findings resolved (2026-09-08, lane `lane/browser-regression-20260908`, base `736ffe9e`)
+
+The independent review of `a091a968` returned REQUEST_CHANGES with three reproduced defects plus three source findings. This follow-up (CLWX-130, coupled CLWX-121) resolves all six at the owning boundaries. Author: Claude (Bedrock). Independent review of THIS diff: pending — this section is author evidence, not approval.
+
+| Review finding | Repair |
+|---|---|
+| 1. `endpoint_owner_unverified` after launch killed our own working Chrome (CIM-denied box) | Positive spawn ownership: the spawned PID is recorded per port (process-lifetime memory) and an endpoint owned by that PID is `cdp_ready` even with unreadable process metadata. The ownership probe re-probes once before concluding. Unknown identity NEVER kills; the only Chrome ever killed is our own spawn, on confirmed foreign/conflicting ownership or port-bind timeout. |
+| 2. Same-session different-profile labelled "another user session" with sign-in advice | Verdicts split by evidence: confirmed different session vs same-session conflict return distinct truthful messages (both `foreign_endpoint_owner`; no consumer contract change). "Please sign in to your own Windows session" is gone. The documented pilot launch — the principal's own user-profile Chrome started with the debug port — is now accepted as ours (profile=user preserved); the managed "Ministry of Education" dir stays refused (CLWX-73). |
+| 3. Outlook/Forms `connectOverCDP` bypassed the ownership gate | New exported `verifyCdpEndpointOwnershipForAttach` runs BEFORE any `connectOverCDP` in both drivers; a reachable wrong-session or unverifiable loopback endpoint refuses the attach fail-closed. `no_listener`, macOS/Linux and non-loopback endpoints proceed unchanged. |
+| 4. Ownership probed `debugPort` while readiness probed `cdpEndpoint` | One endpoint identity: the endpoint-derived port now wins for ownership, launch and readiness; a conflicting `debugPort` option is logged, not silently honored. |
+| 5. Default PowerShell probe branches untested | `defaultDescribeLoopbackPortOwner` exported and exercised against a controlled `powershell.exe` process fixture on PATH (real spawn/parse): invalid-port (no spawn), `no_listener`, full ok payload (validated integer port and `-NoProfile` asserted from the recorded argv), null commandLine, malformed stdout, unrecognized payload, non-zero exit. Skipped on real win32 where the fixture cannot shadow System32 — the genuine probe there remains installed-Windows evidence (NOT_RUN). |
+| 6 / CLWX-121. Subject/compose state unbound before narrowing the draft scan | Driver-level binding first: `composeSurface()` is the ONLY trustable compose surface (the bound tab, re-validated live/in-context/on-Outlook; never a silent re-bind), and `outlookPages()` — the draft scan — is DERIVED from it, so the MEDIUM-8 narrowing cannot exist without the MEDIUM-7 binding. Confirm/exact-subject/recipient gates, tab-theft rules and no-replay behavior unchanged. |
+
+### Verification (this lane, uncommitted tree over `736ffe9e`; commands exact)
+
+| Check | Command | Result |
+|---|---|---|
+| Chrome-CDP incl. spawn-ownership, never-kill-on-unverified, session-vs-profile split, user-profile launch accepted, managed refused, endpoint identity, attach gate, PS process fixture | `pnpm exec vitest run tests/unit/chrome-cdp.test.ts` | PASS (36) |
+| Outlook driver incl. attach gate order/refusal and CLWX-121 compose-surface rows | `pnpm exec vitest run tests/unit/outlook-playwright-driver-cdp.test.ts` | PASS (19) |
+| Forms driver incl. attach gate order/refusal | `pnpm exec vitest run tests/unit/forms-browser-driver-cdp.test.ts` | PASS (16) |
+| Adjacent safety/gate suites (send gates, submit gate, readiness, plugin, probe parity) | `pnpm exec vitest run` on the 9 focused files | PASS (240 total) |
+| Mutation proof (9 legs, each caught by a named row, sources restored byte-identical: `cmp` clean) | disable spawn ownership; kill-on-unverified; revert port precedence; drop user-profile acceptance; revert draft-scan narrowing; strip composeSurface checks; drop bound-tab preference; remove each driver's attach gate | 9/9 caught |
+
+### Limitations (unchanged unless stated)
+
+- The exact 11:44Z stock-launch timeout cause remains **UNKNOWN**; nothing here claims it fixed.
+- No installed-build, live-account, VM or GUI evidence in this follow-up (GUI/Electron launches on hold). The real PowerShell probe on multi-session Windows Server remains NOT_RUN.
+- Fail-closed attach on a box where the ownership probe itself is broken (PowerShell missing/denied and no recorded spawn) refuses Outlook/Forms attach until a ClawX-launched Chrome restores positive ownership; this is deliberate (a reachable wrong-session endpoint must not bypass checks) and recorded as a support-visible behavior.
+- After a CDP reconnect the driver cannot re-identify its previous draft tab (Page objects are new); the compose binding then starts empty and the send gates re-verify on the freshly bound tab. Actions-level snapshot continuity remains with the outlook-actions owner.

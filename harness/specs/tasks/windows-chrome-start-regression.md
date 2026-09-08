@@ -12,10 +12,14 @@ intent: >-
 touchedAreas:
   - harness/specs/tasks/windows-chrome-start-regression.md
   - electron/services/chrome-cdp.ts
+  - electron/services/outlook-browser-v2/playwright-driver.ts
+  - electron/services/forms-browser-v2/forms-driver.ts
   - extensions/moe-principal-assistant/index.mjs
   - extensions/moe-principal-assistant/persona.mjs
   - extensions/moe-principal-assistant/openclaw.plugin.json
   - tests/unit/chrome-cdp.test.ts
+  - tests/unit/outlook-playwright-driver-cdp.test.ts
+  - tests/unit/forms-browser-driver-cdp.test.ts
   - tests/unit/moe-principal-assistant-plugin.test.ts
   - README.md
   - README.zh-CN.md
@@ -23,9 +27,10 @@ touchedAreas:
   - docs/evidence/WINDOWS_CHROME_START_REGRESSION_2026-09-08.md
 expectedUserBehavior:
   - Asking to open Chrome or the browser calls the explicit Ministry browser.open_chrome tool, which launches the principal's system Chrome through the existing Main repair/ensure service; the stock managed browser is never the Ministry path.
-  - On Windows, a responding CDP endpoint is only reported ready after a bounded loopback ownership check confirms the listener is a Chrome in the current Windows session on the dedicated ClawX automation profile.
-  - A debug port confirmed to belong to another Windows session or profile is refused with a typed, Windows-appropriate status; ClawX never kills or attaches to another user's Chrome and never silently picks a different port.
-  - An unidentifiable endpoint owner is reported truthfully as unverified, never as ready.
+  - On Windows, a responding CDP endpoint is only reported ready after a bounded loopback ownership check confirms the listener is a Chrome ClawX may drive - our own spawn (positive PID ownership), the dedicated ClawX automation profile, or the principal's own user-profile Chrome deliberately started with the debug port (the documented pilot launch).
+  - A debug port confirmed to belong to another Windows user's session is refused with truthful different-session guidance; a same-session Chrome that was not started for automation is refused as a same-session conflict - the principal is never told to sign in to a Windows session they are already in.
+  - An unidentifiable endpoint owner is reported truthfully as unverified, never as ready - and unknown identity is never a reason to kill a running Chrome; the only Chrome ever killed is the one ClawX itself spawned, and only on confirmed foreign/conflicting ownership or port-bind timeout.
+  - The Outlook and Forms drivers verify loopback endpoint ownership BEFORE connectOverCDP, so a reachable wrong-session endpoint is refused at the attach boundary instead of being driven; ownership, launch and readiness all derive one port identity from the CDP endpoint.
   - Ordinary cases keep working - same-session automation profile reports ready, no Chrome launches Chrome, missing Chrome still says install Chrome, our own locked profile still says close Chrome, and macOS/Linux never run Windows ownership queries.
   - Recovery guidance surfaced on Windows never contains macOS menu-bar instructions.
 requiredProfiles:

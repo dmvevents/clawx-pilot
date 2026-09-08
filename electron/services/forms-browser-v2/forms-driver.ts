@@ -15,7 +15,7 @@
  */
 import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright-core';
 import { logger } from '../../utils/logger';
-import { CHROME_CDP_ENDPOINT, ensureChromeCdpReady } from '../chrome-cdp';
+import { CHROME_CDP_ENDPOINT, ensureChromeCdpReady, verifyCdpEndpointOwnershipForAttach } from '../chrome-cdp';
 
 const CDP_DEFAULT = CHROME_CDP_ENDPOINT;
 
@@ -189,6 +189,15 @@ export class FormsDriver {
       await this.browser.close().catch(() => null);
       this.browser = null;
       this.page = null;
+    }
+    // Attach boundary (CLWX-130): verify the loopback endpoint's Windows
+    // session/profile ownership BEFORE connectOverCDP — a reachable endpoint
+    // owned by another user's session must be refused, not driven. The port
+    // identity is derived from the endpoint itself, so ownership and attach
+    // describe the same listener.
+    const attachGate = await verifyCdpEndpointOwnershipForAttach({ cdpEndpoint: this.cdp });
+    if (!attachGate.allowed) {
+      throw new Error(`[${attachGate.status.state}] ${attachGate.status.message}`);
     }
     logger.info(`[forms-v2] Connecting via CDP at ${this.cdp}`);
     try {

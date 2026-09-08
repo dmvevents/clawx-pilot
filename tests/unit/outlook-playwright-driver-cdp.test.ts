@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { chromium } from 'playwright-core';
-import { ensureChromeCdpReady } from '../../electron/services/chrome-cdp';
+import { ensureChromeCdpReady, verifyCdpEndpointOwnershipForAttach } from '../../electron/services/chrome-cdp';
 import { PlaywrightDriver } from '../../electron/services/outlook-browser-v2/playwright-driver';
 
 vi.mock('playwright-core', () => ({
@@ -16,7 +16,13 @@ vi.mock('../../electron/services/chrome-cdp', () => ({
   defaultChromeUserDataDir: vi.fn(() => 'C:\\Users\\Teacher\\AppData\\Local\\Google\\Chrome\\User Data'),
   ensureChromeCdpReady: vi.fn(),
   resolveChromeExecutable: vi.fn(() => 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'),
+  verifyCdpEndpointOwnershipForAttach: vi.fn(async () => ({ allowed: true })),
 }));
+
+function allowAttach() {
+  vi.mocked(verifyCdpEndpointOwnershipForAttach).mockReset();
+  vi.mocked(verifyCdpEndpointOwnershipForAttach).mockResolvedValue({ allowed: true });
+}
 
 function fakeBrowser(contexts: unknown[]) {
   return {
@@ -31,6 +37,7 @@ describe('PlaywrightDriver CDP repair', () => {
   beforeEach(() => {
     vi.mocked(chromium.connectOverCDP).mockReset();
     vi.mocked(ensureChromeCdpReady).mockReset();
+    allowAttach();
   });
 
   it('repairs Chrome CDP when the initial attach fails', async () => {
@@ -128,6 +135,7 @@ describe('PlaywrightDriver tab selection', () => {
   beforeEach(() => {
     vi.mocked(chromium.connectOverCDP).mockReset();
     vi.mocked(ensureChromeCdpReady).mockReset();
+    allowAttach();
   });
 
   // BOUNDARY ROW, NOT A CLWX-118 PIN — do not count it as tab-theft coverage.
@@ -336,5 +344,166 @@ describe('PlaywrightDriver tab selection', () => {
     expect(await driver.ensureOutlookTab()).toBe(mine);
     expect(theirs.goto).toHaveBeenCalledTimes(1);
     expect(context.newPage).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── CLWX-130 attach boundary ─────────────────────────────────────────────────
+// The independent review reproduced that this driver called connectOverCDP
+// FIRST and only consulted the ownership check when the connect failed — so a
+// REACHABLE endpoint owned by another Windows session was attached and driven,
+// bypassing the new guard entirely. The gate must run BEFORE any connect.
+describe('PlaywrightDriver attach ownership gate (CLWX-130)', () => {
+  beforeEach(() => {
+    vi.mocked(chromium.connectOverCDP).mockReset();
+    vi.mocked(ensureChromeCdpReady).mockReset();
+    allowAttach();
+  });
+
+  it('refuses to connect when the endpoint is owned by another Windows session — connectOverCDP is never called', async () => {
+    vi.mocked(verifyCdpEndpointOwnershipForAttach).mockResolvedValue({
+      allowed: false,
+      status: {
+        state: 'foreign_endpoint_owner',
+        cdpEndpoint: 'http://127.0.0.1:18792',
+        debugPort: 18792,
+        userDataDir: 'x',
+        chromeExecutable: 'x',
+        chromeProcessCount: 0,
+        targetProfileProcessCount: 0,
+        remoteDebugProcessCount: 0,
+        message: 'The Chrome automation connection on this computer is in use by a different Windows user\'s session.',
+        action: 'resolve_port_conflict',
+      },
+    });
+
+    const driver = new PlaywrightDriver();
+
+    await expect(driver.ensureBrowser()).rejects.toThrow('[foreign_endpoint_owner]');
+    // The whole point: a reachable wrong-session endpoint must not be attached,
+    // and a refusal must not be "repaired" into an attach either.
+    expect(chromium.connectOverCDP).not.toHaveBeenCalled();
+    expect(ensureChromeCdpReady).not.toHaveBeenCalled();
+  });
+
+  it('runs the ownership gate BEFORE the first connect attempt', async () => {
+    const context = { pages: vi.fn(() => []) };
+    vi.mocked(chromium.connectOverCDP).mockResolvedValue(fakeBrowser([context]) as never);
+
+    await new PlaywrightDriver().ensureBrowser();
+
+    expect(verifyCdpEndpointOwnershipForAttach).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(verifyCdpEndpointOwnershipForAttach).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(chromium.connectOverCDP).mock.invocationCallOrder[0]);
+    // Ownership and readiness must describe ONE endpoint identity: the gate is
+    // handed the same endpoint (and self-launch port) the connect uses.
+    expect(verifyCdpEndpointOwnershipForAttach).toHaveBeenCalledWith(expect.objectContaining({
+      cdpEndpoint: 'http://127.0.0.1:18792',
+      debugPort: 18792,
+    }));
+  });
+});
+
+// ── CLWX-121: compose state binds to the OWNED tab (MEDIUM-7 before MEDIUM-8) ─
+// The two send_email gates evaluate compose panes. A pane on a tab this driver
+// does not drive is the principal's own work: matching a reviewed subject
+// there, or counting their half-written email as "our draft", binds the send
+// contract to a pane nobody reviewed. Guard (a): the only trustable compose
+// surface is the bound tab (composeSurface). Guard (b): the draft scan
+// (outlookPages) is DERIVED from that same binding, so the scan cannot be
+// narrowed without the binding — the coupling CLWX-121 names is structural.
+describe('PlaywrightDriver owned compose surface (CLWX-121)', () => {
+  beforeEach(() => {
+    vi.mocked(chromium.connectOverCDP).mockReset();
+    vi.mocked(ensureChromeCdpReady).mockReset();
+    allowAttach();
+  });
+
+  it('MEDIUM-7 pin: the compose surface is exactly the tab the driver drives, never another Outlook tab', async () => {
+    // The principal's own Outlook tab (with their compose pane) sits at a lower
+    // index than ours. A subject match may only ever be evaluated against the
+    // tab ensureOutlookTab bound — the same Page object it returned.
+    const theirs = fakePage('https://outlook.office.com/mail/0/');
+    const { context } = attachContext([theirs]);
+    const driver = new PlaywrightDriver();
+
+    const bound = await driver.ensureOutlookTab();
+
+    expect(driver.composeSurface()).toBe(bound);
+    // And the draft scan exposes ONLY that same surface object — no cross-tab
+    // pane can reach the gates through the scan.
+    const another = fakePage('https://outlook.office365.com/mail/1/');
+    context.pages.mockReturnValue([theirs, another]);
+    expect(await driver.outlookPages()).toEqual([bound]);
+  });
+
+  it('MEDIUM-8 pin: the draft scan no longer sees the principal\'s other Outlook tabs', async () => {
+    const newTab = fakePage('chrome://new-tab-page/');
+    const theirsA = fakePage('https://outlook.office.com/mail/0/');
+    const theirsB = fakePage('https://outlook.cloud.microsoft/mail/deeplink/compose');
+    const { context } = attachContext([theirsA, newTab]);
+    const driver = new PlaywrightDriver();
+
+    // forceNavigate:false would borrow theirsA; force our own claimed tab so the
+    // row exercises tabs that are genuinely NOT the bound one.
+    const bound = await driver.ensureOutlookTab({ forceNavigate: true });
+    context.pages.mockReturnValue([theirsA, bound, theirsB] as never);
+
+    const scanned = await driver.outlookPages();
+
+    // Pre-fix this returned every Outlook tab in the context (theirsA, theirsB
+    // included) — the principal's own compose pane counted as our draft state.
+    expect(scanned).toEqual([bound]);
+  });
+
+  it('exposes NO compose surface when its bound tab is gone, instead of silently rebinding to someone else\'s tab', async () => {
+    const theirs = fakePage('https://outlook.office.com/mail/0/');
+    const { context } = attachContext([theirs]);
+    const driver = new PlaywrightDriver();
+
+    const bound = await driver.ensureOutlookTab();
+    expect(driver.composeSurface()).toBe(bound);
+
+    // The bound tab closes; another Outlook tab (the principal's) remains.
+    (bound as unknown as ReturnType<typeof fakePage>).isClosed.mockReturnValue(true);
+    const survivor = fakePage('https://outlook.office.com/mail/0/');
+    context.pages.mockReturnValue([survivor] as never);
+
+    expect(driver.composeSurface()).toBeNull();
+    expect(await driver.outlookPages()).toEqual([]);
+  });
+
+  it('spends the compose binding when the bound tab leaves Outlook', async () => {
+    const newTab = fakePage('chrome://new-tab-page/');
+    attachContext([newTab]);
+    const driver = new PlaywrightDriver();
+
+    const bound = await driver.ensureOutlookTab();
+    expect(driver.composeSurface()).toBe(bound);
+
+    // The principal repurposes the tab: it is no longer a compose surface, and
+    // the scan must not treat whatever is there as draft state.
+    (bound as unknown as ReturnType<typeof fakePage>).setUrl('https://docs.google.com/spreadsheets/d/abc/edit');
+
+    expect(driver.composeSurface()).toBeNull();
+    expect(await driver.outlookPages()).toEqual([]);
+  });
+
+  it('keeps driving ITS bound tab when another Outlook tab appears at a lower index', async () => {
+    // Subject binding across calls: once bound, repeated ensureOutlookTab calls
+    // must return the SAME tab — not whichever Outlook tab happens to be found
+    // first — or the gates would evaluate a pane on a tab nobody reviewed.
+    const newTab = fakePage('chrome://new-tab-page/');
+    const { context } = attachContext([newTab]);
+    const driver = new PlaywrightDriver();
+
+    const bound = await driver.ensureOutlookTab();
+    const theirs = fakePage('https://outlook.office.com/mail/0/');
+    context.pages.mockReturnValue([theirs, bound] as never);
+
+    const again = await driver.ensureOutlookTab();
+
+    expect(again).toBe(bound);
+    expect(theirs.goto).not.toHaveBeenCalled();
+    expect(theirs.bringToFront).not.toHaveBeenCalled();
   });
 });
