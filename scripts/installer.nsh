@@ -115,7 +115,7 @@ Var /GLOBAL ClawXStaleInstallDir
   ; then unconditionally from customUnInstallCheck / …CurrentUser), and a
   ; later invocation that finds the destination already clean must retain the
   ; exact rollback pointer set by the invocation that performed the move so
-  ; customInstall cleanup targets the right tree. Every invocation re-runs
+  ; the customInstall retention notice names the right tree. Every invocation re-runs
   ; all checks; a destination modified between invocations is re-verified and
   ; re-prepared (a further move updates the pointer to the newest rollback
   ; directory; earlier ._stale_* trees are preserved).
@@ -433,18 +433,21 @@ Var /GLOBAL ClawXStaleInstallDir
 !macroend
 
 !macro customInstall
-  ; Async cleanup of the EXACT directory moved aside by this invocation of
-  ; ClawXPrepareInstallDirectory (never a wildcard over arbitrary siblings —
-  ; preexisting ._stale_* directories and other sibling installs are
-  ; preserved). Tradeoff: deleting the moved tree after a successful payload
-  ; install trades rollback retention for disk space, matching the previous
-  ; release behavior; on any aborted install customInstall never runs, so the
-  ; moved tree remains recoverable.
-  ; Wait 60s before starting deletion to avoid I/O contention with ClawX's
-  ; first launch (Windows Defender scan, ASAR mapping, etc.).
-  ; ExecShell SW_HIDE is completely detached from NSIS and avoids pipe blocking.
+  ; The rollback directory moved aside by this invocation of
+  ; ClawXPrepareInstallDirectory is intentionally RETAINED after a successful
+  ; install. The previous delayed `cmd.exe /c ... rd /s /q "$ClawXStaleInstallDir"`
+  ; is removed: cmd expands a literal %VAR% inside the quoted path even when
+  ; the path is a real on-disk directory name (native control evidence
+  ; 2026-09-08 22:14:52 UTC, quoted-percent-cleanup-path-control-v1), so a
+  ; previous-install path containing e.g. a literal "%USERNAME%" could make
+  ; the deferred deletion target — and recursively delete — a DIFFERENT
+  ; similarly named sibling directory instead of merely failing. No in-NSIS
+  ; escaping layer or cleanup service is added; the exact rollback tree stays
+  ; on disk for explicit later operator cleanup (documented disk-space
+  ; tradeoff). Preexisting ._stale_* siblings and other sibling installs are
+  ; untouched, as before.
   ${If} $ClawXStaleInstallDir != ""
-    ExecShell "" "cmd.exe" `/c ping -n 61 127.0.0.1 >nul & rd /s /q "$ClawXStaleInstallDir"` SW_HIDE
+    DetailPrint "Previous installation preserved at '$ClawXStaleInstallDir' (rollback copy; not auto-deleted — remove manually to reclaim disk space)."
   ${EndIf}
   DetailPrint "Core files extracted. Finalizing system integration..."
 
