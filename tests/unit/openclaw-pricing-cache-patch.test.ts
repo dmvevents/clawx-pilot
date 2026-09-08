@@ -12,9 +12,11 @@ import {
 } from '../../scripts/openclaw-pricing-cache-patch.mjs';
 
 const ROOT = path.resolve(__dirname, '..', '..');
+const installedOpenClawVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules', 'openclaw', 'package.json'), 'utf8')).version;
+const describeForPinnedOpenClaw = installedOpenClawVersion === TARGET_OPENCLAW_VERSION ? describe : describe.skip;
 const ACTUAL_USAGE_FORMAT = path.join(ROOT, 'node_modules', 'openclaw', 'dist', 'usage-format-DDiDZsKE.js');
 const OTHER_USAGE_FORMAT = path.join(ROOT, 'node_modules', 'openclaw', 'dist', 'usage-format-xnB_wIM3.js');
-const actualSource = fs.readFileSync(ACTUAL_USAGE_FORMAT, 'utf8');
+const actualSource = fs.existsSync(ACTUAL_USAGE_FORMAT) ? fs.readFileSync(ACTUAL_USAGE_FORMAT, 'utf8') : '';
 const tempDirs: string[] = [];
 
 type FetchRecord = { url: string };
@@ -155,7 +157,7 @@ async function refreshAndResolve(params: {
   }
 }
 
-describe('openclaw pricing cache patch', () => {
+describeForPinnedOpenClaw('openclaw pricing cache patch', () => {
   it('patches the pinned pricing refresh source and is idempotent', () => {
     const first = transformOpenClawPricingCacheSource(actualSource);
     const second = transformOpenClawPricingCacheSource(first.source);

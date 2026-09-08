@@ -21,7 +21,7 @@ set "OPENCLAW_ENTRY=%~dp0..\openclaw\openclaw.mjs"
 
 set "_USE_BUNDLED_NODE=0"
 if exist "%NODE_EXE%" (
-    "%NODE_EXE%" -e "const [maj,min]=process.versions.node.split('.').map(Number);process.exit((maj>22||maj===22&&min>=16)?0:1)" >nul 2>&1
+    "%NODE_EXE%" -e "const [maj,min,patch]=process.versions.node.split('.').map(Number);process.exit((maj===22&&(min>22||min===22&&patch>=3)||maj===24&&min>=15||maj===25&&min>=9||maj>25)?0:1)" >nul 2>&1
     if not errorlevel 1 set "_USE_BUNDLED_NODE=1"
 )
 

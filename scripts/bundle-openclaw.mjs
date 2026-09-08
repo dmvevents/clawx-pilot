@@ -18,10 +18,7 @@
 
 import 'zx/globals';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
-import { patchOpenClawChatHistory } from './openclaw-chat-history-patch.mjs';
 import { patchExtensionOpenClawSelfImports } from './openclaw-self-import-patch.mjs';
-import { patchOpenClawPricingCache } from './openclaw-pricing-cache-patch.mjs';
-import { patchOpenClawSdkAlias } from './openclaw-sdk-alias-patch.mjs';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
@@ -992,14 +989,7 @@ if (openclawSelfImportPatch.specifiersPatched > 0) {
   echo`   🩹 Rewrote ${openclawSelfImportPatch.specifiersPatched} OpenClaw plugin-sdk self-import(s) in ${openclawSelfImportPatch.filesPatched} extension file(s)`;
 }
 
-const pricingPatch = patchOpenClawPricingCache(OUTPUT);
-echo`   🩹 OpenClaw pricing cache normalization: ${pricingPatch.patched ? 'patched' : 'already patched'}`;
-
-const chatHistoryPatch = patchOpenClawChatHistory(OUTPUT);
-echo`   🩹 OpenClaw chat.history startup catalog block: ${chatHistoryPatch.patched ? 'patched' : 'already patched'}`;
-
-const sdkAliasPatch = patchOpenClawSdkAlias(OUTPUT);
-echo`   🩹 OpenClaw SDK alias idempotent materialization: ${sdkAliasPatch.patched ? 'patched' : 'already patched'}`;
+echo`   ℹ️ OpenClaw 2026.9.2 uses upstream runtime catalog, pricing, and SDK alias implementations; no CLWX 2026.4.23 bundle surgery applied`;
 
 // 8. Verify the bundle
 const entryExists = fs.existsSync(path.join(OUTPUT, 'openclaw.mjs'));

@@ -26,9 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
-import { verifyOpenClawChatHistoryPatch } from './openclaw-chat-history-patch.mjs';
-import { verifyOpenClawPricingCachePatch } from './openclaw-pricing-cache-patch.mjs';
-import { verifyOpenClawSdkAliasPatch } from './openclaw-sdk-alias-patch.mjs';
+import { verifyOpenClaw20269Upgrade } from './openclaw-2026-9-upgrade-verifier.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BUNDLE_NM = path.join(ROOT, 'build', 'openclaw', 'node_modules');
@@ -86,34 +84,16 @@ for (const name of HOST_LOADABLE) {
   }
 }
 
-// 4. CLWX-106: pricing refresh must not normalize every remote OpenRouter
-// row through provider plugins during startup. The bundle step patches the
-// pinned OpenClaw usage-format chunk, and verification fails closed if the
-// target drifted or the patch was omitted.
+// 4. OpenClaw 2026.9.2 upgrade disposition: the old 2026.4.23 CLWX
+// bundle-surgery patches are obsolete only if the bundled runtime exposes the
+// upstream catalog/pricing/SDK-alias implementations we inspected.
 try {
-  verifyOpenClawPricingCachePatch(path.join(ROOT, 'build', 'openclaw'));
+  await verifyOpenClaw20269Upgrade(path.join(ROOT, 'build', 'openclaw'));
 } catch (err) {
-  failures.push(`PRICING-CACHE: ${err instanceof Error ? err.message : String(err)}`);
+  failures.push(`OPENCLAW-2026.9: ${err instanceof Error ? err.message : String(err)}`);
 }
 
-// 5. September 8 Windows startup: chat.history must not wait for the cold
-// model catalog merely to infer an absent thinkingLevel.
-try {
-  verifyOpenClawChatHistoryPatch(path.join(ROOT, 'build', 'openclaw'));
-} catch (err) {
-  failures.push(`CHAT-HISTORY: ${err instanceof Error ? err.message : String(err)}`);
-}
-
-// 6. CLWX-125: repeated plugin loader passes must not rewrite the
-// OpenClaw plugin-sdk alias package and wrapper modules when generated
-// content is already current.
-try {
-  verifyOpenClawSdkAliasPatch(path.join(ROOT, 'build', 'openclaw'));
-} catch (err) {
-  failures.push(`SDK-ALIAS: ${err instanceof Error ? err.message : String(err)}`);
-}
-
-// 7. CLWX-92: PDF parsing must survive the Electron UtilityProcess
+// 5. CLWX-92: PDF parsing must survive the Electron UtilityProcess
 // environment shape (process.versions.electron + process.type='utility'
 // makes pdfjs demand GlobalWorkerOptions.workerSrc). Run the shipped
 // doc-tools against the BUNDLE's pdf-parse in a child process with the

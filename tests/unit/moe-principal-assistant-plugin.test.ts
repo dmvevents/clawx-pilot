@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readFile } from 'node:fs/promises';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const pluginConfig = {
@@ -59,6 +61,19 @@ describe('moe-principal-assistant plugin registration', () => {
         properties: expect.any(Object),
       });
     }
+  });
+
+  it('declares every registered tool in the OpenClaw 2026.9 manifest contract', async () => {
+    const manifest = JSON.parse(await readFile('extensions/moe-principal-assistant/openclaw.plugin.json', 'utf8')) as {
+      contracts?: { tools?: string[] };
+    };
+    const src = await readFile('extensions/moe-principal-assistant/index.mjs', 'utf8');
+    const registeredNames = [...src.matchAll(/name:\s*'((?:document|principal|browser|outlook|forms)\.[a-z_]+)'/g)]
+      .map((match) => match[1])
+      .sort();
+    const declaredNames = [...(manifest.contracts?.tools ?? [])].sort();
+
+    expect(declaredNames).toEqual(registeredNames);
   });
 
   it('registers Outlook and Forms tools when Host API credentials are present', async () => {

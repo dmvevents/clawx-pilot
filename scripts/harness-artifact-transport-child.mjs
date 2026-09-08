@@ -39,6 +39,37 @@ function pickFunction(mod, names, label) {
   throw new Error(`staged OpenClaw ${label} export not found (${names.join('/')})`);
 }
 
+async function loadPluginRuntime(distDir) {
+  const buildSmokeEntry = path.join(distDir, 'plugins', 'build-smoke-entry.js');
+  if (existsSync(buildSmokeEntry)) {
+    const smoke = await import(pathToFileURL(buildSmokeEntry).href);
+    return {
+      loadOpenClawPlugins: pickFunction(smoke, ['loadOpenClawPlugins'], 'loadOpenClawPlugins'),
+      resolvePluginRuntimeLoadContext: pickFunction(smoke, ['resolvePluginRuntimeLoadContext'], 'resolvePluginRuntimeLoadContext'),
+      buildPluginRuntimeLoadOptions: pickFunction(smoke, ['buildPluginRuntimeLoadOptions'], 'buildPluginRuntimeLoadOptions'),
+    };
+  }
+
+  const loaderPath = findDistChunk(distDir, 'plugin loader', [
+    /function loadOpenClawPlugins\b/,
+    /loadOpenClawPlugins as \w+/,
+  ]);
+  const loadContextPath = findDistChunk(distDir, 'plugin load-context', [
+    /function resolvePluginRuntimeLoadContext\b/,
+    /function buildPluginRuntimeLoadOptions\b/,
+    /resolvePluginRuntimeLoadContext as \w+/,
+    /buildPluginRuntimeLoadOptions as \w+/,
+  ]);
+
+  const loader = await import(pathToFileURL(loaderPath).href);
+  const loadContext = await import(pathToFileURL(loadContextPath).href);
+  return {
+    loadOpenClawPlugins: pickFunction(loader, ['loadOpenClawPlugins', 'r'], 'loadOpenClawPlugins'),
+    resolvePluginRuntimeLoadContext: pickFunction(loadContext, ['resolvePluginRuntimeLoadContext', 'i'], 'resolvePluginRuntimeLoadContext'),
+    buildPluginRuntimeLoadOptions: pickFunction(loadContext, ['buildPluginRuntimeLoadOptions', 't'], 'buildPluginRuntimeLoadOptions'),
+  };
+}
+
 function buildScopedPluginPayload(registry, pluginId) {
   const plugins = Array.isArray(registry?.plugins) ? registry.plugins : [];
   if (plugins.length !== 1) {
@@ -63,29 +94,18 @@ async function main() {
   if (!pluginId) throw new Error('pluginId is required');
 
   const distDir = path.join(gatewayDir, 'dist');
-  const loaderPath = findDistChunk(distDir, 'plugin loader', [
-    /function loadOpenClawPlugins\b/,
-    /loadOpenClawPlugins as \w+/,
-  ]);
-  const loadContextPath = findDistChunk(distDir, 'plugin load-context', [
-    /function resolvePluginRuntimeLoadContext\b/,
-    /function buildPluginRuntimeLoadOptions\b/,
-    /resolvePluginRuntimeLoadContext as \w+/,
-    /buildPluginRuntimeLoadOptions as \w+/,
-  ]);
-
-  const loader = await import(pathToFileURL(loaderPath).href);
-  const loadContext = await import(pathToFileURL(loadContextPath).href);
-  const loadOpenClawPlugins = pickFunction(loader, ['loadOpenClawPlugins', 'r'], 'loadOpenClawPlugins');
-  const resolvePluginRuntimeLoadContext = pickFunction(loadContext, ['resolvePluginRuntimeLoadContext', 'i'], 'resolvePluginRuntimeLoadContext');
-  const buildPluginRuntimeLoadOptions = pickFunction(loadContext, ['buildPluginRuntimeLoadOptions', 't'], 'buildPluginRuntimeLoadOptions');
+  const {
+    loadOpenClawPlugins,
+    resolvePluginRuntimeLoadContext,
+    buildPluginRuntimeLoadOptions,
+  } = await loadPluginRuntime(distDir);
 
   const env = { ...process.env };
   const context = resolvePluginRuntimeLoadContext({
     env,
     workspaceDir,
   });
-  const registry = loadOpenClawPlugins(buildPluginRuntimeLoadOptions(context, {
+  const registry = await loadOpenClawPlugins(buildPluginRuntimeLoadOptions(context, {
     workspaceDir,
     env,
     onlyPluginIds: [pluginId],

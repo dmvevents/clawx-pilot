@@ -35,8 +35,8 @@ describe('Windows package inspection contracts', () => {
     expect(pkg.scripts.package).toMatch(/^node scripts\/release-build-source\.mjs record &&/);
     expect(pkg.scripts.package).toContain('zx scripts/bundle-preinstalled-skills.mjs && node scripts/release-build-source.mjs receipt');
     expect(pkg.scripts.build).toMatch(/^node scripts\/release-build-source\.mjs record &&/);
-    expect(pkg.scripts.build).toContain('zx scripts/bundle-preinstalled-skills.mjs && node scripts/release-build-source.mjs receipt && node scripts/run-electron-builder.mjs');
-    expect(pkg.scripts.release).toContain('node scripts/run-electron-builder.mjs --publish never');
+    expect(pkg.scripts.build).toContain('zx scripts/bundle-preinstalled-skills.mjs && node scripts/release-build-source.mjs receipt && pnpm run electron:download && node scripts/run-electron-builder.mjs');
+    expect(pkg.scripts.release).toContain('pnpm run electron:download && node scripts/run-electron-builder.mjs --publish never');
     expect(pkg.scripts.release).not.toContain('--publish always');
   });
 

@@ -2,7 +2,6 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -55,17 +54,19 @@ function runVerifier(cwd: string, env: NodeJS.ProcessEnv) {
 }
 
 function copyVerifierCheckoutFiles(destinationRoot: string) {
-  for (const dir of ['scripts', 'extensions/moe-principal-assistant']) {
+  for (const dir of ['scripts', 'extensions']) {
     fs.mkdirSync(path.join(destinationRoot, dir), { recursive: true });
   }
+  fs.cpSync(
+    path.join(ROOT, 'extensions', 'moe-principal-assistant'),
+    path.join(destinationRoot, 'extensions', 'moe-principal-assistant'),
+    { recursive: true },
+  );
   for (const file of [
     'scripts/verify-openclaw-bundle.mjs',
     'scripts/clwx92-workerenv-check.mjs',
     'scripts/openclaw-bundle-config.mjs',
-    'scripts/openclaw-chat-history-patch.mjs',
-    'scripts/openclaw-pricing-cache-patch.mjs',
-    'scripts/openclaw-sdk-alias-patch.mjs',
-    'extensions/moe-principal-assistant/doc-tools.mjs',
+    'scripts/openclaw-2026-9-upgrade-verifier.mjs',
   ]) {
     fs.copyFileSync(path.join(ROOT, file), path.join(destinationRoot, file));
   }
@@ -81,63 +82,86 @@ async function createFakeOpenClawBundle(destinationRoot: string, options: { incl
 
   const openclawRoot = path.join(destinationRoot, 'build', 'openclaw');
   const distDir = path.join(openclawRoot, 'dist');
-  fs.mkdirSync(distDir, { recursive: true });
-  fs.writeFileSync(path.join(openclawRoot, 'package.json'), JSON.stringify({ version: '2026.4.23' }), 'utf8');
+  fs.mkdirSync(path.join(distDir, 'plugin-sdk'), { recursive: true });
+  fs.mkdirSync(path.join(distDir, 'plugins'), { recursive: true });
+  fs.writeFileSync(path.join(openclawRoot, 'package.json'), JSON.stringify({
+    version: '2026.9.2',
+    engines: { node: '>=22.22.3 <23 || >=24.15.0 <25 || >=25.9.0' },
+  }), 'utf8');
+  fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(destinationRoot, 'extensions', 'moe-principal-assistant', 'node_modules'), 'junction');
+  fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(destinationRoot, 'build', 'node_modules'), 'junction');
   fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(openclawRoot, 'node_modules'), 'junction');
 
-  const { transformOpenClawPricingCacheSource } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'openclaw-pricing-cache-patch.mjs')).href);
-  const { transformOpenClawChatHistorySource } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'openclaw-chat-history-patch.mjs')).href);
-  const { transformOpenClawSdkAliasSource } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'openclaw-sdk-alias-patch.mjs')).href);
-  const source = `function canonicalizeOpenRouterProvider(provider) {
-\tconst normalized = normalizeModelRef(provider, "placeholder").provider;
-\treturn PROVIDER_ALIAS_TO_OPENROUTER[normalized] ?? normalized;
+  fs.writeFileSync(path.join(distDir, 'chat-test.js'), [
+    'async function handleChatHistoryRequest() {',
+    'readPolicy: method === "chat.history" ? "ready" : "current";',
+    'const startupProjectionPromise = entry?.authProfileOverride?.trim() ? readStartupProjection() : void 0;',
+    'const thinkingDefault = resolveConfiguredThinkingDefault({ cfg, provider, model });',
+    '}',
+    'const chatHistoryHandlers = {};',
+  ].join('\n'), 'utf8');
+  fs.writeFileSync(path.join(distDir, 'sdk-alias-test.js'), [
+    'function resolvePluginSdkScopedAliasMap() {}',
+    'const cachedPluginSdkScopedAliasMaps = new Map();',
+  ].join('\n'), 'utf8');
+  fs.writeFileSync(path.join(distDir, 'pricing-test.js'), [
+    'function normalizeOpenRouterModelPricing() {}',
+    'const MODEL_PRICING_SOURCES = [];',
+  ].join('\n'), 'utf8');
+  const moduleFiles = {
+    'plugin-sdk/model-catalog-pricing.js': 'export function normalizeOpenRouterModelPricing() {}\nexport function normalizeModelPricingCatalog() {}\n',
+    'plugin-sdk/agent-runtime.js': 'export function resolveThinkingDefault() {}\nexport function resolveThinkingDefaultWithRuntimeCatalog() {}\n',
+    'plugin-sdk/document-extractor.js': 'export {};\n',
+    'plugin-sdk/gateway-method-runtime.js': 'export function dispatchGatewayMethod() {}\n',
+    'plugin-sdk/transport-ready-runtime.js': 'export function waitForTransportReady() {}\n',
+    'plugins/loader.js': 'export function loadOpenClawPlugins() {}\nexport function resolveRuntimePluginRegistry() {}\n',
+    'plugins/build-smoke-entry.js': `
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+export function resolvePluginRuntimeLoadContext(options) {
+  const configPath = options.env.OPENCLAW_CONFIG_PATH;
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  return { ...options, config };
 }
-function resolveCatalogPricingForRef(params) {
-\treturn params;
+
+export function buildPluginRuntimeLoadOptions(context, overrides) {
+  return { ...context, ...overrides };
 }
-function refreshGatewayModelPricingCache() {
-\t\tconst catalogByNormalizedId = /* @__PURE__ */ new Map();
-\t\tfor (const entry of catalogById.values()) {
-\t\t\tconst normalizedId = canonicalizeOpenRouterLookupId(entry.id);
-\t\t\tif (!normalizedId || catalogByNormalizedId.has(normalizedId)) continue;
-\t\t\tcatalogByNormalizedId.set(normalizedId, entry);
-\t\t}
+
+export async function loadOpenClawPlugins(options) {
+  const pluginRoot = options.config.plugins.load.paths[0];
+  const manifest = JSON.parse(fs.readFileSync(path.join(pluginRoot, 'openclaw.plugin.json'), 'utf8'));
+  const pluginConfig = options.config.plugins.entries[manifest.id].config;
+  const registry = { plugins: [], tools: [] };
+  const record = { id: manifest.id, status: 'loaded', activated: true, rootDir: pluginRoot, toolNames: [] };
+  const declared = new Set(manifest.contracts?.tools ?? []);
+  const mod = await import(pathToFileURL(path.join(pluginRoot, 'index.mjs')).href);
+  mod.register({
+    pluginConfig,
+    config: options.config,
+    log: { info() {}, warn() {} },
+    registerTool(tool, opts) {
+      const names = [...(opts?.names ?? []), ...(opts?.name ? [opts.name] : []), ...(typeof tool === 'function' ? [] : [tool.name])].filter(Boolean);
+      for (const name of names) {
+        if (!declared.has(name)) throw new Error(\`undeclared tool \${name}\`);
+      }
+      record.toolNames.push(...names);
+      registry.tools.push({
+        names,
+        factory: typeof tool === 'function' ? tool : () => tool,
+      });
+    },
+  });
+  registry.plugins.push(record);
+  return registry;
 }
-`;
-  fs.writeFileSync(path.join(distDir, 'usage-format-test.js'), transformOpenClawPricingCacheSource(source).source, 'utf8');
-  const chatSource = `function resolveThinkingDefault(params) {
-\treturn params;
-}
-const chatHandlers = {
-\t"chat.history": async ({ params, respond, context }) => {
-\t\tconst cfg = {};
-\t\tconst entry = {};
-\t\tconst resolvedSessionModel = { provider: "test", model: "model" };
-\t\tconst bounded = { messages: [], placeholderCount: 0 };
-\t\tlet thinkingLevel = entry?.thinkingLevel;
-\t\tif (!thinkingLevel) {
-\t\t\tconst catalog = await context.loadGatewayModelCatalog();
-\t\t\tthinkingLevel = resolveThinkingDefault({
-\t\t\t\tcfg,
-\t\t\t\tprovider: resolvedSessionModel.provider,
-\t\t\t\tmodel: resolvedSessionModel.model,
-\t\t\t\tcatalog
-\t\t\t});
-\t\t}
-\t\trespond(true, {
-\t\t\tsessionKey: params.sessionKey,
-\t\t\tmessages: bounded.messages,
-\t\t\tthinkingLevel
-\t\t});
-\t},
-};
-`;
-  fs.writeFileSync(path.join(distDir, 'chat-test.js'), transformOpenClawChatHistorySource(chatSource).source, 'utf8');
-  fs.writeFileSync(
-    path.join(distDir, 'loader-test.js'),
-    transformOpenClawSdkAliasSource(fs.readFileSync(path.join(ROOT, 'node_modules', 'openclaw', 'dist', 'loader-DeOtDUYt.js'), 'utf8')).source,
-    'utf8',
-  );
+`,
+  };
+  for (const [rel, content] of Object.entries(moduleFiles)) {
+    fs.writeFileSync(path.join(distDir, rel), content, 'utf8');
+  }
   return { openclawRoot, bundleNm: path.join(openclawRoot, 'node_modules') };
 }
 
@@ -160,7 +184,7 @@ describe('CLWX-92 public PDF bundle fixture', () => {
     const result = runWorker({ ...env, CLWX92_PDF_FIXTURE: stagedFixture });
     const output = `${result.stdout}${result.stderr}`;
 
-    expect(result.status).toBe(0);
+    expect(result.status, output).toBe(0);
     expect(output).toContain('CLWX92_VERIFY=PASS');
     expect(output).toContain(MARKER);
     expect(output).not.toContain('refused to read');
@@ -212,7 +236,7 @@ describe('CLWX-92 public PDF bundle fixture', () => {
     const result = runVerifier(sandboxRoot, env);
     const output = `${result.stdout}${result.stderr}`;
 
-    expect(result.status).toBe(0);
+    expect(result.status, output).toBe(0);
     expect(output).toContain('openclaw bundle verified');
     expect(output).not.toContain('refused to read');
   }), 35_000);

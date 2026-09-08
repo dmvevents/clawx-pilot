@@ -14,8 +14,10 @@ import {
 } from '../../scripts/openclaw-sdk-alias-patch.mjs';
 
 const ROOT = path.resolve(__dirname, '..', '..');
+const installedOpenClawVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules', 'openclaw', 'package.json'), 'utf8')).version;
+const describeForPinnedOpenClaw = installedOpenClawVersion === TARGET_OPENCLAW_VERSION ? describe : describe.skip;
 const ACTUAL_LOADER = path.join(ROOT, 'node_modules', 'openclaw', 'dist', 'loader-DeOtDUYt.js');
-const actualSource = fs.readFileSync(ACTUAL_LOADER, 'utf8');
+const actualSource = fs.existsSync(ACTUAL_LOADER) ? fs.readFileSync(ACTUAL_LOADER, 'utf8') : '';
 const tempDirs: string[] = [];
 
 type MaterializeHelper = (distRoot: string) => void;
@@ -83,7 +85,7 @@ function wrapperPath(distRoot: string, name: string) {
   return path.join(aliasRoot(distRoot), 'plugin-sdk', name);
 }
 
-describe('openclaw SDK alias materialization patch', () => {
+describeForPinnedOpenClaw('openclaw SDK alias materialization patch', () => {
   it('patches the pinned loader source and is idempotent', () => {
     const first = transformOpenClawSdkAliasSource(actualSource);
     const second = transformOpenClawSdkAliasSource(first.source);

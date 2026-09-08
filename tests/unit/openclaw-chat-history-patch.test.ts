@@ -14,9 +14,11 @@ import {
 } from '../../scripts/openclaw-chat-history-patch.mjs';
 
 const ROOT = path.resolve(__dirname, '..', '..');
+const installedOpenClawVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules', 'openclaw', 'package.json'), 'utf8')).version;
+const describeForPinnedOpenClaw = installedOpenClawVersion === TARGET_OPENCLAW_VERSION ? describe : describe.skip;
 const ACTUAL_CHAT = path.join(ROOT, 'node_modules', 'openclaw', 'dist', 'chat-DM9hSaNV.js');
 const ACTUAL_MODEL_SELECTION = path.join(ROOT, 'node_modules', 'openclaw', 'dist', 'model-selection-BLnNKGGO.js');
-const actualSource = fs.readFileSync(ACTUAL_CHAT, 'utf8');
+const actualSource = fs.existsSync(ACTUAL_CHAT) ? fs.readFileSync(ACTUAL_CHAT, 'utf8') : '';
 const tempDirs: string[] = [];
 
 type ChatMessage = { role: string; content: string; id?: string; timestamp?: number };
@@ -203,7 +205,7 @@ async function flushMicrotasks(turns = 3) {
   }
 }
 
-describe('openclaw chat.history startup patch', () => {
+describeForPinnedOpenClaw('openclaw chat.history startup patch', () => {
   it('patches the pinned chat.history source and is idempotent', () => {
     const first = transformOpenClawChatHistorySource(actualSource);
     const second = transformOpenClawChatHistorySource(first.source);

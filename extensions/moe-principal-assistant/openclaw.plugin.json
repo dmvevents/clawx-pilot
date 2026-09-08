@@ -30,7 +30,10 @@
       },
       "schoolType": {
         "type": "string",
-        "enum": ["Denominational", "Government"],
+        "enum": [
+          "Denominational",
+          "Government"
+        ],
         "description": "Denominational or Government primary school."
       },
       "defaultDailyReportRecipientUrl": {
@@ -44,7 +47,12 @@
         "description": "Microsoft Forms URL for the Primary School Student Suspensions form. Placeholder — supplied by the MoE district office."
       }
     },
-    "required": ["principalName", "schoolName", "educationDistrict", "schoolType"]
+    "required": [
+      "principalName",
+      "schoolName",
+      "educationDistrict",
+      "schoolType"
+    ]
   },
   "uiHints": {
     "principalName": {
@@ -71,5 +79,42 @@
       "label": "Suspension form URL",
       "help": "Provided by your district office. One submission per suspended student."
     }
+  },
+  "contracts": {
+    "tools": [
+      "document.find",
+      "document.read_pdf",
+      "document.read_docx",
+      "document.write_docx",
+      "document.read_xlsx",
+      "document.write_xlsx",
+      "document.read_image",
+      "principal.draft_letter",
+      "principal.draft_memo",
+      "principal.summarise_circular",
+      "principal.daily_report_payload",
+      "principal.daily_report_form_payload",
+      "principal.suspension_payload",
+      "principal.find_school",
+      "principal.nscc_lookup",
+      "browser.diagnose",
+      "browser.repair_chrome_cdp",
+      "outlook.open",
+      "outlook.read_inbox",
+      "outlook.draft_email",
+      "outlook.send_email",
+      "outlook.search_inbox",
+      "outlook.read_email",
+      "outlook.reply",
+      "outlook.forward",
+      "outlook.mark_read",
+      "outlook.list_attachments",
+      "outlook.download_attachment",
+      "forms.list",
+      "forms.preview_suspension",
+      "forms.preview_daily_report",
+      "forms.submit_suspension",
+      "forms.submit_daily_report"
+    ]
   }
 }
