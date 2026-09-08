@@ -1,5 +1,7 @@
 # OpenClaw and Windows improvement study — September 8, 2026
 
+**Execution update:** after this planning checkpoint, the owner instructed execution to resume. The research observations below retain their original scope; active work and new results are tracked in [COMPLETION_PLAN.md](../COMPLETION_PLAN.md) and the [state vector](../completion-state.json). ASR remains deferred.
+
 **Decision state: research and planning only.** The owner explicitly paused implementation/builds after providing the five sources below. This document records findings and proposes improvements; it does not approve a migration, install community skills or establish release acceptance. [COMPLETION_PLAN.md](../COMPLETION_PLAN.md) remains the current work-order authority.
 
 **Recommendation:** keep the Ministry application and its existing Main/Gateway/tool boundaries. Evaluate a coherent OpenClaw upgrade in isolation, strengthen the existing Outlook and document adapters using the useful examples, and require installed evidence before selecting a release. A wholesale AionUi migration or a bundle of community skills has not been justified by the observed failures.
