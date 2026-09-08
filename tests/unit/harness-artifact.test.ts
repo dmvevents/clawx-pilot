@@ -336,7 +336,7 @@ describe('registration-inventory fast-lane drift guard (Claude lens 2026-09-06)'
   // must also fail in the UNIT lane: parse the registerTool name literals
   // straight out of index.mjs source and set-compare with the exported
   // constants. Same discipline as the CLWX-86 route-literal drift guard.
-  it('the 34 hardcoded names match the registerTool literals in index.mjs', async () => {
+  it('the 35 hardcoded names match the registerTool literals in index.mjs', async () => {
     const { readFile } = await import('node:fs/promises');
     const src = await readFile('extensions/moe-principal-assistant/index.mjs', 'utf8');
     const found = new Set<string>();
@@ -346,7 +346,7 @@ describe('registration-inventory fast-lane drift guard (Claude lens 2026-09-06)'
     const { DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES, BROWSER_TOOL_NAMES, OUTLOOK_TOOL_NAMES, FORMS_TOOL_NAMES, inventoryDiff } = await load();
     const expected = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES];
     expect(inventoryDiff(expected, [...found])).toBe(true);
-    expect(found.size).toBe(34);
+    expect(found.size).toBe(35);
   });
 
   it('inventoryDiff flags duplicate registrations — set semantics cannot hide a double register', async () => {
@@ -821,10 +821,10 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
     expect(String(wrongPlugin)).toContain('moe-principal-assistant');
   });
 
-  it('transport contract inventories: 15 tools without host-API, 34 with (matches the register-mode rows)', async () => {
+  it('transport contract inventories: 15 tools without host-API, 35 with (matches the register-mode rows)', async () => {
     const { TRANSPORT_NO_HOSTAPI_EXPECTED, TRANSPORT_FULL_EXPECTED, DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES } = await load();
     expect(TRANSPORT_NO_HOSTAPI_EXPECTED.length).toBe(15);
-    expect(TRANSPORT_FULL_EXPECTED.length).toBe(34);
+    expect(TRANSPORT_FULL_EXPECTED.length).toBe(35);
     expect(TRANSPORT_NO_HOSTAPI_EXPECTED).toEqual([...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES]);
   });
 

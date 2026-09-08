@@ -331,7 +331,7 @@ export const PRINCIPAL_TOOL_NAMES = [
   'principal.daily_report_payload', 'principal.daily_report_form_payload',
   'principal.suspension_payload', 'principal.find_school', 'principal.nscc_lookup',
 ];
-export const BROWSER_TOOL_NAMES = ['browser.diagnose', 'browser.repair_chrome_cdp'];
+export const BROWSER_TOOL_NAMES = ['browser.open_chrome', 'browser.diagnose', 'browser.repair_chrome_cdp'];
 export const OUTLOOK_TOOL_NAMES = [
   // outlook.readiness landed in 6ec32807 (read-only capability diagnosis)
   // inside the same host-API + skillAllowlist gate as the rest of the
@@ -794,8 +794,8 @@ export const MATRIX = [
   },
   {
     // Registration smoke, full activation: complete config + host-API env →
-    // the ENTIRE 34-tool inventory must register from the STAGED PLUGIN copy
-    // (outlook 12 + forms 5 + browser 2 + principal 8 + document 7). Pins the
+    // the ENTIRE 35-tool inventory must register from the STAGED PLUGIN copy
+    // (outlook 12 + forms 5 + browser 3 + principal 8 + document 7). Pins the
     // env/config gates and entry-file integrity. Honest coverage note: index
     // .mjs's static import graph today is builtins + local files (doc deps
     // load lazily at call time — the doc rows cover those), so this row
@@ -865,7 +865,7 @@ export const MATRIX = [
   {
     // Gateway-process transport, full activation: with host-API env present
     // (fake port/token; fetch stubbed via preload so the CLWX-86 probe fails
-    // open without a socket) the ENTIRE 34-tool inventory must register
+    // open without a socket) the ENTIRE 35-tool inventory must register
     // through the real gateway host.
     id: 'gateway-transport.full', mode: 'transport', expectation: 'ok',
     transport: { pluginConfig: FULL_PLUGIN_CONFIG, hostApi: FAKE_HOST_API },
