@@ -138,6 +138,25 @@ async function loadDocToolsWithVirtualDefaultRoots() {
   }
 }
 
+function pdfWithLines(lines: string[]) {
+  const escapePdfText = (value: string) => value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  const stream = [
+    'BT /F1 12 Tf 14 TL 72 720 Td',
+    ...lines.map((line) => `(${escapePdfText(line)}) Tj T*`),
+    'ET',
+  ].join('\n');
+  return [
+    '%PDF-1.4',
+    '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+    '2 0 obj<</Type/Pages/Count 1/Kids [3 0 R]>>endobj',
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox [0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj',
+    `4 0 obj<</Length ${stream.length}>>stream\n${stream}\nendstream endobj`,
+    '5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj',
+    'trailer<</Size 6/Root 1 0 R>>',
+    '%%EOF',
+  ].join('\n');
+}
+
 beforeAll(async () => {
   workDir = mkdtempSync(path.join(tmpdir(), 'moe-doc-tools-'));
 });
@@ -572,6 +591,234 @@ describe('readPdf refuses unreadable PDFs in principal language (CLWX-77)', () =
     ].join('\n'));
     const result = (await readPdf({ path: p })) as { text: string };
     expect(result.text).toContain('Mapping must not block real files');
+  });
+});
+
+describe('readPdf action/deadline excerpts for ordinary summaries', () => {
+  it('extracts explicit action, deadline, submission and exception sections without changing raw text', async () => {
+    const { extractPdfActionExcerpts } = await loadDocTools();
+    const source = [
+      'MINISTRY CIRCULAR',
+      'Background',
+      'This audit supports planning for the new term.',
+      'REQUIRED ACTIONS',
+      'Complete ICT 1 with serial number, condition and location for each item.',
+      'Damaged or missing items require ICT 2 and a written explanation.',
+      'KEY DEADLINES',
+      'School inventory: 30 July 2026',
+      'District verification visits: 4-15 August 2026',
+      'Final consolidated report to Head Office: 29 August 2026',
+      'SUBMISSION ROUTE AND FORMS',
+      'Send ICT 1 and ICT 2 via the District Office before Head Office consolidation.',
+      'EXCEPTIONS',
+      'Schools with no damaged or missing equipment are not required to submit ICT 2.',
+    ].join('\n');
+
+    const result = extractPdfActionExcerpts(source) as {
+      sections: Array<{ heading: string; text: string; truncated: boolean }>;
+    };
+
+    const combined = result.sections.map((section) => `${section.heading}\n${section.text}`).join('\n\n');
+    expect(combined).toContain('REQUIRED ACTIONS');
+    expect(combined).toContain('Complete ICT 1 with serial number, condition and location');
+    expect(combined).toContain('KEY DEADLINES');
+    expect(combined).toContain('School inventory: 30 July 2026');
+    expect(combined).toContain('District verification visits: 4-15 August 2026');
+    expect(combined).toContain('Final consolidated report to Head Office: 29 August 2026');
+    expect(combined).toContain('SUBMISSION ROUTE AND FORMS');
+    expect(combined).toContain('via the District Office');
+    expect(combined).toContain('EXCEPTIONS');
+    expect(combined).toContain('not required to submit ICT 2');
+    expect(source).toContain('Final consolidated report to Head Office: 29 August 2026');
+  });
+
+  it('preserves conditions, negations and wrapped source lines', async () => {
+    const { extractPdfActionExcerpts } = await loadDocTools();
+    const source = [
+      'Submission Requirements:',
+      'If a school has no damaged equipment, it is not',
+      'required to submit Form B.',
+      'Required actions:',
+      'Principals must attach the signed cover memo',
+      'and retain a copy for district review.',
+    ].join('\n');
+
+    const result = extractPdfActionExcerpts(source) as {
+      sections: Array<{ heading: string; text: string }>;
+    };
+    const combined = result.sections.map((section) => section.text).join('\n');
+    const normalized = combined.replace(/\s+/g, ' ');
+
+    expect(normalized).toContain('it is not required to submit Form B.');
+    expect(normalized).toContain('attach the signed cover memo and retain a copy');
+  });
+
+  it('keeps wrapped inline-labelled submission conditions with the source row', async () => {
+    const { extractPdfActionExcerpts } = await loadDocTools();
+    const result = extractPdfActionExcerpts([
+      'Submission: Schools must submit Form A only',
+      'if they have damaged equipment.',
+    ].join('\n')) as {
+      sections: Array<{ heading: string; text: string; truncated: boolean }>;
+    };
+
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0]).toMatchObject({
+      heading: 'Submission',
+      truncated: false,
+    });
+    expect(result.sections[0].text).toBe([
+      'Schools must submit Form A only',
+      'if they have damaged equipment.',
+    ].join('\n'));
+  });
+
+  it('treats sentence-shaped body lines as content and stops at the next structural heading', async () => {
+    const { extractPdfActionExcerpts } = await loadDocTools();
+    const result = extractPdfActionExcerpts([
+      'REQUIRED ACTIONS',
+      'Submit Form A.',
+      'BACKGROUND',
+      'This audit supports planning and is not an action.',
+    ].join('\n')) as {
+      sections: Array<{ heading: string; text: string }>;
+    };
+
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0].heading).toBe('REQUIRED ACTIONS');
+    expect(result.sections[0].text).toBe('Submit Form A.');
+    expect(JSON.stringify(result.sections)).not.toContain('This audit supports planning');
+    expect(JSON.stringify(result.sections)).not.toContain('heading":"Submit Form A.');
+  });
+
+  it('enforces hard total character bounds without appending over-limit markers', async () => {
+    const { extractPdfActionExcerpts } = await loadDocTools();
+    const result = extractPdfActionExcerpts('ACTION ITEMS\nSchools must submit Form A by 12 May 2026.', {
+      maxSections: 1,
+      maxChars: 10,
+      maxTotalChars: 10,
+    }) as {
+      sections: Array<{ text: string; truncated: boolean }>;
+      truncated: boolean;
+    };
+
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0].text).toBe('Schools mu');
+    expect(result.sections[0].text.length).toBeLessThanOrEqual(10);
+    expect(result.sections[0].truncated).toBe(true);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('bounds long sections and does not inject the ICT audit fixture', async () => {
+    const { extractPdfActionExcerpts } = await loadDocTools();
+    const source = [
+      'Action Items',
+      ...Array.from({ length: 40 }, (_, i) => `Item ${i + 1}: source obligation ${i + 1} for this unrelated circular.`),
+    ].join('\n');
+
+    const result = extractPdfActionExcerpts(source, { maxSections: 2, maxChars: 160, maxTotalChars: 220 }) as {
+      sections: Array<{ heading: string; text: string; truncated: boolean }>;
+      limits: Record<string, number>;
+    };
+
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0].text.length).toBeLessThanOrEqual(164);
+    expect(result.sections[0].truncated).toBe(true);
+    expect(JSON.stringify(result)).not.toMatch(/Head Office|29 August 2026|ICT 1|ICT 2/);
+    expect(result.limits).toMatchObject({ maxSections: 2, maxChars: 160, maxTotalChars: 220 });
+  });
+
+  it('places sourceExcerpts before raw text in the read_pdf result contract', async () => {
+    const { readPdf } = await loadDocTools();
+    const p = path.join(workDir, 'excerpt-order.pdf');
+    const stream = 'BT /F1 12 Tf 72 720 Td (KEY DEADLINES Final report: 12 May 2026) Tj ET';
+    writeFileSync(p, [
+      '%PDF-1.4',
+      '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+      '2 0 obj<</Type/Pages/Count 1/Kids [3 0 R]>>endobj',
+      '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox [0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj',
+      `4 0 obj<</Length ${stream.length}>>stream\n${stream}\nendstream endobj`,
+      '5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj',
+      'trailer<</Size 6/Root 1 0 R>>',
+      '%%EOF',
+    ].join('\n'));
+
+    const result = await readPdf({ path: p }) as Record<string, unknown>;
+    expect(Object.keys(result).indexOf('sourceExcerpts')).toBeLessThan(Object.keys(result).indexOf('text'));
+    expect(result.text).toContain('KEY DEADLINES Final report: 12 May 2026');
+    expect(result.sourceExcerpts).toMatchObject({
+      sections: expect.any(Array),
+      limits: {
+        maxSections: expect.any(Number),
+        maxChars: expect.any(Number),
+        maxTotalChars: expect.any(Number),
+      },
+    });
+  });
+
+  it('derives sourceExcerpts from the returned maxChars PDF text boundary', async () => {
+    const { readPdf } = await loadDocTools();
+    const p = path.join(workDir, 'excerpt-maxchars.pdf');
+    const visible = 'KEY DEADLINES Visible deadline: 12 May 2026. ';
+    const beyond = 'ACTION ITEMS Hidden action beyond the requested reader slice.';
+    const stream = `BT /F1 12 Tf 72 720 Td (${visible}${beyond}) Tj ET`;
+    writeFileSync(p, [
+      '%PDF-1.4',
+      '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+      '2 0 obj<</Type/Pages/Count 1/Kids [3 0 R]>>endobj',
+      '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox [0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj',
+      `4 0 obj<</Length ${stream.length}>>stream\n${stream}\nendstream endobj`,
+      '5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj',
+      'trailer<</Size 6/Root 1 0 R>>',
+      '%%EOF',
+    ].join('\n'));
+
+    const result = await readPdf({ path: p, maxChars: visible.length }) as {
+      text: string;
+      sourceExcerpts: { sections: Array<{ text: string }> };
+    };
+    const excerpts = JSON.stringify(result.sourceExcerpts);
+
+    expect(result.text).toContain('Visible deadline');
+    expect(result.text).not.toContain('Hidden action');
+    expect(excerpts).toContain('Visible deadline');
+    expect(excerpts).not.toContain('Hidden action beyond the requested reader slice');
+  });
+
+  it('surfaces the P3 Head Office deadline from an actual parsed PDF result', async () => {
+    const { readPdf } = await loadDocTools();
+    const p = path.join(workDir, 'ICT_Equipment_Audit.pdf');
+    writeFileSync(p, pdfWithLines([
+      'MINISTRY CIRCULAR',
+      'REQUIRED ACTIONS',
+      'Complete ICT 1 with serial number, condition and location for each item.',
+      'Damaged or missing items require ICT 2 and a written explanation.',
+      'KEY DEADLINES',
+      'School inventory: 30 July 2026',
+      'District verification visits: 4-15 August 2026',
+      'Final consolidated report to Head Office: 29 August 2026',
+      'SUBMISSION ROUTE AND FORMS',
+      'Send ICT 1 and ICT 2 via the District Office before Head Office consolidation.',
+      'EXCEPTIONS',
+      'Schools with no damaged or missing equipment are not required to submit ICT 2.',
+    ]));
+
+    const result = await readPdf({ path: p }) as {
+      text: string;
+      sourceExcerpts: { sections: Array<{ heading: string; text: string; truncated: boolean }> };
+    };
+    const combined = result.sourceExcerpts.sections
+      .map((section) => `${section.heading}\n${section.text}`)
+      .join('\n\n');
+
+    expect(result.text).toContain('Final consolidated report to Head Office: 29 August 2026');
+    expect(combined).toContain('Complete ICT 1 with serial number, condition and location');
+    expect(combined).toContain('Damaged or missing items require ICT 2 and a written explanation');
+    expect(combined).toContain('School inventory: 30 July 2026');
+    expect(combined).toContain('District verification visits: 4-15 August 2026');
+    expect(combined).toContain('Final consolidated report to Head Office: 29 August 2026');
+    expect(combined).toContain('Send ICT 1 and ICT 2 via the District Office before Head Office consolidation');
+    expect(combined).toContain('not required to submit ICT 2');
   });
 });
 

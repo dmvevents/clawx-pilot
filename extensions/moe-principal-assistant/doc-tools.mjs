@@ -972,6 +972,231 @@ function mapPdfParseError(err, filePath) {
   );
 }
 
+const PDF_SELECTED_SECTION_HEADING_RE =
+  /\b(required\s+actions?|action\s+items?|key\s+deadlines?|deadlines?|important\s+dates?|timeline|schedule|submissions?|submission\s+(requirements?|routes?|forms?)|routes?(?:\s+and\s+forms?)?|forms?|exceptions?|exemptions?|explanations?|verification\s+visits?|district\s+verification|audit\s+requirements?)\b/i;
+const PDF_INLINE_HEADING_PREFIXES = [
+  'REQUIRED ACTIONS',
+  'ACTION ITEMS',
+  'KEY DEADLINES',
+  'DEADLINES',
+  'IMPORTANT DATES',
+  'SUBMISSION ROUTE AND FORMS',
+  'SUBMISSION REQUIREMENTS',
+  'SUBMISSION',
+  'EXCEPTIONS',
+  'EXEMPTIONS',
+  'EXPLANATIONS',
+];
+const PDF_ACTION_EXCERPT_MAX_SECTIONS = 8;
+const PDF_ACTION_EXCERPT_MAX_CHARS = 720;
+const PDF_ACTION_EXCERPT_MAX_TOTAL_CHARS = 4_800;
+
+function cleanPdfLine(line) {
+  return String(line ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizePdfHeading(line) {
+  const clean = cleanPdfLine(line).replace(/[:\u2013-]\s*$/, '');
+  return clean;
+}
+
+function isSelectedPdfSectionHeading(heading) {
+  return PDF_SELECTED_SECTION_HEADING_RE.test(normalizePdfHeading(heading));
+}
+
+function looksLikePdfSectionHeading(line, { requireActionKeyword = false } = {}) {
+  const clean = normalizePdfHeading(line);
+  if (!clean || clean.length > 110) return false;
+  if (/[.!?]\s*$/.test(clean)) return false;
+  if (requireActionKeyword && !isSelectedPdfSectionHeading(clean)) return false;
+
+  const letters = clean.replace(/[^A-Za-z]/g, '');
+  const upper = clean.replace(/[^A-Z]/g, '');
+  const words = clean.split(/\s+/).filter(Boolean);
+  const upperRatio = letters.length ? upper.length / letters.length : 0;
+  const hasHeadingPunctuation = /[:\u2013-]\s*$/.test(line);
+  const compact = words.length <= 8;
+  const titleLike = words.every((word) => {
+    const stripped = word.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, '');
+    return !stripped || /^[A-Z]/.test(stripped) || /^(and|or|of|to|for|the|via|with)$/i.test(stripped);
+  });
+
+  return hasHeadingPunctuation || upperRatio >= 0.65 || (compact && titleLike);
+}
+
+function splitPdfSourceLines(text) {
+  const source = String(text ?? '');
+  const lines = [];
+  const re = /([^\r\n]*)(\r\n|\n|\r|$)/g;
+  let match;
+  while ((match = re.exec(source)) !== null) {
+    const raw = match[1];
+    const newline = match[2];
+    if (raw === '' && newline === '') break;
+    const start = match.index;
+    const end = start + raw.length;
+    lines.push({
+      raw,
+      start,
+      end,
+      nextStart: end + newline.length,
+    });
+    if (newline === '') break;
+  }
+  return lines;
+}
+
+function trimPdfSourceSpan(source, start, end) {
+  let from = Math.max(0, start);
+  let to = Math.min(source.length, end);
+  while (from < to && /\s/.test(source[from])) from += 1;
+  while (to > from && /\s/.test(source[to - 1])) to -= 1;
+  return source.slice(from, to);
+}
+
+function classifyStandalonePdfHeading(line) {
+  const heading = normalizePdfHeading(line.raw);
+  if (!looksLikePdfSectionHeading(line.raw)) return null;
+  return {
+    heading,
+    selected: isSelectedPdfSectionHeading(heading),
+    bodyStart: line.nextStart,
+  };
+}
+
+function classifyInlinePdfHeading(line) {
+  const sourceLine = String(line.raw ?? '');
+  const labelled = sourceLine.match(/^(\s*)(.{2,80}?)([:\u2013-])(\s+)(\S.*)$/);
+  if (labelled) {
+    const label = normalizePdfHeading(labelled[2]);
+    if (looksLikePdfSectionHeading(label, { requireActionKeyword: true })) {
+      return {
+        heading: label,
+        selected: true,
+        bodyStart: line.start + labelled[1].length + labelled[2].length + labelled[3].length + labelled[4].length,
+      };
+    }
+  }
+
+  const trimmedStart = sourceLine.search(/\S/);
+  if (trimmedStart < 0) return null;
+  const trimmed = sourceLine.slice(trimmedStart);
+  const upperTrimmed = trimmed.toUpperCase();
+  for (const prefix of PDF_INLINE_HEADING_PREFIXES) {
+    if (
+      upperTrimmed.startsWith(`${prefix} `) &&
+      isSelectedPdfSectionHeading(prefix) &&
+      looksLikePdfSectionHeading(prefix, { requireActionKeyword: true })
+    ) {
+      return {
+        heading: prefix,
+        selected: true,
+        bodyStart: line.start + trimmedStart + prefix.length + 1,
+      };
+    }
+  }
+
+  return null;
+}
+
+function boundPdfExcerpt(text, maxChars = PDF_ACTION_EXCERPT_MAX_CHARS) {
+  const limit = Math.max(0, Number.isFinite(maxChars) ? Math.floor(maxChars) : PDF_ACTION_EXCERPT_MAX_CHARS);
+  if (text.length <= limit) return { text, truncated: false };
+  return { text: text.slice(0, limit).trimEnd(), truncated: true };
+}
+
+/**
+ * Extract bounded, source-derived sections that make action summaries more
+ * reliable. This is deliberately heading-led: it surfaces explicit sections
+ * from the document and uses unrelated structural headings only as boundaries,
+ * rather than guessing possible obligations from dates or verbs in background
+ * prose.
+ */
+export function extractPdfActionExcerpts(text, {
+  maxSections = PDF_ACTION_EXCERPT_MAX_SECTIONS,
+  maxChars = PDF_ACTION_EXCERPT_MAX_CHARS,
+  maxTotalChars = PDF_ACTION_EXCERPT_MAX_TOTAL_CHARS,
+} = {}) {
+  const source = String(text ?? '');
+  const lines = splitPdfSourceLines(source);
+  const sections = [];
+  let current = null;
+  let totalChars = 0;
+  let truncated = false;
+
+  const pushCurrent = (endOffset = source.length) => {
+    if (!current) return;
+    if (sections.length >= maxSections) {
+      truncated = true;
+      current = null;
+      return;
+    }
+    const rawExcerpt = trimPdfSourceSpan(source, current.bodyStart, endOffset);
+    if (!rawExcerpt) {
+      current = null;
+      return;
+    }
+    const remaining = maxTotalChars - totalChars;
+    if (remaining <= 0) {
+      truncated = true;
+      current = null;
+      return;
+    }
+    const bounded = boundPdfExcerpt(rawExcerpt, Math.min(maxChars, remaining));
+    if (bounded.text) {
+      sections.push({
+        heading: current.heading,
+        text: bounded.text,
+        truncated: bounded.truncated,
+      });
+      totalChars += bounded.text.length;
+    }
+    if (bounded.truncated || rawExcerpt.length > remaining) truncated = true;
+    current = null;
+  };
+
+  for (const line of lines) {
+    if (!cleanPdfLine(line.raw)) continue;
+
+    const standalone = classifyStandalonePdfHeading(line);
+    if (standalone) {
+      pushCurrent(line.start);
+      if (sections.length >= maxSections) {
+        truncated = true;
+        break;
+      }
+      current = standalone.selected
+        ? { heading: standalone.heading, bodyStart: standalone.bodyStart }
+        : null;
+      continue;
+    }
+
+    const inline = classifyInlinePdfHeading(line);
+    if (inline) {
+      pushCurrent(line.start);
+      if (sections.length >= maxSections) {
+        truncated = true;
+        break;
+      }
+      current = { heading: inline.heading, bodyStart: inline.bodyStart };
+      continue;
+    }
+  }
+  pushCurrent();
+
+  return {
+    sections,
+    truncated,
+    limits: {
+      maxSections,
+      maxChars,
+      maxTotalChars,
+    },
+  };
+}
+
 export async function readPdf({ path: inputPath, maxChars = 200_000 } = {}) {
   const filePath = resolveReadablePath(inputPath);
   // Must precede the pdf-parse load: pdfjs-dist references DOMMatrix at
@@ -1034,12 +1259,14 @@ export async function readPdf({ path: inputPath, maxChars = 200_000 } = {}) {
     throw new Error('pdf-parse: unknown module shape (neither PDFParse class nor callable).');
   }
   const truncated = text.length > maxChars;
+  const returnedText = truncated ? text.slice(0, maxChars) : text;
   return {
     path: filePath,
     bytes: buf.length,
     pages: numPages,
     info,
-    text: truncated ? text.slice(0, maxChars) : text,
+    sourceExcerpts: extractPdfActionExcerpts(returnedText),
+    text: returnedText,
     truncated,
     totalChars: text.length,
   };
