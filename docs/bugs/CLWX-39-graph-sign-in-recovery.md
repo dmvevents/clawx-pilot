@@ -37,3 +37,9 @@ Author evidence: 18 new and 45 existing Graph unit tests PASS; typecheck, focuse
 Commands and handoff: candidate `docs/evidence/GRAPH_CONNECTION_SETUP_2026-09-08.md` and private `graph-connection-finish/result.md`. Next: independent source verdict, mocked Electron UI proof, then account-holder verification on the identified installed artifact.
 
 Independent review update: `graph-connection-review/result.md` returns **APPROVE** for `7a129570`, confirming callback state isolation, neutral cancellation, auth-required refresh classification, token preservation and unchanged send gates. The review reran the new focused suites. Electron E2E and live account proof remain open; source has not yet been integrated or installed.
+
+## UI environment blocker removed
+
+`graph-ui-proof` passed the existing Settings E2E against real Electron 42 UI at approved source `7a129570`: unconfigured → saved synthetic configuration → signed_out with enabled sign-in and truthful mock badge. One test passed in 11.5 seconds; no live OAuth or Graph call was made. The shared package contained a hollow app stub and no `path.txt`; an isolated official darwin-arm64 binary matched the package-pinned SHA-256 `3c619bb8ec6a243142e392335382a3383739a9977ca85067cb1f31599ff993e5`.
+
+Reproduce: `ELECTRON_OVERRIDE_DIST_PATH=/private/tmp/clawx-graph-e2e-electron42/dist pnpm exec playwright test tests/e2e/settings-msgraph-connection.spec.ts` from the Graph worktree with its matching renderer build. The override resolves a symlink to the real Electron binary and leaves shared dependencies unchanged. Evidence commit `9a17b3ee`; private result `artifacts/ga-fable-20260908/graph-ui-proof/result.json`. Graph source is integrated as `f520d2cc`; this original-revision UI result does not replace final integrated, installed Windows or tenant acceptance.

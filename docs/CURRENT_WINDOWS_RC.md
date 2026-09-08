@@ -4,7 +4,7 @@
 
 ## Current source candidate — moe.26, not packaged
 
-`release/moe26-plan-execution` at `6ec328073f272c538e2e0d653824c1f407b6e6e4`, checkout `/private/tmp/clawx-plan-execution-20260908`. Reviewed S1–S4, native Ollama, actual-9.2 policy oracle and read-only Graph diagnosis are integrated; version is `0.4.3-moe.26`. No push, hosted build, installer, installation or publication exists for this source. The policy oracle now has independent approval and 22 focused passes; Graph diagnosis has 83 focused passes and independent approval. Full preflight awaits the remaining source integrations; held test repair `24e1cfd3` remains excluded. See the exact handoff and remaining gates in the completion plan.
+`release/moe26-plan-execution` at `64ae2dc6e708ae0b312eb29fc09a761586d8321c`, checkout `/private/tmp/clawx-plan-execution-20260908`. Reviewed S1–S4, native Ollama, actual-9.2 policy oracle and read-only Graph diagnosis, Graph setup recovery and the curated fidelity fixture are integrated; version is `0.4.3-moe.26`. No push, hosted build, installer, installation or publication exists for this source. The policy oracle now has independent approval and 22 focused passes; Graph diagnosis has 83 focused passes and independent approval. Full preflight awaits the remaining source integrations; held test repair `24e1cfd3` remains excluded. Graph setup also has independent source approval and isolated Electron UI proof; the fidelity fixture has independent approval and 60 focused passes. Browser source is held for review findings. See the exact handoff and remaining gates in the completion plan.
 
 ## Latest installed diagnostic — moe.25
 

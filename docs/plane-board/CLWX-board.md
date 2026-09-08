@@ -187,6 +187,8 @@ Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex ro
 
 - **State:** Backlog  |  **Priority:** medium
 
+CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Current-source UI acceptance lane launched at488ebe29 with CLWX122. Verify historical English-only/provider/channel E2E failures against current code; correct stale fork expectations only where the product contract supports it. Use isolated Electron42 already verified by Graph UI, without shared dependency mutation. Source changes require focused rendered-app proof and independent review; no blanket skips or false release pass.
+Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 Area: ui   Severity: medium (priority medium)
 
 Steps to reproduce
@@ -1623,6 +1625,8 @@ Acceptance: (a) the flake is either fixed or quantified by N repeat runs with a 
 
 - **State:** Todo  |  **Priority:** medium
 
+CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Coupled guard work assigned to browser-ownership-repair together with CLWX130. Subject verification must bind the owned compose tab before narrowing cross-tab draft detection; both changes need mutation regressions. One owner covers Chrome and Outlook/Forms attach boundaries, preserving reviewed-state and confirmation gates. No live send or installed acceptance in this source repair. Current base736ffe9e includes candidate488ebe29 plus held browser source; root integrates only independently approved correction.
+Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 Filed as ONE card on purpose: these two findings are coupled, and the coupling is the actionable part. Both raised by the review lane on the CLWX-118 tab-ownership fix and deliberately left out of that fix rather than folded in.
 MEDIUM-7: the compose-pane subject match — the second of the two send_email gates — is evaluated against whatever compose pane the driver can see, without asserting that pane belongs to the tab the driver owns.
 MEDIUM-8: hasAnyVisibleOpenDraft currently scans across tabs rather than only the owned tab.
@@ -1634,6 +1638,8 @@ Acceptance: pinning rows in tests/unit/outlook-playwright-driver-cdp.test.ts tha
 
 - **State:** Todo  |  **Priority:** medium
 
+CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Principal-readable footer correction assigned to ui-release-acceptance at488ebe29 alongside CLWX102. Remove ordinary user-facing port/PID details while retaining developer diagnostics and honest loading/connected/disconnected state. Focused component and Electron E2E proof precede independent review. No current-source or installed PASS yet.
+Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 An error footer observed during evidence review renders port: 16783 | pid: 5756 on a surface the principal sees.
 Why this matters here specifically: this project already treats internals-in-the-UI as a trust defect, not cosmetics. The same rule family anonymises model identity to "Online" / "On this device", hides cost in the frontend while logging it in the backend, and keeps recipients and body content out of logs. A raw port and pid is the same category: it tells a primary-school principal at 3:30pm that something technical broke, in a vocabulary that offers them no action.
 Not a security leak — a loopback port and a local pid are not secrets. It is a trust-surface defect, so it is filed at medium rather than high, and it belongs to the principal-proxy lens.
@@ -1700,6 +1706,8 @@ Source: local WhatsApp store 2026-06-22. Tier: verified_at_commit (store read 20
 
 - **State:** In Progress  |  **Priority:** none
 
+CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — GA RED. Reviewed Graph setup f520d2cc and fidelity correction 488ebe29 are integrated. Candidate64ae2dc6 adds the Graph local-UI evidence only; no moe.26 build/install/publication. Five supervised Claude sessions launched with no spending cap: browser ownership130/121; UI122/102; read-only Outlook eval119/120/61 audit; read-only artifact77/24/26/lifecycle audit; Forms63/71 documentation correction. Initial Fable5 selection, live PIDs and fresh heartbeats verified; final provider/model provenance remains checked at completion. Board audit supports five useful GA lanes and one later package/VM operator. Preliminary19-card tally was not exhaustive: additional102/119/120/121/122 criteria and Ready118 revalidation must be reconciled. Existing NSCC, reminders, artifact harness and prior119/120 fixes are reused, not rebuilt. Remaining stabilization sprint plus acceptance/release sprint is a planning estimate, with contingency for defects. Windows owner session remains observation-only.
+Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 CLWX-NO-CAP-EXECUTION-20260908 — Latest owner direction supersedes the pending-budget hold: NO SPENDING LIMIT; execute the worktrees. Five monitored Claude Fable5 sessions on Bedrock are live with no CLI cap: Chrome independent review, fidelity delta review, Graph Electron UI proof, history/skills source review and Forms/files factual review. Root owns integration and later single-owner packaging/VM. Source candidate6ec32807 remains unbuilt; GA RED. Sprint/epic sequence and seven pilot acceptance rows remain in docs/COMPLETION_PLAN.md and this card; no scope or acceptance waiver.
 CLWX-SOURCE-CHECKPOINT-20260908-1240 — Progress since sprint checkpoint: Chrome source a091a968 committed with113focused tests and remaining checks passing, independent review queued. Graph source7a129570 independently APPROVED; UI test environment and integration still open. Fidelity correction remains the only active Claude lane at this check. New paid launches/continuations held pending owner total spending limit. GA RED; candidate still6ec32807, no new installer.
 CLWX-SPRINT-CHECKPOINT-20260908-1235 — GA sprint and epic checkpoint: reviewed moe.26 source 6ec32807 has 105 combined focused tests passing. Active lanes are Chrome validation/commit, Graph independent review and fidelity correction. Full integrated preflight and one build precede installed Windows acceptance, Windows10/11 client and Microsoft account proof, performance/recovery rehearsal, verified download and Karunesh unaided rerun. The seven pilot acceptance criteria remain required; broader production/fleet KRs retain their separate milestone. GA RED; no moe.26 installer yet. Current plan docs/COMPLETION_PLAN.md; test spec .omx/plans/test-spec-ga-fable-20260908.md. Owner requested a total spending limit after authorizing doubled lane allowances. Amount is pending; new paid launches/continuations are held. Existing sessions retain original caps.
@@ -2147,6 +2155,8 @@ Accept (KR8): reply sent (by Anton); working-session notes record the hostname d
 
 - **State:** In Progress  |  **Priority:** none
 
+CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Graph setup7a129570 independently APPROVED and integratedf520d2cc: 18 new plus45 existing focused Graph tests pass. The local UI environment blocker is removed using an isolated official Electron42 binary, without changing shared dependencies. Graph Settings mocked-renderer E2E PASS1 at original7a129570; evidence-only9a17b3ee integrated64ae2dc6. Real tenant sign-in and installed Microsoft journeys remain NOT_RUN. No token/config/tenant values in this record. Handoff: docs/bugs/CLWX-39-graph-sign-in-recovery.md.
+Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 CLWX-SOURCE-CHECKPOINT-20260908-1240 — Independent review APPROVE for7a129570, with focused Graph regressions rerun. Source is awaiting integration and Electron UI proof; missing Electron42 test binary and real account-holder/tenant acceptance remain open. See docs/bugs/CLWX-39-graph-sign-in-recovery.md and private graph-connection-review/result.md.
 CLWX-SPRINT-CHECKPOINT-20260908-1235 — Source7a129570 completes callback-state-before-error validation, terminal cancellation and typed rejected-refresh reauthentication;18new+45existing Graph unit tests, typecheck/lint/harness/comms PASS. Independent Graph review now running. Mocked Electron E2E BLOCKED by missing Electron42 binary path.txt in shared test store; not evidence of a Windows installer defect. Real account-holder authentication remains required. Report:docs/bugs/CLWX-39-graph-sign-in-recovery.md.
 Prior dated status and full acceptance preserved below.
@@ -2211,6 +2221,8 @@ S1 Email. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-
 
 - **State:** In Progress  |  **Priority:** high
 
+CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Documentation study a57e6bd7 received factual-review REQUEST_CHANGES; forms-files-correction is launched. Ministry document.* routing must remain distinct from generic upstream PDF capability. Graph list-item creation is a SharePoint record write, not a proven Microsoft Forms response; actual store mapping and owner-approved semantics remain prerequisites. Bound no-API/no-MCP claims to reviewed official surfaces and current-tenant Conditional Access to UNKNOWN. No unsupported submit API was implemented or called. Existing nine-route local adapter is reused. Thorough handoff: docs/bugs/CLWX-63-forms-capability-claims.md. Live preview/store/auth criteria remain open.
+Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 Why
 Demo flow #2 and the product's core promise: extraction is built, fill is proven, but the full chain (drop a suspension report -> agent extracts 32 fields -> prefills the form) has no end-to-end test (audit: FORMS, 2026-09-03).
 
@@ -2516,6 +2528,8 @@ Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is sc
 
 - **State:** In Progress  |  **Priority:** medium
 
+CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Fidelity correction6ed95e82 independently APPROVED and integrated488ebe29 after the e12c150a/2ee28efa chain. 60 focused tests and12 curated fixture rows pass, including rejecting the reviewed wrong-fact with/despite controls. This is a curated regression checker, not a general free-text semantic oracle; another pre-existing no-fuss phrase false-PASS is documented. Installed document fidelity and semantic review remain open. Handoff: docs/bugs/CLWX-115-fidelity-validator.md.
+Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 CLWX-NO-CAP-EXECUTION-20260908 — Correction6ed95e828eca254d76c3e16eccce65cf26fa6ae0 committed: exact with/despite negation-borrow failures reproduced before fix;60focused tests and12fixture rows now pass. Minimal after-window fact binding retains previous controls. Independent delta review is running, no spending cap. This remains source-fixture evidence only; installed CLWX115 rerun open. Report docs/bugs/CLWX-115-fidelity-validator.md.
 CLWX-SPRINT-CHECKPOINT-20260908-1235 — Independent review at2ee28efa confirms both original false passes fixed and58focused tests plus11fixtures pass, but exact adjacent variant attending with no meal or shirt still falsely passes (also despite). Required correction owns the checker/fixture/test only and is running in w2-negation-finish. Candidate held until independent delta approval; installed fidelity remains NOT_RUN. Report:docs/bugs/CLWX-115-fidelity-validator.md.
 Prior dated status and full acceptance preserved below.
@@ -2686,6 +2700,8 @@ Evidence: docs/evidence/WINDOWS_STAKEHOLDER_CONNECTION_2026-09-08.md; artifacts/
 
 - **State:** In Progress  |  **Priority:** medium
 
+CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — History/skills source2b4a3e81 independently APPROVED and integrated into root operations as4993cb2e, separate from product candidate. 44 synthetic tests, three skill validations/mirror checks and a synthetic forward-use mocked-critic test pass with no additional real log reads or paid critic calls in review. Historical exposure remains UNKNOWN; regex/privacy and ambient AWS credential routing limitations retained. Handoff: docs/bugs/CLWX-129-history-redaction.md. No Ready promotion: evidence reconstruction limitations remain explicit.
+Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 CLWX-SPRINT-CHECKPOINT-20260908-1235 — Source checkpoint2b4a3e81 includes script/report/three skill mirrors;44synthetic tests and3skill validations PASS, independent review pending. Known prose-credential class corrected and local63-file pack regenerated without another model call; available old pack already had zero known-class matches and originally affected version was not separately preserved. Historical exposure UNKNOWN; no claim of public leak or full containment. Report:docs/bugs/CLWX-129-history-redaction.md. Keep raw logs/packs private; no repeat paid synthesis needed for source review.
 Prior dated status and full acceptance preserved below.
 CLWX-HISTORY-REVIEW-20260908 — Owner requested JSON/JSONL project history and repo structure review through a Bedrock multi-LLM lane, including FreeRDP lessons, omissions, workflow optimization and reusable skills.
@@ -2696,6 +2712,8 @@ Deliverables: reusable Bedrock-only review script, scoped skill and verified Fre
 
 - **State:** In Progress  |  **Priority:** high
 
+CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Independent review REQUEST_CHANGES on a091a968. Three reproduced defects: restricted process metadata can cause an owned Chrome launch to be killed; same-session profile conflict is misreported as foreign Windows session; Outlook/Forms attach bypasses ownership validation when the endpoint is reachable. Also bind port/endpoint identity and cover default PowerShell parsing errors. New browser-ownership-repair author owns the coupled130/121 service/driver boundaries at merged base736ffe9e. Browser source excluded from candidate. Exact original stock timeout cause UNKNOWN. Review execution metadata included Fable5 and Opus5 on Bedrock, so monitor flagged MODEL_MISMATCH; concrete failing probes retained, no approval inferred. Handoff: docs/bugs/CLWX-130-windows-chrome-start.md.
+Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 CLWX-SOURCE-CHECKPOINT-20260908-1240 — Source completion:a091a968b89c5127e41c55ab62bf942c56c08e46 committed and clean. 113focused unit passes retained; typecheck, focused lint, explicit-base harness and comms PASS. Independent review queued under owner budget hold. Full report docs/bugs/CLWX-130-windows-chrome-start.md; source/installed scopes remain distinct.
 CLWX-SPRINT-CHECKPOINT-20260908-1235 — Chrome source author stopped at explicit spending cap, preserving edits and 113 focused test passes; bounded browser-finish now validates and commits. Explicit Ministry open-Chrome routing and Windows session/profile ownership guards are proposed, unreviewed and uninstalled. Exact incident-time stock timeout cause remains UNKNOWN. Next: remaining source checks, independent review, integrated artifact and installed rerun. Full transferable report: docs/bugs/CLWX-130-windows-chrome-start.md.
 Prior dated status and full acceptance preserved below.

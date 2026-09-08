@@ -74,3 +74,17 @@ Next agent: start from the receipts above, retrieve only the relevant incident-t
 The `browser-fix` author reached its explicit spending cap with preserved source edits, not a proven runtime hang. It reported 18 Chrome, 29 plugin and 66 adjacent focused tests passing. The uncommitted fix adds explicit Ministry Chrome opening through the existing Main repair route and checks Windows endpoint session/profile ownership before readiness. Typecheck/lint/harness/comms receipts were incomplete; independent review and installed acceptance remain pending. `browser-finish` now owns only missing validation, concrete corrections and a source commit. The exact incident-time stock-launch cause remains UNKNOWN.
 
 Completion update: `a091a968b89c5127e41c55ab62bf942c56c08e46` is committed and the lane is clean. Typecheck, focused lint, explicit-base harness validation/dry-run, comms replay/compare and diff check pass; prior 113 unit passes were recovered from their retained receipts. Independent source review remains queued; no installed acceptance claim. Private completion: `artifacts/ga-fable-20260908/browser-finish/result.md`.
+
+## Independent review of a091a968 — held for changes
+
+The read-only reviewer reran 113 focused tests and reproduced three boundary defects in isolated probes. Result: REQUEST_CHANGES; source remains excluded from the release candidate.
+
+1. `endpoint_owner_unverified` after launch kills the newly spawned Chrome even when the reported endpoint PID matches that spawn. With restricted Windows process metadata, a valid launch can repeatedly be terminated. Add a deterministic same-owned-PID/unknown-metadata control; do not kill a working browser solely because identity information is unavailable.
+2. Same-session/different-profile conflicts are reported as a different Windows user session, directing the user to sign in to their own session. Separate profile conflict from confirmed foreign session; preserve truthful and actionable guidance.
+3. Outlook and Forms drivers connect over CDP before calling the readiness repair fallback. A reachable endpoint bypasses the new ownership check entirely. The actual attach boundary must enforce ownership; a diagnosis-only guard cannot establish this property.
+
+Additional source findings: ownership uses `debugPort` while readiness uses `cdpEndpoint`, permitting inconsistent-port evidence; derive or validate one endpoint identity. Default PowerShell probe parsing/error branches lack direct tests. Changes touching the Outlook driver must be owned together with CLWX-121's coupled subject/draft-tab guards; do not narrow the draft scan before binding subject verification to the owned tab.
+
+Private review and probes: `artifacts/ga-fable-20260908/browser-review/result.json`, `/private/tmp/clwx130-review/`. Review execution was flagged MODEL_MISMATCH: initialization requested/reported Fable 5, while final usage also contains Opus 5; all observed usage reports Bedrock. No nested model CLI invocation was found in Bash tool records. This is a provenance exception, not a source approval or a confirmed routing root cause. Retain the concrete failing probes for the next author and require a fresh independent verdict after correction.
+
+Current corrective dispatch: `browser-ownership-repair`, worktree `/private/tmp/clawx-browser-regression-20260908`, base `736ffe9e` (held browser source plus candidate `488ebe29`). CLWX-121 coupled guards are included under the same owner. Source correction, independent approval and installed acceptance remain pending.

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T12:13:39.204988+00:00",
+  "updatedAt": "2026-09-08T13:01:34.296796+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -2093,7 +2093,7 @@
   },
   "currentSourceCandidate": {
     "version": "0.4.3-moe.26",
-    "source": "6ec328073f272c538e2e0d653824c1f407b6e6e4",
+    "source": "64ae2dc6e708ae0b312eb29fc09a761586d8321c",
     "branch": "release/moe26-plan-execution",
     "worktree": "/private/tmp/clawx-plan-execution-20260908",
     "clean": true,
@@ -2117,12 +2117,34 @@
         "scope": "read-only Outlook/Graph readiness diagnosis",
         "focusedTests": 83,
         "independentReview": "APPROVE"
+      },
+      {
+        "authorCommit": "7a129570",
+        "integratedCommit": "f520d2cc",
+        "scope": "Graph setup/cancellation/reauthentication",
+        "focusedTests": 63,
+        "independentReview": "APPROVE",
+        "localMockedElectronUi": "PASS_AT_7a129570"
+      },
+      {
+        "authorCommit": "6ed95e82",
+        "integratedCommit": "488ebe29",
+        "scope": "curated association/negation source-fixture gate",
+        "focusedTests": 60,
+        "independentReview": "APPROVE",
+        "installedAcceptance": "NOT_RUN"
       }
     ],
     "combinedFocusedTests": {
       "passed": 105,
       "files": 6,
       "source": "6ec328073f272c538e2e0d653824c1f407b6e6e4"
+    },
+    "productSource": "488ebe29d7d16cfec13c08545f5336babc7e5741",
+    "latestDocumentationOnlyChange": {
+      "source": "9a17b3ee",
+      "integrated": "64ae2dc6",
+      "scope": "Graph mocked local Electron UI proof"
     }
   },
   "handoff": {
@@ -2163,7 +2185,7 @@
     "awsProfile": "bedrock",
     "region": "us-east-2",
     "baseSource": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
-    "phase": "REVIEWED_SOURCE_INTEGRATED_REMAINING_FIXES",
+    "phase": "PARALLEL_REPAIR_AND_ACCEPTANCE_AUDIT_RUNNING",
     "privateReceipts": "artifacts/ga-fable-20260908",
     "plan": ".omx/plans/prd-ga-fable-20260908.md",
     "testSpec": ".omx/plans/test-spec-ga-fable-20260908.md",
@@ -2207,12 +2229,15 @@
           "CLWX-115",
           "CLWX-106"
         ],
-        "status": "SOURCE_CORRECTION_COMMITTED_REVIEW_PENDING",
+        "status": "REVIEWED_INTEGRATED",
         "owner": "Claude fidelity author",
         "scope": "synthetic association/negation source fixture and recurring gate",
         "source": "6ed95e82",
         "report": "docs/bugs/CLWX-115-fidelity-validator.md",
-        "receipts": "artifacts/ga-fable-20260908/w2-negation-finish"
+        "receipts": "artifacts/ga-fable-20260908/w2-negation-finish",
+        "integrated": "488ebe29",
+        "independentReview": "APPROVE",
+        "tests": 60
       },
       {
         "id": "W3/W4",
@@ -2229,7 +2254,7 @@
       },
       {
         "id": "TEST",
-        "status": "ACTIVE_INDEPENDENT_REVIEWS",
+        "status": "READ_ONLY_ACCEPTANCE_AUDITS_RUNNING_INDEPENDENT_SOURCE_REVIEW_FOLLOWS",
         "owner": "independent Claude reviewer/tester"
       },
       {
@@ -2242,13 +2267,15 @@
         "cards": [
           "CLWX-129"
         ],
-        "status": "SOURCE_CHECKPOINT_REVIEW_PENDING",
+        "status": "REVIEWED_INTEGRATED_ROOT",
         "owner": "Claude Fable5 author plus bounded Bedrock Nova2Lite critic",
         "worktree": "/private/tmp/clawx-history-skills-20260908",
         "scope": "sanitized project log review, repo map, FreeRDP lessons and reusable skills; advisory findings require source verification",
         "report": "docs/bugs/CLWX-129-history-redaction.md",
         "source": "2b4a3e81",
-        "tests": 44
+        "tests": 44,
+        "independentReview": "APPROVE",
+        "integrated": "4993cb2e"
       },
       {
         "id": "ASR",
@@ -2285,24 +2312,32 @@
           "CLWX-40"
         ],
         "scope": "Existing OAuth setup, cancellation and reauthentication",
-        "status": "SOURCE_APPROVED_PENDING_UI_AND_INTEGRATION",
+        "status": "REVIEWED_INTEGRATED_LOCAL_UI_PASS",
         "receipts": "artifacts/ga-fable-20260908/graph-connection-review",
         "source": "7a129570",
         "tests": 63,
-        "e2e": "BLOCKED_MISSING_ELECTRON_BINARY",
-        "independentReview": "APPROVE"
+        "e2e": "PASS_MOCKED_LOCAL_ELECTRON_AT_7a129570",
+        "independentReview": "APPROVE",
+        "integrated": "f520d2cc",
+        "uiEvidenceCommit": "9a17b3ee",
+        "uiEvidenceIntegrated": "64ae2dc6"
       },
       {
         "id": "BROWSER",
         "owner": "Claude Fable5 / Bedrock",
         "cards": [
-          "CLWX-130"
+          "CLWX-130",
+          "CLWX-121"
         ],
         "scope": "Explicit Chrome opening and Windows session/profile ownership",
-        "status": "SOURCE_COMMITTED_REVIEW_PENDING",
-        "receipts": "artifacts/ga-fable-20260908/browser-finish",
+        "status": "REVIEW_CORRECTIONS_RUNNING",
+        "receipts": "artifacts/ga-fable-20260908/browser-review",
         "source": "a091a968b89c5127e41c55ab62bf942c56c08e46",
-        "tests": 113
+        "tests": 113,
+        "independentReview": "REQUEST_CHANGES",
+        "reviewExecution": "MODEL_MISMATCH_BEDROCK_ONLY",
+        "activeTask": "browser-ownership-repair",
+        "repairBase": "736ffe9e"
       },
       {
         "id": "FORMS-FILES",
@@ -2312,23 +2347,25 @@
           "CLWX-71"
         ],
         "scope": "Official API and local-tool study; needs factual review",
-        "status": "DOC_REVIEW_PENDING",
+        "status": "FACTUAL_CORRECTIONS_RUNNING",
         "receipts": "artifacts/ga-fable-20260908/forms-files-review",
-        "source": "a57e6bd7"
+        "source": "a57e6bd7",
+        "independentReview": "REQUEST_CHANGES",
+        "activeTask": "forms-files-correction"
       }
     ],
     "maxConcurrentAuthorClis": 5,
     "concurrencyReason": "Independent source and tooling lanes; no concurrent VM mutations. Source accepts only after independent review.",
     "bugHandoffPolicy": "docs/bugs/TEMPLATE.md required by PROJECT_CONTRACT, AGENTS.md and CLAUDE.md",
-    "statusCheckedAt": "2026-09-08T12:33:46.670019+00:00",
+    "statusCheckedAt": "2026-09-08T13:01:34.296796+00:00",
     "epic": "CLWX-22",
     "sprintExit": "Reviewed browser/Graph/fidelity integration, full source preflight and one identified moe.26 artifact ready for installed acceptance",
     "activeCliTasks": [
-      "browser-review",
-      "w2-binding-review",
-      "graph-ui-proof",
-      "history-source-review",
-      "forms-files-factual-review"
+      "browser-ownership-repair",
+      "ui-release-acceptance",
+      "eval-acceptance-audit",
+      "artifact-acceptance-audit",
+      "forms-files-correction"
     ],
     "budgetAuthorization": {
       "source": "Owner: There is no limit. Execute the work trees.",
@@ -2341,8 +2378,19 @@
       "issues": 131,
       "states": 6,
       "readback": "PASS",
-      "receipt": "artifacts/ga-fable-20260908/no-cap-board-export-verification.json",
-      "monitorState": "Ready"
+      "receipt": "artifacts/ga-fable-20260908/dispatch-board-export-verification.json",
+      "monitorState": "Ready",
+      "updatedCards": [
+        22,
+        130,
+        121,
+        39,
+        115,
+        129,
+        63,
+        102,
+        122
+      ]
     },
     "releaseCardTally": {
       "at": "2026-09-08T12:39:25.441861+00:00",
@@ -2406,6 +2454,73 @@
       "scope": "Pilot release portions of shared cards; CLWX110 cohort rollout excluded beyond release handoff",
       "estimate": "Rest of current stabilization sprint plus one acceptance/release sprint; contingency if acceptance exposes defects",
       "notAnEta": true
+    },
+    "parallelAudit": {
+      "maxUsefulGaLanes": 5,
+      "newImplementationLanesLaunched": true,
+      "source": "artifacts/ga-fable-20260908/parallel-board-audit/result.json",
+      "rootCorrections": [
+        "NSCC source/pack exists",
+        "Mac reminder already verified",
+        "harness:artifact exists",
+        "Ready118 is revalidation, not additional open card",
+        "119/120 have correction evidence; verify rather than blindly rewrite"
+      ],
+      "preliminaryTallyExhaustive": false,
+      "additionalCriteriaToReconcile": [
+        "CLWX-102",
+        "CLWX-118",
+        "CLWX-119",
+        "CLWX-120",
+        "CLWX-121",
+        "CLWX-122"
+      ],
+      "overlappingProof": [
+        "CLWX-113 with CLWX-26",
+        "CLWX-114 with CLWX-24/77"
+      ]
+    },
+    "dispatch": {
+      "at": "2026-09-08T13:01:34.296796+00:00",
+      "authorCount": 3,
+      "readOnlyAuditCount": 2,
+      "tasks": [
+        {
+          "task": "browser-ownership-repair",
+          "phase": "RUNNING",
+          "modelInitialized": "claude-fable-5",
+          "spendingCapUsd": null,
+          "receipt": "artifacts/ga-fable-20260908/browser-ownership-repair/status.json"
+        },
+        {
+          "task": "ui-release-acceptance",
+          "phase": "RUNNING",
+          "modelInitialized": "claude-fable-5",
+          "spendingCapUsd": null,
+          "receipt": "artifacts/ga-fable-20260908/ui-release-acceptance/status.json"
+        },
+        {
+          "task": "eval-acceptance-audit",
+          "phase": "RUNNING",
+          "modelInitialized": "claude-fable-5",
+          "spendingCapUsd": null,
+          "receipt": "artifacts/ga-fable-20260908/eval-acceptance-audit/status.json"
+        },
+        {
+          "task": "artifact-acceptance-audit",
+          "phase": "RUNNING",
+          "modelInitialized": "claude-fable-5",
+          "spendingCapUsd": null,
+          "receipt": "artifacts/ga-fable-20260908/artifact-acceptance-audit/status.json"
+        },
+        {
+          "task": "forms-files-correction",
+          "phase": "RUNNING",
+          "modelInitialized": "claude-fable-5",
+          "spendingCapUsd": null,
+          "receipt": "artifacts/ga-fable-20260908/forms-files-correction/status.json"
+        }
+      ]
     }
   }
 }
