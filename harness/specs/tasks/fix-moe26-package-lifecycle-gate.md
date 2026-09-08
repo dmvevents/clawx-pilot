@@ -23,6 +23,7 @@ touchedAreas:
   - scripts/bundle-openclaw.mjs
   - scripts/verify-openclaw-bundle.mjs
   - tests/unit/openclaw-package-lifecycle.test.ts
+  - tests/unit/clwx92-bundle-fixture.test.ts
 expectedUserBehavior:
   - A freshly installed build's Gateway process starts instead of exiting 1 on the package-lifecycle gate; readiness and backend communication proceed over the existing Host API/RPC boundaries, which this task does not change.
   - pnpm install runs OpenClaw's own preinstall/postinstall (approved build scripts), clearing the lifecycle marker the way upstream requires.

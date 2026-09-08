@@ -3,8 +3,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  PACKAGE_LIFECYCLE_MARKER_CONTRACT_RELATIVE_PATH,
+  PACKAGE_LIFECYCLE_RUNNER_RELATIVE_PATH,
+  collectRelativeImportClosure,
+} from '../../scripts/openclaw-package-lifecycle.mjs';
 
 const ROOT = path.resolve(__dirname, '..', '..');
+// ACTUAL upstream package (2026.9.2): source of the real launcher/lifecycle
+// files the verifier's moe.26 shipped-entrypoint controls execute. The fake
+// bundle must carry them so both full-verifier cases reach their INTENDED
+// checks instead of failing earlier (and so the pending negative control
+// exercises the real upstream gate, never a stubbed launcher).
+const REAL_OPENCLAW_DIR = path.join(ROOT, 'node_modules', 'openclaw');
 const FIXTURE = path.join(ROOT, 'eval', 'fixtures', 'clwx92-public-pdf-fixture.pdf');
 const WORKER_CHECK = path.join(ROOT, 'scripts', 'clwx92-workerenv-check.mjs');
 const MARKER = 'CLWX92_SYNTHETIC_PUBLIC_FIXTURE_TEXT';
@@ -69,8 +80,37 @@ function copyVerifierCheckoutFiles(destinationRoot: string) {
     'scripts/openclaw-2026-9-upgrade-verifier.mjs',
     'scripts/openclaw-2026-9-moe-registry-child.mjs',
     'scripts/openclaw-windows-pty-guard-patch.mjs',
+    // moe.26/d343f23d: verify-openclaw-bundle.mjs imports the lifecycle guard
+    // helpers; omitting this file fails both full-verifier cases with
+    // ERR_MODULE_NOT_FOUND before any intended check runs (run 34270069669).
+    'scripts/openclaw-package-lifecycle.mjs',
   ]) {
     fs.copyFileSync(path.join(ROOT, file), path.join(destinationRoot, file));
+  }
+}
+
+/**
+ * Copy the REAL upstream launcher + lifecycle-runner chain into the fake
+ * bundle so the verifier's moe.26 controls run for real:
+ *  - positive control: `openclaw.mjs --version` must exit 0 (version comes
+ *    from the fake bundle's package.json, 2026.9.2);
+ *  - negative control: the verifier builds its own pending fixture from these
+ *    files and the real launcher gate must fail readably.
+ * The fake bundle's minimal package.json is preserved (never overwritten by
+ * the real one) and no lifecycle marker is introduced here.
+ */
+function copyRealLauncherLifecycleFiles(openclawRoot: string) {
+  const files = [
+    'openclaw.mjs',
+    'node-version.mjs',
+    PACKAGE_LIFECYCLE_MARKER_CONTRACT_RELATIVE_PATH,
+    ...collectRelativeImportClosure(REAL_OPENCLAW_DIR, [PACKAGE_LIFECYCLE_RUNNER_RELATIVE_PATH]),
+  ];
+  for (const rel of files) {
+    const src = path.join(REAL_OPENCLAW_DIR, rel);
+    const dest = path.join(openclawRoot, rel);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(src, dest);
   }
 }
 
@@ -90,6 +130,7 @@ async function createFakeOpenClawBundle(destinationRoot: string, options: { incl
     version: '2026.9.2',
     engines: { node: '>=22.22.3 <23 || >=24.15.0 <25 || >=25.9.0' },
   }), 'utf8');
+  copyRealLauncherLifecycleFiles(openclawRoot);
   fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(destinationRoot, 'extensions', 'moe-principal-assistant', 'node_modules'), 'junction');
   fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(destinationRoot, 'build', 'node_modules'), 'junction');
   fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(openclawRoot, 'node_modules'), 'junction');
@@ -249,6 +290,10 @@ describe('CLWX-92 public PDF bundle fixture', () => {
 
     expect(result.status, output).toBe(0);
     expect(output).toContain('openclaw bundle verified');
+    // The moe.26 shipped-entrypoint controls must actually run against the
+    // real launcher files in the fixture bundle, not be skipped or fail.
+    expect(output).toContain('lifecycle gate + shipped-entrypoint controls passed');
+    expect(output).not.toContain('LIFECYCLE(');
     expect(output).not.toContain('refused to read');
   }), 35_000);
 
@@ -264,5 +309,11 @@ describe('CLWX-92 public PDF bundle fixture', () => {
     expect(output).toContain(path.join(sandboxRoot, 'eval', 'fixtures', 'clwx92-public-pdf-fixture.pdf'));
     expect(output).not.toContain('utility-env pdf check skipped');
     expect(output).not.toContain('01_Ministry_Circular_ICT_Equipment_Audit.pdf');
+    // The failure must be EXACTLY the missing public fixture: the moe.26
+    // lifecycle gate and shipped-entrypoint controls still pass here, so a
+    // LIFECYCLE failure would mean this case no longer reaches its intended
+    // negative check.
+    expect(output).not.toContain('LIFECYCLE(');
+    expect(output).toContain('bundle verification FAILED (1)');
   }), 35_000);
 });
