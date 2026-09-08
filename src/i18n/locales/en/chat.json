@@ -1,6 +1,6 @@
 {
   "errorDisplay": {
-    "unreachable": "The assistant could not be reached. Your work is safe — try again, or switch between Online and \"On this device\".",
+    "unreachable": "The assistant did not finish that request. Your work is safe — try again when ready.",
     "rateLimited": "The assistant is busy right now. Your work is safe — try again in a moment, or switch between Online and \"On this device\".",
     "authConfig": "The assistant's online access needs attention from IT support. You can keep working with \"On this device\".",
     "generic": "The assistant ran into a problem with that request. Your work is safe — please try again.",

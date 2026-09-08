@@ -71,6 +71,16 @@ let _sendGeneration = 0;
 const _runGenerationById = new Map<string, number>();
 const _watchdogTerminatedRunIds = new Set<string>();
 
+type TerminalTurnSnapshot = {
+  runId: string | null;
+  userMessage: RawMessage;
+  error: string;
+};
+
+const _terminalTurnSnapshotBySession = new Map<string, TerminalTurnSnapshot>();
+
+const NO_RESPONSE_ERROR = 'No response received from the model. Your message was kept here, but the assistant did not finish in time. Try again when ready.';
+
 type DegradeTurnToken = {
   sessionKey: string;
   generation: number;
@@ -688,6 +698,61 @@ function getLatestOptimisticUserMessage(messages: RawMessage[], userTimestampMs:
   return [...messages].reverse().find(
     (message) => message.role === 'user' && (!message.timestamp || Math.abs(toMs(message.timestamp) - userTimestampMs) < 5000),
   );
+}
+
+function getLatestUserMessage(messages: RawMessage[]): RawMessage | undefined {
+  return [...messages].reverse().find((message) => message.role === 'user');
+}
+
+function rememberTerminalTurnSnapshot(
+  state: ChatState,
+  sessionKey: string,
+  runId: string | null,
+  error: string,
+): void {
+  const userMessage = state.lastUserMessageAt
+    ? getLatestOptimisticUserMessage(state.messages, toMs(state.lastUserMessageAt))
+    : getLatestUserMessage(state.messages);
+  if (!userMessage) return;
+  _terminalTurnSnapshotBySession.set(sessionKey, {
+    runId,
+    userMessage: { ...userMessage },
+    error,
+  });
+}
+
+function messageBelongsToRun(message: RawMessage, runId: string | null): boolean {
+  if (!runId) return false;
+  const messageRecord = message as RawMessage & {
+    runId?: unknown;
+    metadata?: { runId?: unknown };
+  };
+  return [messageRecord.id, messageRecord.runId, messageRecord.metadata?.runId]
+    .some((value) => value === runId || value === `run-${runId}`);
+}
+
+function applyTerminalTurnSnapshot(
+  sessionKey: string,
+  messages: RawMessage[],
+): { messages: RawMessage[]; snapshot: TerminalTurnSnapshot | null } {
+  const snapshot = _terminalTurnSnapshotBySession.get(sessionKey);
+  if (!snapshot) return { messages, snapshot: null };
+
+  const userTimestampMs = snapshot.userMessage.timestamp ? toMs(snapshot.userMessage.timestamp) : 0;
+  const withoutExactAbortedRunFinals = messages.filter((message) => (
+    message.role !== 'assistant' || !messageBelongsToRun(message, snapshot.runId)
+  ));
+  const historyHasSubmittedUser = withoutExactAbortedRunFinals.some((message) =>
+    matchesOptimisticUserMessage(message, snapshot.userMessage, userTimestampMs));
+
+  if (historyHasSubmittedUser) {
+    return { messages: withoutExactAbortedRunFinals, snapshot };
+  }
+
+  return {
+    messages: [...withoutExactAbortedRunFinals, { ...snapshot.userMessage }],
+    snapshot,
+  };
 }
 
 /** Extract plain text from message content (string or content blocks) */
@@ -2563,6 +2628,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // contributing to the Dashboard token-usage history.
 
   deleteSession: async (key: string) => {
+    _terminalTurnSnapshotBySession.delete(key);
     clearCachedSessionHistory(key);
     clearSessionLabelHydrationTracking(key);
     // Hard-delete the session's JSONL transcript on disk.
@@ -2821,6 +2887,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           finalMessages = [...enrichedMessages, optimistic];
         }
       }
+      const terminalSnapshot = applyTerminalTurnSnapshot(currentSessionKey, finalMessages);
+      finalMessages = terminalSnapshot.messages;
 
       const { pendingFinal, lastUserMessageAt, sending: isSendingNow } = get();
       const userMsTs = lastUserMessageAt ? toMs(lastUserMessageAt) : 0;
@@ -2885,6 +2953,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messages: finalMessages,
         thinkingLevel,
         loading: false,
+        error: terminalSnapshot.snapshot ? terminalSnapshot.snapshot.error : get().error,
         runError: get().lastUserMessageAt
           ? (latestTerminalAssistantErrorMessage && ownSendThisWindow
               ? latestTerminalAssistantErrorMessage
@@ -3177,6 +3246,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!trimmed && (!attachments || attachments.length === 0)) return;
 
     const targetSessionKey = resolveMainSessionKeyForAgent(targetAgentId) ?? get().currentSessionKey;
+    _terminalTurnSnapshotBySession.delete(targetSessionKey);
 
     if (targetSessionKey !== get().currentSessionKey) {
       set((s) => buildSessionSwitchPatch(s, targetSessionKey));
@@ -3265,7 +3335,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     _historyPollTimer = setTimeout(pollHistory, POLL_START_DELAY);
 
     const SAFETY_TIMEOUT_MS = 90_000;
-    const NO_RESPONSE_ERROR = 'No response received from the model. The provider may be unavailable or the API key may have insufficient quota. Please check your provider settings.';
     const checkStuck = () => {
       const state = get();
       if (!state.sending) return;
@@ -3305,6 +3374,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // or history paths below may trigger channel degradation; the watchdog's
       // job is to stop the stuck composer and surface the honest no-response
       // state without mutating the session to another channel.
+      rememberTerminalTurnSnapshot(state, currentSessionKey, stalledRunId, NO_RESPONSE_ERROR);
       set({
         error: NO_RESPONSE_ERROR,
         sending: false,
@@ -3429,6 +3499,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     clearHistoryPoll();
     clearErrorRecoveryTimer();
     const { currentSessionKey } = get();
+    _terminalTurnSnapshotBySession.delete(currentSessionKey);
     set({ sending: false, streamingText: '', streamingMessage: null, pendingFinal: false, lastUserMessageAt: null, pendingToolImages: [] });
     set({ streamingTools: [] });
 
@@ -3742,6 +3813,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           // After the final response, quietly reload history to surface all intermediate
           // tool-use turns (thinking + tool blocks) from the Gateway's authoritative record.
           if (hasOutput && !toolOnly) {
+            _terminalTurnSnapshotBySession.delete(currentSessionKey);
             clearHistoryPoll();
             void get().loadHistory(true);
 

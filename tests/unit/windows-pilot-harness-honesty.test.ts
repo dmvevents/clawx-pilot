@@ -172,6 +172,7 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
       processingToolResults: false,
       activeExecutionGraph: false,
       runErrorSeen: false,
+      genericErrorSeen: false,
       errorChipSeen: false,
     }, 'online');
 
@@ -200,6 +201,7 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
       activeRunIdPresent: true,
       activeExecutionGraph: true,
       runErrorSeen: false,
+      genericErrorSeen: false,
       errorChipSeen: false,
     }, 'online');
 
@@ -233,6 +235,7 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
       'MISSING_TERMINAL_SIGNAL_DEGRADE_IN_PROGRESS',
       'MISSING_TERMINAL_SIGNAL_ACTIVE_GRAPH',
       'MISSING_TERMINAL_SIGNAL_RUN_ERROR',
+      'MISSING_TERMINAL_SIGNAL_GENERIC_ERROR',
       'MISSING_TERMINAL_SIGNAL_ERROR_CHIP',
     ]));
     expect(driver.verdictFor({
@@ -254,6 +257,7 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
       activeRunIdPresent: false,
       activeExecutionGraph: false,
       runErrorSeen: true,
+      genericErrorSeen: false,
       errorChipSeen: false,
     }, 'online');
     const chipBlockers = driver.terminalBlockersFor({
@@ -266,11 +270,26 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
       activeRunIdPresent: false,
       activeExecutionGraph: false,
       runErrorSeen: false,
+      genericErrorSeen: false,
       errorChipSeen: true,
+    }, 'online');
+    const genericErrorBlockers = driver.terminalBlockersFor({
+      rootPresent: true,
+      channel: 'online',
+      degradeNoticeSeen: false,
+      degradeInProgress: false,
+      sending: false,
+      pendingFinal: false,
+      activeRunIdPresent: false,
+      activeExecutionGraph: false,
+      runErrorSeen: false,
+      genericErrorSeen: true,
+      errorChipSeen: false,
     }, 'online');
 
     expect(runErrorBlockers).toContain('RUN_ERROR_VISIBLE');
     expect(chipBlockers).toContain('ERROR_CHIP_VISIBLE');
+    expect(genericErrorBlockers).toContain('GENERIC_ERROR_VISIBLE');
     expect(driver.verdictFor({
       settled: true,
       terminalStable: false,
@@ -281,6 +300,23 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
       terminalStable: false,
       terminalBlockers: chipBlockers,
     })).toBe('TIMED_OUT_MID_TURN');
+    expect(driver.verdictFor({
+      settled: false,
+      genericErrorSeen: true,
+      assistantPromptEcho: false,
+      errorChipOnly: false,
+      messagesBefore: 0,
+      messagesAfter: 1,
+    })).toBe('FAILED_GENERIC_ERROR');
+    expect(driver.verdictFor({
+      settled: true,
+      terminalStable: true,
+      terminalBlockers: [],
+      genericErrorSeen: true,
+      runErrorSeen: false,
+      messagesBefore: 0,
+      messagesAfter: 2,
+    })).toBe('FAILED_GENERIC_ERROR');
   });
 
   it('treats post-answer instability as a mid-turn timeout, not a clean answer', () => {
@@ -323,6 +359,7 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
       'FAILED_SESSION_NOT_FRESH',
       'FAILED_UNEXPECTED_DEGRADE',
       'FAILED_UNEXPECTED_CHANNEL',
+      'FAILED_GENERIC_ERROR',
       'INCOMPLETE',
     ]) {
       expect(driver.exitCodeFor(verdict)).toBe(40);

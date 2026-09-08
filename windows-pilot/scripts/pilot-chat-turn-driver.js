@@ -122,6 +122,7 @@ const SEL = {
   message: '[data-testid^="chat-message-"]:not([data-testid="chat-message-error-chip"])',
   degrade: '[data-testid="chat-degrade-notice"]',
   runError: '[data-testid="chat-run-error"]',
+  genericError: '[data-testid="chat-error-bar"]',
   newChat: '[data-testid="sidebar-new-chat"]',
   executionStep: '[data-testid="chat-execution-step"]',
   executionGraph: '[data-testid="chat-execution-graph"]',
@@ -381,6 +382,7 @@ function terminalBlockersFor(surface, expectedChannel = '') {
     ['degradeInProgress', 'MISSING_TERMINAL_SIGNAL_DEGRADE_IN_PROGRESS'],
     ['activeExecutionGraph', 'MISSING_TERMINAL_SIGNAL_ACTIVE_GRAPH'],
     ['runErrorSeen', 'MISSING_TERMINAL_SIGNAL_RUN_ERROR'],
+    ['genericErrorSeen', 'MISSING_TERMINAL_SIGNAL_GENERIC_ERROR'],
     ['errorChipSeen', 'MISSING_TERMINAL_SIGNAL_ERROR_CHIP'],
   ];
 
@@ -403,6 +405,7 @@ function terminalBlockersFor(surface, expectedChannel = '') {
   if (surface?.activeRunIdPresent) blockers.push('ACTIVE_RUN_STILL_PRESENT');
   if (surface?.activeExecutionGraph) blockers.push('EXECUTION_GRAPH_STILL_ACTIVE');
   if (surface?.runErrorSeen) blockers.push('RUN_ERROR_VISIBLE');
+  if (surface?.genericErrorSeen) blockers.push('GENERIC_ERROR_VISIBLE');
   if (surface?.errorChipSeen) blockers.push('ERROR_CHIP_VISIBLE');
   return blockers;
 }
@@ -416,6 +419,7 @@ function verdictFor(result) {
     }
     return 'TIMED_OUT_MID_TURN';
   }
+  if (result.genericErrorSeen) return 'FAILED_GENERIC_ERROR';
   if (result.settled && result.terminalStable === false) return 'TIMED_OUT_MID_TURN';
   if (result.settled) return result.runErrorSeen ? 'ANSWERED_WITH_RUN_ERROR' : 'ANSWERED';
   if (result.errorChipOnly) return 'FAILED_ERROR_CHIP_ONLY';
@@ -448,6 +452,7 @@ async function captureTerminalSurface(page) {
     const degrade = document.querySelector(selectors.degrade);
     const composer = document.querySelector(selectors.composer);
     const runError = document.querySelector(selectors.runError);
+    const genericError = document.querySelector(selectors.genericError);
     const errorChip = document.querySelector(selectors.errorChip);
     const messages = Array.from(document.querySelectorAll(selectors.message)).map((el) => semanticMessageText(el));
     const runErrorState = root ? readBool(root.getAttribute('data-run-error-present')) : null;
@@ -469,6 +474,8 @@ async function captureTerminalSurface(page) {
       degradeNoticeInProgressAttr: degrade ? degrade.getAttribute('data-in-progress') === 'true' : false,
       degradeNoticeText: degrade ? textOf(degrade).slice(0, 300) : null,
       runErrorText: runError ? textOf(runError).slice(0, 300) : null,
+      genericErrorSeen: Boolean(genericError),
+      genericErrorText: genericError ? textOf(genericError).slice(0, 300) : null,
       errorChipText: errorChip ? textOf(errorChip).slice(0, 300) : null,
       messageCount: messages.length,
       lastMessageText: messages.length ? messages[messages.length - 1].slice(0, 800) : '',
@@ -620,6 +627,8 @@ async function main() {
     degradeNoticeText: null,
     runErrorSeen: false,
     runErrorText: null,
+    genericErrorSeen: false,
+    genericErrorText: null,
     answerText: null,
     settled: false,
     terminalStable: null,
@@ -713,6 +722,10 @@ async function main() {
         result.runErrorSeen = true;
         result.runErrorText = truncate(await page.locator(SEL.runError).innerText().catch(() => ''), 300);
       }
+      if (await page.locator(SEL.genericError).count() > 0) {
+        result.genericErrorSeen = true;
+        result.genericErrorText = truncate(await page.locator(SEL.genericError).innerText().catch(() => ''), 300);
+      }
       if (result.messagesAfter >= result.messagesBefore + 2) {
         const text = await readSemanticMessageText(page.locator(SEL.message).last()).catch(() => '');
         // Placeholders ("Thinking…"), the user's own echoed prompt (empty
@@ -777,6 +790,7 @@ async function main() {
       };
     }
     if (await page.locator(SEL.errorChip).count() > 0) result.errorChipSeen = true;
+    if (await page.locator(SEL.genericError).count() > 0) result.genericErrorSeen = true;
 
     result.verdict = verdictFor(result);
 

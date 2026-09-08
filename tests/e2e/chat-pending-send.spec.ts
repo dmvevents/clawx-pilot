@@ -184,6 +184,8 @@ test.describe('ClawX pending chat send acknowledgement', () => {
       await expect(page.getByTestId('chat-degrade-notice')).toHaveCount(0);
       await expect(page.getByTestId('chat-streaming-indicator')).toHaveCount(0);
       await expect(page.getByTestId('chat-page')).toHaveAttribute('data-error-present', 'true');
+      await expect(page.getByText('cloud is cold but reachable')).toBeVisible();
+      await expect(page.getByTestId('chat-error-bar')).toBeVisible();
 
       await app.evaluate(() => {
         const { BrowserWindow } = process.mainModule!.require('electron') as typeof import('electron');
@@ -206,6 +208,8 @@ test.describe('ClawX pending chat send acknowledgement', () => {
       await expect(page.getByTestId('chat-page')).toHaveAttribute('data-degrade-in-progress', 'false');
       await expect(page.getByTestId('chat-page')).toHaveAttribute('data-active-run-id-present', 'false');
       await expect(page.getByTestId('chat-page')).toHaveAttribute('data-error-present', 'true');
+      await expect(page.getByText('cloud is cold but reachable')).toBeVisible();
+      await expect(page.getByTestId('chat-error-bar')).toBeVisible();
       await expect(page.getByTestId('chat-degrade-notice')).toHaveCount(0);
       await expect(page.getByText('Online answer arrived after cold startup.')).toHaveCount(0);
 

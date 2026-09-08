@@ -986,7 +986,7 @@ export function Chat() {
           verbatim duplicate of the callout, and suppressed while the degrade
           notice explains the same transport failure (D0/D1). */}
       {showErrorBar && (
-        <div className="px-4 py-2 bg-destructive/10 border-t border-destructive/20">
+        <div className="px-4 py-2 bg-destructive/10 border-t border-destructive/20" data-testid="chat-error-bar">
           <div className="max-w-4xl mx-auto flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm text-destructive flex items-center gap-2">

@@ -1966,6 +1966,141 @@ describe('chat store: send-time channel degradation', () => {
     }
   });
 
+  it('keeps the submitted prompt and timeout visible when late empty history arrives after the watchdog', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-cold-timeout' };
+        if (method === 'chat.history') return { messages: [] };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('cold setup should keep my prompt');
+      await vi.advanceTimersByTimeAsync(120_000);
+
+      expect(store.getState().sending).toBe(false);
+
+      await store.getState().loadHistory(true);
+
+      expect(store.getState().messages.map((message) => message.role)).toEqual(['user']);
+      expect(store.getState().messages.map((message) => String(message.content))).toEqual(['cold setup should keep my prompt']);
+      expect(store.getState().error).toContain('assistant did not finish in time');
+      expect(degradeCalls()).toEqual([]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('only removes a late history final when it is explicitly tied to the watchdog-aborted run', async () => {
+    vi.useFakeTimers();
+    try {
+      let lateHistoryAvailable = false;
+      let userTimestampSeconds = 0;
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-late-history-final' };
+        if (method === 'chat.history') {
+          if (!lateHistoryAvailable) return { messages: [] };
+          return {
+            messages: [
+              { role: 'user', id: 'u-cold', content: 'cold setup should keep the timeout', timestamp: userTimestampSeconds },
+              { role: 'assistant', id: 'run-run-late-history-final', content: [{ type: 'text', text: 'late answer after abort' }], timestamp: userTimestampSeconds + 180 },
+            ],
+          };
+        }
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('cold setup should keep the timeout');
+      userTimestampSeconds = store.getState().messages.find((message) => message.role === 'user')?.timestamp ?? (Date.now() / 1000);
+      await vi.advanceTimersByTimeAsync(120_000);
+      lateHistoryAvailable = true;
+      await store.getState().loadHistory(true);
+
+      expect(store.getState().messages.map((message) => message.role)).toEqual(['user']);
+      expect(store.getState().messages.some((message) => message.id === 'run-run-late-history-final')).toBe(false);
+      expect(store.getState().error).toContain('assistant did not finish in time');
+      expect(degradeCalls()).toEqual([]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps unrelated assistant history while preserving a timed-out submitted prompt', async () => {
+    vi.useFakeTimers();
+    try {
+      let lateHistoryAvailable = false;
+      let userTimestampSeconds = 0;
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-cold-owned-timeout' };
+        if (method === 'chat.history') {
+          if (!lateHistoryAvailable) return { messages: [] };
+          return {
+            messages: [
+              { role: 'user', id: 'u-cold', content: 'cold setup with another durable answer', timestamp: userTimestampSeconds },
+              { role: 'assistant', id: 'durable-other-run', runId: 'other-run', content: [{ type: 'text', text: 'durable assistant history from another actor' }], timestamp: userTimestampSeconds + 180 },
+            ],
+          };
+        }
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({ sending: false, activeRunId: null, lastSentPayload: null });
+
+      await store.getState().sendMessage('cold setup with another durable answer');
+      userTimestampSeconds = store.getState().messages.find((message) => message.role === 'user')?.timestamp ?? (Date.now() / 1000);
+      await vi.advanceTimersByTimeAsync(120_000);
+      lateHistoryAvailable = true;
+      await store.getState().loadHistory(true);
+
+      expect(store.getState().messages.map((message) => message.id)).toEqual(['u-cold', 'durable-other-run']);
+      expect(store.getState().messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+      expect(store.getState().error).toContain('assistant did not finish in time');
+      expect(degradeCalls()).toEqual([]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears retained timeout snapshots when a session is hard-deleted', async () => {
+    vi.useFakeTimers();
+    try {
+      providerState.accounts = [BOTH_CHANNELS[0]];
+      gatewayRpcMock.mockImplementation(async (method: string) => {
+        if (method === 'chat.send') return { runId: 'run-deleted-timeout' };
+        if (method === 'chat.history') return { messages: [] };
+        return undefined;
+      });
+      const store = await loadStore();
+      store.setState({
+        sending: false,
+        activeRunId: null,
+        lastSentPayload: null,
+        sessions: [{ key: 'agent:main:main', displayName: 'main' }],
+      });
+
+      await store.getState().sendMessage('deleted prompt must not reappear');
+      await vi.advanceTimersByTimeAsync(120_000);
+      await store.getState().deleteSession('agent:main:main');
+      await store.getState().loadHistory(true);
+
+      expect(store.getState().messages).toEqual([]);
+      expect(store.getState().error).toBeNull();
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps a pending chat.send acknowledgement alive until the send deadline, then adopts the run', async () => {
     vi.useFakeTimers();
     try {

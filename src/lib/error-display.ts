@@ -46,6 +46,7 @@ export interface ErrorDisplay {
  */
 const TRANSPORT_WRAPPER = /^(?:model call failed[.:]?\s*)?connection error\.?$/i;
 const RAW_ERROR_FRAGMENT = /\s*rawError=connection error\.?/gi;
+const RENDERER_NO_RESPONSE = /\bno response received from the model\b/i;
 
 /**
  * Transport-class kinds are the ones the amber channel-degrade notice already
@@ -96,6 +97,8 @@ export function principalErrorDisplay(raw: string | null | undefined): ErrorDisp
   if (AUTH_CONFIG_PATTERNS.some((pattern) => pattern.test(classified))) {
     return { kind: 'auth-config', detail };
   }
+
+  if (RENDERER_NO_RESPONSE.test(classified)) return { kind: 'unreachable', detail };
 
   const failureClass = classifyFailure(classified);
   if (failureClass === 'unreachable') return { kind: 'unreachable', detail };

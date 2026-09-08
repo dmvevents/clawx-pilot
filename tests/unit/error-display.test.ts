@@ -23,6 +23,14 @@ describe('principalErrorDisplay', () => {
     }
   });
 
+  it('keeps the renderer no-response watchdog copy out of the busy/quota bucket', () => {
+    const display = principalErrorDisplay(
+      'No response received from the model. Your message was kept here, but the assistant did not finish in time. Try again when ready.',
+    );
+
+    expect(display.kind).toBe('unreachable');
+  });
+
   it('classifies throttling and quota exhaustion as rate-limited', () => {
     for (const raw of ['429 Too Many Requests', 'quota exceeded for this project', 'rate limit reached']) {
       expect(principalErrorDisplay(raw).kind).toBe('rate-limited');
