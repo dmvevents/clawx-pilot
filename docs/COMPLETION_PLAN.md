@@ -9,7 +9,7 @@ Start with [PROJECT_CONTRACT.md](PROJECT_CONTRACT.md), this page and [repository
 | Layer | Frozen state | Meaning |
 |---|---|---|
 | Documentation checkout | `fix/doc-tooling-steering`, repository root | Board, research, skills and this handoff. Inspect `git status`; preserve other authors’ changes in `docs/TESTER_QUICKSTART.md` and `docs/build/windows-build-pipeline.md`. |
-| Reviewed source candidate | `release/moe26-plan-execution`, `64ae2dc6e708ae0b312eb29fc09a761586d8321c`, `/private/tmp/clawx-plan-execution-20260908` | Version reserved as `0.4.3-moe.26`; clean source, not pushed, packaged, installed or published. Includes reviewed S1–S4, native Ollama repair, actual-9.2 policy oracle, read-only Outlook/Graph diagnosis, reviewed Graph setup recovery and the reviewed fidelity fixture. Browser changes remain excluded. |
+| Reviewed source candidate | `release/moe26-plan-execution`, `7e1f9417ae3f57096a7799d9a433ea9745604e5f`, `/private/tmp/clawx-plan-execution-20260908` | Version reserved as `0.4.3-moe.26`; clean source, not pushed, packaged, installed or published. Includes reviewed S1–S4, native Ollama repair, actual-9.2 policy oracle, read-only Outlook/Graph diagnosis, reviewed Graph setup recovery and the reviewed fidelity fixture. Browser changes remain excluded. |
 | Held test repair | `24e1cfd3dd1d736d15252f77ef3e305fb5367857`, `/private/tmp/clawx-ondevice-policy-5251ea8d-actual` | Excluded from candidate: actual OpenClaw 2026.9.2 full policy pipeline disagrees with the old literal `canvas` fixture. Source revision alone did not guarantee the author tested the new dependency. |
 | Latest installed artifact | moe.25, source `8058e9b5b3050463c72a11c8e5da56616206f6e3`, run `34203201042` | Assisted standard-user existing-profile upgrade on GCP Windows Server 2022. Exact package and installed hashes pass; Existing Main, fresh and next Online turns pass. |
 | Earlier journey baseline | moe.22, source `a4efc7e4`, run `34180280985` | Retains broader document/lifecycle observations; P3 deadline fidelity and local-model behavior failed. Results do not transfer automatically to moe.25/moe.26. |
@@ -102,7 +102,7 @@ The external Claude audit is advisory. Root rejected its proposed NSCC reimpleme
 
 ### Current supervised dispatch
 
-September 8, 13:01 UTC: five Claude CLI processes were verified live with fresh heartbeats and Fable 5 initialization. Final usage metadata still determines provider/model provenance; a running CLI is not an acceptance pass. Reviewed candidate `64ae2dc6 differs from product commit `488ebe29` only by Graph UI evidence documentation.
+September 8, 13:01 UTC: five Claude CLI processes were verified live with fresh heartbeats and Fable 5 initialization. Final usage metadata still determines provider/model provenance; a running CLI is not an acceptance pass. Reviewed candidate `64ae2dc6` differs from product commit `488ebe29` only by Graph UI evidence documentation.
 
 | Task | Work and scope | Current exit criterion |
 |---|---|---|
@@ -113,6 +113,12 @@ September 8, 13:01 UTC: five Claude CLI processes were verified live with fresh 
 | `forms-files-correction` | CLWX-63/71; bounded corrections to the reviewed study `a57e6bd7`. | Remove unsupported Forms store/submission and tenant-access claims; preserve existing document.* routes. |
 
 Each task has its own worktree, prompt, status/event/result receipts and 30-minute supervision deadline. The deadline is a liveness control, not a completion estimate. Root integrates reviewed changes, writes Plane and current pointers, then runs the combined preflight. Windows remains observation-only during the owner's RDP test. CLWX-128's monitor and CLWX-129's reviewed history/skills are integrated in the operations checkout; neither is product acceptance.
+
+Latest UI interruption: **REOPENED** after the owner reported the same Keychain dialog at 17:27–17:28 Dubai, with repeated test app windows. The previously approved fixture change `7e1f9417` passed a narrow two-launch synthetic test but did not resolve the full suite. Root stopped `ui-release-resume` and its eight identified descendants; no owned Electron process remained afterward. All desktop UI launches on the owner Mac are held. [CLWX-102 handoff](bugs/CLWX-102-macos-test-keychain.md) preserves both attempts, screenshots, containment, uncertain cause and the read-only Claude investigation. The UI component edits remain preserved and unapproved.
+
+Current source-only Claude dispatch adds `artifact-matrix-repair` (CLWX-77, typed XLSX/JPEG/generated-file reopen coverage), `installed-verifier-repair` (CLWX-106/107, selected-version evidence producer) and `recovery-acceptance-trace` (CLWX-96, verify whether recovery criteria actually need more code). Each has an isolated worktree based on `7e1f9417`. `keychain-recurrence-analysis` inspects the recurrence without launching apps. `browser-repair-finish` intentionally resumes retained browser work after its supervision deadline; completed checks should be reused. None may mutate the Windows owner session or launch desktop tests.
+
+Cost discipline: Claude CLI on Bedrock performs bounded implementation, investigation and independent review; GPT coordinates acceptance, integrates and reports concise deltas. No new GPT subagents, duplicate whole-repo audits or repeated full suites. The email audit verified existing CLWX-119/120 source fixes; do not assign a duplicate repair. Confirmed attachment-download evidence still needs a seeded, authenticated test path. [Acceptance audit disposition](evidence/GA_ACCEPTANCE_AUDIT_2026-09-08.md) records the concrete gaps and assigned exits.
 
 ### Sprint exit and epic completion
 
@@ -132,4 +138,4 @@ The canonical release command is `GA_GATE_RELEASE=1 node scripts/ga-gate.mjs --r
 
 The handoff checkpoint is complete in `bb729688`: current pointers, source recovery, guidance and independent review pass. The full 127-card board snapshot is verified; CLWX-127 is Ready and CLWX-126 remains Backlog for the engine experiment. All original acceptance/history is retained. GA remains RED. The owner has now resumed execution; that newer instruction supersedes the handoff pause.
 
-Current board checkpoint: 131 cards and six states; the latest dispatch and eight detailed bug dossiers are linked from their owning cards, with all prior descriptions/comments retained after verified export; CLWX-128 is Ready after independent operational review. Later dated status supersedes historical running/hold statements.
+Current board checkpoint: 132 cards and six states. The latest nine-card update records the reopened Keychain issue, source-only Claude worktree dispatch and acceptance audit disposition; all 131 prior cards and their description/comment history were retained. CLWX-132 arrived concurrently and is not closed by this checkpoint. Later dated status supersedes historical running/hold statements.
