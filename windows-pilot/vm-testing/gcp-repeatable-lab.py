@@ -208,10 +208,25 @@ def check_subnet(existing: dict, cfg: dict):
 def check_firewall(existing: dict, cfg: dict):
     fw = cfg["firewall"]
     allowed = existing.get("allowed") or []
-    want_ports = sorted(str(p) for p in fw["ports"])
-    if (len(allowed) != 1 or allowed[0].get("IPProtocol") != "tcp"
-            or sorted(allowed[0].get("ports") or []) != want_ports):
-        return f"firewall allowed rules != tcp:{want_ports}"
+    want_ports = set(str(p) for p in fw["ports"])
+    if not allowed:
+        return "firewall has no allowed rules"
+    # The API may return one grouped tcp entry or one entry per port; both are
+    # the same restriction. Validate each entry, then compare the exact union.
+    got_ports = set()
+    for entry in allowed:
+        if entry.get("IPProtocol") != "tcp":
+            return f"firewall allows non-tcp protocol {entry.get('IPProtocol')!r}"
+        ports = entry.get("ports") or []
+        if not ports:
+            return "firewall tcp entry has no port restriction (allows all ports)"
+        for port in ports:
+            if str(port) not in want_ports:  # includes ranges like '22-3389'
+                return f"firewall allows unexpected tcp port {port!r}"
+            got_ports.add(str(port))
+    if got_ports != want_ports:
+        return (f"firewall allowed tcp ports {sorted(got_ports)} != "
+                f"{sorted(want_ports)}")
     if existing.get("sourceRanges") != [cfg["iapRange"]]:
         return "firewall source ranges are not exactly the IAP range"
     if existing.get("targetTags") != [cfg["tag"]]:

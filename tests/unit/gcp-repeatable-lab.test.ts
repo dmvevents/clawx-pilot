@@ -55,11 +55,13 @@ const SUBNET_OK = {
   network: 'https://compute/projects/p/global/networks/clawx-test-lab',
   region: 'https://compute/projects/p/regions/us-central1',
 };
+// The real GCP API returns one allowed entry PER PORT for our restricted rule
+// (raw sanitized shape confirmed by root on 2026-09-08); grouped is equivalent.
 const FIREWALL_OK = {
   name: baseline.firewall.name, direction: 'INGRESS', disabled: false,
   network: 'https://compute/projects/p/global/networks/clawx-test-lab',
   sourceRanges: ['35.235.240.0/20'], targetTags: ['clawx-repeatable-test'],
-  allowed: [{ IPProtocol: 'tcp', ports: ['22', '3389'] }],
+  allowed: [{ IPProtocol: 'tcp', ports: ['22'] }, { IPProtocol: 'tcp', ports: ['3389'] }],
 };
 
 // Rule order matters: subnets before networks (both contain "networks list" tokens).
@@ -301,6 +303,87 @@ describe('gcp-repeatable-lab create fail-closed against gcloud reality', () => {
     const receipt = readReceipt(lab, 'gcloud-fail-1');
     expect(receipt.result).toBe('FAIL');
     expect(receipt.failure).toMatch(/gcloud failed \(exit 1\)/);
+  });
+});
+
+describe('gcp-repeatable-lab firewall equivalence (split vs grouped) and fail-closed controls', () => {
+  function runWithFirewall(runId: string, allowed: unknown, overrides: object = {}) {
+    const instanceName = `clawx-lab-${runId}`;
+    const rules = happyRules(instanceName);
+    rules[4] = {
+      match: ['firewall-rules', 'list'],
+      stdout: JSON.stringify([{ ...FIREWALL_OK, allowed, ...overrides }]),
+    };
+    const lab = makeLab(rules);
+    const r = run(lab, ['create', '--run-id', runId, '--image', IMG.name, '--receipt-dir', lab.receipts]);
+    return { lab, r };
+  }
+  const firewallCreates = (lab: Lab) =>
+    calls(lab).filter((argv) => argv.includes('firewall-rules') && argv.includes('create'));
+  const instanceCreates = (lab: Lab) =>
+    calls(lab).filter((argv) => argv.includes('instances') && argv.includes('create'));
+
+  it('accepts the actual split per-port representation the real API returns', () => {
+    const { lab, r } = runWithFirewall('fw-split-1', [
+      { IPProtocol: 'tcp', ports: ['22'] }, { IPProtocol: 'tcp', ports: ['3389'] },
+    ]);
+    expect(r.status).toBe(0);
+    expect(readReceipt(lab, 'fw-split-1').result).toBe('PASS');
+    expect(firewallCreates(lab)).toEqual([]); // adopted as-is, never mutated
+    expect(instanceCreates(lab)).toHaveLength(1);
+  });
+
+  it('accepts the equivalent grouped representation', () => {
+    const { lab, r } = runWithFirewall('fw-grouped-1', [
+      { IPProtocol: 'tcp', ports: ['22', '3389'] },
+    ]);
+    expect(r.status).toBe(0);
+    expect(readReceipt(lab, 'fw-grouped-1').result).toBe('PASS');
+    expect(firewallCreates(lab)).toEqual([]);
+  });
+
+  const refusals: Array<[string, string, unknown, RegExp]> = [
+    ['missing port (22 only)', 'fw-missing-1',
+      [{ IPProtocol: 'tcp', ports: ['22'] }], /allowed tcp ports/],
+    ['unrestricted tcp entry (no ports = all ports)', 'fw-allports-1',
+      [{ IPProtocol: 'tcp', ports: ['22'] }, { IPProtocol: 'tcp' }], /no port restriction/],
+    ['extra tcp port beyond the pinned set', 'fw-extra-1',
+      [{ IPProtocol: 'tcp', ports: ['22'] }, { IPProtocol: 'tcp', ports: ['3389', '80'] }],
+      /unexpected tcp port '80'/],
+    ['port range instead of exact ports', 'fw-range-1',
+      [{ IPProtocol: 'tcp', ports: ['22-3389'] }], /unexpected tcp port '22-3389'/],
+    ['non-tcp protocol', 'fw-udp-1',
+      [{ IPProtocol: 'tcp', ports: ['22', '3389'] }, { IPProtocol: 'udp', ports: ['3389'] }],
+      /non-tcp protocol 'udp'/],
+    ['empty allowed list', 'fw-empty-1', [], /no allowed rules/],
+  ];
+  for (const [label, runId, allowed, failureRe] of refusals) {
+    it(`refuses drift: ${label}`, () => {
+      const { lab, r } = runWithFirewall(runId, allowed);
+      expect(r.status).toBe(1);
+      const receipt = readReceipt(lab, runId);
+      expect(receipt.result).toBe('FAIL');
+      expect(receipt.failure).toMatch(/refusing drift/);
+      expect(receipt.failure).toMatch(failureRe);
+      expect(firewallCreates(lab)).toEqual([]); // refuse, never repair in place
+      expect(instanceCreates(lab)).toEqual([]);
+    });
+  }
+
+  it('still refuses source/target/network drift with correct split ports', () => {
+    const drifts: Array<[string, object, RegExp]> = [
+      ['fw-src-1', { sourceRanges: ['0.0.0.0/0'] }, /source ranges/],
+      ['fw-tag-1', { targetTags: ['some-other-tag'] }, /target tags/],
+      ['fw-net-1', { network: 'https://compute/projects/p/global/networks/default' }, /different network/],
+    ];
+    for (const [runId, overrides, failureRe] of drifts) {
+      const { lab, r } = runWithFirewall(runId, FIREWALL_OK.allowed, overrides);
+      expect(r.status).toBe(1);
+      const receipt = readReceipt(lab, runId);
+      expect(receipt.result).toBe('FAIL');
+      expect(receipt.failure).toMatch(failureRe);
+      expect(instanceCreates(lab)).toEqual([]);
+    }
   });
 });
 
