@@ -1,26 +1,907 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-07T13:55:07.963042+00:00",
+  "updatedAt": "2026-09-08T05:32:00Z",
   "purpose": "Completion planning only; this file is not a release verdict or a substitute for machine-produced acceptance evidence.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
   "source": {
-    "publicCommit": "8d477e9ea27eafeb8bf78ceee49c532858209762",
-    "branch": "release/moe21-reviewed",
-    "version": "0.4.3-moe.21",
-    "buildRunId": 34123550898,
-    "buildStatus": "failure",
-    "installerSha256": null
+    "publicCommit": "a4efc7e4a4311d7865bf0c74ab2320289fdadd48",
+    "branch": "release/moe22-package-complete",
+    "version": "0.4.3-moe.22",
+    "buildRunId": 34180280985,
+    "buildStatus": "success",
+    "manifest": "docs/release-manifests/0.4.3-moe.22.json",
+    "published": false,
+    "profile": {
+      "schemaVersion": 1,
+      "producer": ".github/workflows/package-win-manual.yml",
+      "cloudGatewaySeedProfile": "keyless-public",
+      "sourceGitCommit": "a4efc7e4a4311d7865bf0c74ab2320289fdadd48",
+      "repositoryPrivate": false,
+      "repositoryVisibility": "public",
+      "credentialSeedIncluded": false,
+      "cloudGatewaySeedIncluded": false,
+      "azureSpeechSeedIncluded": false,
+      "microsoftGraphSeedIncluded": false
+    },
+    "installerSha256": "eed3d9ec87902d1babcf7906122009ac3a0ec708871db175de52871dc3e5938f",
+    "artifactIdentityVerified": true,
+    "artifactIdentityReport": "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json",
+    "nativeBuildStatus": "PASS",
+    "nativeTestSummary": {
+      "passedFiles": 204,
+      "failedFiles": 0,
+      "passedTests": 2114,
+      "failedTests": 0,
+      "skippedTests": 11
+    },
+    "identity": {
+      "installer": {
+        "bytes": 394149483,
+        "sha256": "eed3d9ec87902d1babcf7906122009ac3a0ec708871db175de52871dc3e5938f"
+      },
+      "appAsar": {
+        "bytes": 256225541,
+        "sha256": "ccec2df6a9ed21fe1882cad0f71b29dd9ee60f358fb0d2786b3e85f1bbef1170"
+      },
+      "packagedAppExe": {
+        "bytes": 214315008,
+        "sha256": "41ccabad0822cb5312b6bd0ebaa1c255671ba26f026824c44a44ade02bedec1a"
+      }
+    },
+    "packageCompleteness": {
+      "status": "PASS_EXTRACTED_ARTIFACT",
+      "helperInventory": [
+        {
+          "name": "FFMPEG_LICENSE.txt",
+          "bytes": 7651,
+          "sha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"
+        },
+        {
+          "name": "FFMPEG_PROVENANCE.json",
+          "bytes": 1534,
+          "sha256": "90eed7a368429ad1e6fc1d3cff740b29a7a652e2444646926a7b386e875072de"
+        },
+        {
+          "name": "THIRD_PARTY_FFMPEG.txt",
+          "bytes": 1251,
+          "sha256": "1b0309abb2199368a23ebc658fdc05d00b1d0086292b865d17b4008182f78b23"
+        },
+        {
+          "name": "WinSpeechRecognize.exe",
+          "bytes": 12288,
+          "sha256": "4303143d4ebf165addb8830ec73baf21cec8f5eaec02c4d1f336c17f7ef5c8af"
+        },
+        {
+          "name": "WinSpeechRecognize.exe.config",
+          "bytes": 174,
+          "sha256": "051099983b896673909e01a1f631b6652abb88da95c9f06f3efef4be033091fa"
+        },
+        {
+          "name": "ffmpeg.exe",
+          "bytes": 114400768,
+          "sha256": "63a0b3c76a245bc0d986853612d9ec43a2a2d1f1c7a3fa40ee459c248075b3a6"
+        },
+        {
+          "name": "node.exe",
+          "bytes": 85119640,
+          "sha256": "c5ff4c736112dd483c750fd4149d30c8a116db1a49b8b3ec88be4b65e6c86c19"
+        },
+        {
+          "name": "uv.exe",
+          "bytes": 63647232,
+          "sha256": "5e559e322ad2f2e25e7d9c3cb51e3891ab0676a7e7b59ea250a021e4cb2f6e31"
+        }
+      ],
+      "blockedFilesFound": 0,
+      "blockedAsarFilesFound": 0,
+      "playwrightRuntimePresent": true,
+      "installedSmoke": "PASS_INSTALLED_IDENTITY_HELPERS"
+    },
+    "vmDownloadVerified": true,
+    "installedEvidence": {
+      "status": "PARTIAL",
+      "artifactRoot": "artifacts/windows-vm/20260908-moe22/installed-acceptance-34180280985",
+      "profileBackupFiles": 1820,
+      "installedAt": "2026-09-08T03:08:57.5187343Z",
+      "installExit": 0,
+      "identityVerified": true,
+      "helpersVerified": 8,
+      "shortcutsVerified": 2,
+      "startup": {
+        "status": "PASS_WITH_LATENCY_FINDING",
+        "firstReadyMs": 105745,
+        "stableDurationMs": 20164,
+        "sampleCount": 1,
+        "visualReview": "startup-visual-review.json"
+      },
+      "p3": {
+        "content": "FAIL",
+        "missing": "29 August 2026 consolidated report to Head Office",
+        "grounding": "PASS",
+        "latencyMs": 101252,
+        "review": "p3-content-review.json"
+      },
+      "p5": {
+        "content": "PASS",
+        "fields": 11,
+        "blanks": 3,
+        "grounding": "PASS",
+        "zeroToolErrors": false,
+        "recoveredTool": "image",
+        "latencyMs": 46712,
+        "review": "p5-content-review.json"
+      },
+      "nativeHelpers": {
+        "status": "PASS",
+        "rows": 7,
+        "microphone": "NOT_TESTED",
+        "quality": "NOT_TESTED",
+        "appAsrRouting": "NOT_TESTED",
+        "report": "native-helper-summary.json"
+      }
+    },
+    "installedAcceptanceStatus": "in_progress",
+    "installedPackageStatus": "PASS",
+    "acceptanceStatus": "BLOCKED_PENDING_INSTALLED_ACCOUNT_CLIENT_AND_EXTERNAL_EVIDENCE",
+    "priorInstalledBuild": 34171848832,
+    "sourceFixes": [
+      "1f2b405e17bd5910fbded09c3a62f8921a8d692f",
+      "a4efc7e4a4311d7865bf0c74ab2320289fdadd48"
+    ]
   },
   "baseline": {
-    "installedVersion": "0.4.3-moe.20",
-    "currentSourceAccepted": false
+    "installedVersion": "0.4.3-moe.22",
+    "currentSourceAccepted": false,
+    "scope": "Prior installed baseline with journey results: moe.22 build 34180280985, with reused Windows Server 2022 administrator-profile payload/journey evidence and fresh standard-user installation/setup evidence. Fresh standard-user Online completion fails. Neither Server account establishes Windows 10/11 client acceptance.",
+    "previousPlanningBaseline": {
+      "installedVersion": "0.4.3-moe.20",
+      "currentSourceAccepted": false
+    },
+    "previousCandidate": {
+      "publicCommit": "34e951dc9d986ce82ef44396d440e9a02bc35242",
+      "branch": "release/moe21-reviewed",
+      "version": "0.4.3-moe.21",
+      "buildRunId": 34134725489,
+      "buildStatus": "success",
+      "installerSha256": "d0da3062156e2faaac1df5967f03710736693f8fc7571adfccf254865579b00f",
+      "previousAttempt": {
+        "runId": 34133858590,
+        "publicCommit": "18bd7d7aab40cac21376e5c333b64143453eb810",
+        "buildStatus": "failure",
+        "phase": "Source preflight",
+        "passedFiles": 202,
+        "passedTests": 2049,
+        "failedTests": 3,
+        "skippedTests": 11,
+        "artifactTestsPassed": 72,
+        "failureSummary": "Source preflight failed three diagnostics-routes tests; all hit the 5-second default because unmocked diagnoseChromeCdp calls reached real OS/browser/network PowerShell probes. Artifact tests all passed."
+      },
+      "dispatchAttempt": {
+        "runId": 34133768880,
+        "publicCommit": "18bd7d7aab40cac21376e5c333b64143453eb810",
+        "buildStatus": "failure",
+        "phase": "checkout",
+        "failureSummary": "Operator dispatch passed abbreviated ref 18bd7d7a; actions/checkout treated it as a branch ref and failed before source checkout, tests, compilation or packaging."
+      },
+      "packageJobDuration": "13m14s",
+      "artifacts": {
+        "windows-installer-x64": {
+          "uploaded": true,
+          "zipBytes": 355198112,
+          "artifactId": 10023937132,
+          "verifiedIdentity": true,
+          "installerBytes": 359123558,
+          "installerSha256": "d0da3062156e2faaac1df5967f03710736693f8fc7571adfccf254865579b00f"
+        },
+        "windows-blockmap": {
+          "uploaded": true,
+          "zipBytes": 348108,
+          "artifactId": 10023938060,
+          "verifiedIdentity": true,
+          "reason": "Downloaded and structurally validated; no differential update execution was run.",
+          "blockmapBytes": 347786,
+          "sha256": "44ac9fa6deebf3b600cc86252a2d45bd3fdd50210c0de9673d0dd5dc7db75111",
+          "chunks": 17319,
+          "coverage": "covers installer",
+          "differentialUpdateExecuted": false
+        },
+        "build-provenance": {
+          "uploaded": true,
+          "zipBytes": 5206,
+          "artifactId": 10023938797,
+          "verifiedIdentity": true
+        },
+        "windows-installer-arm64": {
+          "uploaded": false,
+          "reason": "No release/*-win-arm64.exe matched"
+        },
+        "windows-update-manifests": {
+          "uploaded": false,
+          "reason": "No release/*.yml matched after excluding builder-debug.yml"
+        }
+      },
+      "artifactIdentityVerified": true,
+      "artifactIdentityReport": "artifacts/windows-vm/20260907-moe21/native-artifact-verification-34134725489.json",
+      "vmDownloadVerified": true,
+      "vmDownloadReport": "artifacts/windows-vm/20260907-moe21/download-34134725489-result.json",
+      "identity": {
+        "installer": {
+          "bytes": 359123558,
+          "sha256": "d0da3062156e2faaac1df5967f03710736693f8fc7571adfccf254865579b00f"
+        },
+        "appAsar": {
+          "bytes": 256224473,
+          "sha256": "8905aef127a3f1e443069b484a54481e76caa8a152902b85da3d778079f2cc94"
+        },
+        "packagedAppExe": {
+          "bytes": 214315008,
+          "sha256": "b60a4000d657085d4940f0f97ccc05132b04061b88891e2d4b6c34842a0c3bbe"
+        }
+      },
+      "installedEvidence": {
+        "status": "fail",
+        "evidenceDir": "artifacts/windows-vm/20260907-moe21/installed-evidence-34134725489",
+        "environment": "Windows Server 2022 Datacenter 10.0.20348 on Google Compute Engine; elevated administrator; reused profile with prior install/app data/OpenClaw/Chrome state present",
+        "installCompletedAt": "2026-09-07T15:14:29.3208846Z",
+        "installExit": 0,
+        "installStatus": "INSTALLED_HASH_VERIFIED",
+        "installedVersion": "0.4.3-moe.21",
+        "versionSource": "electron-cdp hostapi:fetch GET /api/capabilities appVersion",
+        "hashesMatchVerifiedArtifact": true,
+        "coldLaunch": {
+          "status": "APP_COLD_STABLE_READY",
+          "launchToFirstReadyMs": 151459,
+          "quietDurationMs": 20169,
+          "stableSamples": 11
+        },
+        "officeRuntime": "PASS_WITH_LIMITATIONS",
+        "officeWriteReadback": "PASS",
+        "safeChatFormsList": "PASS",
+        "video": {
+          "status": "CAPTURE_ONLY_VERIFIED",
+          "durationSeconds": 300.067,
+          "frameCount": 30,
+          "scope": "Later launch plus Online answer; not complete cold launch; visual/product verdicts not run"
+        },
+        "limitations": [
+          "Reused Server 2022 administrator profile; not a fresh Windows 10/11 standard-client proof",
+          "Original ordinary chat false failure is retained; fresh ordinary Online v2 rerun passed after external producer timestamp parsing fix",
+          "Five accepted ordinary journeys, cancellation/fault recovery, warm latency and adapter release evidence remain pending",
+          "Microsoft Outlook account-holder sign-in remains unanswered",
+          "Startup recorder permission/token failure retained; later video capture verified mechanics only",
+          "Required ffmpeg.exe is absent from the run9 fresh package and second clean application-directory install; moe.21 cannot be accepted.",
+          "Video/recording path is blocked by missing ffmpeg.exe; helper-launched warm observations are not product warm-launch evidence.",
+          "Blockmap was downloaded and structurally validated, but no differential update execution was run.",
+          "First on-device run is valid failed prerequisite evidence because the existing Ollama service was stopped after VM restart; service/model restored without new dependency installation, then a fresh uncontaminated installed rerun failed with NO_RESPONSE and degradeNoticeTrue.",
+          "Second clean install Office imports and Word/Excel write-readback passed; controlled forms.list passed but is not Forms preview evidence.",
+          "Reminder natural one-shot fired, job cleanup was verified, and exact retained history opened by job ID showed the marker visibly at 2026-09-07T16:48:05Z; this does not prove desktop notification, manual run or ordinary chat creation.",
+          "Document content acceptance is partial: D0/P1/P2/P4 passed, P2/P4 parseback passed with unchanged source hashes, P3 failed with no tool call, and P5 failed content review after the correct PNG reader returned truncated JSON text rather than a native image block.",
+          "Overlapping document/on-device attempts after the valid Online/cancel checks are excluded."
+        ],
+        "ordinaryOnlineTurn": {
+          "status": "PASS",
+          "evidenceDir": "artifacts/windows-vm/20260907-moe21/clwx-ordinary-online-20260907-153309",
+          "turnArtifact": "artifacts/windows-vm/20260907-moe21/clwx-ordinary-online-20260907-153309/turn/chat-turn-2026-09-07T15-33-16-391Z.json",
+          "semanticReaderVerification": "artifacts/windows-vm/20260907-moe21/semantic-reader-verification.json",
+          "sentAt": "2026-09-07T15:33:19.451Z",
+          "answerAt": "2026-09-07T15:33:51.918Z",
+          "answerLatencyMs": 32467,
+          "terminalStableSeconds": 30,
+          "terminalStable": true,
+          "toolCalls": 0,
+          "errorOrDegradeSeen": false,
+          "driverSha256": "f19db2e24e40f0635b7632e53100ed2aa131f900fa7391f296fe2e2c78653433",
+          "scope": "Fresh ordinary Online turn on reused Server 2022/admin profile; producer fix is external test harness only and does not alter candidate source."
+        },
+        "packageCompleteness": "FAIL_MISSING_FFMPEG_EXE",
+        "firstUpgradeMaskedPackageGap": true,
+        "secondCleanApplicationDirInstall": {
+          "status": "INSTALLED_HASH_VERIFIED_BUT_PACKAGE_INCOMPLETE",
+          "completedAt": "2026-09-07T16:04:02Z",
+          "exit": 0,
+          "exeAndAsarSameAsVerifiedArtifact": true,
+          "oldAppDirPreserved": true,
+          "existingProfileRetained": true,
+          "credentialSeedRowsAbsent": [
+            "cloud gateway seed rows",
+            "Azure seed rows"
+          ],
+          "coldLaunch": {
+            "status": "APP_COLD_STABLE_READY",
+            "launchToFirstReadyMs": 86838,
+            "quietDurationMs": 20176,
+            "stableSamples": 11
+          },
+          "video": "BLOCKED_MISSING_FFMPEG_EXE",
+          "officeRuntime": "PASS_WITH_LIMITATIONS",
+          "officeWriteReadback": "PASS",
+          "safeChatFormsList": "PASS_FOR_FORMS_LIST_NOT_PREVIEW",
+          "evidenceDir": "artifacts/windows-vm/20260907-moe21-clean/installed-evidence-34134725489-clean"
+        },
+        "blockmap": {
+          "status": "STRUCTURALLY_VALID",
+          "bytes": 347786,
+          "sha256": "44ac9fa6deebf3b600cc86252a2d45bd3fdd50210c0de9673d0dd5dc7db75111",
+          "chunks": 17319,
+          "coverage": "installer",
+          "differentialUpdateExecuted": false
+        },
+        "cancelNext": {
+          "status": "PASS_OBSERVABLE_CANCEL_NEXT_SEND",
+          "window": "2026-09-07T15:34:50Z/2026-09-07T15:35:57Z",
+          "exactRuntimeAbortProven": false,
+          "scope": "Observable installed behavior before later overlapping controller attempts; source tests separately cover exact old-run abort."
+        },
+        "onDeviceFirstRun": {
+          "status": "FAIL_PREREQUISITE_OBSERVED",
+          "reason": "Existing Ollama service was stopped after VM restart, so the first on-device run is valid prerequisite-failure evidence. Ollama 0.32.14 service/model was later restored without new dependency installation; the next overlapping attempt is excluded."
+        },
+        "onDeviceFreshRerun": {
+          "status": "FAIL_ORDINARY_ON_DEVICE",
+          "evidenceDir": "artifacts/windows-vm/20260907-moe21-clean/clwx-ordinary-on-device-20260907-164900",
+          "turnArtifact": "artifacts/windows-vm/20260907-moe21-clean/clwx-ordinary-on-device-20260907-164900/turn/chat-turn-2026-09-07T16-49-29-732Z.json",
+          "modelPresent": "qwen2.5:3b-instruct",
+          "verdict": "NO_RESPONSE",
+          "degradeNoticeSeen": true,
+          "terminalAnswerSeen": false
+        },
+        "cleanEvidenceDir": "artifacts/windows-vm/20260907-moe21-clean/installed-evidence-34134725489-clean",
+        "cleanOfficeRuntime": "PASS_WITH_LIMITATIONS",
+        "cleanOfficeWriteReadback": "PASS",
+        "cleanSafeChatFormsList": "PASS_FOR_FORMS_LIST_NOT_PREVIEW",
+        "reminderOneShot": {
+          "status": "PASS_VISIBLE_RETAINED_HISTORY_SCOPED",
+          "evidenceDir": "artifacts/windows-vm/20260907-moe21-clean/reminder-34134725489-clean",
+          "window": "2026-09-07T16:17:49Z/2026-09-07T16:21:43Z",
+          "naturalRunFired": true,
+          "historyAssistantMarkerPresent": true,
+          "lastRunSuccess": true,
+          "durationMs": 47686,
+          "ownedJobDeletionVerified": true,
+          "visibleAt": "2026-09-07T16:48:05Z",
+          "exactJobIdOpened": "fb7aad7f-304b-4aeb-b67d-9f61b14b3987",
+          "assistantMarkerVisible": true,
+          "rawModelMetadataVisible": false,
+          "scope": "Natural scheduler plus retained in-app history only; not manual run, desktop notification or ordinary chat creation.",
+          "visibleEvidence": "artifacts/windows-vm/20260907-moe21-clean/reminder-existing-visible.json"
+        },
+        "documentContentAcceptance": {
+          "status": "FAIL_CONTENT_ACCEPTANCE",
+          "evidence": "artifacts/windows-vm/20260907-moe21-clean/document-content-review-20260907-1652.json",
+          "parseback": "artifacts/windows-vm/20260907-moe21-clean/document-parseback-20260907-1649/document-journeys-parseback.json",
+          "passes": [
+            "D0",
+            "P1",
+            "P2",
+            "P4"
+          ],
+          "failures": [
+            "P3 PDF title prompt asked for pasted text and called no tool",
+            "P5 image prompt used the correct PNG reader but returned invented content; tool result was truncated JSON text, not a native image block"
+          ],
+          "sourceFilesUnchanged": true
+        }
+      },
+      "installedAcceptanceStatus": "fail",
+      "installedAcceptanceSummary": "Run9 native build and artifact identity passed, but installed package acceptance failed: required resources/bin/ffmpeg.exe is absent from the fresh package and second clean application-directory install. The first assisted upgrade hid the gap with a legacy file in the old application directory. Second install completed at 2026-09-07T16:04:02Z with exit 0 and matching EXE/ASAR, retained the existing profile, had cloud/Azure credential seed rows absent, and reached cold readiness in 86,838ms with 20,176ms quiet / 11 stable samples. Second clean install Office imports and Word/Excel write-readback passed; controlled forms.list passed but is not preview evidence. Video/recording is blocked by missing ffmpeg, so moe.21 cannot be accepted. Valid scoped positives remain fresh ordinary Online v2 PASS, observable cancel-next PASS, P2/P4 document parseback PASS and visible retained reminder history PASS. Current installed failures include on-device NO_RESPONSE/degradeNoticeTrue, P3 PDF title discovery with no tool call, and P5 image grounding with invented content after a truncated JSON tool result.",
+      "nativeBuildStatus": "PASS",
+      "installedPackageStatus": "FAIL",
+      "acceptanceStatus": "BLOCKED_BY_MISSING_PACKAGED_FFMPEG",
+      "packageCompleteness": {
+        "status": "FAIL",
+        "missingRequiredHelpers": [
+          "resources/bin/ffmpeg.exe"
+        ],
+        "observedPackagedBinFiles": [
+          "node.exe",
+          "uv.exe",
+          "WinSpeechRecognize.exe",
+          "WinSpeechRecognize.exe.config"
+        ],
+        "failureSummary": "run9 artifact and second clean application-directory install lack required ffmpeg.exe; first assisted upgrade had a legacy ffmpeg.exe in the old application directory, masking the package gap.",
+        "impact": "Video/recording path exits with missing ffmpeg; moe.21 cannot be accepted or sent to testers."
+      },
+      "ownerTestDistribution": {
+        "status": "DOWNLOAD_VERIFIED_PASS",
+        "scope": "owner-requested personal diagnostic, not GA or general tester acceptance",
+        "version": "0.4.3-moe.21",
+        "gcsObject": "gs://clawx-rc-artifacts-622687731621/moe21-owner-test-20260907/Ministry of Education-0.4.3-moe.21-win-x64.exe",
+        "evidence": "docs/evidence/WINDOWS_OWNER_TEST_DOWNLOAD_2026-09-07.md",
+        "stakeholderMessageSent": true,
+        "downloadVerifiedAt": "2026-09-07T17:28:21.179348+00:00",
+        "installerSha256": "d0da3062156e2faaac1df5967f03710736693f8fc7571adfccf254865579b00f",
+        "installerBytes": 359123558,
+        "linkExpiresUtc": "2026-09-08T04:27:21Z",
+        "httpStatus": 200,
+        "stakeholderSendStatus": "BRIDGE_ACCEPTED",
+        "stakeholderSendAt": "2026-09-07T17:31:43.307346+00:00",
+        "stakeholderContact": "Karunesh Ramdass",
+        "threadReadbackVerified": false,
+        "deliveryReceiptVerified": false,
+        "stakeholderSendAuthorization": "Current user explicitly requested the message; diagnostic candidate limitations included."
+      }
+    },
+    "previousMoe22Candidate": {
+      "publicCommit": "258d3ac079e7cbaa8a9c80c574066923f8ef988c",
+      "branch": "release/moe22-package-complete",
+      "version": "0.4.3-moe.22",
+      "buildRunId": 34171848832,
+      "buildStatus": "success",
+      "packageJobDuration": "15m37s",
+      "installerPhaseDurationSeconds": 364,
+      "manifest": "docs/release-manifests/0.4.3-moe.22.json",
+      "published": false,
+      "profile": {
+        "schemaVersion": 1,
+        "producer": ".github/workflows/package-win-manual.yml",
+        "cloudGatewaySeedProfile": "keyless-public",
+        "sourceGitCommit": "258d3ac079e7cbaa8a9c80c574066923f8ef988c",
+        "repositoryPrivate": false,
+        "repositoryVisibility": "public",
+        "credentialSeedIncluded": false,
+        "cloudGatewaySeedIncluded": false,
+        "azureSpeechSeedIncluded": false,
+        "microsoftGraphSeedIncluded": false
+      },
+      "installerSha256": "ca36f71709919f5d8bfa4ea3e2b490e09a88c9104e47e8ab39a90939b2d4bc13",
+      "artifactIdentityVerified": true,
+      "artifactIdentityReport": "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/verification.json",
+      "nativeBuildStatus": "PASS",
+      "nativeTestSummary": {
+        "passedFiles": 204,
+        "failedFiles": 0,
+        "passedTests": 2106,
+        "failedTests": 0,
+        "skippedTests": 11
+      },
+      "workflowSummary": "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/workflow-summary.json",
+      "downloadVerificationReport": "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/download-verification.json",
+      "identity": {
+        "installer": {
+          "bytes": 394149221,
+          "sha256": "ca36f71709919f5d8bfa4ea3e2b490e09a88c9104e47e8ab39a90939b2d4bc13"
+        },
+        "appAsar": {
+          "bytes": 256224639,
+          "sha256": "6137fd8d2c6bb8ff61b4dd9a48d6bafbd9607410d2d477e645ce30681ec7a733"
+        },
+        "packagedAppExe": {
+          "bytes": 214315008,
+          "sha256": "319ce13ac0ae399f38a1044344b15917d8401488f09494ab44e2296054d07ae5"
+        }
+      },
+      "artifacts": {
+        "windows-installer-x64": {
+          "uploaded": true,
+          "verifiedIdentity": true,
+          "installerBytes": 394149221,
+          "installerSha256": "ca36f71709919f5d8bfa4ea3e2b490e09a88c9104e47e8ab39a90939b2d4bc13"
+        },
+        "windows-blockmap": {
+          "uploaded": true,
+          "verifiedIdentity": true,
+          "blockmapBytes": 385778,
+          "sha256": "d30e51bde19e160aa1360ac91ecf84bd5604abd7321391f8939ecaae93433791",
+          "chunks": 19031,
+          "coverage": "covers installer",
+          "differentialUpdateExecuted": false
+        },
+        "build-provenance": {
+          "uploaded": true,
+          "verifiedIdentity": true
+        }
+      },
+      "packageCompleteness": {
+        "status": "PASS_EXTRACTED_ARTIFACT",
+        "missingRequiredHelpers": [],
+        "observedPackagedBinFiles": [
+          "FFMPEG_LICENSE.txt",
+          "FFMPEG_PROVENANCE.json",
+          "THIRD_PARTY_FFMPEG.txt",
+          "WinSpeechRecognize.exe",
+          "WinSpeechRecognize.exe.config",
+          "ffmpeg.exe",
+          "node.exe",
+          "uv.exe"
+        ],
+        "helperInventory": [
+          {
+            "name": "FFMPEG_LICENSE.txt",
+            "bytes": 7651,
+            "sha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"
+          },
+          {
+            "name": "FFMPEG_PROVENANCE.json",
+            "bytes": 1534,
+            "sha256": "90eed7a368429ad1e6fc1d3cff740b29a7a652e2444646926a7b386e875072de"
+          },
+          {
+            "name": "THIRD_PARTY_FFMPEG.txt",
+            "bytes": 1251,
+            "sha256": "1b0309abb2199368a23ebc658fdc05d00b1d0086292b865d17b4008182f78b23"
+          },
+          {
+            "name": "WinSpeechRecognize.exe",
+            "bytes": 12288,
+            "sha256": "a328135d5dce22740ba65b1dc380bd3cb143b0dbf42f8aaabd587ed864b9a3e3"
+          },
+          {
+            "name": "WinSpeechRecognize.exe.config",
+            "bytes": 174,
+            "sha256": "051099983b896673909e01a1f631b6652abb88da95c9f06f3efef4be033091fa"
+          },
+          {
+            "name": "ffmpeg.exe",
+            "bytes": 114400768,
+            "sha256": "63a0b3c76a245bc0d986853612d9ec43a2a2d1f1c7a3fa40ee459c248075b3a6"
+          },
+          {
+            "name": "node.exe",
+            "bytes": 85119640,
+            "sha256": "c5ff4c736112dd483c750fd4149d30c8a116db1a49b8b3ec88be4b65e6c86c19"
+          },
+          {
+            "name": "uv.exe",
+            "bytes": 63647232,
+            "sha256": "5e559e322ad2f2e25e7d9c3cb51e3891ab0676a7e7b59ea250a021e4cb2f6e31"
+          }
+        ],
+        "blockedFilesFound": 0,
+        "blockedAsarFilesFound": 0,
+        "playwrightRuntimePresent": true,
+        "installedSmoke": "PASS_INSTALLED_IDENTITY_HELPERS_AND_FFMPEG_RECORDING"
+      },
+      "vmDownloadVerified": true,
+      "installedEvidence": {
+        "status": "PARTIAL",
+        "evidence": "docs/evidence/WINDOWS_VM_TESTING_2026-09-08.md",
+        "artifactRoot": "artifacts/windows-vm/20260908-moe22/installed-acceptance-34171848832",
+        "installedAt": "2026-09-08T01:49:36.0315267Z",
+        "installExit": 0,
+        "identityVerified": true,
+        "helpersVerified": 8,
+        "desktopShortcutLaunch": true,
+        "firstReadyMs": 205972,
+        "onlineAnswerMs": 99184,
+        "online": "PASS_WITH_LATENCY_FINDING",
+        "observableCancelNext": "PASS",
+        "exactAbortIdProven": false,
+        "pdfDiscoveryRead": "PASS",
+        "pdfSummaryContent": "FAIL_MISSING_TWO_DEADLINES",
+        "guestMutationsThisContinuation": true,
+        "lastInstalledBaseline": "baseline.previousCandidate",
+        "p5": {
+          "status": "FAIL_IMAGE_CONTENT",
+          "readerNativeImage": "PASS",
+          "sourceFixtureHashVerified": true,
+          "expectedFields": 11,
+          "expectedBlanks": 3,
+          "failure": "Model invented values despite a correct native image tool-result block; provider image transport not yet proven.",
+          "evidence": "artifacts/windows-vm/20260908-moe22/installed-acceptance-34171848832/p5-content-review.json"
+        },
+        "onDevice": {
+          "status": "FAIL_ONDEVICE_EMBEDDED_MODEL_TIMEOUT",
+          "source": "258d3ac079e7cbaa8a9c80c574066923f8ef988c",
+          "buildRunId": 34171848832,
+          "driver": "clwx-ordinary-on-device-20260908-021001/turn/chat-turn-2026-09-08T02-10-32-027Z.json",
+          "sentAt": "2026-09-08T02:10:55.474Z",
+          "finishedAt": "2026-09-08T02:15:57.375Z",
+          "verdict": "TIMED_OUT_MID_TURN",
+          "degradeNoticeSeen": true,
+          "freshSession": true,
+          "visibleAnswer": false,
+          "runtimeModelConfirmed": true,
+          "transcriptResult": "No main-agent session transcript modified after send as of 02:18:51Z. This does not establish no submission: the Gateway log identifies the embedded local model attempt and timeout.",
+          "toolPolicyProof": "NOT_EXERCISED_OR_NOT_OBSERVED",
+          "postTimeoutAt": "2026-09-08T02:18:10.759Z",
+          "postTimeoutIdle": true,
+          "postTimeoutGatewayReady": true,
+          "postTimeoutComposerEnabled": true,
+          "nextAction": "Measure direct local model loading/prompt processing, separately from app prompts; do not infer a missing terminal event from the driver verdict alone.",
+          "runtimeSelectionEvidence": {
+            "source": "Private Gateway log, sanitized timestamp/category review",
+            "at": "2026-09-08T02:13:07.097Z",
+            "stage": "assistant",
+            "decision": "surface_error",
+            "reason": "timeout",
+            "provider": "ollama-ollamalo",
+            "model": "qwen2.5:3b-instruct"
+          },
+          "uiVisualReview": "At the driver timeout the app visibly says the local model is not responding and offers switching Online. No assistant answer. Later idle flags all false."
+        },
+        "warmStartup": {
+          "status": "PASS_WARM_SHORTCUT_READY_WITH_LATENCY",
+          "source": "258d3ac079e7cbaa8a9c80c574066923f8ef988c",
+          "launchAt": "2026-09-08T02:24:44.8813838Z",
+          "firstReadyAt": "2026-09-08T02:25:57.408Z",
+          "firstReadyMs": 72527,
+          "stableAt": "2026-09-08T02:26:17.517Z",
+          "stableReadyForMs": 20109,
+          "warmObserverElapsedMs": 91271,
+          "processSamples": 14,
+          "allReadyFlagsIdle": true,
+          "coldFirstReadyMs": 205972,
+          "normalShortcut": true,
+          "gracefulQuit": true,
+          "profile": "Same reused Server2022 administrator profile; no source/ASAR patch",
+          "scope": "One warm observation, not latency distribution"
+        },
+        "nativeHelpers": "PASS_FILE_EXECUTION_ONLY",
+        "officeHelpers": "PASS_5_MODULES_4_READBACK_ASSERTIONS",
+        "microsoft": {
+          "bridge": "PASS",
+          "outlookInbox": "BLOCKED_NEEDS_SIGNIN",
+          "formsConfiguration": "PASS",
+          "emailSent": false,
+          "formSubmitted": false
+        }
+      },
+      "installedAcceptanceStatus": "partial",
+      "installedPackageStatus": "PASS",
+      "installedAcceptanceSummary": "Selected moe.22/258d3ac0 installer, payload, shortcuts, native helpers and Office read/write checks pass on reused Server 2022 administrator VM. First readiness 205,972 ms; second normal shortcut readiness 72,527 ms. Online and observable Stop-next pass. P3/P5 content fails; reviewed follow-up source a4efc7e4 is building in run34180280985. Local Qwen embedded assistant times out; app displays no-response notice and recovers idle. Browser bridge/CDP/Outlook open and Forms configuration pass, but inbox requires Microsoft sign-in.",
+      "acceptanceStatus": "BLOCKED_PENDING_INSTALLED_ACCOUNT_CLIENT_AND_EXTERNAL_EVIDENCE",
+      "moe22Repair": {
+        "status": "SOURCE_BUILD_ARTIFACT_PASS_INSTALLED_PARTIAL",
+        "worktree": "/tmp/clawx-moe22-package-complete-20260907",
+        "branch": "release/moe22-package-complete",
+        "publicCommit": "258d3ac079e7cbaa8a9c80c574066923f8ef988c",
+        "commits": [
+          "93c00bb4 Prevent clean Windows installs from missing required runtime helpers",
+          "aeb54555 Capture current-turn tool evidence after execution details collapse",
+          "94b38aa8 Close document discovery and image grounding before the GA build",
+          "fd678bd6 Keep Windows packaging tests from executing inert archive fixtures",
+          "a0a9e5f4 Prevent incomplete document searches from claiming a safe unique match",
+          "24c26589 Keep local chat from looping on Gateway administration calls",
+          "f1d88039 Let valid slow sends finish without adopting orphaned runs",
+          "258d3ac0 Let Windows document-budget fixtures reach the behavior under test"
+        ],
+        "sourceValidation": [
+          "package review approved",
+          "180 focused package tests/typecheck/lint passed",
+          "29 graph-reader tests passed",
+          "148 focused document/plugin/harness checks; real baseline budget failure and repaired pass",
+          "9 on-device policy tests; explicit real OpenClaw matcher negative control",
+          "85 chat tests and one Electron E2E; three discriminating baseline failures",
+          "typecheck and full lint PASS (zero errors, 49 existing warnings)",
+          "actual-diff task validation/dry-runs, communication replay/compare and independent reviews PASS"
+        ],
+        "nativeFfmpegDiagnostic": {
+          "status": "PASS",
+          "scope": "isolated helper preparation, not installed package proof",
+          "startedAt": "2026-09-07T16:33:48Z",
+          "completedAt": "2026-09-07T16:34:04Z",
+          "downloaderSha256": "11b9f0acaf1a3426df92705bd95dddca3ef225ec081662368089a2ca4726f8a9",
+          "outputs": [
+            "ffmpeg.exe",
+            "FFMPEG_LICENSE.txt",
+            "FFMPEG_PROVENANCE.json",
+            "THIRD_PARTY_FFMPEG.txt"
+          ]
+        },
+        "buildStatus": "success",
+        "note": "Selected candidate and all package checks passed. Exact-candidate installed acceptance is blocked on interactive Google Cloud authentication; no new guest mutation or publication occurred.",
+        "buildRunId": 34171848832,
+        "fixtureRepairEvidence": "docs/evidence/WINDOWS_VM_DEVELOPMENT_2026-09-07.md",
+        "failedBuildSource": "94b38aa81ba256b432537fe111ac3191cc98f1ed",
+        "fixtureRepairCommit": "fd678bd6f237f2477366a630ddaf30f3c125b5ec",
+        "nativeFixtureRepair": {
+          "status": "PASS",
+          "baselinePassed": 11,
+          "baselineFailed": 1,
+          "correctedPassed": 14,
+          "correctedFailed": 0,
+          "completedAt": "2026-09-07T17:51:01.3114345Z",
+          "testSha256": "cdd234ac6bbf867248129bc6b7f36f127773c0fc72b601e4ee5566d27bb78b81"
+        },
+        "sourceRepairEvidence": "docs/evidence/GA_BLOCKER_RESOLUTION_2026-09-08.md",
+        "supersededBuild": {
+          "runId": 34170721777,
+          "publicCommit": "fd678bd6f237f2477366a630ddaf30f3c125b5ec",
+          "status": "success",
+          "scope": "Native build and artifact verification passed for fd678bd6, including required FFmpeg; superseded because it lacks the three later product fixes.",
+          "nativePreflight": {
+            "passedFiles": 204,
+            "passedTests": 2099,
+            "skippedTests": 11
+          }
+        },
+        "failedFollowupBuild": {
+          "runId": 34171404814,
+          "publicCommit": "f1d880390dac4ab7e67df17c57a389c45915ef53",
+          "status": "failure",
+          "phase": "Preflight release source",
+          "nativePreflight": {
+            "passedFiles": 203,
+            "failedFiles": 1,
+            "passedTests": 2105,
+            "failedTests": 1,
+            "skippedTests": 11
+          },
+          "failure": "The new fixture used an 8.3 temp alias for its synthetic HOME/USERPROFILE while discovery returned the native long path. It failed the sandbox check before reaching the budget assertions.",
+          "repairCommit": "258d3ac079e7cbaa8a9c80c574066923f8ef988c",
+          "repairEvidence": "artifacts/windows-vm/20260908-moe22/document-budget-fixture-review.json",
+          "repairNativeStatus": "PASS"
+        },
+        "nativeSourcePreflight": {
+          "passedFiles": 204,
+          "failedFiles": 0,
+          "passedTests": 2106,
+          "failedTests": 0,
+          "skippedTests": 11,
+          "status": "PASS",
+          "completedAt": "2026-09-08T00:04:41Z"
+        },
+        "nativeInstallerPhase": {
+          "status": "PASS",
+          "completedAt": "2026-09-08T00:14:58Z",
+          "durationSeconds": 364
+        },
+        "artifactVerificationReport": "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/verification.json",
+        "installedAcceptance": {
+          "status": "PARTIAL",
+          "evidence": "docs/evidence/WINDOWS_VM_TESTING_2026-09-08.md",
+          "artifactRoot": "artifacts/windows-vm/20260908-moe22/installed-acceptance-34171848832",
+          "installedAt": "2026-09-08T01:49:36.0315267Z",
+          "installExit": 0,
+          "identityVerified": true,
+          "helpersVerified": 8,
+          "desktopShortcutLaunch": true,
+          "firstReadyMs": 205972,
+          "onlineAnswerMs": 99184,
+          "online": "PASS_WITH_LATENCY_FINDING",
+          "observableCancelNext": "PASS",
+          "exactAbortIdProven": false,
+          "pdfDiscoveryRead": "PASS",
+          "pdfSummaryContent": "FAIL_MISSING_TWO_DEADLINES",
+          "guestMutationsThisContinuation": true,
+          "lastInstalledBaseline": "baseline.previousCandidate"
+        }
+      },
+      "pendingBuild": {
+        "source": "a4efc7e4a4311d7865bf0c74ab2320289fdadd48",
+        "branch": "release/moe22-package-complete",
+        "remoteVerified": true,
+        "buildRunId": 34180280985,
+        "url": "https://github.com/dmvevents/clawx-pilot/actions/runs/34180280985",
+        "createdAt": "2026-09-08T02:30:22Z",
+        "profile": "keyless-public",
+        "status": "IN_PROGRESS",
+        "publicationRequested": false,
+        "priorSelectedBuild": 34171848832
+      }
+    }
   },
   "intake": {
     "whatsappAccess": "configured bridge storage, SQLite read-only; no callable WhatsApp MCP in this session",
-    "refreshedAt": "2026-09-07T13:03:23Z",
-    "latestRelevantStakeholderMessage": "2026-09-04",
-    "boardIssueCount": 124
+    "refreshedAt": "2026-09-08T03:39:18Z",
+    "latestRelevantStakeholderMessage": "2026-09-08T03:31:46Z",
+    "boardIssueCount": 124,
+    "latestRelevantStakeholderSummary": "Karunesh reports the sent moe.21 build cannot connect to the assistant and prevents all functionality tests. Two screenshots and actual log show local default selection/connection errors; source startup import order gap confirmed. Acknowledgment accepted03:39:18Z, no repaired handoff or acceptance.",
+    "evidence": "docs/evidence/WINDOWS_STAKEHOLDER_CONNECTION_2026-09-08.md",
+    "september8StakeholderRefresh": {
+      "checkedAt": "2026-09-08T00:07:10.518675+00:00",
+      "contact": "Karunesh Ramdass",
+      "access": "configured WhatsApp bridge SQLite opened mode=ro; no callable WhatsApp MCP exposed",
+      "messageStoreLatestUtc": "2026-09-08T00:02:45Z",
+      "contactThreadLatestUtc": "2026-09-07T16:55:53Z",
+      "newInboundMessagesAfterDiagnosticSend": 0,
+      "completeSynchronizationProven": false,
+      "deliveryReadReceiptVerified": false,
+      "externalAcceptance": "NOT_PROVEN",
+      "evidence": "artifacts/windows-vm/20260908-moe22/stakeholder-intake-refresh.json"
+    },
+    "september8ActualFailure": {
+      "receivedFromUtc": "2026-09-08T03:28:38Z",
+      "logReceivedUtc": "2026-09-08T03:31:46Z",
+      "reportedVersion": "0.4.3-moe.21",
+      "logSha256": "e5c2587fb034812a488306a00c828f35bdd771159357539fd659e92d88f8a2ec",
+      "result": "FAIL",
+      "acknowledgment": "SEND_ACCEPTED",
+      "acknowledgmentAt": "2026-09-08T03:39:18Z",
+      "deliveryReadReceiptVerified": false,
+      "currentMoe22FixesReportedFailure": false,
+      "repair": {
+        "broker": {
+          "sourceCommit": "44ea379ac69b59fae834d77655c1bc55515c9faa",
+          "revision": "clawx-model-broker-00001-jss",
+          "status": "PASS_API_ONLY",
+          "checks": 8
+        },
+        "startupSource": {
+          "commit": "11db81963be6fd913f8d5f757746aa9ca86ae7c3",
+          "review": "APPROVED",
+          "unitTestsPassed": 80,
+          "electronTestsPassed": 1
+        },
+        "setupHelper": {
+          "commit": "9d46832f2fce4036f1943c853a0f88049762e07f",
+          "status": "PASS_NATIVE_CONTRACT",
+          "passed": 20,
+          "failed": 0,
+          "at": "2026-09-08T04:37:02Z",
+          "environment": "Server 2022 fresh standard user; Windows PowerShell5.1; RDP Session2"
+        },
+        "freshInstall": {
+          "status": "PASS_INSTALLED_IDENTITY",
+          "build": "34180280985",
+          "at": "2026-09-08T04:26:05Z",
+          "exitCode": 0,
+          "windowsClientAcceptance": false
+        },
+        "actualProvisionedFirstTurn": {
+          "status": "FAIL_AUTOMATIC_DEGRADE",
+          "build": "34180280985",
+          "sourceCommit": "a4efc7e4a4311d7865bf0c74ab2320289fdadd48",
+          "sentAt": "2026-09-08T04:46:10.933Z",
+          "onlineAnswerAt": "2026-09-08T04:49:01.613Z",
+          "provider": "custom-moecloud",
+          "model": "moe-demo-pro",
+          "tokenCount": 1,
+          "driverVerdict": "TIMED_OUT_MID_TURN",
+          "terminalStable": false,
+          "degradeNotice": true,
+          "subsequentChannel": "on-device",
+          "recordingCapture": "PASS_180_SECONDS_12_FRAMES",
+          "visualReview": "VISUAL_DEFECTS_OBSERVED",
+          "firstColdRecording": "FAIL_WINDOW_WAIT_DEADLINE"
+        },
+        "externalAcceptance": "FAIL_AWAITING_REPAIRED_HANDOFF",
+        "actualCmdEntrypoint": {
+          "status": "PASS_SETUP_FILES_SAVED",
+          "at": "2026-09-08T04:39:32Z",
+          "exitCode": 0,
+          "standardUser": true,
+          "elevationRequired": false,
+          "evidence": "artifacts/windows-vm/20260908-fresh-setup/fresh-first-turn-evidence/actual-online-setup.json",
+          "supersedes": "04:30:22Z default ConfigPath failure"
+        },
+        "moe23Build": {
+          "sourceCommit": "2449a9483b7e4937a902e70914a382d05f8e2e58",
+          "runId": "34187805266",
+          "status": "PASS_HOSTED_BUILD_AND_17_HOST_PAYLOAD_CHECKS",
+          "installerExists": true,
+          "includesTransientFallbackRepair": false,
+          "installerSha256": "228983187371d54a60f4018f6ee3ac86bd3e60d4ed2dbe3cd2784d76962f8d25",
+          "installedAcceptance": "PASS_INSTALLED_IDENTITY_RUNTIME_PENDING",
+          "hostEvidence": "artifacts/windows-vm/20260908-fresh-setup/moe23-host-verification.json",
+          "installedAt": "2026-09-08T05:30:47.7601935Z",
+          "installedEvidence": "artifacts/windows-vm/20260908-fresh-setup/moe23-install-result.json"
+        },
+        "moe23BuildPrevious": {
+          "sourceCommit": "cad3ab65b7c7440976daceca56c8a73cb74e30fe",
+          "runId": "34186790366",
+          "status": "FAIL_PREFLIGHT",
+          "installerExists": false,
+          "failedCase": "document.find global entry budget native timeout"
+        },
+        "transientFallbackRepair": {
+          "status": "PASS_SOURCE_REVIEW",
+          "cause": "Eventless accepted Online run treated as provider unreachable; unavailable local target selected without readiness proof",
+          "timeoutIncrease": false,
+          "commit": "7f4b06d3b943fc15ff6655dd057c3336aa62e31b",
+          "unitTestsPassed": 107,
+          "electronTestsPassed": 2,
+          "independentUnitRepeat": true,
+          "fixesColdLatency": false,
+          "installedAcceptance": "NOT_RUN"
+        },
+        "moe24Build": {
+          "sourceCommit": "b814f804036fc2f9f32d3326c8694f4ae2ef7805",
+          "runId": "34189597051",
+          "status": "PASS_HOSTED_BUILD_GUEST_DOWNLOAD_HASH_FULL_PAYLOAD_REVIEW_PENDING",
+          "includesTransientFallbackRepair": true,
+          "installedAcceptance": "NOT_RUN",
+          "installerSha256": "83af6d00071992b3e34b5430e3e3eb4c848804054cd90d23afbdc3deafc271dd"
+        },
+        "privateSetupBundle": {
+          "status": "PREPARED_PRIVATE_NOT_SENT",
+          "helperCommit": "9d46832f2fce4036f1943c853a0f88049762e07f",
+          "distinctClientKeys": true,
+          "evidence": "artifacts/windows-vm/20260908-fresh-setup/setup-bundle-preparation.json"
+        }
+      }
+    }
   },
   "statusMeaning": {
     "PASS": "The named row exit is evidenced only in its recorded scope.",
@@ -41,8 +922,8 @@
       ],
       "owner": "root",
       "dependsOn": [],
-      "evidenceSummary": "Current project-relevant stakeholder messages, board and contract reconciled; historical titles are not current acceptance.",
-      "nextAction": "Use the same acceptance matrix throughout execution.",
+      "evidenceSummary": "Actual September 8 stakeholder screenshots/log and current source reconciled; assistant connection/setup is the priority before functionality tests.",
+      "nextAction": "Repair and prove the reported startup/provider-connection failure before another tester handoff.",
       "exitCriterion": "Latest relevant asks mapped to existing cards; scope changes require a recorded disposition.",
       "references": [
         "docs/PROJECT_CONTRACT.md",
@@ -58,19 +939,33 @@
       ],
       "owner": "build engineer",
       "dependsOn": [],
-      "evidenceSummary": "Reviewed workflow, cache, summary, procedure, planning artifacts and aligned agent/skill pushed as ae391338. Draft PR18 targets the release branch;32focused checks pass. Native speedup not yet measured.",
-      "nextAction": "Integrate the reviewed process commit into the next candidate freeze; measure the next native run rather than claiming an estimated speedup.",
+      "evidenceSummary": "Selected run 34180280985 from a4efc7e4 passed 204 native files / 2,114 tests, with 11 skips. Source/profile/compiled receipts and full artifact verification pass. Prior build evidence is preserved under baseline.previousMoe22Candidate.",
+      "nextAction": "Native build complete; run exact selected artifact through installed acceptance.",
       "exitCriterion": "Equivalent package commands and publication guards; focused tests pass; branch SHA read back from GitHub.",
       "references": [
         ".github/workflows/package-win-manual.yml",
         "docs/build/windows-build-pipeline.md",
         "tests/unit/windows-build-summary.test.ts",
-        "https://github.com/dmvevents/clawx-pilot/pull/18"
+        "https://github.com/dmvevents/clawx-pilot/pull/18",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34133858590",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34133768880",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34131398263",
+        "artifacts/windows-vm/20260907-moe21/native-unit-probe/third-result.json",
+        "artifacts/windows-vm/20260907-moe21/native-seventh-failed.log",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34134725489",
+        "artifacts/windows-vm/20260907-moe21/native-diagnostics-probe/result.json",
+        "artifacts/windows-vm/20260907-moe21/native-diagnostics-probe/tests.stdout.log",
+        "artifacts/windows-vm/20260907-moe21/native-artifact-verification-34134725489.json",
+        "artifacts/windows-vm/20260907-moe21/download-34134725489-result.json",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/verification.json",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/workflow-summary.json",
+        "docs/evidence/GA_BLOCKER_RESOLUTION_2026-09-08.md",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json"
       ]
     },
     {
       "id": "native_installer",
-      "status": "FAIL",
+      "status": "PASS",
       "cards": [
         "CLWX-25",
         "CLWX-77"
@@ -79,18 +974,33 @@
       "dependsOn": [
         "build_process"
       ],
-      "evidenceSummary": "Run 34123550898 failed after 201 files / 2011 tests and seven artifact rows passed. The scoped-loader repair now passes both native Windows diagnostics (42413ms cold no-hostapi, 6094ms full) under the unchanged 120-second limit, with exact host/guest script hashes. This is diagnostic evidence, not a moe.21 installer.",
-      "nextAction": "Build once from the frozen reviewed public source, including native-proven transport, lifecycle/retry repairs and process workflow; validate installer/profile/source/compiled receipts and manifest before VM transfer.",
+      "evidenceSummary": "Installed moe.22 baseline installer SHA256 eed3d9ec87902d1babcf7906122009ac3a0ec708871db175de52871dc3e5938f, 394,149,483 bytes. Host and VM hashes agree. Five manifest entries, EXE/ASAR, eight helper files, keyless scans, Playwright and blockmap pass.",
+      "nextAction": "Verify the moe.24 repair-target package and installed identity, then rerun connection acceptance. Moe.22 installation is already complete; moe.23 is an intermediate diagnostic upgrade.",
       "exitCriterion": "Native package succeeds from the exact clean reviewed SHA; installer, profile, source and compiled receipts plus manifest validate.",
       "references": [
-        "https://github.com/dmvevents/clawx-pilot/actions/runs/34123550898",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34133858590",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34133768880",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34131398263",
+        "artifacts/windows-vm/20260907-moe21/native-unit-probe/third-result.json",
+        "artifacts/windows-vm/20260907-moe21/native-unit-probe/third-host-source-verification.json",
+        "artifacts/windows-vm/20260907-moe21/result-shortpath.json",
         "scripts/harness-artifact.mjs",
-        "scripts/release-build-profile.mjs"
+        "scripts/release-build-profile.mjs",
+        "artifacts/windows-vm/20260907-moe21/native-seventh-failed.log",
+        "https://github.com/dmvevents/clawx-pilot/actions/runs/34134725489",
+        "artifacts/windows-vm/20260907-moe21/native-diagnostics-probe/result.json",
+        "artifacts/windows-vm/20260907-moe21/native-diagnostics-probe/tests.stdout.log",
+        "artifacts/windows-vm/20260907-moe21/native-artifact-verification-34134725489.json",
+        "artifacts/windows-vm/20260907-moe21/download-34134725489-result.json",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/verification.json",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/workflow-summary.json",
+        "docs/evidence/GA_BLOCKER_RESOLUTION_2026-09-08.md",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json"
       ]
     },
     {
       "id": "installed_candidate",
-      "status": "NOT_RUN",
+      "status": "PARTIAL",
       "cards": [
         "CLWX-25",
         "CLWX-85",
@@ -100,14 +1010,29 @@
       "dependsOn": [
         "native_installer"
       ],
-      "evidenceSummary": "GCP Server 2022 VM reachable; app stopped and profile backed up. Latest installed moe.20 is a reused-profile diagnostic baseline. A keyless fresh profile has no automatic Online credentials; supported provisioning is an existing account or the documented post-install drop-in.",
-      "nextAction": "Transfer verified installer; assisted visible-session install; hash/version/readiness and video before diagnostic warm-up. Verify first-run behavior and documented provisioning separately from reused-profile Online chat.",
+      "evidenceSummary": "Selected a4efc7e4 / build 34180280985 installed at 03:08:57Z with exit 0 after 1,820-file profile backup and prior-directory preservation. Exact EXE/ASAR/eight helpers/two shortcuts pass. Cold shortcut readiness and native helper execution pass; P5 content passes with a recovered core image path error; P3 final deadline still omitted.",
+      "nextAction": "Complete the remaining installed journey/recovery/client/account checks; keep temporary local configuration diagnostics separate from immutable installer acceptance.",
       "exitCriterion": "Installer transfer hash and installed EXE/ASAR match the candidate; complete helpers; zero manual dependency installation; cold and warm observations recorded. Report profile/provisioning prerequisites explicitly; a reused Online profile cannot prove an unaided keyless first run.",
       "references": [
         "windows-pilot/vm-testing/README.md",
         "docs/CURRENT_WINDOWS_RC.md",
         "scripts/installed-release-evidence.mjs",
-        "docs/RELEASE_PROVISIONING_PLAN.md"
+        "docs/RELEASE_PROVISIONING_PLAN.md",
+        "artifacts/windows-vm/20260907-moe21/installed-evidence-34134725489/install-result.json",
+        "artifacts/windows-vm/20260907-moe21/installed-evidence-34134725489/cold-start.json",
+        "artifacts/windows-vm/20260907-moe21/installed-evidence-34134725489/running-identity.json",
+        "artifacts/windows-vm/20260907-moe21/installed-evidence-34134725489/install-artifacts.json",
+        "artifacts/windows-vm/20260907-moe21/installed-evidence-34134725489/runtime-after-cold-launch/host-verification/host-verification.json",
+        "artifacts/windows-vm/20260907-moe21/clwx-ordinary-online-20260907-153309/turn/chat-turn-2026-09-07T15-33-16-391Z.json",
+        "artifacts/windows-vm/20260907-moe21/semantic-reader-verification.json",
+        "artifacts/windows-vm/20260907-moe21-clean/clwx-ordinary-on-device-20260907-164900/turn/chat-turn-2026-09-07T16-49-29-732Z.json",
+        "artifacts/windows-vm/20260907-moe21-clean/document-content-review-20260907-1652.json",
+        "artifacts/windows-vm/20260907-moe21-clean/reminder-existing-visible.json",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/verification.json",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/workflow-summary.json",
+        "docs/evidence/GA_BLOCKER_RESOLUTION_2026-09-08.md",
+        "docs/evidence/WINDOWS_VM_TESTING_2026-09-08.md",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json"
       ]
     },
     {
@@ -122,13 +1047,14 @@
       "dependsOn": [
         "installed_candidate"
       ],
-      "evidenceSummary": "Current source passes 117 focused tests, six Electron interactions and independent review: owned-progress watchdog, exact old-run abort, strict Main-owned saved-provider proof, acknowledged inactive-pin recovery and per-episode retry accounting. Installed moe.20 remains the failing older baseline; moe.21 installed proof is pending.",
-      "nextAction": "On the frozen installer, verify ordinary Online completion, cancellation, stalled/late runs, controlled provider outage and repeated next-turn recovery without restarting.",
+      "evidenceSummary": "Current source passes lifecycle-focused tests and six Electron interactions. Installed moe.21 has fresh ordinary Online v2 PASS and observable cancel-next PASS before later overlapping attempts; exact runtime abort remains proven by source tests, not this installed run. Package acceptance is blocked by missing ffmpeg.exe, so these scoped passes cannot promote moe.21. September 8: f1d88039 separates the existing 120s pending-ack deadline from the 90s owned-run inactivity bound, prevents unowned degradation/replay and aborts orphaned late acknowledgements. Three baseline failures, 85 unit checks, one Electron E2E, communication replay/compare and independent review support the source fix; installed fault/cancellation proof remains pending. Selected moe.22 ordinary Online and observable same-session Stop-next pass; exact runtime abort targeting remains unproved.",
+      "nextAction": "On the frozen installer, verify cancellation, stalled/late runs, controlled provider outage and repeated next-turn recovery without restarting.",
       "exitCriterion": "Each accepted turn reaches one answer, visible failure or cancellation within the test bound; no duplicate turn/effect; recovery works without restart and preserves user channel intent. A successful actual Online provider probe clears the owned stale failure notice. Accepted sends without acknowledgement/events terminate visibly.",
       "references": [
         "src/stores/chat.ts",
         "tests/unit/chat-channel-degrade.test.ts",
-        "docs/evidence/WINDOWS_RUNTIME_RECOVERY_2026-09-07.md"
+        "docs/evidence/WINDOWS_RUNTIME_RECOVERY_2026-09-07.md",
+        "docs/evidence/WINDOWS_VM_TESTING_2026-09-08.md"
       ]
     },
     {
@@ -142,13 +1068,17 @@
       "dependsOn": [
         "installed_candidate"
       ],
-      "evidenceSummary": "Current source denies sessions_yield and terminalizes stalled tool/partial-stream runs using owned progress, including no-op and empty-tool-array regressions. Source and Electron checks pass; the latest installed moe.20 reproduction remains a failure until the new candidate is tested.",
-      "nextAction": "Run an ordinary installed on-device prompt and offline document path without test-only steering; prove terminal output, stalled-run recovery and no non-loopback egress.",
-      "exitCriterion": "Nonempty terminal answer without top-level sessions_yield; a stalled tool yields a visible terminal outcome; offline document path has no non-loopback egress.",
+      "evidenceSummary": "Prior installed moe.22 build 34171848832 attempted ollama-ollamalo/qwen2.5:3b-instruct and hit embedded assistant timeout at 02:13:07Z; the app displayed a no-response notice and recovered idle. Actual failed-session metadata records 33,177 system characters plus 33,102 tool-schema characters across 47 tools. Direct API diagnostics: tiny warm first content in 694 ms; a 32,283-character context produced no content by 120,215 ms. Managed OpenAI-compatible catalog metadata advertises contextWindow 200000 while native Ollama metadata is 32768. Ollama v0.32.14 drops top-level options.num_ctx on its OpenAI route, so the catalog value does not prove a 200,000-token allocation. Ordinary app and offline acceptance remain unproved; new candidate a4efc7e4 contains no local-context repair. Selected build policy-only experiment also timed out; exact prior policy restored03:35:08Z, fresh Online turn answered03:38:15Z and actual model correlation passed03:44:22Z. Stakeholder local network failure is separate from this VM context/latency defect.",
+      "nextAction": "Prioritize startup/provider readiness for the stakeholder\u2019s unreachable local endpoint. Retain local-context prototype as unproved source work; verify ordinary/offline behavior after repair.",
+      "exitCriterion": "Nonempty terminal answer with the actual local provider and no Gateway/session-administration loop or tool-validation errors; stalled tools terminate visibly; offline document path has no non-loopback egress.",
       "references": [
         "electron/utils/ondevice-tool-policy.ts",
         "windows-pilot/scripts/pilot-electron-cdp-probe.js",
-        "docs/PROJECT_CONTRACT.md"
+        "docs/PROJECT_CONTRACT.md",
+        "artifacts/windows-vm/20260907-moe21-clean/clwx-ordinary-on-device-20260907-164900/turn/chat-turn-2026-09-07T16-49-29-732Z.json",
+        "artifacts/windows-vm/20260908-moe22/installed-acceptance-34171848832/ollama-latency-20260908T0232Z/ollama-latency-summary.json",
+        "artifacts/windows-vm/20260908-moe22/installed-acceptance-34171848832/prompt-size-report-20260908T0237Z.json",
+        "artifacts/windows-vm/20260908-moe22/installed-acceptance-34171848832/ondevice-context-metadata-20260908T0240Z.json"
       ]
     },
     {
@@ -158,20 +1088,25 @@
         "CLWX-22",
         "CLWX-42",
         "CLWX-77",
-        "CLWX-115"
+        "CLWX-115",
+        "CLWX-67"
       ],
       "owner": "Office verifier",
       "dependsOn": [
         "installed_candidate",
         "turn_lifecycle"
       ],
-      "evidenceSummary": "Native package parsers and VM Office helpers pass within their scopes. Current candidate live model selection and complete user journeys remain unproved.",
-      "nextAction": "Run the five Ministry document prompts plus folder discovery, parse back outputs, policy citation questions and a visible reminder through installed chat.",
+      "evidenceSummary": "Selected build 34180280985: P3 correct scoped unique find and complete 835-character PDF reader pass, but the answer omits the explicit August 29 consolidated Head Office deadline. P5 reads all 11 fields, eight values and three blanks correctly after one recovered generic image path error. Earlier Office/helper/reminder results remain bound to their previous builds.",
+      "nextAction": "Repair and rerun P3 obligation coverage; retain P5 content proof and the recovered tool-error limitation. Finish the declared policy/reminder and other document scope.",
       "exitCriterion": "Real document tools selected; correct structured content and output parse-back; no missing Python/dependency workaround; correct policy citation; reminder fires visibly or has an accurate supported disposition.",
       "references": [
         "docs/PRODUCT_PRINCIPAL_ASSISTANT.md",
         "harness/specs",
-        "windows-pilot/vm-testing/README.md"
+        "windows-pilot/vm-testing/README.md",
+        "artifacts/windows-vm/20260907-moe21-clean/document-content-review-20260907-1652.json",
+        "artifacts/windows-vm/20260907-moe21-clean/document-parseback-20260907-1649/document-journeys-parseback.json",
+        "artifacts/windows-vm/20260907-moe21-clean/reminder-existing-visible.json",
+        "docs/evidence/WINDOWS_VM_TESTING_2026-09-08.md"
       ]
     },
     {
@@ -187,8 +1122,8 @@
         "installed_candidate",
         "turn_lifecycle"
       ],
-      "evidenceSummary": "Recipient/body boundary source tests and one Mac compose check pass. VM Outlook requires sign-in; Forms list alone is not preview evidence; external tester attach regression remains open.",
-      "nextAction": "Use authenticated user Chrome to prove attach/read/draft/reopen/reply/forward and two Forms previews; preserve send/submit gates.",
+      "evidenceSummary": "Recipient/body boundary source tests and one Mac compose check pass. Second clean moe.21 install controlled safeChat forms.list passed on reused Server 2022/admin, but it is not Forms preview evidence. VM Outlook still requires sign-in; external tester attach regression remains open. The Microsoft account-holder question remains unanswered. September 8 selected moe.22: bridge/CDP/Outlook open and Forms configuration pass. Actual bounded Inbox request returns needs_signin; no mail read or sent, no Forms submission.",
+      "nextAction": "After account-holder sign-in is available, use authenticated user Chrome to prove attach/read/draft/reopen/reply/forward and two Forms previews; preserve send/submit gates.",
       "exitCriterion": "Correct compose identity, recipient buckets, body and subject; changed/ambiguous review refuses; preview has required coverage and no submission. Separately authorized sandbox dispatch proof is required by the full release gate.",
       "references": [
         "electron/services/outlook-browser-v2",
@@ -201,23 +1136,29 @@
       "status": "BLOCKED",
       "cards": [
         "CLWX-25",
-        "CLWX-67"
+        "CLWX-20",
+        "CLWX-87"
       ],
       "owner": "root + tester",
       "dependsOn": [
         "native_installer"
       ],
-      "evidenceSummary": "Physical pilot SSH timed out at 12:52Z. Available Server 2022/admin/reused-profile VM lacks a microphone and does not prove a Windows 10/11 principal installation.",
-      "nextAction": "Complete Server VM proof now; obtain a reachable client/standard-user lane and exercise fresh setup, signed-in Chrome and microphone.",
+      "evidenceSummary": "moe.22 now contains the required FFmpeg/native recognizer and notices; extracted package verification passed. Representative Windows 10/11 standard-user/client and actual microphone/ASR acceptance remain blocked. The prior Server 2022/admin/reused-profile VM has no microphone and is not a substitute for those checks.",
+      "nextAction": "Complete selected-candidate Server VM smoke, then obtain representative Windows client/standard-user and physical microphone evidence.",
       "exitCriterion": "Same installer passes fresh client/standard-user setup and advertised ASR; lane limitations remain explicit until evidenced or an actual scope deferral is accepted.",
       "references": [
         "docs/PILOT_LAPTOP_ACCESS.md",
-        "windows-pilot/vm-testing/README.md"
+        "windows-pilot/vm-testing/README.md",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/verification.json",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34171848832/workflow-summary.json",
+        "docs/evidence/GA_BLOCKER_RESOLUTION_2026-09-08.md",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json",
+        "docs/evidence/WINDOWS_VM_TESTING_2026-09-08.md"
       ]
     },
     {
       "id": "latency_rehearsal",
-      "status": "NOT_RUN",
+      "status": "PARTIAL",
       "cards": [
         "CLWX-43",
         "CLWX-107"
@@ -228,12 +1169,13 @@
         "documents_policy_reminders",
         "microsoft_journeys"
       ],
-      "evidenceSummary": "Pricing-only diagnostic improved warm readiness 191.090s to 84.171s in one comparable repeat; this is not current-candidate acceptance. Historical latency budgets conflict.",
-      "nextAction": "Measure actual ready/first-output/terminal timings on the candidate, then rehearse all three demo moments consecutively with named backstop recordings.",
+      "evidenceSummary": "Selected build 34180280985: one cold shortcut readiness sample 105,745 ms with 20,164 ms stable; P3 answer 101,252 ms and P5 answer 46,712 ms. Prior build 34171848832: cold readiness 205,972 ms, one warm readiness sample 72,527 ms and Online answer 99,184 ms. No distribution or latency-budget acceptance.",
+      "nextAction": "Diagnose Gateway initialization cost and measure repeated prompt latency after content/local-model fixes; retain cold and warm observations separately.",
       "exitCriterion": "Report p50/p90 and sample size for repeated prompts; measure cold/warm separately; record accepted latency budget and a continuous successful rehearsal on the demo machine/account.",
       "references": [
         "docs/evidence/WINDOWS_RUNTIME_RECOVERY_2026-09-07.md",
-        "docs/COMPLETION_PLAN.md"
+        "docs/COMPLETION_PLAN.md",
+        "docs/evidence/WINDOWS_VM_TESTING_2026-09-08.md"
       ]
     },
     {
@@ -260,7 +1202,7 @@
     },
     {
       "id": "external_acceptance",
-      "status": "BLOCKED",
+      "status": "FAIL",
       "cards": [
         "CLWX-73",
         "CLWX-107",
@@ -271,12 +1213,14 @@
         "microsoft_journeys",
         "representative_windows_asr"
       ],
-      "evidenceSummary": "Latest tester complaint remains September 4; no new installed moe.21 retest exists. Deployment ambition is 450 laptops, not an assumed 20-device release.",
-      "nextAction": "Provide exact verified artifact/checklist through the authorized handoff and collect the unaided reproduction result.",
+      "evidenceSummary": "Karunesh reports no assistant connection on sent moe.21 at03:28\u201303:31Z; screenshots/log confirm unavailable local route. Acknowledgment accepted03:39:18Z. Current moe.22 has not been handed off and does not contain the startup repair. No unaided acceptance.",
+      "nextAction": "Validate the startup repair and separate client Online setup on Windows, provide the tested handoff, and collect an unaided ordinary-first-turn followed by email rerun.",
       "exitCriterion": "Tester completes formerly failing attach/read workflow on the same artifact; limitations and rollout scope recorded.",
       "references": [
         "docs/COMPLETION_PLAN.md",
-        "docs/PROJECT_CONTRACT.md"
+        "docs/PROJECT_CONTRACT.md",
+        "artifacts/windows-vm/20260908-moe22/stakeholder-intake-refresh.json",
+        "docs/evidence/WINDOWS_STAKEHOLDER_CONNECTION_2026-09-08.md"
       ]
     },
     {
@@ -298,13 +1242,14 @@
         "latency_rehearsal",
         "external_acceptance"
       ],
-      "evidenceSummary": "Owner authorized release and completion notice after verification. No release tag, uploaded moe.21 installer or completion notification exists.",
-      "nextAction": "Run canonical strict gate with actual build profile/manifest/installed bundle; verify freshness and publication replay; publish and verify downloads before notifying stakeholders.",
+      "evidenceSummary": "Selected moe.22 run34180280985 at a4efc7e4 passes native and exact artifact verification, visible installation and installed payload checks. Runtime/content retests are in progress. Account-holder Microsoft sign-in, first-run, representative client/microphone, recovery, rehearsal and external acceptance remain required. No moe.22 publication or stakeholder completion notice has been sent.",
+      "nextAction": "Finish required artifact-bound installed/account/client/tester evidence and the strict release gate before publication or completion notification.",
       "exitCriterion": "All required automated and principal-facing pilot criteria PASS on the identified artifact and scope, with no required missing/skipped evidence; published downloads match hashes; completion-notification delivery verified. Release notes explicitly exclude Ministry production identity/APIM/PostgreSQL/backend integration and fleet capacity until the production milestone passes.",
       "references": [
         "scripts/ga-gate.mjs",
         "scripts/release-evidence.mjs",
-        ".github/workflows/package-win-manual.yml"
+        ".github/workflows/package-win-manual.yml",
+        "artifacts/windows-vm/20260908-moe22/hosted-package-34180280985/verification.json"
       ],
       "scope": "single_school_windows_pilot"
     },
@@ -351,5 +1296,56 @@
     "docs/PROJECT_CONTRACT.md#product-and-completion",
     "docs/MINISTRY_ASKS_2026-09-02.md",
     "docs/GA_FINISH_SPRINT_2026-09-03.md"
-  ]
+  ],
+  "windowsDevelopment": {
+    "workspace": "C:\\Users\\clawxtest\\ClawXDev\\source",
+    "branch": "fix/windows-vm-email",
+    "baseRevision": "94b38aa81ba256b432537fe111ac3191cc98f1ed",
+    "additionalReviewedPatch": "fd678bd6f237f2477366a630ddaf30f3c125b5ec",
+    "evidence": "docs/evidence/WINDOWS_VM_DEVELOPMENT_2026-09-07.md",
+    "nativeEmailTests": {
+      "passed": 46,
+      "failed": 0,
+      "node": "22.16.0"
+    },
+    "chromeSourceProbe": {
+      "status": "PASS",
+      "launchAttachMs": [
+        5159,
+        2414
+      ],
+      "iterations": 2,
+      "microsoftAuthentication": "NOT_TESTED"
+    },
+    "installedMoe21Email": {
+      "browser": "cdp_ready",
+      "inbox": "needs_signin",
+      "observedAt": "2026-09-07T18:01:07.024Z"
+    },
+    "residentAgentInstalled": false,
+    "agentExecution": "authenticated SSH from current controller",
+    "nativeDevValidation": {
+      "status": "PASS",
+      "node": "24.20.0",
+      "pnpm": "10.33.4",
+      "passedTests": 60,
+      "failedTests": 0,
+      "devBuildExitCode": 0,
+      "completedAt": "2026-09-07T18:05:46.5859148Z"
+    },
+    "currentAccess": {
+      "status": "PASS",
+      "observedAt": "2026-09-08T01:38:58Z",
+      "scope": "IAP RDP/SSH protocol plus closed guest control; authenticated SSH marker separately passed",
+      "evidence": "artifacts/windows-vm/20260908-moe22/login-refresh.json",
+      "guestMutationPerformed": true
+    },
+    "iterationSkill": ".agents/skills/windows-vm-iteration/SKILL.md",
+    "resizeProposal": {
+      "status": "PREPARED_AWAITING_SHUTDOWN_HOLD_EXCEPTION",
+      "from": "e2-standard-4",
+      "to": "e2-standard-8",
+      "evidence": "artifacts/windows-vm/20260908-fresh-setup/resize-proposal.json"
+    }
+  }
 }

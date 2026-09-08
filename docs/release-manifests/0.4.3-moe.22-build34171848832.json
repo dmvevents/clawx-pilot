@@ -1,0 +1,90 @@
+{
+  "version": "0.4.3-moe.22",
+  "generatedAt": "2026-09-08T00:14:58.829Z",
+  "published": false,
+  "artifacts": [
+    {
+      "name": "Ministry of Education-0.4.3-moe.22-win-x64.exe",
+      "path": "Ministry of Education-0.4.3-moe.22-win-x64.exe",
+      "kind": "installer",
+      "sha256": "ca36f71709919f5d8bfa4ea3e2b490e09a88c9104e47e8ab39a90939b2d4bc13",
+      "bytes": 394149221,
+      "mtimeMs": 1788826491195.014,
+      "source": {
+        "schemaVersion": 1,
+        "gitCommit": "258d3ac079e7cbaa8a9c80c574066923f8ef988c",
+        "gitDirty": false,
+        "gitStatusHash": null,
+        "builtAt": "2026-09-08T00:05:16.152Z",
+        "recordedAt": "2026-09-08T00:05:16.152Z"
+      }
+    },
+    {
+      "name": "win:app.asar",
+      "path": "win-unpacked/resources/app.asar",
+      "kind": "asar",
+      "asarVersion": "0.4.3-moe.22",
+      "sha256": "6137fd8d2c6bb8ff61b4dd9a48d6bafbd9607410d2d477e645ce30681ec7a733",
+      "bytes": 256224639,
+      "mtimeMs": 1788826274177.5408,
+      "source": {
+        "schemaVersion": 1,
+        "gitCommit": "258d3ac079e7cbaa8a9c80c574066923f8ef988c",
+        "gitDirty": false,
+        "gitStatusHash": null,
+        "builtAt": "2026-09-08T00:05:16.152Z",
+        "recordedAt": "2026-09-08T00:05:16.152Z"
+      }
+    },
+    {
+      "name": "win:bin",
+      "path": "win-unpacked/resources/bin",
+      "kind": "bin-dir",
+      "sha256": "2941632ff0a4db9884180f265a2f3f2957fddacaf3eba46f89e262f96e12e96b",
+      "fileCount": 8,
+      "mtimeMs": 1788826277337.7837,
+      "source": {
+        "schemaVersion": 1,
+        "gitCommit": "258d3ac079e7cbaa8a9c80c574066923f8ef988c",
+        "gitDirty": false,
+        "gitStatusHash": null,
+        "builtAt": "2026-09-08T00:05:16.152Z",
+        "recordedAt": "2026-09-08T00:05:16.152Z"
+      }
+    },
+    {
+      "name": "win:extensions",
+      "path": "win-unpacked/resources/extensions",
+      "kind": "bundle-dir",
+      "sha256": "9ea5203df5492d465fa8c67210746f5783680e63a4a55a67cee30f536ebb3840",
+      "fileCount": 29,
+      "mtimeMs": 1788826277335.7651,
+      "source": {
+        "schemaVersion": 1,
+        "gitCommit": "258d3ac079e7cbaa8a9c80c574066923f8ef988c",
+        "gitDirty": false,
+        "gitStatusHash": null,
+        "builtAt": "2026-09-08T00:05:16.152Z",
+        "recordedAt": "2026-09-08T00:05:16.152Z"
+      }
+    },
+    {
+      "name": "win:openclaw-plugins",
+      "path": "win-unpacked/resources/openclaw-plugins",
+      "kind": "bundle-dir",
+      "sha256": "69c40a0b78646f8114c254179dda585a8879b0801abc0aaac19e16ca4a71b675",
+      "fileCount": 4692,
+      "mtimeMs": 1788826300092.936,
+      "source": {
+        "schemaVersion": 1,
+        "gitCommit": "258d3ac079e7cbaa8a9c80c574066923f8ef988c",
+        "gitDirty": false,
+        "gitStatusHash": null,
+        "builtAt": "2026-09-08T00:05:16.152Z",
+        "recordedAt": "2026-09-08T00:05:16.152Z"
+      }
+    }
+  ],
+  "supersededBuilds": [],
+  "warnings": []
+}
