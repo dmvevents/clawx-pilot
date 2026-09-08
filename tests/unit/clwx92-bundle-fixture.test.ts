@@ -67,6 +67,7 @@ function copyVerifierCheckoutFiles(destinationRoot: string) {
     'scripts/clwx92-workerenv-check.mjs',
     'scripts/openclaw-bundle-config.mjs',
     'scripts/openclaw-2026-9-upgrade-verifier.mjs',
+    'scripts/openclaw-2026-9-moe-registry-child.mjs',
     'scripts/openclaw-windows-pty-guard-patch.mjs',
   ]) {
     fs.copyFileSync(path.join(ROOT, file), path.join(destinationRoot, file));
