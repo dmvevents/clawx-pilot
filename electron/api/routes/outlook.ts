@@ -118,21 +118,32 @@ async function isGraphOutlookFlagConfigured(
   }
 }
 
-async function shouldUseGraphOutlookRead(): Promise<boolean> {
-  const enabled =
+// Lane intent (operator env override OR persisted Settings flag). Split out
+// from shouldUse* so the readiness endpoint reports the exact same intent
+// the transport selectors consume — one interpretation for select and report.
+async function isGraphOutlookReadIntended(): Promise<boolean> {
+  return (
     process.env.CLAWX_GRAPH_OUTLOOK_READ === '1' ||
-    (await isGraphOutlookFlagConfigured('graphOutlookRead'));
-  if (!enabled) {
+    (await isGraphOutlookFlagConfigured('graphOutlookRead'))
+  );
+}
+
+async function isGraphOutlookComposeIntended(): Promise<boolean> {
+  return (
+    process.env.CLAWX_GRAPH_OUTLOOK_COMPOSE === '1' ||
+    (await isGraphOutlookFlagConfigured('graphOutlookCompose'))
+  );
+}
+
+async function shouldUseGraphOutlookRead(): Promise<boolean> {
+  if (!(await isGraphOutlookReadIntended())) {
     return false;
   }
   return isGraphAvailableForOutlook();
 }
 
 async function shouldUseGraphOutlookCompose(): Promise<boolean> {
-  const enabled =
-    process.env.CLAWX_GRAPH_OUTLOOK_COMPOSE === '1' ||
-    (await isGraphOutlookFlagConfigured('graphOutlookCompose'));
-  if (!enabled) {
+  if (!(await isGraphOutlookComposeIntended())) {
     return false;
   }
   return isGraphAvailableForOutlook();
@@ -226,6 +237,88 @@ export async function handleOutlookRoutes(
   }
 
   try {
+    if (url.pathname === '/api/outlook/readiness') {
+      // Read-only capability diagnosis (owner RDP feedback 2026-09-08):
+      // answers "is Microsoft Graph installed / configured / signed in, and
+      // which path will email use" WITHOUT opening a window, navigating the
+      // principal's browser, or calling any Graph mailbox API. Main owns
+      // this truth; the plugin's outlook.readiness tool only reports it.
+      // Graph support is bundled inside the app (this route existing proves
+      // the integration), so `integrated` is a constant — the variable facts
+      // are client configuration, sign-in, and per-lane transport selection.
+      const readEnabled = await isGraphOutlookReadIntended();
+      const composeEnabled = await isGraphOutlookComposeIntended();
+      let graphState: 'signed_in' | 'not_signed_in' | 'not_configured' | 'unknown' = 'unknown';
+      let configured = false;
+      let signedIn = false;
+      let mockMailbox = false;
+      let mailSendScopeGranted = false;
+      try {
+        const status = await getMicrosoftGraphStatus();
+        configured = status.configured;
+        signedIn = status.signedIn;
+        mockMailbox = status.mockMailbox;
+        // Mirror refuseGraphSendWithoutSendScope: the mock layer composes
+        // without touching Graph, so the tenant grant is irrelevant there.
+        mailSendScopeGranted =
+          status.mockMailbox || grantIncludesScope(status.grantedScopes, 'Mail.Send');
+        graphState = signedIn ? 'signed_in' : configured ? 'not_signed_in' : 'not_configured';
+      } catch (error) {
+        // A failed status read is INDETERMINATE — never report it as
+        // "not configured"/absent (that inference is the incident class).
+        logger.debug(
+          `[host-api outlook/readiness] Graph status read failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      // The exact selectors real read/compose calls use — reported, not
+      // re-derived, so the diagnosis can never disagree with behavior.
+      const readTransport = (await shouldUseGraphOutlookRead()) ? 'graph' : 'browser';
+      const composeTransport = (await shouldUseGraphOutlookCompose()) ? 'graph' : 'browser';
+      const graphSentence =
+        graphState === 'unknown'
+          ? 'its Microsoft 365 sign-in state could not be read just now'
+          : graphState === 'not_configured'
+            ? 'it is not yet configured with a Microsoft 365 connection'
+            : graphState === 'not_signed_in'
+              ? 'it is configured but no Microsoft 365 account is signed in'
+              : 'a Microsoft 365 account is signed in';
+      const summary =
+        'Microsoft Graph (cloud email) support is built into the Ministry of Education app; ' +
+        `${graphSentence}. Email reading currently uses ${readTransport === 'graph' ? 'the Microsoft cloud' : 'the Outlook window in Chrome'}; ` +
+        `drafting/sending currently uses ${composeTransport === 'graph' ? 'the Microsoft cloud' : 'the Outlook window in Chrome'}. ` +
+        'No local Microsoft Graph API installation is ever required.';
+      const result = {
+        status: 'ok' as const,
+        graph: {
+          integrated: true as const,
+          state: graphState,
+          configured,
+          signedIn,
+          mockMailbox,
+          read: { enabled: readEnabled, transport: readTransport },
+          compose: {
+            enabled: composeEnabled,
+            transport: composeTransport,
+            mailSendScopeGranted,
+          },
+        },
+        browser: {
+          state: 'unknown' as const,
+          note:
+            'This read-only check does not probe the Outlook window. Use browser.diagnose for ' +
+            'Chrome automation readiness; only outlook.open (which opens a window) reveals whether ' +
+            'Outlook Web itself is signed in.',
+        },
+        summary,
+      };
+      logger.info(
+        `[host-api outlook/readiness] graph=${graphState} readEnabled=${readEnabled} composeEnabled=${composeEnabled} ` +
+          `readTransport=${readTransport} composeTransport=${composeTransport} mock=${mockMailbox} sendScope=${mailSendScopeGranted}`,
+      );
+      sendJson(res, 200, { success: true, data: result });
+      return true;
+    }
+
     if (url.pathname === '/api/outlook/open') {
       const result = await outlookBrowserManager.open();
       logger.info(`[host-api outlook/open] status=${result.status}`);

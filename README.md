@@ -317,6 +317,8 @@ Windows binary preparation downloads pinned LGPL FFmpeg with its license and pro
 
 The Ministry principal assistant resolves named local documents with `document.find` before it reads content. Discovery returns bounded metadata and `safeUnique`; only the exact `document.read_*` tool reads the selected file. Ambiguous or incomplete discovery asks the principal to choose.
 
+Questions about email capability ("is Microsoft Graph installed / signed in, which path does email use") are answered by the read-only `outlook.readiness` tool over `POST /api/outlook/readiness`, which reports the typed Graph state (signed in, not signed in, not configured, or unknown) and the per-lane read/compose transport from the same selection code real email calls use. It opens no windows and calls no mailbox API; the Outlook window's own sign-in state stays honestly unknown until `outlook.open` observes it. A failed status read reports unknown — never "not configured" — and a missing configuration file is never treated as evidence that Graph support is absent.
+
 Windows packaging runs the complete preflight on Windows. Preserve `.gitattributes`: executable source uses LF, `.cmd`/`.bat` use CRLF, and PDFs retain their binary bytes.
 
 Windows environment profiling, IAP access and app-window recording are documented in the [Windows testing guide](windows-pilot/vm-testing/README.md). Server VM smoke and principal-laptop acceptance have separate coverage requirements.

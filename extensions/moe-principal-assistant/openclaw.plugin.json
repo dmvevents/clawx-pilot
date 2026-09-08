@@ -99,6 +99,7 @@
       "principal.nscc_lookup",
       "browser.diagnose",
       "browser.repair_chrome_cdp",
+      "outlook.readiness",
       "outlook.open",
       "outlook.read_inbox",
       "outlook.draft_email",

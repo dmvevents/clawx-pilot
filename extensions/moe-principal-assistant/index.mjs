@@ -1531,6 +1531,7 @@ export function register(api) {
           createHostApiOutlookFacade(hostApiPort, hostApiToken),
           'outlook',
           {
+            readiness: 'POST /api/outlook/readiness',
             open: 'POST /api/outlook/open',
             readInbox: 'POST /api/outlook/read-inbox',
             draftEmail: 'POST /api/outlook/draft',
@@ -1556,6 +1557,14 @@ export function register(api) {
       : (typeof allowlist.has === 'function' ? allowlist.has('outlook') : false) ||
         (Array.isArray(allowlist) && allowlist.includes('outlook'));
   if (outlook && typeof outlook.open === 'function' && allowlistGate) {
+    registerTool({
+      name: 'outlook.readiness',
+      description:
+        'Read-only Outlook/email capability diagnosis. Call this FIRST for any question about whether Microsoft Graph or cloud email is installed, available, configured, signed in, or which path (Microsoft Graph cloud vs the Outlook window in Chrome) email reading/drafting/sending uses. It opens no windows, navigates nothing, and changes nothing. Microsoft Graph support is built into the Ministry of Education app — it is a cloud service that never needs a local API installation. Never inspect configuration files or paths to answer availability questions, and never claim Microsoft Graph is missing because a configuration file or path does not exist. Returns { status: "ok", graph: { integrated, state: "signed_in" | "not_signed_in" | "not_configured" | "unknown", configured, signedIn, mockMailbox, read: { enabled, transport }, compose: { enabled, transport, mailSendScopeGranted } }, browser: { state: "unknown", note }, summary }. Answer the principal from the summary in plain terms, then state the accurate next step (for example: connect Microsoft 365 in Settings, complete sign-in, or continue using the Outlook window). This tool cannot see the Outlook window\'s own sign-in: browser.state stays "unknown" here — use browser.diagnose for Chrome automation readiness, and do not call outlook.open just to answer a status question.',
+      parameters: emptyParameters,
+      execute: async (_toolCallId, _params = {}) => outlook.readiness(),
+    });
+
     registerTool({
       name: 'outlook.open',
       description:
@@ -2115,6 +2124,7 @@ function createHostApiOutlookFacade(port, token) {
   }
 
   return {
+    readiness: () => call('/readiness'),
     open: () => call('/open'),
     readInbox: (top) => call('/read-inbox', typeof top === 'number' ? { top } : {}),
     draftEmail: (args) => call('/draft', args),

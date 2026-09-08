@@ -317,6 +317,8 @@ Windows 二进制准备阶段会下载固定版本的 LGPL FFmpeg 及其许可�
 
 Ministry 校长助手在读取内容前使用 `document.find` 解析本地文档名称。发现阶段只返回有界元数据和 `safeUnique`；只有精确的 `document.read_*` 工具会读取选中的文件。存在歧义或扫描不完整时，助手会请校长选择候选文件。
 
+关于邮件能力的问题（"Microsoft Graph 是否已安装/已登录，邮件走哪条通道"）由只读的 `outlook.readiness` 工具通过 `POST /api/outlook/readiness` 回答：它报告类型化的 Graph 状态（已登录、未登录、未配置或未知），以及读取/撰写两条通道的实际选择结果，与真实邮件调用使用同一套选择代码。该工具不打开任何窗口、不调用任何邮箱 API；Outlook 窗口自身的登录状态在 `outlook.open` 观察到之前保持"未知"。状态读取失败时报告"未知"——绝不报告"未配置"；缺失的配置文件也绝不被当作 Graph 支持不存在的证据。
+
 Windows 打包会在 Windows 上运行完整预检。请保留 `.gitattributes`：可执行源码使用 LF，`.cmd`/`.bat` 使用 CRLF，PDF 保持原始二进制字节。
 
 Windows 环境信息采集、IAP 连接和应用窗口录制请参阅 [Windows 测试指南](windows-pilot/vm-testing/README.md)。服务器虚拟机检查与校长笔记本验收的覆盖范围分别记录。

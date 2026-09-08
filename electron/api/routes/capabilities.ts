@@ -24,6 +24,7 @@ import { sendJson } from '../route-utils';
 export const PLUGIN_FACING_HOST_API_ROUTES: readonly string[] = [
   'POST /api/browser/diagnose',
   'POST /api/browser/repair-chrome-cdp',
+  'POST /api/outlook/readiness',
   'POST /api/outlook/open',
   'POST /api/outlook/read-inbox',
   'POST /api/outlook/draft',

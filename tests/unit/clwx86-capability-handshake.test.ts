@@ -84,6 +84,7 @@ const CAPABILITIES_OK: StubResponse = {
       routes: [
         'POST /api/browser/diagnose',
         'POST /api/browser/repair-chrome-cdp',
+        'POST /api/outlook/readiness',
         'POST /api/outlook/open',
         'POST /api/outlook/read-inbox',
         'POST /api/outlook/draft',
@@ -109,6 +110,7 @@ const CAPABILITIES_OK: StubResponse = {
 const TOOL_ROWS: Array<[string, Record<string, unknown>]> = [
   ['browser.diagnose', {}],
   ['browser.repair_chrome_cdp', {}],
+  ['outlook.readiness', {}],
   ['outlook.open', {}],
   ['outlook.read_inbox', {}],
   ['outlook.draft_email', { to: 'someone@example.com', subject: 'Test', body: 'Body' }],
@@ -262,7 +264,7 @@ describe('per-tool self-park rows on a skewed (legacy, family-less) app — CLWX
     delete process.env.MOE_DEMO_DEFAULTS;
   });
 
-  it('all 18 host-API tools park readably and zero POSTs reach the host-API', async () => {
+  it('all 19 host-API tools park readably and zero POSTs reach the host-API', async () => {
     process.env.CLAWX_HOST_API_PORT = '13299';
     process.env.CLAWX_HOST_API_TOKEN = 'unit-test-token';
     // preview_suspension must clear statutory normalization to reach the
@@ -298,7 +300,7 @@ describe('per-tool self-park rows on a skewed (legacy, family-less) app — CLWX
 
   it('tier-1 positive control: with the full inventory NO tool is parked (route-map typo guard)', async () => {
     // Functional half of the route-map drift guard (adversarial-review
-    // MAJOR): a typo in any of the 18 route strings in index.mjs would park
+    // MAJOR): a typo in any of the 19 route strings in index.mjs would park
     // that tool against a current app — this row fails on exactly that.
     process.env.CLAWX_HOST_API_PORT = '13299';
     process.env.CLAWX_HOST_API_TOKEN = 'unit-test-token';
