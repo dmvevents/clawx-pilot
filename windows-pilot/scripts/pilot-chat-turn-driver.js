@@ -192,19 +192,106 @@ function terminalLatestText(surface) {
 }
 
 
+
+function stableTextFingerprint(value) {
+  const text = normalize(value);
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return { hash: hash.toString(16).padStart(8, '0'), length: text.length };
+}
+
+function messageFingerprintFromElement(el, selectors = SEL) {
+  const testId = el?.getAttribute?.('data-testid') || '';
+  const semanticText = semanticMessageTextFromElement(el);
+  const chipTexts = Array.from(el?.querySelectorAll?.(selectors.errorChip) || [])
+    .map((chip) => normalize(chip.textContent || ''))
+    .filter(Boolean)
+    .join('\n');
+  const semantic = stableTextFingerprint(semanticText);
+  const chips = stableTextFingerprint(chipTexts);
+  return {
+    testId,
+    semanticHash: semantic.hash,
+    semanticLength: semantic.length,
+    chipHash: chips.hash,
+    chipLength: chips.length,
+    chipCount: chipTexts ? chipTexts.split('\n').length : 0,
+  };
+}
+
+function collectMessageScopeFromDocument(doc, options = {}) {
+  const selectors = options.selectors || SEL;
+  const root = doc.querySelector(selectors.page);
+  const sessionKey = options.sessionKey ?? root?.getAttribute?.('data-current-session-key') ?? null;
+  const messages = Array.from(doc.querySelectorAll(selectors.message)).map((el, domOrdinal) => ({
+    domOrdinal,
+    ...messageFingerprintFromElement(el, selectors),
+  }));
+  return { sessionKey, messageCount: messages.length, messages };
+}
+
+function prefixScopeBlockers(currentScope, preSendScope) {
+  const blockers = [];
+  const beforeMessages = Array.isArray(preSendScope?.messages) ? preSendScope.messages : [];
+  const currentMessages = Array.isArray(currentScope?.messages) ? currentScope.messages : [];
+  const beforeSessionKey = preSendScope?.sessionKey || null;
+  const currentSessionKey = currentScope?.sessionKey || null;
+
+  if (!beforeSessionKey || !currentSessionKey) blockers.push('ERROR_CHIP_SCOPE_SESSION_MISSING');
+  else if (beforeSessionKey !== currentSessionKey) blockers.push('ERROR_CHIP_SCOPE_SESSION_CHANGED');
+  if (beforeMessages.length === 0) blockers.push('ERROR_CHIP_SCOPE_PREFIX_MISSING');
+  if (currentMessages.length < beforeMessages.length) blockers.push('ERROR_CHIP_SCOPE_NON_MONOTONIC_HISTORY');
+
+  for (let i = 0; i < beforeMessages.length && i < currentMessages.length; i += 1) {
+    const before = beforeMessages[i];
+    const current = currentMessages[i];
+    if (
+      before?.testId !== current?.testId
+      || before?.semanticHash !== current?.semanticHash
+      || before?.semanticLength !== current?.semanticLength
+      || before?.chipHash !== current?.chipHash
+      || before?.chipLength !== current?.chipLength
+      || before?.chipCount !== current?.chipCount
+    ) {
+      blockers.push('ERROR_CHIP_SCOPE_PREFIX_CHANGED');
+      break;
+    }
+  }
+
+  return blockers;
+}
+
 function collectCurrentTurnErrorChipEvidenceFromDocument(doc, options = {}) {
   const selectors = options.selectors || SEL;
   const textOf = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
+  const currentScope = collectMessageScopeFromDocument(doc, {
+    selectors,
+    sessionKey: options.currentSessionKey,
+  });
+  const preSendScope = options.preSendMessageScope || (
+    Array.isArray(options.preSendMessages)
+      ? { sessionKey: options.preSendSessionKey ?? null, messages: options.preSendMessages }
+      : null
+  );
   const preSendMessageTestIds = new Set(Array.isArray(options.preSendMessageTestIds) ? options.preSendMessageTestIds : []);
-  const inferredPreSendCount = preSendMessageTestIds.size;
   const explicitPreSendCount = Number(options.preSendMessageCount);
-  const preSendMessageCount = Number.isFinite(explicitPreSendCount) && explicitPreSendCount >= 0
+  const legacyPreSendCount = Number.isFinite(explicitPreSendCount) && explicitPreSendCount >= 0
     ? explicitPreSendCount
-    : inferredPreSendCount;
-  const hasPreSendScope = preSendMessageTestIds.size > 0 || preSendMessageCount > 0;
+    : preSendMessageTestIds.size;
+  const hasStablePrefixScope = Array.isArray(preSendScope?.messages);
+  const legacyHasPreSendScope = !hasStablePrefixScope && (preSendMessageTestIds.size > 0 || legacyPreSendCount > 0);
+  const scopeBlockers = hasStablePrefixScope ? prefixScopeBlockers(currentScope, preSendScope) : [];
+  if (!hasStablePrefixScope && !legacyHasPreSendScope) scopeBlockers.push('ERROR_CHIP_SCOPE_PREFIX_MISSING');
+  const errorChipScopeValid = hasStablePrefixScope ? scopeBlockers.length === 0 : legacyHasPreSendScope;
+  const preSendCount = hasStablePrefixScope ? preSendScope.messages.length : legacyPreSendCount;
+
   const messages = Array.from(doc.querySelectorAll(selectors.message)).map((el, domOrdinal) => {
     const testId = el.getAttribute('data-testid') || '';
-    const presentBeforeSend = preSendMessageTestIds.has(testId) || (hasPreSendScope && domOrdinal < preSendMessageCount);
+    const presentBeforeSend = errorChipScopeValid
+      && (hasStablePrefixScope ? domOrdinal < preSendCount : (preSendMessageTestIds.has(testId) || domOrdinal < preSendCount));
     const chips = Array.from(el.querySelectorAll(selectors.errorChip)).map((chip) => ({
       text: textOf(chip),
       ownerTestId: testId || null,
@@ -214,16 +301,20 @@ function collectCurrentTurnErrorChipEvidenceFromDocument(doc, options = {}) {
     return { testId, domOrdinal, presentBeforeSend, chips };
   });
   const chips = messages.flatMap((message) => message.chips);
-  const currentChips = hasPreSendScope ? chips.filter((chip) => !chip.presentBeforeSend) : chips;
+  const currentChips = errorChipScopeValid ? chips.filter((chip) => !chip.presentBeforeSend) : chips;
   const chipText = currentChips.map((chip) => chip.text).filter(Boolean).at(-1) || '';
 
   return {
     errorChipSeen: currentChips.length > 0,
     errorChipText: chipText,
     errorChipCount: currentChips.length,
-    historicalErrorChipCount: hasPreSendScope ? chips.length - currentChips.length : 0,
+    historicalErrorChipCount: errorChipScopeValid ? chips.length - currentChips.length : 0,
     messageTestIds: currentChips.map((chip) => chip.ownerTestId).filter(Boolean),
-    hasPreSendScope,
+    hasPreSendScope: errorChipScopeValid,
+    errorChipScopeValid,
+    errorChipScopeBlockers: scopeBlockers,
+    preSendMessageCount: preSendCount,
+    currentMessageCount: currentScope.messageCount,
   };
 }
 
@@ -420,6 +511,7 @@ function terminalBlockersFor(surface, expectedChannel = '') {
     ['runErrorSeen', 'MISSING_TERMINAL_SIGNAL_RUN_ERROR'],
     ['genericErrorSeen', 'MISSING_TERMINAL_SIGNAL_GENERIC_ERROR'],
     ['errorChipSeen', 'MISSING_TERMINAL_SIGNAL_ERROR_CHIP'],
+    ['errorChipScopeValid', 'MISSING_TERMINAL_SIGNAL_ERROR_CHIP_SCOPE'],
   ];
 
   if (!surface?.rootPresent) blockers.push('MISSING_TERMINAL_STATE_ROOT');
@@ -442,6 +534,7 @@ function terminalBlockersFor(surface, expectedChannel = '') {
   if (surface?.activeExecutionGraph) blockers.push('EXECUTION_GRAPH_STILL_ACTIVE');
   if (surface?.runErrorSeen) blockers.push('RUN_ERROR_VISIBLE');
   if (surface?.genericErrorSeen) blockers.push('GENERIC_ERROR_VISIBLE');
+  if (surface?.errorChipScopeValid === false) blockers.push('ERROR_CHIP_SCOPE_UNPROVEN');
   if (surface?.errorChipSeen) blockers.push('ERROR_CHIP_VISIBLE');
   return blockers;
 }
@@ -604,25 +697,39 @@ async function waitForFreshSessionProof(page, before, timeoutMs) {
   return { ok: false, state: latest, blockers: latestBlockers };
 }
 
-async function captureCurrentTurnErrorChipEvidence(page, preSendMessageTestIds = []) {
-  return page.evaluate(({ selectors, collectorSource, preSendIds }) => {
+async function captureCurrentTurnErrorChipEvidence(page, preSendMessageScope = null) {
+  return page.evaluate(({ selectors, collectorSource, scopeSource, fingerprintSource, stableFingerprintSource, semanticSource, normalizeSource, preSendScope }) => {
+    const normalize = (0, eval)(`(${normalizeSource})`);
+    const stableTextFingerprint = (0, eval)(`(${stableFingerprintSource})`);
+    const semanticMessageTextFromElement = (0, eval)(`(${semanticSource})`);
+    const messageFingerprintFromElement = (0, eval)(`(${fingerprintSource})`);
+    const collectMessageScopeFromDocument = (0, eval)(`(${scopeSource})`);
     const collect = (0, eval)(`(${collectorSource})`);
     return collect(document, {
       selectors,
-      preSendMessageTestIds: preSendIds,
-      preSendMessageCount: Array.isArray(preSendIds) ? preSendIds.length : 0,
+      preSendMessageScope: preSendScope,
     });
   }, {
     selectors: SEL,
     collectorSource: collectCurrentTurnErrorChipEvidenceFromDocument.toString(),
-    preSendIds: preSendMessageTestIds,
+    scopeSource: collectMessageScopeFromDocument.toString(),
+    fingerprintSource: messageFingerprintFromElement.toString(),
+    stableFingerprintSource: stableTextFingerprint.toString(),
+    semanticSource: semanticMessageTextFromElement.toString(),
+    normalizeSource: normalize.toString(),
+    preSendScope: preSendMessageScope,
   });
 }
 
-async function captureTerminalSurface(page, preSendMessageTestIds = []) {
-  return page.evaluate(({ selectors, semanticMessageTextFunctionSource, collectorSource, preSendIds }) => {
+async function captureTerminalSurface(page, preSendMessageScope = null) {
+  return page.evaluate(({ selectors, semanticMessageTextFunctionSource, collectorSource, scopeSource, fingerprintSource, stableFingerprintSource, normalizeSource, preSendScope }) => {
     const textOf = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
-    const semanticMessageText = (0, eval)(`(${semanticMessageTextFunctionSource})`);
+    const normalize = (0, eval)(`(${normalizeSource})`);
+    const stableTextFingerprint = (0, eval)(`(${stableFingerprintSource})`);
+    const semanticMessageTextFromElement = (0, eval)(`(${semanticMessageTextFunctionSource})`);
+    const semanticMessageText = semanticMessageTextFromElement;
+    const messageFingerprintFromElement = (0, eval)(`(${fingerprintSource})`);
+    const collectMessageScopeFromDocument = (0, eval)(`(${scopeSource})`);
     const collectErrorChips = (0, eval)(`(${collectorSource})`);
     const readBool = (value) => {
       if (value === 'true') return true;
@@ -637,8 +744,7 @@ async function captureTerminalSurface(page, preSendMessageTestIds = []) {
     const genericError = document.querySelector(selectors.genericError);
     const currentErrorChips = collectErrorChips(document, {
       selectors,
-      preSendMessageTestIds: preSendIds,
-      preSendMessageCount: Array.isArray(preSendIds) ? preSendIds.length : 0,
+      preSendMessageScope: preSendScope,
     });
     const messages = Array.from(document.querySelectorAll(selectors.message)).map((el) => semanticMessageText(el));
     const runErrorState = root ? readBool(root.getAttribute('data-run-error-present')) : null;
@@ -664,6 +770,8 @@ async function captureTerminalSurface(page, preSendMessageTestIds = []) {
       genericErrorText: genericError ? textOf(genericError).slice(0, 300) : null,
       errorChipText: currentErrorChips.errorChipText ? currentErrorChips.errorChipText.slice(0, 300) : null,
       historicalErrorChipCount: currentErrorChips.historicalErrorChipCount,
+      errorChipScopeValid: currentErrorChips.errorChipScopeValid,
+      errorChipScopeBlockers: currentErrorChips.errorChipScopeBlockers,
       messageCount: messages.length,
       lastMessageText: messages.length ? messages[messages.length - 1].slice(0, 800) : '',
       lastMessageTextFull: messages.length ? messages[messages.length - 1] : '',
@@ -672,11 +780,16 @@ async function captureTerminalSurface(page, preSendMessageTestIds = []) {
     selectors: SEL,
     semanticMessageTextFunctionSource: semanticMessageTextFromElement.toString(),
     collectorSource: collectCurrentTurnErrorChipEvidenceFromDocument.toString(),
-    preSendIds: preSendMessageTestIds,
+    scopeSource: collectMessageScopeFromDocument.toString(),
+    fingerprintSource: messageFingerprintFromElement.toString(),
+    stableFingerprintSource: stableTextFingerprint.toString(),
+    semanticSource: semanticMessageTextFromElement.toString(),
+    normalizeSource: normalize.toString(),
+    preSendScope: preSendMessageScope,
   });
 }
 
-async function waitForTerminalAcceptance(page, args, answerText, preSendMessageTestIds = []) {
+async function waitForTerminalAcceptance(page, args, answerText, preSendMessageScope = null) {
   const quietMs = args.terminalQuiet * 1000;
   const deadline = Date.now() + Math.max(quietMs + 10_000, 10_000);
   const startedAt = new Date().toISOString();
@@ -686,7 +799,7 @@ async function waitForTerminalAcceptance(page, args, answerText, preSendMessageT
   let finalBlockers = [];
 
   while (Date.now() <= deadline) {
-    const surface = await captureTerminalSurface(page, preSendMessageTestIds).catch((error) => ({
+    const surface = await captureTerminalSurface(page, preSendMessageScope).catch((error) => ({
       at: new Date().toISOString(),
       captureError: error instanceof Error ? error.message : String(error),
     }));
@@ -745,6 +858,24 @@ async function captureMessageTestIds(page) {
   return page.evaluate((selector) => Array.from(document.querySelectorAll(selector))
     .map((el) => el.getAttribute('data-testid') || '')
     .filter(Boolean), SEL.message);
+}
+
+async function captureMessageScope(page) {
+  return page.evaluate(({ selectors, collectorSource, fingerprintSource, stableFingerprintSource, semanticSource, normalizeSource }) => {
+    const normalize = (0, eval)(`(${normalizeSource})`);
+    const stableTextFingerprint = (0, eval)(`(${stableFingerprintSource})`);
+    const semanticMessageTextFromElement = (0, eval)(`(${semanticSource})`);
+    const messageFingerprintFromElement = (0, eval)(`(${fingerprintSource})`);
+    const collect = (0, eval)(`(${collectorSource})`);
+    return collect(document, { selectors });
+  }, {
+    selectors: SEL,
+    collectorSource: collectMessageScopeFromDocument.toString(),
+    fingerprintSource: messageFingerprintFromElement.toString(),
+    stableFingerprintSource: stableTextFingerprint.toString(),
+    semanticSource: semanticMessageTextFromElement.toString(),
+    normalizeSource: normalize.toString(),
+  });
 }
 
 async function collectExecutionGraphEvidence(page, { prompt, preSendMessageTestIds }) {
@@ -810,12 +941,15 @@ async function main() {
     composerPlaceholder: null,
     messagesBefore: 0,
     messageTestIdsBefore: [],
+    messageSnapshotBefore: null,
     messagesAfter: 0,
     executionSteps: [],
     toolNames: [],
     executionEvidence: null,
     errorChipSeen: false,
     errorChipText: null,
+    errorChipScopeValid: null,
+    errorChipScopeBlockers: [],
     errorChipOnly: false,
     assistantPromptEcho: false,
     degradeNoticeSeen: false,
@@ -880,8 +1014,9 @@ async function main() {
         return result;
       }
     }
-    result.messageTestIdsBefore = await captureMessageTestIds(page);
-    result.messagesBefore = result.messageTestIdsBefore.length;
+    result.messageSnapshotBefore = await captureMessageScope(page);
+    result.messageTestIdsBefore = result.messageSnapshotBefore.messages.map((message) => message.testId).filter(Boolean);
+    result.messagesBefore = result.messageSnapshotBefore.messageCount;
 
     // Wait for the composer to be ENABLED, not just present. A listening port
     // 18789 is NOT readiness: the renderer disables the composer (placeholder
@@ -922,11 +1057,15 @@ async function main() {
       // chip in the current turn still blocks acceptance. The container's
       // innerText includes its chip text, so the current chip string is needed
       // to distinguish an answer from a bare inline failure.
-      const chipEvidence = await captureCurrentTurnErrorChipEvidence(page, result.messageTestIdsBefore).catch(() => null);
+      const chipEvidence = await captureCurrentTurnErrorChipEvidence(page, result.messageSnapshotBefore).catch(() => null);
       if (chipEvidence?.errorChipSeen) {
         result.errorChipSeen = true;
         chipTextRaw = normalize(chipEvidence.errorChipText || '');
         result.errorChipText = truncate(chipTextRaw, 300);
+      }
+      if (chipEvidence) {
+        result.errorChipScopeValid = chipEvidence.errorChipScopeValid;
+        result.errorChipScopeBlockers = chipEvidence.errorChipScopeBlockers || [];
       }
       if (await page.locator(SEL.degrade).count() > 0) {
         result.degradeNoticeSeen = true;
@@ -972,7 +1111,7 @@ async function main() {
     }
 
     if (result.settled) {
-      const terminal = await waitForTerminalAcceptance(page, args, lastText, result.messageTestIdsBefore);
+      const terminal = await waitForTerminalAcceptance(page, args, lastText, result.messageSnapshotBefore);
       result.terminalStable = terminal.stable;
       result.terminalBlockers = terminal.blockers;
       result.terminalState = terminal.finalSurface;
@@ -1003,10 +1142,14 @@ async function main() {
         diagnostics: [`CAPTURE_FAILED:${error && error.message ? error.message : error}`],
       };
     }
-    const finalChipEvidence = await captureCurrentTurnErrorChipEvidence(page, result.messageTestIdsBefore).catch(() => null);
+    const finalChipEvidence = await captureCurrentTurnErrorChipEvidence(page, result.messageSnapshotBefore).catch(() => null);
     if (finalChipEvidence?.errorChipSeen) {
       result.errorChipSeen = true;
       result.errorChipText = truncate(finalChipEvidence.errorChipText || result.errorChipText || '', 300);
+    }
+    if (finalChipEvidence) {
+      result.errorChipScopeValid = finalChipEvidence.errorChipScopeValid;
+      result.errorChipScopeBlockers = finalChipEvidence.errorChipScopeBlockers || [];
     }
     if (await page.locator(SEL.genericError).count() > 0) result.genericErrorSeen = true;
 
@@ -1044,6 +1187,9 @@ module.exports = {
   semanticMessageTextFromElement,
   semanticAnswerStillLatest,
   terminalLatestText,
+  stableTextFingerprint,
+  messageFingerprintFromElement,
+  collectMessageScopeFromDocument,
   extractExecutionGraphEvidenceFromDocument,
   collectExecutionGraphEvidence,
   captureMessageTestIds,
@@ -1056,5 +1202,6 @@ module.exports = {
   redactTerminalSurface,
   collectCurrentTurnErrorChipEvidenceFromDocument,
   captureCurrentTurnErrorChipEvidence,
+  captureMessageScope,
   captureTerminalSurface,
 };
