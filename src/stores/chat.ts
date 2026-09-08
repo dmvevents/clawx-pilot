@@ -1965,9 +1965,11 @@ async function cutoverSessionModel(sessionKey: string, modelRef: string): Promis
 
 /**
  * Clear a session's model pin so it follows the configured channel again.
- * `model: null` deletes the override AND the stale last-run model identity, so
- * the next turn resolves from config. Idempotent: a session with no pin is
- * unaffected.
+ * OpenClaw's `model: null` clears explicit overrides, then returns the
+ * effective `resolved` model after the write. The raw entry may still contain
+ * runtime model fields when they already match that default, so retained fields
+ * only prove a clear when the resolved readback matches the Online default we
+ * just probed. Idempotent: a session with no pin is unaffected.
  */
 
 function hasNonEmptyStringField(value: unknown, field: string): boolean {
@@ -1975,17 +1977,80 @@ function hasNonEmptyStringField(value: unknown, field: string): boolean {
   return String((value as Record<string, unknown>)[field] ?? '').trim().length > 0;
 }
 
-function isSessionModelClearConfirmed(ack: unknown, sessionKey: string): boolean {
+type SessionModelClearTarget = {
+  channel: ProviderClass;
+  model: string;
+  provider?: string;
+};
+
+function splitModelRef(value: string): { provider: string; model: string } | null {
+  const slash = value.indexOf('/');
+  if (slash <= 0 || slash >= value.length - 1) return null;
+  return {
+    provider: value.slice(0, slash).trim(),
+    model: value.slice(slash + 1).trim(),
+  };
+}
+
+function getSessionModelClearTarget(
+  account: { model?: string; vendorId?: string; baseUrl?: string } | null | undefined,
+): SessionModelClearTarget | null {
+  if (!account || classifyProvider(account) !== 'online') return null;
+  const rawModel = String(account.model ?? '').trim();
+  if (!rawModel) return null;
+  const parsed = splitModelRef(rawModel);
+  if (parsed) {
+    return { channel: 'online', provider: parsed.provider, model: parsed.model };
+  }
+  return { channel: 'online', model: rawModel };
+}
+
+function modelMatchesClearTarget(resolvedModel: string, target: SessionModelClearTarget): boolean {
+  const got = resolvedModel.trim().toLowerCase();
+  const want = target.model.trim().toLowerCase();
+  if (!got || !want) return false;
+  if (got === want) return true;
+  if (target.provider) {
+    return got === `${target.provider}/${target.model}`.toLowerCase();
+  }
+  return false;
+}
+
+function providerMatchesClearTarget(resolvedProvider: string, target: SessionModelClearTarget): boolean {
+  const provider = resolvedProvider.trim().toLowerCase();
+  if (!provider) return false;
+  if (target.channel === 'online' && (provider === 'ollama' || provider.startsWith('ollama-'))) return false;
+  if (!target.provider) return true;
+  return provider === target.provider.trim().toLowerCase();
+}
+
+function isSessionModelClearConfirmed(
+  ack: unknown,
+  sessionKey: string,
+  target?: SessionModelClearTarget | null,
+): boolean {
   if (!ack || typeof ack !== 'object') return false;
-  const top = ack as { key?: unknown; ok?: unknown; entry?: unknown };
+  const top = ack as { key?: unknown; ok?: unknown; entry?: unknown; resolved?: unknown };
   if (top.ok !== true) return false;
   if ('key' in top && String(top.key ?? '').trim() !== sessionKey) return false;
   if (!top.entry || typeof top.entry !== 'object') return false;
 
-  return !hasNonEmptyStringField(top.entry, 'modelOverride')
-    && !hasNonEmptyStringField(top.entry, 'providerOverride')
-    && !hasNonEmptyStringField(top.entry, 'model')
-    && !hasNonEmptyStringField(top.entry, 'modelProvider');
+  if (hasNonEmptyStringField(top.entry, 'modelOverride')
+    || hasNonEmptyStringField(top.entry, 'providerOverride')) {
+    return false;
+  }
+
+  const hasRuntimeModel = hasNonEmptyStringField(top.entry, 'model');
+  const hasRuntimeProvider = hasNonEmptyStringField(top.entry, 'modelProvider');
+  if (!hasRuntimeModel && !hasRuntimeProvider) return true;
+  if (!target) return false;
+
+  if (!top.resolved || typeof top.resolved !== 'object') return false;
+  const resolved = top.resolved as { modelProvider?: unknown; model?: unknown };
+  const provider = String(resolved.modelProvider ?? '').trim();
+  const model = String(resolved.model ?? '').trim();
+  return providerMatchesClearTarget(provider, target)
+    && modelMatchesClearTarget(model, target);
 }
 
 type StoredDefaultProviderProbe = {
@@ -2024,6 +2089,7 @@ async function probeStoredDefaultOnlineProvider(expectedAccountId: string): Prom
 async function clearSessionModelPinRpc(
   sessionKey: string,
   timeoutMs: number = SESSION_PATCH_TIMEOUT_MS,
+  target?: SessionModelClearTarget | null,
 ): Promise<boolean> {
   if (!sessionKey) return false;
   try {
@@ -2032,7 +2098,7 @@ async function clearSessionModelPinRpc(
       { key: sessionKey, model: null },
       timeoutMs,
     );
-    const confirmed = isSessionModelClearConfirmed(ack, sessionKey);
+    const confirmed = isSessionModelClearConfirmed(ack, sessionKey, target);
     if (!confirmed) {
       console.warn('[chat] sessions.patch did not confirm the session model pin clear; keeping the recorded pin');
     }
@@ -2110,12 +2176,14 @@ async function reconcileSessionModelPin(
     if (!ownedPin && stateAfterProbe.runtimeChannelPin?.sessionKey === sessionKey) return;
     if (ownedNotice && stateAfterProbe.degradeNotice !== ownedNotice) return;
 
+    const clearTarget = getSessionModelClearTarget(defaultAfterProbe);
+    if (!clearTarget) return;
     // Only spend the bounded retry budget once the provider is proven healthy
     // and ownership checks pass. Transient outage probes must not burn the clear
     // budget before a clear RPC is even attempted.
     _pinReconcileAttempts.set(sessionKey, (_pinReconcileAttempts.get(sessionKey) ?? 0) + 1);
     // Only a confirmed clear closes this stale-pin episode out for the run.
-    if (await clearSessionModelPinRpc(sessionKey, RECONCILE_PATCH_TIMEOUT_MS)) {
+    if (await clearSessionModelPinRpc(sessionKey, RECONCILE_PATCH_TIMEOUT_MS, clearTarget)) {
       const stateAfterClear = useChatStore.getState();
       if (stateAfterClear.currentSessionKey !== sessionKey) return;
       if ((stateAfterClear.lastSentPayload?.generation ?? -1) !== sendGeneration) return;

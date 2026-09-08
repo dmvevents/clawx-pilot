@@ -113,6 +113,34 @@ function ackFor(params: unknown) {
   };
 }
 
+
+function retainedRuntimeClearAck(options: {
+  key?: string;
+  modelProvider?: string;
+  model?: string;
+  resolvedProvider?: string;
+  resolvedModel?: string;
+  modelOverride?: string;
+  providerOverride?: string;
+}) {
+  const key = options.key ?? 'agent:main:main';
+  return {
+    ok: true,
+    key,
+    entry: {
+      key,
+      ...(options.modelProvider ? { modelProvider: options.modelProvider } : {}),
+      ...(options.model ? { model: options.model } : {}),
+      ...(options.modelOverride ? { modelOverride: options.modelOverride } : {}),
+      ...(options.providerOverride ? { providerOverride: options.providerOverride } : {}),
+    },
+    resolved: {
+      modelProvider: options.resolvedProvider ?? options.modelProvider,
+      model: options.resolvedModel ?? options.model,
+    },
+  };
+}
+
 /** Paths POSTed/PUT to the host API, in order. */
 const calledPaths = () => hostApiFetchMock.mock.calls.map((c) => String(c[0]));
 /** `sessions.patch` calls, in order: [{ key, model }]. */
@@ -1205,6 +1233,159 @@ describe('chat store: send-time channel degradation', () => {
     expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
     expect(gatewayRpcMock.mock.calls.map((c) => c[0])).toContain('chat.send');
     expect(store.getState().runtimeChannelPin).toBeNull();
+  });
+
+  it('accepts OpenClaw clear acks that retain runtime fields matching a fully-qualified Online default', async () => {
+    providerState.accounts = [
+      {
+        id: 'custom-moecloud',
+        vendorId: 'custom',
+        label: 'MoE Cloud',
+        authMode: 'api_key',
+        baseUrl: 'https://gateway.example.test/v1',
+        apiProtocol: 'openai-completions',
+        model: 'custom-moecloud/moe-demo-pro',
+        enabled: true,
+        isDefault: true,
+        createdAt: '2026-09-08T00:00:00.000Z',
+        updatedAt: '2026-09-08T00:00:00.000Z',
+      },
+    ];
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/provider-accounts/default/probe'
+      ? Promise.resolve({ success: true, valid: true, accountId: 'custom-moecloud', channel: 'online', status: 200, reason: 'ok' })
+      : Promise.resolve({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' })));
+    gatewayRpcMock.mockImplementation((method: string) => {
+      if (method === 'sessions.patch') {
+        return Promise.resolve(retainedRuntimeClearAck({
+          modelProvider: 'custom-moecloud',
+          model: 'moe-demo-pro',
+        }));
+      }
+      if (method === 'chat.send') return Promise.resolve({ runId: 'run-after-runtime-pin-clear' });
+      return Promise.resolve(undefined);
+    });
+    const store = await loadStore();
+    const stalePin = { sessionKey: 'agent:main:main', channel: 'on-device' as const };
+    store.setState({
+      sending: false,
+      activeRunId: null,
+      lastSentPayload: null,
+      runtimeChannelPin: stalePin,
+      degradeNotice: { reason: 'unreachable', resent: false, to: 'on-device' },
+    });
+
+    await store.getState().sendMessage('retry after fallback completed');
+
+    expect(storedProviderProbeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toBeNull();
+    expect(store.getState().degradeNotice).toBeNull();
+  });
+
+  it('accepts retained runtime fields when a managed Online default stores a bare model id', async () => {
+    providerState.accounts = [
+      {
+        id: 'moe-cloud-gateway',
+        vendorId: 'custom',
+        label: 'MoE Cloud',
+        authMode: 'api_key',
+        baseUrl: 'https://gateway.example.test/v1',
+        apiProtocol: 'openai-completions',
+        model: 'moe-demo-pro',
+        enabled: true,
+        isDefault: true,
+        createdAt: '2026-09-08T00:00:00.000Z',
+        updatedAt: '2026-09-08T00:00:00.000Z',
+      },
+    ];
+    hostApiFetchMock.mockImplementation((path: unknown) => (String(path) === '/api/provider-accounts/default/probe'
+      ? Promise.resolve({ success: true, valid: true, accountId: 'moe-cloud-gateway', channel: 'online', status: 200, reason: 'ok' })
+      : Promise.resolve({ success: true, modelRef: 'ollama/qwen2.5:3b-instruct' })));
+    gatewayRpcMock.mockImplementation((method: string) => {
+      if (method === 'sessions.patch') {
+        return Promise.resolve(retainedRuntimeClearAck({
+          modelProvider: 'custom-moecloud',
+          model: 'moe-demo-pro',
+        }));
+      }
+      if (method === 'chat.send') return Promise.resolve({ runId: 'run-after-managed-clear' });
+      return Promise.resolve(undefined);
+    });
+    const store = await loadStore();
+    store.setState({
+      sending: false,
+      activeRunId: null,
+      lastSentPayload: null,
+      runtimeChannelPin: { sessionKey: 'agent:main:main', channel: 'on-device' },
+    });
+
+    await store.getState().sendMessage('retry managed cloud after fallback');
+
+    expect(storedProviderProbeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+    expect(store.getState().runtimeChannelPin).toBeNull();
+  });
+
+  it('rejects retained runtime fields when the clear ack still resolves to another model', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    gatewayRpcMock.mockImplementation((method: string) => {
+      if (method === 'sessions.patch') {
+        return Promise.resolve(retainedRuntimeClearAck({
+          modelProvider: 'google',
+          model: 'gemini-2.5-pro',
+          resolvedProvider: 'ollama',
+          resolvedModel: 'qwen2.5:3b-instruct',
+        }));
+      }
+      if (method === 'chat.send') return Promise.resolve({ runId: 'run-after-conflicting-clear' });
+      return Promise.resolve(undefined);
+    });
+    const store = await loadStore();
+    const stalePin = { sessionKey: 'agent:main:main', channel: 'on-device' as const };
+    store.setState({
+      sending: false,
+      activeRunId: null,
+      lastSentPayload: null,
+      runtimeChannelPin: stalePin,
+    });
+
+    await store.getState().sendMessage('retry while clear resolves local');
+
+    expect(storedProviderProbeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+    expect(gatewayRpcMock.mock.calls.map((c) => c[0])).toContain('chat.send');
+    expect(store.getState().runtimeChannelPin).toBe(stalePin);
+  });
+
+  it('rejects retained runtime fields when explicit override fields remain after clear', async () => {
+    providerState.accounts = [...ONLINE_DEFAULT];
+    gatewayRpcMock.mockImplementation((method: string) => {
+      if (method === 'sessions.patch') {
+        return Promise.resolve(retainedRuntimeClearAck({
+          modelProvider: 'google',
+          model: 'gemini-2.5-pro',
+          modelOverride: 'google/gemini-2.5-pro',
+          providerOverride: 'google',
+        }));
+      }
+      if (method === 'chat.send') return Promise.resolve({ runId: 'run-after-override-clear' });
+      return Promise.resolve(undefined);
+    });
+    const store = await loadStore();
+    const stalePin = { sessionKey: 'agent:main:main', channel: 'on-device' as const };
+    store.setState({
+      sending: false,
+      activeRunId: null,
+      lastSentPayload: null,
+      runtimeChannelPin: stalePin,
+    });
+
+    await store.getState().sendMessage('retry while explicit overrides remain');
+
+    expect(storedProviderProbeCalls()).toHaveLength(1);
+    expect(patchCalls()).toEqual([{ key: 'agent:main:main', model: null }]);
+    expect(store.getState().runtimeChannelPin).toBe(stalePin);
   });
 
   it('retries inactive runtime-pin recovery after a failed stored provider probe', async () => {
