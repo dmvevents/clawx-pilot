@@ -10,6 +10,8 @@ Read [docs/PROJECT_CONTRACT.md](docs/PROJECT_CONTRACT.md) before project work. I
 2. Inspect `git status --short --branch` and the selected CLWX card in `docs/plane-board/CLWX-board-export.json`.
 3. Load the relevant domain skill and scoped `AGENTS.md`; execute the workstream through verification. Historical plans and the large state vector are searchable evidence, not startup reading.
 
+Repository layout, module ownership and evidence locations: [docs/REPOSITORY_GUIDE.md](docs/REPOSITORY_GUIDE.md).
+
 ## Codex routing
 
 - [docs/AGENT_SKILL_INTEROPERABILITY.md](docs/AGENT_SKILL_INTEROPERABILITY.md) maps Codex, OMX and Claude project surfaces.

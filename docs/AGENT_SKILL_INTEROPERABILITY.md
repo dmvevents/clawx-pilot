@@ -10,6 +10,8 @@ Read the same two project documents from either agent: [PROJECT_CONTRACT.md](PRO
 
 Current candidate: [CURRENT_WINDOWS_RC.md](CURRENT_WINDOWS_RC.md). Release evidence: [GA_RELEASE_EVIDENCE_MANIFEST.md](GA_RELEASE_EVIDENCE_MANIFEST.md). Historical May/June packets are searchable reference, not startup routing. Read the candidate pointer for the recorded installer and installed proof; build-process documentation does not maintain a second current-version table.
 
+Repository navigation and ownership boundaries are summarized in [REPOSITORY_GUIDE.md](REPOSITORY_GUIDE.md). That guide points to actual folders, tests and evidence classes; it does not replace the current release pointers above.
+
 Claude's existing `ga-sprint-driver` skill implements the shared continuation policy: follow one outcome across checkpoints, keep source and installed/live evidence distinct, and stop unchanged/blocked ticks. Codex follows the same policy through the shared contract and native domain agents; no additional workflow engine is required.
 
 ## Claude guidance and hook scope verified September 7
@@ -45,17 +47,30 @@ No user-global memory, MCP credentials or tool installation was changed. The exi
 |---|---|---|---|
 | codex-plugin-cc (`codex@openai-codex`) | Claude Code plugin mechanism, user scope; requires local Codex CLI authed with the developer's own credentials (never committed) | Cross-vendor review lane: `/codex:review` and `/codex:adversarial-review` delegate to the local Codex CLI (GPT-5.5) as a second-model adversary for the separate-lane review protocol | Additive only — a Codex verdict never replaces the Claude-lens review or loosens a gate. Protocol: `.claude/skills/ga-sprint-driver/SKILL.md` §3b; adoption record: `docs/PLUGIN_INTEGRATION_PLAN_2026-09-03.md` §1. |
 
+
+## Inventory Snapshot — 2026-09-08
+
+| Surface | Count | Finding |
+|---|---:|---|
+| `.agents/skills` | 13 | Primary Codex project skills. |
+| `.codex/skills` | 10 | Compatibility mirror now includes release-critical resume, local VM, VM iteration, VM smoke, runtime, GA and form-prefill workflows. |
+| `.claude/skills` | 21 | Claude project skills include its Claude-only liaison/session workflows plus mirrored release-critical Windows skills. |
+| `.codex/agents` | 8 | Seven TOML native Codex agents parse successfully; `test-lane-prober.md` is a legacy Claude-format mirror kept as read-only reference. |
+| `.claude/agents` | 20 | Claude project subagents for release, Windows, Microsoft automation, state/config audit and liaison workflows. |
+
+Mirror drift is expected where a tool surface needs different commands or metadata. Byte-identical mirrors are maintained for the high-risk shared skills that do not need tool-specific syntax: `ga-e2e-regression`, `windows-local-vm-testing`, `windows-vm-iteration` across their mirrored surfaces, and `windows-vm-smoke` where present.
+
 ## Canonical Skill Map
 
 | Capability | Codex official skill | Codex/OMX skill | Claude skill | Windows pilot reference |
 |---|---|---|---|---|
-| Resume/handoff | `.agents/skills/windows-demo-resume` | `.codex/skills/windows-outlook-demo` | `.claude/skills/windows-demo-resume` | `windows-pilot/README.md` |
+| Resume/handoff | `.agents/skills/windows-demo-resume` | `.codex/skills/windows-demo-resume` | `.claude/skills/windows-demo-resume` | `windows-pilot/README.md` |
 | Runtime/Gateway/model repair | `.agents/skills/windows-runtime-recovery` | `.codex/skills/windows-runtime-recovery` | `.claude/skills/windows-runtime-recovery` | `windows-pilot/skills/model-gateway-recovery.md` |
 | Outlook and Forms | `.agents/skills/windows-outlook-forms` | `.codex/skills/windows-outlook-demo` | `.claude/skills/windows-outlook-forms` | `windows-pilot/skills/outlook-email-windows.md`, `windows-pilot/skills/forms-suspension-fill.md` |
 | Build process and CI reliability | `.agents/skills/windows-build-pipeline` | `.codex/skills/windows-build-pipeline` | `.claude/skills/windows-build-pipeline` | `docs/build/windows-build-pipeline.md` |
 | Windows build/package | `.agents/skills/windows-build-package` | use `.agents/skills/windows-build-package` | `.claude/skills/windows-build-package` | `docs/WINDOWS_INSTALL_RUNBOOK.md` |
 | Windows VM/laptop smoke | `.agents/skills/windows-vm-smoke` | `.codex/skills/windows-vm-smoke` | `.claude/skills/windows-vm-smoke` | `docs/WINDOWS_INSTALL_RUNBOOK.md`, `windows-pilot/scripts/` |
-| Windows VM iteration from stakeholder failure | `.agents/skills/windows-vm-iteration` | `.codex/skills/windows-vm-iteration` | use `.claude/skills/windows-vm-smoke` + `.claude/skills/gcp-iap-windows-lane` until mirrored | `windows-pilot/vm-testing/README.md` |
+| Windows VM iteration from stakeholder failure | `.agents/skills/windows-vm-iteration` | `.codex/skills/windows-vm-iteration` | `.claude/skills/windows-vm-iteration` | `windows-pilot/vm-testing/README.md` |
 | Local Windows VM discovery and testing | `.agents/skills/windows-local-vm-testing` | `.codex/skills/windows-local-vm-testing` | `.claude/skills/windows-local-vm-testing` | [Local VM runbook](testing/WINDOWS_LOCAL_VM_TESTING.md); distinguishes UTM guest, Mac harness and GCP lane |
 | SSH laptop operations | `.agents/skills/pilot-ssh-ops` | use `.agents/skills/pilot-ssh-ops` | `.claude/skills/pilot-ssh-ops` | `docs/PILOT_LAPTOP_ACCESS.md` |
 | Form prefill | `.agents/skills/moe-form-prefill` | `.codex/skills/moe-form-prefill` | `.claude/skills/moe-form-prefill` | `docs/MOE_FORM_PREFILL_STRATEGY.md` |

@@ -10,6 +10,8 @@
 
 The shared contract governs both Claude and Codex. Current status is maintained in the completion plan, candidate pointer and evidence manifest; historical sprint notes and auto memory are supporting evidence. Do not load the full state vector at startup or revive old model defaults, dates or owner holds from memory without checking current evidence.
 
+Repository layout, module ownership and evidence locations: [docs/REPOSITORY_GUIDE.md](docs/REPOSITORY_GUIDE.md).
+
 ## Claude tools and workflows
 
 - Sprint continuation: `.claude/skills/ga-sprint-driver/SKILL.md` follows the completion plan. A scheduled invocation is a bounded checkpoint, not a reason to repeat unchanged tests or generate another backlog.

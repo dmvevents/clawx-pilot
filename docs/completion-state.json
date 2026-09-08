@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T10:20:33.285388+00:00",
-  "purpose": "Completion planning only; this file is not a release verdict or a substitute for machine-produced acceptance evidence.",
+  "updatedAt": "2026-09-08T10:41:23.981235+00:00",
+  "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
   "source": {
@@ -149,7 +149,7 @@
       "1f2b405e17bd5910fbded09c3a62f8921a8d692f",
       "a4efc7e4a4311d7865bf0c74ab2320289fdadd48"
     ],
-    "scope": "Last broader installed journey baseline (moe.22); not the latest diagnostic artifact. See latestDiagnosticBaseline."
+    "scope": "HISTORICAL_LAST_BROAD_JOURNEY_BASELINE"
   },
   "baseline": {
     "installedVersion": "0.4.3-moe.22",
@@ -1126,7 +1126,7 @@
       "owner": "root",
       "dependsOn": [],
       "evidenceSummary": "Actual September 8 stakeholder screenshots/log and current source reconciled; assistant connection/setup is the priority before functionality tests.",
-      "nextAction": "Repair and prove the reported startup/provider-connection failure before another tester handoff.",
+      "nextAction": "Next sprint after owner resumes execution: repair and prove the reported startup/provider-connection failure before another tester handoff.",
       "exitCriterion": "Latest relevant asks mapped to existing cards; scope changes require a recorded disposition.",
       "references": [
         "docs/PROJECT_CONTRACT.md",
@@ -1143,7 +1143,7 @@
       "owner": "build engineer",
       "dependsOn": [],
       "evidenceSummary": "Latest diagnostic moe.25 run 34203201042 from 8058e9b5 passed 206 native test files / 2,173 tests, with 11 skips; 36 host package checks and five manifest entries pass. Completed before the owner pause. Earlier moe.22 evidence remains historical.",
-      "nextAction": "Execution resumed: independently review any selected changes before another package; preserve exact-source/artifact evidence.",
+      "nextAction": "Next sprint after owner resumes execution: independently review any selected changes before another package; preserve exact-source/artifact evidence.",
       "exitCriterion": "Equivalent package commands and publication guards; focused tests pass; branch SHA read back from GitHub.",
       "references": [
         ".github/workflows/package-win-manual.yml",
@@ -1179,7 +1179,7 @@
         "build_process"
       ],
       "evidenceSummary": "Moe.25 installer SHA256 f8ac20f96f4f4dbfab6498144a989dbf83d61dd98c16459682db8a86460db0b2, 394,151,522 bytes. Assisted standard-user existing-profile upgrade exited 0 at 08:53:52Z; installed EXE/ASAR hashes match. This does not prove a fresh Windows client installation.",
-      "nextAction": "Validate the reviewed integrated candidate on a fresh Windows10/11 standard-user client; preserve the existing-profile Server evidence as its own scope.",
+      "nextAction": "Next sprint after owner resumes execution: validate the reviewed integrated candidate on a fresh Windows10/11 standard-user client; preserve the existing-profile Server evidence as its own scope.",
       "exitCriterion": "Native package succeeds from the exact clean reviewed SHA; installer, profile, source and compiled receipts plus manifest validate.",
       "references": [
         "https://github.com/dmvevents/clawx-pilot/actions/runs/34133858590",
@@ -1215,8 +1215,8 @@
       "dependsOn": [
         "native_installer"
       ],
-      "evidenceSummary": "Moe.25 source8058e9b5/run34203201042: backed-up assisted standard-user Server2022 upgrade, exact installed identity and stable startup PASS. Existing Main, fresh Online conversation and next turn PASS with 30s terminal stability and the correct cloud route. Historical error-chip attribution was independently repaired in driver23a15b81; the rerun passes with app hashes unchanged. Full recovery/document/Microsoft/client acceptance remains open.",
-      "nextAction": "Execution resumed: select the exact candidate and complete ordinary first/next turns, cancellation/recovery, documents, authenticated Microsoft workflows and fresh Windows-client acceptance; do not transfer older journey passes.",
+      "evidenceSummary": "Moe.25 source 8058e9b5 / run 34203201042: backed-up assisted standard-user Server 2022 upgrade, exact installed identity and stable startup PASS. Existing Main, fresh Online conversation and next turn PASS with 30s terminal stability and the correct cloud route. Historical error-chip attribution was independently repaired in driver 23a15b81; the rerun passes with app hashes unchanged. Full recovery/document/Microsoft/client acceptance remains open.",
+      "nextAction": "Next sprint after owner resumes execution: select the exact candidate and complete ordinary first/next turns, cancellation/recovery, documents, authenticated Microsoft workflows and fresh Windows-client acceptance; do not transfer older journey passes.",
       "exitCriterion": "Installer transfer hash and installed EXE/ASAR match the candidate; complete helpers; zero manual dependency installation; cold and warm observations recorded. Report profile/provisioning prerequisites explicitly; a reused Online profile cannot prove an unaided keyless first run.",
       "references": [
         "windows-pilot/vm-testing/README.md",
@@ -1255,7 +1255,7 @@
         "installed_candidate"
       ],
       "evidenceSummary": "Current source passes lifecycle-focused tests and six Electron interactions. Installed moe.21 has fresh ordinary Online v2 PASS and observable cancel-next PASS before later overlapping attempts; exact runtime abort remains proven by source tests, not this installed run. Package acceptance is blocked by missing ffmpeg.exe, so these scoped passes cannot promote moe.21. September 8: f1d88039 separates the existing 120s pending-ack deadline from the 90s owned-run inactivity bound, prevents unowned degradation/replay and aborts orphaned late acknowledgements. Three baseline failures, 85 unit checks, one Electron E2E, communication replay/compare and independent review support the source fix; installed fault/cancellation proof remains pending. Selected moe.22 ordinary Online and observable same-session Stop-next pass; exact runtime abort targeting remains unproved.",
-      "nextAction": "On the frozen installer, verify cancellation, stalled/late runs, controlled provider outage and repeated next-turn recovery without restarting.",
+      "nextAction": "Next sprint after owner resumes execution: on the frozen installer, verify cancellation, stalled/late runs, controlled provider outage and repeated next-turn recovery without restarting.",
       "exitCriterion": "Each accepted turn reaches one answer, visible failure or cancellation within the test bound; no duplicate turn/effect; recovery works without restart and preserves user channel intent. A successful actual Online provider probe clears the owned stale failure notice. Accepted sends without acknowledgement/events terminate visibly.",
       "references": [
         "src/stores/chat.ts",
@@ -1269,14 +1269,16 @@
       "status": "FAIL",
       "cards": [
         "CLWX-117",
-        "CLWX-47"
+        "CLWX-47",
+        "CLWX-26",
+        "CLWX-126"
       ],
       "owner": "runtime owner",
       "dependsOn": [
         "installed_candidate"
       ],
       "evidenceSummary": "Prior installed moe.22 build 34171848832 attempted ollama-ollamalo/qwen2.5:3b-instruct and hit embedded assistant timeout at 02:13:07Z; the app displayed a no-response notice and recovered idle. Actual failed-session metadata records 33,177 system characters plus 33,102 tool-schema characters across 47 tools. Direct API diagnostics: tiny warm first content in 694 ms; a 32,283-character context produced no content by 120,215 ms. Managed OpenAI-compatible catalog metadata advertises contextWindow 200000 while native Ollama metadata is 32768. Ollama v0.32.14 drops top-level options.num_ctx on its OpenAI route, so the catalog value does not prove a 200,000-token allocation. Ordinary app and offline acceptance remain unproved; new candidate a4efc7e4 contains no local-context repair. Selected build policy-only experiment also timed out; exact prior policy restored03:35:08Z, fresh Online turn answered03:38:15Z and actual model correlation passed03:44:22Z. Stakeholder local network failure is separate from this VM context/latency defect. Native /api/chat diagnostic at10:13Z consumed num_ctx32768, returned one synthetic answer and /api/ps proved contextLength32768 (27.396s including23.331s load). This is direct API proof only; installed managed provider remains OpenAI-compatible without context metadata.",
-      "nextAction": "Independently review native managed-provider source4f5895ff, integrate only after actual9.2 contract validation, then prove ordinary app/offline document acceptance on the identified installer.",
+      "nextAction": "Next sprint after owner resumes execution: resolve actual 9.2 catalog/policy oracle first; then validate reviewed native route through the identified installed app and offline local-document workflow. Evaluate llama.cpp with matched inputs before any migration.",
       "exitCriterion": "Nonempty terminal answer with the actual local provider and no Gateway/session-administration loop or tool-validation errors; stalled tools terminate visibly; offline document path has no non-loopback egress.",
       "references": [
         "electron/utils/ondevice-tool-policy.ts",
@@ -1305,7 +1307,7 @@
         "turn_lifecycle"
       ],
       "evidenceSummary": "Selected build 34180280985: P3 correct scoped unique find and complete 835-character PDF reader pass, but the answer omits the explicit August 29 consolidated Head Office deadline. P5 reads all 11 fields, eight values and three blanks correctly after one recovered generic image path error. Earlier Office/helper/reminder results remain bound to their previous builds. Reviewed PDF repair b96a097f adds bounded exact source excerpts; integrated as7a61a964. Installed P3 model summary retest remains open.",
-      "nextAction": "Repair and rerun P3 obligation coverage; retain P5 content proof and the recovered tool-error limitation. Finish the declared policy/reminder and other document scope.",
+      "nextAction": "Next sprint after owner resumes execution: validate the reviewed PDF excerpt repair through ordinary installed P3 obligation coverage, then complete typed spreadsheet/output-reopen and original CLWX-115 association fixtures; preserve earlier artifact-specific positives.",
       "exitCriterion": "Real document tools selected; correct structured content and output parse-back; no missing Python/dependency workaround; correct policy citation; reminder fires visibly or has an accurate supported disposition.",
       "references": [
         "docs/PRODUCT_PRINCIPAL_ASSISTANT.md",
@@ -1332,7 +1334,7 @@
         "turn_lifecycle"
       ],
       "evidenceSummary": "Recipient/body boundary source tests and one Mac compose check pass. Second clean moe.21 install controlled safeChat forms.list passed on reused Server 2022/admin, but it is not Forms preview evidence. VM Outlook still requires sign-in; external tester attach regression remains open. The Microsoft account-holder question remains unanswered. September 8 selected moe.22: bridge/CDP/Outlook open and Forms configuration pass. Actual bounded Inbox request returns needs_signin; no mail read or sent, no Forms submission. Reviewed9ea0dbd7 fixes Graph draft permission requiring Mail.Send despite draft needing Mail.ReadWrite; integrated as8fa6bc64. Actual tenant proof remains open.",
-      "nextAction": "After account-holder sign-in is available, use authenticated user Chrome to prove attach/read/draft/reopen/reply/forward and two Forms previews; preserve send/submit gates.",
+      "nextAction": "Next sprint after owner resumes execution: after account-holder sign-in is available, use authenticated user Chrome to prove attach/read/draft/reopen/reply/forward and two Forms previews; preserve send/submit gates.",
       "exitCriterion": "Correct compose identity, recipient buckets, body and subject; changed/ambiguous review refuses; preview has required coverage and no submission. Separately authorized sandbox dispatch proof is required by the full release gate.",
       "references": [
         "electron/services/outlook-browser-v2",
@@ -1352,7 +1354,7 @@
         "native_installer"
       ],
       "evidenceSummary": "Fresh Windows 10/11 standard-user acceptance remains BLOCKED. Moe.25 has assisted existing-profile standard-user upgrade and startup evidence on Server 2022 only. Local UTM/QEMU exists but no usable registered Windows guest; one bounded physical-pilot SSH probe could not connect. Local VM skill/runbook complete; no local Windows test claimed.",
-      "nextAction": "Obtain an available Windows10/11 standard-user lane and validate the selected installer; the local bootstrap/test workflow is documented.",
+      "nextAction": "Next sprint after owner resumes execution: obtain an available Windows10/11 standard-user lane and validate the selected installer; the local bootstrap/test workflow is documented.",
       "exitCriterion": "Same selected installer passes supported fresh client/standard-user setup and declared journeys without development dependencies.",
       "references": [
         "docs/PILOT_LAPTOP_ACCESS.md",
@@ -1395,7 +1397,7 @@
         "microsoft_journeys"
       ],
       "evidenceSummary": "Selected build 34180280985: one cold shortcut readiness sample 105,745 ms with 20,164 ms stable; P3 answer 101,252 ms and P5 answer 46,712 ms. Prior build 34171848832: cold readiness 205,972 ms, one warm readiness sample 72,527 ms and Online answer 99,184 ms. No distribution or latency-budget acceptance. Moe.25 unmodified fresh/next Online actual completion after Send50.104s/17.629s; driver accepted-answer62.915s/30.599s includes stability delay. One sample each. Deployed build-source router maps moe-demo-pro to Vertex Gemini2.5Pro.",
-      "nextAction": "Diagnose Gateway initialization cost and measure repeated prompt latency after content/local-model fixes; retain cold and warm observations separately.",
+      "nextAction": "Next sprint after owner resumes execution: diagnose Gateway initialization cost and measure repeated prompt latency after content/local-model fixes; retain cold and warm observations separately.",
       "exitCriterion": "Report p50/p90 and sample size for repeated prompts; measure cold/warm separately; record accepted latency budget and a continuous successful rehearsal on the demo machine/account.",
       "references": [
         "docs/evidence/WINDOWS_RUNTIME_RECOVERY_2026-09-07.md",
@@ -1417,7 +1419,7 @@
       "owner": "Ministry + owner; root prepares evidence",
       "dependsOn": [],
       "evidenceSummary": "Outbox exists and has local/stub evidence; stale anchor text saying unbuilt is superseded. Production hostname, Entra identity, write/dedupe API, quotas and rollout decisions are not established by those tests.",
-      "nextAction": "Reconcile actual implementation against all eight CLWX-22 KRs; prepare the concrete integration/deployment packet while desktop verification proceeds.",
+      "nextAction": "Next sprint after owner resumes execution: reconcile actual implementation against all eight CLWX-22 KRs; prepare the concrete integration/deployment packet while desktop verification proceeds.",
       "exitCriterion": "Production sign-in yields real identity; backend enforces configured quotas and idempotent writes; Ministry hostname/redirect/caching decisions recorded; fleet rollout has an explicit readiness decision.",
       "references": [
         "docs/PROJECT_CONTRACT.md",
@@ -1439,8 +1441,8 @@
         "microsoft_journeys",
         "representative_windows_client"
       ],
-      "evidenceSummary": "Karunesh reports no assistant connection on sent moe.21 at03:28\u201303:31Z; screenshots/log confirm unavailable local route. Acknowledgment accepted03:39:18Z. Current moe.22 has not been handed off and does not contain the startup repair. No unaided acceptance.",
-      "nextAction": "Validate the startup repair and separate client Online setup on Windows, provide the tested handoff, and collect an unaided ordinary-first-turn followed by email rerun.",
+      "evidenceSummary": "Karunesh reports no assistant connection on sent moe.21 at03:28\u201303:31Z; screenshots/log confirm unavailable local route. Acknowledgment accepted03:39:18Z. Current moe.22 has not been handed off and does not contain the startup repair. No unaided acceptance. Read-only WhatsApp refresh has zero new inbound after03:39Z; database latest10:21:32Z. Last owner outbound03:59:26Z asks stakeholder to wait. No repaired-build acceptance.",
+      "nextAction": "Next sprint after owner resumes execution: validate the startup repair and separate client Online setup on Windows, provide the tested handoff, and collect an unaided ordinary-first-turn followed by email rerun.",
       "exitCriterion": "Tester completes formerly failing attach/read workflow on the same artifact; limitations and rollout scope recorded.",
       "references": [
         "docs/COMPLETION_PLAN.md",
@@ -1468,8 +1470,8 @@
         "latency_rehearsal",
         "external_acceptance"
       ],
-      "evidenceSummary": "Planning pause lifted; owner reaffirmed GA execution. Latest diagnostic moe.25 has package/installed identity, stable startup and Existing Main/fresh/next Online proof. S1\u2013S4 independently reviewed and integrated through5251ea8d; native on-device repair4f5895ff is under review. No new installer/publication/handoff. Exact changed-journey, recovery, account-holder Microsoft, Windows-client, rehearsal and unaided external acceptance remain required. ASR deferred.",
-      "nextAction": "Finish required artifact-bound installed/account/client/tester evidence and the strict release gate before publication or completion notification.",
+      "evidenceSummary": "Owner paused implementation/builds for research, organization and handoff. Reviewed candidatef93ac8b3/moe26 is clean and unbuilt, with a remaining actual9.2 policy-oracle blocker. Installedmoe25 has identity/startup and three Online passes; all remaining artifact/account/client/tester criteria still apply. No new publication/notification.",
+      "nextAction": "Next sprint after owner resumes execution: finish required artifact-bound installed/account/client/tester evidence and the strict release gate before publication or completion notification.",
       "exitCriterion": "All required automated and principal-facing pilot criteria PASS on the identified artifact and scope, with no required missing/skipped evidence; published downloads match hashes; completion-notification delivery verified. Release notes explicitly exclude Ministry production identity/APIM/PostgreSQL/backend integration and fleet capacity until the production milestone passes.",
       "references": [
         "scripts/ga-gate.mjs",
@@ -1495,7 +1497,7 @@
         "production_identity_delivery"
       ],
       "evidenceSummary": "Pilot readiness and fleet production readiness are distinct under the existing contract. The 450-laptop ambition has no current production integration/capacity acceptance.",
-      "nextAction": "Keep the production decision packet and staged rollout/support plan ready; integrate after Ministry inputs and pilot feedback.",
+      "nextAction": "Next sprint after owner resumes execution: keep the production decision packet and staged rollout/support plan ready; integrate after Ministry inputs and pilot feedback.",
       "exitCriterion": "Production identity/backend/quotas and agreed deployment scope pass; fleet rollout explicitly authorized with support and distribution procedures.",
       "references": [
         "docs/PROJECT_CONTRACT.md",
@@ -1576,16 +1578,18 @@
     }
   },
   "planningPause": {
-    "status": "LIFTED",
+    "status": "ACTIVE_HANDOFF_STABILIZATION",
     "ownerDirected": true,
     "date": "2026-09-08",
-    "scope": "Historical research-only pause; lifted by owner execution instruction. ASR remains deferred; release acceptance still required.",
+    "scope": "Owner paused new implementation and packaging for Ollama/llama.cpp research, repository/skills/agent organization, full Plane/docs update and next-agent handoff. ASR remains deferred.",
     "study": "docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md",
     "communicationMap": "docs/architecture/OPENCLAW_WINDOWS_COMMUNICATION_MAP.md",
     "deferredAsrPlan": "docs/research/WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md",
-    "unreviewedUpgradeWorktree": "/private/tmp/clawx-openclaw-2026-9-upgrade-20260908",
     "resumedAt": "2026-09-08T09:34:32.351960+00:00",
-    "resumeDirection": "Owner: If so, let us execute it. Release implementation and validation resumed; ASR remains deferred."
+    "resumeDirection": "Historical 09:34 execution instruction, superseded by current research/organization handoff pause.",
+    "pausedAt": "2026-09-08T10:33:12.002316+00:00",
+    "resumeCondition": "Next owner execution instruction; do not infer permission to build from this documentation task.",
+    "reviewedUpgradeWorktree": "/private/tmp/clawx-openclaw-2026-9-upgrade-20260908"
   },
   "latestDiagnosticBaseline": {
     "version": "0.4.3-moe.25",
@@ -1639,7 +1643,7 @@
     }
   },
   "improvementPlan": {
-    "status": "EXECUTING",
+    "status": "PAUSED_FOR_RESEARCH_ORGANIZATION_HANDOFF",
     "path": "docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md",
     "maxConcurrentChildAgents": 6,
     "integrationOwner": "root",
@@ -1674,9 +1678,10 @@
         "sourceCommit": "23a15b81a0959a205cebb9ae865b7e1e318408b5",
         "onDeviceSlice": {
           "sourceCommit": "4f5895ff4db6e96a6bec0eb40645b910e1b985be",
-          "status": "NATIVE_CONTRACT_UNDER_INDEPENDENT_REVIEW",
-          "scope": "Managed loopback native Ollama adapter and32768 context metadata; direct native VM diagnostic PASS, app acceptance NOT_RUN",
-          "rejectedCompatibilityInjection": "d14643b9: server ignores top-level options.num_ctx on its OpenAI route"
+          "status": "SOURCE_REVIEWED_INTEGRATED_APP_NOT_RUN",
+          "scope": "Managed native Ollama contract; actual9.2 schema/request reviewed. Direct VM API proof only; installed app/offline acceptance open.",
+          "rejectedCompatibilityInjection": "d14643b9: server ignores top-level options.num_ctx on its OpenAI route",
+          "integratedCommit": "0b46e833"
         }
       },
       {
@@ -1715,7 +1720,7 @@
       {
         "id": "S5",
         "name": "Integration and independent review",
-        "status": "PARTIAL_INTEGRATION",
+        "status": "BLOCKED_POLICY_ORACLE_HANDOFF",
         "dependsOn": [
           "S1",
           "S2",
@@ -1727,7 +1732,7 @@
       {
         "id": "S6",
         "name": "Identified build then sequential Windows acceptance",
-        "status": "NOT_RUN",
+        "status": "PAUSED_NOT_BUILT",
         "dependsOn": [
           "S5"
         ],
@@ -1736,7 +1741,7 @@
       {
         "id": "S7",
         "name": "Gate, distribution and stakeholder acceptance",
-        "status": "NOT_RUN",
+        "status": "PAUSED_NOT_RUN",
         "dependsOn": [
           "S6"
         ],
@@ -1812,7 +1817,8 @@
       ],
       "export": "docs/plane-board/CLWX-board-export.json",
       "issuesExported": 125,
-      "statesExported": 6
+      "statesExported": 6,
+      "scope": "Historical S0 snapshot at 09:26; latest handoff board update is recorded separately."
     },
     "verification": {
       "independentPlanningReview": "PASS",
@@ -1835,19 +1841,36 @@
       "worktree": "/private/tmp/clawx-plan-execution-20260908",
       "branch": "release/moe26-plan-execution",
       "base": "8058e9b5b3050463c72a11c8e5da56616206f6e3",
-      "head": "5251ea8d6927b0df6525fbb22c1bbf2c90c58747",
+      "head": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
       "reviewedSourceCommits": {
         "S3": "b96a097fafcc301c6416f22ec5d50cc36f6b6e31",
         "S4": "9ea0dbd7be4ada51a23cc7e60d93d1d24c51c8c7",
         "S1": "23a15b81a0959a205cebb9ae865b7e1e318408b5",
         "S2": "eb307b424fe84a144a60ba41f4f61dbdb66fe11c"
       },
-      "status": "S1_S2_S3_S4_INTEGRATED_OFFLINE_REPAIR_HELD",
-      "build": "NOT_RUN",
+      "status": "FROZEN_REVIEWED_SOURCE_WITH_POLICY_ORACLE_BLOCKER",
+      "build": "NOT_RUN_OWNER_PAUSE",
       "focusedValidation": {
         "files": 11,
         "passedTests": 302,
-        "failedTests": 0
+        "failedTests": 0,
+        "source": "5251ea8d"
+      },
+      "nativeOllamaCommit": "0b46e833",
+      "testRepairCommit": "42265f97",
+      "versionCommit": "f93ac8b3",
+      "preflightCheckpoint": {
+        "source": "5251ea8d",
+        "passedTests": 2180,
+        "failedTests": 5,
+        "skippedTests": 29,
+        "passedFiles": 200,
+        "failedFiles": 4,
+        "skippedFiles": 3,
+        "repairSource": "42265f97",
+        "repairedSuites": 3,
+        "repairFocusedPassedTests": 35,
+        "remaining": "Actual 9.2 full policy pipeline expands the canvas family to show_widget; held fixture 24e1cfd3 still fails the literal canvas row. Bind the next oracle to the enabled tool catalog. No final full-suite run."
       }
     },
     "executionPlaneUpdate": {
@@ -1911,7 +1934,8 @@
           "from": "Backlog",
           "to": "In Progress"
         }
-      ]
+      ],
+      "scope": "Historical resumed execution snapshot; CLWX-87 Graph comment was misfiled and corrected in the current handoff update."
     },
     "nativeOllamaDiagnostic": {
       "status": "PASS_NATIVE_API_ONLY",
@@ -1919,7 +1943,158 @@
       "allocatedContext": 32768,
       "elapsedMs": 27396,
       "coldLoadMs": 23330.6266,
-      "appAcceptance": "NOT_RUN"
+      "appAcceptance": "NOT_RUN",
+      "allocationBytes": 3368466512,
+      "allocationGiB": 3.137,
+      "coldLoadSharePercent": 85.2,
+      "sampleCount": 1
+    },
+    "localEngineResearch": {
+      "status": "DOCUMENTED_NO_MIGRATION",
+      "path": "docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md#llamacpp-versus-ollama--execution-follow-up",
+      "sameHardwareComparison": "NOT_RUN",
+      "decision": "Preserve reviewed native Ollama candidate; compare llama.cpp with identical model weights, prompt, tools, context and CPU settings plus vanilla-install acceptance before replacement.",
+      "card": "CLWX-126"
+    },
+    "handoffPlaneUpdate": {
+      "verifiedAt": "2026-09-08T10:41:23.957685+00:00",
+      "projectId": "81a2ea23-e060-49b4-a344-1ab0339f46d5",
+      "issues": 127,
+      "states": 6,
+      "stateCounts": {
+        "In Progress": 22,
+        "Backlog": 25,
+        "Todo": 8,
+        "Ready": 60,
+        "Cancelled": 12
+      },
+      "enrichmentRegression": false,
+      "comments": [
+        {
+          "card": "CLWX-22",
+          "id": "ce6620dc-695a-40ac-987c-eae50db183f1",
+          "created": "2026-09-08T10:39:11.762399Z",
+          "detailAndListReadback": "PASS",
+          "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-26",
+          "id": "d25528c7-48fe-40ef-aa37-1041787d20e2",
+          "created": "2026-09-08T10:39:12.175478Z",
+          "detailAndListReadback": "PASS",
+          "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-40",
+          "id": "43318718-c71a-4462-a7f1-9a13cdb84c71",
+          "created": "2026-09-08T10:39:12.622149Z",
+          "detailAndListReadback": "PASS",
+          "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-77",
+          "id": "8c7ee04a-1bd5-4347-a485-5f77c19b011b",
+          "created": "2026-09-08T10:39:13.019698Z",
+          "detailAndListReadback": "PASS",
+          "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-87",
+          "id": "90088719-1c1b-4c67-8250-70b72720c840",
+          "created": "2026-09-08T10:39:13.437129Z",
+          "detailAndListReadback": "PASS",
+          "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-106",
+          "id": "b388109f-ec0e-4475-8eb0-957ab213a271",
+          "created": "2026-09-08T10:39:13.835321Z",
+          "detailAndListReadback": "PASS",
+          "exportReadback": "PASS"
+        },
+        {
+          "card": "CLWX-125",
+          "id": "3cb9f2fd-f621-4395-b0a3-eedb994cc037",
+          "created": "2026-09-08T10:39:14.290349Z",
+          "detailAndListReadback": "PASS",
+          "exportReadback": "PASS"
+        }
+      ],
+      "marker": "CLWX-HANDOFF-CURRENT-20260908",
+      "receipt": "artifacts/plane/20260908-handoff/verified-summary.json",
+      "newCards": [
+        "CLWX-126",
+        "CLWX-127"
+      ],
+      "currentDescriptionCards": [
+        "CLWX-22",
+        "CLWX-25",
+        "CLWX-26",
+        "CLWX-40",
+        "CLWX-43",
+        "CLWX-61",
+        "CLWX-77",
+        "CLWX-87",
+        "CLWX-106",
+        "CLWX-115",
+        "CLWX-117",
+        "CLWX-123",
+        "CLWX-125"
+      ],
+      "originalAcceptancePreserved": true,
+      "stateChanges": [
+        {
+          "card": "CLWX-26",
+          "from": "Ready",
+          "to": "In Progress",
+          "reason": "Current offline app acceptance unproved and earlier failure remains"
+        },
+        {
+          "card": "CLWX-87",
+          "from": "In Progress",
+          "to": "Backlog",
+          "reason": "Owner deferred ASR/microphone from this release"
+        }
+      ]
+    }
+  },
+  "currentSourceCandidate": {
+    "version": "0.4.3-moe.26",
+    "source": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
+    "branch": "release/moe26-plan-execution",
+    "worktree": "/private/tmp/clawx-plan-execution-20260908",
+    "clean": true,
+    "pushed": false,
+    "packaged": false,
+    "installed": false,
+    "published": false,
+    "fullPreflight": "NOT_GREEN_POLICY_ORACLE_UNRESOLVED",
+    "heldCommit": "24e1cfd3dd1d736d15252f77ef3e305fb5367857"
+  },
+  "handoff": {
+    "status": "REVIEWED_PENDING_COMMIT_AND_BOARD_READY",
+    "entrypoint": "docs/COMPLETION_PLAN.md",
+    "repositoryGuide": "docs/REPOSITORY_GUIDE.md",
+    "sourceCandidate": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
+    "releaseVerdict": "RED",
+    "pilotKrsFullyAccepted": 0,
+    "pilotKrsTotal": 7,
+    "note": "No percent-complete claim: scoped source/installed passes are not full pilotKR acceptance.",
+    "card": "CLWX-127",
+    "researchCard": "CLWX-126",
+    "independentReview": "PASS",
+    "reviewer": "email_connection_trace",
+    "validation": "artifacts/plane/20260908-handoff/documentation-validation.json",
+    "sourceTests": "No new product tests or builds during documentation freeze",
+    "guidanceInventory": {
+      "officialProjectSkills": 13,
+      "codexCompatibilitySkills": 10,
+      "claudeSkills": 21,
+      "nativeCodexTomlAgents": 7,
+      "legacyMarkdownReferenceAgents": 1,
+      "claudeAgents": 20,
+      "newSkillMirrorsValidated": 2,
+      "criticalMirrorPairsChecked": 5
     }
   }
 }

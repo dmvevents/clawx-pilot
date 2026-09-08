@@ -1,8 +1,8 @@
 # OpenClaw and Windows improvement study — September 8, 2026
 
-**Execution update:** after this planning checkpoint, the owner instructed execution to resume. The research observations below retain their original scope; active work and new results are tracked in [COMPLETION_PLAN.md](../COMPLETION_PLAN.md) and the [state vector](../completion-state.json). ASR remains deferred.
+**Current mode:** research, repository organization and handoff. The owner resumed execution after the first planning checkpoint, then paused new implementation, packaging and VM/model work before the next sprint. Completed source integration and current blockers are tracked in [COMPLETION_PLAN.md](../COMPLETION_PLAN.md) and the [state vector](../completion-state.json). ASR remains deferred.
 
-**Decision state: research and planning only.** The owner explicitly paused implementation/builds after providing the five sources below. This document records findings and proposes improvements; it does not approve a migration, install community skills or establish release acceptance. [COMPLETION_PLAN.md](../COMPLETION_PLAN.md) remains the current work-order authority.
+**Decision state: documentation and planning only.** This document records findings and proposes improvements; it does not approve a migration, install community skills, publish an installer or establish release acceptance. [COMPLETION_PLAN.md](../COMPLETION_PLAN.md) remains the current work-order authority.
 
 **Recommendation:** keep the Ministry application and its existing Main/Gateway/tool boundaries. Evaluate a coherent OpenClaw upgrade in isolation, strengthen the existing Outlook and document adapters using the useful examples, and require installed evidence before selecting a release. A wholesale AionUi migration or a bundle of community skills has not been justified by the observed failures.
 
@@ -15,11 +15,11 @@ Evidence labels: **Verified** means inspected source, metadata or a named observ
 | Karunesh must connect and test ordinary email/document work | His moe.21 connection failure blocked all downstream journeys. Later repairs have scoped diagnostic positives, not his acceptance. | Reliable provisioned first turn, useful unprovisioned state, unaided rerun; CLWX-125, CLWX-73, CLWX-110 |
 | Explain why earlier code worked and stop repeated blind builds | The RCA distinguishes old artifact behavior, profile/cache differences, history delay, SDK work, model routing and lifecycle cancellation. | Preserve baseline, change one boundary, run a discriminating comparison; CLWX-125 |
 | A regular Windows machine should need no development setup | Current app bundles document parsers/helpers, but public Online provisioning and authenticated Microsoft access are separate prerequisites. | Standard-user Windows 10/11 installation and supported onboarding without manual Node/Python/WSL setup; CLWX-25 |
-| Use a high-quality cloud model | Source maps `moe-demo-pro` to Gemini 2.5 Pro. Actual deployed upstream mapping and workload quality are not fully established. | Trace the route, then compare quality and latency on the same task set; CLWX-125, CLWX-115 |
+| Use a high-quality cloud model | Deployed build-source provenance maps `moe-demo-pro` to Gemini 2.5 Pro. Workload quality is still not established by the name alone. | Compare quality and latency on the same de-identified task set; CLWX-125, CLWX-115 |
 | Study/upgrade OpenClaw and reuse examples | The shipped backend is older than current upstream; newer capabilities cross Node, Electron, SDK and plugin boundaries. | Version-coherent upgrade proposal with keep/drop decisions for each local patch; CLWX-22, CLWX-106 |
 | Understand Windows PDF, Excel and Outlook support | Local file parsing, model inference, browser authentication and Graph authorization are different operations. | Explicit tool/transport capability matrix and content-level tests; CLWX-61, CLWX-77, CLWX-115, CLWX-123 |
 | Iterate on the VM and control compute/credit use | Native development checkout and caches already exist. Server evidence is not fresh client acceptance. | Use local/native focused checks before hosted packages; measure CPU/I/O/model wait before requesting more compute; CLWX-25, CLWX-107 |
-| Map communication and document blockers on Plane | Source map and dated RCA exist; findings need durable, linked decisions. | This study, the communication map and evidence-linked existing-card updates |
+| Map communication and document blockers on Plane | Source map, dated RCA and board updates exist; the current handoff cards are CLWX-126 engine comparison and CLWX-127 repository organization/handoff. | This study, the communication map, [COMPLETION_PLAN.md](../COMPLETION_PLAN.md) and evidence-linked existing-card updates |
 | Provide a testable Windows download; private Google Storage is acceptable | Diagnostic private distribution has prior authorization; current artifact lacks full acceptance. | Later verify exact downloadable bytes/expiry and declared limitations before handoff; CLWX-106, CLWX-110 |
 | Leave microphone settings for later | Explicit owner scope decision. | **ASR/microphone DEFERRED**; retain package-integrity checks and Windows client acceptance |
 
@@ -32,9 +32,9 @@ The latest locally refreshed stakeholder evidence is recorded in [the connection
 | Pilot acceptance ID | Falsifiable criterion | Current state / owning cards |
 |---|---|---|
 | P-KR1 installation and setup | Exact artifact installs on fresh Windows 10/11 as standard user with zero manual runtime dependencies; unprovisioned state is actionable; supported Online setup produces a verified first answer | PARTIAL / client and first-turn evidence missing; CLWX-25/125 |
-| P-KR2 reliable execution | Existing-Main, fresh-session and next-turn answers use the requested effective route; cancel and controlled disconnect end visibly; late events cannot revive a run or duplicate a write | PARTIAL diagnostic proof / moe.25 model turns NOT_RUN; CLWX-94/95/96/125 |
+| P-KR2 reliable execution | Existing-Main, fresh-session and next-turn answers use the requested effective route; cancel and controlled disconnect end visibly; late events cannot revive a run or duplicate a write | PARTIAL: moe.25 Existing Main, fresh and next Online turns pass; same-candidate recovery/client proof remains open; CLWX-94/95/96/125 |
 | P-KR3 document fidelity | D0 and all five Ministry prompts pass through ordinary in-app tool selection; all P3 obligations, P4 typed values and required P5 fields match source; generated outputs reopen; no Python/CLI installation needed | PARTIAL / P3 FAIL; CLWX-22/77/115 |
-| P-KR4 Microsoft journeys | Actual authorized tenant read/search/draft/reply and both Forms previews preserve reviewed state; mandatory dispatch proof uses separately authorized actions and exact-state verification; invalid grants/IDs/confirmation refuse | BLOCKED on authenticated current-candidate proof; CLWX-61/73/123 |
+| P-KR4 Microsoft journeys | Actual authorized tenant read/search/draft/reply and both Forms previews preserve reviewed state; mandatory dispatch proof uses separately authorized actions and exact-state verification; invalid grants/IDs/confirmation refuse | PARTIAL/BLOCKED: Graph draft repair is reviewed; account-holder tenant proof and current-candidate installed Microsoft acceptance remain open; CLWX-61/73/123 |
 | P-KR5 advertised local/policy/reminder behavior | Declared on-device document grounding works with non-loopback egress blocked; correct policy source is cited; supported reminder appears at its recorded time | PARTIAL / on-device FAIL; CLWX-42/67/117 |
 | P-KR6 performance and recovery | Comparable cold/warm startup and first/next output timings, sample size and p90 recorded against an explicit product budget; full rehearsal completes and recovery leaves the next ordinary turn usable | PARTIAL / budget and rehearsal open; CLWX-43/107 |
 | P-KR7 release and stakeholder outcome | Same source/profile/artifact satisfies strict gate and declared scope; public/keyless checks pass; downloaded bytes match; Karunesh completes an unaided rerun on supported Windows | NOT_RUN / prior external failure unresolved; CLWX-106/110/125 |
@@ -59,8 +59,8 @@ The [communication map](../architecture/OPENCLAW_WINDOWS_COMMUNICATION_MAP.md) i
 
 | Boundary | Verified local evidence | Consequence for improvement |
 |---|---|---|
-| Startup vs usable chat | Gateway running, ready, composer ready and a terminal model answer are separate states. Moe.25 reached stable readiness 280.083 seconds after shortcut launch; no chat acceptance yet. | Preserve distinct timestamps and failure states. A newer model or Outlook skill cannot fix readiness by itself. |
-| Selected vs effective model | A historical Online-labelled Main session still carried local model metadata. Diagnostic first/next answers later correlated to `custom-moecloud/moe-demo-pro`. | Verify a turn's session override and actual provider, not just settings/indicator. |
+| Startup vs usable chat | Gateway running, ready, composer ready and a terminal model answer are separate states. Moe.25 later passed Existing Main, fresh conversation and next Online turns on the installed Server lane, but this remains existing-profile Server evidence. | Preserve distinct timestamps and failure states. A newer model or Outlook skill cannot fix readiness, client setup or stakeholder acceptance by itself. |
+| Selected vs effective model | A historical Online-labelled Main session still carried local model metadata. Moe.25 accepted turns correlate to `custom-moecloud/moe-demo-pro`, and deployed build-source provenance maps that alias to Gemini 2.5 Pro through the broker/LiteLLM path. | Verify a turn's session override, broker route and actual provider; model identity still does not prove task quality. |
 | Preparation vs generation | Earlier failing cloud diagnostic spent 75.061 seconds preparing, then only 24.933 seconds in the model window before abort. | Measure host preparation separately from provider latency; do not blame model quality for pre-model delay. |
 | Lifecycle vs watchdog | Reviewed `155e7a73` recognizes actual `phase:start` once for the owned run/session/generation and preserves cancellation. | Keep the regression oracle when evaluating newer OpenClaw event shapes. |
 | File discovery vs correct answer | P3 found/read its PDF but omitted the August 29 Head Office deadline. | Test extraction coverage and answer coverage separately; successful tool execution is insufficient. |
@@ -69,20 +69,20 @@ The [communication map](../architecture/OPENCLAW_WINDOWS_COMMUNICATION_MAP.md) i
 
 See the [RCA](../evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md) for measured timelines, baseline failures and the reusable commit samples `61be816e`, `38085ba3`, `7f4b06d3`, `f5875b54`, `141841df`, `155e7a73`. Earlier positives used different profiles/cache/history and sometimes diagnostic code; this is not evidence that one whole older revision can safely replace the current fork.
 
-## OpenClaw upgrade: evaluate the whole runtime
+## OpenClaw upgrade: source candidate reviewed, package proof open
 
 Verified on September 8: npm `latest` and the [official release](https://github.com/openclaw/openclaw/releases/tag/v2026.9.2) identify `2026.9.2`. The [published package metadata](https://registry.npmjs.org/openclaw/2026.9.2) declares Node `>=22.22.3 <23 || >=24.15.0 <25 || >=25.9.0`. Current rolling installation recommendations and this package's engine range differ; a later implementation must satisfy the chosen supported runtime and the actual package, not copy a minimum from one page.
 
-| Component | Existing moe.25 baseline | Proposed assessment before changing it |
+| Component | Existing moe.25 baseline | Current source-candidate status |
 |---|---|---|
-| OpenClaw | `2026.4.23` | Evaluate exact `2026.9.2`, record package integrity and release notes; recheck the stable target when work resumes |
-| Electron / embedded Node | Electron `40.8.4` / Node `24.14.0` | Select a supported Electron release whose embedded Node satisfies the backend; helper Node alone cannot repair UtilityProcess compatibility |
-| Bundled Windows helper Node | `22.16.0` in [downloader](../../scripts/download-bundled-node.mjs) | Align downloader, CLI wrappers and package checks; verify no global Node fallback |
-| Playwright | `1.59.1` declared by this fork | Account for newer backend dependencies and the app's browser driver; prevent bundler preference from downgrading required runtime packages |
-| Channel plugins | Version family pinned around the older backend | Verify only the shipped plugins against the chosen SDK; do not update unrelated channels just because newer versions exist |
-| Local bundle patches | History, pricing cache, SDK alias and self-import compatibility repairs | For each, identify the original failing behavior, reproduce against new upstream, then retain/adapt/remove with an independent test; missing old symbols alone are not a proof |
+| OpenClaw | `2026.4.23` | Reviewed candidate uses exact `2026.9.2`; source/package integrity and real Ministry registry/PDF proof were reviewed, but no hosted package or installed proof exists. |
+| Electron / embedded Node | Electron `40.8.4` / Node `24.14.0` | Candidate uses Electron `42.0.0` with embedded Node `24.15.0`, satisfying the `2026.9.2` engine floor in source review. |
+| Bundled Windows helper Node | `22.16.0` in [downloader](../../scripts/download-bundled-node.mjs) | Candidate aligns helper Node to `24.15`; bundle checks are source-level only until packaging installs those bytes. |
+| Playwright | `1.59.1` declared by this fork | Candidate pins Playwright `1.62.1`; the browser driver still needs installed Windows validation. |
+| Channel plugins | Version family pinned around the older backend | Reviewed source keeps the shipped Ministry tool surface coherent with the selected SDK; actual packaged Gateway inventory remains a release-gate item. |
+| Local bundle patches | History, pricing cache, SDK alias and self-import compatibility repairs | Reviewed source retains/adapts/removes patches against behavior-specific tests. The held policy oracle below remains the one known source gate. |
 
-The interrupted experiment selected Electron `42.0.0`; [official metadata](https://releases.electronjs.org/release/v42.0.0) identifies embedded Node `24.15.0`. This is one verified-compatible floor candidate, **not a decision that it is the minimal or best supported target**. Its unreviewed dependency and patch-removal edits remain isolated; see the [pause baseline](../evidence/WINDOWS_MOE25_PLANNING_BASELINE_2026-09-08.md).
+The selected reviewed source candidate is `release/moe26-plan-execution` at `f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5`, with native Ollama repair integrated as `0b46e833`. The branch reserves `0.4.3-moe.26`; it is clean source, not pushed, packaged, installed or published. The interrupted earlier experiment is superseded by this reviewed candidate state; [COMPLETION_PLAN.md](../COMPLETION_PLAN.md) is the current pointer.
 
 The [version-bound Windows documentation](https://github.com/openclaw/openclaw/blob/v2026.9.2/docs/platforms/windows.md) describes native Windows Hub/CLI and WSL paths. The Hub publishes independently; a matching `v2026.9.2` Windows Hub EXE was not established in this review. It is not our Ministry installer, and using OpenClaw as the embedded backend does not require adopting its separate Hub or asking principals to install WSL.
 
@@ -90,11 +90,50 @@ The [version-bound Skills CLI](https://github.com/openclaw/openclaw/blob/v2026.9
 
 The [previous ClawX upstream comparison](../UPSTREAM_MERGE_ASSESSMENT_2026-08-20.md) inspected `ValueCell-ai/ClawX` at `6a938757`, which uses OpenClaw `2026.7.1-2`. That is the application upstream, distinct from OpenClaw's latest backend. The measured 198 upstream-only commits are not 198 missing capabilities: copied/squashed backports already exist. This study does not approve a broad upstream merge or release the hold on `7add864b`.
 
+**Current source-gate blocker:** full preflight at `5251ea8d` produced **2,180 pass / 5 fail / 29 skip**. Four failures were repaired and reviewed in `42265f97` with 35 focused tests passing. Held repair `24e1cfd3` is excluded because its full policy-pipeline oracle still fails against actual OpenClaw `2026.9.2`: the historical fixture treats literal `canvas` as the runtime surface, while `2026.9.2` keeps `canvas` as a policy family and promotes `show_widget` as the OpenClaw-group core tool. The versioned source references are [tool-catalog.ts](https://github.com/openclaw/openclaw/blob/v2026.9.2/src/agents/tool-catalog.ts#L309-L320) and [tool-policy.ts](https://github.com/openclaw/openclaw/blob/v2026.9.2/src/agents/tool-policy.ts#L56-L60). This is guidance for the next oracle repair, not an installed runtime PASS.
+
+## llama.cpp versus Ollama — execution follow-up
+
+The owner asked whether llama.cpp would be a better local engine. **Recommendation:** compare it in the next sprint, but do not replace the reviewed native Ollama source candidate until an equivalent same-machine workload proves better tool fidelity, memory, latency and vanilla-Windows packaging. This is a dependency assessment, not authorization or proof of a migrated product.
+
+Primary references:
+
+- [Ollama `POST /api/chat`](https://docs.ollama.com/api/chat) supports `tools`, runtime `options`, `keep_alive` and timing fields including `load_duration`, `prompt_eval_count`, `prompt_eval_duration`, `eval_count` and `eval_duration`.
+- [Ollama OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility) supports `/v1/chat/completions` and lists its accepted request fields; the list does not include native `options` or `keep_alive`.
+- [Ollama v0.32.14 OpenAI adapter source](https://github.com/ollama/ollama/blob/v0.32.14/openai/openai.go#L105-L124) defines `ChatCompletionRequest` without top-level native `Options`/`KeepAlive`; [conversion to native chat](https://github.com/ollama/ollama/blob/v0.32.14/openai/openai.go#L641-L716) maps only selected OpenAI fields into `api.ChatRequest.Options`.
+- [Ollama context-length docs](https://docs.ollama.com/context-length) define context as tokens in memory, warn that larger context increases memory, recommend at least 64k for large-context agent/coding work and show `OLLAMA_CONTEXT_LENGTH=64000 ollama serve` plus `ollama ps` for allocated context/offload checks.
+- [Ollama Windows docs](https://docs.ollama.com/windows) describe native Windows support, Windows 10 22H2+ requirements, localhost API, no-admin home-directory install, 4GB binary-space need and separate model storage that can be tens to hundreds of GB.
+- [OpenClaw Ollama provider docs](https://docs.openclaw.ai/providers/ollama) say OpenClaw uses Ollama's native `/api/chat` endpoint and warns that OpenAI-compatible `/v1` breaks tool calling in OpenClaw; the lean `openclaw infer model run` smoke intentionally skips full chat tools, memory and session context.
+- [llama.cpp server docs](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md) describe an OpenAI-compatible server, timing/context reporting and function/tool calling through `--jinja`; [llama.cpp releases](https://github.com/ggml-org/llama.cpp/releases) list Windows x64 CPU and accelerated assets, with `b10853` marked pre-release on September 8, 2026. [Build docs](https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md#for-windows-users) document Windows Vulkan prerequisites and CMake commands.
+
+Measured versus unmeasured state:
+
+| Question | Existing Ollama evidence | llama.cpp evidence here | Consequence |
+|---|---|---|---|
+| Tiny direct local answer | `native-context-diagnostic.json`: 27.396s wall time; 23.331s load (**85.2%** of wall), 2.348s prompt eval, 1.473s decode; 51 prompt tokens and 13 output tokens. | Not run. | The VM can run the model, but this is a tiny no-tool native diagnostic, not an app turn or benchmark. |
+| Memory/allocation | Native diagnostic reports `size: 3,368,466,512` bytes (**3.137 GiB**, 3.368 GB), `sizeVram: 0`, `contextLength: 32768`. | Not run. | CPU local operation is possible for this model; larger prompts/context may require more memory. |
+| App provider route | `local-provider-policy.json` shows `api: "openai-completions"`, no context fields and `injectNumCtxForOpenAICompat: null`. | Not applicable. | The captured installed/local policy did not prove native OpenClaw Ollama routing. The integrated candidate source now repairs this, but installed proof is still open. |
+| App-sized prompt | Historical evidence records a 32,283-character direct synthetic request at 8,192 context producing no content before a 120.215s abort. The failed app metadata had 33,177 system chars + 33,102 schema chars + 47 tools + 7,721 skill-description chars. | Not run. | The real on-device risk is prompt/tool-schema processing, not just model load. Character counts are not token counts, but the combined system+schema text was 66,279 chars before user content/history. |
+| Tool calling | Native Ollama and OpenClaw docs support tools through `/api/chat`; the old compatibility route is the wrong control surface for OpenClaw tool calling. | llama.cpp docs support tool calling through `--jinja`, but no Ministry tool schema was tested. | Use the same actual candidate inventory on both engines; preserve the old 47-tool case as a separate baseline before claiming one engine is better. |
+| Vanilla Windows packaging | Ollama has a native Windows app and localhost API, but model files are separate large assets. | llama.cpp has Windows binaries, but model download/hashes, server lifecycle and updates would be owned by ClawX. | Neither engine is a free “regular Windows machine” fix unless the installer/onboarding owns prerequisites and validates them. |
+
+The direct Ollama diagnostic proves native API allocation and one tiny response on the guest. It does **not** prove the 33k+33k app prompt because the diagnostic used 51 prompt tokens, no tools, no session/history, no document work and no app Gateway route. The historical 47-tool shape is a baseline from the failed app session; the actual candidate inventory must be recaptured after the `f93ac8b3` source is packaged or run in the intended source harness.
+
+Next-sprint matched experiment:
+
+1. Run four safe, no-secret Ollama native `/api/chat` probes with max output 8: unloaded tiny prompt, warm tiny prompt, app-sized no-tools prompt, and app-sized prompt plus the actual candidate tool schema.
+2. Run the current app/provider route as a control and verify whether the candidate uses native `api: "ollama"` rather than `openai-completions`.
+3. If llama.cpp is still a candidate, run one pinned Windows CPU binary or source build with the identical GGUF weights and model hash (an equivalent model is a separate, confounded comparison), same quantization, `--ctx-size 32768`, fixed `--threads`, same prompts and same tools.
+4. Capture HTTP status, first-byte/first-token time, elapsed time, terminal state, prompt tokens/cache tokens, generated tokens, memory/RSS or process working set, context size, CPU/GPU split, and whether a valid tool call or grounded answer was produced.
+5. Stop a cell after one 120s direct timeout or two repeated app failures; stop immediately on model crash, unload loop, runaway memory pressure, invalid tool-call encoding, non-loopback egress or manual-runtime dependency.
+
+Adoption decision: if native Ollama with the full app-like prompt/tool payload passes, keep the native Ollama route and package/prove it. If no-tools passes and tools fail, propose a simple-chat-only local scope to the owner; advertised offline agent acceptance remains blocked unless the owner explicitly changes release scope. If Ollama fails but llama.cpp passes the identical workload, open a separate packaging workstream for llama.cpp. If both fail on CPU, local agent mode is not a GA default on vanilla Windows.
+
 ## Cloud model: capability, routing and quality
 
 **Verified configured intent:** [LiteLLM configuration](../../services/litellm-gateway/litellm_config.yaml) maps `moe-demo-pro` to `vertex_ai/gemini-2.5-pro`, and `moe-demo` to Flash. The MoE plugin uses the model supplied by OpenClaw; OpenClaw itself is the orchestration backend, not the intelligence model.
 
-**Verified diagnostic scope:** repaired first/next transcripts used `custom-moecloud/moe-demo-pro`. **Unknown:** those aliases alone do not prove the live broker's final upstream model/version, nor that it is the best available model for the principal's tasks. Read-only broker metadata showed alias forwarding, not a fully verified end-to-end deployed LiteLLM mapping.
+**Verified deployed-source scope:** moe.25 Existing Main, fresh and next turns used `custom-moecloud/moe-demo-pro`. The read-only cloud inspection recorded broker revision `clawx-model-broker-00001-jss` forwarding that alias to the owned Cloud Run LiteLLM service, whose deployed build-source archive maps `moe-demo-pro` to `vertex_ai/gemini-2.5-pro`. Direct image-content extraction timed out, so this is deployed build-source provenance, not byte-level container attestation. **Unknown:** that model name alone does not prove it is the best available model for principal tasks.
 
 **Proposed comparison:** first bind the exact client provider → broker alias → deployed router revision → actual model. Run the same de-identified greeting, circular/deadline, spreadsheet, policy and email-draft tasks on the existing route and at most two available alternatives. Score required-fact recall, unsupported claims, tool/schema correctness, draft-field fidelity, latency and cost per successfully completed task. Keep generation settings and artifact constant. Require zero unauthorized actions and complete required-field/deadline recall; select a model only from measured results. Do not expose infrastructure model names or costs in the principal UI.
 
@@ -141,7 +180,7 @@ The app already has a [Microsoft Graph service](../../electron/services/microsof
 | COM Outlook/Teams listing | Requires installed/signed-in desktop Outlook and Python `pywin32`; provenance unresolved in this review | Exclude from the vanilla-Windows default. Microsoft lists OOM/COM support for classic Outlook, not new Outlook. |
 | Generic new Outlook MCP server | Adds another auth/tool/transport layer | No identified implementation demonstrates better coverage than our existing adapter; no adoption decision. |
 
-[Microsoft's compatibility matrix](https://support.microsoft.com/en-us/outlook/getstarted/feature-comparison-between-new-outlook-and-classic-outlook) establishes the classic/new Outlook distinction. [Graph permissions](https://learn.microsoft.com/en-us/graph/permissions-reference) separate reading/writing mail from sending; [sendMail](https://learn.microsoft.com/en-us/graph/api/user-sendmail?view=graph-rest-1.0) returns acceptance, not delivery proof. Our current Graph compose route additionally checks `Mail.Send` even for draft creation. Review that local contract before promising a read/draft-only least-permission mode; do not assume Microsoft requires send permission to create every draft.
+[Microsoft's compatibility matrix](https://support.microsoft.com/en-us/outlook/getstarted/feature-comparison-between-new-outlook-and-classic-outlook) establishes the classic/new Outlook distinction. [Graph permissions](https://learn.microsoft.com/en-us/graph/permissions-reference) separate reading/writing mail from sending; [create-message](https://learn.microsoft.com/en-us/graph/api/user-post-messages?view=graph-rest-1.0) and [sendMail](https://learn.microsoft.com/en-us/graph/api/user-sendmail?view=graph-rest-1.0) are separate operations, and `sendMail` returns request acceptance, not delivery proof. Reviewed S4 source repair removes the erroneous `Mail.Send` requirement from draft creation while preserving send confirmation/state gates. Live tenant consent, draft creation and dispatch evidence remain unproved.
 
 **Proposed adapter contract:** connect → identify transport/account readiness → list/read → prepare draft → reopen and compare recipients/subject/body → dispatch only the explicitly authorized reviewed state → report accepted/verified/unknown accurately. Bind message IDs to transport. No automatic browser fallback after an uncertain Graph send, and no blind retry of an uncertain write. First validate no-send refusal and draft-only behavior; actual dispatch needs its separate existing authorization and evidence.
 
@@ -176,55 +215,48 @@ Use AionUi's examples to improve our diagnostic/result contracts and validation.
 
 The owner selected [whisper.cpp](https://github.com/ggml-org/whisper.cpp) for a memory-efficient ASR plan after the initial five-source study. The detailed [deferred ASR plan](WHISPER_CPP_WINDOWS_ASR_PLAN_2026-09-08.md) specifies quantized model candidates, CPU-only Windows operation, model/process lifetime and proposed measurable memory/quality limits. ASR remains outside this release; this adds a post-release design direction, not a new release gate.
 
-## Improvement sequence when implementation resumes
+## Current next sequence
 
-These are proposed dependent work packages, not commands being run now. Owners are existing modules and cards; this study does not create duplicate defect cards or mark open ones Ready.
+The current source/release sequence is maintained in [COMPLETION_PLAN.md](../COMPLETION_PLAN.md). Do not restart completed S1–S4 source lanes from this older study. The next implementer should resume from the frozen `f93ac8b3` source candidate, the excluded `24e1cfd3` policy-oracle finding and the current cards CLWX-126/CLWX-127.
 
-| Order | Work package / owning files | Exit evidence before moving on |
+| Order | Work package | Exit evidence before moving on |
 |---|---|---|
-| 1 | Freeze the defect oracles and candidate baseline: [RCA](../evidence/WINDOWS_FIRST_RESPONSE_RCA_2026-09-08.md), [moe.25 record](../evidence/WINDOWS_MOE25_PLANNING_BASELINE_2026-09-08.md), chat/Gateway regression tests; CLWX-125 | Existing-Main, fresh-session and next-turn cases have exact source, real session/model correlation and bounded outcomes. Record pre-existing failures rather than trying to conceal them. |
-| 2 | Coherent backend experiment: [package.json](../../package.json), lockfile, [bundler](../../scripts/bundle-openclaw.mjs), [bundle verifier](../../scripts/verify-openclaw-bundle.mjs), Windows CLI/downloader and communication task spec; CLWX-22/106 | Runtime engines, plugin registration, history/event/session/model contracts and all required imports/helpers pass focused checks. Each removed patch has behavioral proof, not just deleted tests. Independent review before packaging. |
-| 3 | Online/onboarding and lifecycle: [channel router](../../electron/services/providers/channel-router.ts), [provider sync](../../electron/services/providers/provider-runtime-sync.ts), [GatewayManager](../../electron/gateway/manager.ts), chat store; CLWX-125/117 | Unconfigured profile gets a useful setup outcome; provisioned profile answers through the intended route; cancellation/failure preserves intent and next turn works. No silence-triggered local replay. |
-| 4 | Document fidelity: [document tools](../../extensions/moe-principal-assistant/doc-tools.mjs), tool descriptions/persona and P3/P4 content fixtures; CLWX-77/115 | All circular obligations retained; spreadsheet identifiers/types/formula semantics and Word output survive readback; source hashes unchanged; allowed Windows paths work. Compare native PDF analysis only if it improves the failing oracle. |
-| 5 | Outlook and Forms: Main browser/Graph adapters, [Outlook routes](../../electron/api/routes/outlook.ts), [Forms services](../../electron/services/forms-browser-v2/); CLWX-61/73/123 | Correct account-stage diagnostics, authenticated reads and reviewed drafts/previews on the exact Windows app; permission/ID/compose-mismatch refusals. Optional Graph expansion evaluated separately from baseline repair. |
-| 6 | Candidate selection and release acceptance: [VM runbook](../../windows-pilot/vm-testing/README.md), [workflow matrix](../APP_WORKFLOWS_TEST_MATRIX.md), [release pointer](../CURRENT_WINDOWS_RC.md); CLWX-25/106/107/110 | One reviewed source/artifact passes clean standard-user client installation, declared journeys, recovery, latency/rehearsal and unaided tester rerun. Then hash-verify the download and record its scope. |
+| 1 | Repair the held policy oracle from actual OpenClaw `2026.9.2` tool catalog/policy evidence; CLWX-106/117 | Focused regression proves `canvas` policy-family handling and `show_widget` runtime/default-surface behavior without weakening local-tool denial. Independent review approves. |
+| 2 | Run integrated source gates on the frozen candidate plus approved oracle fix | Report exact source, command, pass/fail/skip counts and remaining unsupported installed scopes. No source-test pass may become release acceptance. |
+| 3 | Package one exact candidate only after the owner resumes execution | Hosted/package receipts bind source/profile/dependencies/helper Node/Electron/OpenClaw integrity and no key seed. |
+| 4 | Install and test the changed candidate on the single Windows lane | Installed identity, startup, Online, local/on-device, document, Microsoft, recovery and latency evidence use the same artifact and preserve no-send/no-submit gates. |
+| 5 | Complete client/stakeholder/release handoff | Representative Windows 10/11 or declared equivalent, authenticated account-holder proof, Karunesh unaided rerun, download hash/expiry and strict GA gate are recorded before any public release claim. |
 
-Stages 3–5 use independent focused fixtures but do not launch competing VM mutations. Source experiments precede a hosted package. An agent may work in the existing VM development checkout under the established operator controls; a principal installation must not depend on that checkout, globally installed tools or its populated caches. Readiness measurements use one VM owner and one clearly identified artifact.
+An agent may work in the existing VM development checkout under established operator controls, but a principal installation must not depend on that checkout, globally installed tools or populated caches. Readiness measurements use one VM owner and one clearly identified artifact.
 
 ## Concurrent-agent plan and sequential gates
 
-**Current mode:** documentation/planning. Independent source studies and read-only review can run concurrently now. The implementation lanes below are scheduled proposals and remain paused. Root owns integration and the live VM; authors do not approve their own changes. Use at most six child agents and start only lanes with useful independent work.
+**Current mode:** documentation/planning. Root owns integration and the live VM; authors do not approve their own changes. The active handoff is [COMPLETION_PLAN.md](../COMPLETION_PLAN.md), CLWX-126 and CLWX-127. Use this table as next-sprint routing only.
 
-| Package | Role / exclusive ownership when resumed | Can run alongside | Must wait for |
+| Lane | Role / exclusive ownership when resumed | Can run alongside | Must wait for |
 |---|---|---|---|
-| S0 source study/state | Root + read-only researcher/verifier; this study, source ledger, scope/Plane update | Read-only source/review lanes | No runtime action; this is the present deliverable |
-| S1 failure oracles | Debugger/test-engineer; existing lifecycle/history/model-selection fixtures and baseline test specification, with named file ownership before editing | S2 dependency audit, S3 document fixture design, S4 Microsoft contract audit | S0; baseline VM observations need the sole VM owner |
-| S2 runtime compatibility | Dependency-expert → executor; isolated package/lockfile, Node wrappers, bundler/verifier and migration-spec worktree | S1, document/Microsoft source work that does not alter those files | S0 and explicit end of implementation pause; individual patch removals need S1 or equivalent behavioral oracle |
-| S3 document improvements | Executor; `doc-tools.mjs`, agreed tool-description files and document fixtures only | S1/S2/S4 in separate worktrees | S0; integration/installed proof must use selected S2 backend |
-| S4 Microsoft improvements | Office automation verifier/debugger; agreed Outlook/Forms adapter fixtures and Main service files | S1/S2/S3 | S0; authenticated tenant tests require account-holder session and one browser/VM owner |
-| S5 integration and review | Root integrates exact commits; independent code-reviewer/verifier reviews the combined candidate | Documentation/evidence preparation only | Selected S1–S4 work complete; resolve shared-file conflicts, focused tests, typecheck/lint, comms/harness and package checks before build |
-| S6 Windows acceptance | Windows build/package owner, then sole VM operator; artifact and installed evidence only | Read-only review and tester instructions | S5 → one hosted package → exact hashes → assisted/fresh-client installation → startup → ordinary turns → document/Microsoft/recovery matrix |
-| S7 handoff | Release conductor/root; strict gate, download verification, release pointers and authorized stakeholder message | No competing candidate mutation | S6 plus external acceptance/product dependencies; publication pause lifted |
-| D1 whisper.cpp ASR | Future Windows runtime/package lane; bounded adapter/capture/model plan and CLWX-87 corpus | After release: source/corpus preparation may run independently | ASR remains post-release; same-machine model benchmarks are sequential, then independent review/package acceptance |
+| CLWX-127 handoff/docs | Writer/root; repository guide, completion pointers, board/state consistency | Read-only research/review | No implementation or package work during the current pause |
+| CLWX-126 local engine comparison | Dependency researcher/test planner; matched Ollama versus llama.cpp experiment design and acceptance | Policy-oracle source review | No runtime/model calls until implementation resumes |
+| Policy-oracle repair | One executor; held `24e1cfd3` versus actual OpenClaw `2026.9.2` `canvas`/`show_widget` behavior | Docs/tester preparation | Current pause lifted; focused regression and independent review required |
+| Candidate integration/package | Root/build owner; frozen `f93ac8b3` plus approved policy fix only | Read-only review | Source gates green; one exact package; no competing candidate mutation |
+| Windows acceptance/release | Sole VM operator, then independent verifier | Documentation only | Packaged candidate, exact hashes, assisted/fresh-client install, Microsoft/account-holder proof, stakeholder rerun and strict gate |
+| Deferred ASR | Future runtime/package lane | Post-release source/corpus prep | ASR remains post-release; same-machine benchmarks and package acceptance happen later |
 
 ```mermaid
 flowchart TD
-  S0[Study and state complete] --> Hold[Owner implementation pause]
-  Hold -->|after owner resumes| S1[Failure oracles]
-  Hold -->|after owner resumes| S2[Runtime compatibility experiment]
-  Hold -->|after owner resumes| S3[Document source and fixtures]
-  Hold -->|after owner resumes| S4[Microsoft source and fixtures]
-  S1 --> S5[Root integration and independent review]
-  S2 --> S5
-  S3 --> S5
-  S4 --> S5
-  S5 --> Build[One identified candidate build]
-  Build --> S6[Single-owner Windows acceptance]
-  S6 --> S7[Gate and verified stakeholder handoff]
-  S7 --> D1[Deferred whisper.cpp implementation]
+  Pause[Current pause: docs, organization, handoff] --> CLWX127[CLWX-127 repository handoff]
+  Pause --> CLWX126[CLWX-126 engine comparison design]
+  CLWX127 --> Resume[Owner resumes implementation]
+  CLWX126 --> Resume
+  Resume --> Oracle[Repair actual 2026.9.2 policy oracle]
+  Oracle --> SourceGate[Integrated source gates]
+  SourceGate --> Package[One exact candidate package]
+  Package --> WinAccept[Single-owner Windows acceptance]
+  WinAccept --> ReleaseGate[Strict GA gate and stakeholder rerun]
+  ReleaseGate --> ASR[Deferred whisper.cpp work]
 ```
 
-Do not parallelize changes to the same dependency tree, provider configuration, installed application, signed-in Chrome profile or artifact pointer. Tool metadata/model mapping can be read concurrently; model-performance comparisons must avoid competing CPU/network jobs. If S2 proves unnecessary or regresses required behavior, preserve the accepted baseline and record the decision rather than force an upgrade or weaken an oracle.
+Do not parallelize changes to the same dependency tree, provider configuration, installed application, signed-in Chrome profile or artifact pointer. Tool metadata/model mapping can be read concurrently; model-performance comparisons must avoid competing CPU/network jobs. If an engine comparison shows no measured advantage, preserve the accepted candidate and record the decision rather than force a runtime swap or weaken an oracle.
 
 ## Acceptance and experiment design
 
@@ -259,9 +291,9 @@ Open decisions are tracked, not guessed: supported Electron/Node tuple for the s
 
 The study is complete when all five supplied sources have a traceable assessment, reuse decisions have owners and testable exits, the communication map and current release scope agree, Plane has the evidence-linked planning update, and unfinished runtime work is clearly paused. This is completion of research/documentation, **not GA completion**. Implementation resumes only after the owner lifts the current pause.
 
-## Completed planning and Plane evidence
+## Historical planning and Plane evidence
 
-**S0 is complete on September 8.** The authorized Plane API update used the CLWX project identity `81a2ea23-e060-49b4-a344-1ab0339f46d5`. The dated amendment marker is `CLWX-STUDY-20260908`. Four descriptions were updated and read back at 09:21:15Z, preserving their original requirements and states. Six comments were independently read back through both detail and list endpoints:
+**Historical 09:26Z S0 snapshot:** the authorized Plane API update used the CLWX project identity `81a2ea23-e060-49b4-a344-1ab0339f46d5`. The dated amendment marker is `CLWX-STUDY-20260908`. Four descriptions were updated and read back at 09:21:15Z, preserving their original requirements and states. Six comments were independently read back through both detail and list endpoints:
 
 | Card | Recorded result | Verified comment ID |
 |---|---|---|
@@ -272,6 +304,6 @@ The study is complete when all five supplied sources have a traceable assessment
 | CLWX-115 | Comment linking P3 document-fidelity failure to proposed fixtures and acceptance | `bcf6fd81-5131-471c-bd7f-1e238e73b2b1` |
 | CLWX-73 | Comment separating browser readiness, tenant authentication and Graph coverage | `8e621f0e-a1ae-4dee-8243-0fba94e15848` |
 
-The [board export](../plane-board/CLWX-board-export.json) contains 125 issues and six states. No issue was promoted: CLWX-115 remains Backlog, CLWX-73 retains its earlier Ready scope, and the four amended cards remain In Progress. Local receipts are under `artifacts/plane/20260908-study/`; no credentials or stakeholder message contents were added to this study.
+That [board export](../plane-board/CLWX-board-export.json) contained 125 issues and six states at the historical snapshot. No issue was promoted then: CLWX-115 remained Backlog, CLWX-73 retained its earlier Ready scope, and the four amended cards remained In Progress. Local receipts are under `artifacts/plane/20260908-study/`; no credentials or stakeholder message contents were added to this study. The current board has since added CLWX-126 for the local engine comparison in Backlog and CLWX-127 for repository organization/handoff in In Progress; [COMPLETION_PLAN.md](../COMPLETION_PLAN.md) is the current board/work-order summary.
 
-The independent read-only reviewer found no remaining planning blockers after source/candidate and archived-checklist ambiguities were corrected. Markdown parsing, local-link checks and state dependency validation cover the authored documents. The work-package graph has nine nodes and no cycles; ASR stays DEFERRED, the representative Windows-client gate stays BLOCKED, and moe.25 ordinary turns stay NOT_RUN. Mermaid source was checked manually; a Mermaid renderer was unavailable. These are documentation checks; no new product test, installation, build, benchmark or stakeholder handoff was performed during this pass.
+The independent read-only reviewer found no remaining planning blockers after source/candidate and archived-checklist ambiguities were corrected. Markdown parsing, local-link checks and state dependency validation covered the authored documents. That graph and the `moe.25 ordinary turns NOT_RUN` claim are historical to the 09:26Z S0 snapshot; later execution evidence records moe.25 Existing Main, fresh and next Online turns as PASS. ASR stays DEFERRED and the representative Windows-client gate stays BLOCKED. These are documentation checks; no new product test, installation, build, benchmark or stakeholder handoff was performed during this research update.
