@@ -32,10 +32,14 @@
  *                                SHIRT" — even when both cue words co-occur in
  *                                the sentence).
  *   - negation-dropped         — a negated fact stated without a negation cue
- *                                bound to the value: in the window AND not
+ *                                bound to the value: in the window, not
  *                                separated by a clause fence (comma/
- *                                conjunction), so an adjacent fact's negation
- *                                is never borrowed.
+ *                                conjunction), and — for an after-window cue —
+ *                                not itself forward-attributive to a DIFFERENT
+ *                                fact's attribute noun ("attending with no
+ *                                MEAL": that "no" belongs to the meal fact),
+ *                                so an adjacent fact's negation is never
+ *                                borrowed, fence or no fence.
  *   - negation-inverted        — a positive fact stated under a negation cue.
  *   - action-token-missing     — a required requested-action token absent from
  *                                the whole output.
@@ -114,10 +118,30 @@ export function findMentions(segmentText_, persons) {
   return mentions.sort((a, b) => a.start - b.start);
 }
 
+/** An after-window negation cue that is itself forward-attributive to a
+ * DIFFERENT fact's attribute noun ("no MEAL") is claimed by that noun — it
+ * negates the noun ahead of it, never the value behind it. Mirrors
+ * nearestAttributeCue's following-cue preference; this is what stops
+ * "attending WITH no meal" and "attending DESPITE no meal" from borrowing the
+ * meal fact's "no" across an unfenced prepositional connector (W2 delta
+ * review). The fact's OWN cues are exempt: "wants no MEAL" for a negated meal
+ * fact is the cue doing its job, not a borrow. */
+function cueClaimedByFollowingNoun(segment, cueEnd, foreignCues) {
+  for (const noun of foreignCues) {
+    for (const hit of allMatches(tokenRegex(noun), segment)) {
+      if (hit.start < cueEnd) continue;
+      if (hit.start - cueEnd > NEG_AFTER_WINDOW) continue;
+      if (!BINDING_BREAKER.test(segment.slice(cueEnd, hit.start))) return true;
+    }
+  }
+  return false;
+}
+
 /** A negation cue counts for a value only when it is inside the window AND the
  * text between cue and value crosses no clause fence — i.e. the cue is bound
- * to THIS value, not borrowed from an adjacent fact. */
-function hasBoundNegationCue(segment, valueStart, valueEnd, lookAfter) {
+ * to THIS value, not borrowed from an adjacent fact. After-window cues must
+ * additionally not be claimed by a following foreign attribute noun. */
+function hasBoundNegationCue(segment, valueStart, valueEnd, lookAfter, foreignCues = []) {
   for (const cue of NEGATION_CUES) {
     for (const hit of allMatches(tokenRegex(cue), segment)) {
       if (hit.end <= valueStart) {
@@ -125,7 +149,9 @@ function hasBoundNegationCue(segment, valueStart, valueEnd, lookAfter) {
         if (!BINDING_BREAKER.test(segment.slice(hit.end, valueStart))) return true;
       } else if (lookAfter && hit.start >= valueEnd) {
         if (hit.start - valueEnd > NEG_AFTER_WINDOW) continue;
-        if (!BINDING_BREAKER.test(segment.slice(valueEnd, hit.start))) return true;
+        if (BINDING_BREAKER.test(segment.slice(valueEnd, hit.start))) continue;
+        if (cueClaimedByFollowingNoun(segment, hit.end, foreignCues)) continue;
+        return true;
       }
     }
   }
@@ -208,8 +234,9 @@ export function checkAssociationFidelity(outputText, expectations) {
         }
       }
       if (fact.negated) {
+        const foreignCues = cueVocabulary.filter((c) => !cues.includes(c));
         for (const o of mine) {
-          if (!hasBoundNegationCue(o.segment, o.start, o.end, true)) {
+          if (!hasBoundNegationCue(o.segment, o.start, o.end, true, foreignCues)) {
             failures.push({ type: 'negation-dropped', person: person.name, attribute: fact.attribute, value: fact.value, detail: 'negated fact stated without a negation cue bound to the value' });
             break;
           }

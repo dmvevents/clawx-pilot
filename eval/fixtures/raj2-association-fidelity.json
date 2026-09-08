@@ -89,6 +89,13 @@
       "output": "SUMMARY:\nThe sports day committee reports staff meal and shirt picks for Friday. Keisha Mohammed wants the vegetarian meal and a small shirt; Keisha Ali wants the chicken meal and an extra-large shirt with no peanuts in her meal. Marcus Persad wants the fish meal, a medium shirt and 3 extra jerseys for his relay team. Anil Rampersad is attending and needs no meal or shirt. They ask you to confirm the final counts with the caterer by Wednesday.\n\nREPLY:\nThank you for collecting the picks. I will confirm the final counts with the caterer by Wednesday, and I have the note that Keisha Ali's meal must contain no peanuts."
     },
     {
+      "id": "negation-borrowed-across-preposition",
+      "expected": "FAIL",
+      "mutationClass": "negation-borrow",
+      "note": "W2 delta review blocking finding: 'Anil Rampersad is attending with no meal or shirt.' — one token away from the conjunction control, same borrowed cue, same semantics (he attends). A prepositional connector ('with', 'despite') is not a clause fence, so an after-window that only checks distance and fences credits the next fact's forward-attributive 'no meal' to 'attending' and false-PASSes.",
+      "output": "SUMMARY:\nThe sports day committee reports staff meal and shirt picks for Friday. Keisha Mohammed wants the vegetarian meal and a small shirt; Keisha Ali wants the chicken meal and an extra-large shirt with no peanuts in her meal. Marcus Persad wants the fish meal, a medium shirt and 3 extra jerseys for his relay team. Anil Rampersad is attending with no meal or shirt. They ask you to confirm the final counts with the caterer by Wednesday.\n\nREPLY:\nThank you for collecting the picks. I will confirm the final counts with the caterer by Wednesday, and I have the note that Keisha Ali's meal must contain no peanuts."
+    },
+    {
       "id": "negation-inverted",
       "expected": "FAIL",
       "mutationClass": "negation-invert",

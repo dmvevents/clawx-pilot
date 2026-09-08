@@ -103,6 +103,30 @@ describe('CLWX-115 checker: person→fact bindings the membership probe cannot s
     );
   });
 
+  it('a preposition does not lend the next fact\'s negation: "attending with no meal or shirt" (delta review)', () => {
+    // W2 delta-review blocking finding: "with" is not a clause fence, so the
+    // fence test alone lets the forward-attributive "no meal" bind backwards
+    // onto "attending". The cue's own noun claims it; attendance stays red.
+    const { failures } = checkAssociationFidelity(
+      caseById('negation-borrowed-across-preposition').output,
+      fixture.expectations,
+    );
+    expect(failures).toContainEqual(
+      expect.objectContaining({ type: 'negation-dropped', person: 'Anil Rampersad', value: 'attending' }),
+    );
+  });
+
+  it('the "despite no meal or shirt" variant of the borrowed negation is also red', () => {
+    const output = caseById('faithful').output.replace(
+      'Anil Rampersad is not attending, so he needs no meal or shirt.',
+      'Anil Rampersad is attending despite no meal or shirt.',
+    );
+    const { failures } = checkAssociationFidelity(output, fixture.expectations);
+    expect(failures).toContainEqual(
+      expect.objectContaining({ type: 'negation-dropped', person: 'Anil Rampersad', value: 'attending' }),
+    );
+  });
+
   it('a stray "not" across a clause boundary does not satisfy a negated fact', () => {
     // Reviewer variant of Finding 1: "not one to skip" is separated from
     // "attending" by a comma; the cue must not bind across it.
