@@ -20,6 +20,10 @@ import 'zx/globals';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
 import { patchExtensionOpenClawSelfImports } from './openclaw-self-import-patch.mjs';
 import { patchOpenClawWindowsPtyGuard } from './openclaw-windows-pty-guard-patch.mjs';
+import {
+  assertShippedOpenClawLifecycleComplete,
+  completeBundledOpenClawLifecycle,
+} from './openclaw-package-lifecycle.mjs';
 
 const ROOT = path.resolve(__dirname, '..');
 const OUTPUT = path.join(ROOT, 'build', 'openclaw');
@@ -97,6 +101,35 @@ fs.cpSync(openclawReal, OUTPUT, {
   dereference: true,
   filter: shouldCopyOpenClawPackageEntry,
 });
+
+// 3b. Complete the npm package lifecycle in the OWNED bundle copy (moe.26).
+//
+// OpenClaw 2026.9.x ships `.openclaw-lifecycle-pending` in its tarball and its
+// own postinstall clears it; pnpm only runs that script when openclaw is
+// approved in pnpm.onlyBuiltDependencies. If the store copy is still pending
+// (unapproved install, or a node_modules predating the approval), the shipped
+// launcher hard-fails at Gateway start on the installed app — its startup
+// self-heal children observably exited 0 without completing the marker there
+// (exact child env/argv mechanism pending root's native diagnostics), and an
+// in-place self-heal would prune the mirrored extension deps anyway (see the
+// module header of openclaw-package-lifecycle.mjs). Complete the lifecycle
+// HERE, at build time, against build/openclaw only — never against the pnpm
+// store — and fail the build if any pending marker survives. This MUST run
+// before extension-dependency mirroring: the upstream postinstall prunes
+// legacy dist/extensions/*/node_modules dirs, which would delete the deps
+// step 5b mirrors in.
+try {
+  const lifecycle = completeBundledOpenClawLifecycle(OUTPUT);
+  if (lifecycle.completed) {
+    echo`   ✅ Completed OpenClaw package lifecycle in the bundle copy (cleared: ${lifecycle.pendingBefore.join(', ')})`;
+  } else {
+    echo`   ✓ OpenClaw package lifecycle already complete (package scripts ran at install)`;
+  }
+  assertShippedOpenClawLifecycleComplete(OUTPUT);
+} catch (error) {
+  echo`❌ ${error instanceof Error ? error.message : String(error)}`;
+  process.exit(1);
+}
 
 // 4. Recursively collect ALL transitive dependencies via pnpm virtual store BFS
 //
@@ -1001,6 +1034,14 @@ echo`   ℹ️ OpenClaw 2026.9.2 uses upstream runtime catalog, pricing, and SDK
 // 8. Verify the bundle
 const entryExists = fs.existsSync(path.join(OUTPUT, 'openclaw.mjs'));
 const distExists = fs.existsSync(path.join(OUTPUT, 'dist', 'entry.js'));
+// Re-assert at the very end: no later bundle step may reintroduce an
+// install-gate marker into the shipped package (moe.26).
+let lifecycleGateError = null;
+try {
+  assertShippedOpenClawLifecycleComplete(OUTPUT);
+} catch (error) {
+  lifecycleGateError = error instanceof Error ? error.message : String(error);
+}
 
 echo``;
 echo`✅ Bundle complete: ${OUTPUT}`;
@@ -1010,8 +1051,10 @@ echo`   Duplicate versions skipped: ${skippedDupes}`;
 echo`   Total discovered: ${collected.size}`;
 echo`   openclaw.mjs: ${entryExists ? '✓' : '✗'}`;
 echo`   dist/entry.js: ${distExists ? '✓' : '✗'}`;
+echo`   lifecycle markers cleared: ${lifecycleGateError ? '✗' : '✓'}`;
 
-if (!entryExists || !distExists) {
+if (!entryExists || !distExists || lifecycleGateError) {
+  if (lifecycleGateError) echo`❌ ${lifecycleGateError}`;
   echo`❌ Bundle verification failed!`;
   process.exit(1);
 }

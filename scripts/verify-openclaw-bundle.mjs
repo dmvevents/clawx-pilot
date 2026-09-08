@@ -27,6 +27,13 @@ import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
 import { verifyOpenClaw20269Upgrade } from './openclaw-2026-9-upgrade-verifier.mjs';
+import {
+  assertShippedOpenClawLifecycleComplete,
+  buildShippedLauncherPendingFixture,
+  gradeShippedLauncherPendingNegativeControl,
+  gradeShippedLauncherVersionControl,
+  runShippedLauncherVersionProbe,
+} from './openclaw-package-lifecycle.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BUNDLE_NM = path.join(ROOT, 'build', 'openclaw', 'node_modules');
@@ -125,9 +132,62 @@ try {
   }
 }
 
+// 6. moe.26: shipped-launcher package-lifecycle gate. The installed moe.26
+// Gateway never became ready because the bundle shipped OpenClaw's
+// `.openclaw-lifecycle-pending` marker (pnpm had not run the package's
+// postinstall) and openclaw.mjs hard-exits 1 on it. None of the previous
+// checks — nor the nine-row artifact harness, whose transport rows import the
+// staged plugin loader directly — ever EXECUTED openclaw.mjs, the actual
+// shipped entrypoint, so the gate was invisible until the installed VM run.
+// Three sub-checks, all against build/openclaw or an isolated temp fixture:
+//   a) no install-gate marker ships;
+//   b) POSITIVE: the real entrypoint launches (`openclaw.mjs --version`)
+//      from the prepared package;
+//   c) NEGATIVE CONTROL: a minimal isolated launcher fixture WITH a pending
+//      marker (and lifecycle-script stubs that exit 0 without completing it,
+//      the exact installed moe.26 shape) must exit 1 with the
+//      lifecycle-incomplete stderr — proving the upstream guard is intact,
+//      not weakened or bypassed.
+{
+  const bundleRoot = path.join(ROOT, 'build', 'openclaw');
+  let lifecycleMarkersClean = false;
+  try {
+    assertShippedOpenClawLifecycleComplete(bundleRoot);
+    lifecycleMarkersClean = true;
+  } catch (err) {
+    failures.push(`LIFECYCLE(marker): ${err instanceof Error ? err.message : String(err)}`);
+  }
+  // Only probe the real entrypoint when the marker gate passed: on a pending
+  // bundle the launcher's self-heal would RUN the lifecycle inside
+  // build/openclaw (pruning the mirrored extension deps) — the verifier must
+  // never mutate the bundle it grades.
+  if (lifecycleMarkersClean) {
+    try {
+      const expectedVersion = JSON.parse(fs.readFileSync(path.join(bundleRoot, 'package.json'), 'utf8')).version;
+      const probe = runShippedLauncherVersionProbe(bundleRoot);
+      const verdict = gradeShippedLauncherVersionControl(probe, expectedVersion);
+      if (verdict !== true) failures.push(`LIFECYCLE(entrypoint --version): ${verdict}`);
+    } catch (err) {
+      failures.push(`LIFECYCLE(entrypoint --version): ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  let fixtureDir = null;
+  try {
+    fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'clawx-moe26-pending-control-'));
+    buildShippedLauncherPendingFixture(bundleRoot, fixtureDir);
+    const probe = runShippedLauncherVersionProbe(fixtureDir);
+    const verdict = gradeShippedLauncherPendingNegativeControl(probe);
+    if (verdict !== true) failures.push(`LIFECYCLE(pending negative control): ${verdict}`);
+  } catch (err) {
+    failures.push(`LIFECYCLE(pending negative control): ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    if (fixtureDir) fs.rmSync(fixtureDir, { recursive: true, force: true });
+  }
+}
+
 if (failures.length > 0) {
   console.error(`✗ openclaw bundle verification FAILED (${failures.length}):`);
   for (const f of failures) console.error(`  - ${f}`);
   process.exit(1);
 }
-console.log(`✓ openclaw bundle verified: ${EXTRA_BUNDLED_PACKAGES.length} extra packages present, ${SHIP_TARGETS.length} ship-target binding sets, ${HOST_LOADABLE.length} parsers loadable on host.`);
+console.log(`✓ openclaw bundle verified: ${EXTRA_BUNDLED_PACKAGES.length} extra packages present, ${SHIP_TARGETS.length} ship-target binding sets, ${HOST_LOADABLE.length} parsers loadable on host, lifecycle gate + shipped-entrypoint controls passed.`);
