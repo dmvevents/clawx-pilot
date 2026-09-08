@@ -1,0 +1,89 @@
+# CLWX-135/25 (moe27) NSIS upgrade-preparation behavioral harness
+
+Native, bounded behavioral tests for the production
+`!macro ClawXPrepareInstallDirectory` (zero parameters; consumes `$INSTDIR`
+and `${APP_EXECUTABLE_FILENAME}`, records `Var /GLOBAL ClawXStaleInstallDir`)
+that replaces the moe27 upgrade path which retained stale runtime files
+(e.g. an old `.openclaw-lifecycle-pending`) after an exit-0 installer run.
+
+The fixture compiles the ACTUAL reviewed macro source — never a reimplemented
+algorithm — and only inserts that one macro. `customCheckAppRunning` (broad
+legacy process kills) is never inserted; `stub-includes/nsProcess.nsh` is an
+inert compile-time placeholder so the production include compiles with no
+live process capability.
+
+## Files
+
+- `fixture.nsi` — minimal silent installer: guards → `!insertmacro
+  ClawXPrepareInstallDirectory` → simulated new-payload copy on success.
+  Exit codes: 0 success; 2 macro rejection (`SetErrorLevel 2` + `Quit`);
+  3/4 fixture-guard failures; 5 payload-copy failure.
+- `compile-fixture.sh` — macOS compile with the pinned electron-builder
+  NSIS 3.0.4.1 (`makensis` reports v3.04) and explicit `NSISDIR`.
+- `run-upgrade-suite.ps1` — sequential Windows runner (PowerShell 5.1),
+  structured JSON evidence per scenario + suite summary.
+- `contract-compile-check.nsh` — compile-check-only macro stand-in that
+  ALWAYS aborts at runtime; never acceptance-relevant.
+
+## Compile (macOS, no GUI)
+
+```sh
+# against the ACTUAL production source (required for any behavioral run):
+tests/windows/nsis-upgrade/compile-fixture.sh \
+  /private/tmp/clawx-moe27-upgrade-20260908/scripts/installer.nsh
+# output: tests/windows/nsis-upgrade/out/clawx-upgrade-prepare-fixture.exe
+```
+
+`NSISDIR` defaults to `~/Library/Caches/electron-builder/nsis/nsis-3.0.4.1`.
+
+## Run (Windows, root-operated)
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\windows\nsis-upgrade\run-upgrade-suite.ps1 `
+  -FixtureExe <path>\clawx-upgrade-prepare-fixture.exe `
+  [-FixtureRoot C:\clawx-fixtures\run1] [-EvidenceDir <private evidence dir>]
+```
+
+Runner exit: 0 all pass, 1 failures, 3 safety stop. Evidence:
+`<FixtureRoot>\evidence\scenario-*.json` + `suite-summary.json` (includes the
+fixture SHA-256). Fixture trees are left in place for inspection — no broad
+cleanup, no retries.
+
+## Scenarios (sequential, single guest)
+
+1. `unsafe-root-target` — drive-root rejection, run FIRST as safety gate;
+   uses only an OS-confirmed UNMAPPED drive letter; suite stops unless it
+   passes.
+2. `reparse-target` — junction rejected; decoy destination untouched.
+3. `plain-file-target` — file at destination rejected and preserved.
+4. `unrecognized-nonempty-target` — foreign nonempty directory preserved.
+5. `empty-existing-destination` — existing empty dir accepted; no rename.
+6. `fresh-install` — nonexistent destination; payload lands; no stale dir.
+7. `upgrade-with-stale-markers` — old install (with `stale-runtime.sentinel`
+   and `resources\openclaw\.openclaw-lifecycle-pending`) moved wholesale to a
+   fresh `._stale_<n>` name; preexisting `._stale_0`/`._stale_1` collision
+   siblings, an `install-dir-old` sibling and external `.openclaw`/`AppData`
+   sentinels preserved; old tree recoverable at the exact recorded path.
+8. `locked-old-file` — rename refusal PROVEN by a negative-control rename
+   under an owned no-Delete-share handle (child file first, held directory
+   handle fallback; restore on unexpected success) before the fixture runs;
+   macro must exit nonzero and preserve the old tree in place.
+
+## Safety boundaries
+
+- All mutating scenarios stay inside one newly created fixture root that is
+  validated BEFORE creation (absolute, no whitespace, not existing, not
+  shallow, not under Windows/Program Files/ProgramData, not the profile root).
+- Never targets an installed application or user data directory, even in
+  negative tests.
+- A probe against a real MAPPED drive root is deliberately not implemented:
+  if rejection regressed it could mutate a live volume. It requires separate
+  static safety review before anyone adds it.
+- The runner owns only the fixture process it launches (bounded wait, then
+  kill of that PID only) and the lock handles it opens (released in finally).
+
+## Status
+
+Compiled locally against production commit 2841f8c0 with NSIS 3.0.4.1
+(v3.04, mac makensis). All Windows scenario executions are NOT_RUN here;
+root executes them and owns the verdict. No GA/Windows-pass claim.
