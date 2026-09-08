@@ -622,10 +622,10 @@
     "NEW-1": 133,
     "NEW-2": 134
   },
-  "updatedAt": "2026-09-08T19:20:26.379216+00:00",
+  "updatedAt": "2026-09-08T19:41:28.380131+00:00",
   "snapshotAt": "2026-09-08T17:51:49.120601+00:00",
   "readiness": "RED",
-  "sourceCandidate": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+  "sourceCandidate": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
   "privateVerification": "artifacts/ga-fable-20260908/sprint-loop/sprint-verification.json",
   "boardExportVerifiedAt": "2026-09-08T18:00:23.817350+00:00",
   "boardIssueCount": 134,
@@ -634,7 +634,7 @@
     "artifactHarnessReview": "APPROVE; integrated",
     "installedVerifierReview": "APPROVE; integrated",
     "integrationReview": "APPROVE104focused",
-    "sourceCandidate": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+    "sourceCandidate": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
     "fullUnit": {
       "passed": 2327,
       "failed": 0,
@@ -828,6 +828,89 @@
       "gatewayError": "OpenClaw package postinstall did not complete its lifecycle marker",
       "repairCard": "CLWX-135",
       "chat": "NOT_RUN_STARTUP_BLOCKED"
+    },
+    "moe26LifecycleRepair": {
+      "source": "7ea6969c29993f5eda99e55d5fe9366c355505a7",
+      "author": "CLI_SUCCEEDED",
+      "independentReview": "APPROVE_RECHECK",
+      "modelProviderVerified": true,
+      "focusedTests": {
+        "lifecycle": 10,
+        "harnessSpecs": 11
+      },
+      "fastArtifactRows": 9,
+      "nativeFocused": {
+        "at": "2026-09-08T19:25:19.4939091Z",
+        "source": "99e672cb0eec12ea3bfb87b1d7b777ae37b7f6be",
+        "nativeExit": 0,
+        "node": "v24.20.0",
+        "openclawVersion": "2026.9.2",
+        "passed": 10,
+        "failed": 0,
+        "pending": 0,
+        "success": true,
+        "tests": [
+          {
+            "title": "reports pending for the modern marker, the legacy guard, and both",
+            "status": "passed"
+          },
+          {
+            "title": "ship gate throws with the marker path and no hand-deletion guidance",
+            "status": "passed"
+          },
+          {
+            "title": "refuses any node_modules tree (shared store / immutable evidence protection)",
+            "status": "passed"
+          },
+          {
+            "title": "accepts owned bundle and temp fixture roots",
+            "status": "passed"
+          },
+          {
+            "title": "follows only relative specifiers, transitively",
+            "status": "passed"
+          },
+          {
+            "title": "fails loudly on a missing chunk instead of building a broken fixture",
+            "status": "passed"
+          },
+          {
+            "title": "grades the pending negative control",
+            "status": "passed"
+          },
+          {
+            "title": "grades the prepared-package positive control",
+            "status": "passed"
+          },
+          {
+            "title": "a pending marker with exit-0 lifecycle children (installed moe.26 shape) fails readably",
+            "status": "passed"
+          },
+          {
+            "title": "completeBundledOpenClawLifecycle runs the real upstream scripts in an owned copy, then --version succeeds",
+            "status": "passed"
+          }
+        ],
+        "scope": "Two SHA-bound changed source/test files in isolated auto-d native harness, existing OpenClaw9.2 dependencies. Not full candidate checkout or installed acceptance.",
+        "privateReceipt": "artifacts/ga-fable-20260908/windows-lab/native-lifecycle-99e672cb/native-focused.json"
+      },
+      "installed": "NOT_RUN",
+      "publication": "BLOCKED",
+      "privateReportMustBeExcluded": false,
+      "correction": "F1_F2_F3_RESOLVED",
+      "priorSource": "99e672cb0eec12ea3bfb87b1d7b777ae37b7f6be",
+      "integrated": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
+      "buildRunId": 34270069669,
+      "privateReportExcluded": true,
+      "priorReview": "REQUEST_CHANGES_F1_F2_F3"
+    },
+    "currentBuild": {
+      "source": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
+      "runId": 34270069669,
+      "version": "0.4.3-moe.27",
+      "status": "in_progress",
+      "profile": "keyless-public",
+      "installed": "NOT_RUN"
     }
   },
   "addedRegressionCards": [

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T19:20:26.379216+00:00",
+  "updatedAt": "2026-09-08T19:51:08.596317+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -2093,17 +2093,32 @@
     }
   },
   "currentSourceCandidate": {
-    "version": "0.4.3-moe.26",
-    "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
-    "branch": "release/moe26-plan-execution",
+    "version": "0.4.3-moe.27",
+    "source": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
+    "productSource": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
+    "branch": "release/moe27-lifecycle",
     "worktree": "/private/tmp/clawx-plan-execution-20260908",
     "clean": true,
     "pushed": true,
-    "packaged": true,
+    "packaged": false,
     "installed": false,
     "published": false,
-    "fullPreflight": "PASS_NATIVE_HOSTED",
-    "heldCommit": "24e1cfd3dd1d736d15252f77ef3e305fb5367857",
+    "fullPreflight": "FAIL_NATIVE_HOSTED",
+    "nativePreflight": {
+      "status": "FAIL",
+      "source": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
+      "runId": 34270069669,
+      "passed": 2317,
+      "failed": 2,
+      "skipped": 57,
+      "failedFile": "tests/unit/clwx92-bundle-fixture.test.ts",
+      "cause": "Isolated checkout omits imported openclaw-package-lifecycle.mjs; ERR_MODULE_NOT_FOUND",
+      "packaging": "SKIPPED",
+      "finishedAt": "2026-09-08T19:43:11Z"
+    },
+    "buildRunId": 34270069669,
+    "buildStatus": "completed",
+    "profile": "keyless-public",
     "reviewedAdditions": [
       {
         "authorCommit": "babc1bdc",
@@ -2190,124 +2205,24 @@
         "focusedTests": 6,
         "independentReview": "APPROVE",
         "nativeAcceptance": "HOSTED_FULL_PREFLIGHT_PASS; FULL_VM_NOT_RUN_AUTH_BLOCKED"
+      },
+      {
+        "authorCommit": "7ea6969c29993f5eda99e55d5fe9366c355505a7",
+        "integratedCommit": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
+        "scope": "CLWX-135 upstream package lifecycle completion and shipped launcher controls; moe27 version",
+        "independentReview": "APPROVE_AFTER_F1_F2_F3",
+        "focusedTests": 10,
+        "nativeFocusedTests": 10,
+        "nativeSkipped": 0,
+        "installedAcceptance": "NOT_RUN"
       }
     ],
-    "combinedFocusedTests": {
-      "passed": 105,
-      "files": 6,
-      "source": "6ec328073f272c538e2e0d653824c1f407b6e6e4"
-    },
-    "productSource": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
-    "latestDocumentationOnlyChange": {
-      "source": "9a17b3ee",
-      "integrated": "64ae2dc6",
-      "scope": "Graph mocked local Electron UI proof"
-    },
-    "latestTestOnlyChange": {
-      "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
-      "scope": "one-line isolated-checkout dependency copy",
-      "independentReview": "APPROVE",
-      "focusedTests": 6
-    },
-    "buildRunId": 34256868050,
-    "buildStatus": "success",
-    "profile": "keyless-public",
-    "integrationEvidence": "docs/evidence/GA_SOURCE_INTEGRATION_2026-09-08.md",
-    "nativePreflight": {
-      "status": "PASS",
-      "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
-      "runId": 34256868050,
-      "passed": 2309,
-      "failed": 0,
-      "skipped": 57,
-      "passedFiles": 210,
-      "skippedFiles": 3,
-      "suiteSeconds": 140.11,
-      "runtimePreparation": "PASS",
-      "compileAndBundle": "PASS",
-      "artifactHarness": {
-        "passed": 9,
-        "failed": 0
-      },
-      "installerBuild": "PASS",
-      "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/build-34256868050-complete.log"
-    },
-    "priorNativeBuilds": [
-      {
-        "source": "1d7455673774fd70c086b41b405c8ece868ce302",
-        "runId": 34244582967,
-        "status": "failure",
-        "passed": 2297,
-        "failed": 2,
-        "skipped": 57,
-        "installerProduced": false
-      },
-      {
-        "source": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
-        "runId": 34252050616,
-        "status": "failure",
-        "passed": 2304,
-        "failed": 1,
-        "skipped": 57,
-        "installerProduced": false
-      },
-      {
-        "source": "99468423e78d90ef75a49ac5d7b52939caf9e808",
-        "runId": 34255425275,
-        "status": "failure",
-        "passed": 2308,
-        "failed": 1,
-        "skipped": 57,
-        "installerProduced": false
-      }
-    ],
-    "nativeFocusedProof": {
-      "source": "99468423e78d90ef75a49ac5d7b52939caf9e808",
-      "environment": "auto-d Windows Server2022; Node24.20.0; pnpm10.33.4; locked OpenClaw2026.9.2",
-      "normalTemp": {
-        "passed": 33,
-        "failed": 0,
-        "exit": 0,
-        "suiteSeconds": 16.22
-      },
-      "shortTemp": {
-        "passed": 23,
-        "failed": 0,
-        "exit": 0,
-        "suiteSeconds": 16.35
-      },
-      "controlA": "IN_PROCESS_EPERM",
-      "controlB": "EXACT_TEMP_DB_CLOSED_TRUE_THEN_RM_OK",
-      "controlC": "CHILD_LIFETIME_VERIFIER_PASS",
-      "rootTypecheckExit": 0,
-      "independentReview": "APPROVE_33_FOCUSED_PLUS_FALSIFIERS",
-      "reviewTask": "moe26-db-lifetime-review",
-      "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/native-db-root/"
-    },
-    "artifactVerification": {
-      "status": "PASS",
-      "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
-      "runId": 34256868050,
-      "version": "0.4.3-moe.26",
-      "profile": "keyless-public",
-      "hostChecks": 36,
-      "compiledAsarFiles": 172,
-      "openclawVersion": "2026.9.2",
-      "artifactId": 10068872044,
-      "archiveSha256": "aab9744390313f004b8c7438bd7c45b9dae45547bb39b179f020634c975509d2",
-      "archiveBytes": 473565450,
-      "installerSha256": "5de74d6d1ce40b5c4c5d963f66bc74dd6c880c4972a6dbf82cd88c1ac5beb620",
-      "installerBytes": 476768641,
-      "asarSha256": "a81d7dd0cf030df2ab934068aaacf8d5d9edcb70d984c2a07dce72854b7c62bd",
-      "packagedExeSha256": "44ff6a6f90fc5872b38626f544e7f19166185ecf2e5bb607f66dc3ddf386f902",
-      "manifest": "docs/release-manifests/0.4.3-moe.26.json",
-      "privateEvidence": "/private/tmp/clawx-moe26-run-34256868050",
-      "installedAcceptance": "NOT_RUN",
-      "published": false,
-      "verifiedAt": "2026-09-08T17:51:49.120601+00:00"
-    },
-    "artifactId": 10068872044,
-    "artifactArchiveSha256": "aab9744390313f004b8c7438bd7c45b9dae45547bb39b179f020634c975509d2"
+    "differenceFromReviewed": "package.json app version only",
+    "privateReportInSource": false,
+    "previousCandidateSource": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+    "integrationEvidence": "docs/bugs/CLWX-135-openclaw-package-lifecycle.md",
+    "heldCommit": "24e1cfd3dd1d736d15252f77ef3e305fb5367857",
+    "buildConclusion": "failure"
   },
   "handoff": {
     "status": "COMPLETE_READY_FOR_NEXT_AGENT",
@@ -2347,7 +2262,7 @@
     "awsProfile": "bedrock",
     "region": "us-east-2",
     "baseSource": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
-    "phase": "MOE26_INSTALLED_STARTUP_FAILED_CLWX135_REPAIR_RUNNING",
+    "phase": "MOE27_PREFLIGHT_FAILED_FIXTURE_CORRECTION",
     "privateReceipts": "artifacts/ga-fable-20260908",
     "plan": ".omx/plans/prd-ga-fable-20260908.md",
     "testSpec": ".omx/plans/test-spec-ga-fable-20260908.md",
@@ -2519,19 +2434,11 @@
     "maxConcurrentAuthorClis": 5,
     "concurrencyReason": "Independent source and tooling lanes; no concurrent VM mutations. Source accepts only after independent review.",
     "bugHandoffPolicy": "docs/bugs/TEMPLATE.md required by PROJECT_CONTRACT, AGENTS.md and CLAUDE.md",
-    "statusCheckedAt": "2026-09-08T18:57:53.318826+00:00",
+    "statusCheckedAt": "2026-09-08T19:51:08.596317+00:00",
     "epic": "CLWX-22",
     "sprintExit": "Exact candidate passes all required source/artifact/installed/client/tenant/performance/unaided tester and final release checks",
     "activeCliTasks": [
-      {
-        "task": "moe26-lifecycle-author",
-        "phase": "RUNNING",
-        "worktree": "/private/tmp/clawx-moe26-lifecycle-20260908",
-        "source": "8bb7a779",
-        "card": "CLWX-135",
-        "model": "claude-fable-5",
-        "provider": "bedrock"
-      }
+      "moe27-fixture-author-retry"
     ],
     "budgetAuthorization": {
       "source": "Owner: There is no limit. Execute the work trees.",
@@ -4001,6 +3908,233 @@
         "iamRevocation": "NOT_RUN"
       },
       "scheduler": "OUT_OF_SCOPE_FIRST_CLI"
+    },
+    "moe26LifecycleRepair": {
+      "source": "7ea6969c29993f5eda99e55d5fe9366c355505a7",
+      "author": "CLI_SUCCEEDED",
+      "independentReview": "APPROVE_RECHECK",
+      "modelProviderVerified": true,
+      "focusedTests": {
+        "lifecycle": 10,
+        "harnessSpecs": 11
+      },
+      "fastArtifactRows": 9,
+      "nativeFocused": {
+        "at": "2026-09-08T19:25:19.4939091Z",
+        "source": "99e672cb0eec12ea3bfb87b1d7b777ae37b7f6be",
+        "nativeExit": 0,
+        "node": "v24.20.0",
+        "openclawVersion": "2026.9.2",
+        "passed": 10,
+        "failed": 0,
+        "pending": 0,
+        "success": true,
+        "tests": [
+          {
+            "title": "reports pending for the modern marker, the legacy guard, and both",
+            "status": "passed"
+          },
+          {
+            "title": "ship gate throws with the marker path and no hand-deletion guidance",
+            "status": "passed"
+          },
+          {
+            "title": "refuses any node_modules tree (shared store / immutable evidence protection)",
+            "status": "passed"
+          },
+          {
+            "title": "accepts owned bundle and temp fixture roots",
+            "status": "passed"
+          },
+          {
+            "title": "follows only relative specifiers, transitively",
+            "status": "passed"
+          },
+          {
+            "title": "fails loudly on a missing chunk instead of building a broken fixture",
+            "status": "passed"
+          },
+          {
+            "title": "grades the pending negative control",
+            "status": "passed"
+          },
+          {
+            "title": "grades the prepared-package positive control",
+            "status": "passed"
+          },
+          {
+            "title": "a pending marker with exit-0 lifecycle children (installed moe.26 shape) fails readably",
+            "status": "passed"
+          },
+          {
+            "title": "completeBundledOpenClawLifecycle runs the real upstream scripts in an owned copy, then --version succeeds",
+            "status": "passed"
+          }
+        ],
+        "scope": "Two SHA-bound changed source/test files in isolated auto-d native harness, existing OpenClaw9.2 dependencies. Not full candidate checkout or installed acceptance.",
+        "privateReceipt": "artifacts/ga-fable-20260908/windows-lab/native-lifecycle-99e672cb/native-focused.json"
+      },
+      "installed": "NOT_RUN",
+      "publication": "BLOCKED",
+      "privateReportMustBeExcluded": false,
+      "correction": "F1_F2_F3_RESOLVED",
+      "priorSource": "99e672cb0eec12ea3bfb87b1d7b777ae37b7f6be",
+      "integrated": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
+      "buildRunId": 34270069669,
+      "privateReportExcluded": true,
+      "priorReview": "REQUEST_CHANGES_F1_F2_F3",
+      "replacementPreflight": {
+        "status": "FAIL",
+        "source": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
+        "runId": 34270069669,
+        "passed": 2317,
+        "failed": 2,
+        "skipped": 57,
+        "failedFile": "tests/unit/clwx92-bundle-fixture.test.ts",
+        "cause": "Isolated checkout omits imported openclaw-package-lifecycle.mjs; ERR_MODULE_NOT_FOUND",
+        "packaging": "SKIPPED",
+        "finishedAt": "2026-09-08T19:43:11Z"
+      }
+    },
+    "previousMoe26SourceCandidate": {
+      "version": "0.4.3-moe.26",
+      "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+      "branch": "release/moe26-plan-execution",
+      "worktree": "/private/tmp/clawx-plan-execution-20260908",
+      "clean": true,
+      "pushed": true,
+      "packaged": true,
+      "installed": true,
+      "published": false,
+      "fullPreflight": "PASS_NATIVE_HOSTED",
+      "heldCommit": "24e1cfd3dd1d736d15252f77ef3e305fb5367857",
+      "combinedFocusedTests": {
+        "passed": 105,
+        "files": 6,
+        "source": "6ec328073f272c538e2e0d653824c1f407b6e6e4"
+      },
+      "productSource": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+      "latestDocumentationOnlyChange": {
+        "source": "9a17b3ee",
+        "integrated": "64ae2dc6",
+        "scope": "Graph mocked local Electron UI proof"
+      },
+      "latestTestOnlyChange": {
+        "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+        "scope": "one-line isolated-checkout dependency copy",
+        "independentReview": "APPROVE",
+        "focusedTests": 6
+      },
+      "buildRunId": 34256868050,
+      "buildStatus": "success",
+      "profile": "keyless-public",
+      "integrationEvidence": "docs/evidence/GA_SOURCE_INTEGRATION_2026-09-08.md",
+      "nativePreflight": {
+        "status": "PASS",
+        "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+        "runId": 34256868050,
+        "passed": 2309,
+        "failed": 0,
+        "skipped": 57,
+        "passedFiles": 210,
+        "skippedFiles": 3,
+        "suiteSeconds": 140.11,
+        "runtimePreparation": "PASS",
+        "compileAndBundle": "PASS",
+        "artifactHarness": {
+          "passed": 9,
+          "failed": 0
+        },
+        "installerBuild": "PASS",
+        "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/build-34256868050-complete.log"
+      },
+      "priorNativeBuilds": [
+        {
+          "source": "1d7455673774fd70c086b41b405c8ece868ce302",
+          "runId": 34244582967,
+          "status": "failure",
+          "passed": 2297,
+          "failed": 2,
+          "skipped": 57,
+          "installerProduced": false
+        },
+        {
+          "source": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
+          "runId": 34252050616,
+          "status": "failure",
+          "passed": 2304,
+          "failed": 1,
+          "skipped": 57,
+          "installerProduced": false
+        },
+        {
+          "source": "99468423e78d90ef75a49ac5d7b52939caf9e808",
+          "runId": 34255425275,
+          "status": "failure",
+          "passed": 2308,
+          "failed": 1,
+          "skipped": 57,
+          "installerProduced": false
+        }
+      ],
+      "nativeFocusedProof": {
+        "source": "99468423e78d90ef75a49ac5d7b52939caf9e808",
+        "environment": "auto-d Windows Server2022; Node24.20.0; pnpm10.33.4; locked OpenClaw2026.9.2",
+        "normalTemp": {
+          "passed": 33,
+          "failed": 0,
+          "exit": 0,
+          "suiteSeconds": 16.22
+        },
+        "shortTemp": {
+          "passed": 23,
+          "failed": 0,
+          "exit": 0,
+          "suiteSeconds": 16.35
+        },
+        "controlA": "IN_PROCESS_EPERM",
+        "controlB": "EXACT_TEMP_DB_CLOSED_TRUE_THEN_RM_OK",
+        "controlC": "CHILD_LIFETIME_VERIFIER_PASS",
+        "rootTypecheckExit": 0,
+        "independentReview": "APPROVE_33_FOCUSED_PLUS_FALSIFIERS",
+        "reviewTask": "moe26-db-lifetime-review",
+        "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/native-db-root/"
+      },
+      "artifactVerification": {
+        "status": "PASS",
+        "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+        "runId": 34256868050,
+        "version": "0.4.3-moe.26",
+        "profile": "keyless-public",
+        "hostChecks": 36,
+        "compiledAsarFiles": 172,
+        "openclawVersion": "2026.9.2",
+        "artifactId": 10068872044,
+        "archiveSha256": "aab9744390313f004b8c7438bd7c45b9dae45547bb39b179f020634c975509d2",
+        "archiveBytes": 473565450,
+        "installerSha256": "5de74d6d1ce40b5c4c5d963f66bc74dd6c880c4972a6dbf82cd88c1ac5beb620",
+        "installerBytes": 476768641,
+        "asarSha256": "a81d7dd0cf030df2ab934068aaacf8d5d9edcb70d984c2a07dce72854b7c62bd",
+        "packagedExeSha256": "44ff6a6f90fc5872b38626f544e7f19166185ecf2e5bb607f66dc3ddf386f902",
+        "manifest": "docs/release-manifests/0.4.3-moe.26.json",
+        "privateEvidence": "/private/tmp/clawx-moe26-run-34256868050",
+        "installedAcceptance": "NOT_RUN",
+        "published": false,
+        "verifiedAt": "2026-09-08T17:51:49.120601+00:00"
+      },
+      "artifactId": 10068872044,
+      "artifactArchiveSha256": "aab9744390313f004b8c7438bd7c45b9dae45547bb39b179f020634c975509d2",
+      "installedAcceptance": "FAIL_GATEWAY_PACKAGE_LIFECYCLE",
+      "nativeInstallerExit": "UNKNOWN"
+    },
+    "moe27FixtureCorrection": {
+      "status": "AUTHOR_RUNNING",
+      "worktree": "/private/tmp/clawx-moe27-fixture-20260908",
+      "base": "d343f23d3b1d60bb5fb2dc1941ae277af7713d7b",
+      "task": "moe27-fixture-author-retry",
+      "nativeValidation": "PENDING",
+      "review": "PENDING",
+      "initialLaunch": "SPAWN_FAILED_RELATIVE_WRAPPER_PATH; absolute retry"
     }
   }
 }
