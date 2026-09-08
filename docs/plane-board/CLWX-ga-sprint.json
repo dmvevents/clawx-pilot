@@ -622,10 +622,10 @@
     "NEW-1": 133,
     "NEW-2": 134
   },
-  "updatedAt": "2026-09-08T15:38:02.222174+00:00",
+  "updatedAt": "2026-09-08T16:46:51.453457+00:00",
   "snapshotAt": "2026-09-08T15:40:04.348123+00:00",
   "readiness": "RED",
-  "sourceCandidate": "1d7455673774fd70c086b41b405c8ece868ce302",
+  "sourceCandidate": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
   "privateVerification": "artifacts/ga-fable-20260908/sprint-loop/sprint-verification.json",
   "boardExportVerifiedAt": "2026-09-08T15:40:04.348123+00:00",
   "boardIssueCount": 134,
@@ -634,13 +634,14 @@
     "artifactHarnessReview": "APPROVE; integrated",
     "installedVerifierReview": "APPROVE; integrated",
     "integrationReview": "APPROVE104focused",
-    "sourceCandidate": "1d7455673774fd70c086b41b405c8ece868ce302",
+    "sourceCandidate": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
     "fullUnit": {
       "passed": 2327,
       "failed": 0,
-      "skipped": 29
+      "skipped": 29,
+      "source": "1d7455673774fd70c086b41b405c8ece868ce302"
     },
-    "installedArtifact": "moe.25 only; moe.26 build34244582967 failed native preflight",
+    "installedArtifact": "moe.25 only; moe.26 build34252050616 failed native preflight",
     "windowsOwnerHold": "RELEASED; sole root operator",
     "macGuiHold": "HELD",
     "microsoftBrowser": "moe25 assisted account/inbox and two synthetic Forms previews PASS; Graph unconfigured",
@@ -651,11 +652,20 @@
       "Todo": 10,
       "Ready": 3
     },
-    "nativePreflight": {
+    "nativeRepair": "seed fixed; sole Claude db-lifetime lane on prepared auto-d investigates remaining SQLite teardown",
+    "nativeRepairReview": "APPROVE_29_FOCUSED_TESTS_AT_5785E570",
+    "priorNativePreflight": {
       "passed": 2297,
       "failed": 2,
-      "skipped": 57
+      "skipped": 57,
+      "source": "1d745567"
     },
-    "nativeRepair": "Claude owns isolated auto-d development VM and two failing suites"
+    "nativePreflight": {
+      "status": "FAIL",
+      "runId": 34252050616,
+      "passed": 2304,
+      "failed": 1,
+      "skipped": 57
+    }
   }
 }

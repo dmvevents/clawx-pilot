@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T15:38:02.222174+00:00",
+  "updatedAt": "2026-09-08T16:46:51.453457+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -2094,7 +2094,7 @@
   },
   "currentSourceCandidate": {
     "version": "0.4.3-moe.26",
-    "source": "1d7455673774fd70c086b41b405c8ece868ce302",
+    "source": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
     "branch": "release/moe26-plan-execution",
     "worktree": "/private/tmp/clawx-plan-execution-20260908",
     "clean": true,
@@ -2102,7 +2102,7 @@
     "packaged": false,
     "installed": false,
     "published": false,
-    "fullPreflight": "PASS_SOURCE_CHECKS_PLATFORM_SKIPS_RETAINED",
+    "fullPreflight": "FAIL_NATIVE_VERIFIER_CLEANUP",
     "heldCommit": "24e1cfd3dd1d736d15252f77ef3e305fb5367857",
     "reviewedAdditions": [
       {
@@ -2162,6 +2162,16 @@
         "scope": "three integration inventory/evidence deltas",
         "independentReview": "APPROVE",
         "installedAcceptance": "NOT_RUN"
+      },
+      {
+        "authorCommit": "5785e570",
+        "integratedCommit": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
+        "scope": "native seed dependency isolation and truthful bounded verifier cleanup",
+        "focusedTests": 29,
+        "neighborAuthorTests": 6,
+        "independentReview": "APPROVE",
+        "remainingFinding": "F1 minor falsy-throw sentinel; not fixed",
+        "installedAcceptance": "NOT_RUN"
       }
     ],
     "combinedFocusedTests": {
@@ -2169,27 +2179,40 @@
       "files": 6,
       "source": "6ec328073f272c538e2e0d653824c1f407b6e6e4"
     },
-    "productSource": "1d7455673774fd70c086b41b405c8ece868ce302",
+    "productSource": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
     "latestDocumentationOnlyChange": {
       "source": "9a17b3ee",
       "integrated": "64ae2dc6",
       "scope": "Graph mocked local Electron UI proof"
     },
     "latestTestOnlyChange": {
-      "source": "7e1f9417ae3f57096a7799d9a433ea9745604e5f",
-      "scope": "macOS synthetic E2E Keychain isolation",
+      "source": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
+      "scope": "native seed unit boundary and build verifier",
       "independentReview": "APPROVE",
-      "focusedE2e": "PASS_ONE_SPEC_TWO_LAUNCHES"
+      "focusedTests": 29,
+      "privateCheckpointExcluded": "8db5bc5f"
     },
-    "buildRunId": 34244582967,
+    "buildRunId": 34252050616,
     "buildStatus": "failure",
     "profile": "keyless-public",
     "integrationEvidence": "docs/evidence/GA_SOURCE_INTEGRATION_2026-09-08.md",
     "nativePreflight": {
-      "passed": 2297,
-      "failed": 2,
-      "skipped": 57
-    }
+      "passed": 2304,
+      "failed": 1,
+      "skipped": 57,
+      "remainingFailure": "verifier owned-temp cleanup EPERM after bounded retries"
+    },
+    "priorNativeBuilds": [
+      {
+        "source": "1d7455673774fd70c086b41b405c8ece868ce302",
+        "runId": 34244582967,
+        "status": "failure",
+        "passed": 2297,
+        "failed": 2,
+        "skipped": 57,
+        "installerProduced": false
+      }
+    ]
   },
   "handoff": {
     "status": "COMPLETE_READY_FOR_NEXT_AGENT",
@@ -2229,7 +2252,7 @@
     "awsProfile": "bedrock",
     "region": "us-east-2",
     "baseSource": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
-    "phase": "NATIVE_PREFLIGHT_REPAIR",
+    "phase": "NATIVE_DB_LIFETIME_REPAIR",
     "privateReceipts": "artifacts/ga-fable-20260908",
     "plan": ".omx/plans/prd-ga-fable-20260908.md",
     "testSpec": ".omx/plans/test-spec-ga-fable-20260908.md",
@@ -2401,11 +2424,11 @@
     "maxConcurrentAuthorClis": 5,
     "concurrencyReason": "Independent source and tooling lanes; no concurrent VM mutations. Source accepts only after independent review.",
     "bugHandoffPolicy": "docs/bugs/TEMPLATE.md required by PROJECT_CONTRACT, AGENTS.md and CLAUDE.md",
-    "statusCheckedAt": "2026-09-08T15:38:02.222174+00:00",
+    "statusCheckedAt": "2026-09-08T16:46:51.453457+00:00",
     "epic": "CLWX-22",
     "sprintExit": "Exact candidate passes all required source/artifact/installed/client/tenant/performance/unaided tester and final release checks",
     "activeCliTasks": [
-      "moe26-native-preflight-resume"
+      "moe26-db-lifetime"
     ],
     "budgetAuthorization": {
       "source": "Owner: There is no limit. Execute the work trees.",
@@ -3601,7 +3624,8 @@
         "passed": 2297,
         "failed": 2,
         "skipped": 57
-      }
+      },
+      "supersededByNativeRepair": "5785e570f8c04d0f3f16b541c99e0c273afc85c4"
     },
     "qaMailAuthHelper": {
       "authorSource": "5e3d1d06",
@@ -3628,27 +3652,61 @@
       "privateNativeProof": "artifacts/ga-fable-20260908/windows-lab/native-auth-helper-controls.json"
     },
     "nativePreflightRepair": {
-      "task": "moe26-native-preflight-resume",
-      "worktree": "/private/tmp/clawx-moe26-native-preflight-20260908",
-      "base": "1d745567",
+      "task": "moe26-db-lifetime",
+      "worktree": "/private/tmp/clawx-moe26-db-lifetime-20260908",
+      "base": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
       "VM": "clawx-lab-auto-d-20260908",
       "instanceId": "4908385059495321872",
       "scope": [
-        "seed test timeout",
-        "verifier owned-temp EPERM"
+        "owned verifier database handle lifecycle",
+        "falsy error capture"
       ],
-      "status": "CORRECTION_REQUIRED_AFTER_INTERRUPTED_REVIEW",
+      "status": "SEED_FIXED_CLEANUP_REPRODUCED_NATIVE_AND_CI",
       "proposedCommits": [
         "8fb8bd96",
         "409bce89"
       ],
-      "independentReview": "28_MAC_TESTS_PASS_NO_VERDICT_API_INTERRUPTED",
-      "rootFinding": "exhausted cleanup errors must surface, with primary verification error preserved",
-      "nativeSetup": "NODE_SOURCE_VERIFIED_DEPS_NOT_INSTALLED",
+      "independentReview": "APPROVE_29_FOCUSED_TESTS",
+      "rootFinding": "CORRECTED_AT_5785E570",
+      "nativeSetup": "KEPT_LIVE_INSTALL_EXIT_0_PNPM_10_33_4",
       "priorTasks": {
         "author": "TIMED_OUT_NO_RESULT",
         "reviewer": "TIMED_OUT_ERROR_DURING_EXECUTION"
-      }
+      },
+      "source": "5785e570f8c04d0f3f16b541c99e0c273afc85c4",
+      "reviewTask": "moe26-native-rereview",
+      "nativeInstallDurationSeconds": 318,
+      "buildRunId": 34252050616,
+      "buildStatus": "failure",
+      "remainingFinding": "F1 non-blocking falsy-throw edge",
+      "nativeBeforeAfter": {
+        "baseline": {
+          "source": "1d745567",
+          "passed": 21,
+          "failed": 2,
+          "exit": 1,
+          "seconds": 67.8
+        },
+        "after": {
+          "source": "5785e570",
+          "passed": 28,
+          "failed": 1,
+          "exit": 1,
+          "seconds": 14.8
+        },
+        "shortTempVerifier": {
+          "source": "5785e570",
+          "passed": 18,
+          "failed": 1,
+          "exit": 1,
+          "seconds": 14.9
+        },
+        "remainingFiles": "state-no-hostapi/state/openclaw.sqlite and optional WAL/SHM",
+        "freshProcessDelete": "PASS_SAME_USER_CORRECTED_LEFTOVER",
+        "baselinePreserved": true
+      },
+      "cause": "Strong process-lifetime evidence; exact live handle mechanism pending targeted control",
+      "priorNativeResume": "TIMED_OUT_AFTER_REPRODUCTION_NO_FINAL_RECEIPT"
     }
   }
 }
