@@ -2,6 +2,16 @@
 
 **Current mode — September 8, 2026: execution resumed through Claude Fable 5 on Amazon Bedrock.** The owner lifted the handoff pause and requested board-led work, independent testing and live CLI monitoring. Root coordinates priorities/integration; substantive planning, implementation and review use Claude to reduce GPT spend. **GA remains RED.** ASR/microphone and the action journal remain outside the current release; the owner has separately started a Whisper.cpp backlog implementation branch.
 
+## Active GA closure sprint
+
+[Plane sprint](http://localhost:8090/issues-agent/projects/81a2ea23-e060-49b4-a344-1ab0339f46d5/cycles/9a7b9c92-101e-4fd9-bfb7-07bdbdd49b5a) contains **31 cards: 29 existing owners plus CLWX-133 (release-run receipt) and CLWX-134 (unaided stakeholder acceptance)**. The September 8–15 UTC window is a planning target, not a promised GA date. Exact membership, acceptance slices, dependencies, ownership and external gates are mirrored in [the sprint snapshot](plane-board/CLWX-ga-sprint.json). All prior card criteria/history are retained; shared proof for CLWX-73/85/113 and policy/reminder checks stays explicit without duplicate runs.
+
+Latest source checkpoint: browser `41359e1` has independent APPROVE with 240 focused passes (one non-blocking follow-up retained); integration is pending. Harness `8bf5d32` and verifier `9bc9221b` are committed and under independent review. Their author receipts include a Bedrock model-provenance exception; neither is relabeled as a clean CLI success. The Keychain analysis reached its deadline and is resumed only to capture existing findings, with desktop launches still held.
+
+One continuous execution loop: bounded Claude/Bedrock fixes → focused checks → independent review → root integration/preflight → identified keyless Windows installer → installed/client/Microsoft/document/offline/recovery/performance acceptance → verified candidate download and unaided tester rerun → strict final verdict → GA publication and final hash check. A failure returns to its owning card and resumes the earliest affected stage in this same sprint. New source means a new identified candidate and affected downstream retests; source success never substitutes for installed proof.
+
+Graph CLWX-39/40, document-search CLWX-114 and tab-preservation CLWX-118 remain included. Recovery CLWX-96 already has 145 focused source passes and policy CLWX-117 is already repaired; their remaining work is acceptance evidence, not duplicate implementation. CLWX-102 desktop testing remains held after recurrence. Missing account/client/isolated-GUI evidence stays BLOCKED. Only human card closure is reserved; root can record an evidence-backed verdict and perform already authorized release actions.
+
 Start with [PROJECT_CONTRACT.md](PROJECT_CONTRACT.md), this page and [repository navigation](REPOSITORY_GUIDE.md). The [state vector](completion-state.json) records exact evidence and dependencies; the [Plane board](plane-board/CLWX-board.md) and [JSON snapshot](plane-board/CLWX-board-export.json) track work. Current artifact identity belongs in [CURRENT_WINDOWS_RC.md](CURRENT_WINDOWS_RC.md); verification belongs in [GA_RELEASE_EVIDENCE_MANIFEST.md](GA_RELEASE_EVIDENCE_MANIFEST.md).
 
 ## Handoff: exact source and artifact
@@ -100,7 +110,7 @@ Avoid duplicate work: the NSCC pack and lookup already exist (CLWX-42 also has i
 
 The external Claude audit is advisory. Root rejected its proposed NSCC reimplementation, repeated Mac reminder run and new artifact-harness scaffold after checking current code and dated comments, and corrected its treatment of Ready card 118 as an additional open card. Card-state changes require their own complete evidence; no extra card was closed by this audit.
 
-### Current supervised dispatch
+### Earlier dispatch checkpoint (13:01 UTC)
 
 September 8, 13:01 UTC: five Claude CLI processes were verified live with fresh heartbeats and Fable 5 initialization. Final usage metadata still determines provider/model provenance; a running CLI is not an acceptance pass. Reviewed candidate `64ae2dc6` differs from product commit `488ebe29` only by Graph UI evidence documentation.
 
@@ -122,9 +132,9 @@ Cost discipline: Claude CLI on Bedrock performs bounded implementation, investig
 
 ### Sprint exit and epic completion
 
-The current sprint exits when browser, Graph setup and fidelity corrections are independently accepted, the integrated candidate passes full preflight, and one identified moe.26 installer is ready for installed acceptance. Source integration alone does not complete CLWX-22.
+The active closure sprint exits after the same identified candidate satisfies the required source, installer, installed/client/tenant, performance, unaided tester and final release checks. A verified installer is an intermediate checkpoint. CLWX-133 owns the release-run receipt and CLWX-134 binds the unaided result to its exact bytes; neither bypasses CLWX-22 acceptance.
 
-Preliminary direct-KR tally before the acceptance audit: **19 open cards plus CLWX-22**, with five related Ready cards requiring final-artifact revalidation. Open: CLWX-25/26/39/40/43/61/63/77/95/96/106/107/110/115/117/123/125/130/131. Ready: CLWX-24/42/67/73/94. This counts only pilot-release portions of shared cards; broader CLWX-110 cohort rollout is excluded. Plan for the rest of the current stabilization sprint plus one acceptance/release sprint, with a contingency sprint if acceptance exposes defects. This is a planning estimate, not a calendar ETA or completion percentage.
+The earlier 19-card tally and two-sprint estimate are superseded by this explicit 31-card closure cycle. Membership is not a count of new bugs: several cards already have reviewed source and share installed acceptance runs. Fleet portions of shared cards remain open outside the pilot slice.
 
 Sequential release path: reviewed source → full preflight → one build with verified hashes → installed Windows journey matrix → Windows 10/11 standard-user and authenticated Microsoft proof → matched performance/recovery rehearsal → verified download and Karunesh's unaided rerun → strict release verdict. The seven pilot acceptance rows on CLWX-22 cover installation/setup, reliable execution, document fidelity, Microsoft journeys, local/policy/reminder behavior, performance/recovery, and release/stakeholder outcome. Each required row needs artifact-specific evidence. Production/fleet identity, backend durability, metering and rollout decisions retain their separate milestone.
 
@@ -138,4 +148,4 @@ The canonical release command is `GA_GATE_RELEASE=1 node scripts/ga-gate.mjs --r
 
 The handoff checkpoint is complete in `bb729688`: current pointers, source recovery, guidance and independent review pass. The full 127-card board snapshot is verified; CLWX-127 is Ready and CLWX-126 remains Backlog for the engine experiment. All original acceptance/history is retained. GA remains RED. The owner has now resumed execution; that newer instruction supersedes the handoff pause.
 
-Current board checkpoint: 132 cards and six states. The latest nine-card update records the reopened Keychain issue, source-only Claude worktree dispatch and acceptance audit disposition; all 131 prior cards and their description/comment history were retained. CLWX-132 arrived concurrently and is not closed by this checkpoint. Later dated status supersedes historical running/hold statements.
+Current sprint membership is readback-verified as 31 exact issue IDs. CLWX-133/134 were created through the canonical writer; the other 29 cards retain their original history. The board export and sprint snapshot record the verified totals. CLWX-132 remains a separate open defect whose exposure must be assessed against final supported setup routes.

@@ -1,0 +1,641 @@
+{
+  "name": "GA closure \u2014 reviewed source to verified Windows release",
+  "objective": "Close the Windows pilot through one continuous repair, review and acceptance loop. September8-15 UTC is a planning window, not a promised completion date. Graph, document search, actual Windows10/11 and unaided tester proof remain in scope.",
+  "existingCards": [
+    {
+      "number": 130,
+      "lane": "source-author \u2192 review",
+      "priority": "urgent",
+      "exitCriteria": [
+        "REQUEST_CHANGES findings on a091a968 resolved at 41359e1: owned-launch kill under restricted process metadata, same-session profile conflict misreport, attach ownership bypass, port/endpoint identity binding, PowerShell parse errors",
+        "Independent review APPROVE; regressions for all three reproduced defects",
+        "Installed rerun on the candidate: 'open Chrome' succeeds or fails with Windows-correct recovery copy; no Mac instructions"
+      ],
+      "dependsOn": [],
+      "evidenceClass": "source-review \u2192 installed-vm",
+      "ownerRole": "source-author (Claude CLI) then independent-reviewer",
+      "executionState": "Independent review APPROVE on41359e1, 240 focused tests; integration and installed proof pending. Non-blocking home-prefix boundary finding retained for CLWX130."
+    },
+    {
+      "number": 121,
+      "lane": "source-author \u2192 review",
+      "priority": "high",
+      "exitCriteria": [
+        "Cross-tab draft visibility (MEDIUM-7/8) covered by the coupled 130 browser-ownership boundary at merged base; no separate implementation lane",
+        "Regression rows land with 130; installed Outlook draft-reopen check on candidate"
+      ],
+      "dependsOn": [
+        130
+      ],
+      "evidenceClass": "source-review \u2192 installed-vm",
+      "ownerRole": "same lane as 130",
+      "executionState": "coupled into browser-ownership-repair per 130 dispatch"
+    },
+    {
+      "number": 77,
+      "lane": "source-author \u2192 review",
+      "priority": "high",
+      "exitCriteria": [
+        "artifact-matrix-repair: JPEG, typed numeric/string XLSX, cached-formula and generated DOCX/XLSX write-then-reopen rows added to the EXISTING harness/fixtures with positive and negative checks",
+        "Independent review APPROVE; no new harness scaffold",
+        "Packaged-runtime matrix run once on the moe.26 artifact (installed stage, separate receipt)",
+        "Resolve reproduced stale registration inventory (missing outlook.readiness) and order-dependent suppression guard; verify against actual staged9.2 bundle. Source tests do not prove packaging."
+      ],
+      "dependsOn": [],
+      "evidenceClass": "source-test \u2192 installed-vm",
+      "ownerRole": "source-author (Claude CLI) then reviewer; vm-operator for installed run",
+      "executionState": "Author8bf5d32 committed; independent artifact-matrix-review active; staged execution NOT_RUN and author model-provenance exception recorded."
+    },
+    {
+      "number": 106,
+      "lane": "source-author \u2192 review \u2192 root gate wiring",
+      "priority": "urgent",
+      "exitCriteria": [
+        "installed-verifier-repair: explicit version/artifact parameters, phases and fail-closed identity retained; pure argument/config/dry-run tests only",
+        "Gate: required tier that entirely SKIPs is FAIL unless GA_GATE_STATIC=1 explicit; release path refuses without full GREEN \u226424h against recorded artifact identity",
+        "Independent review APPROVE; root wires into ga-gate (root-owned)"
+      ],
+      "dependsOn": [],
+      "evidenceClass": "source-review \u2192 artifact-identity",
+      "ownerRole": "source-author (Claude CLI); root-integrator owns ga-gate",
+      "executionState": "Author9bc9221b committed,72 focused tests; independent review active. Author final usage was MODEL_MISMATCH, allBedrock; provenance disposition pending."
+    },
+    {
+      "number": 96,
+      "lane": "installed recovery acceptance",
+      "priority": "high",
+      "exitCriteria": [
+        "Reuse verified probe/pin/notice and accepted-send watchdog behavior; recovery-acceptance-trace found no remaining source defect (145 focused passes).",
+        "If a fix lands: focused tests + independent review",
+        "Installed fault row on candidate: post-restore Online turn succeeds without relaunch; banner clears; silent send impossible"
+      ],
+      "dependsOn": [],
+      "evidenceClass": "source-test \u2192 installed-vm",
+      "ownerRole": "root VM operator after source verification",
+      "executionState": "PASS_SOURCE at7e1f9417: 145 focused tests; no new watchdog needed; installed restore/cancel proof pending"
+    },
+    {
+      "number": 102,
+      "lane": "read-only analysis",
+      "priority": "high",
+      "exitCriteria": [
+        "keychain-recurrence-analysis: cause identified or bounded UNKNOWN with a safe isolation/validation path away from the owner desktop; detector coverage assessed; no GUI launches, no Keychain changes",
+        "Complete the original required UI-suite criteria in a safe isolated GUI environment; a bounded diagnosis alone does not close CLWX102. Keep owner desktop launches held and record detector limitations."
+      ],
+      "dependsOn": [],
+      "evidenceClass": "source-analysis",
+      "ownerRole": "Claude read-only analyst; root selects safe isolated GUI validation environment",
+      "executionState": "Recurrence unresolved;20-minute analysis timed out, receipt-only resume active; owner desktop GUI remains held."
+    },
+    {
+      "number": 122,
+      "lane": "conditional UI author",
+      "priority": "medium",
+      "exitCriteria": [
+        "Resume ONLY after 102 provides a safe validation path",
+        "Principal-readable footer (no port/pid in rendered string; regression row pins it); component + E2E proof; independent review"
+      ],
+      "dependsOn": [
+        102
+      ],
+      "evidenceClass": "source-test",
+      "ownerRole": "Claude UI author/reviewer; safe isolated GUI lane required, owner desktop remains held",
+      "executionState": "edits preserved; paused on Keychain recurrence"
+    },
+    {
+      "number": 117,
+      "lane": "source-author \u2192 review",
+      "priority": "urgent",
+      "exitCriteria": [
+        "Reuse integrated1c387821 actual OpenClaw2026.9.2 policy oracle and native route; do not commission another catalog fix.",
+        "Installed: fresh on-device no-tool prompt yields answer text; no top-level sessions_yield; stalled loop terminates visibly; falsifiability run recorded; probe steering removed or mirrored into product"
+      ],
+      "dependsOn": [],
+      "evidenceClass": "source-review \u2192 installed-vm",
+      "ownerRole": "source-author (Claude CLI); vm-operator installed",
+      "executionState": "Actual-9.2 policy oracle independently approved and integrated1c387821; 22 focused passes; installed app proof and unsteered probe remain."
+    },
+    {
+      "number": 123,
+      "lane": "source-author \u2192 review",
+      "priority": "high",
+      "exitCriteria": [
+        "Discriminating read-back probe (chip display-name vs selector race) run; read-back fixed WITHOUT loosening the assertion; genuine-mismatch still REFUSES (pinned row)",
+        "Independent review APPROVE",
+        "Installed W4.1 + W4.4 pass on candidate with authenticated user Chrome (tenant gate)"
+      ],
+      "dependsOn": [],
+      "evidenceClass": "source-review \u2192 tenant-live",
+      "ownerRole": "source-author (Claude CLI); account-holder for sign-in",
+      "executionState": "reproduced 4/4; reviewed source repair noted CLEAR per card; installed/live acceptance pending"
+    },
+    {
+      "number": 119,
+      "lane": "review sign-off + root evidence hygiene",
+      "priority": "medium",
+      "exitCriteria": [
+        "NO duplicate implementation (content already byte-identical at candidate)",
+        "Root: redact + promote /tmp per-run artifacts and 4-run zero-flip comparison to docs/evidence; fix broken GA_GATE_2026-09-07_run2.md manifest link; board state refresh",
+        "\u22652 eval runs on the final artifact (repeat-run rule) recorded per-run"
+      ],
+      "dependsOn": [],
+      "evidenceClass": "installed-vm/tenant-live",
+      "ownerRole": "independent-reviewer + root-integrator",
+      "executionState": "source landed; audit PASS_SOURCE; /tmp evidence volatile"
+    },
+    {
+      "number": 120,
+      "lane": "review sign-off",
+      "priority": "medium",
+      "exitCriteria": [
+        "Independent review-lane sign-off of landed typed not_in_list/stale_read_guard grading (audit found no defect)",
+        "W3.2 verified on final-artifact live runs alongside 119"
+      ],
+      "dependsOn": [
+        119
+      ],
+      "evidenceClass": "installed-vm/tenant-live",
+      "ownerRole": "independent-reviewer",
+      "executionState": "source landed and audit-corroborated; approval lane open"
+    },
+    {
+      "number": 61,
+      "lane": "source-author + tenant seed + live eval",
+      "priority": "high",
+      "exitCriteria": [
+        "Author missing-diff #1: DOM-fixture unit pin for attachment metadata extraction (tests/unit/outlook-attachment-metadata.test.ts), mocked driver; review",
+        "EXTERNAL: one seeded attachment-bearing mail to test.fac (account-holder/root action, not code)",
+        "\u22652 live runs: W8.3 refusal first, W8.4 download confirm:true, W3.2 filename/sizeBytes/mimeType exercised"
+      ],
+      "dependsOn": [
+        123
+      ],
+      "evidenceClass": "source-test \u2192 tenant-live",
+      "ownerRole": "source-author; account-holder for seed + sign-in",
+      "executionState": "gate/refusal proven; confirm leg NOT_RUN seed-blocked"
+    },
+    {
+      "number": 63,
+      "lane": "installed/tenant acceptance",
+      "priority": "high",
+      "exitCriteria": [
+        "Fixture suspension letter \u2192 live extraction \u2192 prefill on test.fac Suspensions clone; \u22643 field misses vs expected JSON; hard-confirm gate holds; form left UNSUBMITTED; re-runnable script committed",
+        "Forms-files-correction findings (REQUEST_CHANGES on a57e6bd7) resolved; SharePoint list-write \u2260 Forms response distinction preserved"
+      ],
+      "dependsOn": [],
+      "evidenceClass": "tenant-live",
+      "ownerRole": "vm-operator + account-holder session",
+      "executionState": "Forms study corrected in fc19138d, root re-review pending; installed document-to-preview chain still open."
+    },
+    {
+      "number": 115,
+      "lane": "installed acceptance",
+      "priority": "medium",
+      "exitCriteria": [
+        "Curated fail-closed source fixture remains green with mutation controls, preserving its documented semantic limits.",
+        "Installed ordinary-app overlapping-name meal/shirt journey is reviewed fact-by-fact for associations, quantities, negation and actions; source fixture alone cannot provide the installed verdict."
+      ],
+      "dependsOn": [],
+      "evidenceClass": "installed-vm",
+      "ownerRole": "vm-operator",
+      "executionState": "correction 6ed95e82 APPROVED, integrated 488ebe29; installed rerun open"
+    },
+    {
+      "number": 26,
+      "lane": "installed acceptance",
+      "priority": "high",
+      "exitCriteria": [
+        "On packaged moe.26: network blocked, on-device channel, local doc read + grounded answer, zero non-loopback egress, guard negative-control run",
+        "This single receipt also satisfies CLWX-113 (annotated, no duplicate run)"
+      ],
+      "dependsOn": [
+        117
+      ],
+      "evidenceClass": "installed-vm",
+      "ownerRole": "vm-operator",
+      "executionState": "REOPENED; moe.25 native diagnostic only; app path NOT_RUN"
+    },
+    {
+      "number": 24,
+      "lane": "installed acceptance",
+      "priority": "high",
+      "exitCriteria": [
+        "Live in-app P1\u2013P5 + folder discovery on installed candidate; tool trace shows document.* every time, Python skills zero",
+        "Include OneDrive-redirected Desktop and complete obligation recall; each unsupported/encrypted input must have the supported behavior or readable refusal promised by the current matrix. Do not relabel implemented formats unsupported."
+      ],
+      "dependsOn": [
+        77,
+        115
+      ],
+      "evidenceClass": "installed-vm",
+      "ownerRole": "vm-operator",
+      "executionState": "Historical in-app evidence exists on older artifacts; exact upgraded-candidate evidence remains open."
+    },
+    {
+      "number": 125,
+      "lane": "installed acceptance",
+      "priority": "urgent",
+      "exitCriteria": [
+        "On moe.26: Existing Main + proven-fresh + next turn each answer once on the intended route with 30s terminal observation; prompt survives preparation delay/error",
+        "Cancel during preparation AND generation terminates visibly; controlled connectivity fault ends once; next turn succeeds; no silent replay/duplicate write",
+        "Launch/ready/send/dispatch/first-output/final timestamps recorded cold and warm"
+      ],
+      "dependsOn": [
+        96
+      ],
+      "evidenceClass": "installed-vm \u2192 installed-client",
+      "ownerRole": "vm-operator",
+      "executionState": "scoped moe.25 Online PASS; fault/cancel matrix and new-candidate proof open"
+    },
+    {
+      "number": 94,
+      "lane": "installed fault matrix",
+      "priority": "high",
+      "exitCriteria": [
+        "Under the churn recipe, a vanished-context run is never re-submitted as a new user turn; regression around run-resume path"
+      ],
+      "dependsOn": [
+        125
+      ],
+      "evidenceClass": "installed-vm",
+      "ownerRole": "vm-operator",
+      "executionState": "observed on moe.17; row scheduled inside 125 fault matrix"
+    },
+    {
+      "number": 95,
+      "lane": "installed fault matrix",
+      "priority": "high",
+      "exitCriteria": [
+        "Mid-turn degrade: interrupted turn resumes on new channel exactly once OR terminates visibly; never an indefinite spinner"
+      ],
+      "dependsOn": [
+        125
+      ],
+      "evidenceClass": "installed-vm",
+      "ownerRole": "vm-operator",
+      "executionState": "observed on moe.17; row scheduled inside 125 fault matrix"
+    },
+    {
+      "number": 43,
+      "lane": "installed performance",
+      "priority": "high",
+      "exitCriteria": [
+        "\u22655 matched cold + \u22655 warm samples on the candidate: preparation/first-token/terminal latency + memory; p50/p90 vs an EXPLICIT recorded budget disposition (do not silently pick 30s vs 45s)",
+        "Latency row in the evidence packet with pass/fail vs budget"
+      ],
+      "dependsOn": [
+        125
+      ],
+      "evidenceClass": "installed-vm/installed-client",
+      "ownerRole": "vm-operator",
+      "executionState": "heterogeneous single observations only; no p50/p90"
+    },
+    {
+      "number": 131,
+      "lane": "installed acceptance",
+      "priority": "medium",
+      "exitCriteria": [
+        "Installed same-build unaided rerun: Graph capability question returns actual Main-owned status; no fictional Gateway config probing; no navigation/auth side effects"
+      ],
+      "dependsOn": [],
+      "evidenceClass": "installed-vm",
+      "ownerRole": "vm-operator",
+      "executionState": "source APPROVED, integrated 6ec32807; installed rerun open"
+    },
+    {
+      "number": 39,
+      "lane": "external-gated",
+      "priority": "medium",
+      "exitCriteria": [
+        "Reuse reviewed/integrated Graph setup and recovery; actual approved tenant/client configuration, account-holder sign-in, token and Graph read are verified.",
+        "Missing tenant configuration/consent or live proof stays BLOCKED. No new Graph deferral is introduced by this sprint."
+      ],
+      "dependsOn": [],
+      "evidenceClass": "tenant-live (external)",
+      "ownerRole": "account-holder (human); author support only",
+      "executionState": "source 7a129570 APPROVED + integrated; real sign-in NOT_RUN"
+    },
+    {
+      "number": 25,
+      "lane": "client install",
+      "priority": "urgent",
+      "exitCriteria": [
+        "Assisted-screen install of the EXACT moe.26 installer on a Windows 10/11 client as standard user: exit 0, complete tree incl. ffmpeg.exe, ports bind, zero manual dependency steps, recording",
+        "Unprovisioned first-run state + documented provisioning path verified; hashes match the release run"
+      ],
+      "dependsOn": [
+        106
+      ],
+      "evidenceClass": "installed-client",
+      "ownerRole": "vm-operator + machine gate (no local UTM; GCP is Server, not client)",
+      "executionState": "moe.25 Server-2022 upgrade evidence only; client lane machine-blocked"
+    },
+    {
+      "number": 107,
+      "lane": "stakeholder prep",
+      "priority": "high",
+      "exitCriteria": [
+        "One continuous timed rehearsal of all three demo moments on the accepted candidate/machine/account; runbook committed; two backstop clips staged as named assets"
+      ],
+      "dependsOn": [
+        125,
+        24
+      ],
+      "evidenceClass": "stakeholder-receipt",
+      "ownerRole": "root + vm-operator",
+      "executionState": "not started; runbooks 3 months stale"
+    },
+    {
+      "number": 110,
+      "lane": "stakeholder prep",
+      "priority": "medium",
+      "exitCriteria": [
+        "Pilot slice only: dated revised-schedule note to Raj DRAFTED AND HELD + distribution checklist (auto-update OFF, per-laptop signed-in Chrome, onboarding, support channel)",
+        "Fleet scope stays open and uncompleted; send only under the recorded Sept-7 authorization after the verdict"
+      ],
+      "dependsOn": [],
+      "evidenceClass": "stakeholder-receipt",
+      "ownerRole": "root (draft-and-hold)",
+      "executionState": "not started"
+    },
+    {
+      "number": 22,
+      "lane": "anchor (root)",
+      "priority": "urgent",
+      "exitCriteria": [
+        "Record all seven pilot acceptance groups with PASS/FAIL/BLOCKED/NOT_RUN, exact source/artifact/environment evidence, and final strict release verdict.",
+        "Only the human changes cards to Done; this does not prevent root recording an evidence-backed verdict or executing already authorized release actions."
+      ],
+      "dependsOn": [],
+      "evidenceClass": "verdict",
+      "ownerRole": "root-integrator + owner",
+      "executionState": "OKR anchor; not an execution card"
+    },
+    {
+      "number": 40,
+      "lane": "Graph installed acceptance",
+      "priority": "high",
+      "exitCriteria": [
+        "On the exact clean Windows candidate without a Chrome session, run the Graph transport Outlook matrix with actual account-holder sign-in; record read/draft/recovery and action-gated dispatch evidence.",
+        "Tenant/registration decisions remain named external blockers; mock transport cannot pass the live lane."
+      ],
+      "dependsOn": [
+        39
+      ],
+      "evidenceClass": "installed-client/tenant-live",
+      "ownerRole": "root VM operator and account holder",
+      "executionState": "Source permission/setup repairs integrated; tenant and installed acceptance open"
+    },
+    {
+      "number": 114,
+      "lane": "installed document acceptance",
+      "priority": "high",
+      "exitCriteria": [
+        "Run two consecutive ordinary in-app file enumerations against the same seeded filesystem manifest, including nested/redirected Desktop files; require exact set equality.",
+        "If not reproduced, record a dated CANNOT-REPRO disposition with exact artifact/fixture and remaining ask; no extra discovery implementation without evidence."
+      ],
+      "dependsOn": [
+        77
+      ],
+      "evidenceClass": "installed-vm",
+      "ownerRole": "root VM operator, shared D0/document run",
+      "executionState": "Selected into sprint; shares discovery fixtures with24/77"
+    },
+    {
+      "number": 118,
+      "lane": "browser regression acceptance",
+      "priority": "high",
+      "exitCriteria": [
+        "Retain reviewed source tab-ownership controls; installed browser regression preserves principal-owned tabs and sign-in redirects on the final candidate."
+      ],
+      "dependsOn": [
+        130,
+        121
+      ],
+      "evidenceClass": "source-regression/installed-vm",
+      "ownerRole": "browser reviewer then root VM operator",
+      "executionState": "Ready historical source fix; required final-artifact regression remains explicit"
+    }
+  ],
+  "newCards": [
+    {
+      "key": "CLWX-133",
+      "name": "GA release run: integrate, build, validate and publish one identified Windows candidate",
+      "parentCard": "CLWX-22",
+      "priority": "urgent",
+      "state": "Todo",
+      "whyNoExistingCard": "CLWX106 owns gate behavior,25 installation,85 hash integrity and22 objectives; this card owns the bounded release-run receipt across their checkpoints.",
+      "description_html": "<p>Own one continuous release run under CLWX22. Acceptance: (1) integrate only independently reviewed source; freeze clean revision and unique candidate version; (2) focused checks then one integrated preflight per changed candidate; (3) hosted keyless installer with source/run/profile provenance and installer, ASAR, EXE and runtime/helper hashes; enforce CLWX85 identity contract; (4) installed, Windows10/11 client, Microsoft, document, offline, lifecycle and performance evidence for these exact bytes; (5) verified candidate download for the unaided tester card BEFORE final GA; (6) strict required-evidence verdict, then publish the accepted GA artifact set and verify its downloadable hashes. Any new source fix creates a newly identified candidate and reruns affected acceptance; previous hashes/results never silently transfer. Missing, failed or skipped required rows block publication.</p><p>Owner: root integration/release operator, Claude CLI source/review lanes. Dependencies are phased: source acceptance precedes build, installer identity precedes installed/tester proof, tester proof precedes final verdict/publication. No completed-card dependency cycle is intended. Preserve original card histories and all owner-session, authentication and dispatch gates. Store exact commands/timestamps/results and first causal failures; route a failure to its existing owner and continue within this sprint. Only a human closes Done.</p>",
+      "number": 133,
+      "id": "1645f522-d9d2-4ae3-9345-b65aa7e43584"
+    },
+    {
+      "key": "CLWX-134",
+      "name": "Unaided stakeholder acceptance of the verified Windows candidate",
+      "parentCard": "CLWX-22",
+      "priority": "high",
+      "state": "Todo",
+      "whyNoExistingCard": "CLWX107 owns internal rehearsal and110 broader rollout logistics; neither owns the unaided tester receipt bound to a specific installer and each reported failure.",
+      "description_html": "<p>Before final GA approval, give the designated external tester the verified candidate download/hash and a concise reproducible checklist covering reported setup, email/Chrome/Graph, local PDF/Office, Forms preview and response/recovery failures. The candidate can be shared through the authorized test-artifact channel; do not require GA publication first.</p><p>Acceptance: (1) candidate has passed internal acceptance and its downloadable bytes match the immutable manifest; (2) dated unaided Windows10/11 standard-user run records environment, source/artifact identity and PASS/FAIL/BLOCKED for every required journey; (3) tester observations and failure evidence are preserved/redacted; (4) failures reopen their existing owning cards and invalidate the affected candidate verdict; (5) the successful receipt is included in the final strict GA evidence. Account-holder sign-in and action-specific send/download/submit gates remain; no assisted repair is presented as an unaided pass. Tester availability/authentication is an external dependency. This card is part of pilot acceptance; fleet rollout remains separate.</p>",
+      "number": 134,
+      "id": "ec29ab89-d82d-4c5a-a6ff-f006cedcc12e"
+    }
+  ],
+  "lanes": [
+    {
+      "name": "L1 bounded source fixes and diagnosis",
+      "parallel": true,
+      "writeScope": "Separate source worktrees for browser130/121, artifact harness77, installed verifier106 and UI122; read-only Keychain102 analysis. Recovery96 and policy117 already have source evidence.",
+      "owner": "Claude CLI (claude-fable-5, Bedrock)",
+      "nextAction": "Review committed browser41359e1 and artifact8bf5d32; finish verifier; preserve desktop hold; no duplicate96/117 implementation."
+    },
+    {
+      "name": "L2 independent review",
+      "parallel": true,
+      "writeScope": "review receipts only; never the author's diff",
+      "owner": "separate Claude CLI review lane (never the author session)",
+      "nextAction": "Browser independent review is active; review harness/verifier commits, adjudicate model-provenance exception, reuse unchanged approved source evidence."
+    },
+    {
+      "name": "L3 integration + release run (CLWX-133)",
+      "parallel": false,
+      "writeScope": "root repo, ga-gate wiring, release pointers, Plane writes \u2014 root only",
+      "owner": "root-integrator",
+      "nextAction": "integrate approved commits as they clear L2; freeze when L1 set is merged; run CLWX-133 once"
+    },
+    {
+      "name": "L4 installed/client acceptance",
+      "parallel": false,
+      "writeScope": "VM/client machines + evidence files; sequential single operator; Windows Session 2 stays observation-only until owner releases it",
+      "owner": "vm-operator (root-directed)",
+      "nextAction": "Prepare fixtures and exact-artifact protocol now; execute when candidate identity and a permitted isolated machine/session are available."
+    },
+    {
+      "name": "L5 tenant/account-holder actions",
+      "parallel": true,
+      "writeScope": "none in repo; human actions: Microsoft sign-in, seeded attachment mail to test.fac, forms clone session",
+      "owner": "account-holder (human) coordinated by root",
+      "nextAction": "schedule sign-in + one seeded attachment mail before L4 reaches the Outlook rows"
+    },
+    {
+      "name": "L6 stakeholder prep (draft-and-hold)",
+      "parallel": true,
+      "writeScope": "Runbook and tester packet; send within recorded authorization at the candidate-testing stage, with final GA notification after release.",
+      "owner": "root",
+      "nextAction": "Prepare internal rehearsal and unaided candidate checklist before final verdict; do not make stakeholder acceptance depend on GA publication."
+    }
+  ],
+  "sequence": [
+    "S0: finish bounded source corrections; reuse96/117/119/120 source proof; independent review and fix findings in the same owned worktree/card.",
+    "S1: integrate approved commits, freeze one clean source revision and unique candidate version, then full integrated preflight.",
+    "S2: hosted keyless build; verify immutable source/run/profile, installer/ASAR/EXE/runtime/helper hashes. This is artifact readiness, not a release verdict.",
+    "S3: exact-artifact installed Windows identity and lifecycle/cancel/fault/recovery; D0/P1-P5 obligations, file reopen, fidelity and exact double enumeration; offline/no-egress and unsteered local-model behavior.",
+    "S4: account-authenticated Graph and browser Outlook, seeded attachment metadata/download gates, both Forms previews, tab preservation and repeated evals; keep dispatch action gates.",
+    "S5: Windows10/11 standard-user fresh setup, explicit-budget matched cold/warm performance, internal rehearsal and scoped policy/reminder regressions. Reuse compatible evidence only with its scope.",
+    "S6: publish/share the candidate through the authorized test-artifact channel, verify downloaded bytes, complete the unaided stakeholder rerun on the same artifact.",
+    "S7: run the strict final release verdict with fresh required evidence; only then GA publication, final download/hash verification and authorized stakeholder notification.",
+    "Failure transition: preserve first causal evidence, return to the owning card, repair/review, then resume at the earliest affected stage in this same sprint. A changed binary means new identity and affected downstream retests."
+  ],
+  "externalGates": [
+    {
+      "gate": "Windows Session 2 observation-only hold",
+      "owner": "owner",
+      "blocks": "any L4 action on that session until released"
+    },
+    {
+      "gate": "Owner Mac desktop GUI hold (Keychain recurrence)",
+      "owner": "owner",
+      "blocks": "Owner desktop launches remain held; required GUI acceptance must use a safe isolated lane."
+    },
+    {
+      "gate": "Microsoft account-holder sign-in (tenant)",
+      "owner": "account-holder",
+      "blocks": "Graph39/40 and authenticated browser/Forms/attachment acceptance; tenant/client consent requirements remain visible"
+    },
+    {
+      "gate": "Seeded attachment-bearing mail to test.fac",
+      "owner": "account-holder/root",
+      "blocks": "61 W8.4 + W3.2 metadata legs (action, not code)"
+    },
+    {
+      "gate": "Windows 10/11 client machine (no usable local UTM; GCP = Server 2022 \u2260 client)",
+      "owner": "owner/root",
+      "blocks": "CLWX-25 client lane and matched client performance evidence"
+    },
+    {
+      "gate": "Unaided external tester availability (Karunesh told to wait)",
+      "owner": "root coordinates before final GA using the verified candidate",
+      "blocks": "CLWX-134"
+    }
+  ],
+  "excluded": [
+    {
+      "item": "CLWX-113",
+      "reason": "duplicate of CLWX-26 offline receipt; satisfied by the single 26 run, annotated"
+    },
+    {
+      "item": "CLWX-85",
+      "reason": "identity binding satisfied by CLWX-133 matrix; no duplicate proof"
+    },
+    {
+      "item": "CLWX-71 MCP adapter, CLWX-126 engine comparison",
+      "reason": "optional/research; not pilot-blocking"
+    },
+    {
+      "item": "CLWX-87 / ASR functional acceptance",
+      "reason": "explicitly deferred per anchor; no microphone lane; helper packaging still verified in CLWX-133"
+    },
+    {
+      "item": "CLWX-28/29/30/31/116 + fleet scope of 110/22",
+      "reason": "fleet/production milestone; stays BLOCKED and visible, not a pilot prerequisite"
+    },
+    {
+      "item": "CLWX124 action journal,55/56/57 recorder/video,108 Mac RC",
+      "reason": "Outside this Windows pilot sprint; no new deferrals to required Windows criteria."
+    },
+    {
+      "item": "CLWX132 retired generic Google OAuth default",
+      "reason": "Separate open defect; not established as the cause of the pilot Online failures. Exposure must be checked against final supported setup routes before the release verdict; no automatic pass or closure."
+    }
+  ],
+  "stopRule": "Complete only after all required sprint acceptance is satisfied or explicitly owner-deferred, the exact-artifact unaided tester receipt exists, and the strict final verdict/publication checks pass. A recoverable failure returns to its owning card and resumes this sprint. If all remaining work requires unavailable account/machine/authorization, record BLOCKED with exact dependencies and preserve state; never turn timeout, missing evidence or Ready counts into GA. Human Done closure is separate from evidence recording.",
+  "costPolicy": "Claude CLI on Bedrock handles bounded authorship, diagnosis and independent review; requested model Fable5 and final usage provenance both recorded. GPT coordinates briefly. No new GPT subagents or repeated broad audits. One integrated preflight/build per unchanged candidate, rerunning affected checks after actual fixes; no blind retries or GUI launches on the owner desktop.",
+  "coveredExistingCards": [
+    {
+      "number": 113,
+      "coveredBy": [
+        26
+      ],
+      "rule": "Share final offline/no-egress evidence, no duplicate run."
+    },
+    {
+      "number": 85,
+      "coveredBy": [
+        "CLWX-133"
+      ],
+      "rule": "Unique version/artifact set and hash manifest remain mandatory."
+    },
+    {
+      "number": 73,
+      "coveredBy": [
+        130,
+        118
+      ],
+      "rule": "Retain authenticated user-profile ownership and managed-profile negative controls."
+    },
+    {
+      "number": 42,
+      "coveredBy": [
+        "CLWX-133"
+      ],
+      "rule": "Policy pack/lookup acceptance in the final evidence matrix; existing implementation reused."
+    },
+    {
+      "number": 67,
+      "coveredBy": [
+        "CLWX-133"
+      ],
+      "rule": "Existing reminder receipts retain their exact scope; run affected final-artifact regression when required, never imply new-build proof from an old hash."
+    }
+  ],
+  "proposalCorrections": [
+    "117 oracle already repaired;96 recovery verified145tests;24 had historical in-app proof.",
+    "Keep39/40 Graph and114 discovery in scope; explicitly retain118 regression.",
+    "Installed fidelity needs fact-by-fact app proof, not just source fixture execution.",
+    "Tester acceptance precedes finalGA; candidate availability is distinct from GA publication.",
+    "Do not run strictrelease verdict before installed evidence or require human Done as a new evidence gate.",
+    "Record harness8bf5d32 source receipt and Bedrock model-mismatch exception; independent review remains required."
+  ],
+  "cycle": {
+    "id": "9a7b9c92-101e-4fd9-bfb7-07bdbdd49b5a",
+    "name": "GA closure \u2014 reviewed source to verified Windows release",
+    "readback": "PASS_DETAIL_AND_LIST",
+    "project": "81a2ea23-e060-49b4-a344-1ab0339f46d5",
+    "start_date": "2026-09-08T13:39:12.264237Z",
+    "end_date": "2026-09-15T23:59:00Z",
+    "at": "2026-09-08T13:39:12.377885+00:00",
+    "url": "http://localhost:8090/issues-agent/projects/81a2ea23-e060-49b4-a344-1ab0339f46d5/cycles/9a7b9c92-101e-4fd9-bfb7-07bdbdd49b5a",
+    "membershipCount": 31,
+    "membershipReadback": "PASS_EXACT_SET"
+  },
+  "newCardMapping": {
+    "NEW-1": 133,
+    "NEW-2": 134
+  },
+  "updatedAt": "2026-09-08T13:50:00.759686+00:00",
+  "snapshotAt": "2026-09-08T13:55:39.841954+00:00",
+  "readiness": "RED",
+  "sourceCandidate": "7e1f9417ae3f57096a7799d9a433ea9745604e5f",
+  "privateVerification": "artifacts/ga-fable-20260908/sprint-loop/sprint-verification.json",
+  "boardExportVerifiedAt": "2026-09-08T13:53:07.389668+00:00",
+  "boardIssueCount": 134,
+  "executionCheckpoint": {
+    "browserReview": "APPROVE; integration pending",
+    "artifactHarnessReview": "IN_PROGRESS",
+    "installedVerifierReview": "IN_PROGRESS",
+    "keychainAnalysis": "Timed out; resumed only to capture existing evidence, no further investigation or GUI launches",
+    "sourceCandidate": "7e1f9417ae3f57096a7799d9a433ea9745604e5f",
+    "installedArtifact": "moe.25 only; moe.26 not built",
+    "readiness": "RED"
+  }
+}

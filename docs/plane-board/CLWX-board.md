@@ -183,55 +183,6 @@ Canary classifies failure cause (model load vs timeout vs real regression), supp
 Source
 Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex rollouts, 11 app sessions, all feedback docs). Master table: docs/BLOCKER_BUG_COLLECTION_2026-09-03.md.
 
-### CLWX-102 — [bug/ui] e2e suite baseline debt: 13 specs red from fork-decision drift (deleted locales, anonymised provider labels, channels copy)
-
-- **State:** Backlog  |  **Priority:** medium
-
-CLWX-SOURCE-ONLY-RECURRENCE-20260908-1334 — REOPENED: owner screenshots at17:27:58/17:28:12/17:28:20 Dubai reproduce Keychain Not Found after the fixture-only7e1f9417 fix and resumed suite. Previous two-launch synthetic PASS and review did not prove full-suite resolution. Root interrupted ui-release-resume and eight identified descendants at13:28:47UTC; no owned Electron remained, observer reported zero SecurityAgent windows afterward. Detector coverage itself is under review. All GUI launches on owner Mac are held; no automatic resume. keychain-recurrence-analysis is read-only Claude/Bedrock in /private/tmp/clawx-e2e-macos-keychain-20260908. One shared electron.launch already contains both switches; alternate cause UNKNOWN. Full updated history, screenshots, commands, scope and next validation: docs/bugs/CLWX-102-macos-test-keychain.md. No Keychain configuration changed.
-CLWX-KEYCHAIN-RESOLVED-20260908 — Keychain interruption removed for the tested path. Fixture-only fix7e1f9417 isolates synchronous mock Keychain and Electron42 async Keychain provider for darwin UI tests. Independent Claude Fable5/Bedrock review APPROVE; typecheck, Vite build, focused lint and one E2E with two launches plus cross-relaunch synthetic decryption PASS. Ten native-window samples observed zero SecurityAgent dialogs; no Keychain or installed app configuration changed. Integrated candidate7e1f9417, rootb943fd2d and UI worktreecedca13d. Original three UI edits hash-verified preserved. ui-release-resume intentionally resumes the interrupted Claude session; full CLWX102 E2E criteria remain open. Complete handoff: docs/bugs/CLWX-102-macos-test-keychain.md. Private proof: artifacts/ga-fable-20260908/keychain-popup/focused-e2e-verification.json and keychain-isolation-review/result.json.
-CLWX-MAC-KEYCHAIN-20260908 — Owner screenshot at17:05:27 Dubai reports repeated Keychain Not Found / Electron Key during local UI E2E. Root stopped only the identified UI author/test process tree and verified no isolated-test Electron or visible SecurityAgent windows remain. Production apps and system Keychain untouched. Tagged Electron42.0.0 has eager async safeStorage initialization; its async Keychain provider is separate from Chromium synchronous mock Keychain. Fixture-only darwin isolation is being verified in fix/e2e-macos-keychain-20260908. Original UI component edits preserved. Full root-cause, screenshot hash, process containment, sources and acceptance: docs/bugs/CLWX-102-macos-test-keychain.md. Source/rendered review pending; no GA promotion.
-CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Current-source UI acceptance lane launched at488ebe29 with CLWX122. Verify historical English-only/provider/channel E2E failures against current code; correct stale fork expectations only where the product contract supports it. Use isolated Electron42 already verified by Graph UI, without shared dependency mutation. Source changes require focused rendered-app proof and independent review; no blanket skips or false release pass.
-Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
-Area: ui   Severity: medium (priority medium)
-
-Steps to reproduce
-pnpm test:e2e (full suite, renderer built). Or GA_GATE_E2E=1 pnpm ga:gate once CLWX-91 lands.
-
-Expected
-Full renderer e2e suite green so the ga:gate opt-in tier (GA_GATE_E2E=1, wired by CLWX-91) can flip formally green
-
-Actual
-Baseline 2026-09-06: 32 pass / 13 fail / 2 skip (6.2m). Red classes: (a) language-russian x4 + chat-skill-trigger-i18n Chinese label x1 — specs test locales the fork DELETED (English-only hard rule); disposition = delete or fork-skip with reason. (b) provider-lifecycle x3 — spec expects upstream label copy (Moonshot E2E) but the fork anonymises provider identity; card renders, data loads, text assertion stale. (c) channels-* x4 + app-smoke persist-setup x1 — unverified, likely same fork-copy class; each needs a 10-min disposition (fix expectation vs real defect). NOT caused by CLWX-91 provider normalization: failing cards render with data loaded; the normalization only alters non-array payload handling.
-
-Evidence
-Playwright line-reporter run 2026-09-06 (session task bb5mnels0); CLWX-91 evidence comment
-
-Environment
-fix/doc-tooling-steering @ 4854e8f3 + CLWX-91 fix, Mac dev lane, moe.18-era tree
-
-Regression class? fork-decision drift vs upstream specs, not a runtime regression class
-
-### CLWX-107 — Monday demo dress rehearsal + DEMO_RUNBOOK_2026-09-08
-
-- **State:** Backlog  |  **Priority:** high
-
-Filed by the ga-sprint-driver fold of docs/STAKEHOLDER_GAP_ANALYSIS_2026-09-06.md §5 item 2 (stakeholder-gap synthesizer, 2026-09-06: 4 chronological mappers + a GPT-6 codex-exec adversary + a completeness critic; cross-checked against the 105-card mirror, no existing card covers it).
-Why this is a gap: GA_DEMO_READINESS_ASSESSMENT_2026-09-05.md recommends this as P2/P3 but neither was carded; the only committed runbooks are dated 2026-05-26/29, i.e. three months stale against the current build.
-Acceptance: One continuous timed rehearsal of all three demo moments on the actual demo build + machine + account; a runbook committed (pre-warm attach, reset sequence, fallback order); and the two backstop clips staged as named demo assets.
-Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is scheduled.
-
-**Comments (9):**
-
-- moe.23 package/fallback repair checkpoint 05:23 - 2026-09-08 external acceptance. No repaired installer, login/setup bundle or release candidate was sent to Karunesh in this checkpoint. Setup bundles were rebuilt with the tested 9d46832f helper and distinct VM/stakeholder credentials, but remain private and unsent. moe.23 is only at host package success plus assisted-upgrade extraction; moe.24 with the fallback repair is packaging and has no accepted artifact. External acceptance remains blocked; do not ask the stakeholder to retest functionality until a repaired installed artifact has first-turn stability proof.
-- Fresh first-turn transient fallback checkpoint 04:54 - 2026-09-08 external acceptance. No repaired installer, new login or setup bundle has been sent to Karunesh, and a fresh read-only WhatsApp check at 04:53:27Z found no new messages. The setup entrypoint is now repaired in VM evidence, but external acceptance remains blocked because the fresh first Online app turn failed the driver and visual review despite a late correct cloud answer. Cache is still unconfirmed; do not ask the tester to run email/doc functionality until the ordinary assistant turn is stable.
-- Fresh standard-user setup checkpoint 04:31 - 2026-09-08 external acceptance. No new download/setup was sent to Karunesh after the connection-failure report. The current work has narrowed the path: broker API proof exists, setup-helper native tests now pass, and moe.22 installs on the fresh standard Server profile. External acceptance is still blocked because the actual CMD setup launch failed at 04:30:22Z before installing the Online seed, no ordinary seeded first reply is proved, and there is no new artifact/handoff for the stakeholder to test. Treat cache as unconfirmed, not root cause.
-- GA broker/setup checkpoint 04:11 - 2026-09-08 external acceptance. Latest read-only WhatsApp refresh around 04:11Z found no new inbound after the 03:31 stakeholder failure. Owner outbound at 03:59Z told the tester to wait for the fix and suspected cache, but cache cause is unconfirmed. The private moe.22 download was verified separately, but no new download/setup was sent and no URL is recorded here. External acceptance remains blocked until setup/provisioning is fixed and Karunesh can retest.
-- GA stakeholder connection checkpoint 03:39 - 2026-09-08. Fresh mapped WhatsApp read at 2026-09-08T03:31:42Z supersedes the earlier no-reply state. Karunesh reported repeated assistant reachability / work-safe errors at 03:28-03:29Z and said he cannot test functionality. The diagnostic log SHA256 e5c2587fb034812a488306a00c828f35bdd771159357539fd659e92d88f8a2ec reports moe.21, which matches the earlier sent diagnostic build; do not blame the stakeholder for testing the wrong version. Acknowledgment send was accepted at 03:39:18Z to focus on connection first and hold functionality tests; no delivery/read proof. A private moe.22 URL was verified by anonymous full GET but was not posted here and no new installer handoff occurred.
-- GA checkpoint 03:23 - 2026-09-08 external handoff boundary. No new GCS upload, public release, stakeholder send or tester acceptance was produced for selected a4efc7e4. Prior Karunesh intake remains read-only freshness evidence, not acceptance; the earlier diagnostic owner download link was for an older candidate and does not authorize or validate this build. External release/handoff stays blocked until the exact selected artifact has the remaining gates resolved or explicitly accepted as deferrals.
-- GA final artifact delta - 2026-09-08 external handoff. Read-only stakeholder intake refresh at 2026-09-08T00:07:10Z resolved Karunesh Ramdass through the configured bridge SQLite store and found zero new inbound messages after the prior accepted diagnostic send. No new send was attempted. Complete sync, delivery receipt, read receipt and tester acceptance remain unproven. Evidence: artifacts/windows-vm/20260908-moe22/stakeholder-intake-refresh.json. The selected installer artifact exists and passed local artifact verification, but it has not been published or sent as an accepted tester package in this lane. This card remains external-acceptance/open-rehearsal scope.
-- GA blocker correction - 2026-09-08 handoff expiry. The earlier GA blocker comment on this card used the word "expired" for the GCS signed URL. At the time of that comment and this correction, the expiry was still in the future. Correct wording: the signed URL expires at 2026-09-08T04:27:21Z. This remains a diagnostic owner/tester handoff only, with no delivery/read receipt or tester acceptance proven.
-- GA blocker record - 2026-09-08. External handoff and rehearsal status recorded in docs/evidence/GA_BLOCKER_RESOLUTION_2026-09-08.md. - Owner-requested moe.21 diagnostic download was verified and the authorized WhatsApp bridge send to Karunesh was accepted at 2026-09-07T17:31:43Z; see docs/evidence/WINDOWS_OWNER_TEST_DOWNLOAD_2026-09-07.md. - The message stated known limits. It did not prove delivery, read receipt, tester acceptance or that email was fixed on Karunesh's machine. - The signed GCS URL expired at 2026-09-08T04:27:21Z. Do not treat that handoff as a public release asset. - No continuous timed rehearsal exists for the current candidate; moe.22 has no accepted installer yet. Next action: after exact-candidate installed acceptance, prepare the current tester package/checklist and run the rehearsal against that artifact.
-
 ### CLWX-108 — Mac RC cut + install + manifest publish (moe.19+)
 
 - **State:** Backlog  |  **Priority:** high
@@ -248,15 +199,6 @@ Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is sc
 Filed by the ga-sprint-driver fold of docs/STAKEHOLDER_GAP_ANALYSIS_2026-09-06.md §5 item 4 (stakeholder-gap synthesizer, 2026-09-06: 4 chronological mappers + a GPT-6 codex-exec adversary + a completeness critic; cross-checked against the 105-card mirror, no existing card covers it).
 Why this is a gap: Zero board cards mention the one stakeholder document with contractual force (“AI Tool Usage Agreement MPAAI↔MoE.pdf”).
 Acceptance: A FACTS-vs-ANALYSIS memo mapping each clause to the real data flows (Google AI / Bedrock / Cloud Run broker egress, WhatsApp liaison capture, on-device credentials, the public repo), with conflicts flagged to the owner and fed into the KR8 working-session agenda.
-Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is scheduled.
-
-### CLWX-110 — 20-principal rollout plan + revised schedule answer to Raj
-
-- **State:** Backlog  |  **Priority:** medium
-
-Filed by the ga-sprint-driver fold of docs/STAKEHOLDER_GAP_ANALYSIS_2026-09-06.md §5 item 5 (stakeholder-gap synthesizer, 2026-09-06: 4 chronological mappers + a GPT-6 codex-exec adversary + a completeness critic; cross-checked against the 105-card mirror, no existing card covers it).
-Why this is a gap: CLWX-8 covers only production login + support logging. Nothing covers cohort logistics, and the original go-live date expired silently.
-Acceptance: A carded plan covering distribution with auto-update OFF, per-laptop signed-in Chrome setup across the 7 districts, an onboarding checklist, a support/escalation channel and a fix-shipping cadence; plus a dated revised-schedule note to Raj (closeout draft 08).
 Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is scheduled.
 
 ### CLWX-111 — Forms corpus inventory + source-PDF vault
@@ -284,15 +226,6 @@ Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is sc
 Filed by the ga-sprint-driver fold of docs/STAKEHOLDER_GAP_ANALYSIS_2026-09-06.md §5 item 8 (stakeholder-gap synthesizer, 2026-09-06: 4 chronological mappers + a GPT-6 codex-exec adversary + a completeness critic; cross-checked against the 105-card mirror, no existing card covers it).
 Why this is a gap: KR3’s checked evidence predates moe.11 and no card tracks the re-proof (checklist item V11 executes it; this card owns it).
 Acceptance: Network blocked, on-device channel, local doc read + grounded answer, zero non-loopback egress — on a build ≥ moe.16. Until then the KR3 scorecard box is annotated evidence-stale.
-Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is scheduled.
-
-### CLWX-114 — DOCSEARCH: reproduce with the guided-test repro, or disposition
-
-- **State:** Backlog  |  **Priority:** medium
-
-Filed by the ga-sprint-driver fold of docs/STAKEHOLDER_GAP_ANALYSIS_2026-09-06.md §5 item 9 (stakeholder-gap synthesizer, 2026-09-06: 4 chronological mappers + a GPT-6 codex-exec adversary + a completeness critic; cross-checked against the 105-card mirror, no existing card covers it).
-Why this is a gap: The only Raj-lineage defect with neither a card nor a disposition. The GPT-6 adversary showed a repro already exists in-repo (docs/KARUNESH_GUIDED_TEST_2026-09-03.md:128), which contradicts the wait-for-the-tester framing.
-Acceptance: Run the document-search opener: two consecutive in-app enumerations compared against a filesystem manifest (nested files included), exact set equality. Otherwise a CANNOT-REPRO disposition with the ask documented.
 Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is scheduled.
 
 ### CLWX-116 — Minister / 2000-laptop ask disposition
@@ -499,6 +432,14 @@ Accept: timeline stays current with each shippable commit; it is the reference f
 
 - **State:** Ready  |  **Priority:** none
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: installed acceptance. Owner: vm-operator. Current checkpoint: Historical in-app evidence exists on older artifacts; exact upgraded-candidate evidence remains open..
+Sprint acceptance slice (original full criteria retained below):
+
+- Live in-app P1–P5 + folder discovery on installed candidate; tool trace shows document.* every time, Python skills zero
+- Include OneDrive-redirected Desktop and complete obligation recall; each unsupported/encrypted input must have the supported behavior or readable refusal promised by the current matrix. Do not relabel implemented formats unsupported.
+Dependencies: CLWX-77, CLWX-115. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 Raj's 0/5 was a tool-selection failure, not a missing capability: the agent consulted ~/.openclaw/skills/pdf/SKILL.md, which steered it to pdfplumber/pandas, burned 7 tool calls, and gave up. Capability and steering are now fixed in config + eval, but the only test that reproduces Raj's failure mode — a live, LLM-driven, in-app run — has not been done.
 FACTS: handler replay 7/7 PASS (raj-prompt-replay REPORT); persona now carries a hard document.* routing rule; the 4 Python doc skills flipped to autoEnable:false; 6-lane BM25 tool-selection eval added (73514b4f). c1b18125 also rewrote findWithinDir breadth-first so a sibling of the search root is found.
 INFERENCE / RISK: both the handler replay and the harness call handlers directly with absolute paths — structurally blind to tool selection and discovery, the two things that broke. A re-test could reproduce Raj's transcript despite 7/7.
@@ -636,6 +577,14 @@ Fix directions: plugin-side breaker (after N identical failures return a success
 
 - **State:** Todo  |  **Priority:** none
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: Graph installed acceptance. Owner: root VM operator and account holder. Current checkpoint: Source permission/setup repairs integrated; tenant and installed acceptance open.
+Sprint acceptance slice (original full criteria retained below):
+
+- On the exact clean Windows candidate without a Chrome session, run the Graph transport Outlook matrix with actual account-holder sign-in; record read/draft/recovery and action-gated dispatch evidence.
+- Tenant/registration decisions remain named external blockers; mock transport cannot pass the live lane.
+Dependencies: CLWX-39. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-RDP-FEEDBACK-20260908-1548 — Fresh owner RDP evidence: Graph handler is bundled but configured=false and signedIn=false. Chrome-less Graph acceptance cannot run until actual tenant/client setup and account-holder sign-in. Source diagnostic/setup lanes are active under CLWX-39; original Graph-C criteria remain open.
 CLWX-HANDOFF-CURRENT-20260908
 SOURCE-ONLY GRAPH DELTA: reviewed 8fa6bc64 lets draft creation use Mail.ReadWrite without requiring Mail.Send; send still requires its action permission and exact reviewed-state confirmation. Invalid grants/IDs refuse. Chrome-less installed Graph workflow, tenant registration/consent and authenticated read/draft/send evidence are still open. This corrects the email summary mistakenly placed on ASR CLWX-87; that older comment is retained as history, not ASR evidence.
@@ -1455,6 +1404,13 @@ Provenance: the built moe.17 artifact (sha 182d92d6...) predates this commit and
 
 - **State:** Ready  |  **Priority:** none
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: installed fault matrix. Owner: vm-operator. Current checkpoint: observed on moe.17; row scheduled inside 125 fault matrix.
+Sprint acceptance slice (original full criteria retained below):
+
+- Under the churn recipe, a vanished-context run is never re-submitted as a new user turn; regression around run-resume path
+Dependencies: CLWX-125. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 Observed live on the moe.17 VM verify (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md, "Observation to flag"): under CDP page-close mid-turn + repeated gateway reloads, the app spawned autonomous continuation turns replaying an earlier prompt (a 10:04 PDF prompt reappeared as fresh user turns at 10:09/10:26/10:30/10:33; one chained a write tool call). Confirmed no concurrent human. Suspected orphaned-run resume / degrade-resend interaction under reload churn.
 Risk: an unattended replay that chains a WRITE tool call is a trust and safety problem even if rare. Not normal principal use; did not affect moe.17 verdicts.
 Acceptance: reproduce under the same churn recipe; a run whose renderer/CDP context vanished is never re-submitted as a new user turn; add a regression test around the run-resume path. Raw sessions preserved on the VM under .openclaw/agents/main/sessions/.
@@ -1544,6 +1500,41 @@ Related: CLWX-77 (matrix), CLWX-80 (read-path steering), scanned-pdf empty-text 
 
 - FIXED in-tree + review-hardened (commits e737af5a + 1a4f08bd) — moving to Ready; a human closes Done. 1. CONTAINER SNIFF (doc-tools.mjs readDocx): OLE2 magic → legacy Word (.doc, Word 97-2003) wording; OLE2 + EncryptedPackage (UTF-16LE CFB stream) → password-protected wording (MS-OFFCRYPTO: encrypted modern .docx shares the .doc magic — review catch, wrong-cause refusal class); {\rtf → Rich Text Format wording; non-PK → not-a-Word-document; 0 bytes → failed-download/sync wording. Every refusal names the likely cause AND the way out (Save As .docx / open with password / re-download). Quoted filename sanitized (control chars stripped, 80-char cap — macOS names can fake stack frames in chat). 2. RESIDUAL MAMMOTH ERRORS: renamed-format tier (e.g. OpenDocument .odt under a .docx name) + catch-ALL damaged-or-incomplete fallback. Raw "[xmldom error] element parse error…" and null-deref TypeErrors can no longer reach the principal (review MAJOR — demonstrated live pre-fix on a valid zip with mangled word/document.xml). Only the error CLASS is logged, never parser text (can quote document content). 3. HARNESS BAR TIGHTENED (harness-artifact.mjs): isReadableRefusal now rejects http(s) URLs, bracketed library tags ("[xmldom error]"), and "@#[line:" parser artifacts; per-row refusalCheck mechanism added to classifyRow; doc-legacy/rtf/odt rows pinned to the new wording — the old jszip text now FAILs both named rows (MATRIX-pin unit proves it); NEW rows docx-badxml (valid zip, mangled XML — hand-rolled STORED-zip builder, no new dep) + docx-password. EVIDENCE: pnpm harness:artifact 16 rows — 9 PASS / 6 REFUSED-READABLY / 0 FAIL / 1 NO-TOOL (docs/evidence/HARNESS_ARTIFACT_2026-09-05.md regenerated); guards 41/41 across the two suites with falsifiability proven on BOTH passes (5 then 4 tests fail with the fix stashed); full suite 1446 passed; typecheck + lint clean. Separate-lane adversarial review: 3 lenses, 2 FAIL verdicts, both MAJORs (xmldom leak, password-docx misdiagnosis) fixed same tick. RESIDUALS (recorded, out of scope): pdf-corrupt row's "Invalid PDF structure." is library text minus the URL (pdf tool path — CLWX-77 trail candidate); the URL-reject would false-flag a refusal echoing a URL-shaped user path (latent — no such row exists). NEXT-BUILD GATE (same class as CLWX-99/100): the running app carries the old wording until a build ships these commits.
 
+### CLWX-102 — [bug/ui] e2e suite baseline debt: 13 specs red from fork-decision drift (deleted locales, anonymised provider labels, channels copy)
+
+- **State:** Todo  |  **Priority:** medium
+
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: read-only analysis. Owner: Claude read-only analyst; root selects safe isolated GUI validation environment. Current checkpoint: REOPENED after second recurrence; owner Mac GUI tests held; analysis lane active.
+Sprint acceptance slice (original full criteria retained below):
+
+- keychain-recurrence-analysis: cause identified or bounded UNKNOWN with a safe isolation/validation path away from the owner desktop; detector coverage assessed; no GUI launches, no Keychain changes
+- Complete the original required UI-suite criteria in a safe isolated GUI environment; a bounded diagnosis alone does not close CLWX102. Keep owner desktop launches held and record detector limitations.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
+CLWX-SOURCE-ONLY-RECURRENCE-20260908-1334 — REOPENED: owner screenshots at17:27:58/17:28:12/17:28:20 Dubai reproduce Keychain Not Found after the fixture-only7e1f9417 fix and resumed suite. Previous two-launch synthetic PASS and review did not prove full-suite resolution. Root interrupted ui-release-resume and eight identified descendants at13:28:47UTC; no owned Electron remained, observer reported zero SecurityAgent windows afterward. Detector coverage itself is under review. All GUI launches on owner Mac are held; no automatic resume. keychain-recurrence-analysis is read-only Claude/Bedrock in /private/tmp/clawx-e2e-macos-keychain-20260908. One shared electron.launch already contains both switches; alternate cause UNKNOWN. Full updated history, screenshots, commands, scope and next validation: docs/bugs/CLWX-102-macos-test-keychain.md. No Keychain configuration changed.
+CLWX-KEYCHAIN-RESOLVED-20260908 — Keychain interruption removed for the tested path. Fixture-only fix7e1f9417 isolates synchronous mock Keychain and Electron42 async Keychain provider for darwin UI tests. Independent Claude Fable5/Bedrock review APPROVE; typecheck, Vite build, focused lint and one E2E with two launches plus cross-relaunch synthetic decryption PASS. Ten native-window samples observed zero SecurityAgent dialogs; no Keychain or installed app configuration changed. Integrated candidate7e1f9417, rootb943fd2d and UI worktreecedca13d. Original three UI edits hash-verified preserved. ui-release-resume intentionally resumes the interrupted Claude session; full CLWX102 E2E criteria remain open. Complete handoff: docs/bugs/CLWX-102-macos-test-keychain.md. Private proof: artifacts/ga-fable-20260908/keychain-popup/focused-e2e-verification.json and keychain-isolation-review/result.json.
+CLWX-MAC-KEYCHAIN-20260908 — Owner screenshot at17:05:27 Dubai reports repeated Keychain Not Found / Electron Key during local UI E2E. Root stopped only the identified UI author/test process tree and verified no isolated-test Electron or visible SecurityAgent windows remain. Production apps and system Keychain untouched. Tagged Electron42.0.0 has eager async safeStorage initialization; its async Keychain provider is separate from Chromium synchronous mock Keychain. Fixture-only darwin isolation is being verified in fix/e2e-macos-keychain-20260908. Original UI component edits preserved. Full root-cause, screenshot hash, process containment, sources and acceptance: docs/bugs/CLWX-102-macos-test-keychain.md. Source/rendered review pending; no GA promotion.
+CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Current-source UI acceptance lane launched at488ebe29 with CLWX122. Verify historical English-only/provider/channel E2E failures against current code; correct stale fork expectations only where the product contract supports it. Use isolated Electron42 already verified by Graph UI, without shared dependency mutation. Source changes require focused rendered-app proof and independent review; no blanket skips or false release pass.
+Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
+Area: ui   Severity: medium (priority medium)
+
+Steps to reproduce
+pnpm test:e2e (full suite, renderer built). Or GA_GATE_E2E=1 pnpm ga:gate once CLWX-91 lands.
+
+Expected
+Full renderer e2e suite green so the ga:gate opt-in tier (GA_GATE_E2E=1, wired by CLWX-91) can flip formally green
+
+Actual
+Baseline 2026-09-06: 32 pass / 13 fail / 2 skip (6.2m). Red classes: (a) language-russian x4 + chat-skill-trigger-i18n Chinese label x1 — specs test locales the fork DELETED (English-only hard rule); disposition = delete or fork-skip with reason. (b) provider-lifecycle x3 — spec expects upstream label copy (Moonshot E2E) but the fork anonymises provider identity; card renders, data loads, text assertion stale. (c) channels-* x4 + app-smoke persist-setup x1 — unverified, likely same fork-copy class; each needs a 10-min disposition (fix expectation vs real defect). NOT caused by CLWX-91 provider normalization: failing cards render with data loaded; the normalization only alters non-array payload handling.
+
+Evidence
+Playwright line-reporter run 2026-09-06 (session task bb5mnels0); CLWX-91 evidence comment
+
+Environment
+fix/doc-tooling-steering @ 4854e8f3 + CLWX-91 fix, Mac dev lane, moe.18-era tree
+
+Regression class? fork-decision drift vs upstream specs, not a runtime regression class
+
 ### CLWX-103 — [dev-tooling/board] Comment POSTs orphaned cross-project (PLANE_PROJECT env bleed) — canonical poster with readback verify
 
 - **State:** Ready  |  **Priority:** high
@@ -1583,10 +1574,78 @@ Related residuals recorded on CLWX-104: degrade notice is store-global (not sess
 
 - Chip BUILT + review-hardened → READY (2026-09-06; a human closes Done). Commits 2a3fc967 + 9474fd57; the moe.19 cut in flight carries it, and the moe.19 VM verify's interactive checklist includes its live re-check. - What shipped: error-stopped assistant messages (stopReason/stop_reason === 'error') render an in-line error chip EVEN with empty content — closing the re-open gap this card was filed for (historical failures had NO surface after the D0 stale-banner fix). Anonymised class line first; raw string only behind the collapsed "Technical details" expander (the banner's rules); ERROR_DISPLAY_KEY moved to lib/error-display and shared. - Review lanes folded: principal-proxy trust lens verdict FAIL — its MAJOR (imperative "try again in a moment" reads as broken on a 3-day-old failure) fixed with NEW tense-neutral errorDisplayInline.* strings used by the chip only ("…when this request ran. Your work was not lost."), with a guard forbidding imperative phrasing; its minors dispositioned (banner+chip redundancy momentary-acceptable, red-wall-on-a-bad-day = truthful). Codex (gpt-6-astra) MED — the unconditional chip reintroduced the CLWX-104 D1 stacking class on the ACTIVE turn — fixed: the NEWEST error-stopped message suppresses its chip while the banner/run-error/degrade notice shows (suppressErrorChip wired from Chat); historical failures always chip; guard added. - Gates: chip guards 10/10; full suite 1637/6-skip; typecheck+lint clean. NEXT-BUILD verification path (already staged): the moe.19 rebuild in flight carries the hardened chip; scripts/vm-verify-moe19.sh's interactive checklist has the explicit row — induce an error turn, re-open the session, expect the chip with tense-neutral wording and NO chip+banner double-surface on the active turn.
 
+### CLWX-107 — Monday demo dress rehearsal + DEMO_RUNBOOK_2026-09-08
+
+- **State:** Todo  |  **Priority:** high
+
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: stakeholder prep. Owner: root + vm-operator. Current checkpoint: not started; runbooks 3 months stale.
+Sprint acceptance slice (original full criteria retained below):
+
+- One continuous timed rehearsal of all three demo moments on the accepted candidate/machine/account; runbook committed; two backstop clips staged as named assets
+Dependencies: CLWX-125, CLWX-24. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
+Filed by the ga-sprint-driver fold of docs/STAKEHOLDER_GAP_ANALYSIS_2026-09-06.md §5 item 2 (stakeholder-gap synthesizer, 2026-09-06: 4 chronological mappers + a GPT-6 codex-exec adversary + a completeness critic; cross-checked against the 105-card mirror, no existing card covers it).
+Why this is a gap: GA_DEMO_READINESS_ASSESSMENT_2026-09-05.md recommends this as P2/P3 but neither was carded; the only committed runbooks are dated 2026-05-26/29, i.e. three months stale against the current build.
+Acceptance: One continuous timed rehearsal of all three demo moments on the actual demo build + machine + account; a runbook committed (pre-warm attach, reset sequence, fallback order); and the two backstop clips staged as named demo assets.
+Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is scheduled.
+
+**Comments (9):**
+
+- moe.23 package/fallback repair checkpoint 05:23 - 2026-09-08 external acceptance. No repaired installer, login/setup bundle or release candidate was sent to Karunesh in this checkpoint. Setup bundles were rebuilt with the tested 9d46832f helper and distinct VM/stakeholder credentials, but remain private and unsent. moe.23 is only at host package success plus assisted-upgrade extraction; moe.24 with the fallback repair is packaging and has no accepted artifact. External acceptance remains blocked; do not ask the stakeholder to retest functionality until a repaired installed artifact has first-turn stability proof.
+- Fresh first-turn transient fallback checkpoint 04:54 - 2026-09-08 external acceptance. No repaired installer, new login or setup bundle has been sent to Karunesh, and a fresh read-only WhatsApp check at 04:53:27Z found no new messages. The setup entrypoint is now repaired in VM evidence, but external acceptance remains blocked because the fresh first Online app turn failed the driver and visual review despite a late correct cloud answer. Cache is still unconfirmed; do not ask the tester to run email/doc functionality until the ordinary assistant turn is stable.
+- Fresh standard-user setup checkpoint 04:31 - 2026-09-08 external acceptance. No new download/setup was sent to Karunesh after the connection-failure report. The current work has narrowed the path: broker API proof exists, setup-helper native tests now pass, and moe.22 installs on the fresh standard Server profile. External acceptance is still blocked because the actual CMD setup launch failed at 04:30:22Z before installing the Online seed, no ordinary seeded first reply is proved, and there is no new artifact/handoff for the stakeholder to test. Treat cache as unconfirmed, not root cause.
+- GA broker/setup checkpoint 04:11 - 2026-09-08 external acceptance. Latest read-only WhatsApp refresh around 04:11Z found no new inbound after the 03:31 stakeholder failure. Owner outbound at 03:59Z told the tester to wait for the fix and suspected cache, but cache cause is unconfirmed. The private moe.22 download was verified separately, but no new download/setup was sent and no URL is recorded here. External acceptance remains blocked until setup/provisioning is fixed and Karunesh can retest.
+- GA stakeholder connection checkpoint 03:39 - 2026-09-08. Fresh mapped WhatsApp read at 2026-09-08T03:31:42Z supersedes the earlier no-reply state. Karunesh reported repeated assistant reachability / work-safe errors at 03:28-03:29Z and said he cannot test functionality. The diagnostic log SHA256 e5c2587fb034812a488306a00c828f35bdd771159357539fd659e92d88f8a2ec reports moe.21, which matches the earlier sent diagnostic build; do not blame the stakeholder for testing the wrong version. Acknowledgment send was accepted at 03:39:18Z to focus on connection first and hold functionality tests; no delivery/read proof. A private moe.22 URL was verified by anonymous full GET but was not posted here and no new installer handoff occurred.
+- GA checkpoint 03:23 - 2026-09-08 external handoff boundary. No new GCS upload, public release, stakeholder send or tester acceptance was produced for selected a4efc7e4. Prior Karunesh intake remains read-only freshness evidence, not acceptance; the earlier diagnostic owner download link was for an older candidate and does not authorize or validate this build. External release/handoff stays blocked until the exact selected artifact has the remaining gates resolved or explicitly accepted as deferrals.
+- GA final artifact delta - 2026-09-08 external handoff. Read-only stakeholder intake refresh at 2026-09-08T00:07:10Z resolved Karunesh Ramdass through the configured bridge SQLite store and found zero new inbound messages after the prior accepted diagnostic send. No new send was attempted. Complete sync, delivery receipt, read receipt and tester acceptance remain unproven. Evidence: artifacts/windows-vm/20260908-moe22/stakeholder-intake-refresh.json. The selected installer artifact exists and passed local artifact verification, but it has not been published or sent as an accepted tester package in this lane. This card remains external-acceptance/open-rehearsal scope.
+- GA blocker correction - 2026-09-08 handoff expiry. The earlier GA blocker comment on this card used the word "expired" for the GCS signed URL. At the time of that comment and this correction, the expiry was still in the future. Correct wording: the signed URL expires at 2026-09-08T04:27:21Z. This remains a diagnostic owner/tester handoff only, with no delivery/read receipt or tester acceptance proven.
+- GA blocker record - 2026-09-08. External handoff and rehearsal status recorded in docs/evidence/GA_BLOCKER_RESOLUTION_2026-09-08.md. - Owner-requested moe.21 diagnostic download was verified and the authorized WhatsApp bridge send to Karunesh was accepted at 2026-09-07T17:31:43Z; see docs/evidence/WINDOWS_OWNER_TEST_DOWNLOAD_2026-09-07.md. - The message stated known limits. It did not prove delivery, read receipt, tester acceptance or that email was fixed on Karunesh's machine. - The signed GCS URL expired at 2026-09-08T04:27:21Z. Do not treat that handoff as a public release asset. - No continuous timed rehearsal exists for the current candidate; moe.22 has no accepted installer yet. Next action: after exact-candidate installed acceptance, prepare the current tester package/checklist and run the rehearsal against that artifact.
+
+### CLWX-110 — 20-principal rollout plan + revised schedule answer to Raj
+
+- **State:** Todo  |  **Priority:** medium
+
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: stakeholder prep. Owner: root (draft-and-hold). Current checkpoint: not started.
+Sprint acceptance slice (original full criteria retained below):
+
+- Pilot slice only: dated revised-schedule note to Raj DRAFTED AND HELD + distribution checklist (auto-update OFF, per-laptop signed-in Chrome, onboarding, support channel)
+- Fleet scope stays open and uncompleted; send only under the recorded Sept-7 authorization after the verdict
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
+Filed by the ga-sprint-driver fold of docs/STAKEHOLDER_GAP_ANALYSIS_2026-09-06.md §5 item 5 (stakeholder-gap synthesizer, 2026-09-06: 4 chronological mappers + a GPT-6 codex-exec adversary + a completeness critic; cross-checked against the 105-card mirror, no existing card covers it).
+Why this is a gap: CLWX-8 covers only production login + support logging. Nothing covers cohort logistics, and the original go-live date expired silently.
+Acceptance: A carded plan covering distribution with auto-update OFF, per-laptop signed-in Chrome setup across the 7 districts, an onboarding checklist, a support/escalation channel and a fix-shipping cadence; plus a dated revised-schedule note to Raj (closeout draft 08).
+Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is scheduled.
+
+### CLWX-114 — DOCSEARCH: reproduce with the guided-test repro, or disposition
+
+- **State:** Todo  |  **Priority:** medium
+
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: installed document acceptance. Owner: root VM operator, shared D0/document run. Current checkpoint: Selected into sprint; shares discovery fixtures with24/77.
+Sprint acceptance slice (original full criteria retained below):
+
+- Run two consecutive ordinary in-app file enumerations against the same seeded filesystem manifest, including nested/redirected Desktop files; require exact set equality.
+- If not reproduced, record a dated CANNOT-REPRO disposition with exact artifact/fixture and remaining ask; no extra discovery implementation without evidence.
+Dependencies: CLWX-77. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
+Filed by the ga-sprint-driver fold of docs/STAKEHOLDER_GAP_ANALYSIS_2026-09-06.md §5 item 9 (stakeholder-gap synthesizer, 2026-09-06: 4 chronological mappers + a GPT-6 codex-exec adversary + a completeness critic; cross-checked against the 105-card mirror, no existing card covers it).
+Why this is a gap: The only Raj-lineage defect with neither a card nor a disposition. The GPT-6 adversary showed a repro already exists in-repo (docs/KARUNESH_GUIDED_TEST_2026-09-03.md:128), which contradicts the wait-for-the-tester framing.
+Acceptance: Run the document-search opener: two consecutive in-app enumerations compared against a filesystem manifest (nested files included), exact set equality. Otherwise a CANNOT-REPRO disposition with the ask documented.
+Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is scheduled.
+
 ### CLWX-118 — OUTLOOK-TAB-STEAL: ensureOutlookTab() navigates the principal's own tab away (shipped in every moe build since bfd55b90)
 
 - **State:** Ready  |  **Priority:** high
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: browser regression acceptance. Owner: browser reviewer then root VM operator. Current checkpoint: Ready historical source fix; required final-artifact regression remains explicit.
+Sprint acceptance slice (original full criteria retained below):
+
+- Retain reviewed source tab-ownership controls; installed browser regression preserves principal-owned tabs and sign-in redirects on the final candidate.
+Dependencies: CLWX-130, CLWX-121. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 PRODUCT defect. Found + fixed 2026-09-07. Present since the original v2 commit bfd55b90, so it has shipped in every moe build to date.
 electron/services/outlook-browser-v2/playwright-driver.ts::ensureOutlookTab() did pages.find(isOutlook) ?? pages[0] ?? newPage() and then goto('https://outlook.office.com/mail/'). By hard rule this driver attaches over CDP to the principal's OWN Chrome (profile=user), so context.pages() is their real work, not a scratch pool. Any email tool call made while no Outlook tab happened to be open navigated their first tab away from under them.
 Proven live, read-only, on the Mac lane 2026-09-06: pages[0] was a playing YouTube tab while an unused chrome://new-tab-page sat at index 2. The principal loses a half-written form mid-task and reads it as the assistant breaking their browser — the exact trust the profile=user rule exists to protect.
@@ -1607,6 +1666,14 @@ Follow-ups deliberately NOT folded in (filed separately): the MEDIUM-7/MEDIUM-8 
 
 - **State:** Todo  |  **Priority:** high
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: review sign-off + root evidence hygiene. Owner: independent-reviewer + root-integrator. Current checkpoint: source landed; audit PASS_SOURCE; /tmp evidence volatile.
+Sprint acceptance slice (original full criteria retained below):
+
+- NO duplicate implementation (content already byte-identical at candidate)
+- Root: redact + promote /tmp per-run artifacts and 4-run zero-flip comparison to docs/evidence; fix broken GA_GATE_2026-09-07_run2.md manifest link; board state refresh
+- ≥2 eval runs on the final artifact (repeat-run rule) recorded per-run
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-SOURCE-ONLY-RECURRENCE-20260908-1334 — Current-source audit at488ebe29 confirms the historical eval correction content is already present byte-for-byte; 131 focused eval/Outlook tests and34 verdict tests PASS. Four September7 repeat runs remain historical-only evidence with zero flips; private durable redaction and final-artifact acceptance remain. Do not commission duplicate implementation from open board status. Independent acceptance disposition still required; no state promotion here. docs/evidence/GA_ACCEPTANCE_AUDIT_2026-09-08.md.
 No card existed for this until 2026-09-07, and it undermines every GO/NO-GO box that cites the eval.
 Two runs of scripts/v2-eval.ts ten minutes apart, on identical code, against the same live mailbox:
@@ -1629,6 +1696,14 @@ Acceptance: (a) the flake is either fixed or quantified by N repeat runs with a 
 
 - **State:** Todo  |  **Priority:** medium
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: source-author → review. Owner: same lane as 130. Current checkpoint: coupled into browser-ownership-repair per 130 dispatch.
+Sprint acceptance slice (original full criteria retained below):
+
+- Cross-tab draft visibility (MEDIUM-7/8) covered by the coupled 130 browser-ownership boundary at merged base; no separate implementation lane
+- Regression rows land with 130; installed Outlook draft-reopen check on candidate
+Dependencies: CLWX-130. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Coupled guard work assigned to browser-ownership-repair together with CLWX130. Subject verification must bind the owned compose tab before narrowing cross-tab draft detection; both changes need mutation regressions. One owner covers Chrome and Outlook/Forms attach boundaries, preserving reviewed-state and confirmation gates. No live send or installed acceptance in this source repair. Current base736ffe9e includes candidate488ebe29 plus held browser source; root integrates only independently approved correction.
 Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 Filed as ONE card on purpose: these two findings are coupled, and the coupling is the actionable part. Both raised by the review lane on the CLWX-118 tab-ownership fix and deliberately left out of that fix rather than folded in.
@@ -1642,6 +1717,14 @@ Acceptance: pinning rows in tests/unit/outlook-playwright-driver-cdp.test.ts tha
 
 - **State:** Todo  |  **Priority:** medium
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: conditional UI author. Owner: Claude UI author/reviewer; safe isolated GUI lane required, owner desktop remains held. Current checkpoint: edits preserved; paused on Keychain recurrence.
+Sprint acceptance slice (original full criteria retained below):
+
+- Resume ONLY after 102 provides a safe validation path
+- Principal-readable footer (no port/pid in rendered string; regression row pins it); component + E2E proof; independent review
+Dependencies: CLWX-102. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-SOURCE-ONLY-RECURRENCE-20260908-1334 — Desktop UI acceptance paused after owner reported repeated app windows and another native Keychain prompt. ui-release-resume was operator-interrupted, source/component edits preserved, no final UI approval. This is an additional CLWX102 recurrence, not proof the footer changes fail. Resume only after a safe isolation/validation path away from the active owner desktop. Source-only work elsewhere continues.
 CLWX-KEYCHAIN-RESOLVED-20260908 — UI source work resumes after fixing the local Mac test Keychain interruption. Root preserved the three existing component/locale/unit edits and applied independently approved test fixture isolationcedca13d to the same worktree. ui-release-resume uses the existing inspected Claude session with Fable5 pinned on Bedrock and no spending cap. The footer/component changes still require their own completed tests, source commit and independent review; root fixture approval does not approve them.
 CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Principal-readable footer correction assigned to ui-release-acceptance at488ebe29 alongside CLWX102. Remove ordinary user-facing port/PID details while retaining developer diagnostics and honest loading/connected/disconnected state. Focused component and Electron E2E proof precede independent review. No current-source or installed PASS yet.
@@ -1705,6 +1788,26 @@ Accept:
 - [ ] App REBUILT and restarted - a source fix changes nothing while a running Electron process holds its bundled code (the same mistake was made this week by editing a router config while a 26-day-old process served the old one from memory). Restart is the account holder's call.
 - [ ] Follow-up: a startup or CI check that every hardcoded model id still appears in its provider's live catalogue, so a retirement fails loudly next to the constant instead of as a 404 at the call site
 
+### CLWX-133 — GA release run: integrate, build, validate and publish one identified Windows candidate
+
+- **State:** Todo  |  **Priority:** urgent
+
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: release execution receipt. Owner: root integration/release operator; independent Claude CLI testing. Current checkpoint: Selected; acceptance not yet satisfied.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
+Own one continuous release run under CLWX22. Acceptance: (1) integrate only independently reviewed source; freeze clean revision and unique candidate version; (2) focused checks then one integrated preflight per changed candidate; (3) hosted keyless installer with source/run/profile provenance and installer, ASAR, EXE and runtime/helper hashes; enforce CLWX85 identity contract; (4) installed, Windows10/11 client, Microsoft, document, offline, lifecycle and performance evidence for these exact bytes; (5) verified candidate download for the unaided tester card BEFORE final GA; (6) strict required-evidence verdict, then publish the accepted GA artifact set and verify its downloadable hashes. Any new source fix creates a newly identified candidate and reruns affected acceptance; previous hashes/results never silently transfer. Missing, failed or skipped required rows block publication.
+Owner: root integration/release operator, Claude CLI source/review lanes. Dependencies are phased: source acceptance precedes build, installer identity precedes installed/tester proof, tester proof precedes final verdict/publication. No completed-card dependency cycle is intended. Preserve original card histories and all owner-session, authentication and dispatch gates. Store exact commands/timestamps/results and first causal failures; route a failure to its existing owner and continue within this sprint. Only a human closes Done.
+
+### CLWX-134 — Unaided stakeholder acceptance of the verified Windows candidate
+
+- **State:** Todo  |  **Priority:** high
+
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: release execution receipt. Owner: root integration/release operator; independent Claude CLI testing. Current checkpoint: Selected; acceptance not yet satisfied.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
+Before final GA approval, give the designated external tester the verified candidate download/hash and a concise reproducible checklist covering reported setup, email/Chrome/Graph, local PDF/Office, Forms preview and response/recovery failures. The candidate can be shared through the authorized test-artifact channel; do not require GA publication first.
+Acceptance: (1) candidate has passed internal acceptance and its downloadable bytes match the immutable manifest; (2) dated unaided Windows10/11 standard-user run records environment, source/artifact identity and PASS/FAIL/BLOCKED for every required journey; (3) tester observations and failure evidence are preserved/redacted; (4) failures reopen their existing owning cards and invalidate the affected candidate verdict; (5) the successful receipt is included in the final strict GA evidence. Account-holder sign-in and action-specific send/download/submit gates remain; no assisted repair is presented as an unaided pass. Tester availability/authentication is an external dependency. This card is part of pilot acceptance; fleet rollout remains separate.
+
 ## Started
 
 ### CLWX-20 — clawx-asr voice-note path fails with ffmpeg-not-found on user machines
@@ -1727,6 +1830,13 @@ Source: local WhatsApp store 2026-06-22. Tier: verified_at_commit (store read 20
 
 - **State:** In Progress  |  **Priority:** none
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: anchor (root). Owner: root-integrator + owner. Current checkpoint: OKR anchor; not an execution card.
+Sprint acceptance slice (original full criteria retained below):
+
+- Record all seven pilot acceptance groups with PASS/FAIL/BLOCKED/NOT_RUN, exact source/artifact/environment evidence, and final strict release verdict.
+- Only the human changes cards to Done; this does not prevent root recording an evidence-backed verdict or executing already authorized release actions.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-SOURCE-ONLY-RECURRENCE-20260908-1334 — Current GA strategy and cost policy: Claude CLI/Fable5 on Bedrock owns bounded implementation, diagnosis and independent review in isolated worktrees; GPT remains brief coordination/integration. No new GPT subagents or duplicate broad audits. Source-only lanes now: browser-repair-finish, artifact-matrix-repair, installed-verifier-repair, recovery-acceptance-trace and keychain-recurrence-analysis. UI desktop suite is HELD after owner reproduced the Keychain popup; root stopped that session and its eight descendants, preserving edits. Reviewed source -> combined preflight -> identified installer/hash chain -> installed Microsoft/document/local/recovery/client/performance acceptance -> verified download and unaided stakeholder rerun -> strict verdict. Current candidate7e1f9417 is unbuilt; GA RED. Current plan docs/COMPLETION_PLAN.md; audit disposition docs/evidence/GA_ACCEPTANCE_AUDIT_2026-09-08.md.
 CLWX-KEYCHAIN-RESOLVED-20260908 — PM checkpoint: owner requests board-led Claude CLI/worktree execution to remove GA red. Local test Keychain blocker is corrected, independently reviewed, integrated and recorded on CLWX102; UI author resumed in its isolated worktree. Candidate7e1f9417 adds only test isolation to previously reviewed product source488ebe29 plus Graph evidence. Strategy: assign independent acceptance gaps to bounded Claude/Bedrock owners and isolated write scopes; review separately; integrate approved commits; run one combined preflight; build/hash one installer; execute installed Windows/client/Microsoft/document/offline/recovery/performance criteria with one VM operator; finish with verified download and unaided stakeholder rerun. Source/CLI success never closes installed or tenant criteria. Existing NSCC, reminders, artifact harness and prior eval fixes are reused. Browser repair remains active; eval/artifact audits and Forms correction have receipts awaiting coordinator disposition. No moe26 build/publication yet; GA RED.
 CLWX-MAC-KEYCHAIN-20260908 — UI acceptance paused after owner-reported macOS Keychain popup regression in our local automated test run; related CLWX102 dossier records containment and pending fixture correction. Other source and read-only audit lanes may continue. No Windows VM or installed Mac app mutation. Resume UI only after narrow isolation fix and controlled launch/relaunch proof.
@@ -2052,6 +2162,14 @@ Accept (GA): every KR above GREEN with cited evidence, and a human closes each w
 
 - **State:** In Progress  |  **Priority:** none
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: client install. Owner: vm-operator + machine gate (no local UTM; GCP is Server, not client). Current checkpoint: moe.25 Server-2022 upgrade evidence only; client lane machine-blocked.
+Sprint acceptance slice (original full criteria retained below):
+
+- Assisted-screen install of the EXACT moe.26 installer on a Windows 10/11 client as standard user: exit 0, complete tree incl. ffmpeg.exe, ports bind, zero manual dependency steps, recording
+- Unprovisioned first-run state + documented provisioning path verified; hashes match the release run
+Dependencies: CLWX-106. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-HANDOFF-CURRENT-20260908
 CURRENT ARTIFACT: moe.25 source 8058e9b5/run 34203201042 passed package identity and assisted standard-user existing-profile upgrade on GCP Windows Server 2022. Stable startup took 280.083s; this is not a latency pass. Fresh Windows 10/11 client installation, unprovisioned onboarding and no-manual-runtime/model setup remain unproved. No registered usable local UTM Windows guest was found. VM operator owns exact-artifact client/install evidence; local and GCP runbooks are linked from docs/REPOSITORY_GUIDE.md.
 Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
@@ -2104,6 +2222,14 @@ Accept (KR2): clean Windows VM, assisted installer screens, 0 manual dependency 
 
 - **State:** In Progress  |  **Priority:** none
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: installed acceptance. Owner: vm-operator. Current checkpoint: REOPENED; moe.25 native diagnostic only; app path NOT_RUN.
+Sprint acceptance slice (original full criteria retained below):
+
+- On packaged moe.26: network blocked, on-device channel, local doc read + grounded answer, zero non-loopback egress, guard negative-control run
+- This single receipt also satisfies CLWX-113 (annotated, no duplicate run)
+Dependencies: CLWX-117. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-HANDOFF-CURRENT-20260908
 REOPENED FOR CURRENT OFFLINE EVIDENCE: earlier Ready scope does not establish current local-mode acceptance. Moe.22 ordinary on-device turns timed out. Direct native Ollama on the moe.25 VM answers a tiny no-tools request in 27.396s with context 32768 and 3.137 GiB allocation; this is not an app pass. Native-route source 0b46e833 is reviewed in frozen f93ac8b3, but ordinary app and PDF/DOCX/XLSX tool behavior with non-loopback egress blocked are NOT_RUN. CLWX-117 owns the hanging-turn defect; CLWX-126 owns a measured engine comparison.
 Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
@@ -2179,6 +2305,13 @@ Accept (KR8): reply sent (by Anton); working-session notes record the hostname d
 
 - **State:** In Progress  |  **Priority:** none
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: external-gated. Owner: account-holder (human); author support only. Current checkpoint: source 7a129570 APPROVED + integrated; real sign-in NOT_RUN.
+Sprint acceptance slice (original full criteria retained below):
+
+- Reuse reviewed/integrated Graph setup and recovery; actual approved tenant/client configuration, account-holder sign-in, token and Graph read are verified.
+- Missing tenant configuration/consent or live proof stays BLOCKED. No new Graph deferral is introduced by this sprint.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Graph setup7a129570 independently APPROVED and integratedf520d2cc: 18 new plus45 existing focused Graph tests pass. The local UI environment blocker is removed using an isolated official Electron42 binary, without changing shared dependencies. Graph Settings mocked-renderer E2E PASS1 at original7a129570; evidence-only9a17b3ee integrated64ae2dc6. Real tenant sign-in and installed Microsoft journeys remain NOT_RUN. No token/config/tenant values in this record. Handoff: docs/bugs/CLWX-39-graph-sign-in-recovery.md.
 Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 CLWX-SOURCE-CHECKPOINT-20260908-1240 — Independent review APPROVE for7a129570, with focused Graph regressions rerun. Source is awaiting integration and Electron UI proof; missing Electron42 test binary and real account-holder/tenant acceptance remain open. See docs/bugs/CLWX-39-graph-sign-in-recovery.md and private graph-connection-review/result.md.
@@ -2199,6 +2332,14 @@ Pull-forward from docs/MINISTRY_GRAPH_ACCESS_PLAN.md step B: wire the EXISTING m
 
 - **State:** In Progress  |  **Priority:** none
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: installed performance. Owner: vm-operator. Current checkpoint: heterogeneous single observations only; no p50/p90.
+Sprint acceptance slice (original full criteria retained below):
+
+- ≥5 matched cold + ≥5 warm samples on the candidate: preparation/first-token/terminal latency + memory; p50/p90 vs an EXPLICIT recorded budget disposition (do not silently pick 30s vs 45s)
+- Latency row in the evidence packet with pass/fail vs budget
+Dependencies: CLWX-125. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-HANDOFF-CURRENT-20260908
 MEASUREMENT CHECKPOINT: moe.25 actual Online answer times were 13.572s Existing Main, 50.104s fresh and 17.629s next; heterogeneous single observations, not p50/p90. Native local cold wall 27.396s includes 23.331s load (85.2%); allocation 3.137 GiB/CPU. No llama.cpp comparison exists. Performance owner must collect at least five matched cold and five warm samples, preparation/first-token/terminal latency and memory against an explicit product budget; do not infer a resize requirement from these samples.
 Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
@@ -2219,6 +2360,15 @@ Scope: define a user-facing budget (proposal: p50 ≤15s / p90 ≤30s wall-clock
 
 - **State:** In Progress  |  **Priority:** medium
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: source-author + tenant seed + live eval. Owner: source-author; account-holder for seed + sign-in. Current checkpoint: gate/refusal proven; confirm leg NOT_RUN seed-blocked.
+Sprint acceptance slice (original full criteria retained below):
+
+- Author missing-diff #1: DOM-fixture unit pin for attachment metadata extraction (tests/unit/outlook-attachment-metadata.test.ts), mocked driver; review
+- EXTERNAL: one seeded attachment-bearing mail to test.fac (account-holder/root action, not code)
+- ≥2 live runs: W8.3 refusal first, W8.4 download confirm:true, W3.2 filename/sizeBytes/mimeType exercised
+Dependencies: CLWX-123. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-SOURCE-ONLY-RECURRENCE-20260908-1334 — Acceptance audit confirms forward/refusal historical evidence, but confirmed attachment download and metadata remained unexercised without a seeded attachment-bearing message. This is a tenant fixture/authorization evidence gap, not missing download code. Preserve action-specific confirmation and authenticated test-account requirements; known recipient readback failure belongs to CLWX123. docs/evidence/GA_ACCEPTANCE_AUDIT_2026-09-08.md.
 CLWX-HANDOFF-CURRENT-20260908
 ACCEPTANCE RETAINED: new Graph draft-permission source repair does not close forward E2E, authorized attachment download or attachment-metadata evidence in this card. Latest Windows browser proof reaches cdp_ready then needs_signin; account-holder authentication and current-candidate read/draft/reply/attachment checks remain open. No new mail send or attachment download occurred in this checkpoint.
@@ -2246,6 +2396,13 @@ S1 Email. Filed by the 2026-09-03 reconciliation (docs/GA_FINISH_SPRINT_2026-09-
 
 - **State:** In Progress  |  **Priority:** high
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: installed/tenant acceptance. Owner: vm-operator + account-holder session. Current checkpoint: Forms study corrected in fc19138d, root re-review pending; installed document-to-preview chain still open..
+Sprint acceptance slice (original full criteria retained below):
+
+- Fixture suspension letter → live extraction → prefill on test.fac Suspensions clone; ≤3 field misses vs expected JSON; hard-confirm gate holds; form left UNSUBMITTED; re-runnable script committed
+- Forms-files-correction findings (REQUEST_CHANGES on a57e6bd7) resolved; SharePoint list-write ≠ Forms response distinction preserved
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Documentation study a57e6bd7 received factual-review REQUEST_CHANGES; forms-files-correction is launched. Ministry document.* routing must remain distinct from generic upstream PDF capability. Graph list-item creation is a SharePoint record write, not a proven Microsoft Forms response; actual store mapping and owner-approved semantics remain prerequisites. Bound no-API/no-MCP claims to reviewed official surfaces and current-tenant Conditional Access to UNKNOWN. No unsupported submit API was implemented or called. Existing nine-route local adapter is reused. Thorough handoff: docs/bugs/CLWX-63-forms-capability-claims.md. Live preview/store/auth criteria remain open.
 Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 Why
@@ -2298,6 +2455,15 @@ microsoft/mcp catalog; microsoft/playwright-mcp; ChromeDevTools/chrome-devtools-
 
 - **State:** In Progress  |  **Priority:** high
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: source-author → review. Owner: source-author (Claude CLI) then reviewer; vm-operator for installed run. Current checkpoint: Author committed8bf5d32; 83 harness +39 document tests and typecheck/lint pass. Staged execution NOT_RUN; independent review pending. Runner MODEL_MISMATCH reports Fable5 plus us.anthropic.claude-opus-5, all Bedrock; provenance disposition required..
+Sprint acceptance slice (original full criteria retained below):
+
+- artifact-matrix-repair: JPEG, typed numeric/string XLSX, cached-formula and generated DOCX/XLSX write-then-reopen rows added to the EXISTING harness/fixtures with positive and negative checks
+- Independent review APPROVE; no new harness scaffold
+- Packaged-runtime matrix run once on the moe.26 artifact (installed stage, separate receipt)
+- Resolve reproduced stale registration inventory (missing outlook.readiness) and order-dependent suppression guard; verify against actual staged9.2 bundle. Source tests do not prove packaging.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-SOURCE-ONLY-RECURRENCE-20260908-1334 — Acceptance audit at488ebe29 verified existing artifact harness and source tests; no current9.2 installed artifact evidence. Concrete coverage gaps: JPEG, typed numeric/string XLSX and cached formula values, generated DOCX/XLSX write-then-reopen content. artifact-matrix-repair author launched in /private/tmp/clawx-artifact-matrix-repair-20260908 at7e1f9417, Fable5/Bedrock, narrow harness/fixture/test ownership; no hydration/package/GUI/VM changes. Exit: focused positive and negative checks, bounded commit, independent review; packaged/installed execution separately NOT_RUN. Existing fidelity fixture reused; no new harness scaffold. docs/evidence/GA_ACCEPTANCE_AUDIT_2026-09-08.md.
 CLWX-HANDOFF-CURRENT-20260908
 SOURCE DELTA: reviewed PDF source-excerpt repair 7a61a964 preserves explicit deadlines/submission instructions and the raw extraction contract. Source/parser checks pass; ordinary installed P3 answer coverage remains unproved. Test owner must run D0 plus all five principal prompts, complete obligation recall, typed spreadsheet values, generated-file reopen and required format/command matrix on one artifact. CLWX-115 retains its distinct meal/shirt association fixture.
@@ -2457,6 +2623,13 @@ Source: full-project mining pass 2026-09-03 (session-log-miner over 181 Codex ro
 
 - **State:** In Progress  |  **Priority:** none
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: installed fault matrix. Owner: vm-operator. Current checkpoint: observed on moe.17; row scheduled inside 125 fault matrix.
+Sprint acceptance slice (original full criteria retained below):
+
+- Mid-turn degrade: interrupted turn resumes on new channel exactly once OR terminates visibly; never an indefinite spinner
+Dependencies: CLWX-125. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 Observed on the moe.17 verify addendum (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md): the cloud→on-device channel switch is applied via a gateway RESTART; the interrupted turn's trajectory stops at prompt.submitted with no model response ever produced, and the renderer spins "still-thinking" for the full 420s (answerText=null). The degrade notice + switch + preference-preservation all work (CLWX-78 core PASS); the gap is that the degraded turn itself never completes.
 Acceptance: after a mid-turn channel degrade, the interrupted turn is either resumed on the new channel exactly once or terminated with a visible, anonymised outcome — never an indefinite spinner. Verdict-tension note: moe.17 PASSed under the "switch + notice + attempt" bar; this card is the stricter "answer must land or fail visibly" bar, explicitly owner-arbitrated.
 
@@ -2482,6 +2655,14 @@ Acceptance: after a mid-turn channel degrade, the interrupted turn is either res
 
 - **State:** In Progress  |  **Priority:** none
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: installed recovery acceptance. Owner: root VM operator after source verification. Current checkpoint: PASS_SOURCE at7e1f9417: 145 focused tests; no new watchdog needed; installed restore/cancel proof pending.
+Sprint acceptance slice (original full criteria retained below):
+
+- Reuse verified probe/pin/notice and accepted-send watchdog behavior; recovery-acceptance-trace found no remaining source defect (145 focused passes).
+- If a fix lands: focused tests + independent review
+- Installed fault row on candidate: post-restore Online turn succeeds without relaunch; banner clears; silent send impossible
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-SOURCE-ONLY-RECURRENCE-20260908-1334 — recovery-acceptance-trace is a read-only Claude/Bedrock lane at7e1f9417 in /private/tmp/clawx-recovery-acceptance-trace-20260908. Audit suspicion about notice retraction and silent-send detector is MODERATE confidence, not established missing code. Trace current notice/pin/probe/send/lifecycle/UI against criteria and focused tests, accounting for already reviewed pending-send repairs. Deliver reproduced gap + smallest owned correction, or evidence of existing behavior; no speculative watchdog. No desktop/VM/live actions. doc/evidence pointer: docs/evidence/GA_ACCEPTANCE_AUDIT_2026-09-08.md.
 Observed on the moe.17 verify addendum (skills/laptop/evidence/2026-09-03-moe17-verify/RESULT.md): after hosts-restore following a degrade, the post-restore Online turn returned NO_RESPONSE with messagesAfter=0 (silent send) while a stale "offline" degrade banner was still displayed; Online only worked again after a full app relaunch. Contradicts the intended "Online resumes automatically once available" behaviour.
 Acceptance: after connectivity returns, the next Online turn succeeds without an app restart; the degrade banner clears when the provider probe succeeds; a silent send (accepted composer input, no turn, no error) is treated as a defect class of its own with a watchdog. Trust lens: this is exactly the 3:30pm-dropped-connection scenario the principal-proxy vetoes on.
@@ -2499,6 +2680,14 @@ Acceptance: after connectivity returns, the next Online turn succeeds without an
 
 - **State:** In Progress  |  **Priority:** high
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: source-author → review → root gate wiring. Owner: source-author (Claude CLI); root-integrator owns ga-gate. Current checkpoint: author active in /private/tmp/clawx-installed-verifier-repair-20260908 at 7e1f9417.
+Sprint acceptance slice (original full criteria retained below):
+
+- installed-verifier-repair: explicit version/artifact parameters, phases and fail-closed identity retained; pure argument/config/dry-run tests only
+- Gate: required tier that entirely SKIPs is FAIL unless GA_GATE_STATIC=1 explicit; release path refuses without full GREEN ≤24h against recorded artifact identity
+- Independent review APPROVE; root wires into ga-gate (root-owned)
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-SOURCE-ONLY-RECURRENCE-20260908-1334 — installed-verifier-repair launched in isolated /private/tmp/clawx-installed-verifier-repair-20260908 at7e1f9417. Replace old moe19 version/object assumptions with explicit selected artifact/version parameters, retain existing evidence schema/phases and fail-closed hash/version requirements. Pure argument/config/dry-run regression tests only; no real cloud, VM, install or GUI execution. Root retains ga-gate and current-pointer ownership. Independent review required before integration; installed evidence remains NOT_RUN. CLWX107 linked acceptance dependency.
 CLWX-FABLE-EXECUTION-20260908 — Execution resumed. W1 repairs the actual OpenClaw 2026.9.2 policy oracle; W2 adds the required synthetic source-fixture fidelity row. Source-fixture GREEN cannot satisfy installed fidelity. Independent review and one full integrated preflight are required before packaging. CLWX-128 owns CLI liveness/deadline/outcome automation.
 CLWX-HANDOFF-CURRENT-20260908
@@ -2556,6 +2745,13 @@ Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is sc
 
 - **State:** In Progress  |  **Priority:** medium
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: installed acceptance. Owner: vm-operator. Current checkpoint: correction 6ed95e82 APPROVED, integrated 488ebe29; installed rerun open.
+Sprint acceptance slice (original full criteria retained below):
+
+- Curated fail-closed source fixture remains green with mutation controls, preserving its documented semantic limits.
+- Installed ordinary-app overlapping-name meal/shirt journey is reviewed fact-by-fact for associations, quantities, negation and actions; source fixture alone cannot provide the installed verdict.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Fidelity correction6ed95e82 independently APPROVED and integrated488ebe29 after the e12c150a/2ee28efa chain. 60 focused tests and12 curated fixture rows pass, including rejecting the reviewed wrong-fact with/despite controls. This is a curated regression checker, not a general free-text semantic oracle; another pre-existing no-fuss phrase false-PASS is documented. Installed document fidelity and semantic review remain open. Handoff: docs/bugs/CLWX-115-fidelity-validator.md.
 Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 CLWX-NO-CAP-EXECUTION-20260908 — Correction6ed95e828eca254d76c3e16eccce65cf26fa6ae0 committed: exact with/despite negation-borrow failures reproduced before fix;60focused tests and12fixture rows now pass. Minimal after-window fact binding retains previous controls. Independent delta review is running, no spending cap. This remains source-fixture evidence only; installed CLWX115 rerun open. Report docs/bugs/CLWX-115-fidelity-validator.md.
@@ -2585,6 +2781,13 @@ Agent-filed at Backlog. Scope/priority is the owner’s call; nothing here is sc
 
 - **State:** In Progress  |  **Priority:** high
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: source-author → review. Owner: source-author (Claude CLI); vm-operator installed. Current checkpoint: Actual-9.2 policy oracle independently approved and integrated1c387821; 22 focused passes; installed app proof and unsteered probe remain..
+Sprint acceptance slice (original full criteria retained below):
+
+- Reuse integrated1c387821 actual OpenClaw2026.9.2 policy oracle and native route; do not commission another catalog fix.
+- Installed: fresh on-device no-tool prompt yields answer text; no top-level sessions_yield; stalled loop terminates visibly; falsifiability run recorded; probe steering removed or mirrored into product
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-FABLE-EXECUTION-20260908 — Claude W1 is resolving the test catalog/export mismatch against explicitly selected OpenClaw 2026.9.2. Existing native Ollama source repair remains integrated in f93ac8b3. Installed ordinary local/tool/document acceptance is still required; direct native API timing is insufficient.
 CLWX-HANDOFF-CURRENT-20260908
 ON-DEVICE DEFECT STILL OPEN: native-route/context source repair 0b46e833 is reviewed/integrated in frozen f93ac8b3; full app prompt and offline document behavior are NOT_RUN. Direct native diagnostic confirms API/context feasibility only. Held test repair 24e1cfd3 fails with actual OpenClaw 2026.9.2: canvas policy family expands to show_widget while old fixture supplies literal canvas. Next executor must bind the oracle to the actual tool catalog and dependency version, obtain independent review, then verify bounded terminal/cancel/next-turn behavior in the installed app. CLWX-126 owns engine selection research.
@@ -2624,6 +2827,14 @@ Agent-filed at Backlog from the moe.19 verify. Scope, priority, and whether to u
 
 - **State:** In Progress  |  **Priority:** medium
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: review sign-off. Owner: independent-reviewer. Current checkpoint: source landed and audit-corroborated; approval lane open.
+Sprint acceptance slice (original full criteria retained below):
+
+- Independent review-lane sign-off of landed typed not_in_list/stale_read_guard grading (audit found no defect)
+- W3.2 verified on final-artifact live runs alongside 119
+Dependencies: CLWX-119. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-SOURCE-ONLY-RECURRENCE-20260908-1334 — Current-source audit confirms typed not_in_list/stale_read_guard propagation and fail-closed grading already exist at488ebe29; focused regression suites PASS. No new defect reproduced by audit and no duplicate repair assigned. Independent acceptance disposition and exact-artifact live proof remain separate. docs/evidence/GA_ACCEPTANCE_AUDIT_2026-09-08.md.
 In the 2026-09-07 round-2 gate run, outlook-eval went RED on W3.2 with status=not_found attachments=undefined. The per-check log shows the real cause: reading-pane settle FAILED: pane stayed on a different message — i.e. the CLWX-46 stale-read guard doing its job and refusing to report a message it could not confirm was the right one.
 That refusal is the SAFE behaviour. The dedicated guard row for exactly this (stale-read check (CLWX-46 guard)) PASSED in the same run. So the suite has two rows observing the same mechanism and grading it in opposite directions.
@@ -2639,6 +2850,14 @@ Interacts with the eval-determinism card: W3.2 is one of the two rows that swap 
 
 - **State:** In Progress  |  **Priority:** high
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: source-author → review. Owner: source-author (Claude CLI); account-holder for sign-in. Current checkpoint: reproduced 4/4; reviewed source repair noted CLEAR per card; installed/live acceptance pending.
+Sprint acceptance slice (original full criteria retained below):
+
+- Discriminating read-back probe (chip display-name vs selector race) run; read-back fixed WITHOUT loosening the assertion; genuine-mismatch still REFUSES (pinned row)
+- Independent review APPROVE
+- Installed W4.1 + W4.4 pass on candidate with authenticated user Chrome (tenant gate)
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-HANDOFF-CURRENT-20260908
 DRAFT FIDELITY REMAINS OPEN: retain the original reproduced recipient-assertion mismatch and its compose/readback criteria. Graph draft-permission repair is a separate reviewed source change on CLWX-40; it does not prove browser recipient, subject or body fidelity. An authenticated user Chrome profile and exact installed candidate are required for reviewed draft/reopen testing. No current tenant acceptance or new dispatch is claimed.
 Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
@@ -2670,6 +2889,15 @@ Filed by the GA sprint driver at the agent ceiling: Backlog, not Ready. No fix a
 
 - **State:** In Progress  |  **Priority:** urgent
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: installed acceptance. Owner: vm-operator. Current checkpoint: scoped moe.25 Online PASS; fault/cancel matrix and new-candidate proof open.
+Sprint acceptance slice (original full criteria retained below):
+
+- On moe.26: Existing Main + proven-fresh + next turn each answer once on the intended route with 30s terminal observation; prompt survives preparation delay/error
+- Cancel during preparation AND generation terminates visibly; controlled connectivity fault ends once; next turn succeeds; no silent replay/duplicate write
+- Launch/ready/send/dispatch/first-output/final timestamps recorded cold and warm
+Dependencies: CLWX-96. Source approval, artifact availability and full installed acceptance are separate checkpoints; do not wait for whole-card Done before a permitted downstream stage.
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-HANDOFF-CURRENT-20260908
 SCOPED ONLINE PASS: unchanged installed moe.25 now passes Existing Main, fresh and next turns with intended custom-moecloud/moe-demo-pro route and 30-second terminal observations. Reviewed driver 23a15b81 corrected historical-error-chip attribution; original failed receipt retained. Cloud deployed build-source maps the alias to Vertex Gemini 2.5 Pro. This is not new-candidate/client/tenant/external acceptance. Latest read-only WhatsApp refresh found no new inbound Karunesh response; no fresh acceptance. Owner messages told him to wait. Lifecycle fault/cancel recovery, useful vanilla setup and unaided stakeholder rerun remain open.
 Current plan: docs/COMPLETION_PLAN.md. Evidence: docs/evidence/WINDOWS_PLAN_EXECUTION_2026-09-08.md. Research: docs/research/OPENCLAW_WINDOWS_IMPROVEMENT_STUDY_2026-09-08.md. GA RED; source/build work paused for the next-agent handoff.
@@ -2741,6 +2969,14 @@ Deliverables: reusable Bedrock-only review script, scoped skill and verified Fre
 
 - **State:** In Progress  |  **Priority:** high
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: source-author → review. Owner: source-author (Claude CLI) then independent-reviewer. Current checkpoint: committed 41359e1; independent review is the next action.
+Sprint acceptance slice (original full criteria retained below):
+
+- REQUEST_CHANGES findings on a091a968 resolved at 41359e1: owned-launch kill under restricted process metadata, same-session profile conflict misreport, attach ownership bypass, port/endpoint identity binding, PowerShell parse errors
+- Independent review APPROVE; regressions for all three reproduced defects
+- Installed rerun on the candidate: 'open Chrome' succeeds or fails with Windows-correct recovery copy; no Mac instructions
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-ACCEPTANCE-DISPATCH-20260908-1302 — Independent review REQUEST_CHANGES on a091a968. Three reproduced defects: restricted process metadata can cause an owned Chrome launch to be killed; same-session profile conflict is misreported as foreign Windows session; Outlook/Forms attach bypasses ownership validation when the endpoint is reachable. Also bind port/endpoint identity and cover default PowerShell parsing errors. New browser-ownership-repair author owns the coupled130/121 service/driver boundaries at merged base736ffe9e. Browser source excluded from candidate. Exact original stock timeout cause UNKNOWN. Review execution metadata included Fable5 and Opus5 on Bedrock, so monitor flagged MODEL_MISMATCH; concrete failing probes retained, no approval inferred. Handoff: docs/bugs/CLWX-130-windows-chrome-start.md.
 Current plan: docs/COMPLETION_PLAN.md. Private supervised receipts: artifacts/ga-fable-20260908/. Prior criteria and history retained below.
 CLWX-SOURCE-CHECKPOINT-20260908-1240 — Source completion:a091a968b89c5127e41c55ab62bf942c56c08e46 committed and clean. 113focused unit passes retained; typecheck, focused lint, explicit-base harness and comms PASS. Independent review queued under owner budget hold. Full report docs/bugs/CLWX-130-windows-chrome-start.md; source/installed scopes remain distinct.
@@ -2756,6 +2992,12 @@ Owner: Claude browser-regression lane; root sole VM operator. User is actively t
 
 - **State:** In Progress  |  **Priority:** high
 
+CLWX-GA-CLOSURE-SPRINT-20260908 — GA closure sprint, September 8–15 UTC (planning window, not promised GA date).
+Lane: installed acceptance. Owner: vm-operator. Current checkpoint: source APPROVED, integrated 6ec32807; installed rerun open.
+Sprint acceptance slice (original full criteria retained below):
+
+- Installed same-build unaided rerun: Graph capability question returns actual Main-owned status; no fictional Gateway config probing; no navigation/auth side effects
+Evidence contract: criterion, source revision, artifact/run/hashes where applicable, machine/account class, command, timestamp, result and redacted receipt. PASS/FAIL/BLOCKED/NOT_RUN; unknowns never pass. Failures return to the existing owning card and this same sprint. No owner-desktop GUI launches or protected Windows-session changes. Full card Ready requires all its acceptance; Done remains human-owned. Current plan: docs/COMPLETION_PLAN.md; sprint mirror: docs/plane-board/CLWX-ga-sprint.json.
 CLWX-SPRINT-CHECKPOINT-20260908-1235 — Graph diagnosis source independently APPROVED:73b77d0c integrated as6ec32807;83 focused tests pass,105 combined with runtime oracle. Existing handler can report actual configured/signed-in/browser readiness without fictional Gateway outlook lookup. Installed assistant rerun and tenant authentication remain open. Report:docs/bugs/CLWX-131-graph-readiness-diagnosis.md.
 Prior dated status and full acceptance preserved below.
 CLWX-GRAPH-DIAGNOSIS-20260908

@@ -56,3 +56,19 @@ The upstream comment API accepts `comment_html` on POST and exposes list/detail 
 | Cancelled | `cancelled` | Retired/duplicate work; retain history |
 
 Do not infer closure from group ordering: this instance's Ready state is in `unstarted`. Never turn board counts or a Ready card into a GA claim. Use the [completion plan](COMPLETION_PLAN.md) and installed acceptance evidence for that decision.
+
+
+## Sprint cycles
+
+Verified September 8, 2026 for the GA closure sprint. This project initially returned HTTP 400, `Cycles are not enabled for this project`, despite the cycle list being readable. The owner's sprint request authorized enabling `cycle_view` on the verified CLWX project with a field-only PATCH; readback confirmed it before creation. Do not infer enablement from an empty list.
+
+| Operation | Installed route / body |
+|---|---|
+| Read/enable project cycle feature | `GET P/`; when required, `PATCH P/` with `{"cycle_view":true}` |
+| List/create sprint | `GET/POST P/cycles/` |
+| Read sprint | `GET P/cycles/<cycle-uuid>/` |
+| List/add sprint cards | `GET/POST P/cycles/<cycle-uuid>/cycle-issues/`; POST `{"issues":["<issue-uuid>"]}` |
+
+Creation uses name, description, start/end dates, timezone, verified project ID and the existing project lead as `owned_by`. Record returned dates: this instance normalizes date-only inputs to timestamps. Deduplicate by the intended cycle name/external ID and inspect readback after an ambiguous write before retrying. Verify both cycle detail/list and exact membership after adding cards; a created empty cycle is not a completed sprint setup. Keep original card acceptance, states and prior cycle memberships unless moving them is intended.
+
+API contracts: [create cycle](https://developers.plane.so/api-reference/cycle/add-cycle), [add cycle work items](https://developers.plane.so/api-reference/cycle/add-cycle-work-items), [list membership](https://developers.plane.so/api-reference/cycle/list-cycle-work-items). Private operation receipts are under `artifacts/ga-fable-20260908/sprint-loop/`; the sanitized sprint mirror is kept beside the board export.
