@@ -1,7 +1,7 @@
 /**
- * One-shot seed for a local OpenAI-compatible LLM provider account.
+ * One-shot seed for a local native Ollama LLM provider account.
  *
- * Wires Ollama running `qwen2.5:3b-instruct` at http://127.0.0.1:11434/v1 as a
+ * Wires Ollama running `qwen2.5:3b-instruct` at http://127.0.0.1:11434 as a
  * ClawX provider account so that fresh installs (no cloud keys configured)
  * can still get a chat reply out of the box.
  *
@@ -60,8 +60,10 @@ import { proxyAwareFetch } from '../utils/proxy-fetch';
 //
 // Long-term: revisit when Qwen 3.5 / Hermes 4 land. The self-test cron at
 // scripts/clawx-selftest.mjs will catch regressions.
-const LOCAL_BASE_URL = 'http://127.0.0.1:11434/v1';
+const LOCAL_BASE_URL = 'http://127.0.0.1:11434';
 const LOCAL_MODEL_ID = 'qwen2.5:3b-instruct';
+const LOCAL_CONTEXT_TOKENS = 32_768;
+const LOCAL_MODEL_PARAMS = { num_ctx: LOCAL_CONTEXT_TOKENS } as const;
 const LOCAL_ACCOUNT_ID = 'ollama-local-qwen2.5-3b-instruct';
 const LOCAL_ACCOUNT_LABEL = 'On this device (Qwen 2.5 3B Instruct)';
 // Ollama doesn't enforce auth but the secret-store and runtime-sync paths
@@ -83,6 +85,8 @@ function accountTargetsLocalEndpoint(account: ProviderAccount): boolean {
   // Treat 127.0.0.1 and localhost as equivalent for idempotency.
   return (
     target === normaliseBaseUrl(LOCAL_BASE_URL) ||
+    target === normaliseBaseUrl(`${LOCAL_BASE_URL}/v1`) ||
+    target === normaliseBaseUrl('http://localhost:11434') ||
     target === normaliseBaseUrl('http://localhost:11434/v1')
   );
 }
@@ -114,19 +118,29 @@ function normalizeLocalModelId(model: string | undefined | null): string {
 
 function buildLocalModelsUrl(baseUrl: string | undefined | null): string {
   const normalized = normaliseBaseUrl(baseUrl || LOCAL_BASE_URL);
-  if (!normalized) return `${LOCAL_BASE_URL}/models`;
-  if (normalized.endsWith('/models')) return normalized;
+  if (!normalized) return `${LOCAL_BASE_URL}/api/tags`;
+  if (normalized.endsWith('/api/tags') || normalized.endsWith('/models')) return normalized;
   if (normalized.endsWith('/v1')) return `${normalized}/models`;
-  return `${normalized}/v1/models`;
+  return `${normalized}/api/tags`;
 }
 
 function responseContainsModel(data: unknown, modelId: string): boolean | null {
   if (!data || typeof data !== 'object') return null;
-  const entries = (data as { data?: unknown }).data;
-  if (!Array.isArray(entries)) return null;
-  return entries.some((entry) => (
-    entry && typeof entry === 'object' && (entry as { id?: unknown }).id === modelId
-  ));
+  const openAiEntries = (data as { data?: unknown }).data;
+  if (Array.isArray(openAiEntries)) {
+    return openAiEntries.some((entry) => (
+      entry && typeof entry === 'object' && (entry as { id?: unknown }).id === modelId
+    ));
+  }
+
+  const ollamaEntries = (data as { models?: unknown }).models;
+  if (Array.isArray(ollamaEntries)) {
+    return ollamaEntries.some((entry) => (
+      entry && typeof entry === 'object' && (entry as { name?: unknown }).name === modelId
+    ));
+  }
+
+  return null;
 }
 
 export async function probeLocalProviderReadiness(options?: {
@@ -224,35 +238,42 @@ export async function seedDefaultLocalProvider(
   }
 
   // Always-run re-sync: if our canonical account exists, push its current
-  // model id into openclaw.json on every boot. This catches the case where
-  // an earlier ClawX release wrote a different model into openclaw.json's
-  // models.providers entry (e.g. ollama-ollamalo → qwen3:4b) and the model
-  // id has since changed at the seed level. Without this, the gateway keeps
-  // routing the old model id even though the providerAccount points to the
-  // new one. Idempotent — syncSavedProviderToRuntime only writes when
-  // something actually differs.
+  // native Ollama contract into openclaw.json on every boot. This catches the
+  // case where an earlier ClawX release wrote /v1 + openai-completions or a
+  // different model id into the runtime provider entry. Idempotent —
+  // syncSavedProviderToRuntime only writes when something actually differs.
   try {
     const accounts = await listProviderAccounts();
     const canonical = accounts.find((a) => a.id === LOCAL_ACCOUNT_ID);
-    if (canonical && canonical.model !== LOCAL_MODEL_ID) {
+    let accountToSync = canonical;
+    const canonicalDrifted = canonical && (
+      canonical.model !== LOCAL_MODEL_ID
+        || normaliseBaseUrl(canonical.baseUrl) !== normaliseBaseUrl(LOCAL_BASE_URL)
+        || canonical.apiProtocol !== 'ollama'
+    );
+    if (canonicalDrifted) {
       // Drift between the seed code and the stored account: update the
       // account so the migration block below isn't needed in this branch.
-      const updated = { ...canonical, model: LOCAL_MODEL_ID, label: LOCAL_ACCOUNT_LABEL,
-        updatedAt: new Date().toISOString() };
+      const updated = {
+        ...canonical,
+        model: LOCAL_MODEL_ID,
+        label: LOCAL_ACCOUNT_LABEL,
+        baseUrl: LOCAL_BASE_URL,
+        apiProtocol: 'ollama' as const,
+        updatedAt: new Date().toISOString(),
+      };
       await saveProviderAccount(updated);
+      accountToSync = updated;
       logger.info(
-        `[local-provider-seed] Bumped local account ${LOCAL_ACCOUNT_ID} model → ${LOCAL_MODEL_ID}`,
+        `[local-provider-seed] Repaired local account ${LOCAL_ACCOUNT_ID} runtime contract → ${LOCAL_MODEL_ID} (${LOCAL_BASE_URL}, api=ollama, num_ctx=${LOCAL_MODEL_PARAMS.num_ctx})`,
       );
     }
-    if (canonical || accounts.find((a) => a.id === LOCAL_ACCOUNT_ID)) {
-      const account = (await listProviderAccounts()).find((a) => a.id === LOCAL_ACCOUNT_ID);
-      if (account) {
-        await syncSavedProviderToRuntime(
-          providerAccountToConfig(account),
-          LOCAL_PLACEHOLDER_KEY,
-          syncGatewayManager,
-        );
-      }
+    if (accountToSync) {
+      await syncSavedProviderToRuntime(
+        providerAccountToConfig(accountToSync),
+        LOCAL_PLACEHOLDER_KEY,
+        syncGatewayManager,
+      );
     }
   } catch (err) {
     logger.warn(
@@ -294,7 +315,7 @@ export async function seedDefaultLocalProvider(
         label: LOCAL_ACCOUNT_LABEL,
         model: LOCAL_MODEL_ID,
         baseUrl: LOCAL_BASE_URL,
-        apiProtocol: 'openai-completions',
+        apiProtocol: 'ollama',
         updatedAt: now,
       };
       await saveProviderAccount(migrated);
@@ -356,7 +377,7 @@ export async function seedDefaultLocalProvider(
       label: LOCAL_ACCOUNT_LABEL,
       authMode: 'local',
       baseUrl: LOCAL_BASE_URL,
-      apiProtocol: 'openai-completions',
+      apiProtocol: 'ollama',
       model: LOCAL_MODEL_ID,
       enabled: true,
       isDefault: shouldBecomeDefault,
@@ -411,7 +432,7 @@ export async function seedDefaultLocalProvider(
     }
 
     logger.info(
-      `[local-provider-seed] Seeded "${LOCAL_ACCOUNT_LABEL}" (${LOCAL_BASE_URL}, model=${LOCAL_MODEL_ID}, default=${shouldBecomeDefault})`,
+      `[local-provider-seed] Seeded "${LOCAL_ACCOUNT_LABEL}" (${LOCAL_BASE_URL}, api=ollama, model=${LOCAL_MODEL_ID}, num_ctx=${LOCAL_MODEL_PARAMS.num_ctx}, default=${shouldBecomeDefault})`,
     );
   } catch (err) {
     logger.warn(

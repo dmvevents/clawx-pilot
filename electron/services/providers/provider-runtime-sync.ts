@@ -30,11 +30,15 @@ const OPENAI_OAUTH_DEFAULT_MODEL_REF = `${OPENAI_OAUTH_RUNTIME_PROVIDER}/gpt-5.4
 const MANAGED_CLOUD_GATEWAY_RUNTIME_PROVIDER = 'custom-moecloud';
 const MANAGED_CLOUD_GATEWAY_PROVIDER_IDS = new Set(['moe-cloud-gateway', MANAGED_CLOUD_GATEWAY_RUNTIME_PROVIDER]);
 const MANAGED_CLOUD_GATEWAY_VISION_MODELS = new Set(['moe-demo-pro', 'moe-demo']);
+const MANAGED_LOCAL_OLLAMA_PROVIDER_ID = 'ollama-local-qwen2.5-3b-instruct';
+const MANAGED_LOCAL_OLLAMA_MODEL_ID = 'qwen2.5:3b-instruct';
+const MANAGED_LOCAL_OLLAMA_CONTEXT_TOKENS = 32_768;
 const TEXT_AND_IMAGE_INPUT: PiAiModelInputCapability[] = ['text', 'image'];
 
 /**
  * Provider types that are not in the built-in provider registry (no `providerConfig.api`).
- * They require explicit api-protocol defaulting to `openai-completions`.
+ * Custom providers require OpenAI-compatible defaulting; the managed loopback
+ * Ollama account opts into the native Ollama runtime protocol explicitly.
  */
 function isUnregisteredProviderType(type: string): boolean {
   return type === 'custom' || type === 'ollama';
@@ -63,6 +67,12 @@ function normalizeProviderBaseUrl(
 
   if (isUnregisteredProviderType(config.type)) {
     const protocol = apiProtocol || config.apiProtocol || 'openai-completions';
+    if (protocol === 'ollama') {
+      return normalized
+        .replace(/\/api\/chat$/i, '')
+        .replace(/\/api\/tags$/i, '')
+        .replace(/\/v1$/i, '');
+    }
     if (protocol === 'openai-responses') {
       return normalized.replace(/\/responses?$/i, '');
     }
@@ -381,6 +391,17 @@ function shouldStampManagedCloudGatewayVision(
     && MANAGED_CLOUD_GATEWAY_VISION_MODELS.has(modelId);
 }
 
+function shouldStampManagedLocalOllamaContext(
+  config: ProviderConfig,
+  runtimeProviderKey: string,
+  modelId: string,
+): boolean {
+  return config.type === 'ollama'
+    && config.id === MANAGED_LOCAL_OLLAMA_PROVIDER_ID
+    && runtimeProviderKey === getOpenClawProviderKey('ollama', MANAGED_LOCAL_OLLAMA_PROVIDER_ID)
+    && modelId === MANAGED_LOCAL_OLLAMA_MODEL_ID;
+}
+
 function runtimeModelEntryForProvider(
   config: ProviderConfig,
   runtimeProviderKey: string,
@@ -388,6 +409,13 @@ function runtimeModelEntryForProvider(
 ): PiAiModelsJsonModelEntry {
   if (shouldStampManagedCloudGatewayVision(config, runtimeProviderKey, modelId)) {
     return piAiModelsJsonModelEntry(modelId, modelId, { input: TEXT_AND_IMAGE_INPUT });
+  }
+  if (shouldStampManagedLocalOllamaContext(config, runtimeProviderKey, modelId)) {
+    return piAiModelsJsonModelEntry(modelId, modelId, {
+      contextWindow: MANAGED_LOCAL_OLLAMA_CONTEXT_TOKENS,
+      contextTokens: MANAGED_LOCAL_OLLAMA_CONTEXT_TOKENS,
+      params: { num_ctx: MANAGED_LOCAL_OLLAMA_CONTEXT_TOKENS },
+    });
   }
   return piAiModelsJsonModelEntry(modelId);
 }
@@ -423,13 +451,20 @@ function managedRuntimeModelEntriesForProvider(
   runtimeProviderKey: string,
 ): PiAiModelsJsonModelEntry[] | undefined {
   if (
-    config.type !== 'custom'
-    || !MANAGED_CLOUD_GATEWAY_PROVIDER_IDS.has(config.id)
-    || runtimeProviderKey !== MANAGED_CLOUD_GATEWAY_RUNTIME_PROVIDER
+    config.type === 'custom'
+    && MANAGED_CLOUD_GATEWAY_PROVIDER_IDS.has(config.id)
+    && runtimeProviderKey === MANAGED_CLOUD_GATEWAY_RUNTIME_PROVIDER
   ) {
-    return undefined;
+    return runtimeModelEntriesForProvider(config, runtimeProviderKey);
   }
-  return runtimeModelEntriesForProvider(config, runtimeProviderKey);
+  if (
+    config.type === 'ollama'
+    && config.id === MANAGED_LOCAL_OLLAMA_PROVIDER_ID
+    && runtimeProviderKey === getOpenClawProviderKey('ollama', MANAGED_LOCAL_OLLAMA_PROVIDER_ID)
+  ) {
+    return runtimeModelEntriesForProvider(config, runtimeProviderKey);
+  }
+  return undefined;
 }
 
 async function resolveRuntimeSyncContext(config: ProviderConfig): Promise<RuntimeProviderSyncContext | null> {

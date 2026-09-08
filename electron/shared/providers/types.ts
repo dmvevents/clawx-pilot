@@ -40,7 +40,8 @@ export type ProviderProtocol =
   | 'openai-completions'
   | 'openai-responses'
   | 'anthropic-messages'
-  | 'openrouter';
+  | 'openrouter'
+  | 'ollama';
 
 export type ProviderAuthMode =
   | 'api_key'

@@ -90,7 +90,7 @@ describe('gateway boot convergence', () => {
     mocks.syncSavedProviderToRuntime.mockResolvedValue(undefined);
     mocks.patchProviderModelCompat.mockResolvedValue(undefined);
     mocks.proxyAwareFetch.mockResolvedValue(new Response(JSON.stringify({
-      data: [{ id: 'qwen2.5:3b-instruct' }],
+      models: [{ name: 'qwen2.5:3b-instruct' }],
     }), { status: 200 }));
   });
 
@@ -103,6 +103,8 @@ describe('gateway boot convergence', () => {
       id: 'ollama-local-qwen2.5-3b-instruct',
       vendorId: 'ollama',
       model: 'qwen2.5:3b-instruct',
+      baseUrl: 'http://127.0.0.1:11434',
+      apiProtocol: 'ollama',
       isDefault: true,
     }));
     expect(mocks.storeApiKey).toHaveBeenCalledWith('ollama-local-qwen2.5-3b-instruct', 'ollama-local');
@@ -110,6 +112,50 @@ describe('gateway boot convergence', () => {
       id: 'ollama-local-qwen2.5-3b-instruct',
       type: 'ollama',
       model: 'qwen2.5:3b-instruct',
+      baseUrl: 'http://127.0.0.1:11434',
+      apiProtocol: 'ollama',
+    }), 'ollama-local', undefined);
+  });
+
+  it('probes the native Ollama tags endpoint for fresh local readiness', async () => {
+    await seedDefaultLocalProvider(undefined, { skipGatewayRefresh: true });
+
+    expect(mocks.proxyAwareFetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:11434/api/tags',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it('repairs a stale managed local account from OpenAI-compatible /v1 to native Ollama', async () => {
+    const staleAccount = {
+      id: 'ollama-local-qwen2.5-3b-instruct',
+      vendorId: 'ollama',
+      label: 'On this device (Qwen 2.5 3B Instruct)',
+      authMode: 'local',
+      baseUrl: 'http://127.0.0.1:11434/v1',
+      apiProtocol: 'openai-completions',
+      model: 'qwen2.5:3b-instruct',
+      enabled: true,
+      isDefault: true,
+      createdAt: '2026-09-08T00:00:00.000Z',
+      updatedAt: '2026-09-08T00:00:00.000Z',
+    };
+    mocks.listProviderAccounts.mockResolvedValue([staleAccount]);
+
+    await seedDefaultLocalProvider({} as never, { skipGatewayRefresh: true });
+
+    expect(mocks.saveProviderAccount).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'ollama-local-qwen2.5-3b-instruct',
+      baseUrl: 'http://127.0.0.1:11434',
+      apiProtocol: 'ollama',
+      model: 'qwen2.5:3b-instruct',
+    }));
+    expect(mocks.syncSavedProviderToRuntime).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'ollama-local-qwen2.5-3b-instruct',
+      type: 'ollama',
+      model: 'qwen2.5:3b-instruct',
+      baseUrl: 'http://127.0.0.1:11434',
+      apiProtocol: 'ollama',
     }), 'ollama-local', undefined);
   });
 
@@ -155,6 +201,8 @@ describe('gateway boot convergence', () => {
       id: 'ollama-local-qwen2.5-3b-instruct',
       vendorId: 'ollama',
       model: 'qwen2.5:3b-instruct',
+      baseUrl: 'http://127.0.0.1:11434',
+      apiProtocol: 'ollama',
       isDefault: false,
     }));
     expect(mocks.storeApiKey).toHaveBeenCalledWith('ollama-local-qwen2.5-3b-instruct', 'ollama-local');
@@ -163,6 +211,8 @@ describe('gateway boot convergence', () => {
       id: 'ollama-local-qwen2.5-3b-instruct',
       type: 'ollama',
       model: 'qwen2.5:3b-instruct',
+      baseUrl: 'http://127.0.0.1:11434',
+      apiProtocol: 'ollama',
     }), 'ollama-local', undefined);
   });
 });

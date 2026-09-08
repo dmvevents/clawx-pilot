@@ -25,10 +25,16 @@ export type PiAiModelsJsonModelEntry = {
   name: string;
   cost: PiAiModelCostRates;
   input?: PiAiModelInputCapability[];
+  contextWindow?: number;
+  contextTokens?: number;
+  params?: Record<string, unknown>;
 };
 
 type PiAiModelsJsonModelEntryOptions = {
   input?: PiAiModelInputCapability[];
+  contextWindow?: number;
+  contextTokens?: number;
+  params?: Record<string, unknown>;
 };
 
 export function normalizePiAiModelCost(existing: unknown): PiAiModelCostRates {
@@ -56,6 +62,15 @@ export function piAiModelsJsonModelEntry(
   const entry: PiAiModelsJsonModelEntry = { id, name, cost: normalizePiAiModelCost(undefined) };
   if (options.input?.length) {
     entry.input = [...options.input];
+  }
+  if (typeof options.contextWindow === 'number' && Number.isFinite(options.contextWindow)) {
+    entry.contextWindow = options.contextWindow;
+  }
+  if (typeof options.contextTokens === 'number' && Number.isFinite(options.contextTokens)) {
+    entry.contextTokens = options.contextTokens;
+  }
+  if (options.params && typeof options.params === 'object') {
+    entry.params = { ...options.params };
   }
   return entry;
 }

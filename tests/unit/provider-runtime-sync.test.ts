@@ -339,6 +339,7 @@ describe('provider-runtime-sync refresh strategy', () => {
       name: 'Ollama',
       model: 'qwen3:30b',
       baseUrl: 'http://localhost:11434/v1',
+      apiProtocol: 'openai-completions',
     });
 
     mocks.getProviderConfig.mockReturnValue(undefined);
@@ -353,9 +354,81 @@ describe('provider-runtime-sync refresh strategy', () => {
       expect.objectContaining({
         baseUrl: 'http://localhost:11434/v1',
         api: 'openai-completions',
+        models: undefined,
       }),
     );
     expect(gateway.debouncedReload).toHaveBeenCalledTimes(1);
+  });
+
+  it('syncs the managed loopback Qwen provider through native Ollama with 32k context metadata', async () => {
+    const ollamaProvider = createProvider({
+      id: 'ollama-local-qwen2.5-3b-instruct',
+      type: 'ollama',
+      name: 'On this device (Qwen 2.5 3B Instruct)',
+      model: 'qwen2.5:3b-instruct',
+      baseUrl: 'http://127.0.0.1:11434',
+      apiProtocol: 'ollama',
+    });
+
+    mocks.getProviderConfig.mockReturnValue(undefined);
+    mocks.getProviderSecret.mockResolvedValue({ type: 'local', apiKey: 'ollama-local' });
+
+    const gateway = createGateway('running');
+    await syncSavedProviderToRuntime(ollamaProvider, 'ollama-local', gateway as GatewayManager);
+
+    const expectedModel = expect.objectContaining({
+      id: 'qwen2.5:3b-instruct',
+      name: 'qwen2.5:3b-instruct',
+      contextWindow: 32768,
+      contextTokens: 32768,
+      params: { num_ctx: 32768 },
+    });
+    expect(mocks.syncProviderConfigToOpenClaw).toHaveBeenCalledWith(
+      'ollama-ollamalo',
+      'qwen2.5:3b-instruct',
+      expect.objectContaining({
+        baseUrl: 'http://127.0.0.1:11434',
+        api: 'ollama',
+        authHeader: false,
+        models: [expectedModel],
+      }),
+    );
+    expect(mocks.updateAgentModelProvider).toHaveBeenCalledWith(
+      'ollama-ollamalo',
+      expect.objectContaining({
+        baseUrl: 'http://127.0.0.1:11434',
+        api: 'ollama',
+        apiKey: 'ollama-local',
+        authHeader: false,
+        models: [expectedModel],
+      }),
+    );
+    expect(gateway.debouncedReload).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes stale managed loopback /v1 URLs when native Ollama is selected', async () => {
+    const ollamaProvider = createProvider({
+      id: 'ollama-local-qwen2.5-3b-instruct',
+      type: 'ollama',
+      name: 'On this device (Qwen 2.5 3B Instruct)',
+      model: 'qwen2.5:3b-instruct',
+      baseUrl: 'http://127.0.0.1:11434/v1',
+      apiProtocol: 'ollama',
+    });
+
+    mocks.getProviderConfig.mockReturnValue(undefined);
+    mocks.getProviderSecret.mockResolvedValue({ type: 'local', apiKey: 'ollama-local' });
+
+    await syncSavedProviderToRuntime(ollamaProvider, 'ollama-local');
+
+    expect(mocks.syncProviderConfigToOpenClaw).toHaveBeenCalledWith(
+      'ollama-ollamalo',
+      'qwen2.5:3b-instruct',
+      expect.objectContaining({
+        baseUrl: 'http://127.0.0.1:11434',
+        api: 'ollama',
+      }),
+    );
   });
 
   it('syncs custom OpenAI-compatible provider config with bearer auth header semantics', async () => {
@@ -520,6 +593,43 @@ describe('provider-runtime-sync refresh strategy', () => {
       }),
       expect.any(Array),
     );
+  });
+
+  it('syncs the managed local Ollama provider as default with native model metadata', async () => {
+    const ollamaProvider = createProvider({
+      id: 'ollama-local-qwen2.5-3b-instruct',
+      type: 'ollama',
+      name: 'On this device (Qwen 2.5 3B Instruct)',
+      model: 'qwen2.5:3b-instruct',
+      baseUrl: 'http://127.0.0.1:11434',
+      apiProtocol: 'ollama',
+    });
+
+    mocks.getProvider.mockResolvedValue(ollamaProvider);
+    mocks.getDefaultProvider.mockResolvedValue('ollama-local-qwen2.5-3b-instruct');
+    mocks.getProviderConfig.mockReturnValue(undefined);
+    mocks.getApiKey.mockResolvedValue('ollama-local');
+
+    const gateway = createGateway('running');
+    await syncDefaultProviderToRuntime('ollama-local-qwen2.5-3b-instruct', gateway as GatewayManager);
+
+    expect(mocks.setOpenClawDefaultModelWithOverride).toHaveBeenCalledWith(
+      'ollama-ollamalo',
+      'ollama-ollamalo/qwen2.5:3b-instruct',
+      expect.objectContaining({
+        baseUrl: 'http://127.0.0.1:11434',
+        api: 'ollama',
+        authHeader: false,
+        models: [expect.objectContaining({
+          id: 'qwen2.5:3b-instruct',
+          contextWindow: 32768,
+          contextTokens: 32768,
+          params: { num_ctx: 32768 },
+        })],
+      }),
+      expect.any(Array),
+    );
+    expect(gateway.debouncedReload).toHaveBeenCalledTimes(1);
   });
 
   it('uses the built-in Google provider path for legacy apiProtocol-only accounts', async () => {
