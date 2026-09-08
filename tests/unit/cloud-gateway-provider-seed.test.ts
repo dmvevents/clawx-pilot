@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   getOpenClawProviderKey: vi.fn(),
   getSetting: vi.fn(),
   setSetting: vi.fn(),
+  getMicrosoftGraphAccount: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
@@ -70,6 +71,20 @@ vi.mock('@electron/utils/store', () => ({
   setSetting: mocks.setSetting,
 }));
 
+// KR7 boundary: the seed reads the signed-in Graph account to stamp the
+// UserId metering header. This was the ONLY unmocked collaborator in this
+// unit suite, and its real implementation lazily does
+// `await import('electron-store')` -> `import 'electron'` -> the electron
+// package entry, which SYNCHRONOUSLY spawns `install.js` ("Downloading
+// Electron binary...") when node_modules/electron/dist is absent — exactly
+// what hosted34244582967 (windows-latest, clean 1d745567) logged inside the
+// first seeding test before it hit the 5000ms default timeout. Mock the
+// boundary so the unit suite is hermetic and deterministic; the account
+// present/absent/failing cases are pinned explicitly below.
+vi.mock('@electron/services/microsoft-graph/store', () => ({
+  getMicrosoftGraphAccount: mocks.getMicrosoftGraphAccount,
+}));
+
 import {
   normalizeCloudGatewayBaseUrl,
   resolveCloudGatewaySeedConfig,
@@ -113,6 +128,8 @@ describe('cloud-gateway-provider-seed', () => {
     mocks.syncSavedProviderToRuntime.mockResolvedValue(undefined);
     mocks.syncDefaultProviderToRuntime.mockResolvedValue(undefined);
     mocks.getOpenClawProviderKey.mockReturnValue('custom-moecloud');
+    // Default: no Graph account signed in -> no UserId header stamped.
+    mocks.getMicrosoftGraphAccount.mockResolvedValue(null);
     // Default scenario: a post-migration box where the principal explicitly
     // chose On this device. channelDefaultMigrated=true marks that the seed's
     // one-time launch-default pass already ran, so the persisted value is an
@@ -169,6 +186,10 @@ describe('cloud-gateway-provider-seed', () => {
         metadata: { customModels: ['moe-demo-pro', 'moe-demo'] },
       }),
     );
+    // No signed-in Graph account -> the headers key must stay off entirely so
+    // unauthenticated turns use the broker's anonymous path.
+    const savedAccount = mocks.saveProviderAccount.mock.calls[0][0] as ProviderAccount;
+    expect(savedAccount.headers).toBeUndefined();
     expect(mocks.storeApiKey).toHaveBeenCalledWith('moe-cloud-gateway', 'sk-clawx-client');
     expect(mocks.syncSavedProviderToRuntime).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -189,6 +210,43 @@ describe('cloud-gateway-provider-seed', () => {
     // moe.13 KR2 run, 2026-09-02).
     expect(mocks.setSetting).not.toHaveBeenCalledWith('preferredChannel', expect.anything());
     expect(mocks.setSetting).toHaveBeenCalledWith('setupComplete', true);
+  });
+
+  it('stamps the Graph UserId metering header when a Graph account is signed in (KR7)', async () => {
+    process.env.CLAWX_CLOUD_GATEWAY_BASE_URL = 'https://gateway.example.run.app';
+    process.env.CLAWX_CLOUD_GATEWAY_API_KEY = 'sk-clawx-client';
+    mocks.getMicrosoftGraphAccount.mockResolvedValue({
+      accountId: 'entra-oid-1234',
+      email: 'principal@example.gov.tt',
+      tenantId: 'tenant-1',
+      signedInAt: 1757300000000,
+    });
+
+    const result = await seedCloudGatewayProvider();
+
+    expect(result).toMatchObject({ status: 'seeded', providerId: 'moe-cloud-gateway' });
+    expect(mocks.saveProviderAccount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'moe-cloud-gateway',
+        headers: { UserId: 'entra-oid-1234' },
+      }),
+    );
+  });
+
+  it('still seeds without a UserId header when the Graph account read fails', async () => {
+    // Pins the production `.catch(() => null)` boundary deterministically:
+    // before hosted34244582967 this path was only ever exercised by the real
+    // Graph store accidentally throwing (after trying to download an Electron
+    // binary), which is neither hermetic nor a guaranteed control.
+    process.env.CLAWX_CLOUD_GATEWAY_BASE_URL = 'https://gateway.example.run.app';
+    process.env.CLAWX_CLOUD_GATEWAY_API_KEY = 'sk-clawx-client';
+    mocks.getMicrosoftGraphAccount.mockRejectedValue(new Error('graph store unavailable'));
+
+    const result = await seedCloudGatewayProvider();
+
+    expect(result).toMatchObject({ status: 'seeded', providerId: 'moe-cloud-gateway', defaulted: true });
+    const savedAccount = mocks.saveProviderAccount.mock.calls[0][0] as ProviderAccount;
+    expect(savedAccount.headers).toBeUndefined();
   });
 
   it('defaults preferredChannel to online only when no choice exists yet', async () => {
