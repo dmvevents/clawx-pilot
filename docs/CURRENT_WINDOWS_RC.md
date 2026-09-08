@@ -4,13 +4,13 @@
 
 
 **Local UI acceptance hold:** the owner reproduced the macOS Keychain dialog after the narrow fixture test passed. The resumed suite was stopped; desktop launches remain held. [CLWX-102](bugs/CLWX-102-macos-test-keychain.md) is unresolved and under read-only Claude diagnosis. This does not change the installed Windows artifact.
-## Current source candidate — moe.26, native lifetime fix passes; build running
+## Current source candidate — moe.26, reviewed fixture correction; build running
 
-`release/moe26-plan-execution` at **`99468423e78d90ef75a49ac5d7b52939caf9e808`**, checkout `/private/tmp/clawx-plan-execution-20260908`, version `0.4.3-moe.26`. Exact-source independent review APPROVE: 33 focused passes and failure controls; root typecheck exits 0. Prepared Windows auto-d passes 33 normal-TEMP tests and 23 short-TEMP tests. Native controls prove that the loader's cached temporary SQLite handle causes EPERM and targeted diagnostic closure releases it; product code uses an owned bounded child instead of unstable internal close APIs.
+`release/moe26-plan-execution` at **`8bb7a77907faf35fb8fc4136073ce340ea9a9aaa`**, checkout `/private/tmp/clawx-plan-execution-20260908`, version `0.4.3-moe.26`. One copy-list entry repairs the isolated bundle test's missing registry child. Root's six tests/lint pass; independent Fable/Bedrock APPROVE reproduces six passes and checks adjacent copy lists. [Hosted build 34256868050](https://github.com/dmvevents/clawx-pilot/actions/runs/34256868050) started at **17:24:08 UTC**, `keyless-public`, no required credential seeds or publication inputs. Full preflight/package pending; no installer/hash claimed.
 
-Root confirmed the same SHA on the pilot remote. [Hosted build 34255425275](https://github.com/dmvevents/clawx-pilot/actions/runs/34255425275) started at **17:09:49 UTC**, `keyless-public` profile, no required credential seeds and no publication inputs. Full native preflight/package remain pending; no new installer or hash is claimed.
+Native SQLite lifetime proof remains bound to parent99468423: normal TEMP33/33 and short TEMP23/23 pass, plus exact cached-handle/targeted-close control. The attempted full VM unit run at8bb7a779 did not start because transfer authentication failed; account-holder GCP reauthentication is pending. Hosted native validation is the available full-run path.
 
-Previous runs remain failed evidence: `34252050616` at `5785e570` (2,304 PASS / one FAIL / 57 SKIP; cleanup EPERM) and `34244582967` at `1d745567` (2,297 PASS / two FAIL / 57 SKIP). The full Mac 2,327-test pass belongs to `1d745567`, not this new revision. [Source/build evidence](evidence/GA_SOURCE_INTEGRATION_2026-09-08.md) preserves scoped checks and operational recovery. Held `24e1cfd3` and private checkpoint `8db5bc5f` remain excluded; the Mac GUI hold remains.
+Preserved failures:34255425275 at99468423 (2,308 PASS/one FAIL/57 SKIP, missing child in isolated fixture);34252050616 at5785e570 (2,304/one/57, cleanup EPERM);34244582967 at1d745567 (2,297/two/57). Full Mac2,327-test evidence belongs to1d745567. [Source/build evidence](evidence/GA_SOURCE_INTEGRATION_2026-09-08.md) keeps these scopes separate. Held24e1cfd3 and private8db5bc5f remain excluded.
 
 ## Latest installed diagnostic — moe.25
 

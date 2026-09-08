@@ -1,6 +1,12 @@
 # Reviewed moe.26 source and hosted build — September 8, 2026
 
-**Reviewed source PASS; native focused proof PASS; hosted build RUNNING; artifact acceptance NOT_RUN; GA RED.** Current source is clean **`99468423e78d90ef75a49ac5d7b52939caf9e808`**, version `0.4.3-moe.26`, on `release/moe26-plan-execution`. Root verified the same remote SHA and dispatched [run 34255425275](https://github.com/dmvevents/clawx-pilot/actions/runs/34255425275) at 17:09:49 UTC. Profile `keyless-public`, required credential seeds false, publication inputs absent. No installer hash, installation or GA publication is claimed.
+**Current source `8bb7a77907faf35fb8fc4136073ce340ea9a9aaa` reviewed/integrated/pushed; hosted build 34256868050 RUNNING; artifact acceptance NOT_RUN; GA RED.** Root confirmed exact pilot-remote SHA and dispatched the keyless build at17:24:08UTC. Required credential-seed inputs are false; publication inputs are absent.
+
+## Isolated checkout fixture correction — 17:24 UTC
+
+Hosted34255425275 at99468423 failed full native units:2,308 PASS/one FAIL/57 SKIP. The actual upgrade verifier/seed pass; CLWX92's explicit isolated-checkout copy list omitted the new helper, causing MODULE_NOT_FOUND. Root reproduced five passes/one failure locally, then added one entry at8bb7a779; six tests and scoped lint pass. Independent Fable/Bedrock review APPROVE reproduces six passes, confirms complete import/copy closure and finds no other matching copy allowlist. Receipt: `/private/tmp/clawx-moe26-db-lifetime-review-20260908/artifacts/REVIEW_FIXTURE_COPY.md`.
+
+Root attempted the full VM unit suite before another build, but SCP was rejected by GCP reauthentication **before the test launched**. Therefore full-native-VM result at8bb7a779 is NOT_RUN, not PASS/running. CLI and stored authorized-user ADC refresh both failed; only one account is registered and new original-VM SSH also fails. Owner reauthentication requested; hosted Windows preflight is the available full-run path. [CLWX-25](../bugs/CLWX-25-windows-lab-repeatability.md) and [CLWX-106](../bugs/CLWX-106-installed-verifier-identity.md) retain exact boundaries and corrective action.
 
 ## Owned child lifetime repair — 17:09 UTC
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T17:11:42.526488Z",
+  "updatedAt": "2026-09-08T17:27:10.586903+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -2094,7 +2094,7 @@
   },
   "currentSourceCandidate": {
     "version": "0.4.3-moe.26",
-    "source": "99468423e78d90ef75a49ac5d7b52939caf9e808",
+    "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
     "branch": "release/moe26-plan-execution",
     "worktree": "/private/tmp/clawx-plan-execution-20260908",
     "clean": true,
@@ -2182,6 +2182,14 @@
         "nativeNormalTempTests": 33,
         "nativeShortTempTests": 23,
         "installedAcceptance": "NOT_RUN"
+      },
+      {
+        "authorCommit": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+        "integratedCommit": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+        "scope": "One missing helper in isolated bundle-verifier checkout copy",
+        "focusedTests": 6,
+        "independentReview": "APPROVE",
+        "nativeAcceptance": "FULL_VM_NOT_RUN_AUTH_BLOCKED; HOSTED_RUNNING"
       }
     ],
     "combinedFocusedTests": {
@@ -2189,26 +2197,26 @@
       "files": 6,
       "source": "6ec328073f272c538e2e0d653824c1f407b6e6e4"
     },
-    "productSource": "99468423e78d90ef75a49ac5d7b52939caf9e808",
+    "productSource": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
     "latestDocumentationOnlyChange": {
       "source": "9a17b3ee",
       "integrated": "64ae2dc6",
       "scope": "Graph mocked local Electron UI proof"
     },
     "latestTestOnlyChange": {
-      "source": "99468423e78d90ef75a49ac5d7b52939caf9e808",
-      "scope": "Build verifier owned child and failure capture",
+      "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+      "scope": "one-line isolated-checkout dependency copy",
       "independentReview": "APPROVE",
-      "focusedTests": 33
+      "focusedTests": 6
     },
-    "buildRunId": 34255425275,
+    "buildRunId": 34256868050,
     "buildStatus": "in_progress",
     "profile": "keyless-public",
     "integrationEvidence": "docs/evidence/GA_SOURCE_INTEGRATION_2026-09-08.md",
     "nativePreflight": {
-      "status": "RUNNING",
-      "source": "99468423e78d90ef75a49ac5d7b52939caf9e808",
-      "runId": 34255425275
+      "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+      "runId": 34256868050,
+      "status": "RUNNING"
     },
     "priorNativeBuilds": [
       {
@@ -2225,6 +2233,15 @@
         "runId": 34252050616,
         "status": "failure",
         "passed": 2304,
+        "failed": 1,
+        "skipped": 57,
+        "installerProduced": false
+      },
+      {
+        "source": "99468423e78d90ef75a49ac5d7b52939caf9e808",
+        "runId": 34255425275,
+        "status": "failure",
+        "passed": 2308,
         "failed": 1,
         "skipped": 57,
         "installerProduced": false
@@ -2292,7 +2309,7 @@
     "awsProfile": "bedrock",
     "region": "us-east-2",
     "baseSource": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
-    "phase": "HOSTED_BUILD_AFTER_NATIVE_DB_FIX",
+    "phase": "HOSTED_BUILD_VM_REAUTH_BLOCKED",
     "privateReceipts": "artifacts/ga-fable-20260908",
     "plan": ".omx/plans/prd-ga-fable-20260908.md",
     "testSpec": ".omx/plans/test-spec-ga-fable-20260908.md",
@@ -2464,7 +2481,7 @@
     "maxConcurrentAuthorClis": 5,
     "concurrencyReason": "Independent source and tooling lanes; no concurrent VM mutations. Source accepts only after independent review.",
     "bugHandoffPolicy": "docs/bugs/TEMPLATE.md required by PROJECT_CONTRACT, AGENTS.md and CLAUDE.md",
-    "statusCheckedAt": "2026-09-08T17:13:33.039749+00:00",
+    "statusCheckedAt": "2026-09-08T17:27:10.586903+00:00",
     "epic": "CLWX-22",
     "sprintExit": "Exact candidate passes all required source/artifact/installed/client/tenant/performance/unaided tester and final release checks",
     "activeCliTasks": [],
@@ -3699,7 +3716,7 @@
         "owned verifier database handle lifecycle",
         "falsy error capture"
       ],
-      "status": "NATIVE_REPAIR_PASS_BUILD_RUNNING",
+      "status": "NATIVE_CLEANUP_FIXED_ADJACENT_FIXTURE_SUPERSEDED_BY_8BB7A779",
       "proposedCommits": [
         "8fb8bd96",
         "409bce89"
@@ -3715,7 +3732,7 @@
       "reviewTask": "moe26-db-lifetime-review",
       "nativeInstallDurationSeconds": 318,
       "buildRunId": 34255425275,
-      "buildStatus": "in_progress",
+      "buildStatus": "failure",
       "remainingFinding": "N3 pre-existing HostAPI duplicate-with-coverage set check; source delta approved",
       "nativeBeforeAfter": {
         "baseline": {
@@ -3788,6 +3805,36 @@
         "reviewTask": "moe26-db-lifetime-review",
         "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/native-db-root/"
       }
+    },
+    "fixtureCopyRepair": {
+      "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+      "worktree": "/private/tmp/clawx-moe26-fixture-copy-20260908",
+      "scope": "one entry in existing isolated checkout script copy list",
+      "localBaseline": {
+        "passed": 5,
+        "failed": 1
+      },
+      "localAfter": {
+        "passed": 6,
+        "failed": 0,
+        "lintExit": 0
+      },
+      "reviewTask": "moe26-fixture-copy-review",
+      "status": "APPROVED_INTEGRATED_HOSTED_RUNNING",
+      "independentReview": "APPROVE_6_TESTS_AND_ADJACENT_COPY_SCAN",
+      "buildRunId": 34256868050,
+      "fullNativeVmUnit": "NOT_RUN: SCP transfer rejected by GCP reauthentication before test launch"
+    },
+    "vmAuthentication": {
+      "status": "BLOCKED_NEW_CONNECTIONS",
+      "accountRefresh": "REAUTHENTICATION_FAILED",
+      "registeredAccounts": 1,
+      "adcRefresh": "FAILED_AUTHORIZED_USER_SAME_QUOTA_PROJECT",
+      "originalNewSsh": "CONNECTION_RESET",
+      "fullNativeVmSuite": "NOT_RUN_BEFORE_TRANSFER",
+      "ownerReauthenticationRequested": true,
+      "requiredAction": "gcloud auth login by account holder",
+      "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/adc-refresh-status.json"
     }
   }
 }

@@ -622,26 +622,26 @@
     "NEW-1": 133,
     "NEW-2": 134
   },
-  "updatedAt": "2026-09-08T17:11:42.526488Z",
+  "updatedAt": "2026-09-08T17:27:10.586903+00:00",
   "snapshotAt": "2026-09-08T15:40:04.348123+00:00",
   "readiness": "RED",
-  "sourceCandidate": "99468423e78d90ef75a49ac5d7b52939caf9e808",
+  "sourceCandidate": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
   "privateVerification": "artifacts/ga-fable-20260908/sprint-loop/sprint-verification.json",
-  "boardExportVerifiedAt": "2026-09-08T17:13:04.833483+00:00",
+  "boardExportVerifiedAt": "2026-09-08T17:28:12.629740+00:00",
   "boardIssueCount": 134,
   "executionCheckpoint": {
     "browserReview": "APPROVE; integrated in1d745567",
     "artifactHarnessReview": "APPROVE; integrated",
     "installedVerifierReview": "APPROVE; integrated",
     "integrationReview": "APPROVE104focused",
-    "sourceCandidate": "99468423e78d90ef75a49ac5d7b52939caf9e808",
+    "sourceCandidate": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
     "fullUnit": {
       "passed": 2327,
       "failed": 0,
       "skipped": 29,
       "source": "1d7455673774fd70c086b41b405c8ece868ce302"
     },
-    "installedArtifact": "moe.25 only; moe.26 build34255425275 running after native lifetime repair",
+    "installedArtifact": "moe25 only; moe26 build34256868050 running",
     "windowsOwnerHold": "RELEASED; sole root operator",
     "macGuiHold": "HELD",
     "microsoftBrowser": "moe25 assisted account/inbox and two synthetic Forms previews PASS; Graph unconfigured",
@@ -652,12 +652,12 @@
       "Todo": 10,
       "Ready": 3
     },
-    "nativeRepair": "99468423 owned child fix PASS on actual Windows; root native operator after author containment",
-    "nativeRepairReview": "APPROVE_33_FOCUSED_PLUS_FALSIFIERS_AT_99468423",
+    "nativeRepair": "99468423 native lifetime proof PASS;8bb7a779 fixture omission corrected/reviewed",
+    "nativeRepairReview": "APPROVE_33_AT99468423_PLUS6_AT8BB7A779",
     "nativePreflight": {
       "status": "RUNNING",
-      "runId": 34255425275,
-      "source": "99468423e78d90ef75a49ac5d7b52939caf9e808"
+      "source": "8bb7a77907faf35fb8fc4136073ce340ea9a9aaa",
+      "runId": 34256868050
     },
     "priorNativePreflights": [
       {
@@ -670,6 +670,14 @@
         "status": "FAIL",
         "runId": 34252050616,
         "passed": 2304,
+        "failed": 1,
+        "skipped": 57
+      },
+      {
+        "status": "FAIL",
+        "source": "99468423",
+        "runId": 34255425275,
+        "passed": 2308,
         "failed": 1,
         "skipped": 57
       }
@@ -696,6 +704,8 @@
       "independentReview": "APPROVE_33_FOCUSED_PLUS_FALSIFIERS",
       "reviewTask": "moe26-db-lifetime-review",
       "privateEvidence": "artifacts/ga-fable-20260908/windows-lab/native-db-root/"
-    }
+    },
+    "vmAuthentication": "BLOCKED_NEW_CONNECTIONS_OWNER_REAUTH_REQUIRED",
+    "fullNativeVmAt8bb7a779": "NOT_RUN_TRANSFER_AUTH_FAILED"
   }
 }
