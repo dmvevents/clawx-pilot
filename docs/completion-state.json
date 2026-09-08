@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-08T20:26:47.878868+00:00",
+  "updatedAt": "2026-09-08T21:06:07.395772+00:00",
   "purpose": "Current handoff and evidence/dependency state; not a release verdict or a substitute for machine-produced acceptance.",
   "plan": "docs/COMPLETION_PLAN.md",
   "readiness": "RED",
@@ -2101,7 +2101,7 @@
     "clean": true,
     "pushed": true,
     "packaged": true,
-    "installed": false,
+    "installed": true,
     "published": false,
     "fullPreflight": "PASS_NATIVE_HOSTED",
     "nativePreflight": {
@@ -2243,7 +2243,9 @@
     },
     "installerSha256": "a5d080fa02ffe582652f05dc4459bbc439c131a48d44ca3c0f1395edd9ab38f3",
     "appAsarSha256": "83e82f2850d13f97bbac40e6533600111e6023cec4d5ae1ede462420de0986eb",
-    "appExeSha256": "2749c2fe080a8370690b0968d9c00f355f57cce9129753f6b7238a8cc57c70b6"
+    "appExeSha256": "2749c2fe080a8370690b0968d9c00f355f57cce9129753f6b7238a8cc57c70b6",
+    "installedAcceptance": "FAIL_UPGRADE_GATEWAY_STARTUP",
+    "installedEnvironment": "Assisted existing-profile standard-user Windows Server 2022"
   },
   "handoff": {
     "status": "COMPLETE_READY_FOR_NEXT_AGENT",
@@ -2283,7 +2285,7 @@
     "awsProfile": "bedrock",
     "region": "us-east-2",
     "baseSource": "f93ac8b3d8039428bfa6d0dde151b5bfe5d119f5",
-    "phase": "MOE27_BUILD_AND_ARTIFACT_PASS_WINDOWS_TRANSFER",
+    "phase": "MOE27_STALE_UPGRADE_REPAIR",
     "privateReceipts": "artifacts/ga-fable-20260908",
     "plan": ".omx/plans/prd-ga-fable-20260908.md",
     "testSpec": ".omx/plans/test-spec-ga-fable-20260908.md",
@@ -2455,10 +2457,12 @@
     "maxConcurrentAuthorClis": 5,
     "concurrencyReason": "Independent source and tooling lanes; no concurrent VM mutations. Source accepts only after independent review.",
     "bugHandoffPolicy": "docs/bugs/TEMPLATE.md required by PROJECT_CONTRACT, AGENTS.md and CLAUDE.md",
-    "statusCheckedAt": "2026-09-08T20:26:47.878868+00:00",
+    "statusCheckedAt": "2026-09-08T21:06:07.395772+00:00",
     "epic": "CLWX-22",
     "sprintExit": "Exact candidate passes all required source/artifact/installed/client/tenant/performance/unaided tester and final release checks",
-    "activeCliTasks": [],
+    "activeCliTasks": [
+      "moe27-upgrade-author"
+    ],
     "budgetAuthorization": {
       "source": "Owner: There is no limit. Execute the work trees.",
       "recordedAt": "2026-09-08T12:36:00.652793+00:00",
@@ -4237,7 +4241,7 @@
       "integrated": "4c023f7ea3d16f4da0205308e93839ac08be26b9",
       "treeEqualToReviewed": true,
       "buildRunId": 34272395270,
-      "reviewTypecheckGap": "Ungenerated extension bridge in clean review checkout; hosted full preflight pending",
+      "reviewTypecheckGap": "Resolved by successful full hosted preflight at4c023f7e",
       "build": "SUCCESS"
     },
     "previousMoe27SourceCandidate": {
@@ -4373,15 +4377,96 @@
       "buildConclusion": "failure"
     },
     "moe27Upgrade": {
-      "status": "TRANSFER_IN_PROGRESS",
+      "status": "INSTALLED_STARTUP_FAILED_STALE_RUNTIME",
       "source": "4c023f7ea3d16f4da0205308e93839ac08be26b9",
       "runId": 34272395270,
       "previousInstalled": "moe26",
       "environment": "Original GCP Windows Server2022, existing standard-user QA profile",
-      "nativeInstallExit": "NOT_RUN",
-      "startup": "NOT_RUN",
+      "nativeInstallExit": 0,
+      "startup": "NOT_READY",
       "publication": false,
-      "privateReceipts": "artifacts/windows-vm/20260908-moe27/"
+      "privateReceipts": "artifacts/windows-vm/20260908-moe27/",
+      "download": "NATIVE_HASH_AND_BYTES_VERIFIED",
+      "protectedProfileBackup": {
+        "at": "2026-09-08T20:28:45.5300822Z",
+        "status": "PASS_PROTECTED_PROFILE_BACKUP",
+        "directories": [
+          {
+            "allHashesMatch": true,
+            "name": "appdata",
+            "files": 61
+          },
+          {
+            "allHashesMatch": true,
+            "name": "openclaw",
+            "files": 634
+          }
+        ]
+      },
+      "installerTask": "ClawXMoe27Install",
+      "installerExecutionLimit": "PT40M",
+      "installerPid": 6616,
+      "installerProcessCreatedAt": "2026-09-08T20:28:49.1816740Z",
+      "installClickedAt": "2026-09-08T20:34:58.6459794Z",
+      "finishObserver": "ClawXMoe27WaitFinish",
+      "finishObserverDeadlineMinutes": 20,
+      "noAutoLaunchRequired": true,
+      "installedAt": "2026-09-08T20:49:10.7495534Z",
+      "installedAsarSha256": "83e82f2850d13f97bbac40e6533600111e6023cec4d5ae1ede462420de0986eb",
+      "installedExeSha256": "2749c2fe080a8370690b0968d9c00f355f57cce9129753f6b7238a8cc57c70b6",
+      "finishClickedAt": "2026-09-08T20:48:19.7288423Z",
+      "runCheckboxVerifiedUnchecked": true,
+      "startupTask": "ClawXMoe27FirstShortcut",
+      "startupNativeExit": 1,
+      "startupLastElapsedMs": 359321,
+      "startupSamples": 159,
+      "ordinaryChat": "NOT_RUN_STARTUP_FAILED",
+      "retainedMoe26LifecycleMarker": true,
+      "retainedMarkerCreatedAt": "2026-09-08T18:26:45.1697714Z",
+      "retainedMarkerModifiedAt": "2026-09-08T17:40:00Z",
+      "newArtifactMarkerAbsent": true,
+      "gracefulQuit": {
+        "at": "2026-09-08T20:56:16.5874784Z",
+        "nativeExit": 0,
+        "source": "4c023f7ea3d16f4da0205308e93839ac08be26b9",
+        "status": "GRACEFUL_QUIT_REQUESTED"
+      },
+      "remainingAppProcesses": 0,
+      "remainingAppListeners": 0,
+      "qaChromeProcessesPreserved": 11
+    },
+    "moe27UpgradeRepair": {
+      "status": "AUTHOR_RUNNING",
+      "task": "moe27-upgrade-author",
+      "worktree": "/private/tmp/clawx-moe27-upgrade-20260908",
+      "branch": "fix/moe27-upgrade-replacement",
+      "base": "4c023f7ea3d16f4da0205308e93839ac08be26b9",
+      "model": "claude-fable-5",
+      "provider": "bedrock",
+      "providerEvidence": "env-pinned-unobserved",
+      "sessionId": "8cf8dcb0-cb83-43f7-9b20-7a1fa9438095",
+      "deadlineSeconds": 900,
+      "nativeMutationOwner": "root",
+      "scope": "Installer replacement and failure handling; behavioral stale-runtime and locked-path regressions",
+      "independentReview": "PENDING",
+      "nativeAfterProof": "PENDING",
+      "installedRetest": "PENDING",
+      "rootNativeDirectoryControl": {
+        "status": "PASS_DEFECT_REPRODUCED",
+        "at": "2026-09-08T21:02:51.1641893Z",
+        "nsis": "3.0.4.1",
+        "directory": "present",
+        "trailingBackslash": "absent",
+        "wildcard": "present",
+        "nativeExit": 0,
+        "installedFilesMutated": false,
+        "receipt": "artifacts/windows-vm/20260908-moe27/native-nsis-directory-pattern-result.json"
+      },
+      "cliCheckedAt": "2026-09-08T21:06:07.395772+00:00",
+      "cliPhase": "RUNNING",
+      "elapsedSeconds": 767.29,
+      "observedModel": "claude-fable-5",
+      "toolCalls": 35
     }
   }
 }
