@@ -424,19 +424,24 @@ describe('Outlook Host API Graph routing', () => {
       success: true,
       data: expect.objectContaining({
         status: 'refused',
-        reason: expect.stringContaining('read-only'),
+        reason: expect.stringContaining('Mail.Send'),
       }),
     });
   });
 
-  it('refuses Graph draft when Mail.Send is not granted instead of silently using the browser', async () => {
+  it('routes Graph draft with Mail.ReadWrite when Mail.Send is not granted', async () => {
     graphConfigMock.mockResolvedValue(graphConfig({ graphOutlookCompose: true }));
     graphAvailableMock.mockResolvedValueOnce(true);
-    graphStatusMock.mockResolvedValue(graphStatus([]));
+    graphStatusMock.mockResolvedValue(graphStatus(['offline_access', 'User.Read', 'Mail.ReadWrite']));
     parseBodyMock.mockResolvedValueOnce({
       to: 'teacher@example.edu',
       subject: 'Read-only tenant',
       body: 'Body',
+    });
+    graphDraftEmailMock.mockResolvedValueOnce({
+      status: 'drafted',
+      draftLeftOpen: false,
+      preview: { to: ['teacher@example.edu'], cc: [], bcc: [], subject: 'Read-only tenant', body: 'Body' },
     });
 
     const { handleOutlookRoutes } = await import('../../electron/api/routes/outlook');
@@ -447,13 +452,12 @@ describe('Outlook Host API Graph routing', () => {
     );
 
     expect(handled).toBe(true);
-    expect(graphDraftEmailMock).not.toHaveBeenCalled();
+    expect(graphDraftEmailMock).toHaveBeenCalledWith(expect.objectContaining({ subject: 'Read-only tenant' }));
     expect(browserManagerMock.draftEmail).not.toHaveBeenCalled();
     expect(sendJsonMock).toHaveBeenCalledWith(expect.anything(), 200, {
       success: true,
       data: expect.objectContaining({
-        status: 'refused',
-        reason: expect.stringContaining('read-only'),
+        status: 'drafted',
       }),
     });
   });

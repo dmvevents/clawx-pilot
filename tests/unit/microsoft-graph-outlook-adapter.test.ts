@@ -316,7 +316,8 @@ describe('Microsoft Graph Outlook adapter', () => {
     });
 
     expect(result).toMatchObject({ status: 'refused' });
-    expect((result as { reason?: string }).reason).toMatch(/read-only/i);
+    expect((result as { reason?: string }).reason).toContain('Mail.ReadWrite');
+    expect((result as { reason?: string }).reason).not.toContain('Mail.Send');
   });
 
   it('maps a Graph 403 on send to a structured refusal instead of throwing', async () => {
@@ -332,7 +333,8 @@ describe('Microsoft Graph Outlook adapter', () => {
     });
 
     expect(result).toMatchObject({ status: 'refused' });
-    expect(result.reason).toMatch(/read-only/i);
+    expect(result.reason).toContain('Mail.Send');
+    expect(result.reason).not.toContain('Mail.ReadWrite');
   });
 
   it('rethrows non-403 Graph write failures', async () => {

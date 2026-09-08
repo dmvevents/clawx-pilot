@@ -138,14 +138,12 @@ async function shouldUseGraphOutlookCompose(): Promise<boolean> {
   return isGraphAvailableForOutlook();
 }
 
-// Compose via Graph additionally requires the Mail.Send delegated scope
-// (contract C1). When the compose lane is enabled but the tenant grant is
-// read-only we refuse loudly with the adapter's structured refused shape
-// (contract C4) instead of a raw 500 or a silent browser fallback — silent
-// fallback would hide the misconfiguration from the operator.
-const GRAPH_COMPOSE_READ_ONLY_REASON =
-  'Your Microsoft 365 connection is read-only, so email cannot be drafted or sent through the Microsoft cloud. ' +
-  'Ask your IT administrator to allow sending for this app, or compose the email in the Outlook window instead.';
+// Sending via Graph requires the Mail.Send delegated scope (contract C1).
+// Draft creation uses the Graph message-create path and is intentionally not
+// blocked here; its adapter surfaces Mail.ReadWrite failures from Graph.
+const GRAPH_SEND_SCOPE_REFUSAL_REASON =
+  'Your Microsoft 365 connection is not allowed to send through Microsoft Graph. ' +
+  'Ask your IT administrator to grant Mail.Send for this app, or compose the email in the Outlook window instead.';
 
 // Entra returns scopes in bare form ("Mail.Send") on some flows and
 // resource-qualified form ("https://graph.microsoft.com/Mail.Send") on
@@ -159,7 +157,7 @@ function grantIncludesScope(grantedScopes: string[], scope: string): boolean {
   });
 }
 
-async function refuseGraphComposeWithoutSendScope(
+async function refuseGraphSendWithoutSendScope(
   route: string,
 ): Promise<{ status: 'refused'; reason: string } | null> {
   let grantedScopes: string[] = [];
@@ -180,9 +178,9 @@ async function refuseGraphComposeWithoutSendScope(
     return null;
   }
   logger.warn(
-    `[host-api outlook/${route}] Graph compose enabled but Mail.Send scope not granted; refusing`,
+    `[host-api outlook/${route}] Graph send enabled but Mail.Send scope not granted; refusing`,
   );
-  return { status: 'refused', reason: GRAPH_COMPOSE_READ_ONLY_REASON };
+  return { status: 'refused', reason: GRAPH_SEND_SCOPE_REFUSAL_REASON };
 }
 
 // The reply/forward/mark-read/attachment actions run only in the browser
@@ -256,13 +254,6 @@ export async function handleOutlookRoutes(
       const body = await parseJsonBody<DraftEmailArgs>(req);
       logger.info(`[host-api outlook/draft] ${JSON.stringify(logSafeArgs(body))}`);
       const graphAvailable = await shouldUseGraphOutlookCompose();
-      if (graphAvailable) {
-        const refusal = await refuseGraphComposeWithoutSendScope('draft');
-        if (refusal) {
-          sendJson(res, 200, { success: true, data: refusal });
-          return true;
-        }
-      }
       const result = graphAvailable
         ? await draftEmailWithGraph(body)
         : await outlookBrowserManager.draftEmail(body);
@@ -277,7 +268,7 @@ export async function handleOutlookRoutes(
       logger.info(`[host-api outlook/send] attempt ${JSON.stringify(logSafeArgs(body))}`);
       const graphAvailable = await shouldUseGraphOutlookCompose();
       if (graphAvailable) {
-        const refusal = await refuseGraphComposeWithoutSendScope('send');
+        const refusal = await refuseGraphSendWithoutSendScope('send');
         if (refusal) {
           sendJson(res, 200, { success: true, data: refusal });
           return true;

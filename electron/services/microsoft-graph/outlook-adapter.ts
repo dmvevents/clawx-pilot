@@ -100,12 +100,15 @@ export interface GraphOutlookRefusal {
   reason: string;
 }
 
-const GRAPH_WRITE_REFUSAL_REASON =
-  'Microsoft 365 denied the request (403 ErrorAccessDenied). The signed-in '
-  + 'account\'s Microsoft 365 access is read-only right now, so drafting and '
-  + 'sending through Microsoft Graph are not permitted. Ask the tenant '
-  + 'administrator to grant Mail.ReadWrite / Mail.Send, or use the Outlook '
+const GRAPH_DRAFT_REFUSAL_REASON =
+  'Microsoft 365 denied draft creation (403 ErrorAccessDenied). Ask the tenant '
+  + 'administrator to grant Mail.ReadWrite for this app, or use the Outlook '
   + 'browser lane instead.';
+
+const GRAPH_SEND_REFUSAL_REASON =
+  'Microsoft 365 denied sending (403 ErrorAccessDenied). Ask the tenant '
+  + 'administrator to grant Mail.Send for this app, or use the Outlook browser '
+  + 'lane instead.';
 
 function isGraphAccessDenied(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
@@ -308,7 +311,7 @@ export async function draftEmailWithGraph(
     await graphCalls.createDraft(normalizeGraphDraftArgs(args));
   } catch (err) {
     if (isGraphAccessDenied(err)) {
-      return { status: 'refused', reason: GRAPH_WRITE_REFUSAL_REASON };
+      return { status: 'refused', reason: GRAPH_DRAFT_REFUSAL_REASON };
     }
     throw err;
   }
@@ -350,7 +353,7 @@ export async function sendEmailWithGraph(args: SendEmailArgs): Promise<SendEmail
     }));
   } catch (err) {
     if (isGraphAccessDenied(err)) {
-      return { status: 'refused', reason: GRAPH_WRITE_REFUSAL_REASON };
+      return { status: 'refused', reason: GRAPH_SEND_REFUSAL_REASON };
     }
     throw err;
   }
