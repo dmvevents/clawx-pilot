@@ -139,3 +139,89 @@ Evidence: [native source/blocker handoff](../bugs/CLWX-106-installed-verifier-id
 Use legacy SCP `-O` through the known-host IAP SSH route for this Server image. It copied the four native verifier/control files in 6.8s after the default SCP protocol failed. A piped base64/PowerShell `Console.In.ReadToEnd()` fallback stalled and left a guest PowerShell process; do not use it as the default transfer. Bind the received source with SHA256 before execution. When an encoded command exceeds Windows command-length limits, copy the `.ps1` and use `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File <owned-path>`; retain the failed command receipt separately.
 
 Process recovery is limited to verified owned PIDs/process groups. Never use broad `pkill -f` patterns for `gcloud`, `ssh`, `tunnel-through-iap`, `node` or app names. An author violated this boundary; root stopped that author group, checked existing tunnels, restored the original CDP forwards and stopped only the surviving guest transfer PID whose command line matched this task. Root then completed native proof without reinstalling dependencies. See [CLWX-25](../bugs/CLWX-25-windows-lab-repeatability.md) for receipts and the exact-source results.
+
+## Durable automation access — proposed, not deployed (2026-09-08)
+
+CLWX-25 owns this follow-up. Keep IAP as the restricted transport and move
+unattended Windows command/test orchestration onto a separate small GCP
+controller with a dedicated, user-managed service account. This is a
+recommendation based on the documented authentication mechanisms, not an
+existing access path or a GA pass. IAM policy, the controller and cloud cost
+have not been changed by this research. The present account-holder
+reauthentication request remains pending.
+
+Observed failure: local user CLI credentials and authorized-user ADC both
+failed refresh with a reauthentication requirement. The exact administrator
+session policy or refresh-token expiry trigger is UNKNOWN. Existing Chrome
+and Electron streams remained reachable. Google documents that user sessions
+and refresh tokens can expire, including local ADC under Workspace session
+controls. [Google reauthentication](https://docs.cloud.google.com/docs/authentication/reauthentication).
+
+The proposed flow is:
+
+```mermaid
+flowchart LR
+    A[Operator or reviewed CI task] --> B[Cloud test controller]
+    B --> C[Attached service account and renewed credentials]
+    C --> D[IAP tunnel to the selected VM]
+    D --> E[Windows SSH operator and bounded test job]
+    H[Human RDP operator] --> D
+    E --> F[Durable job state and artifact-bound evidence]
+```
+
+Google's Compute Engine integration lets gcloud and supported clients use an
+attached service account without interactive `gcloud auth login`; token
+management uses the metadata service. Put this identity on the controller,
+leaving the clean Windows acceptance VM without cloud credentials. Human RDP
+retains its own identity. [Workload authentication](https://docs.cloud.google.com/compute/docs/access/authenticate-workloads).
+
+Implementation sequence and operational acceptance:
+
+1. Restore an authorized bootstrap session and review the exact controller,
+   project, target VM IDs, IAM bindings and ongoing compute cost. Use a
+   separate controller identity with only the needed instance discovery and
+   per-VM IAP tunnel access. Scope automated access to SSH port 22; human RDP
+   authorization remains separate. IAP permission does not grant a Windows
+   login: provision/rotate the dedicated SSH key and guest permissions through
+   the existing verified process. A preprovisioned key plus `start-iap-tunnel`
+   avoids granting a routine test runner project-wide metadata write powers.
+2. Add one owned supervisor and a per-VM execution lock. Check real protocol,
+   authenticated guest identity and a closed/unauthorized-port control;
+   listener readiness is insufficient. Restart only owned tunnel processes
+   with bounded backoff. Preserve an existing job's ID, native log and exit
+   receipt before resuming; never replay an uncertain installation or write.
+3. Keep job state on the controller and guest so Mac sleep or CLI disconnect
+   does not lose the test. Run desktop acceptance in the intended interactive
+   standard-user session; a service or SSH Session 0 is not equivalent.
+4. Prove fresh authenticated connections after credential renewal and with no
+   operator user credentials available; then exercise controller restart,
+   connection loss and a disposable guest reboot. Retain before/after receipts
+   and prove one active job. Use an overnight soak to validate durability,
+   running alongside other acceptance rather than declaring a new product GA
+   requirement. Revoke the scoped test permission as a negative control and
+   verify a fresh connection fails closed without stopping unrelated work.
+5. Once proven, route reviewed artifact-bound test tasks through this
+   controller. Microsoft browser/Graph sign-in, consent and MFA remain
+   independent account-holder requirements; machine cloud identity supplies
+   none of those permissions. Keep the prior operator path for recovery.
+
+IAP supports per-VM access and port conditions. Its documented timeout is
+**one hour of inactivity**, not a fixed one-hour maximum for active sessions;
+gcloud attempts reconnection. Neither keepalives nor a supervisor renew an
+expired human authorization session. Bulk installer transfer should use the
+artifact/storage download path with hashes; IAP is not intended for bulk data.
+[IAP transport, permissions and limitations](https://docs.cloud.google.com/iap/docs/using-tcp-forwarding).
+
+Alternatives considered:
+
+| Option | Fit and limitation |
+|---|---|
+| Longer human session / persistent SSH connection | Reduces some interruptions, but still depends on personal reauthentication; not the unattended-job identity. |
+| GitHub Actions Workload Identity Federation | Good for bounded CI tasks using short-lived credentials. Its authentication action documents short token lifetimes; fresh authentication/renewal must be tested for longer jobs. It is not an automatically permanent desktop session. |
+| Tailscale for human RDP | A viable private desktop connection with device enrollment and policy management, but introduces another enrolled network/identity layer. Consider separately if daily human RDP remains inconvenient. |
+
+[Google GitHub authentication action](https://github.com/google-github-actions/auth),
+[Tailscale RDP](https://tailscale.com/docs/solutions/access-remote-desktops-using-windows-rdp).
+The controller approach is preferred for this project's unattended test loop;
+this recommendation does not promise uninterrupted network service or remove
+Windows/Microsoft authentication.

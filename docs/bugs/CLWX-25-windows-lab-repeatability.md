@@ -74,3 +74,24 @@ Required recovery is account-holder `gcloud auth login`; root requested it while
 ## Existing connection boundary and artifact transfer — 17:39–17:50 UTC
 
 Existing original Windows Chrome/Electron CDP endpoints each return HTTP200 with websocket metadata at17:39:04UTC; new SSH still requires account-holder GCP reauthentication. Do not label the running desktop dead or command access restored. Hosted8bb7a779 successfully produced moe.26 while the account-holder request remained pending. Slow host artifact download was recovered with64 bounded concurrent HTTP ranges:452chunks,227.21s, exact Content-Range/length per chunk and final GitHub archive SHA256/length agreement. Only the two exact owned serial transfer PIDs were stopped after replacement proof; no broad process kill or VM/network change. The partial serial artifact is not acceptance. Scripts/receipts: `/private/tmp/clawx-moe26-run-34256868050/`; all36 extracted payload checks and172 compiled files pass. Installed testing remains NOT_RUN pending restored command access and state backup.
+
+## Durable access recommendation — researched September 8
+
+The current evidence proves a user-credential reauthentication requirement;
+it does not identify the exact session-policy or refresh-token expiry trigger.
+Keeping a tunnel open does not repair that authorization boundary. The
+[repeatable lab runbook](../testing/WINDOWS_REPEATABLE_LAB.md#durable-automation-access--proposed-not-deployed-2026-09-08)
+now records the proposed follow-up: separate GCP test controller with an
+attached, narrowly scoped service account; renewed credentials; owned tunnel
+supervision; guest/controller job receipts; and one operator per VM. Human RDP
+and Windows/Microsoft account authentication remain separate.
+
+Official Google documentation supports attached workload identity, per-VM IAP
+access and port conditions. IAP's documented one-hour limit is inactivity,
+not a universal active-session lifetime. Existing user CLI/ADC refresh failure
+is not fixed by this research. No IAM/network/VM identity or session policy was
+changed. Acceptance requires renewal/reconnect, restart/reboot, no-personal-
+credentials, no-duplicate-job and permission-revocation controls; an overnight
+soak may run in parallel with product acceptance. GitHub federation and
+Tailscale are recorded alternatives, not installed dependencies. Current
+moe.26 installed testing is still pending access restoration.
