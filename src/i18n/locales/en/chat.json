@@ -179,6 +179,8 @@
     "modelPickerTitle": "Switch model for this chat",
     "modelSwitchFailed": "Failed to switch model: {{error}}",
     "gatewayDisconnectedPlaceholder": "Gateway not connected...",
+    "modelSetupPlaceholder": "Set up a model to start chatting...",
+    "modelSetupRequired": "Set up Online access or start the model on this device before sending a message.",
     "send": "Send",
     "stop": "Stop",
     "gatewayConnected": "connected",

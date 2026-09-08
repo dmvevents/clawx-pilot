@@ -52,6 +52,7 @@ import { deviceOAuthManager } from '../utils/device-oauth';
 import { browserOAuthManager } from '../utils/browser-oauth';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
 import { syncAllProviderAuthToRuntime } from '../services/providers/provider-runtime-sync';
+import { getProviderService } from '../services/providers/provider-service';
 import { seedCloudGatewayProvider } from './cloud-gateway-provider-seed';
 import { seedDefaultLocalProvider } from './local-provider-seed';
 import { seedGatewayPluginConfig } from './gateway-plugin-config-seed';
@@ -524,6 +525,21 @@ async function initialize(): Promise<void> {
     }
   }
 
+  // Import provider accounts derivable from openclaw.json before deciding
+  // whether the local Ollama fallback is needed. Stakeholder moe.21 evidence
+  // showed the inverse order: an existing cloud provider was imported only
+  // after preflight had already selected the automatic local account.
+  if (!isE2EMode) {
+    try {
+      const accounts = await getProviderService().listAccounts();
+      logger.info('[main] Imported provider accounts before startup channel selection', {
+        count: accounts.length,
+      });
+    } catch (error) {
+      logger.warn('Provider account import failed before startup channel selection (non-fatal):', error);
+    }
+  }
+
   // Seed a local OpenAI-compatible provider (Ollama / Qwen 2.5 3B) so fresh
   // installs without cloud gateway config still get a working chat reply.
   // Idempotent: skips when any account already targets the local Ollama
@@ -569,11 +585,16 @@ async function initialize(): Promise<void> {
   // configs on boot.
   if (!isE2EMode) {
     try {
-      const desired = (await getSetting('preferredChannel')) ?? 'on-device';
+      const persistedPreferred = await getSetting('preferredChannel');
+      const desired = persistedPreferred ?? 'online';
       const result = await runChannelPreflight(
         desired as 'online' | 'on-device',
         gatewayManager,
-        bootConvergenceOptions,
+        {
+          ...bootConvergenceOptions,
+          allowChannelFallback: persistedPreferred == null,
+          requireLocalReadiness: true,
+        },
       );
       logger.info('[main] Channel preflight result', result);
 

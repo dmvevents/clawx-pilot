@@ -25,7 +25,7 @@ import { useChatStore } from '@/stores/chat';
 import { useArtifactPanel } from '@/stores/artifact-panel';
 import { buildPreviewTarget } from '@/components/file-preview/build-preview-target';
 import { useProviderStore } from '@/stores/providers';
-import { buildConfiguredModelOptions, channelLabelForModelRef, formatModelRefLabel } from '@/lib/model-options';
+import { buildConfiguredModelOptions, channelLabelForModelRef, formatModelRefLabel, resolveRuntimeProviderKey } from '@/lib/model-options';
 import type { AgentSummary } from '@/types/agent';
 import type { QuickAccessSkill } from '@/types/skill';
 import { useTranslation } from 'react-i18next';
@@ -71,6 +71,14 @@ function needsLeadingSkillSpace(value: string, position: number): boolean {
 }
 
 type SkillTokenRange = { start: number; end: number };
+type DefaultProviderProbeResult = {
+  success?: boolean;
+  valid?: boolean;
+  accountId?: string | null;
+  reason?: string;
+};
+
+const LOCAL_ROUTE_PROBE_RETRY_MS = 30_000;
 
 function findSkillTokenRange(value: string, skillName: string): SkillTokenRange | null {
   const token = getSkillPrefix(skillName);
@@ -235,6 +243,7 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
   const skillPickerRef = useRef<HTMLDivElement>(null);
   const modelPickerRef = useRef<HTMLDivElement>(null);
   const isComposingRef = useRef(false);
+  const localRouteProbeRequestRef = useRef(0);
   const gatewayStatus = useGatewayStore((s) => s.status);
   const agents = useAgentsStore((s) => s.agents);
   const updateAgentModel = useAgentsStore((s) => s.updateAgentModel);
@@ -242,6 +251,7 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
   const providerAccounts = useProviderStore((s) => s.accounts);
   const providerStatuses = useProviderStore((s) => s.statuses);
   const providerDefaultAccountId = useProviderStore((s) => s.defaultAccountId);
+  const providersLoading = useProviderStore((s) => s.loading);
   const refreshProviderSnapshot = useProviderStore((s) => s.refreshProviderSnapshot);
   const currentAgentId = useChatStore((s) => s.currentAgentId);
   // Where the runtime actually is for THIS session (a proven degrade cutover),
@@ -265,6 +275,17 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
     [providerAccounts, providerDefaultAccountId, providerStatuses],
   );
   const effectiveModelRef = optimisticModelRef || currentAgent?.modelRef || defaultModelRef || modelOptions[0]?.modelRef || null;
+  const selectedModelOption = useMemo(
+    () => modelOptions.find((option) => option.modelRef === effectiveModelRef) ?? null,
+    [effectiveModelRef, modelOptions],
+  );
+  const selectedModelAccount = useMemo(
+    () => selectedModelOption
+      ? (providerAccounts ?? []).find((account) => account.id === selectedModelOption.accountId) ?? null
+      : null,
+    [providerAccounts, selectedModelOption],
+  );
+  const selectedModelChannel = selectedModelAccount ? classifyProvider(selectedModelAccount) : null;
   // Hard rule: chat-facing surfaces never show a raw model id. Principals see
   // the channel label; the raw ref stays behind the dev-mode unlock.
   const devModeUnlocked = useSettingsStore((s) => s.devModeUnlocked);
@@ -287,6 +308,15 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
     'on-device': onDeviceAccount !== null,
   }), [onlineAccount, onDeviceAccount]);
   const showChannelToggle = channelsAvailable.online && channelsAvailable['on-device'];
+  const selectedModelConfigured = !effectiveModelRef
+    ? false
+    : modelOptions.some((option) => option.modelRef === effectiveModelRef);
+  const [defaultRouteProbe, setDefaultRouteProbe] = useState<{
+    accountId: string | null;
+    checked: boolean;
+    valid: boolean;
+    reason?: string;
+  }>({ accountId: null, checked: false, valid: true });
   // Effective channel: what the RUNTIME is pinned to for this session (a proven
   // degrade cutover) → session override → user setting (if available) →
   // whichever channel is actually configured (graceful degrade).
@@ -327,13 +357,109 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
   const showModelPicker = modelOptions.length > 1 && devModeUnlocked;
   const chatComposerStatusComponents = rendererExtensionRegistry.getChatComposerStatusComponents();
   const isGatewayUsable = gatewayStatus.state === 'running' && gatewayStatus.gatewayReady !== false;
-  const inputDisabled = disabled || !isGatewayUsable;
+  const selectedModelChannelMismatch = !runtimeChannelPin
+    && selectedModelChannel !== null
+    && selectedModelChannel !== effectiveChannel;
+  const localRouteProbeAccount = !selectedModelChannelMismatch && selectedModelChannel === 'on-device'
+    ? selectedModelAccount
+    : null;
+  const localRouteNeedsProbe = isGatewayUsable && Boolean(localRouteProbeAccount);
+  const localRouteUnverified = localRouteNeedsProbe && (
+    defaultRouteProbe.accountId !== localRouteProbeAccount?.id || !defaultRouteProbe.checked
+  );
+  const localRouteInvalid = localRouteNeedsProbe
+    && defaultRouteProbe.accountId === localRouteProbeAccount?.id
+    && defaultRouteProbe.checked
+    && !defaultRouteProbe.valid;
+  const modelRouteSetupRequired = !providersLoading && (
+    !selectedModelConfigured
+    || selectedModelChannelMismatch
+    || localRouteUnverified
+    || localRouteInvalid
+  );
+  const inputDisabled = disabled || !isGatewayUsable || modelRouteSetupRequired;
   const skillTokenRanges = useMemo(() => findSkillTokenRanges(input), [input]);
   const openArtifactPreview = useArtifactPanel((s) => s.openPreview);
 
   useEffect(() => {
     void refreshProviderSnapshot();
   }, [refreshProviderSnapshot]);
+
+  useEffect(() => {
+    if (!isGatewayUsable || !localRouteProbeAccount) {
+      localRouteProbeRequestRef.current += 1;
+      setDefaultRouteProbe({ accountId: null, checked: false, valid: true });
+      return;
+    }
+
+    let active = true;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const accountId = localRouteProbeAccount.id;
+    const probePath = `/api/provider-accounts/${encodeURIComponent(accountId)}/probe`;
+
+    const clearRetry = () => {
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+    };
+    const scheduleRetry = () => {
+      clearRetry();
+      retryTimer = setTimeout(runProbe, LOCAL_ROUTE_PROBE_RETRY_MS);
+    };
+    const runProbe = () => {
+      clearRetry();
+      const requestId = ++localRouteProbeRequestRef.current;
+      setDefaultRouteProbe({ accountId, checked: false, valid: true });
+      Promise.resolve(hostApiFetch<DefaultProviderProbeResult>(probePath))
+        .then((result) => {
+          if (!active || requestId !== localRouteProbeRequestRef.current) return;
+          const matchesRoute = !result?.accountId || result.accountId === accountId;
+          const valid = matchesRoute && result?.valid === true;
+          setDefaultRouteProbe({
+            accountId,
+            checked: true,
+            valid,
+            reason: result?.reason,
+          });
+          if (!valid) scheduleRetry();
+        })
+        .catch((error) => {
+          if (!active || requestId !== localRouteProbeRequestRef.current) return;
+          setDefaultRouteProbe({
+            accountId,
+            checked: true,
+            valid: false,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+          scheduleRetry();
+        });
+    };
+    const rerunWhenVisible = () => {
+      if (document.visibilityState !== 'hidden') runProbe();
+    };
+
+    runProbe();
+    window.addEventListener('focus', runProbe);
+    document.addEventListener('visibilitychange', rerunWhenVisible);
+
+    return () => {
+      active = false;
+      localRouteProbeRequestRef.current += 1;
+      clearRetry();
+      window.removeEventListener('focus', runProbe);
+      document.removeEventListener('visibilitychange', rerunWhenVisible);
+    };
+  }, [
+    isGatewayUsable,
+    localRouteProbeAccount,
+  ]);
+
+  useEffect(() => {
+    if (defaultRouteProbe.accountId && defaultRouteProbe.accountId !== localRouteProbeAccount?.id) {
+      setDefaultRouteProbe({ accountId: null, checked: false, valid: true });
+    }
+  }, [defaultRouteProbe.accountId, localRouteProbeAccount?.id]);
 
   useEffect(() => {
     if (gatewayStatus.state === 'running') return;
@@ -530,8 +656,11 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
     const targetClass = classifyProvider(picked);
     setSessionChannelOverride(targetClass);
 
-    const ock = String((picked as { id: string }).id);
-    const modelRef = `${ock}/${picked.model}`;
+    const runtimeProviderKey = resolveRuntimeProviderKey(picked);
+    const modelId = picked.model.startsWith(`${runtimeProviderKey}/`)
+      ? picked.model.slice(runtimeProviderKey.length + 1)
+      : picked.model;
+    const modelRef = `${runtimeProviderKey}/${modelId}`;
     setSwitchingModelRef(modelRef);
     setOptimisticModelRef(modelRef);
     try {
@@ -927,6 +1056,14 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
               </button>
             </div>
           )}
+          {modelRouteSetupRequired && (
+            <div
+              data-testid="chat-composer-model-setup-required"
+              className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"
+            >
+              {t('composer.modelSetupRequired')}
+            </div>
+          )}
 
           {/* Text Row — flush-left */}
           <div className="relative min-h-[48px]">
@@ -957,7 +1094,11 @@ export function ChatInput({ onSend, onStop, disabled = false, sending = false, i
                 isComposingRef.current = false;
               }}
               onPaste={handlePaste}
-              placeholder={inputDisabled ? t('composer.gatewayDisconnectedPlaceholder') : ''}
+              placeholder={modelRouteSetupRequired
+                ? t('composer.modelSetupPlaceholder')
+                : inputDisabled
+                  ? t('composer.gatewayDisconnectedPlaceholder')
+                  : ''}
               disabled={inputDisabled}
               data-testid="chat-composer-input"
               className={cn(

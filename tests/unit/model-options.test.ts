@@ -85,6 +85,33 @@ describe('model option helpers', () => {
     expect(options[0].label).toBe('model-gamma');
   });
 
+  it('preserves managed runtime-key account ids when building prefixed model options', () => {
+    const managed = account({
+      id: 'custom-moecloud',
+      vendorId: 'custom',
+      label: 'MoE Cloud',
+      model: 'custom-moecloud/moe-demo-pro',
+      isDefault: true,
+    });
+
+    expect(resolveRuntimeProviderKey(managed)).toBe('custom-moecloud');
+
+    const options = buildConfiguredModelOptions(
+      [managed],
+      [status('custom-moecloud')],
+      'custom-moecloud',
+    );
+
+    expect(options).toEqual([
+      {
+        modelRef: 'custom-moecloud/moe-demo-pro',
+        label: 'moe-demo-pro',
+        runtimeProviderKey: 'custom-moecloud',
+        accountId: 'custom-moecloud',
+      },
+    ]);
+  });
+
   it('treats malformed provider snapshots as empty options', () => {
     expect(
       buildConfiguredModelOptions(

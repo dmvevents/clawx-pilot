@@ -311,7 +311,7 @@ For hosted-build acceptance, set `GA_GATE_BUILD_PROFILE` to the downloaded `buil
 
 For build stages, dependency caching, failure diagnosis and the source-to-installer handoff, use the [Windows build procedure](docs/build/windows-build-pipeline.md). The `windows-build-pipeline` skill and `windows_build_engineer` agent share that procedure across Codex and Claude.
 
-Chat returns the composer to an available state with a visible error when a turn stops making progress. Recovery to the saved Online account requires a successful provider check and confirmed session update; progress and cancellation remain tied to the turn that owns them.
+Chat returns the composer to an available state with a visible error when a turn stops making progress. Recovery to the saved Online account requires a successful provider check and confirmed session update; progress and cancellation remain tied to the turn that owns them. If Gateway is connected but no configured model route is usable, the composer stays disabled with setup guidance instead of sending a turn into a timeout; automatic On this device fallback requires the configured Ollama model to pass readiness, while an explicit On this device preference is preserved.
 
 Windows binary preparation downloads pinned LGPL FFmpeg with its license and provenance notices and exercises a native audio transcode. Package checks require the helper set before and after packaging, and the release manifest hashes the shipped `resources/bin` directory.
 

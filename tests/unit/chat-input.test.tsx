@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ChatInput } from '@/pages/Chat/ChatInput';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { hostApiFetch } from '@/lib/host-api';
@@ -27,6 +27,7 @@ const { agentsState, chatState, gatewayState, providersState, artifactPanelMocks
     accounts: [] as Array<Record<string, unknown>>,
     statuses: [] as Array<Record<string, unknown>>,
     defaultAccountId: null as string | null,
+    loading: false,
     refreshProviderSnapshot: vi.fn(),
   },
   artifactPanelMocks: {
@@ -95,6 +96,10 @@ function translate(key: string, vars?: Record<string, unknown>): string {
       return 'Route the next message to another agent';
     case 'composer.gatewayDisconnectedPlaceholder':
       return 'Gateway not connected...';
+    case 'composer.modelSetupPlaceholder':
+      return 'Set up a model to start chatting...';
+    case 'composer.modelSetupRequired':
+      return 'Set up Online access or start the model on this device before sending a message.';
     case 'composer.send':
       return 'Send';
     case 'composer.stop':
@@ -143,6 +148,16 @@ function renderChatInput(onSend = vi.fn()) {
   );
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('ChatInput agent targeting', () => {
   beforeEach(() => {
     agentsState.agents = [];
@@ -154,9 +169,24 @@ describe('ChatInput agent targeting', () => {
     chatState.clearSessionModelPin.mockClear();
     agentsState.fetchAgents.mockClear();
     gatewayState.status = { state: 'running', port: 18789 };
-    providersState.accounts = [];
-    providersState.statuses = [];
-    providersState.defaultAccountId = null;
+    providersState.accounts = [
+      {
+        id: 'google01',
+        vendorId: 'google',
+        label: 'Online',
+        authMode: 'api_key',
+        model: 'google-google01/gemini-2.5-pro',
+        enabled: true,
+        isDefault: true,
+        createdAt: '2025-01-01T00:00:00.000Z',
+        updatedAt: '2025-01-01T00:00:00.000Z',
+      },
+    ];
+    providersState.statuses = [
+      { id: 'google01', name: 'Online', type: 'google', hasKey: true, keyMasked: 'sk-***', enabled: true, createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z' },
+    ];
+    providersState.defaultAccountId = 'google01';
+    providersState.loading = false;
     providersState.refreshProviderSnapshot.mockReset();
     vi.mocked(hostApiFetch).mockReset();
     artifactPanelMocks.openPreview.mockReset();
@@ -307,7 +337,317 @@ describe('ChatInput agent targeting', () => {
     expect(screen.getByTestId('chat-model-picker-button')).toBeDisabled();
   });
 
-  it('hides the raw-id model picker and any model id when dev mode is locked (CLWX-52)', () => {
+  it('blocks a normal send when Gateway is connected but the default local model route is unreachable', async () => {
+    gatewayState.status = { state: 'running', port: 18789, pid: 9708, gatewayReady: true };
+    const now = '2025-01-01T00:00:00.000Z';
+    providersState.accounts = [
+      {
+        id: 'ollama01',
+        vendorId: 'ollama',
+        label: 'Local',
+        authMode: 'local',
+        baseUrl: 'http://127.0.0.1:11434/v1',
+        model: 'ollama-ollama01/qwen2.5:3b-instruct',
+        enabled: true,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+    providersState.statuses = [
+      { id: 'ollama01', name: 'Local', type: 'ollama', hasKey: true, keyMasked: 'ollama-local', enabled: true, createdAt: now, updatedAt: now },
+    ];
+    providersState.defaultAccountId = 'ollama01';
+    agentsState.defaultModelRef = 'ollama-ollama01/qwen2.5:3b-instruct';
+    vi.mocked(hostApiFetch).mockResolvedValue({
+      success: true,
+      valid: false,
+      accountId: 'ollama01',
+      channel: 'on-device',
+      status: null,
+      reason: 'unavailable',
+    } as never);
+    const onSend = vi.fn();
+
+    renderChatInput(onSend);
+
+    expect(await screen.findByTestId('chat-composer-model-setup-required')).toHaveTextContent(
+      'Set up Online access or start the model on this device before sending a message.',
+    );
+    expect(screen.getByTestId('chat-composer-input')).toBeDisabled();
+    expect(screen.getByTestId('chat-composer-input')).toHaveAttribute(
+      'placeholder',
+      'Set up a model to start chatting...',
+    );
+
+    fireEvent.click(screen.getByTitle('Send'));
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('keeps a keyed managed cloud account sendable when its id is already a runtime provider key', () => {
+    gatewayState.status = { state: 'running', port: 18789, pid: 9708, gatewayReady: true };
+    const now = '2025-01-01T00:00:00.000Z';
+    providersState.accounts = [
+      {
+        id: 'custom-moecloud',
+        vendorId: 'custom',
+        label: 'MoE Cloud',
+        authMode: 'api_key',
+        baseUrl: 'https://gateway.example.test/v1',
+        apiProtocol: 'openai-completions',
+        model: 'custom-moecloud/moe-demo-pro',
+        enabled: true,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+    providersState.statuses = [
+      { id: 'custom-moecloud', name: 'MoE Cloud', type: 'custom', hasKey: true, keyMasked: 'sk-***', enabled: true, createdAt: now, updatedAt: now },
+    ];
+    providersState.defaultAccountId = 'custom-moecloud';
+    agentsState.defaultModelRef = 'custom-moecloud/moe-demo-pro';
+    useSettingsStore.setState({ preferredChannel: 'online' });
+    const onSend = vi.fn();
+
+    renderChatInput(onSend);
+
+    expect(screen.queryByTestId('chat-composer-model-setup-required')).not.toBeInTheDocument();
+    const textbox = screen.getByTestId('chat-composer-input') as HTMLTextAreaElement;
+    expect(textbox).not.toBeDisabled();
+    fireEvent.change(textbox, { target: { value: 'review fixture' } });
+    fireEvent.click(screen.getByTitle('Send'));
+    expect(onSend).toHaveBeenCalledWith('review fixture', undefined, null);
+  });
+
+  it('blocks sends instead of using a cloud default when explicit on-device intent has no selected local route', () => {
+    gatewayState.status = { state: 'running', port: 18789, pid: 9708, gatewayReady: true };
+    providersState.accounts = [...CHANNEL_ACCOUNTS];
+    providersState.statuses = [
+      { id: 'google01', name: 'Online', type: 'google', hasKey: true, keyMasked: 'sk-***', enabled: true, createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z' },
+      { id: 'ollama01', name: 'Local', type: 'ollama', hasKey: true, keyMasked: 'local', enabled: true, createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z' },
+    ];
+    providersState.defaultAccountId = 'google01';
+    agentsState.defaultModelRef = 'google/gemini-2.5-pro';
+    useSettingsStore.setState({ preferredChannel: 'on-device' });
+    const onSend = vi.fn();
+
+    renderChatInput(onSend);
+
+    expect(screen.getByTestId('chat-composer-channel')).toHaveAttribute('data-channel', 'on-device');
+    expect(screen.getByTestId('chat-composer-model-setup-required')).toBeInTheDocument();
+    const textbox = screen.getByTestId('chat-composer-input') as HTMLTextAreaElement;
+    expect(textbox).toBeDisabled();
+    fireEvent.change(textbox, { target: { value: 'review fixture' } });
+    fireEvent.click(screen.getByTitle('Send'));
+    expect(onSend).not.toHaveBeenCalled();
+    expect(hostApiFetch).not.toHaveBeenCalledWith(expect.stringContaining('/api/provider-accounts/ollama01/probe'));
+  });
+
+  it('does not block an explicit online agent because an unused local default is unreachable', () => {
+    gatewayState.status = { state: 'running', port: 18789, pid: 9708, gatewayReady: true };
+    providersState.accounts = [
+      {
+        id: 'google01', vendorId: 'google', label: 'Online', authMode: 'api_key',
+        model: 'gemini-2.5-pro', enabled: true, isDefault: false,
+        createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'ollama01', vendorId: 'ollama', label: 'Local', authMode: 'local',
+        baseUrl: 'http://127.0.0.1:11434/v1', model: 'ollama-ollama01/qwen2.5:3b-instruct',
+        enabled: true, isDefault: true,
+        createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z',
+      },
+    ];
+    providersState.statuses = [
+      { id: 'google01', name: 'Online', type: 'google', hasKey: true, keyMasked: 'sk-***', enabled: true, createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z' },
+      { id: 'ollama01', name: 'Local', type: 'ollama', hasKey: true, keyMasked: 'local', enabled: true, createdAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-01-01T00:00:00.000Z' },
+    ];
+    providersState.defaultAccountId = 'ollama01';
+    agentsState.agents = [
+      {
+        id: 'main',
+        name: 'Main',
+        isDefault: true,
+        modelDisplay: 'Gemini',
+        modelRef: 'google/gemini-2.5-pro',
+        inheritedModel: false,
+        workspace: '~/.openclaw/workspace',
+        agentDir: '~/.openclaw/agents/main/agent',
+        mainSessionKey: 'agent:main:main',
+        channelTypes: [],
+      },
+    ];
+    agentsState.defaultModelRef = 'ollama-ollama01/qwen2.5:3b-instruct';
+    useSettingsStore.setState({ preferredChannel: 'online' });
+    const onSend = vi.fn();
+
+    renderChatInput(onSend);
+
+    expect(screen.getByTestId('chat-composer-channel')).toHaveAttribute('data-channel', 'online');
+    expect(screen.queryByTestId('chat-composer-model-setup-required')).not.toBeInTheDocument();
+    const textbox = screen.getByTestId('chat-composer-input') as HTMLTextAreaElement;
+    expect(textbox).not.toBeDisabled();
+    fireEvent.change(textbox, { target: { value: 'review fixture' } });
+    fireEvent.click(screen.getByTitle('Send'));
+    expect(onSend).toHaveBeenCalledWith('review fixture', undefined, null);
+    expect(hostApiFetch).not.toHaveBeenCalledWith(expect.stringContaining('/api/provider-accounts/ollama01/probe'));
+  });
+
+  it('retries a selected local route readiness probe while the composer remains mounted', async () => {
+    gatewayState.status = { state: 'running', port: 18789, pid: 9708, gatewayReady: true };
+    const now = '2025-01-01T00:00:00.000Z';
+    providersState.accounts = [
+      {
+        id: 'ollama01',
+        vendorId: 'ollama',
+        label: 'Local',
+        authMode: 'local',
+        baseUrl: 'http://127.0.0.1:11434/v1',
+        model: 'ollama-ollama01/qwen2.5:3b-instruct',
+        enabled: true,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+    providersState.statuses = [
+      { id: 'ollama01', name: 'Local', type: 'ollama', hasKey: true, keyMasked: 'local', enabled: true, createdAt: now, updatedAt: now },
+    ];
+    providersState.defaultAccountId = 'ollama01';
+    agentsState.defaultModelRef = 'ollama-ollama01/qwen2.5:3b-instruct';
+    useSettingsStore.setState({ preferredChannel: 'on-device' });
+    vi.mocked(hostApiFetch)
+      .mockResolvedValueOnce({
+        success: true,
+        valid: false,
+        accountId: 'ollama01',
+        channel: 'on-device',
+        status: null,
+        reason: 'unavailable',
+      } as never)
+      .mockResolvedValueOnce({
+        success: true,
+        valid: true,
+        accountId: 'ollama01',
+        channel: 'on-device',
+        status: 200,
+        reason: 'ok',
+      } as never);
+    const onSend = vi.fn();
+
+    renderChatInput(onSend);
+
+    expect(await screen.findByTestId('chat-composer-model-setup-required')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-composer-input')).toBeDisabled();
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('chat-composer-model-setup-required')).not.toBeInTheDocument();
+    });
+    expect(hostApiFetch).toHaveBeenCalledWith('/api/provider-accounts/ollama01/probe');
+
+    const textbox = screen.getByTestId('chat-composer-input') as HTMLTextAreaElement;
+    expect(textbox).not.toBeDisabled();
+    fireEvent.change(textbox, { target: { value: 'review fixture' } });
+    fireEvent.click(screen.getByTitle('Send'));
+    expect(onSend).toHaveBeenCalledWith('review fixture', undefined, null);
+  });
+
+  it('ignores stale local readiness probe success after a newer probe reports unavailable', async () => {
+    gatewayState.status = { state: 'running', port: 18789, pid: 9708, gatewayReady: true };
+    const now = '2025-01-01T00:00:00.000Z';
+    providersState.accounts = [
+      {
+        id: 'ollama01',
+        vendorId: 'ollama',
+        label: 'Local',
+        authMode: 'local',
+        baseUrl: 'http://127.0.0.1:11434/v1',
+        model: 'ollama-ollama01/qwen2.5:3b-instruct',
+        enabled: true,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+    providersState.statuses = [
+      { id: 'ollama01', name: 'Local', type: 'ollama', hasKey: true, keyMasked: 'local', enabled: true, createdAt: now, updatedAt: now },
+    ];
+    providersState.defaultAccountId = 'ollama01';
+    agentsState.defaultModelRef = 'ollama-ollama01/qwen2.5:3b-instruct';
+    useSettingsStore.setState({ preferredChannel: 'on-device' });
+    const firstProbe = deferred<{
+      success: true;
+      valid: boolean;
+      accountId: string;
+      channel: 'on-device';
+      status: number | null;
+      reason: 'ok' | 'unavailable';
+    }>();
+    const secondProbe = deferred<{
+      success: true;
+      valid: boolean;
+      accountId: string;
+      channel: 'on-device';
+      status: number | null;
+      reason: 'ok' | 'unavailable';
+    }>();
+    vi.mocked(hostApiFetch)
+      .mockReturnValueOnce(firstProbe.promise as never)
+      .mockReturnValueOnce(secondProbe.promise as never);
+    const onSend = vi.fn();
+
+    renderChatInput(onSend);
+    await waitFor(() => {
+      expect(hostApiFetch).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() => {
+      expect(hostApiFetch).toHaveBeenCalledTimes(2);
+    });
+
+    await act(async () => {
+      secondProbe.resolve({
+        success: true,
+        valid: false,
+        accountId: 'ollama01',
+        channel: 'on-device',
+        status: null,
+        reason: 'unavailable',
+      });
+      await secondProbe.promise;
+    });
+    expect(screen.getByTestId('chat-composer-model-setup-required')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-composer-input')).toBeDisabled();
+
+    await act(async () => {
+      firstProbe.resolve({
+        success: true,
+        valid: true,
+        accountId: 'ollama01',
+        channel: 'on-device',
+        status: 200,
+        reason: 'ok',
+      });
+      await firstProbe.promise;
+    });
+
+    expect(screen.getByTestId('chat-composer-model-setup-required')).toBeInTheDocument();
+    const textbox = screen.getByTestId('chat-composer-input') as HTMLTextAreaElement;
+    expect(textbox).toBeDisabled();
+    fireEvent.change(textbox, { target: { value: 'review fixture' } });
+    fireEvent.click(screen.getByTitle('Send'));
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('hides the raw-id model picker and any model id when dev mode is locked (CLWX-52)', async () => {
     gatewayState.status = { state: 'running', port: 18789, gatewayReady: true };
     agentsState.agents = [
       {
@@ -368,8 +708,19 @@ describe('ChatInput agent targeting', () => {
       { id: 'bbbbbbbb', name: 'Beta', type: 'custom', hasKey: true, keyMasked: 'sk-***', enabled: true, createdAt: now, updatedAt: now },
     ];
     providersState.defaultAccountId = 'aaaaaaaa';
+    vi.mocked(hostApiFetch).mockResolvedValue({
+      success: true,
+      valid: true,
+      accountId: 'aaaaaaaa',
+      channel: 'on-device',
+      status: 200,
+      reason: 'ok',
+    } as never);
 
     renderChatInput();
+    await waitFor(() => {
+      expect(screen.queryByTestId('chat-composer-model-setup-required')).not.toBeInTheDocument();
+    });
 
     expect(screen.queryByTestId('chat-model-picker-button')).not.toBeInTheDocument();
     expect(screen.queryByText(/gpt-a/)).not.toBeInTheDocument();
@@ -521,12 +872,26 @@ describe('ChatInput agent targeting', () => {
         updatedAt: now,
       },
     ];
+    providersState.statuses = [
+      { id: 'demopro1', name: 'MoE Demo Pro', type: 'custom', hasKey: true, keyMasked: 'sk-***', enabled: true, createdAt: now, updatedAt: now },
+      { id: 'ollama01', name: 'Local', type: 'ollama', hasKey: true, keyMasked: 'local', enabled: true, createdAt: now, updatedAt: now },
+    ];
     providersState.defaultAccountId = 'ollama01';
     useSettingsStore.setState({ preferredChannel: 'on-device' });
-    vi.mocked(hostApiFetch).mockResolvedValue({ success: true } as never);
+    vi.mocked(hostApiFetch).mockResolvedValue({
+      success: true,
+      valid: true,
+      accountId: 'ollama01',
+      channel: 'on-device',
+      status: 200,
+      reason: 'ok',
+    } as never);
 
     renderChatInput();
     expect(chatState.clearSessionModelPin).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.queryByTestId('chat-composer-model-setup-required')).not.toBeInTheDocument();
+    });
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('chat-composer-channel'));

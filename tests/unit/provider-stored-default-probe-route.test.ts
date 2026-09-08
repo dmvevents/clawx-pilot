@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     listAccountsKeyInfo: vi.fn(),
   },
   validateApiKeyWithProvider: vi.fn(),
+  probeLocalProviderReadiness: vi.fn(),
   sendJson: vi.fn(),
 }));
 
@@ -22,6 +23,10 @@ vi.mock('@electron/services/providers/provider-service', () => ({
 
 vi.mock('@electron/services/providers/provider-validation', () => ({
   validateApiKeyWithProvider: mocks.validateApiKeyWithProvider,
+}));
+
+vi.mock('@electron/main/local-provider-seed', () => ({
+  probeLocalProviderReadiness: mocks.probeLocalProviderReadiness,
 }));
 
 vi.mock('@electron/api/route-utils', async (importOriginal) => {
@@ -53,11 +58,11 @@ const LOCAL_ACCOUNT = {
   isDefault: true,
 };
 
-function callProbe(): Promise<boolean> {
+function callProbe(path = '/api/provider-accounts/default/probe'): Promise<boolean> {
   return handleProviderRoutes(
     { method: 'GET' } as IncomingMessage,
     {} as ServerResponse,
-    new URL('http://127.0.0.1:13210/api/provider-accounts/default/probe'),
+    new URL(`http://127.0.0.1:13210${path}`),
     {} as never,
   );
 }
@@ -75,6 +80,7 @@ describe('GET /api/provider-accounts/default/probe', () => {
     mocks.providerService.getAccount.mockResolvedValue(ONLINE_ACCOUNT);
     mocks.providerService.getEffectiveAccountApiKey.mockResolvedValue('sk-from-openclaw-or-store');
     mocks.validateApiKeyWithProvider.mockResolvedValue({ valid: true, status: 200 });
+    mocks.probeLocalProviderReadiness.mockResolvedValue({ ready: true, reason: 'ok', status: 200 });
   });
 
   it('proves the stored default Online account only after a strict 2xx authenticated probe', async () => {
@@ -103,7 +109,7 @@ describe('GET /api/provider-accounts/default/probe', () => {
     expect(lastPayload()).toMatchObject({ success: true, valid: false, accountId: 'google', channel: 'online', status: 429, reason: 'unavailable' });
   });
 
-  it('rejects local defaults before reading or validating a credential', async () => {
+  it('proves a reachable local default through the bounded local readiness probe', async () => {
     mocks.providerService.getDefaultAccountId.mockResolvedValue('ollama');
     mocks.providerService.listAccounts.mockResolvedValue([LOCAL_ACCOUNT]);
 
@@ -111,7 +117,62 @@ describe('GET /api/provider-accounts/default/probe', () => {
 
     expect(mocks.providerService.getEffectiveAccountApiKey).not.toHaveBeenCalled();
     expect(mocks.validateApiKeyWithProvider).not.toHaveBeenCalled();
-    expect(lastPayload()).toMatchObject({ success: true, valid: false, accountId: 'ollama', channel: 'on-device', status: null, reason: 'offline-channel' });
+    expect(mocks.probeLocalProviderReadiness).toHaveBeenCalledWith(expect.objectContaining({
+      baseUrl: 'http://127.0.0.1:11434',
+      modelId: 'qwen2.5:3b-instruct',
+      timeoutMs: 5000,
+    }));
+    expect(lastPayload()).toMatchObject({ success: true, valid: true, accountId: 'ollama', channel: 'on-device', status: 200, reason: 'ok' });
+  });
+
+  it('rejects unreachable local defaults before reading or validating a credential', async () => {
+    mocks.providerService.getDefaultAccountId.mockResolvedValue('ollama');
+    mocks.providerService.listAccounts.mockResolvedValue([LOCAL_ACCOUNT]);
+    mocks.probeLocalProviderReadiness.mockResolvedValue({ ready: false, reason: 'connection-error' });
+
+    await callProbe();
+
+    expect(mocks.providerService.getEffectiveAccountApiKey).not.toHaveBeenCalled();
+    expect(mocks.validateApiKeyWithProvider).not.toHaveBeenCalled();
+    expect(lastPayload()).toMatchObject({ success: true, valid: false, accountId: 'ollama', channel: 'on-device', status: null, reason: 'unavailable' });
+  });
+
+  it('rejects a local default account change that happens while the readiness probe is in flight', async () => {
+    mocks.providerService.getDefaultAccountId
+      .mockResolvedValueOnce('ollama')
+      .mockResolvedValueOnce('google');
+    mocks.providerService.listAccounts.mockResolvedValue([LOCAL_ACCOUNT, ONLINE_ACCOUNT]);
+
+    await callProbe();
+
+    expect(lastPayload()).toMatchObject({
+      success: true,
+      valid: false,
+      accountId: 'ollama',
+      channel: 'on-device',
+      status: 200,
+      reason: 'changed-default',
+    });
+  });
+
+  it('probes a selected local account without depending on the global default', async () => {
+    mocks.providerService.getDefaultAccountId.mockResolvedValue('google');
+    mocks.providerService.listAccounts.mockResolvedValue([ONLINE_ACCOUNT, LOCAL_ACCOUNT]);
+
+    await callProbe('/api/provider-accounts/ollama/probe');
+
+    expect(mocks.probeLocalProviderReadiness).toHaveBeenCalledWith(expect.objectContaining({
+      baseUrl: 'http://127.0.0.1:11434',
+      modelId: 'qwen2.5:3b-instruct',
+    }));
+    expect(lastPayload()).toMatchObject({
+      success: true,
+      valid: true,
+      accountId: 'ollama',
+      channel: 'on-device',
+      status: 200,
+      reason: 'ok',
+    });
   });
 
   it('rejects a default account change that happens while the probe is in flight', async () => {

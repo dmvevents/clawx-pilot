@@ -21,6 +21,7 @@ import { validateApiKeyWithProvider } from '../../services/providers/provider-va
 import { classifyAccount, type ProviderChannel } from '../../services/providers/channel-router';
 import { getProviderService } from '../../services/providers/provider-service';
 import { providerAccountToConfig } from '../../services/providers/provider-store';
+import { probeLocalProviderReadiness } from '../../main/local-provider-seed';
 import type { ProviderAccount } from '../../shared/providers/types';
 import { logger } from '../../utils/logger';
 
@@ -62,25 +63,36 @@ function storedDefaultProviderProbeResult(
   };
 }
 
-async function probeStoredDefaultProvider(): Promise<StoredDefaultProviderProbeResult> {
-  const providerService = getProviderService();
-  const defaultAccountId = await providerService.getDefaultAccountId();
-  if (!defaultAccountId) {
-    return storedDefaultProviderProbeResult('missing-default');
-  }
-
-  const accounts = await providerService.listAccounts();
-  const account = accounts.find((candidate) => candidate.id === defaultAccountId)
-    ?? await providerService.getAccount(defaultAccountId);
-  if (!account) {
-    return storedDefaultProviderProbeResult('missing-account', { accountId: defaultAccountId });
-  }
-
+async function probeProviderAccount(
+  account: ProviderAccount,
+  options: { expectedDefaultAccountId?: string | null } = {},
+): Promise<StoredDefaultProviderProbeResult> {
   const channel = classifyAccount(account);
   if (channel !== 'online') {
-    return storedDefaultProviderProbeResult('offline-channel', { accountId: account.id, channel });
+    const readiness = await probeLocalProviderReadiness({
+      baseUrl: account.baseUrl,
+      modelId: account.model,
+      timeoutMs: STORED_DEFAULT_PROBE_TIMEOUT_MS,
+    });
+    if (options.expectedDefaultAccountId) {
+      const currentDefaultAccountId = await getProviderService().getDefaultAccountId();
+      if (currentDefaultAccountId !== options.expectedDefaultAccountId) {
+        return storedDefaultProviderProbeResult('changed-default', {
+          accountId: options.expectedDefaultAccountId,
+          channel,
+          status: readiness.status ?? null,
+        });
+      }
+    }
+    return storedDefaultProviderProbeResult(readiness.ready ? 'ok' : 'unavailable', {
+      accountId: account.id,
+      channel,
+      status: readiness.status ?? null,
+      valid: readiness.ready,
+    });
   }
 
+  const providerService = getProviderService();
   const apiKey = await providerService.getEffectiveAccountApiKey(account);
   if (!apiKey?.trim()) {
     return storedDefaultProviderProbeResult('missing-key', { accountId: account.id, channel });
@@ -96,13 +108,15 @@ async function probeStoredDefaultProvider(): Promise<StoredDefaultProviderProbeR
       quiet: true,
       signal: controller.signal,
     });
-    const currentDefaultAccountId = await providerService.getDefaultAccountId();
-    if (currentDefaultAccountId !== defaultAccountId) {
-      return storedDefaultProviderProbeResult('changed-default', {
-        accountId: defaultAccountId,
-        channel,
-        status: result.status ?? null,
-      });
+    if (options.expectedDefaultAccountId) {
+      const currentDefaultAccountId = await providerService.getDefaultAccountId();
+      if (currentDefaultAccountId !== options.expectedDefaultAccountId) {
+        return storedDefaultProviderProbeResult('changed-default', {
+          accountId: options.expectedDefaultAccountId,
+          channel,
+          status: result.status ?? null,
+        });
+      }
     }
 
     const status = result.status ?? null;
@@ -114,7 +128,7 @@ async function probeStoredDefaultProvider(): Promise<StoredDefaultProviderProbeR
     }
     return storedDefaultProviderProbeResult('unavailable', { accountId: account.id, channel, status });
   } catch (error) {
-    logger.warn('[provider-probe] stored default provider probe failed', {
+    logger.warn('[provider-probe] provider account probe failed', {
       accountId: account.id,
       providerType: account.vendorId,
       error: error instanceof Error ? error.name : typeof error,
@@ -123,6 +137,35 @@ async function probeStoredDefaultProvider(): Promise<StoredDefaultProviderProbeR
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function probeStoredProviderAccount(accountId: string): Promise<StoredDefaultProviderProbeResult> {
+  const providerService = getProviderService();
+  const accounts = await providerService.listAccounts();
+  const account = accounts.find((candidate) => candidate.id === accountId)
+    ?? await providerService.getAccount(accountId);
+  if (!account) {
+    return storedDefaultProviderProbeResult('missing-account', { accountId });
+  }
+
+  return probeProviderAccount(account);
+}
+
+async function probeStoredDefaultProvider(): Promise<StoredDefaultProviderProbeResult> {
+  const providerService = getProviderService();
+  const defaultAccountId = await providerService.getDefaultAccountId();
+  if (!defaultAccountId) {
+    return storedDefaultProviderProbeResult('missing-default');
+  }
+
+  const accounts = await providerService.listAccounts();
+  const account = accounts.find((candidate) => candidate.id === defaultAccountId)
+    ?? await providerService.getAccount(defaultAccountId);
+  if (!account) {
+    return storedDefaultProviderProbeResult('missing-account', { accountId: defaultAccountId });
+  }
+
+  return probeProviderAccount(account, { expectedDefaultAccountId: defaultAccountId });
 }
 
 function hasObjectChanges<T extends Record<string, unknown>>(
@@ -211,6 +254,19 @@ export async function handleProviderRoutes(
       sendJson(res, 200, await probeStoredDefaultProvider());
     } catch (error) {
       logger.warn('[provider-probe] stored default provider probe failed before validation', {
+        error: error instanceof Error ? error.name : typeof error,
+      });
+      sendJson(res, 200, storedDefaultProviderProbeResult('probe-error'));
+    }
+    return true;
+  }
+
+  const accountProbeMatch = url.pathname.match(/^\/api\/provider-accounts\/([^/]+)\/probe$/);
+  if (accountProbeMatch && req.method === 'GET') {
+    try {
+      sendJson(res, 200, await probeStoredProviderAccount(decodeURIComponent(accountProbeMatch[1])));
+    } catch (error) {
+      logger.warn('[provider-probe] provider account probe failed before validation', {
         error: error instanceof Error ? error.name : typeof error,
       });
       sendJson(res, 200, storedDefaultProviderProbeResult('probe-error'));

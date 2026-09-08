@@ -36,6 +36,7 @@ import {
   getOpenClawProviderKey,
   syncDefaultProviderToRuntime,
 } from './provider-runtime-sync';
+import { probeLocalProviderReadiness } from '../../main/local-provider-seed';
 
 export { ensureBootableAgentsConfig } from '../../utils/agent-config';
 
@@ -80,21 +81,7 @@ async function pickAccountForChannel(channel: ProviderChannel): Promise<{
   model?: string;
 } | null> {
   const accounts = await listProviderAccounts();
-  if (accounts.length === 0) return null;
-
-  const inChannel = accounts.filter((a) => classifyAccount({ vendorId: a.vendorId, baseUrl: a.baseUrl }) === channel);
-  if (inChannel.length === 0) return null;
-
-  const defaultMatch = inChannel.find((a) => a.isDefault === true);
-  const firstEnabled = inChannel.find((a) => a.enabled !== false);
-  const picked = defaultMatch ?? firstEnabled ?? inChannel[0];
-  if (!picked) return null;
-
-  return {
-    accountId: picked.id,
-    vendorId: picked.vendorId,
-    model: picked.model,
-  };
+  return pickAccountForChannelFromAccounts(accounts, channel);
 }
 
 function deriveModelRef(provider: ProviderConfig, runtimeKey: string): string | null {
@@ -125,6 +112,69 @@ export interface ApplyChannelChangeOptions {
    * immediate refresh.
    */
   skipGatewayRefresh?: boolean;
+  /**
+   * Boot-time automatic selection must not treat a localhost account as usable
+   * until the configured Ollama model answers a bounded readiness probe.
+   */
+  requireLocalReadiness?: boolean;
+  /**
+   * False preserves an explicit user channel preference when that channel is
+   * unavailable, instead of silently applying the other channel at startup.
+   */
+  allowChannelFallback?: boolean;
+}
+
+type ProviderAccountCandidate = Awaited<ReturnType<typeof listProviderAccounts>>[number];
+
+function pickAccountForChannelFromAccounts(
+  accounts: ProviderAccountCandidate[],
+  channel: ProviderChannel,
+): {
+  accountId: string;
+  vendorId: string;
+  model?: string;
+} | null {
+  if (accounts.length === 0) return null;
+
+  const inChannel = accounts.filter((a) => classifyAccount({ vendorId: a.vendorId, baseUrl: a.baseUrl }) === channel);
+  if (inChannel.length === 0) return null;
+
+  const defaultMatch = inChannel.find((a) => a.isDefault === true);
+  const firstEnabled = inChannel.find((a) => a.enabled !== false);
+  const picked = defaultMatch ?? firstEnabled ?? inChannel[0];
+  if (!picked) return null;
+
+  return {
+    accountId: picked.id,
+    vendorId: picked.vendorId,
+    model: picked.model,
+  };
+}
+
+async function filterSelectableAccounts(
+  accounts: ProviderAccountCandidate[],
+  options?: Pick<ApplyChannelChangeOptions, 'requireLocalReadiness'>,
+): Promise<ProviderAccountCandidate[]> {
+  if (options?.requireLocalReadiness !== true) return accounts;
+
+  const results = await Promise.all(accounts.map(async (account) => {
+    if (classifyAccount({ vendorId: account.vendorId, baseUrl: account.baseUrl }) !== 'on-device') {
+      return { account, selectable: true };
+    }
+    const readiness = await probeLocalProviderReadiness({
+      baseUrl: account.baseUrl,
+      modelId: account.model,
+    });
+    if (!readiness.ready) {
+      logger.warn('[channel-router] Ignoring unready local account during boot preflight', {
+        reason: readiness.reason,
+        status: readiness.status ?? null,
+      });
+    }
+    return { account, selectable: readiness.ready };
+  }));
+
+  return results.filter((entry) => entry.selectable).map((entry) => entry.account);
 }
 
 async function getProviderAccountRuntime(accountId: string): Promise<{ modelRef: string; channel: ProviderChannel }> {
@@ -269,7 +319,7 @@ export async function getActiveChannel(): Promise<ProviderChannel | null> {
 
 export interface ChannelPreflightResult {
   ran: boolean;
-  reason: 'no-accounts' | 'desired-unavailable' | 'reconciled' | 'already-coherent';
+  reason: 'no-accounts' | 'no-ready-accounts' | 'desired-unavailable' | 'reconciled' | 'already-coherent';
   desired: ProviderChannel;
   applied?: ProviderChannel;
   modelRef?: string;
@@ -283,8 +333,9 @@ export interface ChannelPreflightResult {
  * field have `preferredChannel=online` in clawx-settings but
  * `agents.list[main].model.primary` still pointing at ollama.
  *
- * Strategy:
- *   1. Read the renderer-persisted preferredChannel (defaults to 'on-device').
+   * Strategy:
+   *   1. Read the renderer-persisted preferredChannel; callers can distinguish
+   *      no explicit preference from a saved user choice.
  *   2. If no accounts exist at all, skip — seedDefaultLocalProvider is
  *      expected to populate at least one before the next launch.
  *   3. If the desired channel has no account, fall back to the other channel.
@@ -301,14 +352,27 @@ export async function runChannelPreflight(
   gatewayManager?: GatewayManager,
   options?: ApplyChannelChangeOptions,
 ): Promise<ChannelPreflightResult> {
-  const accounts = await listProviderAccounts();
+  const storedAccounts = await listProviderAccounts();
+  const accounts = await filterSelectableAccounts(storedAccounts, {
+    requireLocalReadiness: options?.requireLocalReadiness === true,
+  });
   if (accounts.length === 0) {
-    return { ran: false, reason: 'no-accounts', desired };
+    return {
+      ran: false,
+      reason: storedAccounts.length === 0 ? 'no-accounts' : 'no-ready-accounts',
+      desired,
+    };
   }
 
-  const available = await listAvailableChannels();
+  const available = [...new Set(accounts.map((a) => classifyAccount({ vendorId: a.vendorId, baseUrl: a.baseUrl })))];
   let target: ProviderChannel = desired;
   if (!available.includes(desired)) {
+    if (options?.allowChannelFallback === false) {
+      logger.warn('[channel-router] Preflight: desired channel unavailable and fallback disabled', {
+        desired,
+      });
+      return { ran: false, reason: 'desired-unavailable', desired };
+    }
     const fallback = available[0];
     if (!fallback) {
       return { ran: false, reason: 'no-accounts', desired };
@@ -321,12 +385,26 @@ export async function runChannelPreflight(
   }
 
   try {
-    const result = await applyChannelChange(target, gatewayManager, options);
+    const picked = pickAccountForChannelFromAccounts(accounts, target);
+    if (!picked) {
+      return { ran: false, reason: 'desired-unavailable', desired, applied: target };
+    }
+
+    const previousDefault = await getDefaultProvider();
+    const switched = previousDefault !== picked.accountId;
+    const result = await applyProviderAccountDefault(picked.accountId, gatewayManager, options, switched);
+    logger.info('[channel-router] Applied channel preflight', {
+      channel: result.channel,
+      accountId: result.accountId,
+      modelRef: result.modelRef,
+      previousDefault,
+      gatewayRefreshSuppressed: options?.skipGatewayRefresh === true,
+    });
     return {
       ran: true,
-      reason: target !== desired ? 'desired-unavailable' : (result.switched ? 'reconciled' : 'already-coherent'),
+      reason: target !== desired ? 'desired-unavailable' : (switched ? 'reconciled' : 'already-coherent'),
       desired,
-      applied: target,
+      applied: result.channel,
       modelRef: result.modelRef,
       accountId: result.accountId,
     };

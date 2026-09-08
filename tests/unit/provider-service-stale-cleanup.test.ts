@@ -395,6 +395,80 @@ describe('ProviderService.listAccounts (openclaw.json as sole source of truth)',
       }),
     ]));
   });
+
+  it('imports managed custom provider models and protocol when the runtime default drifted elsewhere', async () => {
+    mocks.listProviderAccounts.mockResolvedValue([]);
+    mocks.getActiveOpenClawProviders.mockResolvedValue(new Set(['custom-moecloud', 'ollama-ollamalo']));
+    mocks.getOpenClawProvidersConfig.mockResolvedValue({
+      providers: {
+        'custom-moecloud': {
+          baseUrl: 'https://gateway.example.test/v1',
+          api: 'openai-completions',
+          models: [{ id: 'moe-demo-pro', name: 'moe-demo-pro' }],
+        },
+        'ollama-ollamalo': {
+          baseUrl: 'http://127.0.0.1:11434/v1',
+          api: 'openai-completions',
+          models: [{ id: 'qwen2.5:3b-instruct', name: 'qwen2.5:3b-instruct' }],
+        },
+      },
+      defaultModel: 'ollama-ollamalo/qwen2.5:3b-instruct',
+    });
+
+    const result = await service.listAccounts();
+
+    expect(result).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'custom-moecloud',
+        vendorId: 'custom',
+        baseUrl: 'https://gateway.example.test/v1',
+        apiProtocol: 'openai-completions',
+        model: 'moe-demo-pro',
+      }),
+      expect.objectContaining({
+        id: 'ollama-ollamalo',
+        vendorId: 'ollama',
+        isDefault: true,
+        model: 'ollama-ollamalo/qwen2.5:3b-instruct',
+      }),
+    ]));
+    expect(mocks.saveProviderAccount).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'custom-moecloud',
+      model: 'moe-demo-pro',
+      apiProtocol: 'openai-completions',
+    }));
+  });
+
+  it('marks the imported account matching the OpenClaw default model as default', async () => {
+    mocks.listProviderAccounts.mockResolvedValue([]);
+    mocks.getActiveOpenClawProviders.mockResolvedValue(new Set(['custom-moecloud', 'custom-altgate']));
+    mocks.getOpenClawProvidersConfig.mockResolvedValue({
+      providers: {
+        'custom-moecloud': {
+          baseUrl: 'https://gateway.example.test/v1',
+          api: 'openai-completions',
+          models: [{ id: 'moe-demo-pro', name: 'moe-demo-pro' }],
+        },
+        'custom-altgate': {
+          baseUrl: 'https://alt.example.test/v1',
+          api: 'openai-completions',
+          models: [{ id: 'alt-model', name: 'alt-model' }],
+        },
+      },
+      defaultModel: 'custom-moecloud/moe-demo-pro',
+    });
+
+    const result = await service.listAccounts();
+
+    expect(result.find((account) => account.id === 'custom-moecloud')).toEqual(expect.objectContaining({
+      isDefault: true,
+      model: 'custom-moecloud/moe-demo-pro',
+    }));
+    expect(result.find((account) => account.id === 'custom-altgate')).toEqual(expect.objectContaining({
+      isDefault: false,
+      model: 'alt-model',
+    }));
+  });
 });
 
 describe('ProviderService.listAccountsKeyInfo', () => {

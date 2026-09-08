@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getOpenClawProviderKey: vi.fn(),
   syncSavedProviderToRuntime: vi.fn(),
   patchProviderModelCompat: vi.fn(),
+  proxyAwareFetch: vi.fn(),
 }));
 
 vi.mock('@electron/utils/logger', () => ({
@@ -68,6 +69,10 @@ vi.mock('@electron/utils/openclaw-auth', () => ({
   patchProviderModelCompat: mocks.patchProviderModelCompat,
 }));
 
+vi.mock('@electron/utils/proxy-fetch', () => ({
+  proxyAwareFetch: mocks.proxyAwareFetch,
+}));
+
 import { seedDefaultLocalProvider } from '@electron/main/local-provider-seed';
 
 describe('gateway boot convergence', () => {
@@ -84,6 +89,9 @@ describe('gateway boot convergence', () => {
     mocks.getOpenClawProviderKey.mockImplementation((type: string, id: string) => `${type}-${id}`);
     mocks.syncSavedProviderToRuntime.mockResolvedValue(undefined);
     mocks.patchProviderModelCompat.mockResolvedValue(undefined);
+    mocks.proxyAwareFetch.mockResolvedValue(new Response(JSON.stringify({
+      data: [{ id: 'qwen2.5:3b-instruct' }],
+    }), { status: 200 }));
   });
 
   it('seeds the local boot provider config without passing a pre-start manager to runtime sync', async () => {
@@ -111,5 +119,15 @@ describe('gateway boot convergence', () => {
     await seedDefaultLocalProvider(gateway);
 
     expect(mocks.syncSavedProviderToRuntime).toHaveBeenCalledWith(expect.any(Object), 'ollama-local', gateway);
+  });
+
+  it('does not create an automatic local default when the configured Ollama model is unreachable', async () => {
+    mocks.proxyAwareFetch.mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:11434'));
+
+    await seedDefaultLocalProvider({} as never, { skipGatewayRefresh: true });
+
+    expect(mocks.saveProviderAccount).not.toHaveBeenCalled();
+    expect(mocks.storeApiKey).not.toHaveBeenCalled();
+    expect(mocks.setDefaultProviderAccount).not.toHaveBeenCalled();
   });
 });

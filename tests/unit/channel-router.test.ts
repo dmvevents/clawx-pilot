@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getOpenClawProviderKey: vi.fn(),
   setAllAgentsModel: vi.fn(),
   getProviderDefaultModel: vi.fn(),
+  probeLocalProviderReadiness: vi.fn(),
 }));
 
 vi.mock('@electron/services/providers/provider-store', () => ({
@@ -45,6 +46,10 @@ vi.mock('@electron/utils/logger', () => ({
     warn: vi.fn(),
     error: vi.fn(),
   },
+}));
+
+vi.mock('@electron/main/local-provider-seed', () => ({
+  probeLocalProviderReadiness: mocks.probeLocalProviderReadiness,
 }));
 
 import {
@@ -93,6 +98,7 @@ describe('channel-router applyChannelChange', () => {
     mocks.syncDefaultProviderToRuntime.mockResolvedValue(undefined);
     mocks.ensureProviderAccountRuntime.mockResolvedValue(undefined);
     mocks.setAllAgentsModel.mockResolvedValue(undefined);
+    mocks.probeLocalProviderReadiness.mockResolvedValue({ ready: true, reason: 'ok', status: 200 });
   });
 
   it('runs the four-store transaction for the online channel', async () => {
@@ -225,6 +231,7 @@ describe('channel-router prepareTransientChannelChange', () => {
     mocks.syncDefaultProviderToRuntime.mockResolvedValue(undefined);
     mocks.ensureProviderAccountRuntime.mockResolvedValue(undefined);
     mocks.setAllAgentsModel.mockResolvedValue(undefined);
+    mocks.probeLocalProviderReadiness.mockResolvedValue({ ready: true, reason: 'ok', status: 200 });
   });
 
   it('returns the target session model without changing global provider defaults', async () => {
@@ -357,5 +364,62 @@ describe('channel-router runChannelPreflight', () => {
       skipGatewayRefresh: true,
     });
     expect(mocks.setAllAgentsModel).toHaveBeenCalledWith('google-gemini-1/gemini-2.5-pro');
+  });
+
+  it('uses an imported OpenClaw cloud account before an unready local fallback during boot preflight', async () => {
+    mocks.listProviderAccounts.mockResolvedValue([
+      makeAccount({ id: 'custom-moecloud', vendorId: 'custom', baseUrl: 'https://gateway.example.run.app/v1', model: 'moe-demo-pro', isDefault: true }),
+      makeAccount({ id: 'ollama-local', vendorId: 'ollama', baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:3b-instruct' }),
+    ]);
+    mocks.probeLocalProviderReadiness.mockResolvedValue({ ready: false, reason: 'connection-error' });
+    mocks.getProvider.mockResolvedValue(makeProvider({
+      id: 'custom-moecloud',
+      type: 'custom',
+      baseUrl: 'https://gateway.example.run.app/v1',
+      model: 'moe-demo-pro',
+    }));
+
+    const result = await runChannelPreflight('online', undefined, { requireLocalReadiness: true });
+
+    expect(result.ran).toBe(true);
+    expect(result.applied).toBe('online');
+    expect(result.accountId).toBe('custom-moecloud');
+    expect(result.modelRef).toBe('custom-custom-moecloud/moe-demo-pro');
+    expect(mocks.setDefaultProvider).toHaveBeenCalledWith('custom-moecloud');
+    expect(mocks.setAllAgentsModel).toHaveBeenCalledWith('custom-custom-moecloud/moe-demo-pro');
+  });
+
+  it('ignores an unready local account during automatic boot preflight', async () => {
+    mocks.listProviderAccounts.mockResolvedValue([
+      makeAccount({ id: 'ollama-local', vendorId: 'ollama', baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:3b-instruct' }),
+    ]);
+    mocks.probeLocalProviderReadiness.mockResolvedValue({ ready: false, reason: 'connection-error' });
+
+    const result = await runChannelPreflight('online', undefined, { requireLocalReadiness: true });
+
+    expect(result).toMatchObject({ ran: false, reason: 'no-ready-accounts', desired: 'online' });
+    expect(mocks.setDefaultProvider).not.toHaveBeenCalled();
+    expect(mocks.setAllAgentsModel).not.toHaveBeenCalled();
+  });
+
+  it('preserves explicit on-device intent instead of silently applying Online during boot', async () => {
+    mocks.listProviderAccounts.mockResolvedValue([
+      makeAccount({ id: 'gemini-1', vendorId: 'google', model: 'gemini-2.5-pro' }),
+      makeAccount({ id: 'ollama-local', vendorId: 'ollama', baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:3b-instruct' }),
+    ]);
+    mocks.probeLocalProviderReadiness.mockImplementation(async (options: { modelId?: string }) => (
+      options.modelId === 'qwen2.5:3b-instruct'
+        ? { ready: false, reason: 'connection-error' }
+        : { ready: true, reason: 'ok', status: 200 }
+    ));
+
+    const result = await runChannelPreflight('on-device', undefined, {
+      allowChannelFallback: false,
+      requireLocalReadiness: true,
+    });
+
+    expect(result).toMatchObject({ ran: false, reason: 'desired-unavailable', desired: 'on-device' });
+    expect(mocks.setDefaultProvider).not.toHaveBeenCalledWith('gemini-1');
+    expect(mocks.setAllAgentsModel).not.toHaveBeenCalled();
   });
 });

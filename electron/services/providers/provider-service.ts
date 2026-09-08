@@ -6,6 +6,7 @@ import type {
   ProviderAccount,
   ProviderConfig,
   ProviderDefinition,
+  ProviderProtocol,
   ProviderType,
 } from '../../shared/providers/types';
 import { BUILTIN_PROVIDER_TYPES } from '../../shared/providers/types';
@@ -67,8 +68,47 @@ function inferProviderVendorIdFromOpenClawEntry(
       return 'minimax-portal-cn';
     }
   }
+  if (key.startsWith('ollama-')) {
+    const tail = key.slice('ollama-'.length);
+    if (tail.length === 8 && !tail.includes('-')) {
+      return 'ollama';
+    }
+  }
 
   return ((BUILTIN_PROVIDER_TYPES as readonly string[]).includes(key) ? key : 'custom') as ProviderType | 'custom';
+}
+
+function firstModelIdFromOpenClawEntry(entry: Record<string, unknown>): string | undefined {
+  const direct = typeof entry.model === 'string' ? entry.model.trim() : '';
+  if (direct) return direct;
+
+  const models = entry.models;
+  if (!Array.isArray(models)) return undefined;
+  for (const model of models) {
+    if (typeof model === 'string' && model.trim()) {
+      return model.trim();
+    }
+    if (model && typeof model === 'object') {
+      const id = (model as { id?: unknown }).id;
+      if (typeof id === 'string' && id.trim()) {
+        return id.trim();
+      }
+    }
+  }
+  return undefined;
+}
+
+function openClawEntryApiProtocol(entry: Record<string, unknown>): ProviderProtocol | undefined {
+  const api = typeof entry.api === 'string' ? entry.api.trim() : '';
+  if (
+    api === 'openai-completions'
+    || api === 'openai-responses'
+    || api === 'anthropic-messages'
+    || api === 'openrouter'
+  ) {
+    return api;
+  }
+  return undefined;
 }
 
 export class ProviderService {
@@ -191,13 +231,22 @@ export class ProviderService {
 
       const baseUrl = typeof entry.baseUrl === 'string' ? entry.baseUrl : definition?.providerConfig?.baseUrl;
 
-      // Infer model from the default model if it belongs to this provider
+      // Infer model from the default model if it belongs to this provider,
+      // otherwise fall back to the provider entry's advertised models. This is
+      // the startup recovery path for field installs whose agent default drifted
+      // to a different provider while a valid managed cloud provider entry still
+      // exists in openclaw.json.
+      const entryModelId = firstModelIdFromOpenClawEntry(entry);
       let model: string | undefined;
       if (defaultModelProvider === key && defaultModel) {
         model = defaultModel;
+      } else if (entryModelId) {
+        model = entryModelId;
       } else if (definition?.defaultModelId) {
         model = definition.defaultModelId;
       }
+
+      const apiProtocol = openClawEntryApiProtocol(entry) ?? definition?.providerConfig?.api;
 
       const account: ProviderAccount = {
         id: key,
@@ -205,13 +254,13 @@ export class ProviderService {
         label: definition?.name ?? key.charAt(0).toUpperCase() + key.slice(1),
         authMode: definition?.defaultAuthMode ?? 'api_key',
         baseUrl,
-        apiProtocol: definition?.providerConfig?.api,
+        apiProtocol,
         headers: (entry.headers && typeof entry.headers === 'object'
           ? (entry.headers as Record<string, string>)
           : undefined),
         model,
         enabled: true,
-        isDefault: false,
+        isDefault: defaultModelProvider === key,
         createdAt: now,
         updatedAt: now,
       };

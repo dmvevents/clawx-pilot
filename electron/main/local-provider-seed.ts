@@ -1,7 +1,7 @@
 /**
  * One-shot seed for a local OpenAI-compatible LLM provider account.
  *
- * Wires Ollama running `nora:4b-v3.2` at http://127.0.0.1:11434/v1 as a
+ * Wires Ollama running `qwen2.5:3b-instruct` at http://127.0.0.1:11434/v1 as a
  * ClawX provider account so that fresh installs (no cloud keys configured)
  * can still get a chat reply out of the box.
  *
@@ -9,10 +9,11 @@
  *   - Idempotent: if a provider account already targets the same baseUrl,
  *     this function does nothing. Re-running on a configured machine is
  *     a no-op and never overwrites a real-user-configured provider.
- *   - Cloud-default with local fallback: marks the seeded account as the
- *     default ONLY if no other default account exists. If a Sonnet/Opus
- *     (etc.) default is already configured, the seeded Nora account is
- *     added as a non-default fallback the user can switch to manually.
+ *   - Cloud-default with local fallback: creates the seeded account only when
+ *     the configured local model answers the bounded readiness probe, and marks
+ *     it as default ONLY if no other default account exists. If a Sonnet/Opus
+ *     (etc.) default is already configured, the seeded Qwen account is added as
+ *     a non-default fallback the user can switch to manually.
  *   - Sync to runtime: calls syncSavedProviderToRuntime() so the gateway's
  *     openclaw.json picks up the new provider on next launch/reload.
  *
@@ -37,6 +38,7 @@ import {
 } from '../services/providers/provider-runtime-sync';
 import { providerAccountToConfig } from '../services/providers/provider-store';
 import { patchProviderModelCompat } from '../utils/openclaw-auth';
+import { proxyAwareFetch } from '../utils/proxy-fetch';
 
 // Local Ollama endpoint and model. Keep these here (not in shared/)
 // so the seed remains a single-file concern that's easy to tweak or revert.
@@ -65,6 +67,7 @@ const LOCAL_ACCOUNT_LABEL = 'On this device (Qwen 2.5 3B Instruct)';
 // Ollama doesn't enforce auth but the secret-store and runtime-sync paths
 // expect a non-empty token — use a recognisable placeholder.
 const LOCAL_PLACEHOLDER_KEY = 'ollama-local';
+const LOCAL_READINESS_TIMEOUT_MS = 1_500;
 
 function normaliseBaseUrl(input: string | undefined | null): string {
   if (!input) return '';
@@ -87,6 +90,76 @@ function accountTargetsLocalEndpoint(account: ProviderAccount): boolean {
 export interface LocalProviderSeedOptions {
   /** Suppress only pre-start boot refreshes; live settings/provider edits still pass the manager. */
   skipGatewayRefresh?: boolean;
+}
+
+export type LocalProviderReadinessReason =
+  | 'ok'
+  | 'connection-error'
+  | 'http-error'
+  | 'invalid-response'
+  | 'model-missing';
+
+export interface LocalProviderReadinessResult {
+  ready: boolean;
+  reason: LocalProviderReadinessReason;
+  status?: number;
+}
+
+function normalizeLocalModelId(model: string | undefined | null): string {
+  const trimmed = (model ?? '').trim();
+  if (!trimmed) return LOCAL_MODEL_ID;
+  const slash = trimmed.indexOf('/');
+  return slash > 0 ? trimmed.slice(slash + 1).trim() : trimmed;
+}
+
+function buildLocalModelsUrl(baseUrl: string | undefined | null): string {
+  const normalized = normaliseBaseUrl(baseUrl || LOCAL_BASE_URL);
+  if (!normalized) return `${LOCAL_BASE_URL}/models`;
+  if (normalized.endsWith('/models')) return normalized;
+  if (normalized.endsWith('/v1')) return `${normalized}/models`;
+  return `${normalized}/v1/models`;
+}
+
+function responseContainsModel(data: unknown, modelId: string): boolean | null {
+  if (!data || typeof data !== 'object') return null;
+  const entries = (data as { data?: unknown }).data;
+  if (!Array.isArray(entries)) return null;
+  return entries.some((entry) => (
+    entry && typeof entry === 'object' && (entry as { id?: unknown }).id === modelId
+  ));
+}
+
+export async function probeLocalProviderReadiness(options?: {
+  baseUrl?: string | null;
+  modelId?: string | null;
+  timeoutMs?: number;
+}): Promise<LocalProviderReadinessResult> {
+  const modelId = normalizeLocalModelId(options?.modelId);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options?.timeoutMs ?? LOCAL_READINESS_TIMEOUT_MS);
+
+  try {
+    const response = await proxyAwareFetch(buildLocalModelsUrl(options?.baseUrl), {
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return { ready: false, reason: 'http-error', status: response.status };
+    }
+
+    const data = await response.json().catch(() => null);
+    const containsModel = responseContainsModel(data, modelId);
+    if (containsModel === true) {
+      return { ready: true, reason: 'ok', status: response.status };
+    }
+    if (containsModel === false) {
+      return { ready: false, reason: 'model-missing', status: response.status };
+    }
+    return { ready: false, reason: 'invalid-response', status: response.status };
+  } catch {
+    return { ready: false, reason: 'connection-error' };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function seedDefaultLocalProvider(
@@ -263,6 +336,18 @@ export async function seedDefaultLocalProvider(
     const hasAnyDefault = Boolean(existingDefaultId)
       || existingAccounts.some((account) => account.isDefault);
     const shouldBecomeDefault = !hasAnyDefault;
+
+    const readiness = await probeLocalProviderReadiness({
+      baseUrl: LOCAL_BASE_URL,
+      modelId: LOCAL_MODEL_ID,
+    });
+    if (!readiness.ready) {
+      logger.warn('[local-provider-seed] Local Ollama model is not ready — skipping automatic local seed', {
+        reason: readiness.reason,
+        status: readiness.status ?? null,
+      });
+      return;
+    }
 
     const now = new Date().toISOString();
     const account: ProviderAccount = {
