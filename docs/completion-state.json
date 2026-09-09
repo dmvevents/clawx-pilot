@@ -2238,7 +2238,23 @@
       "correctedClaim": "An earlier statement that the Gateway took 76 s to listen in both cases compared case 1 gateway-process-to-listener against case 2 launch-to-listener. Split correctly: 75 s cold and 57 s warm process-to-listener.",
       "dominantUnexplainedCost": "A ~57 s floor from gateway process start to listener that barely varies with cache warmth. Not a pure timeout (it does vary by 24%), and not yet explained.",
       "coldConfound": "installer.nsh fires a detached cleanup ~60 s post-install and its Defender exclusion requires elevation a standard user cannot obtain, with a documented 10-30 s fresh-launch penalty. Both land inside the cold case window.",
-      "ownerSpecQuestion": "WINDOWS_DEPLOYMENT_PLAN.md:165 states 30 s with no cold/warm distinction while the installer documents a fresh-install penalty caused by needing elevation. The figure may presume an elevated install. Owner decides: move the figure, scope it to warm starts, or accept FAIL."
+      "ownerSpecQuestion": "WINDOWS_DEPLOYMENT_PLAN.md:165 states 30 s with no cold/warm distinction while the installer documents a fresh-install penalty caused by needing elevation. The figure may presume an elevated install. Owner decides: move the figure, scope it to warm starts, or accept FAIL.",
+      "latencyInvestigation": {
+        "eliminatedByMeasurement": [
+          "gateway PowerShell/WMI startup queries (worst 4.4s)",
+          "repeated PowerShell shell-out for own process creation date (10 spawns = 6.1s total)"
+        ],
+        "confirmedPartialCause": "Defender real-time scanning: the installer cannot apply its exclusion on a non-admin per-user install. Applying it as admin halved both stalls (29.3s->16.2s, 27.6s->16.2s).",
+        "residual": "Two near-identical stalls of 16,212ms and 16,187ms (within 25ms), I/O-sensitive - consistent with the same operation performed twice over a large packaged tree (4,933 openclaw-plugins files), not a network timeout.",
+        "observations_launchToListenerMs": [
+          209390,
+          76320,
+          "never within 200000",
+          61445
+        ],
+        "stillOverDocumentedBudget": "Yes - 61,445ms with the exclusion applied, against a documented 30,000ms.",
+        "gatewayExposure": "Loopback-only, proven by enumerating all listeners: 127.0.0.1:18789 single listener owned by the app. Our source pins no --host, so this is the bundled default rather than an asserted invariant."
+      }
     }
   },
   "handoff": {

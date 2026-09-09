@@ -466,3 +466,64 @@ three scripts parsed clean under 5.1 both before and after, so the parse check w
 never going to find it — the distinction between a syntax check and an executed
 runtime check is exactly the one this repository's own rules draw, and it cost a
 probe run to discover.
+
+### September 9 — startup latency characterised, and the local Gateway is loopback-only
+
+Investigation requested by the owner before deciding the specification question.
+Two hypotheses were eliminated by measurement, one was confirmed as a partial
+cause, and the residual is now well-bounded.
+
+**Eliminated.** The Gateway's PowerShell/WMI startup queries, timed cold on the
+same VM: PowerShell startup 267 ms, `Get-CimInstance Win32_Process` 773 ms,
+`Get-Process` 329 ms, `Get-NetTCPConnection` 4,432 ms, `Get-ScheduledTask`
+4,271 ms. Also eliminated: the Gateway's repeated shell-out to read its own
+process creation date (`Get-CimInstance Win32_Process -Filter "ProcessId = N"`,
+observed 10 times during one startup) — 10 spawns cost **6,094 ms total, mean
+609 ms**. Neither is within an order of magnitude of the stalls.
+
+**Confirmed as a partial cause: the Defender exclusion the installer cannot
+apply for a standard user.** `scripts/installer.nsh` attempts
+`Add-MpPreference -ExclusionPath` and documents that it "silently fails on
+non-admin per-user installs". Direct corroboration on this machine:
+`Get-MpPreference` already listed an exclusion for **`clawxtest`**'s install
+directory — an administrator account — and none for the standard-user acceptance
+account. Applying the missing exclusion as an administrator and re-running:
+
+| | without exclusion (warm) | with exclusion |
+|---|---|---|
+| stall 1 (process → first stderr) | 29,322 ms | **16,212 ms** |
+| stall 2 (to the listener) | 27,610 ms | **16,187 ms** |
+| gateway process → listener | ~57,000 ms | **32,800 ms** |
+| app launch → listener | 76,320 ms | **61,445 ms** |
+
+So real-time scanning accounted for roughly 45% of each stall. **It is not the
+whole story**, and the documented 30-second expectation is still missed by 2×
+with the exclusion in place.
+
+**The residual is two near-identical operations.** With Defender excluded the two
+stalls are 16,212 ms and 16,187 ms — within 25 ms of each other. That equality,
+plus the sensitivity to real-time scanning, points at the same I/O-heavy operation
+being performed **twice** rather than at a network timeout. A packaged tree that
+ships 4,933 `openclaw-plugins` files and emits plugin-provenance warnings during
+this window is the obvious candidate. Naming it is the next step and belongs to
+the latency work, not to this card.
+
+**Variance is itself a finding.** Four observations of app-launch → listener:
+209,390 ms (cold, no exclusion), 76,320 ms (warm, no exclusion), **never within
+200,000 ms** (one run reached no listener at all inside the probe budget), and
+61,445 ms (with exclusion). A criterion phrased as a single threshold needs repeats
+before any verdict is treated as stable.
+
+**Separately — the local Gateway is loopback-only.** Enumerating *every* listener
+on the port rather than filtering for one address: `ALL_18789_LISTENERS
+127.0.0.1:18789 pid=6748` — exactly one listener, bound to loopback, owned by the
+app. Nothing is exposed on the LAN. This supersedes an earlier caveat of mine: a
+probe that filtered on `-LocalAddress 127.0.0.1` could only ever have proved that
+loopback was bound, never that it was the *only* binding, so it was not evidence of
+non-exposure. Enumeration is.
+
+That said, **our source pins nothing**: the Gateway is spawned as
+`['gateway', '--port', N, '--token', T, '--allow-unconfigured']` with no `--host`,
+and there is no bind-host configuration anywhere in our code — the safe value
+observed today is the bundled default, not something we assert. Pinning it and
+asserting it in a regression is worth doing on its own merits.
