@@ -4,7 +4,7 @@
 
 - Reported/last verified: 2026-09-09, discovered by the CLWX-61 authoring lane while writing the DOM-fixture unit pin; independently reproduced by the suite's own assertion at author time. The pin is independently approved (`cd88a205`); the repair (`2b5646a5`) is under independent review.
 - Owning card: [CLWX-61](../plane-board/CLWX-board.md) (Outlook eval gaps — attachment metadata is its W3.2/W8.4 subject). Related: CLWX-136 (candidate), CLWX-119 (per-run eval evidence showing W8.4 skipping in all four runs).
-- Severity: medium as a data-quality defect; **safety-adjacent** because the fabricated entry can be handed to `download_attachment`, which is a confirmation-gated action. No authorization bypass is claimed or observed: the confirm gate is unchanged and still refuses without `confirm:true`.
+- Severity: low-to-medium as a data-quality defect. The fabricated entry does reach the confirmation-gated retrieval action and passes its existence check, but cannot retrieve a file — see the corrected impact section. No authorization bypass is claimed or observed: the confirmation gate is unchanged and still refuses without `confirm:true`.
 - Status: **reproduced at source, repaired at source, repair under independent review.** Remaining gates: completion of that review, then the installed and live-account legs that CLWX-61 already owns.
 - Environment: source only. Revision `0f708082c941fbed007173c57232aec916f4eff1` (moe.29 candidate base), file `electron/services/outlook-browser-v2/outlook-actions.ts`. No VM, no installed artifact, no live mailbox involved. Node/vitest on macOS. **Not observed on an installed build** — do not infer installed behaviour from this record.
 - Known working baseline: none. The defect appears to predate the candidate; no revision is known to be free of it.
@@ -38,9 +38,13 @@ Execution path: `readEmail` (`outlook-actions.ts:792-853`) passes a page-side sc
 
 ## Confirmed impact on the gated retrieval path
 
-Established while authoring the repair, and material to the severity: an entry with an empty filename would have **satisfied** the attachment-retrieval existence check. `downloadAttachment` resolves the requested name against chip labels with `label.includes(<filename>)` (`electron/services/outlook-browser-v2/outlook-actions.ts:1195`), and `includes('')` is always true, so a fabricated empty-filename entry would have matched the first chip rather than being rejected as unknown.
+**Corrected 2026-09-09 after independent review traced the path further than the original entry did.** The first version of this section said a nameless entry "could be resolved to the wrong real attachment". That overstated it, and the correction matters more than the original claim.
 
-This does **not** mean an unauthorised retrieval could occur: the confirmation gate is a separate mechanism, is unchanged by this defect and by its repair, and still refuses without explicit `confirm:true`. The consequence is that a nameless fabricated entry could be resolved to the wrong real attachment inside an otherwise authorised request, which is a correctness and trust problem rather than an authorization bypass. Recorded so the severity is neither inflated nor understated.
+What is true: an entry with an empty filename **satisfies** the retrieval existence check. `downloadAttachment` compares the requested name against chip labels with `label.toLowerCase().includes(wantedFilename.toLowerCase())` (`electron/services/outlook-browser-v2/outlook-actions.ts:1199`; `:1195` is where `wantedFilename` is assigned), and `''.includes` is always true, so pre-repair the fabricated entry passed that check as soon as any chip existed instead of being rejected as unknown.
+
+What is **not** true: it would not have retrieved the wrong file. The next step builds the chip locator `[aria-label*="" i]` (`:1219`), and an empty substring selector matches nothing per the CSS specification (confirmed as zero matches in jsdom), so the chip count is zero, no click occurs, and after thirty seconds the path returns `status: 'refused'` with "Download did not start within 30s" (`:1244-1251`).
+
+So the real user-visible cost of the defect was a **thirty-second hang followed by a misleading refusal**, not a wrong retrieval. The confirmation gate (`:1150-1156`) is a separate mechanism, untouched by both the defect and the repair, and still refuses without explicit `confirm:true`. The defect is therefore a correctness and trust problem of lower severity than first recorded, and the repair remains the right change. Kept in place, with the original overstatement named, because a severity claim that quietly improves is as misleading as one that quietly worsens.
 
 ## Attempted changes and outcomes
 
@@ -57,6 +61,10 @@ At the repair (`2b5646a5`): suite **33 passed (33)**; with five adjacent Outlook
 Mutation evidence in both directions: with the repair in place plus a placeholder default (`.trim() || 'untitled'`), two rows fail (the inverted pin and the placeholder guard); with the repair reverted, the same two rows fail. So the suite catches the original defect, any substituted default name, and an over-aggressive guard that drops a valid chip.
 
 Earlier stages, retained: at `c0437a97` the suite ran 31 passed with 1 expected fail; at `cd88a205` it ran 32 passed.
+
+## Note on the regression row that protects this
+
+The new placeholder-guard row asserts both that every emitted filename appears verbatim in some chip label and that exactly one entry is emitted. Review established that **the length assertion is the durable half**: a label-derived default such as `'Attached file'` *is* a substring of its own label, so the substring assertion alone would have accepted it, and only `toHaveLength(1)` caught it. Anyone editing that row should keep the length assertion rather than treating the substring check as the protection.
 
 ## Owner, revisions, blockers and next exact action
 
