@@ -2154,11 +2154,40 @@
       "diffAwareHarnessValidate": "PASS (moe30-integration-approved-repairs spec valid against base)",
       "integrationReview": "APPROVE (independent Claude/Bedrock lane, reviewed 4fd95ee1; the only delta to the tip is the harness spec commit 40cfe727)"
     },
-    "artifact": null,
-    "artifactStatus": "BUILD_IN_PROGRESS_run_34323058772",
-    "manifest": null,
+    "artifact": {
+      "installerSha256": "9f8a2dc5fc5c238d49935a7f1b0b9b90205c104ddf933124196c62210114aff7",
+      "installerBytes": 476773051,
+      "asarSha256": "366c3166810434b083098f8517e3e8268325216851703394368dd9bea7bfba02",
+      "asarBytes": 260765109,
+      "x64Only": true,
+      "x64OnlyReason": "The arm64 installer and update-manifest upload steps report success but produced no artifact; no arm64 build exists and auto-update stays off in pilot mode."
+    },
+    "artifactStatus": "BUILT_AND_PROVENANCE_VERIFIED_BYTES_IN_VERIFICATION",
+    "manifest": "docs/release-manifests/0.4.3-moe.30.json",
     "installedAcceptance": "NOT_RUN",
-    "priorAcceptance": "None. No earlier version evidence transfers to this version."
+    "priorAcceptance": "None. No earlier version evidence transfers to this version.",
+    "buildRun": "34323058772",
+    "buildProvenance": {
+      "gitCommit": "40cfe727f38d1b29c4f5ff77e1eddba97556061f",
+      "gitDirty": false,
+      "profile": "keyless-public",
+      "credentialSeedIncluded": false,
+      "publishJob": "skipped (build, not release)"
+    },
+    "reproducibleCompile": {
+      "dist": {
+        "sha256": "145ae584cf17a1a076b935bb083f7f167a088d47e769451231d1065e5332825c",
+        "fileCount": 169,
+        "result": "IDENTICAL"
+      },
+      "distElectron": {
+        "sha256": "19b6c6109956b428bd3bf501cb19fe334b1964e5e7355ed3d43bea1878fa5c34",
+        "fileCount": 3,
+        "result": "IDENTICAL"
+      },
+      "covers": "CLWX-61 nameless-entry guard and CLWX-130 path containment, neither of which leaves a distinguishing string literal after minification."
+    },
+    "packagePresence": "IN_PROGRESS"
   },
   "handoff": {
     "status": "COMPLETE_CLAUDE_ACKNOWLEDGED_READY_TO_RESUME",
