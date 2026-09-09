@@ -124,4 +124,37 @@ $out.readyPreconditions = [ordered]@{
   autoLogonArmedForAcceptance = $out.autoLogonArmedForAcceptance
 }
 $out.ready = -not ($out.readyPreconditions.Values -contains $false)
+
+# M11: session creation is the most failure-prone link in this chain, and nothing
+# used to check it. Observed failure modes: Restart-Computer over SSH silently not
+# rebooting at all, logoff wedging the console session in "Conn", and an
+# AutoLogonSID value suppressing re-fire. Every one of them produces the SAME
+# observable as a driver that ran and crashed - no receipt - so the operator
+# cannot tell them apart without going to the machine by hand.
+#
+# Recording the pre-reboot boot time makes the two distinguishable: after the
+# restart, the boot time must have CHANGED and an Active console session must be
+# owned by the acceptance account before it is meaningful to wait on a driver
+# receipt at all. Prefer a hypervisor-level stop/start over an in-guest restart -
+# that is the only mechanism the evidence shows to be reliable here.
+$os = Get-CimInstance Win32_OperatingSystem
+$out.preRebootBootTime = $os.LastBootUpTime.ToUniversalTime().ToString('o')
+# The 8 h auto-shutdown guard is armed once per boot, so its deadline is derivable
+# from the boot time - which also gives the driver's IN_PROGRESS receipt a way to
+# say "the machine went away" rather than "the app failed".
+$out.autoShutdownDueAt = $os.LastBootUpTime.AddSeconds(28800).ToUniversalTime().ToString('o')
+$out.sessionCheck = [ordered]@{
+  instruction = 'After restarting, require BOTH of these before waiting on a driver receipt.'
+  requireBootTimeChangedFrom = $out.preRebootBootTime
+  requireActiveConsoleSessionFor = $accUser
+  howToCheck = 'Win32_OperatingSystem.LastBootUpTime, and Win32_ComputerSystem.UserName or query session parsed for an Active console session'
+  ifEitherFails = 'The session was never created. Do NOT read an absent receipt as an application failure.'
+}
+
+# LOW-6: stdout alone is lost with a dropped SSH session, which would mean
+# re-running stage just to recover state - and the pre-reboot boot time above is
+# exactly the value that must survive.
+$stageReceipt = Join-Path $evidence 'stage-receipt.json'
+$out | ConvertTo-Json -Depth 6 | Set-Content $stageReceipt -Encoding ascii
+$out.stageReceiptPath = $stageReceipt
 $out | ConvertTo-Json -Depth 5 -Compress

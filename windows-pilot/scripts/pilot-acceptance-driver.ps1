@@ -70,7 +70,22 @@ $bootedAt = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
   note = 'If this file still says IN_PROGRESS, the run did not reach a terminal state. Check the auto-shutdown deadline before assuming a product failure.'
 } | ConvertTo-Json -Depth 4 | Set-Content $receiptPath -Encoding ascii
 
+# The default per-user location, but installation directory is user-changeable, so
+# a prior install can sit elsewhere. Consult the per-user Uninstall key before
+# concluding the install produced no executable - otherwise a harness path
+# assumption reads as an app failure. This matters most for the upgrade case,
+# where moe.30 lands over an existing location.
 $appExe = Join-Path $env:LOCALAPPDATA 'Programs\Ministry of Education\Ministry of Education.exe'
+if (-not (Test-Path $appExe)) {
+  foreach ($key in @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+                     'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*')) {
+    foreach ($entry in (Get-ItemProperty $key -ErrorAction SilentlyContinue |
+                        Where-Object { $_.DisplayName -like '*Ministry of Education*' -and $_.InstallLocation })) {
+      $candidate = Join-Path $entry.InstallLocation 'Ministry of Education.exe'
+      if (Test-Path $candidate) { $appExe = $candidate; break }
+    }
+  }
+}
 $openclaw = Join-Path $env:USERPROFILE '.openclaw'
 $PORT = 18789
 $STABLE_MS = 20000          # the verified observer's stable-ready requirement
@@ -86,8 +101,15 @@ function Get-AppProcs { @(Get-Process -Name 'Ministry of Education' -ErrorAction
 function Get-PortOwner {
   # Returns the owning PID, or $null when nothing is listening. Ownership is the
   # point: a listener we cannot attribute is not evidence about our app.
+  #
+  # Deliberately NOT filtered on -LocalAddress 127.0.0.1. That filter matches only
+  # a listener bound literally to 127.0.0.1, and the bind address is not pinned
+  # anywhere in this repo (config-sync passes no --host), so a 0.0.0.0 or ::1 bind
+  # would make the check permanently false and produce a FAIL that blames the app
+  # for a harness assumption. Attribution is handled by the owning-process check
+  # instead, which is the part that actually matters.
   try {
-    $c = Get-NetTCPConnection -State Listen -LocalAddress 127.0.0.1 -LocalPort $PORT -ErrorAction Stop | Select-Object -First 1
+    $c = Get-NetTCPConnection -State Listen -LocalPort $PORT -ErrorAction Stop | Select-Object -First 1
     if ($c) { return [int]$c.OwningProcess }
   } catch { }
   return $null
@@ -121,7 +143,10 @@ function Collect-Findings($tag, $since) {
   foreach ($d in $dirs) {
     if (-not (Test-Path $d)) { continue }
     foreach ($f in Get-ChildItem $d -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 4) {
-      $dest = Join-Path $evidence ("log-$tag-" + $f.Name)
+      # Discriminate by source directory: the two log directories can hold a
+      # same-named file, and without this the second silently overwrote the first.
+      $srcTag = if ($d -like '*.openclaw*') { 'openclaw' } else { 'appdata' }
+      $dest = Join-Path $evidence ("log-$tag-$srcTag-" + $f.Name)
       $kept = @()
       $undated = 0
       foreach ($line in (Get-Content $f.FullName -Tail 4000 -ErrorAction SilentlyContinue)) {
@@ -140,7 +165,11 @@ function Collect-Findings($tag, $since) {
       $kept | Set-Content $dest -Encoding utf8 -ErrorAction SilentlyContinue
       $files += [ordered]@{ name = $f.Name; inWindowLines = $kept.Count; undatedKept = $undated }
       foreach ($pat in @('invalid JSON', 'Unexpected token', 'SECRETS_DEGRADED', 'requires migration',
-                         'restart-loop breaker', 'failed to start', 'read-only')) {
+                         'restart-loop breaker', 'failed to start', 'read-only',
+                         # Migration-shaped failures belong inside the receipt, not
+                         # diagnosed alongside it - the upgrade case is exactly
+                         # where they surface.
+                         'DPAPI', 'decrypt', 'ProtectedData', 'ENOENT', 'NODE_MODULE_VERSION')) {
         $m = Select-String -Path $dest -SimpleMatch -Pattern $pat -ErrorAction SilentlyContinue
         foreach ($hit in ($m | Select-Object -First 3)) {
           $findings += [ordered]@{ pattern = $pat; file = $f.Name; line = $hit.LineNumber; excerpt = (Scrub $hit.Line.Trim()) }
@@ -295,6 +324,7 @@ $r = [ordered]@{}
 # M7: a receipt that cannot name the script revision that produced it cannot be
 # attributed - which matters here because a retracted earlier revision's receipts
 # share this lineage.
+$r.resolvedAppExe = $appExe
 $r.driverPath = $PSCommandPath
 $r.driverSha256 = if ($PSCommandPath -and (Test-Path $PSCommandPath)) { (Get-FileHash -Algorithm SHA256 -Path $PSCommandPath).Hash.ToLower() } else { $null }
 $r.status = 'COMPLETE'

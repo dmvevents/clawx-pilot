@@ -127,9 +127,28 @@ try {
   $needPassword = -not $existing -or -not $armed
 
   if ($needPassword) {
-    $bytes = New-Object byte[] 28
-    [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    $accPw = -join ($bytes | ForEach-Object { $chars[[int]$_ % $chars.Length] })
+    # Complexity must be GUARANTEED, not left to chance. A 28-character draw from
+    # a 57-character alphanumeric alphabet has roughly a 1.5% chance of containing
+    # no digit, which is only two of the four required categories and is rejected
+    # outright by the local password policy. With auto-logon now re-arming on any
+    # boot where it is found unarmed, that would be a recurring dice roll that
+    # silently costs the lane its interactive session.
+    $lower = 'abcdefghijkmnopqrstuvwxyz'
+    $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+    $digit = '23456789'
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    function Get-RandomChar([string] $set) {
+      $b = New-Object byte[] 1
+      $rng.GetBytes($b)
+      return $set[[int]$b[0] % $set.Length]
+    }
+    # One from each required category, then fill, then shuffle so the guaranteed
+    # characters are not always in the same positions.
+    $picked = @((Get-RandomChar $lower), (Get-RandomChar $upper), (Get-RandomChar $digit))
+    while ($picked.Count -lt 28) { $picked += (Get-RandomChar ($lower + $upper + $digit)) }
+    $order = New-Object byte[] $picked.Count
+    $rng.GetBytes($order)
+    $accPw = -join (0..($picked.Count - 1) | Sort-Object { $order[$_] } | ForEach-Object { $picked[$_] })
     if (-not $existing) {
       New-LocalUser -Name $accUser -Password (ConvertTo-SecureString $accPw -AsPlainText -Force) `
         -FullName "ClawX acceptance (standard user)" -Description "Interactive acceptance desktop; disposable" `
