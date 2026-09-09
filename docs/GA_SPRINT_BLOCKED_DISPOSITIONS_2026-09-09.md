@@ -116,3 +116,46 @@ Consequence for how lane evidence is read: for a **test-only** change, the meani
 - The agent ceiling is Ready; only a human closes Done. Neither state is a GA verdict.
 - One VM operator at a time; the lease is part of the receipt for any VM step.
 - Owner holds in force: the macOS Electron/Keychain hold, and no account resets, credential-history reopening or acceptance weakening to obtain green.
+
+## September 9 reclassification — most of "waits on an external party" does not
+
+Two facts established from source and from the verified package change what is
+actually blocked. Recorded here because Group 2 above over-states the external
+dependency.
+
+**1. The Microsoft journeys need no Entra and no Ministry action.** The contract's
+primary transport is the authenticated **user Chrome profile** (`profile=user`),
+not Graph. The Suspensions and daily-report forms used by the journeys are
+**test.fac-owned clones** — `windows-pilot/skills/forms-suspension-fill.md:73`
+states the owner is `test.fac@fac.edu.tt` and that submitting does not reach the
+real Ministry — with their URLs saved at
+`extensions/moe-principal-assistant/forms/suspensions-test-fac-url.txt` and
+`daily-report-test-fac-url.txt`. We hold that account. So CLWX-63, CLWX-61's live
+leg and CLWX-123 depend on a signed-in Chrome on a machine we control, not on a
+tenant grant. CLWX-39 and CLWX-40 remain externally blocked, but they gate the
+**Graph transport**, which is an alternative path rather than a prerequisite for
+the pilot journeys.
+
+**2. The app needs no cloud account to run, but this installer has no Online
+channel.** The on-device provider seed (`local-provider-seed`,
+`ollama-local-qwen2.5-3b-instruct`, hermes3 supported) is present in the shipped
+`dist-electron/main/index.js`, so the app runs with zero cloud access. Google as a
+provider is consumer OAuth against `accounts.google.com` with a loopback redirect —
+not Google Cloud IAM, no project and no service account; Google Cloud is only the
+QA machine's hosting and plays no part in the product. But the build is
+`keyless-public` with `cloudGatewaySeedIncluded: false`, and the runtime confirms
+`[cloud-gateway-seed] No complete cloud gateway config found — skipping`.
+
+Consequence to plan around rather than discover at a gate: **any criterion worded
+as an "Online turn" cannot be exercised on this installer until activation is
+provisioned after install** by the accepted path the build itself documents. That
+affects the CLWX-125 matrix rows phrased as Online, and the fresh/next Online
+passes. It is a provisioning step, not a defect, and on-device journeys are
+unaffected.
+
+**Net effect on sequencing.** Installation, reliable execution, document fidelity,
+Microsoft journeys, and local/policy/reminder behaviour are all reachable on the QA
+machine as it now stands — a standard-user desktop with Chrome and a local document
+folder. Performance/recovery is partly measured. Only the release/stakeholder group
+needs a person other than the lead. That is a materially shorter path than "fifteen
+cards behind one credential", which is how this was recorded this morning.
