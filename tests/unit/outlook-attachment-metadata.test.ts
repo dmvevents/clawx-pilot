@@ -271,10 +271,12 @@ describe('read_email attachment metadata negative controls (CLWX-61)', () => {
   });
 
   it('yields no entry when the chip prefix is present but the filename is missing', async () => {
-    // Catches: pushing `{ filename: '' }`, or substituting a placeholder such as
-    // "attachment"/"untitled" when the label carries no name. An empty or
-    // invented filename would later be handed to download_attachment, whose
-    // chip lookup would then either miss or match the wrong file.
+    // These two labels never satisfy the parser regex (no separator, or a
+    // separator with nothing after it), so they never reach the push. This row
+    // therefore covers only the fail-open path: a fallback that pushes when the
+    // pattern does not match. A placeholder substituted ON the matched path
+    // ("untitled", "attachment") is covered by the whitespace-filename pin
+    // below, not here.
     const { actions } = createActions(readingPane('Body.', [
       'Attachment:',
       'Attached file',
@@ -285,20 +287,25 @@ describe('read_email attachment metadata negative controls (CLWX-61)', () => {
     expect(attachments).toEqual([]);
   });
 
-  // KNOWN DEFECT, found while authoring this pin (2026-09-09), deliberately not
-  // fixed in a test-only slice. In outlook-actions.ts the chip parser
+  // KNOWN DEFECT (CLWX-61; report: docs/bugs/CLWX-61-attachment-metadata-empty-filename.md
+  // on the documentation branch), found while authoring this pin on 2026-09-09
+  // and deliberately not fixed in a test-only slice. In outlook-actions.ts the
+  // chip parser
   //   /(?:Attached file|Attachment)[:\s]+(.+?)(?:,\s*([\d.]+\s*[KMG]?B))?(?:,|$)/i
-  // lets `[:\s]+` give back its trailing whitespace so that `.+?` can match a
-  // lone space, and `.trim()` then produces an entry with filename ''. This row
-  // is marked `fails` so the suite stays green while the defect is open and
-  // turns RED the moment the regex (or the push guard) is repaired — at which
-  // point promote it into the row above. It is not a skip: the assertion runs.
-  it.fails('yields no entry for a chip label whose filename is only whitespace (open defect, see report)', async () => {
+  // lets `[:\s]+` give back its trailing whitespace so that `.+?` matches a
+  // lone space, and `.trim()` then pushes an entry with filename ''. This row
+  // pins that CURRENT output exactly, on purpose: an exact pin turns red both
+  // when the defect is repaired and when it is replaced by a different
+  // fabrication on the same matched path (e.g. `.trim() || 'untitled'`), which
+  // an `it.fails` row could not tell apart from the known defect.
+  // Invert this to `[]` when the regex or push guard is fixed.
+  it('currently emits an empty-filename entry for a whitespace-only filename label (open defect, pinned exactly)', async () => {
     const { actions } = createActions(readingPane('Body.', ['Attached file: ']));
 
     const attachments = attachmentsOf(await actions.readEmail({ id: 'message-1' }));
 
-    expect(attachments).toEqual([]);
+    expect(attachments).toEqual([{ filename: '', sizeBytes: undefined, mimeType: undefined }]);
+    expect(attachments[0].filename).toBe('');
   });
 
   it('leaves sizeBytes undefined when the size is absent or malformed, never 0 or NaN', async () => {
