@@ -68,9 +68,13 @@ describe('prepareGatewayLaunchContext', () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'clawx-config-sync-'));
     const openclawDir = join(tempRoot, 'openclaw');
     const configDir = join(tempRoot, 'config');
+    const gatewayShimDir = join(tempRoot, 'resources', 'gateway');
+    const gatewayShimPath = join(gatewayShimDir, 'clawx-gateway-node-mode-entry.mjs');
     mkdirSync(openclawDir, { recursive: true });
     mkdirSync(configDir, { recursive: true });
+    mkdirSync(gatewayShimDir, { recursive: true });
     writeFileSync(join(openclawDir, 'index.js'), '');
+    writeFileSync(gatewayShimPath, '');
     tempDirs.push(tempRoot);
 
     vi.doMock('electron', () => ({
@@ -97,6 +101,7 @@ describe('prepareGatewayLaunchContext', () => {
       getKeyableProviderTypes: vi.fn(() => []),
     }));
     vi.doMock('@electron/utils/paths', () => ({
+      getGatewayNodeModeEntryPath: vi.fn(() => gatewayShimPath),
       getOpenClawConfigDir: vi.fn(() => configDir),
       getOpenClawDir: vi.fn(() => openclawDir),
       getOpenClawEntryPath: vi.fn(() => join(openclawDir, 'index.js')),
@@ -155,7 +160,8 @@ describe('prepareGatewayLaunchContext', () => {
 
     const tokenModule = await import('@electron/api/host-api-token');
     tokenModule.generateHostApiToken();
-    return import('@electron/gateway/config-sync');
+    const mod = await import('@electron/gateway/config-sync');
+    return { ...mod, openclawDir, gatewayShimPath };
   }
 
   it('threads Host API credentials into the spawned Gateway env after Host API startup', async () => {
@@ -166,6 +172,23 @@ describe('prepareGatewayLaunchContext', () => {
     expect(context.forkEnv.CLAWX_HOST_API_PORT).toBe('13210');
     expect(context.forkEnv.CLAWX_HOST_API_TOKEN).toMatch(/^[a-f0-9]{64}$/);
     expect(context.forkEnv.OPENCLAW_GATEWAY_TOKEN).toBe('gateway-token');
+  });
+
+  it('launches the Gateway through the ClawX Node-mode entry shim so execPath grandchildren run as Node (CLWX-136)', async () => {
+    const { prepareGatewayLaunchContext, openclawDir, gatewayShimPath } =
+      await loadPrepareGatewayLaunchContext();
+
+    const context = await prepareGatewayLaunchContext(18789);
+
+    // The utilityProcess entry must be the ClawX-owned shim, which sets
+    // ELECTRON_RUN_AS_NODE inside the Gateway process before OpenClaw loads.
+    expect(context.entryScript).toBe(gatewayShimPath);
+    // The shim resolves the real OpenClaw entry from this env var.
+    expect(context.forkEnv.CLAWX_GATEWAY_REAL_ENTRY).toBe(join(openclawDir, 'index.js'));
+    // ELECTRON_RUN_AS_NODE must NOT be in the fork env itself: if Electron
+    // passed it through unfiltered, the freshly exec'ed utility process would
+    // boot as plain Node and never become a utility process.
+    expect(context.forkEnv.ELECTRON_RUN_AS_NODE).toBeUndefined();
   });
 
   it('does not set CLAWX_APP_RESOURCES in dev mode', async () => {

@@ -145,6 +145,18 @@ export function getOpenClawEntryPath(): string {
 }
 
 /**
+ * Get the ClawX-owned Gateway Node-mode entry shim (CLWX-136).
+ *
+ * Forked as the Gateway utilityProcess entry; sets ELECTRON_RUN_AS_NODE
+ * inside the Gateway process so OpenClaw's process.execPath children run as
+ * Node instead of booting the GUI app. Ships as a static asset under
+ * resources/gateway/ in both dev and packaged layouts.
+ */
+export function getGatewayNodeModeEntryPath(): string {
+  return join(getResourcesDir(), 'gateway', 'clawx-gateway-node-mode-entry.mjs');
+}
+
+/**
  * Get ClawHub CLI entry script path (clawdhub.js)
  */
 export function getClawHubCliEntryPath(): string {

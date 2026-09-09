@@ -19,6 +19,7 @@ import { getAllSettings } from '../utils/store';
 import { getApiKey, getDefaultProvider, getProvider } from '../utils/secure-storage';
 import { getProviderEnvVar, getKeyableProviderTypes } from '../utils/provider-registry';
 import {
+  getGatewayNodeModeEntryPath,
   getOpenClawConfigDir,
   getOpenClawDir,
   getOpenClawEntryPath,
@@ -568,7 +569,12 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
   const timingsMs: Record<string, number> = {};
   const totalStartedAt = Date.now();
   const openclawDir = getOpenClawDir();
-  const entryScript = getOpenClawEntryPath();
+  // CLWX-136: fork the ClawX-owned Node-mode shim as the utilityProcess
+  // entry; it sets ELECTRON_RUN_AS_NODE in-process (so OpenClaw's
+  // process.execPath children run as Node instead of booting the GUI app)
+  // and then imports the real OpenClaw entry from CLAWX_GATEWAY_REAL_ENTRY.
+  const entryScript = getGatewayNodeModeEntryPath();
+  const openclawEntryScript = getOpenClawEntryPath();
 
   if (!isOpenClawPresent()) {
     throw new Error(`OpenClaw package not found at: ${openclawDir}`);
@@ -579,8 +585,11 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     await syncGatewayConfigBeforeLaunch(appSettings, openclawDir)
   ));
 
+  if (!existsSync(openclawEntryScript)) {
+    throw new Error(`OpenClaw entry script not found at: ${openclawEntryScript}`);
+  }
   if (!existsSync(entryScript)) {
-    throw new Error(`OpenClaw entry script not found at: ${entryScript}`);
+    throw new Error(`Gateway Node-mode entry shim not found at: ${entryScript}`);
   }
 
   const gatewayArgs = ['gateway', '--port', String(port), '--token', appSettings.gatewayToken, '--allow-unconfigured'];
@@ -648,6 +657,9 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     OPENCLAW_SKIP_CHANNELS: skipChannels ? '1' : '',
     CLAWDBOT_SKIP_CHANNELS: skipChannels ? '1' : '',
     OPENCLAW_NO_RESPAWN: '1',
+    // CLWX-136: consumed by the Node-mode entry shim (entryScript above).
+    // Deliberately NOT ELECTRON_RUN_AS_NODE here — see the shim header.
+    CLAWX_GATEWAY_REAL_ENTRY: openclawEntryScript,
   };
 
   // Ensure extension-specific packages (e.g. grammy from the telegram
