@@ -105,17 +105,40 @@ function Scrub([string] $line) {
   return $s
 }
 
-function Collect-Findings($tag) {
+function Collect-Findings($tag, $since) {
   # Full lines stay on the machine; only scrubbed, bounded excerpts are recorded.
+  #
+  # Findings MUST be restricted to lines timestamped inside this case's own
+  # window. The app writes a DAILY log file, so tailing it reaches back across
+  # earlier runs, and per-run output directories do not help because the
+  # contamination is in the source file. This was observed: an earlier run's
+  # SECRETS_DEGRADED and "requires migration" lines were attributed to a later
+  # run that had neither, which would have manufactured a defect out of nothing.
   $dirs = @((Join-Path $env:APPDATA 'Ministry of Education\logs'), (Join-Path $openclaw 'logs'))
   $findings = @()
   $files = @()
+  $tsRe = [regex]'\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\]'
   foreach ($d in $dirs) {
     if (-not (Test-Path $d)) { continue }
     foreach ($f in Get-ChildItem $d -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 4) {
       $dest = Join-Path $evidence ("log-$tag-" + $f.Name)
-      Get-Content $f.FullName -Tail 600 -ErrorAction SilentlyContinue | Set-Content $dest -Encoding utf8 -ErrorAction SilentlyContinue
-      $files += $f.Name
+      $kept = @()
+      $undated = 0
+      foreach ($line in (Get-Content $f.FullName -Tail 4000 -ErrorAction SilentlyContinue)) {
+        $m = $tsRe.Match($line)
+        if ($m.Success) {
+          $t = $null
+          if ([datetime]::TryParse($m.Groups[1].Value, [ref] $t)) {
+            if ($t.ToUniversalTime() -ge $since.ToUniversalTime()) { $kept += $line }
+          }
+        } else {
+          # Continuation lines (stack traces, CLIXML) carry no timestamp; keep
+          # them only once the window has been entered.
+          if ($kept.Count -gt 0) { $kept += $line; $undated += 1 }
+        }
+      }
+      $kept | Set-Content $dest -Encoding utf8 -ErrorAction SilentlyContinue
+      $files += [ordered]@{ name = $f.Name; inWindowLines = $kept.Count; undatedKept = $undated }
       foreach ($pat in @('invalid JSON', 'Unexpected token', 'SECRETS_DEGRADED', 'requires migration',
                          'restart-loop breaker', 'failed to start', 'read-only')) {
         $m = Select-String -Path $dest -SimpleMatch -Pattern $pat -ErrorAction SilentlyContinue
@@ -236,7 +259,7 @@ function Invoke-Case($tag, $budgetSeconds) {
   $res.readyInFinalTenth = ($null -ne $res.timeToStableReadyMs -and $res.timeToStableReadyMs -gt (0.9 * $res.budgetMs))
   $res.launchedProcessExited = $proc.HasExited
   if ($proc.HasExited) { $res.launchedExitCode = $proc.ExitCode }
-  $res.logs = Collect-Findings $tag
+  $res.logs = Collect-Findings $tag $launchedAt
 
   if ($res.stableReady -and $res.windowShown -and -not $res.secondGuiInstance -and -not $res.readyInFinalTenth) {
     # PASS only inside the documented expectation; a slower start is real but is

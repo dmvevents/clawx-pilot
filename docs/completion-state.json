@@ -2164,7 +2164,7 @@
     },
     "artifactStatus": "BUILT_AND_PACKAGE_VERIFIED_NEVER_INSTALLED",
     "manifest": "docs/release-manifests/0.4.3-moe.30.json",
-    "installedAcceptance": "NOT_RUN",
+    "installedAcceptance": "PARTIAL_STARTUP_DEGRADED",
     "priorAcceptance": "None. No earlier version evidence transfers to this version.",
     "buildRun": "34323058772",
     "buildProvenance": {
@@ -2198,19 +2198,36 @@
       "packagingObservation": "6 of 88 asar-header unpacked entries are absent from the payload (foreign-arch @napi-rs/canvas prebuilds). Filed as CLWX-137, low severity, tooling-only; the x64 runtime binding is present and the resolver guards every candidate require."
     },
     "installedStartupEvidence": {
-      "status": "RETRACTED_HARNESS_DEFECT",
-      "what_is_supported": [
-        "standard-user install exit 0",
-        "visible single main window",
-        "a listener appeared on 127.0.0.1:18789 once during the fresh run"
-      ],
-      "what_is_not_supported": [
-        "Gateway readiness",
-        "startup with an existing state database",
-        "CLWX-136 fixed"
-      ],
-      "reason": "Independent review found the harness latched readiness on a single sample with no stability window and never tied the listener to the app under test. The fresh run showed listening=True in exactly 1 of 11 samples, the last one; the documented contract requires a 20-second stable-ready window. The seeded run failed for unrelated confounds (cross-user DPAPI secrets, legacy workspace migration).",
-      "nextAction": "Repair the harness (free-port precondition, PID ownership, contiguous stable-ready, redacted receipt), then re-run."
+      "status": "DEGRADED_ON_LATENCY_DEFECT_NOT_REPRODUCED",
+      "harness": "repaired driver: app-owned listener, contiguous 20s stability, free-port precondition, window-scoped findings",
+      "environment": "QA VM, standard-user auto-logon session, product 0.4.3.0, exe 93f5a781\u2026, installer 9f8a2dc5\u2026",
+      "case1_fresh": {
+        "stableReadyMs": 20974,
+        "readyLostCount": 0,
+        "timeToOwnedListenerMs": 209390,
+        "verdict": "DEGRADED"
+      },
+      "case2_existingDb_sameUser": {
+        "stateFiles": 953,
+        "sqliteBytes": 1429504,
+        "stableReadyMs": 22085,
+        "readyLostCount": 0,
+        "timeToOwnedListenerMs": 76320,
+        "verdict": "DEGRADED"
+      },
+      "clwx136_reproduced": false,
+      "clwx136_evidence": "Listener owned by the app and held past the stability requirement in both cases, zero readiness losses, and no invalid-JSON worker error, restart-loop breaker or SECRETS_DEGRADED in the in-window log. Positive evidence for the shim on an installed build.",
+      "documentedBudgetMs": 30000,
+      "documentedBudgetSource": "docs/WINDOWS_DEPLOYMENT_PLAN.md:165",
+      "whyNotPass": "Case 1 exceeded the documented 30s port-listen expectation by 7x and case 2 by 2.5x.",
+      "stillNotRun": [
+        "ordinary chat",
+        "doctor-repair path",
+        "document journeys",
+        "browser journeys",
+        "tenant evidence",
+        "external-tester acceptance"
+      ]
     }
   },
   "handoff": {

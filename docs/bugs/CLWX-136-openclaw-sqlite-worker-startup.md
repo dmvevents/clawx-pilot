@@ -347,3 +347,61 @@ strengthened by this: these files are QA tooling whose defects can corrupt
 not be integrated into a release candidate. The remainder of the review was
 truncated in transit and has been requested; any further findings will be
 recorded here.
+
+### September 9, corrected harness — this defect did NOT reproduce; startup is DEGRADED on latency
+
+Run on the repaired harness (owned listener, contiguous stability, free-port
+precondition), in a standard-user auto-logon session on the QA VM. Installed
+identity: product version `0.4.3.0`, exe sha256 `93f5a781…`, from installer
+`9f8a2dc5…`.
+
+| Case | State | Stability | Time to app-owned listener | Verdict |
+|---|---|---|---|---|
+| 1 | fresh profile | held **20,974 ms**, readiness lost **0** times | **209,390 ms** | **DEGRADED** |
+| 2 | existing DB written by this same account in case 1 (953 files, `openclaw.sqlite` 1,429,504 bytes) | held **22,085 ms**, readiness lost **0** times | **76,320 ms** | **DEGRADED** |
+
+Both cases: exactly one windowed process across the whole window, no second GUI
+instance, **no foreign port owners observed**, launched process never exited.
+
+**This card's defect did not reproduce.** In both cases the listener on
+127.0.0.1:18789 was owned by the app's own process and held continuously past the
+20-second stability requirement, with zero readiness losses. The in-window log
+contains no invalid-JSON worker error, no restart-loop breaker, and no
+`SECRETS_DEGRADED`. That is genuine positive evidence for the Node-mode entry shim
+on an installed build — including the existing-state-database case this card
+specifies, which is what the earlier invalid run failed to establish.
+
+**But neither case passes.** `docs/WINDOWS_DEPLOYMENT_PLAN.md:165` states "Gateway
+port 18789 listens within 30s of launch". Case 1 exceeded that by 7×, case 2 by
+2.5×, so both are **DEGRADED**, not PASS. Note this threshold is distinct from
+CLWX-43, which is per-turn p50/p90 and does require an owner decision; the startup
+bind figure is already documented, so it is enforceable without pre-empting the
+owner.
+
+Where the time goes, from the in-window log:
+
+```
+09:12:34  Gateway start requested (port=18789)
+09:12:35  Gateway process started (pid=504)
+09:13:50  app-owned listener present            → 76 s after the request
+```
+
+Case 1 also spent ~130 s from launch to a visible window on a first-run profile,
+before the Gateway was even requested; case 2's warm window appeared in ~18 s. So
+the fresh-profile cost is first-run setup, and the ~76 s Gateway bind is present
+in both. The only in-window warnings are plugin-provenance and skill-precedence
+collisions, so the Gateway is starting cleanly and slowly rather than failing.
+
+**Harness defect found and fixed while reading this run.** The first findings list
+for both cases contained `SECRETS_DEGRADED` and "requires migration" entries
+timestamped 08:50–08:53 — from the earlier invalid run, not from these cases,
+which ran 09:12–09:16. The app writes a **daily** log file, so tailing it reaches
+back across runs, and per-run output directories do not help because the
+contamination is in the source file. Findings are now filtered to each case's own
+window. Had this gone unnoticed it would have manufactured a defect out of a
+previous run's noise — the mirror image of the earlier false PASS.
+
+Status for this card: the repair holds on an installed build under both fresh and
+existing-database startup, and the remaining gap is start latency, which belongs
+with the latency work rather than here. Ordinary chat, the doctor-repair path, and
+all document, browser, tenant and external-tester criteria remain **NOT_RUN**.
