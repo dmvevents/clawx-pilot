@@ -269,14 +269,35 @@ function Stop-App {
 }
 
 $r = [ordered]@{}
+# M7: a receipt that cannot name the script revision that produced it cannot be
+# attributed - which matters here because a retracted earlier revision's receipts
+# share this lineage.
+$r.driverPath = $PSCommandPath
+$r.driverSha256 = if ($PSCommandPath -and (Test-Path $PSCommandPath)) { (Get-FileHash -Algorithm SHA256 -Path $PSCommandPath).Hash.ToLower() } else { $null }
 $r.status = 'COMPLETE'
 $r.runId = $runId
 $r.autoShutdownDueAt = $bootedAt.AddSeconds(28800).ToUniversalTime().ToString('o')
 $r.at = (Get-Date).ToUniversalTime().ToString('o')
 $r.driverVersion = 2
-$r.user = "$env:USERNAME"
+# M8: isElevated=false proves not-elevated, NOT standard-user - an unelevated
+# administrator yields the same value - and $env:USERNAME is settable by the very
+# account under test. "The principal is not an administrator" is the premise of
+# this whole design, so it has to be evidenced from the token and group
+# membership, not from an environment variable.
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$r.identityName = $identity.Name
+$r.identitySid = $identity.User.Value
+$r.envUserName = "$env:USERNAME"
+$r.envUserNameMatchesToken = ($identity.Name -like "*\$env:USERNAME")
 $r.sessionName = "$env:SESSIONNAME"
-$r.isElevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$r.isElevated = ([Security.Principal.WindowsPrincipal] $identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$adminSid = New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')
+$r.tokenGroupsIncludeAdministrators = ($identity.Groups | Where-Object { $_.Value -eq $adminSid.Value }) -ne $null
+try {
+  $r.inAdministratorsGroup = @(Get-LocalGroupMember -Group 'Administrators' -ErrorAction Stop |
+    Where-Object { $_.SID.Value -eq $identity.User.Value }).Count -gt 0
+} catch { $r.inAdministratorsGroup = 'UNKNOWN' }
+$r.standardUserProven = (-not $r.isElevated -and $r.tokenGroupsIncludeAdministrators -eq $false -and $r.inAdministratorsGroup -eq $false)
 Note "driver v2 start user=$env:USERNAME session=$env:SESSIONNAME elevated=$($r.isElevated)"
 
 # Install only if absent; a present install is reported with its identity.
@@ -308,11 +329,18 @@ Stop-App
 
 # --- Case 1: fresh state ----------------------------------------------------
 # Any prior .openclaw is moved aside, not deleted, so nothing is destroyed.
-if (Test-Path $openclaw) {
-  $aside = Join-Path $evidence ('preexisting-openclaw-' + (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))
+# M9: fresh state is ENFORCED here, not merely observed - but it must also be
+# proven, so record what was moved aside and how much of it there was. Nothing is
+# deleted.
+$r.priorStateExisted = Test-Path $openclaw
+if ($r.priorStateExisted) {
+  $r.priorStateFileCount = @(Get-ChildItem $openclaw -Recurse -File -ErrorAction SilentlyContinue).Count
+  $aside = Join-Path $evidence 'preexisting-openclaw'
   Move-Item $openclaw $aside -Force -ErrorAction SilentlyContinue
   $r.priorStateMovedTo = $aside
+  $r.priorStateMoveVerified = ((Test-Path $aside) -and -not (Test-Path $openclaw))
 }
+$r.case1StartedFromEmptyState = -not (Test-Path $openclaw)
 $r.case1 = Invoke-Case 'case1-fresh' 300
 Stop-App
 

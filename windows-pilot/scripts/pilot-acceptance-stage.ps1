@@ -85,6 +85,9 @@ Copy-Item $driverSrc $driverDst -Force
 # No grant here: the directory ACL above already gives this account RX and
 # nothing more, and adding a file-level grant is how the earlier mistake was made.
 $out.driverPath = $driverDst
+# M7: stage from a path the account under test cannot write, and record the hash
+# so a receipt can be attributed to a script revision.
+$out.driverSha256 = (Get-FileHash -Algorithm SHA256 -Path $driverDst).Hash.ToLower()
 
 $startup = 'C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp'
 New-Item -ItemType Directory -Force -Path $startup | Out-Null
@@ -110,5 +113,15 @@ foreach ($stale in @('phase2-receipt.json', 'phase2-done.marker', 'phase2-driver
   Remove-Item (Join-Path $evidence $stale) -Force -ErrorAction SilentlyContinue
 }
 
-$out.ready = ($out.installerHashMatches -and $out.startupShimPresent -and $out.autoLogonArmedForAcceptance)
+# M10: gate on what THIS design needs. The old gate never asserted that the
+# existing-database branch was reachable, so "ready" could be true for a run that
+# could not produce the evidence it was staged to produce.
+$out.readyPreconditions = [ordered]@{
+  candidateInstallerHashMatches = $out.installerHashMatches
+  driverStagedAndHashed = ($null -ne $out.driverSha256)
+  driverOutsideWritableTree = ($driverDst -like "$driverDir*")
+  startupShimPresent = $out.startupShimPresent
+  autoLogonArmedForAcceptance = $out.autoLogonArmedForAcceptance
+}
+$out.ready = -not ($out.readyPreconditions.Values -contains $false)
 $out | ConvertTo-Json -Depth 5 -Compress

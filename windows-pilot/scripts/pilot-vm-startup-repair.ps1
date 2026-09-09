@@ -105,28 +105,61 @@ try {
 # nothing sensitive goes into instance metadata, gcloud history or a transcript.
 $accUser = 'ClawXAcc0909'
 try {
-  if (-not (Get-LocalUser -Name $accUser -ErrorAction SilentlyContinue)) {
-    $chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+  $wl = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+  $existing = Get-LocalUser -Name $accUser -ErrorAction SilentlyContinue
+
+  # Arm and VERIFY on every boot, not only when creating the account.
+  #
+  # This was observed failing in the field: after a session cycle, auto-logon did
+  # not re-fire, the console session sat in "Conn" with no user, and Winlogon held
+  # an AutoLogonSID value. Because the account already existed, re-running this
+  # script would have taken a "leave as configured" branch and repaired nothing -
+  # so the lane could lose its interactive session permanently with no operator
+  # error, which is the exact state this script exists to prevent. Windows also
+  # clears AutoAdminLogon/DefaultPassword on some failed-autologon paths, and the
+  # password is deliberately unrecoverable, so "leave as configured" is not a safe
+  # default: the only self-healing option is to set a fresh password and re-arm.
+  $current = Get-ItemProperty -Path $wl -ErrorAction SilentlyContinue
+  $armed = ($current.AutoAdminLogon -eq '1' -and $current.DefaultUserName -eq $accUser -and $current.DefaultPassword)
+  Write-Host ("acceptance auto-logon armed on entry: " + [bool]$armed)
+
+  $chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+  $needPassword = -not $existing -or -not $armed
+
+  if ($needPassword) {
     $bytes = New-Object byte[] 28
     [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     $accPw = -join ($bytes | ForEach-Object { $chars[[int]$_ % $chars.Length] })
-    New-LocalUser -Name $accUser -Password (ConvertTo-SecureString $accPw -AsPlainText -Force) `
-      -FullName "ClawX acceptance (standard user)" -Description "Interactive acceptance desktop; disposable" `
-      -PasswordNeverExpires -ErrorAction Stop | Out-Null
-    Add-LocalGroupMember -Group "Users" -Member $accUser -ErrorAction SilentlyContinue
-
+    if (-not $existing) {
+      New-LocalUser -Name $accUser -Password (ConvertTo-SecureString $accPw -AsPlainText -Force) `
+        -FullName "ClawX acceptance (standard user)" -Description "Interactive acceptance desktop; disposable" `
+        -PasswordNeverExpires -ErrorAction Stop | Out-Null
+      Write-Host "acceptance account created"
+    } else {
+      # The old password is unrecoverable by design, so rotate rather than guess.
+      Set-LocalUser -Name $accUser -Password (ConvertTo-SecureString $accPw -AsPlainText -Force) -ErrorAction Stop
+      Write-Host "acceptance password rotated to re-arm auto-logon"
+    }
     # Standard user on purpose: the principal is not an administrator, so
     # acceptance must run without elevation.
-    $wl = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
-    Set-ItemProperty -Path $wl -Name AutoAdminLogon -Value "1" -Type String -Force
-    Set-ItemProperty -Path $wl -Name DefaultUserName -Value $accUser -Type String -Force
+    Add-LocalGroupMember -Group "Users" -Member $accUser -ErrorAction SilentlyContinue
     Set-ItemProperty -Path $wl -Name DefaultPassword -Value $accPw -Type String -Force
-    Set-ItemProperty -Path $wl -Name DefaultDomainName -Value $env:COMPUTERNAME -Type String -Force
-    Remove-ItemProperty -Path $wl -Name AutoLogonCount -ErrorAction SilentlyContinue
-    Write-Host "acceptance account created and auto-logon armed"
-  } else {
-    Write-Host "acceptance account already present; auto-logon left as configured"
   }
+
+  Set-ItemProperty -Path $wl -Name AutoAdminLogon -Value "1" -Type String -Force
+  Set-ItemProperty -Path $wl -Name DefaultUserName -Value $accUser -Type String -Force
+  Set-ItemProperty -Path $wl -Name DefaultDomainName -Value $env:COMPUTERNAME -Type String -Force
+  # AutoLogonCount consumes the credential; AutoLogonSID suppresses repeats.
+  # Both must be absent for auto-logon to fire on every boot.
+  Remove-ItemProperty -Path $wl -Name AutoLogonCount -ErrorAction SilentlyContinue
+  Remove-ItemProperty -Path $wl -Name AutoLogonSID -ErrorAction SilentlyContinue
+  Remove-ItemProperty -Path $wl -Name AutoLogonChecked -ErrorAction SilentlyContinue
+
+  $after = Get-ItemProperty -Path $wl -ErrorAction SilentlyContinue
+  $ok = ($after.AutoAdminLogon -eq '1' -and $after.DefaultUserName -eq $accUser -and $after.DefaultPassword -and -not $after.AutoLogonSID)
+  Write-Host ("acceptance auto-logon armed and verified: " + [bool]$ok)
+  # Never the value; presence and identity only.
+  Set-Content -Path "C:\clawx-smoke\autologon-state.txt" -Encoding ascii -Value ("armed=$ok user=$accUser rotated=$needPassword at=" + (Get-Date -Format o))
 } catch { Write-Host "acceptance account setup failed: $($_.Exception.Message)" }
 
 # Marker so the host can confirm which revision of this script actually ran.
