@@ -113,10 +113,13 @@ export async function launchGatewayProcess(options: {
     channelStartupSummary,
   } = options.launchContext;
 
+  // CLWX-136: entry is the Node-mode shim; keep the real OpenClaw entry in
+  // startup logs so failure diagnostics still name the actual Gateway script.
+  const realEntrySummary = forkEnv.CLAWX_GATEWAY_REAL_ENTRY ?? '-';
   logger.info(
-    `Starting Gateway process (mode=${mode}, port=${options.port}, entry="${entryScript}", args="${options.sanitizeSpawnArgs(gatewayArgs).join(' ')}", cwd="${openclawDir}", bundledBin=${binPathExists ? 'yes' : 'no'}, providerKeys=${loadedProviderKeyCount}, channels=${channelStartupSummary}, proxy=${proxySummary})`,
+    `Starting Gateway process (mode=${mode}, port=${options.port}, entry="${entryScript}", realEntry="${realEntrySummary}", args="${options.sanitizeSpawnArgs(gatewayArgs).join(' ')}", cwd="${openclawDir}", bundledBin=${binPathExists ? 'yes' : 'no'}, providerKeys=${loadedProviderKeyCount}, channels=${channelStartupSummary}, proxy=${proxySummary})`,
   );
-  const lastSpawnSummary = `mode=${mode}, entry="${entryScript}", args="${options.sanitizeSpawnArgs(gatewayArgs).join(' ')}", cwd="${openclawDir}"`;
+  const lastSpawnSummary = `mode=${mode}, entry="${entryScript}", realEntry="${realEntrySummary}", args="${options.sanitizeSpawnArgs(gatewayArgs).join(' ')}", cwd="${openclawDir}"`;
 
   const runtimeEnv = { ...forkEnv };
 

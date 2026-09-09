@@ -1,7 +1,7 @@
 import { app, utilityProcess } from 'electron';
 import path from 'path';
 import { existsSync } from 'fs';
-import { getOpenClawDir, getOpenClawEntryPath } from '../utils/paths';
+import { getGatewayNodeModeEntryPath, getOpenClawDir, getOpenClawEntryPath } from '../utils/paths';
 import { getUvMirrorEnv } from '../utils/uv-env';
 import { isPythonReady, setupManagedPython } from '../utils/uv-setup';
 import { logger } from '../utils/logger';
@@ -264,9 +264,17 @@ export async function findExistingGatewayProcess(options: {
 
 export async function runOpenClawDoctorRepair(): Promise<boolean> {
   const openclawDir = getOpenClawDir();
-  const entryScript = getOpenClawEntryPath();
+  // CLWX-136: doctor repair fires exactly when Gateway startup fails, and its
+  // own chain spawns process.execPath children (SQLite read-only worker);
+  // fork it through the Node-mode shim like the Gateway itself.
+  const entryScript = getGatewayNodeModeEntryPath();
+  const openclawEntryScript = getOpenClawEntryPath();
+  if (!existsSync(openclawEntryScript)) {
+    logger.error(`Cannot run OpenClaw doctor repair: entry script not found at ${openclawEntryScript}`);
+    return false;
+  }
   if (!existsSync(entryScript)) {
-    logger.error(`Cannot run OpenClaw doctor repair: entry script not found at ${entryScript}`);
+    logger.error(`Cannot run OpenClaw doctor repair: Gateway Node-mode entry shim not found at ${entryScript}`);
     return false;
   }
 
@@ -277,7 +285,10 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
     ? path.join(process.resourcesPath, 'bin')
     : path.join(process.cwd(), 'resources', 'bin', target);
   const binPathExists = existsSync(binPath);
-  const baseProcessEnv = process.env as Record<string, string | undefined>;
+  // CLWX-136: never let an inherited ELECTRON_RUN_AS_NODE reach
+  // utilityProcess.fork — see the Node-mode shim header.
+  const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...baseProcessEnvRaw } = process.env;
+  const baseProcessEnv = baseProcessEnvRaw as Record<string, string | undefined>;
   const baseEnvPatched = binPathExists
     ? prependPathEntry(baseProcessEnv, binPath).env
     : baseProcessEnv;
@@ -285,7 +296,7 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
   const uvEnv = await getUvMirrorEnv();
   const doctorArgs = ['doctor', '--fix', '--yes', '--non-interactive'];
   logger.info(
-    `Running OpenClaw doctor repair (entry="${entryScript}", args="${doctorArgs.join(' ')}", cwd="${openclawDir}", bundledBin=${binPathExists ? 'yes' : 'no'})`,
+    `Running OpenClaw doctor repair (entry="${entryScript}", realEntry="${openclawEntryScript}", args="${doctorArgs.join(' ')}", cwd="${openclawDir}", bundledBin=${binPathExists ? 'yes' : 'no'})`,
   );
 
   return await new Promise<boolean>((resolve) => {
@@ -293,6 +304,7 @@ export async function runOpenClawDoctorRepair(): Promise<boolean> {
       ...baseEnvPatched,
       ...uvEnv,
       OPENCLAW_NO_RESPAWN: '1',
+      CLAWX_GATEWAY_REAL_ENTRY: openclawEntryScript,
     };
 
     const child = utilityProcess.fork(entryScript, doctorArgs, {

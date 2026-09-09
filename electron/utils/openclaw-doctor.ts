@@ -1,7 +1,7 @@
 import { app, utilityProcess } from 'electron';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { getOpenClawDir, getOpenClawEntryPath } from './paths';
+import { getGatewayNodeModeEntryPath, getOpenClawDir, getOpenClawEntryPath } from './paths';
 import { logger } from './logger';
 import { getUvMirrorEnv } from './uv-env';
 
@@ -70,13 +70,20 @@ async function runDoctorCommandWithArgs(
   args: string[],
 ): Promise<OpenClawDoctorResult> {
   const openclawDir = getOpenClawDir();
-  const entryScript = getOpenClawEntryPath();
+  // CLWX-136: the doctor chain spawns process.execPath children (SQLite
+  // read-only worker); fork it through the Node-mode shim like the Gateway.
+  const entryScript = getGatewayNodeModeEntryPath();
+  const openclawEntryScript = getOpenClawEntryPath();
   const command = `openclaw ${args.join(' ')}`;
   const startedAt = Date.now();
 
-  if (!existsSync(entryScript)) {
-    const error = `OpenClaw entry script not found at ${entryScript}`;
-    logger.error(`Cannot run OpenClaw doctor: ${error}`);
+  const missingEntry = !existsSync(openclawEntryScript)
+    ? `OpenClaw entry script not found at ${openclawEntryScript}`
+    : !existsSync(entryScript)
+      ? `Gateway Node-mode entry shim not found at ${entryScript}`
+      : null;
+  if (missingEntry) {
+    logger.error(`Cannot run OpenClaw doctor: ${missingEntry}`);
     return {
       mode,
       success: false,
@@ -86,7 +93,7 @@ async function runDoctorCommandWithArgs(
       command,
       cwd: openclawDir,
       durationMs: Date.now() - startedAt,
-      error,
+      error: missingEntry,
     };
   }
 
@@ -98,18 +105,23 @@ async function runDoctorCommandWithArgs(
   const uvEnv = await getUvMirrorEnv();
 
   logger.info(
-    `Running OpenClaw doctor (mode=${mode}, entry="${entryScript}", args="${args.join(' ')}", cwd="${openclawDir}", bundledBin=${binPathExists ? 'yes' : 'no'})`,
+    `Running OpenClaw doctor (mode=${mode}, entry="${entryScript}", realEntry="${openclawEntryScript}", args="${args.join(' ')}", cwd="${openclawDir}", bundledBin=${binPathExists ? 'yes' : 'no'})`,
   );
+
+  // CLWX-136: never let an inherited ELECTRON_RUN_AS_NODE reach
+  // utilityProcess.fork — see the Node-mode shim header.
+  const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...baseDoctorEnv } = process.env;
 
   return await new Promise<OpenClawDoctorResult>((resolve) => {
     const child = utilityProcess.fork(entryScript, args, {
       cwd: openclawDir,
       stdio: 'pipe',
       env: {
-        ...process.env,
+        ...baseDoctorEnv,
         ...uvEnv,
         PATH: finalPath,
         OPENCLAW_NO_RESPAWN: '1',
+        CLAWX_GATEWAY_REAL_ENTRY: openclawEntryScript,
       } as NodeJS.ProcessEnv,
     });
 

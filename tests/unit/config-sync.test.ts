@@ -175,6 +175,9 @@ describe('prepareGatewayLaunchContext', () => {
   });
 
   it('launches the Gateway through the ClawX Node-mode entry shim so execPath grandchildren run as Node (CLWX-136)', async () => {
+    // Seed the parent env so the no-flag assertion below is a real pin: the
+    // fork env must strip an inherited flag, not merely never add one.
+    vi.stubEnv('ELECTRON_RUN_AS_NODE', '1');
     const { prepareGatewayLaunchContext, openclawDir, gatewayShimPath } =
       await loadPrepareGatewayLaunchContext();
 
@@ -185,10 +188,11 @@ describe('prepareGatewayLaunchContext', () => {
     expect(context.entryScript).toBe(gatewayShimPath);
     // The shim resolves the real OpenClaw entry from this env var.
     expect(context.forkEnv.CLAWX_GATEWAY_REAL_ENTRY).toBe(join(openclawDir, 'index.js'));
-    // ELECTRON_RUN_AS_NODE must NOT be in the fork env itself: if Electron
-    // passed it through unfiltered, the freshly exec'ed utility process would
-    // boot as plain Node and never become a utility process.
-    expect(context.forkEnv.ELECTRON_RUN_AS_NODE).toBeUndefined();
+    // ELECTRON_RUN_AS_NODE must NOT be in the fork env itself, even when the
+    // parent process env carries it: if Electron passed it through
+    // unfiltered, the freshly exec'ed utility process would boot as plain
+    // Node and never become a utility process.
+    expect(context.forkEnv).not.toHaveProperty('ELECTRON_RUN_AS_NODE');
   });
 
   it('does not set CLAWX_APP_RESOURCES in dev mode', async () => {

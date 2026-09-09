@@ -616,7 +616,9 @@ export async function prepareGatewayLaunchContext(port: number): Promise<Gateway
     ? `http=${resolvedProxy.httpProxy || '-'}, https=${resolvedProxy.httpsProxy || '-'}, all=${resolvedProxy.allProxy || '-'}`
     : 'disabled';
 
-  const { NODE_OPTIONS: _nodeOptions, ...baseEnv } = process.env;
+  // CLWX-136: an inherited ELECTRON_RUN_AS_NODE must never reach
+  // utilityProcess.fork — see the Node-mode shim header.
+  const { NODE_OPTIONS: _nodeOptions, ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...baseEnv } = process.env;
   const baseEnvRecord = baseEnv as Record<string, string | undefined>;
   const baseEnvPatched = binPathExists
     ? prependPathEntry(baseEnvRecord, binPath).env

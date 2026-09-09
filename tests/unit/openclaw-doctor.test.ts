@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const MAX_DOCTOR_OUTPUT_BYTES = 10 * 1024 * 1024;
 
@@ -41,6 +41,7 @@ vi.mock('electron', () => ({
 }));
 
 vi.mock('@electron/utils/paths', () => ({
+  getGatewayNodeModeEntryPath: () => '/tmp/resources/gateway/clawx-gateway-node-mode-entry.mjs',
   getOpenClawDir: () => '/tmp/openclaw',
   getOpenClawEntryPath: () => '/tmp/openclaw/openclaw-entry.js',
 }));
@@ -70,6 +71,32 @@ describe('openclaw doctor output handling', () => {
 
     mockExistsSync.mockReturnValue(true);
     mockGetUvMirrorEnv.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('forks the doctor through the Node-mode entry shim and strips ELECTRON_RUN_AS_NODE (CLWX-136)', async () => {
+    // Seed the parent env so the no-flag assertion is a real strip pin.
+    vi.stubEnv('ELECTRON_RUN_AS_NODE', '1');
+    const child = new MockUtilityChild();
+    mockFork.mockReturnValue(child);
+
+    const { runOpenClawDoctor } = await import('@electron/utils/openclaw-doctor');
+    const resultPromise = runOpenClawDoctor();
+
+    await vi.waitFor(() => {
+      expect(mockFork).toHaveBeenCalledTimes(1);
+    });
+    const [entry, , forkOptions] = mockFork.mock.calls[0];
+    expect(entry).toBe('/tmp/resources/gateway/clawx-gateway-node-mode-entry.mjs');
+    expect(forkOptions.env.CLAWX_GATEWAY_REAL_ENTRY).toBe('/tmp/openclaw/openclaw-entry.js');
+    expect(forkOptions.env).not.toHaveProperty('ELECTRON_RUN_AS_NODE');
+
+    child.emit('exit', 0);
+    const result = await resultPromise;
+    expect(result.success).toBe(true);
   });
 
   it('collects normal output under the buffer limit', async () => {
