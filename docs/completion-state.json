@@ -2198,14 +2198,17 @@
       "packagingObservation": "6 of 88 asar-header unpacked entries are absent from the payload (foreign-arch @napi-rs/canvas prebuilds). Filed as CLWX-137, low severity, tooling-only; the x64 runtime binding is present and the resolver guards every candidate require."
     },
     "installedStartupEvidence": {
-      "status": "DEGRADED_ON_LATENCY_DEFECT_NOT_REPRODUCED",
+      "status": "FAIL_ON_DOCUMENTED_START_BUDGET_DEFECT_NOT_REPRODUCED",
       "harness": "repaired driver: app-owned listener, contiguous 20s stability, free-port precondition, window-scoped findings",
       "environment": "QA VM, standard-user auto-logon session, product 0.4.3.0, exe 93f5a781\u2026, installer 9f8a2dc5\u2026",
       "case1_fresh": {
         "stableReadyMs": 20974,
         "readyLostCount": 0,
         "timeToOwnedListenerMs": 209390,
-        "verdict": "DEGRADED"
+        "verdict": "FAIL",
+        "classification": "degraded_over_documented_budget",
+        "launchToGatewayProcessMs": 134000,
+        "gatewayProcessToListenMs": 75000
       },
       "case2_existingDb_sameUser": {
         "stateFiles": 953,
@@ -2213,7 +2216,10 @@
         "stableReadyMs": 22085,
         "readyLostCount": 0,
         "timeToOwnedListenerMs": 76320,
-        "verdict": "DEGRADED"
+        "verdict": "FAIL",
+        "classification": "degraded_over_documented_budget",
+        "launchToGatewayProcessMs": 19000,
+        "gatewayProcessToListenMs": 57000
       },
       "clwx136_reproduced": false,
       "clwx136_evidence": "Listener owned by the app and held past the stability requirement in both cases, zero readiness losses, and no invalid-JSON worker error, restart-loop breaker or SECRETS_DEGRADED in the in-window log. Positive evidence for the shim on an installed build.",
@@ -2227,7 +2233,12 @@
         "browser journeys",
         "tenant evidence",
         "external-tester acceptance"
-      ]
+      ],
+      "verdictNote": "DEGRADED is recorded as a classification, not a verdict. A fifth state beside PASS/FAIL/BLOCKED/NOT_RUN would let a measured miss against a documented figure read as neither.",
+      "correctedClaim": "An earlier statement that the Gateway took 76 s to listen in both cases compared case 1 gateway-process-to-listener against case 2 launch-to-listener. Split correctly: 75 s cold and 57 s warm process-to-listener.",
+      "dominantUnexplainedCost": "A ~57 s floor from gateway process start to listener that barely varies with cache warmth. Not a pure timeout (it does vary by 24%), and not yet explained.",
+      "coldConfound": "installer.nsh fires a detached cleanup ~60 s post-install and its Defender exclusion requires elevation a standard user cannot obtain, with a documented 10-30 s fresh-launch penalty. Both land inside the cold case window.",
+      "ownerSpecQuestion": "WINDOWS_DEPLOYMENT_PLAN.md:165 states 30 s with no cold/warm distinction while the installer documents a fresh-install penalty caused by needing elevation. The figure may presume an elevated install. Owner decides: move the figure, scope it to warm starts, or accept FAIL."
     }
   },
   "handoff": {

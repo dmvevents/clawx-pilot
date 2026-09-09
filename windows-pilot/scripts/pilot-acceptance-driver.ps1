@@ -35,6 +35,17 @@
 # workspace migration, and that produced a failure unrelated to the defect. The
 # valid existing-database test is the database THIS account's own app wrote.
 
+[CmdletBinding()]
+param(
+  # Budget is a parameter with real headroom. With a contiguous 20 s stability
+  # window required, a 300 s budget left only ~70 s of slack against a measured
+  # 209 s cold start - and a slower boot would then produce a timeout that is
+  # indistinguishable in the receipt from a genuine non-start. The stability fix
+  # would have introduced a new false FAIL at exactly the latency being measured.
+  [int] $ColdBudgetSeconds = 600,
+  [int] $WarmBudgetSeconds = 420
+)
+
 $ErrorActionPreference = 'Continue'
 # LOW-10: the guard runs BEFORE anything touches disk, and reads the token rather
 # than $env:USERNAME, which the account under test can set for itself.
@@ -131,6 +142,8 @@ function Scrub([string] $line) {
   return $s
 }
 
+$tsRe2 = [regex]'\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\]'
+
 function Get-LogOffsets {
   # Byte length of each log file at the moment a case starts. Anything beyond it
   # belongs to that case; anything before it does not, regardless of timestamp
@@ -158,6 +171,9 @@ function Collect-Findings($tag, $since, $offsets) {
   $dirs = @((Join-Path $env:APPDATA 'Ministry of Education\logs'), (Join-Path $openclaw 'logs'))
   $findings = @()
   $files = @()
+  # NOTE: [datetime]::TryParse needs a DECLARED [datetime] target on 5.1; a
+  # $null-initialised [ref] fails overload resolution at runtime, which no parse
+  # check can catch.
   $tsRe = [regex]'\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\]'
   foreach ($d in $dirs) {
     if (-not (Test-Path $d)) { continue }
@@ -198,7 +214,7 @@ function Collect-Findings($tag, $since, $offsets) {
         foreach ($line in $all) {
           $m = $tsRe.Match($line)
           if ($m.Success) {
-            $t = $null
+            [datetime] $t = [datetime]::MinValue
             if ([datetime]::TryParse($m.Groups[1].Value, [ref] $t)) {
               if ($t.ToUniversalTime() -ge $since.ToUniversalTime()) { $kept += $line }
               else { $beforeWindowByTimestamp += 1 }
@@ -213,7 +229,7 @@ function Collect-Findings($tag, $since, $offsets) {
       foreach ($line in $kept) {
         $m = $tsRe.Match($line)
         if ($m.Success) {
-          $t = $null
+          [datetime] $t = [datetime]::MinValue
           if ([datetime]::TryParse($m.Groups[1].Value, [ref] $t) -and $t.ToUniversalTime() -lt $since.ToUniversalTime()) { $suspect += 1 }
         }
       }
@@ -343,6 +359,8 @@ function Invoke-Case($tag, $budgetSeconds) {
   $res.timeToFirstOwnedListenerMs = if ($firstOwnedAt) { [int]((New-TimeSpan -Start $launchedAt -End ([DateTime]::Parse($firstOwnedAt).ToLocalTime())).TotalMilliseconds) } else { $null }
   $res.timeToStableReadyMs = if ($stableReachedAt) { [int]((New-TimeSpan -Start $launchedAt -End $stableReachedAt).TotalMilliseconds) } else { $null }
   $res.budgetMs = $budgetSeconds * 1000
+  $res.budgetRemainingMs = [int]((New-TimeSpan -Start (Get-Date) -End $deadline).TotalMilliseconds)
+  if ($res.budgetRemainingMs -lt 0) { $res.budgetRemainingMs = 0 }
   # Flagged, not auto-failed: the acceptable start latency is an owner decision
   # (CLWX-43), not this harness's to invent. The flag makes a near-deadline pass
   # impossible to mistake for a prompt one.
@@ -355,15 +373,48 @@ function Invoke-Case($tag, $budgetSeconds) {
   if ($proc.HasExited) { $res.launchedExitCode = $proc.ExitCode }
   $res.logs = Collect-Findings $tag $launchedAt $offsets
 
+  # Split the latency rather than reporting one number. The invariant is the
+  # finding: if the gateway process starts within a second but takes the same
+  # ~76 s to listen whether cold or warm, that is not work - work varies with
+  # cache warmth. A constant delay looks like a timeout being waited out: an
+  # outbound call, a provider or MCP handshake, or a retry ladder expiring. That
+  # is a testable prediction, and far more actionable for the latency card than
+  # "209 s, slow", which would send it chasing cold-boot environment cost.
+  $gwRequested = $null; $gwStarted = $null
+  foreach ($lf in (Get-ChildItem $evidence -Filter "log-$tag-*" -File -ErrorAction SilentlyContinue)) {
+    foreach ($line in (Get-Content $lf.FullName -ErrorAction SilentlyContinue)) {
+      $m = $tsRe2.Match($line)
+      if (-not $m.Success) { continue }
+      [datetime] $t = [datetime]::MinValue
+      if (-not [datetime]::TryParse($m.Groups[1].Value, [ref] $t)) { continue }
+      if (-not $gwRequested -and $line -match 'Gateway start requested') { $gwRequested = $t.ToUniversalTime() }
+      if (-not $gwStarted -and $line -match 'Gateway process started') { $gwStarted = $t.ToUniversalTime() }
+    }
+  }
+  $res.gatewayStartRequestedAt = if ($gwRequested) { $gwRequested.ToString('o') } else { $null }
+  $res.gatewayProcessStartedAt = if ($gwStarted) { $gwStarted.ToString('o') } else { $null }
+  $res.launchToGatewayProcessMs = if ($gwStarted) { [int]((New-TimeSpan -Start $launchedAt.ToUniversalTime() -End $gwStarted).TotalMilliseconds) } else { $null }
+  $res.gatewayProcessToListenMs = if ($gwStarted -and $firstOwnedAt) { [int]((New-TimeSpan -Start $gwStarted -End ([datetime]::Parse($firstOwnedAt).ToUniversalTime())).TotalMilliseconds) } else { $null }
+
   if ($res.stableReady -and $res.windowShown -and -not $res.secondGuiInstance -and -not $res.readyInFinalTenth) {
-    # PASS only inside the documented expectation; a slower start is real but is
-    # not a pass, and saying so is the whole point of recording the elapsed time.
-    $res.result = if ($res.withinDocumentedBudget) { 'PASS' } else { 'DEGRADED' }
-    if ($res.result -eq 'DEGRADED') {
-      $res.reason = "started but took $($res.timeToFirstOwnedListenerMs) ms to bind, beyond the documented $READY_BUDGET_MS ms expectation"
+    # The verdict stays inside the contract's four states. DEGRADED is a
+    # CLASSIFICATION recorded alongside a typed result, not a fifth state - a
+    # floating extra state is the composed-verdict problem in a new costume, and
+    # it would let a measured miss against a documented figure read as neither a
+    # pass nor a failure. The harness puts the measured number and the documented
+    # threshold side by side; it does not get to decide the threshold is
+    # negotiable.
+    if ($res.withinDocumentedBudget) {
+      $res.result = 'PASS'
+      $res.classification = 'WITHIN_DOCUMENTED_BUDGET'
+    } else {
+      $res.result = 'FAIL'
+      $res.classification = 'DEGRADED_STARTED_BUT_OVER_DOCUMENTED_BUDGET'
+      $res.reason = "started and held readiness, but took $($res.timeToFirstOwnedListenerMs) ms to bind against the documented $READY_BUDGET_MS ms expectation ($($res.timeToFirstOwnedListenerMs / $READY_BUDGET_MS)x)"
     }
   } else {
     $res.result = 'FAIL'
+    $res.classification = 'DID_NOT_REACH_STABLE_OWNED_READINESS'
     $res.reason = ("stableReadyMs=$($res.stableReadyMs)/$STABLE_MS ownedListenerEverSeen=$($res.ownedListenerEverSeen) " +
                    "readyLostCount=$($res.readyLostCount) windowShown=$($res.windowShown) secondGui=$($res.secondGuiInstance)")
   }
@@ -442,6 +493,13 @@ $r | ConvertTo-Json -Depth 8 | ForEach-Object { [System.IO.File]::WriteAllText((
   }
   $p = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru -Wait
   $r.installExitCode = $p.ExitCode
+  # The installer schedules a detached stale-directory cleanup ~60 s later, and
+  # its Defender exclusion needs elevation that a standard user cannot get, with a
+  # documented 10-30 s first-launch penalty as a result. Both land inside the first
+  # case's window, so record when the install finished: a slow first case can then
+  # be attributed to install aftermath rather than to the application.
+  $r.installCompletedAt = (Get-Date).ToUniversalTime().ToString('o')
+  $r.installAftermathNote = 'Installer fires a detached cleanup ~60s post-install; Defender exclusion requires elevation and silently fails for a standard user (documented 10-30s fresh-launch penalty).'
 }
 $r.appPresentAfter = Test-Path $appExe
 if ($r.appPresentAfter) {
@@ -465,7 +523,7 @@ if ($r.priorStateExisted) {
   $r.priorStateMoveVerified = ((Test-Path $aside) -and -not (Test-Path $openclaw))
 }
 $r.case1StartedFromEmptyState = -not (Test-Path $openclaw)
-$r.case1 = Invoke-Case 'case1-fresh' 300
+$r.case1 = Invoke-Case 'case1-fresh' $ColdBudgetSeconds
 Stop-App
 
 # --- Case 2: existing state database, same user ------------------------------
@@ -475,7 +533,7 @@ $r.case2StateFileCount = @(Get-ChildItem $openclaw -Recurse -File -ErrorAction S
 $sq = Get-ChildItem $openclaw -Recurse -Filter 'openclaw.sqlite' -ErrorAction SilentlyContinue | Select-Object -First 1
 $r.case2SqliteBytes = if ($sq) { $sq.Length } else { $null }
 if ($r.case2StateFileCount -gt 0) {
-  $r.case2 = Invoke-Case 'case2-existing-db' 360
+  $r.case2 = Invoke-Case 'case2-existing-db' $WarmBudgetSeconds
   Stop-App
 } else {
   $r.case2 = [ordered]@{ tag = 'case2-existing-db'; result = 'NOT_RUN'; reason = 'case 1 left no state to reuse' }
@@ -487,11 +545,12 @@ $c1 = $r.case1.result; $c2 = $r.case2.result
 # scanning for it would match a non-pass outcome.
 $r.case1Result = $c1
 $r.case2Result = $c2
+$r.case1Classification = $r.case1.classification
+$r.case2Classification = $r.case2.classification
 $r.result = if ($c1 -eq 'PASS' -and $c2 -eq 'PASS') { 'PASS' }
-            elseif ($c1 -in @('PASS','DEGRADED') -and $c2 -eq 'FAIL') { 'FAIL_EXISTING_DB_ONLY' }
-            elseif ($c1 -eq 'FAIL') { 'FAIL_FRESH' }
-            elseif ($c1 -eq 'DEGRADED' -or $c2 -eq 'DEGRADED') { 'DEGRADED' }
             elseif ($c1 -like 'BLOCKED*' -or $c2 -like 'BLOCKED*') { 'BLOCKED' }
+            elseif ($c1 -eq 'FAIL' -or $c2 -eq 'FAIL') { 'FAIL' }
+            elseif ($c1 -eq 'NOT_RUN' -and $c2 -eq 'NOT_RUN') { 'NOT_RUN' }
             else { 'INCOMPLETE' }
 $r.criterion = ("Installed startup reaches Gateway readiness - a listener on 127.0.0.1:$PORT owned by the app's own " +
                 "process, held continuously for at least $STABLE_MS ms, with a visible window and no second GUI instance.")

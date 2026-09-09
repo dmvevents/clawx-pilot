@@ -357,8 +357,8 @@ identity: product version `0.4.3.0`, exe sha256 `93f5a781…`, from installer
 
 | Case | State | Stability | Time to app-owned listener | Verdict |
 |---|---|---|---|---|
-| 1 | fresh profile | held **20,974 ms**, readiness lost **0** times | **209,390 ms** | **DEGRADED** |
-| 2 | existing DB written by this same account in case 1 (953 files, `openclaw.sqlite` 1,429,504 bytes) | held **22,085 ms**, readiness lost **0** times | **76,320 ms** | **DEGRADED** |
+| 1 | fresh profile | held **20,974 ms**, readiness lost **0** times | **209,390 ms** | **FAIL** (classification: degraded — started but over the documented budget) |
+| 2 | existing DB written by this same account in case 1 (953 files, `openclaw.sqlite` 1,429,504 bytes) | held **22,085 ms**, readiness lost **0** times | **76,320 ms** | **FAIL** (classification: degraded — started but over the documented budget) |
 
 Both cases: exactly one windowed process across the whole window, no second GUI
 instance, **no foreign port owners observed**, launched process never exited.
@@ -405,3 +405,64 @@ Status for this card: the repair holds on an installed build under both fresh an
 existing-database startup, and the remaining gap is start latency, which belongs
 with the latency work rather than here. Ordinary chat, the doctor-repair path, and
 all document, browser, tenant and external-tester criteria remain **NOT_RUN**.
+
+### Correction and refinement — the verdict is FAIL, and my "76 s in both cases" was wrong
+
+**"DEGRADED" was not a legitimate verdict.** Independent review pointed out that a
+fifth state floating beside PASS / FAIL / BLOCKED / NOT_RUN is the composed-verdict
+problem in a new costume: it lets a measured miss against a documented figure read
+as neither a pass nor a failure. Corrected: the typed verdict for both cases is
+**FAIL**, with `degraded — started but over the documented budget` recorded as a
+*classification* beside it. The harness puts the measured number and the
+documented threshold side by side; it does not get to decide the threshold is
+negotiable.
+
+**A measurement claim of mine was also wrong.** I wrote that the Gateway took
+"76 seconds to listen in both cases". That compared case 1's *gateway-process to
+listener* interval against case 2's *launch to listener* interval — two different
+measurements that happened to land on similar numbers. Split properly:
+
+| | launch → gateway process | gateway process → listener | launch → listener |
+|---|---|---|---|
+| Case 1 (cold) | ~134,000 ms | **75,000 ms** | 209,390 ms |
+| Case 2 (warm) | ~19,000 ms | **57,000 ms** | 76,320 ms |
+
+Gateway start requested at 09:12:34 / process started 09:12:35 for case 1, and
+09:14:45 / 09:14:46 for case 2, both within a second of the request.
+
+**What that implies, stated at the strength the evidence supports.** The suggestion
+was that a constant process-to-listen interval would indicate a timeout being
+waited out rather than work being done, since work varies with cache warmth. The
+interval is *not* constant — 75 s cold against 57 s warm, a 24% difference — so a
+pure timeout is not supported. What remains is a floor of roughly 57 s that barely
+moves with warmth, which is the dominant cost in both cases and is unexplained.
+The cold-only ~134 s before the Gateway is even requested is separate, and is
+plausibly the install aftermath below.
+
+**Install aftermath is a confound for the cold case specifically.**
+`scripts/installer.nsh` fires a detached `rd /s /q` cleanup ~60 s after install
+(`ping -n 61`), and its Defender-exclusion step is documented as requiring
+elevation and *silently failing on non-admin per-user installs*, with an expected
+"10-30s startup delay on a fresh install" as the stated consequence. Our acceptance
+account is a standard user **by design**, so it can never obtain that exclusion.
+Both effects land inside the first case's observation window. The harness now
+records the install-completion timestamp beside the launch timestamp so this is
+attributable rather than guessed at.
+
+**A specification question for the owner, not for the harness.**
+`docs/WINDOWS_DEPLOYMENT_PLAN.md:165` states "Gateway port 18789 listens within 30s
+of launch" as a bare checklist item, with no cold/warm distinction — while the
+installer documents a 10-30 s fresh-install penalty that exists *because* the
+Defender exclusion needs elevation a principal will not have. So the documented
+figure may presume an elevated install and may never have contemplated the cold,
+standard-user case. This is not resolvable by relaxing the threshold: both numbers
+are reported against 30 s, and the owner either moves the figure, scopes it to warm
+starts, or accepts the FAIL classification.
+
+**A harness defect this exercise exposed, which parsing could not.**
+`[datetime]::TryParse` with a `$null`-initialised `[ref]` fails overload resolution
+at runtime on PowerShell 5.1, and the driver used that pattern in three places. All
+three scripts parsed clean under 5.1 both before and after, so the parse check was
+never going to find it — the distinction between a syntax check and an executed
+runtime check is exactly the one this repository's own rules draw, and it cost a
+probe run to discover.
