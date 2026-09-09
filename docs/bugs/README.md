@@ -4,6 +4,7 @@ Each report gives another agent enough evidence to continue without the original
 
 | Card | Reproducible report | Scope |
 |---|---|---|
+| CLWX-128 | [Claude session configuration](CLWX-128-claude-session-configuration.md) | Checkpoint idle gap, bare/native messaging distinction, plugin prerequisites and scoped instruction repairs |
 | CLWX-25 | [Windows lab repeatability](CLWX-25-windows-lab-repeatability.md) | Shared state, access-contract drift and isolated lab recovery evidence |
 | CLWX-43 | [Slow inbox response](CLWX-43-inbox-latency.md) | Installed successful turn takes 95 seconds to driver stability; Gateway/tool intervals and measurement limits preserved |
 | CLWX-61 | [QA mailbox identity](CLWX-61-test-mail-auth-identity.md) | URL-only/substring false acceptance repaired; independent review and native expected/wrong-account controls pass |

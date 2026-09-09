@@ -7,6 +7,8 @@ description: Continue the highest-priority ClawX completion workstream through d
 
 Read `docs/PROJECT_CONTRACT.md` and `docs/COMPLETION_PLAN.md`. They supersede old per-card ranking and historical sprint task order. A tick is a bounded execution window within one outcome, not a request to find another small change. Do not activate this workflow merely by reading this file during an audit.
 
+**Continuation semantics.** A checkpoint is durable progress within the same accepted outcome — not a new authorization boundary and not a reason to stop because the next step is long. The scheduled timer is a polling watchdog against stalls, not a completion controller: never defer an already-authorized next step to "the next tick." If an authorized step exceeds a comfortable window, run it now with an explicit suitable timeout, an observable receipt (log/artifact/exit status) and a single named owner. Never blindly replay a write that may have partially executed; check its observable result first.
+
 ## Local parameters
 
 | Purpose | Source |
@@ -34,7 +36,9 @@ Before editing, state: observed user failure → owner module/boundary → curre
 
 ## 3. Execute and verify
 
-Complete the chosen work through a regression, fix and focused verification. Delegate independent bounded slices with explicit file ownership when useful. A checkpoint records the next step of the same outcome; do not mark a slice as the whole feature.
+Complete the chosen work through a regression, fix and focused verification. Delegate independent bounded slices with explicit file ownership when useful. A checkpoint records the next step of the same outcome; do not mark a slice as the whole feature. A checkpoint written for resume names the card, source SHA/worktree, the receipt for the last completed step, the exact next step and any concrete blocker — never credentials.
+
+Work from a stated source SHA base in the assigned worktree; the author and reviewers are distinct named owners. The VM/operator lease is single-holder: one agent mutates the VM or installed app at a time, and holding the lease is part of the receipt for any such step.
 
 Use the application's real exported path, not a copied test implementation. Separate source tests, installed-build proof, live-account results and external-tester acceptance. Static green and optional-lane probes do not establish release readiness. Strict release evaluation must fail when required proof is missing; never turn on live sends/submissions just to obtain that proof.
 
@@ -53,8 +57,8 @@ Confirm a finding against code/evidence, fix and rerun the affected tests, or re
 
 When board updates are authorized, post redacted evidence through the verified writer and verify readback. Move to Ready only if that card's full acceptance is met; otherwise record the remaining proof. A Ready gate-script card is not a GA verdict.
 
-Update `docs/COMPLETION_PLAN.md` when current priority/evidence changes. Preserve detailed dated evidence in existing artifacts/ledgers; do not duplicate the whole narrative across docs. Export the board after actual board changes. Commit requested changes with the workspace Lore protocol and appropriate validation trailers.
+Update completion-plan, candidate and evidence pointers only when the delta actually affects them; leave unaffected pointers alone. Preserve detailed dated evidence in existing artifacts/ledgers; do not duplicate the whole narrative across docs. Export the board after actual board changes. Commit requested changes with the workspace Lore protocol and appropriate validation trailers.
 
-## 5. Report and stop
+## 5. Report; stop only on a real boundary
 
-Report the outcome advanced, evidence, remaining criterion and next action in a few lines. If the tree/evidence/dependency state did not materially change, say so once and stop. A recurring timer does not override a user stop or authorize deployment, outward communication, credential changes or a new workflow.
+Report the outcome advanced, evidence, remaining criterion and next action in a few lines. Valid reasons to stop: the outcome's exit is verified, the user holds/stops, or a concrete external blocker remains after independent work allowed by the completion plan is exhausted. "The next step is long" or "the checkpoint format is satisfied" are not stop reasons while an authorized next step exists — continue it under section 3's timeout/receipt/owner rules. If the tree/evidence/dependency state did not materially change and no authorized step remains, say so once and stop. A recurring timer does not override a user stop or authorize deployment, outward communication, credential changes or a new workflow.

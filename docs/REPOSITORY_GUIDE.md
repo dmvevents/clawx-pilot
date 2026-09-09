@@ -1,6 +1,6 @@
 # Repository Guide
 
-Last updated: 2026-09-08.
+Last updated: 2026-09-09.
 
 This guide is a navigation map for agents and reviewers working in the ClawX / Ministry of Education repo. It is not a release-status document. Current candidate, validation and board truth stay in [COMPLETION_PLAN.md](COMPLETION_PLAN.md), [CURRENT_WINDOWS_RC.md](CURRENT_WINDOWS_RC.md), [GA_RELEASE_EVIDENCE_MANIFEST.md](GA_RELEASE_EVIDENCE_MANIFEST.md), and [plane-board/CLWX-board-export.json](plane-board/CLWX-board-export.json).
 
@@ -52,6 +52,8 @@ End-user instructions: [Connect your email and forms](USER_GUIDE.md). This guide
 | Claude project agents | `../.claude/agents/*.md` | Claude Code project subagents. |
 
 Use [AGENT_SKILL_INTEROPERABILITY.md](AGENT_SKILL_INTEROPERABILITY.md) to choose the matching skill or agent. When a workflow must exist in more than one agent surface, keep the mirror linked there rather than adding another status document.
+
+[Claude CLI operations](CLAUDE_CODE_OPERATIONS.md) maps file types to tools, scoped rules, plugins, hooks and direct session messaging. The scoped `CLAUDE.md` files import existing `AGENTS.md` contracts for Claude; `.claude/rules/` adds guidance only for matching file paths.
 
 ## Working tree and branch discipline
 

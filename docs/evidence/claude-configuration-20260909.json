@@ -1,0 +1,113 @@
+{
+  "checkedAtUtc": "2026-09-09T05:13:15.559999+00:00",
+  "scope": "Claude development configuration; not Windows or GA acceptance",
+  "baseRevision": "e4b2636652a297f8965056c55f36aba5549b30fa",
+  "filesSha256": {
+    ".claude/agents/moe-product-manager.md": "2dcab5bf561aa4fd5eb4bb37ecd2721487891ab2b791e19fa22ea916fd6541fc",
+    ".claude/agents/windows-smoke.md": "74afaea5c553576f4051dc5d7dcbdebd74614d708723e523854336a9555aaafd",
+    ".claude/commands/bootstrap-windows-github-dev.md": "44e327ad65ee7c25c88ace2d94d20c0f3b691363170b269b383ceaf4a0ef5523",
+    ".claude/commands/install-claude-bedrock-windows.md": "42412e212a59c4011396f81f78d541b79ef036ec46a41785b2af3f8cf4d03d37",
+    ".claude/commands/windows-demo-resume.md": "b4754f653b1556c95c3df1e190651dfd4209703c7e4f257c74d9b05befa140f7",
+    ".claude/rules/evidence.md": "a97716ec06b13ccda5e92526fc51d7fdda309522797e3ac7ec500efe2e626396",
+    ".claude/rules/tooling.md": "334b5e25a80a26ca525129627d71867683d2fa8d5874d26052775e44098988c2",
+    ".claude/rules/typescript.md": "b66d107395ca0047a39247f5f16b8d0e9af3b1ce0b1de15e010192b81c6fb89a",
+    ".claude/rules/windows-scripts.md": "b81e335497937e516b0d7323cb2a9da6afb0c5135be7c349a0462e817e9a3dce",
+    ".claude/settings.json": "357869e7a8a724b255076f8d5b8e07cda97a019848389918c06fed8cf7fd1cc2",
+    ".claude/skills/ga-sprint-driver/SKILL.md": "020accbf1130fe685419f95b909bc917257197f3078997d834a2abc680b078a7",
+    ".gitignore": "293cab1caee8f81ed5bf113ff918da8bd3f7ba063ebe855350e162509a3bc8ad",
+    "CLAUDE.md": "bc69b681e8317a015e28323b135567a5b775e77a76fe3a511cf60bea0aa97478",
+    "extensions/moe-principal-assistant/CLAUDE.md": "0d7da0f6efcbe138051c66a5b45044282c373eeecd4c655759b9963f47c49712",
+    "windows-pilot/CLAUDE.md": "10ea4a08dc41fdb238cb34a7d55d7c6fb742485b9a012c35ff2727519f880740"
+  },
+  "checks": {
+    "agents": {
+      "files": 20,
+      "errors": []
+    },
+    "skills": {
+      "files": 22,
+      "errors": []
+    },
+    "rules": {
+      "files": 4,
+      "errors": []
+    },
+    "commands": {
+      "files": 3,
+      "errors": []
+    },
+    "settings": {
+      "parse": "PASS",
+      "worktree": {
+        "baseRef": "head"
+      }
+    },
+    "hook": {
+      "cases": [
+        {
+          "case": "ordinary",
+          "expected": 0,
+          "actual": 0
+        },
+        {
+          "case": "safe-send",
+          "expected": 0,
+          "actual": 0
+        },
+        {
+          "case": "secret-block",
+          "expected": 2,
+          "actual": 2
+        }
+      ],
+      "redactedLedger": true
+    },
+    "localLinks": {
+      "files": 5,
+      "errors": []
+    }
+  },
+  "normalCli": {
+    "version": "2.1.266",
+    "provider": "bedrock",
+    "model": "claude-fable-5",
+    "messaging": "PASS; native ListAgents and SendMessage succeeded",
+    "lsp": "PASS; documentSymbol on src/lib/utils.ts returned actual symbols",
+    "plugins": [
+      "typescript-lsp",
+      "claude-md-management",
+      "claude-code-setup"
+    ]
+  },
+  "bareCli": {
+    "messaging": "UNAVAILABLE; no message sent"
+  },
+  "liveSessionReload": {
+    "session": "a1c33a2c-3045-4b77-ba6a-e2b0dd8950bb",
+    "command": "/reload-plugins",
+    "observedResult": "Reloaded: 6 plugins \u00b7 60 skills \u00b7 143 agents \u00b7 36 hooks \u00b7 2 plugin MCP servers \u00b7 1 plugin LSP server",
+    "source": "identified iTerm session terminal readback",
+    "gaVerdict": "NOT_EVALUATED"
+  },
+  "privateEvidenceRoot": "artifacts/ga-autonomy-audit-20260909",
+  "independentReview": {
+    "verdict": "APPROVE",
+    "agent": "separate Claude Fable 5 / Bedrock read-only session",
+    "receipt": "artifacts/ga-autonomy-audit-20260909/claude-config-review/result.json",
+    "findings": "No blocking findings; product-manager historical anchors retained as a low-priority follow-up"
+  },
+  "plane": {
+    "card": "CLWX-128",
+    "commentId": "463d55c6-ffda-496c-93d3-fd915260812a",
+    "readback": "PASS; detail and list",
+    "boardExport": "PASS; 136 issues, six states",
+    "stateChanged": false
+  },
+  "nativeHandoff": {
+    "messageId": "9c851e47-ebad-4765-a784-4f51dbaa27fb",
+    "delivery": "PASS",
+    "recipientObservedReading": "docs/CLAUDE_CODE_OPERATIONS.md",
+    "acknowledgement": "PASS; live terminal states updated instructions accepted and three files read",
+    "replyLimitation": "Direct reply could not reach the already-exited one-shot relay (stale socket); recipient checked ListAgents and acknowledged in its terminal"
+  }
+}

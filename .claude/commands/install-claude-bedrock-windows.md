@@ -1,3 +1,7 @@
+---
+description: Install or verify Claude Code with Bedrock on the assigned Windows pilot target.
+---
+
 # Install Claude Code Bedrock On Windows
 
 Install or verify Claude Code on the Windows pilot laptop using Amazon Bedrock.

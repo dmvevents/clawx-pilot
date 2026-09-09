@@ -6,10 +6,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/whatsapp-send-guard.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/whatsapp-send-guard.sh\"",
+            "timeout": 10
           }
         ]
       }
     ]
+  },
+  "worktree": {
+    "baseRef": "head"
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "claude-code-setup@claude-plugins-official": true
   }
 }

@@ -1,3 +1,7 @@
+---
+description: Set up the assigned Windows development target using the existing GitHub and Claude runbooks.
+---
+
 # Bootstrap Windows GitHub Dev
 
 Configure the Windows pilot laptop as a GitHub-backed ClawX dev target and prepare Claude Code session control.

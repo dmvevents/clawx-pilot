@@ -12,9 +12,19 @@ The shared contract governs both Claude and Codex. Current status is maintained 
 
 Repository layout, module ownership and evidence locations: [docs/REPOSITORY_GUIDE.md](docs/REPOSITORY_GUIDE.md).
 
+## Claude CLI execution model
+
+Claude CLI drives execution from the canonical coordination root; source edits happen in an isolated per-workstream git worktree with one named owner. A worktree isolates branches and files, not the VM, services or shared runtime state. Operational details: [docs/CLAUDE_CODE_OPERATIONS.md](docs/CLAUDE_CODE_OPERATIONS.md).
+
+- Every lane records a run receipt: card, source SHA/worktree, command, outcome, evidence path, exact next step. No credentials in receipts.
+- Bounded bare CLI lanes (`--bare`) skip automatic hooks, LSP and CLAUDE.md discovery; they must explicitly read `docs/PROJECT_CONTRACT.md` and the selected skill file before acting.
+- Distinguish the observed model from the requested model; a saved preference or config file is not proof the running model consumed it. If a model refuses a request, report the refusal and route it to the user — never reword, downgrade gates or switch identity to evade it.
+- Runtime status (process up, port reachable, spend within cap) is not acceptance evidence. Acceptance follows the shared contract's PASS/FAIL/BLOCKED/NOT_RUN records.
+- Review lanes stay as assigned: 2–3 separate Claude reviews for nontrivial code, Codex additive when available. Do not add extra rounds once findings are resolved and the diff is unchanged.
+
 ## Claude tools and workflows
 
-- Sprint continuation: `.claude/skills/ga-sprint-driver/SKILL.md` follows the completion plan. A scheduled invocation is a bounded checkpoint, not a reason to repeat unchanged tests or generate another backlog.
+- Sprint continuation: `.claude/skills/ga-sprint-driver/SKILL.md` follows the completion plan. A scheduled invocation is a bounded checkpoint, not a reason to repeat unchanged tests, generate another backlog, or idle when an authorized next step exists.
 - Domain routing: `docs/AGENT_SKILL_INTEROPERABILITY.md` maps release, Windows, Outlook/Forms, Office and runtime skills/agents.
 - Build process: `.claude/skills/windows-build-pipeline/SKILL.md` and `.claude/agents/windows-build-engineer.md` cover CI stages, caching and build-failure prevention. Use the shared [build procedure](docs/build/windows-build-pipeline.md); preserve the source identity of any candidate already undergoing acceptance.
 - Release verification: `.claude/skills/ga-e2e-regression/SKILL.md` covers known failures; `.claude/skills/windows-vm-smoke/SKILL.md` covers installed Windows evidence.

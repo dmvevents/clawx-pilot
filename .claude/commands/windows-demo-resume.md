@@ -1,3 +1,7 @@
+---
+description: Resume the current Windows workstream from the completion plan and verified release evidence.
+---
+
 # Windows Demo Resume
 
 Resume the ClawX / Ministry Windows demo stabilization work from repo artifacts, not from chat memory.
