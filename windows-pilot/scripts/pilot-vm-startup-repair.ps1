@@ -22,8 +22,36 @@
 # NOTE the 8-hour auto-shutdown below is a deliberate cost guard, not a fault.
 # It is what ended earlier hand-made QA sessions. Start runs from a fresh boot.
 
+[CmdletBinding()]
+param(
+  # LOW-8: AutoAdminLogon stores the password in cleartext at
+  # HKLM\...\Winlogon\DefaultPassword and nothing ever removes it, so any
+  # snapshot, image or disk export of this machine carries a live credential for an
+  # account that stays enabled. That is inherent to auto-logon and acceptable for a
+  # disposable QA VM, but there has to be a way back. Run with -Disarm once the
+  # receipts are off the machine.
+  [switch] $Disarm
+)
+
 $ErrorActionPreference = "Continue"
 New-Item -ItemType Directory -Force -Path "C:\clawx-smoke" | Out-Null
+
+if ($Disarm) {
+  $wl = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+  foreach ($n in @('AutoAdminLogon', 'DefaultPassword', 'DefaultUserName', 'DefaultDomainName', 'AutoLogonSID', 'AutoLogonCount')) {
+    Remove-ItemProperty -Path $wl -Name $n -ErrorAction SilentlyContinue
+  }
+  $after = Get-ItemProperty -Path $wl -ErrorAction SilentlyContinue
+  Disable-LocalUser -Name 'ClawXAcc0909' -ErrorAction SilentlyContinue
+  $acct = Get-LocalUser -Name 'ClawXAcc0909' -ErrorAction SilentlyContinue
+  [ordered]@{
+    disarmedAt = (Get-Date).ToUniversalTime().ToString('o')
+    autoAdminLogonCleared = ($null -eq $after.AutoAdminLogon)
+    defaultPasswordCleared = ($null -eq $after.DefaultPassword)
+    acceptanceAccountEnabled = if ($acct) { $acct.Enabled } else { 'ABSENT' }
+  } | ConvertTo-Json -Compress
+  exit 0
+}
 Start-Transcript -Path "C:\clawx-smoke\startup.log" -Append
 
 # Cost guard retained deliberately at its original 8 hours. It is NOT a fault:
@@ -64,7 +92,10 @@ try {
   if (-not $existing) {
     # Random throwaway: key auth is the only intended login path for this
     # account, so the password is never used, never printed and never exported.
-    $chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@$%*-_"
+    # Single-quoted deliberately: in a double-quoted string the '$%' sequence
+    # invites the parser to look for a variable, and a silently shortened alphabet
+    # would change the category arithmetic that the complexity guarantee relies on.
+    $chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@$%*-_'
     $bytes = New-Object byte[] 32
     [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     $pw = -join ($bytes | ForEach-Object { $chars[[int]$_ % $chars.Length] })
@@ -79,7 +110,13 @@ try {
 
   $admKeys = "C:\ProgramData\ssh\administrators_authorized_keys"
   New-Item -ItemType Directory -Force -Path "C:\ProgramData\ssh" | Out-Null
-  Set-Content -Path $admKeys -Value $pub -Encoding ascii
+  # Append if absent rather than rewrite: this runs on every boot, and a rewrite
+  # would silently remove any key another operator had added.
+  $existingKeys = @()
+  if (Test-Path $admKeys) { $existingKeys = @(Get-Content $admKeys -ErrorAction SilentlyContinue) }
+  if ($existingKeys -notcontains $pub) {
+    Set-Content -Path $admKeys -Value (@($existingKeys | Where-Object { $_ -and $_.Trim() }) + $pub) -Encoding ascii
+  }
   icacls $admKeys /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F" | Out-Null
 
   # Per-profile copy so a non-admin fallback also works.

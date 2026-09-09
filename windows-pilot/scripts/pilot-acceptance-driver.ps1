@@ -36,6 +36,12 @@
 # valid existing-database test is the database THIS account's own app wrote.
 
 $ErrorActionPreference = 'Continue'
+# LOW-10: the guard runs BEFORE anything touches disk, and reads the token rather
+# than $env:USERNAME, which the account under test can set for itself.
+$expectedUser = 'ClawXAcc0909'
+$tokenName = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+if ($tokenName -notlike "*\$expectedUser") { exit 0 }
+
 $root = 'C:\clawx-acceptance'
 # Per-run directory: a shared directory let one run's copied log files be picked
 # up by the next run's signature scan and attributed to it.
@@ -48,9 +54,7 @@ function Note($m) {
   Add-Content -Path $log -Value ("{0} {1}" -f (Get-Date).ToUniversalTime().ToString('o'), $m) -ErrorAction SilentlyContinue
 }
 
-$expectedUser = 'ClawXAcc0909'
 $doneMarker = Join-Path $root 'driver-v2.marker'
-if ($env:USERNAME -ne $expectedUser) { exit 0 }
 if (Test-Path $doneMarker) { Note 'already ran; exiting'; exit 0 }
 Set-Content -Path $doneMarker -Value (Get-Date).ToUniversalTime().ToString('o') -Encoding ascii
 
@@ -68,7 +72,7 @@ $bootedAt = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
   bootedAt = $bootedAt.ToUniversalTime().ToString('o')
   autoShutdownDueAt = $bootedAt.AddSeconds(28800).ToUniversalTime().ToString('o')
   note = 'If this file still says IN_PROGRESS, the run did not reach a terminal state. Check the auto-shutdown deadline before assuming a product failure.'
-} | ConvertTo-Json -Depth 4 | Set-Content $receiptPath -Encoding ascii
+} | ConvertTo-Json -Depth 4 | ForEach-Object { [System.IO.File]::WriteAllText($receiptPath, $_, (New-Object Text.UTF8Encoding($false))) }
 
 # The default per-user location, but installation directory is user-changeable, so
 # a prior install can sit elsewhere. Consult the per-user Uninstall key before
@@ -127,7 +131,22 @@ function Scrub([string] $line) {
   return $s
 }
 
-function Collect-Findings($tag, $since) {
+function Get-LogOffsets {
+  # Byte length of each log file at the moment a case starts. Anything beyond it
+  # belongs to that case; anything before it does not, regardless of timestamp
+  # format. The application writes ONE file per day, so without this a tail reads
+  # back into earlier runs - observed attributing a previous run's secrets and
+  # migration errors to a case that had neither.
+  $dirs = @((Join-Path $env:APPDATA 'Ministry of Education\logs'), (Join-Path $openclaw 'logs'))
+  $map = @{}
+  foreach ($d in $dirs) {
+    if (-not (Test-Path $d)) { continue }
+    foreach ($f in Get-ChildItem $d -File -ErrorAction SilentlyContinue) { $map[$f.FullName] = $f.Length }
+  }
+  return $map
+}
+
+function Collect-Findings($tag, $since, $offsets) {
   # Full lines stay on the machine; only scrubbed, bounded excerpts are recorded.
   #
   # Findings MUST be restricted to lines timestamped inside this case's own
@@ -147,23 +166,68 @@ function Collect-Findings($tag, $since) {
       # same-named file, and without this the second silently overwrote the first.
       $srcTag = if ($d -like '*.openclaw*') { 'openclaw' } else { 'appdata' }
       $dest = Join-Path $evidence ("log-$tag-$srcTag-" + $f.Name)
+      # Byte offset is the primitive, not the timestamp. Reading only the bytes
+      # written after the case began is exact, format-independent, and needs no
+      # parsing - whereas a strict timestamp filter silently drops continuation
+      # lines that carry no timestamp of their own, and drops EVERYTHING if the
+      # format is local-time or dateless. The timestamp check is kept only as a
+      # cross-check, and the counts are recorded so silent over-filtering is
+      # visible rather than invisible.
+      $startOffset = 0
+      if ($offsets.ContainsKey($f.FullName)) { $startOffset = [int64] $offsets[$f.FullName] }
+      $all = @(Get-Content $f.FullName -ErrorAction SilentlyContinue)
       $kept = @()
-      $undated = 0
-      foreach ($line in (Get-Content $f.FullName -Tail 4000 -ErrorAction SilentlyContinue)) {
+      $droppedUnparseable = 0
+      $beforeWindowByTimestamp = 0
+      if ($startOffset -gt 0 -and (Get-Item $f.FullName).Length -gt $startOffset) {
+        $reader = $null
+        try {
+          $fs = [System.IO.File]::Open($f.FullName, 'Open', 'Read', 'ReadWrite')
+          $fs.Seek($startOffset, 'Begin') | Out-Null
+          $reader = New-Object System.IO.StreamReader($fs)
+          while ($null -ne ($line = $reader.ReadLine())) { $kept += $line }
+        } catch {
+          $kept = @()
+        } finally {
+          if ($reader) { $reader.Dispose() }
+        }
+      }
+      if ($kept.Count -eq 0) {
+        # No offset recorded (file appeared mid-case) - fall back to the
+        # timestamp filter rather than to an unbounded tail.
+        foreach ($line in $all) {
+          $m = $tsRe.Match($line)
+          if ($m.Success) {
+            $t = $null
+            if ([datetime]::TryParse($m.Groups[1].Value, [ref] $t)) {
+              if ($t.ToUniversalTime() -ge $since.ToUniversalTime()) { $kept += $line }
+              else { $beforeWindowByTimestamp += 1 }
+            } else { $droppedUnparseable += 1 }
+          } elseif ($kept.Count -gt 0) {
+            $kept += $line   # continuation attached to its timestamped parent
+          } else { $droppedUnparseable += 1 }
+        }
+      }
+      # Cross-check: any kept line whose timestamp predates the case is suspect.
+      $suspect = 0
+      foreach ($line in $kept) {
         $m = $tsRe.Match($line)
         if ($m.Success) {
           $t = $null
-          if ([datetime]::TryParse($m.Groups[1].Value, [ref] $t)) {
-            if ($t.ToUniversalTime() -ge $since.ToUniversalTime()) { $kept += $line }
-          }
-        } else {
-          # Continuation lines (stack traces, CLIXML) carry no timestamp; keep
-          # them only once the window has been entered.
-          if ($kept.Count -gt 0) { $kept += $line; $undated += 1 }
+          if ([datetime]::TryParse($m.Groups[1].Value, [ref] $t) -and $t.ToUniversalTime() -lt $since.ToUniversalTime()) { $suspect += 1 }
         }
       }
-      $kept | Set-Content $dest -Encoding utf8 -ErrorAction SilentlyContinue
-      $files += [ordered]@{ name = $f.Name; inWindowLines = $kept.Count; undatedKept = $undated }
+      Set-Content -Path $dest -Value $kept -Encoding utf8 -ErrorAction SilentlyContinue
+      $files += [ordered]@{
+        name = $f.Name
+        source = $srcTag
+        startOffsetBytes = $startOffset
+        linesSeen = $all.Count
+        linesKept = $kept.Count
+        droppedUnparseable = $droppedUnparseable
+        beforeWindowByTimestamp = $beforeWindowByTimestamp
+        keptButOlderThanCase = $suspect
+      }
       foreach ($pat in @('invalid JSON', 'Unexpected token', 'SECRETS_DEGRADED', 'requires migration',
                          'restart-loop breaker', 'failed to start', 'read-only',
                          # Migration-shaped failures belong inside the receipt, not
@@ -195,6 +259,7 @@ function Invoke-Case($tag, $budgetSeconds) {
     return $res
   }
 
+  $offsets = Get-LogOffsets
   $proc = Start-Process -FilePath $appExe -PassThru
   $res.launchedPid = $proc.Id
   Note "$tag launched pid=$($proc.Id)"
@@ -288,7 +353,7 @@ function Invoke-Case($tag, $budgetSeconds) {
   $res.readyInFinalTenth = ($null -ne $res.timeToStableReadyMs -and $res.timeToStableReadyMs -gt (0.9 * $res.budgetMs))
   $res.launchedProcessExited = $proc.HasExited
   if ($proc.HasExited) { $res.launchedExitCode = $proc.ExitCode }
-  $res.logs = Collect-Findings $tag $launchedAt
+  $res.logs = Collect-Findings $tag $launchedAt $offsets
 
   if ($res.stableReady -and $res.windowShown -and -not $res.secondGuiInstance -and -not $res.readyInFinalTenth) {
     # PASS only inside the documented expectation; a slower start is real but is
@@ -360,13 +425,19 @@ $r.appPresentBefore = Test-Path $appExe
 if (-not $r.appPresentBefore) {
   if (-not (Test-Path $installer)) {
     $r.result = 'BLOCKED'; $r.reason = 'no app and no installer'
-    $r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'receipt.json') -Encoding ascii
+    # BOM-free UTF-8, not ascii: ascii turns any non-ASCII in a collected log line
+# into "?", which is lossy for evidence. A BOM would break consumers that parse
+# the JSON, hence WriteAllText with an explicit no-BOM encoding.
+$r | ConvertTo-Json -Depth 8 | ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $evidence 'receipt.json'), $_, (New-Object Text.UTF8Encoding($false))) }
     exit 1
   }
   $r.installerSha256 = (Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToLower()
   if ($r.installerSha256 -ne $expected) {
     $r.result = 'BLOCKED'; $r.reason = 'installer hash mismatch'
-    $r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'receipt.json') -Encoding ascii
+    # BOM-free UTF-8, not ascii: ascii turns any non-ASCII in a collected log line
+# into "?", which is lossy for evidence. A BOM would break consumers that parse
+# the JSON, hence WriteAllText with an explicit no-BOM encoding.
+$r | ConvertTo-Json -Depth 8 | ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $evidence 'receipt.json'), $_, (New-Object Text.UTF8Encoding($false))) }
     exit 1
   }
   $p = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru -Wait
@@ -427,5 +498,8 @@ $r.criterion = ("Installed startup reaches Gateway readiness - a listener on 127
 $r.notClaimed = ('Readiness here is an owned, stable TCP listener, which is stronger than a running process but weaker ' +
                  'than an in-app assertion that a turn completes. Ordinary chat, the doctor-repair path, and all ' +
                  'document, browser, tenant and external-tester criteria are NOT_RUN.')
-$r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'receipt.json') -Encoding ascii
+# BOM-free UTF-8, not ascii: ascii turns any non-ASCII in a collected log line
+# into "?", which is lossy for evidence. A BOM would break consumers that parse
+# the JSON, hence WriteAllText with an explicit no-BOM encoding.
+$r | ConvertTo-Json -Depth 8 | ForEach-Object { [System.IO.File]::WriteAllText((Join-Path $evidence 'receipt.json'), $_, (New-Object Text.UTF8Encoding($false))) }
 Note "driver v2 done result=$($r.result)"

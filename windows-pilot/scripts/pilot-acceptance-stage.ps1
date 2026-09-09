@@ -8,8 +8,21 @@
 # The driver runs from the all-users Startup folder inside that account's own
 # auto-logon session, so no credential is needed on either side.
 
+[CmdletBinding()]
+param(
+  # LOW-9: bucket, object and expected hash are parameters, not literals. This
+  # repository has a public mirror, so a hard-coded private bucket and project
+  # number is infrastructure disclosure even though access is IAM-gated - and
+  # literals also pin the script to exactly one build, which the upgrade case
+  # cannot use because it has to stage two candidates and verify both.
+  [Parameter(Mandatory = $true)] [string] $Bucket,
+  [Parameter(Mandatory = $true)] [string] $Object,
+  [Parameter(Mandatory = $true)] [string] $ExpectedSha256,
+  [string] $AccountUser = 'ClawXAcc0909'
+)
+
 $ErrorActionPreference = 'Stop'
-$accUser = 'ClawXAcc0909'
+$accUser = $AccountUser
 $evidence = 'C:\clawx-acceptance'
 $seed = Join-Path $evidence 'seed-openclaw'
 $out = [ordered]@{}
@@ -50,10 +63,10 @@ if ($out.sourceExists) {
 # --- 2. fetch the verified installer from private staging --------------------
 # Uses the instance service account (devstorage.read_only). No key material and
 # no signed URL is written anywhere.
-$bucket = 'clawx-rc-artifacts-622687731621'
-$object = 'private-validation/moe30-34323058772/moe30.exe'
-$dest = 'C:\Users\Public\Downloads\moe30.exe'
-$expected = '9f8a2dc5fc5c238d49935a7f1b0b9b90205c104ddf933124196c62210114aff7'
+$bucket = $Bucket
+$object = $Object
+$dest = Join-Path 'C:\Users\Public\Downloads' ([IO.Path]::GetFileName($Object))
+$expected = $ExpectedSha256.ToLower()
 
 $needFetch = $true
 if (Test-Path $dest) {
@@ -69,6 +82,7 @@ if ($needFetch) {
   Invoke-WebRequest -Uri $url -Headers @{ Authorization = "Bearer $tok" } -OutFile $dest -UseBasicParsing
   $out.downloadSeconds = [math]::Round($sw.Elapsed.TotalSeconds, 1)
 }
+$out.installerPath = $dest
 $out.installerBytes = (Get-Item $dest).Length
 $out.installerSha256 = (Get-FileHash -Algorithm SHA256 -Path $dest).Hash.ToLower()
 $out.installerHashMatches = ($out.installerSha256 -eq $expected)
