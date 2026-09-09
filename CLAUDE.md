@@ -25,6 +25,7 @@ Claude CLI drives execution from the canonical coordination root; source edits h
 ## Claude tools and workflows
 
 - Sprint continuation: `.claude/skills/ga-sprint-driver/SKILL.md` follows the completion plan. A scheduled invocation is a bounded checkpoint, not a reason to repeat unchanged tests, generate another backlog, or idle when an authorized next step exists.
+- Autonomous continuation uses native `/goal`; plugins and permission mode alone do not create a running controller. Use the [activation, resume and tool-routing procedure](docs/CLAUDE_CODE_OPERATIONS.md#activate-and-resume-the-controller). Prefer Claude/Bedrock author and review lanes; the installed Codex plugin is optional unless specifically assigned.
 - Domain routing: `docs/AGENT_SKILL_INTEROPERABILITY.md` maps release, Windows, Outlook/Forms, Office and runtime skills/agents.
 - Build process: `.claude/skills/windows-build-pipeline/SKILL.md` and `.claude/agents/windows-build-engineer.md` cover CI stages, caching and build-failure prevention. Use the shared [build procedure](docs/build/windows-build-pipeline.md); preserve the source identity of any candidate already undergoing acceptance.
 - Release verification: `.claude/skills/ga-e2e-regression/SKILL.md` covers known failures; `.claude/skills/windows-vm-smoke/SKILL.md` covers installed Windows evidence.

@@ -11,6 +11,18 @@
           }
         ]
       }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/ga-blocker-recovery.py\"",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   },
   "worktree": {

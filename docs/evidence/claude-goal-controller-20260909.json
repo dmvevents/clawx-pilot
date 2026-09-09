@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-09-09T05:45:12.278646+00:00",
+  "scope": "Claude development-session controller, not GA acceptance",
+  "source_base": "3595771f621e39280b16b943f2f687e0880f7506",
+  "lead_session_id": "a1c33a2c-3045-4b77-ba6a-e2b0dd8950bb",
+  "running_cli_version": "2.1.265",
+  "requested_model": "claude-fable-5[1m]",
+  "observed_model": "Opus 5 (prior refusal-triggered fallback preserved)",
+  "permission_mode": "bypassPermissions, previously authorized",
+  "initial_goal_status": "No goal set",
+  "native_goal_condition": "Complete all executable Plane GA sprint acceptance work using ga-sprint-driver; evidence remaining blockers without claiming GA.",
+  "activation": "PASS: short literal /goal plus Return produced native Goal set; status panel subsequently confirmed Goal active for 3 minutes.",
+  "automatic_continuation": "PASS in isolated normal-CLI Bedrock two-turn test; existing lead native goal active and live recovery callback/next-tool continuation PASS. Existing lead end-of-turn evaluator remains separate from isolated proof.",
+  "superseded_cron": {
+    "id": "cc2751ee",
+    "removed_by": "lead native CronDelete",
+    "readback_remaining_tasks": 0
+  },
+  "controller_instruction_review": {
+    "verdict": "APPROVE",
+    "session_id": "40ead333-0887-4801-91db-7d55682c7e8f",
+    "model": "claude-fable-5",
+    "provider": "bedrock",
+    "nonblocking_findings_addressed": [
+      "effective permission mode",
+      "no-tool pause",
+      "idle check-in cap"
+    ]
+  },
+  "failure_hook": {
+    "state": "PASS: enabled and verified in the existing live lead",
+    "focused_tests": "8/8 PASS in root checkout; command: python3 -m unittest discover -s tests/ops -p test_ga_blocker_recovery.py -v",
+    "author_session_id": "see private blocker-hook-author/receipt.json",
+    "side_effects": "fixed additionalContext only; no I/O writes or external repair by hook itself",
+    "reviews": [
+      {
+        "session_id": "29d02f02-7b14-4310-9db9-86b64b3fa18a",
+        "verdict": "APPROVE",
+        "model": "claude-fable-5",
+        "provider": "bedrock",
+        "tests": "8/8 PASS"
+      },
+      {
+        "session_id": "16e0543f-e5eb-4451-934d-de9b512b5585",
+        "verdict": "APPROVE",
+        "model": "claude-fable-5",
+        "provider": "bedrock",
+        "tests": "8/8 PASS"
+      }
+    ],
+    "live_callback": {
+      "observed_at": "2026-09-09T05:38:14.201035+00:00",
+      "negative_control": {
+        "tool_use_id": "toolu_bdrk_015ejAGs2KSBSMVykteCP8xS",
+        "at": "2026-09-09T05:37:23.047Z",
+        "command": "python3 -c \"raise SystemExit(17)\"",
+        "result_observed": true,
+        "is_error": true,
+        "expected_marker_observed": true
+      },
+      "failure_hook": {
+        "at": "2026-09-09T05:37:23.201Z",
+        "hook_event": "PostToolUseFailure",
+        "hook_name": "PostToolUseFailure:Bash",
+        "exit_code": 0,
+        "duration_ms": 24,
+        "fixed_recovery_context_present": true,
+        "tool_use_id": "toolu_bdrk_015ejAGs2KSBSMVykteCP8xS"
+      },
+      "positive_control": {
+        "tool_use_id": "toolu_bdrk_01UvKisLQBhWQrEBJMWZ6PVa",
+        "at": "2026-09-09T05:37:26.750Z",
+        "command": "python3 -c \"print('GA_HOOK_CONTROL_OK')\"",
+        "result_observed": true,
+        "is_error": false,
+        "expected_marker_observed": true
+      }
+    },
+    "scope_limit": "Synthetic execution-error callback and continuation proven; autonomous removal of every real blocker is not claimed."
+  },
+  "memory_tool_smoke": {
+    "status": "PASS",
+    "scope": "normal Claude CLI using installed Claude Mem 10.5.2 MCP command and project LSP; no live-lead memory query claimed",
+    "query": "CLWX-136 SQLite",
+    "project_filter": "ClawX",
+    "observation_rows": 3,
+    "session_rows": 3,
+    "full_observations_fetched": false,
+    "smart_outline": "PASS on src/lib/utils.ts; cn and formatRelativeTime",
+    "lsp": "PASS on same file; 20 symbols, 6 top-level",
+    "process_exit": 0,
+    "elapsed_seconds": 37.16,
+    "failed_attempts_preserved": [
+      "initial detached launch emitted no initialization receipt",
+      "variadic --tools consumed the positional prompt; switched to stdin and verified exit/result"
+    ]
+  },
+  "limitations": [
+    "Goal completion at an all-external-blocker boundary is not GA.",
+    "Windows QA interactive session remains an external acceptance dependency.",
+    "Controller evaluator reads surfaced conversation; it does not independently execute tests."
+  ],
+  "private_receipts": "artifacts/ga-autonomy-audit-20260909/",
+  "observed_progress": [
+    {
+      "commit": "315d7c37",
+      "result": "Windows alternative-lane evidence documented and owning Plane card updated"
+    },
+    {
+      "commit": "c93d8100",
+      "result": "CLWX-119 repeated-run evidence promoted to durable repo evidence and board updated"
+    },
+    {
+      "commit": "6f0ccc70",
+      "result": "Pilot distribution package drafted and held"
+    },
+    {
+      "commit": "fe7fdda6",
+      "result": "Remaining sprint criteria assigned dependency, owner and exact resume action"
+    }
+  ],
+  "tested_file_sha256": {
+    "CLAUDE.md": "0e38a955f2a62aa4d8e5770d189d783afb2805caef05633ff9cff41ac7edcce2",
+    ".claude/settings.json": "10418f01690aaeaf3902420fe092089dbccfe70ed094ccf5c3a567178c72adbe",
+    ".claude/skills/ga-sprint-driver/SKILL.md": "6956eaf1988c783581e84d2fd967e6dd29e218d82936a8f87f67b5399e9448db",
+    ".claude/hooks/ga-blocker-recovery.py": "d30d3b5d6dbeae0af871449d05a84620c0dafb635bb33a9f7abcf22e26c517bb",
+    "tests/ops/test_ga_blocker_recovery.py": "47a01ee53b056f4fb7759d063df7874a8baf690549763adb32886b1a7ea831b0",
+    "docs/CLAUDE_CODE_OPERATIONS.md": "2e9549eebefc3bb013cdf48990043573c27db3864b2c1626de14f17e3ffa7372"
+  },
+  "tested_checkout_head": "6f0ccc70eaa94a50b43fbcdafa1523070cf4d32f",
+  "configuration_checks": {
+    "frontmatter_files_parsed": 49,
+    "json": "PASS",
+    "local_links": "PASS",
+    "py_compile": "PASS",
+    "diff_check": "PASS"
+  },
+  "plane": {
+    "card": "CLWX-128",
+    "comment_id": "4498e403-abfb-4f03-9f85-4cfd0d12bee9",
+    "detail_and_list_readback": "PASS",
+    "export_card_count": 136,
+    "state_preserved": "Ready"
+  },
+  "live_lane_observation": {
+    "at": "2026-09-09T05:40:14Z",
+    "recent_activity_seconds": {
+      "CLWX-106": 1,
+      "CLWX-130": 11,
+      "CLWX-102": 28,
+      "CLWX-77": 41
+    },
+    "completed_report_receipts": [
+      "CLWX-63: native SendMessage, end_turn",
+      "CLWX-120: native SendMessage, end_turn"
+    ],
+    "observed_lane_model": "claude-fable-5-1",
+    "source": "timestamp/tool metadata only from current-session subagent logs; no message contents copied"
+  },
+  "native_goal_runtime_probe": {
+    "status": "PASS",
+    "cli_version": "2.1.266 (separate probe; live lead remains 2.1.265)",
+    "session_id": "bd9f74bd-6345-4c83-8104-f09b8d16731e",
+    "model_provider": {
+      "claude-fable-5": "bedrock"
+    },
+    "automatic_second_turn": "PASS: native Stop hook feedback after first Read initiated second turn without new user input",
+    "reads": [
+      {
+        "id": "toolu_bdrk_01FMaT8q2QReioDgmsRBZQ2V",
+        "file": "/Users/antonalexander/Github/moe-tt/ClawX/docs/PROJECT_CONTRACT.md",
+        "limit": 5
+      },
+      {
+        "id": "toolu_bdrk_01Qu1oEdYiHpBFoGYosBHvgB",
+        "file": "/Users/antonalexander/Github/moe-tt/ClawX/docs/REPOSITORY_GUIDE.md",
+        "limit": 5
+      }
+    ],
+    "tools_succeeded": true,
+    "process_exit": 0,
+    "elapsed_seconds": 41.36,
+    "terminal_reason": "completed",
+    "result": "TWO_TURNS_VERIFIED",
+    "first_control_limit": "Identical-file repeat was deduplicated; preserved and corrected to two distinct files."
+  }
+}

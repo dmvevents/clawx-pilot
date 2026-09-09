@@ -9,6 +9,8 @@ Read `docs/PROJECT_CONTRACT.md` and `docs/COMPLETION_PLAN.md`. They supersede ol
 
 **Continuation semantics.** A checkpoint is durable progress within the same accepted outcome — not a new authorization boundary and not a reason to stop because the next step is long. The scheduled timer is a polling watchdog against stalls, not a completion controller: never defer an already-authorized next step to "the next tick." If an authorized step exceeds a comfortable window, run it now with an explicit suitable timeout, an observable receipt (log/artifact/exit status) and a single named owner. Never blindly replay a write that may have partially executed; check its observable result first.
 
+**Autonomous session entry.** When asked to configure unattended continuation, use the native Claude `/goal` procedure in [the operations runbook](../../../docs/CLAUDE_CODE_OPERATIONS.md#activate-and-resume-the-controller). Reading this skill, enabling plugins and bypassing permission prompts do not start another turn. Verify the actual goal indicator and transcript receipt. Keep one completion controller; inspect and retire only its superseded GA timer using native scheduling tools. A goal reaching its executable-work boundary is not a GA verdict.
+
 ## Local parameters
 
 | Purpose | Source |
@@ -25,6 +27,7 @@ Read `docs/PROJECT_CONTRACT.md` and `docs/COMPLETION_PLAN.md`. They supersede ol
 
 - Inspect git status/HEAD, the active workstream and its existing card/evidence.
 - Refresh the board if needed for an actual state decision; use the committed snapshot if unavailable and label its age.
+- At an external blocker, inspect the current sprint's remaining acceptance dependencies before declaring the whole sprint blocked. Execute eligible independent work; reuse unchanged evidence. Record whether an alternate lab reproduces a defect or satisfies the actual acceptance environment — these are different claims.
 - Probe a blocked dependency only if that result could change the next action. For IAP, TCP acceptance is insufficient: use the existing SSH handshake/control-leg probe. Do not infer credential expiry from every failed connection.
 - Do not run the full static gate on an unchanged tree just because a timer fired. Reuse dated evidence for the same revision/scope; run affected checks after changes and full checks at integration/release boundaries.
 
@@ -38,18 +41,30 @@ Before editing, state: observed user failure → owner module/boundary → curre
 
 Complete the chosen work through a regression, fix and focused verification. Delegate independent bounded slices with explicit file ownership when useful. A checkpoint records the next step of the same outcome; do not mark a slice as the whole feature. A checkpoint written for resume names the card, source SHA/worktree, the receipt for the last completed step, the exact next step and any concrete blocker — never credentials.
 
+Select tools by the unanswered question using [the operations routing table](../../../docs/CLAUDE_CODE_OPERATIONS.md#route-tools-without-loading-everything): filtered project memory for earlier lessons, structural exploration/LSP for code, Plane for acceptance, domain skills for execution and native messages/background receipts for coordination. Discover session-local tool availability once; do not load every plugin, retrieve whole histories or pay for repeated reviews of unchanged code.
+
 Work from a stated source SHA base in the assigned worktree; the author and reviewers are distinct named owners. The VM/operator lease is single-holder: one agent mutates the VM or installed app at a time, and holding the lease is part of the receipt for any such step.
 
 Use the application's real exported path, not a copied test implementation. Separate source tests, installed-build proof, live-account results and external-tester acceptance. Static green and optional-lane probes do not establish release readiness. Strict release evaluation must fail when required proof is missing; never turn on live sends/submissions just to obtain that proof.
 
 If blocked, prepare the exact remaining artifact, command or decision and continue independent work allowed by the completion plan. If no meaningful work remains, end the tick; do not repeat the blocker or manufacture review work.
 
+### Recover a blocker
+
+The project `PostToolUseFailure` hook cues this procedure after execution errors. It does not change tool results, grant permissions or repair the environment itself. Logical acceptance failures and pre-execution rejections still enter this procedure through the active goal even when no failure hook fires.
+
+1. Classify the result against the current criterion. An expected negative control or a search with no matches is not a new product bug. For a real blocker, check the existing owner/card/report before creating another; capture revision/environment, reproduction, expected/actual, redacted receipt and next falsifiable check using the bug template. If Plane is unavailable, preserve the pending payload locally and label remote sync blocked.
+2. Inspect the cause and choose a bounded recovery in the current write scope. A reviewer reports to its owner rather than becoming an author. Source defects get a regression and isolated fix; unavailable developer tools get a scoped supported fallback; transport failures use the maintained lane's diagnostics and authorized recovery. Before repeating an installation, send or other possibly executed write, inspect its receipt and actual state.
+3. Retry an unchanged transient, read-only/idempotent operation once after checking its prerequisite. If it fails the same way, change the hypothesis or record a concrete dependency; do not loop the same command. A repair gets the original failed check plus affected tests and assigned independent review. Never suppress the failure, weaken the criterion or reset user data to obtain green.
+4. Update the owning card/report with the attempt and verified outcome. A dependency repair can unblock a card without satisfying all of its acceptance; move to Ready only on complete evidence. Resume the dependent step immediately once its prerequisite passes.
+5. Authentication/consent, model refusals, owner holds and unavailable acceptance environments are explicit dependencies, not permission to bypass them. Record owner, minimum needed change and exact resume command; select other eligible work from the same sprint. Observe a real pending job with an event/receipt; recheck an external blocker only when a relevant signal changes. If no executable work remains, report the blocked disposition once and end the controller goal with GA RED.
+
 ## 3b. Separate review before code moves to Ready
 
 The author never approves their own change. Preserve the established review requirements:
 
 - **Claude lanes:** 2–3 fresh review-only contexts for nontrivial code changes being moved to Ready, with diff and acceptance text; reviewers do not edit.
-- **Codex cross-model lane:** additive when available. Check the locally installed `codex@openai-codex` plugin's setup once per session and use its supported review/adversarial-review command, scoped to the actual diff. Do not hard-code a stale model/plugin version. Record availability and the verdict.
+- **Codex cross-model lane:** additive when explicitly assigned or required by the selected acceptance. The owner's cost preference is Claude CLI on Bedrock; an enabled Codex plugin does not by itself require a paid review. Record availability and whether invoked. If assigned, use its supported review command scoped to the actual diff; do not hard-code a stale model/plugin version.
 
 Confirm a finding against code/evidence, fix and rerun the affected tests, or refute it with a concrete reason. Assigned lanes must finish; after resolved findings and an unchanged diff, do not launch extra rounds merely to keep the loop busy. A PASS never cancels another unresolved finding or relaxes a safety gate.
 
