@@ -97,3 +97,21 @@ Full source preflight at `40fa9dfd`: 2,332 passed / 51 skipped; one cold-worktre
 **Candidate `0.4.3-moe.29`, source `0f708082c941fbed007173c57232aec916f4eff1`, branch `release/moe29-node-mode`, pushed to the pilot remote.** Hosted keyless build [34300195990](https://github.com/dmvevents/clawx-pilot/actions/runs/34300195990) dispatched from the release branch with the full-SHA input; run provenance verified (`headSha` = candidate SHA). Tooling note: a first dispatch without `--ref` produced default-branch run metadata and was cancelled before completion (run `34300139391`) — dispatch from the release branch so run↔source identity binds; the deployed default-branch workflow accepts only the `ref` input (no seed-profile input; keyless-public is the in-tree default).
 
 Remaining acceptance (unchanged, installed-artifact-only): shim present in the built installer under `resources\resources\gateway\`; RunAsNode fuse enabled on the rebuilt exe; package/hash identity; standard-user upgrade; **installed startup with the existing state DB reaching Gateway readiness and no second GUI instance**; ordinary existing/fresh/next chat; doctor-repair path. No Ready/Done promotion until those pass.
+
+### moe.29 artifact gate PASS; installed acceptance next
+
+First dispatch `34300195990` FAILED at ~50 minutes inside "Preflight release source" with GitHub's runner-communication-loss annotation and no uploaded logs — infra, not product; preserved as a failed attempt. Re-dispatch [34303783279](https://github.com/dmvevents/clawx-pilot/actions/runs/34303783279) from the same `release/moe29-node-mode` head SHA succeeded 02:49:47 UTC (14m51s).
+
+| Check | Result |
+|---|---|
+| Run↔source provenance | `head_sha` = `0f708082c941fbed007173c57232aec916f4eff1`, run `34303783279`, keyless-public |
+| Artifact archives | `build-provenance` and `windows-blockmap` digest/length PASS; installer archive fetched in 452/452 ranged parts, assembled SHA256 = GitHub digest, exact length |
+| Host package checks | **36/36 PASS**, zero failures. Installer SHA256 `f48ac2f465a6a27a6dee385bb2c3b2e3d61d4e94ae4b633076427621fc5c4ce9` (476,772,726 bytes); ASAR SHA256 `98407244b3202aad270af0ebdd8d7638bc9f82f7f886082d8e87eb5019c96a78`; ASAR version `0.4.3-moe.29`; all eight helpers; keyless seed scan empty; blockmap structure |
+| Compiled output | PASS: clean source/compiled receipt agreement, 172 compiled-file comparisons, packaged OpenClaw 2026.9.2, lifecycle markers absent |
+| **Shim in package (new for this candidate)** | PASS: `extracted-app/resources/resources/gateway/clawx-gateway-node-mode-entry.mjs` SHA256 `4387e8e0a8b6c4bd360ad1e8c7f827e247e2f32e80c1eb29efa96a84cbf6750b` — byte-identical to the reviewed source file. Closes the reviewers' "shim present in the built installer" item |
+| Private staging | `gs://clawx-rc-artifacts-622687731621/private-validation/moe29-34303783279/moe29.exe` |
+| VM download | 02:59:38 UTC `DOWNLOAD_HASH_VERIFIED` — exact SHA256 and byte length on instance `2748349704588098112`, staged at `C:\Users\Public\Downloads\moe29-34303783279` |
+
+Pre-op read-only check 02:59:08 UTC: app stopped, no listeners 13210/18789/9224, no running owned tasks, 10 QA Chrome processes preserved, QA Session2 active. Receipts: `moe29-preop-stage-prep-001.json`, `moe29-download-verified-001.json`, and host-side `/private/tmp/clawx-moe29-run-34303783279/` (`host-verification-34303783279.json`, `compiled-output-verification.json`, `shim-presence-verification.json`, `parallel-download-verification.json`).
+
+Next exact action: protected app/OpenClaw profile backup, then the standard-user assisted upgrade in interactive Session2 under the 40-minute installer budget (Run unchecked before Finish), verify installed EXE/ASAR hashes and the packaged shim on disk, then launch the actual desktop shortcut under the unchanged 360-second observer. The decisive observation is whether Gateway readiness is reached with the **existing** state database and no second GUI instance appears. Startup is NOT_RUN; the RunAsNode fuse on the rebuilt exe is unverified until then.
