@@ -1,211 +1,278 @@
-# moe30-phase2-driver.ps1
+# pilot-acceptance-driver.ps1  (v2)
 #
 # Runs AS THE ACCEPTANCE USER inside the auto-logon interactive session, started
-# from the all-users Startup folder. This is deliberate: the app is an Electron
-# GUI and every installed criterion needs a real session. A scheduled task with
-# an interactive principal returns SCHED_S_TASK_HAS_NOT_RUN when no session
-# exists, which is what defeated the earlier attempts.
+# from the all-users Startup folder. The app is an Electron GUI, so installed
+# acceptance needs a real session; an interactive scheduled task is NOT a working
+# substitute on this machine - `schtasks /Run` on an /IT task returns
+# "Element not found" with SCHED_S_TASK_HAS_NOT_RUN (267011) even with an active
+# console session for that exact user. The Startup shim is the reliable path.
 #
-# Because it runs from Startup inside the user's own session, NO password is
-# needed here, on the host, or in instance metadata.
+# v2 exists because independent review found v1 could report PASS on the very
+# defect it was written to detect. Three corrections, all of which matter:
 #
-# Two launches, on purpose:
-#   Run A - fresh profile state. Baseline: does the installed app start at all?
-#   Run B - the real pre-existing state database seeded in. This is the CLWX-136
-#           scenario (startup WITH an existing database).
-# Without Run A, a Run B failure could not be distinguished from an artifact of
-# seeding another user's database. A is the negative control for B.
+#   1. STABILITY. v1 latched readiness on the first positive sample and broke out
+#      of the loop. In the real CLWX-136 failure the Gateway *does* bind briefly
+#      during a restart attempt before exiting again, and the verified observer
+#      required a 20-second stable-ready window. v1 dropped that, so a single
+#      lucky sample read as success. v2 requires a contiguous window and records
+#      how long readiness actually held and how often it was lost.
+#
+#   2. OWNERSHIP. v1 asked only "is something listening on 18789". With no
+#      free-port precondition and no PID (Start-Process without -PassThru), the
+#      other profile's installed app or a straggler could satisfy it - and since
+#      the failing app shows a window too, that port check was the only
+#      discriminating signal in the whole driver. v2 refuses to start if the port
+#      is already held, and requires the listener's owning process to be in the
+#      launched app's process set.
+#
+#   3. REDACTION. v1 copied matching log lines verbatim into a receipt that gets
+#      pulled off the machine. A keyword filter is an inclusion filter, not a
+#      redaction filter: an error line can carry a token, a signed URL or a
+#      recipient. v2 scrubs before recording and keeps full lines on the VM only.
+#
+# Two cases, no cross-user seeding. Seeding another Windows user's database
+# brings DPAPI values that cannot decrypt for this account plus a legacy
+# workspace migration, and that produced a failure unrelated to the defect. The
+# valid existing-database test is the database THIS account's own app wrote.
 
 $ErrorActionPreference = 'Continue'
 $evidence = 'C:\clawx-acceptance'
-$log = Join-Path $evidence 'phase2-driver.log'
-$seed = Join-Path $evidence 'seed-openclaw'
+$log = Join-Path $evidence 'driver-v2.log'
 New-Item -ItemType Directory -Force -Path $evidence | Out-Null
 
 function Note($m) {
   Add-Content -Path $log -Value ("{0} {1}" -f (Get-Date).ToUniversalTime().ToString('o'), $m) -ErrorAction SilentlyContinue
 }
 
-# Only the acceptance user runs this, and only once. Guard before anything else
-# so a wrong user or a re-logon cannot reinstall or relaunch.
 $expectedUser = 'ClawXAcc0909'
-$doneMarker = Join-Path $evidence 'phase2-done.marker'
+$doneMarker = Join-Path $evidence 'driver-v2.marker'
 if ($env:USERNAME -ne $expectedUser) { exit 0 }
-if (Test-Path $doneMarker) { Note "already ran; exiting"; exit 0 }
+if (Test-Path $doneMarker) { Note 'already ran; exiting'; exit 0 }
 Set-Content -Path $doneMarker -Value (Get-Date).ToUniversalTime().ToString('o') -Encoding ascii
 
 $appExe = Join-Path $env:LOCALAPPDATA 'Programs\Ministry of Education\Ministry of Education.exe'
 $openclaw = Join-Path $env:USERPROFILE '.openclaw'
+$PORT = 18789
+$STABLE_MS = 20000          # the verified observer's stable-ready requirement
+$SAMPLE_MS = 2000
 
 function Get-AppProcs { @(Get-Process -Name 'Ministry of Education' -ErrorAction SilentlyContinue) }
 
-function Test-GatewayListening {
-  try { return $null -ne (Get-NetTCPConnection -State Listen -LocalAddress 127.0.0.1 -LocalPort 18789 -ErrorAction Stop | Select-Object -First 1) }
-  catch { return $false }
+function Get-PortOwner {
+  # Returns the owning PID, or $null when nothing is listening. Ownership is the
+  # point: a listener we cannot attribute is not evidence about our app.
+  try {
+    $c = Get-NetTCPConnection -State Listen -LocalAddress 127.0.0.1 -LocalPort $PORT -ErrorAction Stop | Select-Object -First 1
+    if ($c) { return [int]$c.OwningProcess }
+  } catch { }
+  return $null
 }
 
-function Stop-App {
-  foreach ($p in Get-AppProcs) {
-    try { $p.CloseMainWindow() | Out-Null } catch {}
-  }
-  Start-Sleep -Seconds 8
-  foreach ($p in Get-AppProcs) {
-    try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch {}
-  }
-  Start-Sleep -Seconds 4
+function Scrub([string] $line) {
+  if (-not $line) { return '' }
+  $s = $line
+  $s = $s -replace '(?i)(bearer\s+)\S+', '$1<redacted>'
+  $s = $s -replace '(?i)(token|secret|password|apikey|api_key|authorization)(["'':=\s]+)[^\s",}]+', '$1$2<redacted>'
+  $s = $s -replace 'https?://[^\s"'')]+', '<url redacted>'
+  $s = $s -replace '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', '<address redacted>'
+  $s = $s -replace '[A-Za-z0-9_\-]{32,}', '<opaque redacted>'
+  if ($s.Length -gt 200) { $s = $s.Substring(0, 200) }
+  return $s
 }
 
-function Collect-Logs($tag) {
+function Collect-Findings($tag) {
+  # Full lines stay on the machine; only scrubbed, bounded excerpts are recorded.
   $dirs = @((Join-Path $env:APPDATA 'Ministry of Education\logs'), (Join-Path $openclaw 'logs'))
-  $names = @()
+  $findings = @()
+  $files = @()
   foreach ($d in $dirs) {
     if (-not (Test-Path $d)) { continue }
     foreach ($f in Get-ChildItem $d -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 4) {
       $dest = Join-Path $evidence ("log-$tag-" + $f.Name)
-      # Startup-diagnostic lines only. Never copy whole conversations or
-      # credential material off the machine wholesale.
-      Get-Content $f.FullName -Tail 500 -ErrorAction SilentlyContinue |
-        Where-Object { $_ -match '(?i)gateway|sqlite|worker|invalid|error|ready|listen|fatal|exit|spawn' } |
-        Set-Content $dest -Encoding utf8 -ErrorAction SilentlyContinue
-      $names += $f.Name
+      Get-Content $f.FullName -Tail 600 -ErrorAction SilentlyContinue | Set-Content $dest -Encoding utf8 -ErrorAction SilentlyContinue
+      $files += $f.Name
+      foreach ($pat in @('invalid JSON', 'Unexpected token', 'SECRETS_DEGRADED', 'requires migration',
+                         'restart-loop breaker', 'failed to start', 'read-only')) {
+        $m = Select-String -Path $dest -SimpleMatch -Pattern $pat -ErrorAction SilentlyContinue
+        foreach ($hit in ($m | Select-Object -First 3)) {
+          $findings += [ordered]@{ pattern = $pat; file = $f.Name; line = $hit.LineNumber; excerpt = (Scrub $hit.Line.Trim()) }
+        }
+      }
     }
   }
-  # The specific CLWX-136 signature, looked for explicitly rather than inferred
-  # from silence.
-  $sig = @()
-  foreach ($f in Get-ChildItem $evidence -Filter "log-$tag-*" -File -ErrorAction SilentlyContinue) {
-    $hit = Select-String -Path $f.FullName -SimpleMatch -Pattern 'sqlite', 'invalid json', 'Unexpected token', 'read-only' -ErrorAction SilentlyContinue
-    if ($hit) { $sig += ($hit | Select-Object -First 6 | ForEach-Object { "$($f.Name):$($_.LineNumber): $($_.Line.Trim().Substring(0, [Math]::Min(160, $_.Line.Trim().Length)))" }) }
-  }
-  return [ordered]@{ files = $names; signatureHits = $sig }
+  return [ordered]@{ files = $files; findings = $findings }
 }
 
-function Invoke-LaunchObservation($tag, $budgetSeconds) {
-  Note "$tag launch begin"
-  # Never -WindowStyle Hidden: hiding the window kills the Gateway through the
-  # app's own `deferred start:finally` restart path. Recorded trap.
-  Start-Process -FilePath $appExe | Out-Null
+function Invoke-Case($tag, $budgetSeconds) {
+  $res = [ordered]@{ tag = $tag; budgetSeconds = $budgetSeconds; port = $PORT; stableRequiredMs = $STABLE_MS }
+
+  # Free-port precondition. A pre-existing holder makes the run undecidable, so
+  # refuse rather than produce a contaminated verdict.
+  $pre = Get-PortOwner
+  if ($null -ne $pre) {
+    $name = (Get-Process -Id $pre -ErrorAction SilentlyContinue).ProcessName
+    $res.result = 'BLOCKED_PORT_IN_USE'
+    $res.preexistingOwnerPid = $pre
+    $res.preexistingOwnerName = $name
+    Note "$tag BLOCKED: port $PORT already held by pid $pre ($name)"
+    return $res
+  }
+
+  $proc = Start-Process -FilePath $appExe -PassThru
+  $res.launchedPid = $proc.Id
+  Note "$tag launched pid=$($proc.Id)"
+
   $deadline = (Get-Date).AddSeconds($budgetSeconds)
-  $samples = @(); $readyAt = $null; $windowAt = $null
+  $samples = @()
+  $bestStableMs = 0
+  $runStart = $null
+  $readyLostCount = 0
+  $firstOwnedAt = $null
+  $windowAt = $null
+  $foreignOwnerSeen = @()
+
   while ((Get-Date) -lt $deadline) {
     $procs = Get-AppProcs
-    $listening = Test-GatewayListening
+    $pids = @($procs | ForEach-Object { $_.Id })
+    if ($pids -notcontains $proc.Id -and -not $proc.HasExited) { $proc.Refresh() }
+    $ownerPid = Get-PortOwner
+    $owned = ($null -ne $ownerPid -and $pids -contains $ownerPid)
+    if ($null -ne $ownerPid -and -not $owned) { $foreignOwnerSeen += $ownerPid }
     $windowed = @($procs | Where-Object { $_.MainWindowHandle -ne 0 })
-    $samples += [ordered]@{
-      t = (Get-Date).ToUniversalTime().ToString('o')
-      procs = $procs.Count; listening = $listening; windowed = $windowed.Count
+    $now = Get-Date
+    $good = ($owned -and $windowed.Count -gt 0)
+
+    if ($good) {
+      if (-not $runStart) { $runStart = $now }
+      $heldMs = [int]((New-TimeSpan -Start $runStart -End $now).TotalMilliseconds)
+      if ($heldMs -gt $bestStableMs) { $bestStableMs = $heldMs }
+      if (-not $firstOwnedAt) { $firstOwnedAt = $now.ToUniversalTime().ToString('o') }
+    } else {
+      if ($runStart) { $readyLostCount += 1 }   # a positive run broke: instability
+      $runStart = $null
     }
-    if ($listening -and -not $readyAt) { $readyAt = (Get-Date).ToUniversalTime().ToString('o') }
-    if ($windowed.Count -gt 0 -and -not $windowAt) { $windowAt = (Get-Date).ToUniversalTime().ToString('o') }
-    if ($readyAt -and $windowAt) { break }
-    Start-Sleep -Seconds 5
+    if ($windowed.Count -gt 0 -and -not $windowAt) { $windowAt = $now.ToUniversalTime().ToString('o') }
+
+    $samples += [ordered]@{
+      t = $now.ToUniversalTime().ToString('o')
+      procs = $procs.Count
+      portOwnerPid = $ownerPid
+      ownedByApp = $owned
+      windowed = $windowed.Count
+      heldMs = if ($runStart) { [int]((New-TimeSpan -Start $runStart -End $now).TotalMilliseconds) } else { 0 }
+    }
+
+    # Only a contiguous window satisfying the stability requirement stops the run.
+    if ($bestStableMs -ge $STABLE_MS) { break }
+    # All app processes gone is terminal; no point waiting out the budget.
+    if ($procs.Count -eq 0 -and $samples.Count -gt 3) { break }
+    Start-Sleep -Milliseconds $SAMPLE_MS
   }
+
   $final = Get-AppProcs
   $windowedFinal = @($final | Where-Object { $_.MainWindowHandle -ne 0 })
-  $logs = Collect-Logs $tag
-  $res = [ordered]@{
-    tag = $tag
-    budgetSeconds = $budgetSeconds
-    sampleCount = $samples.Count
-    samples = $samples
-    gatewayReadyAt = $readyAt
-    mainWindowSeenAt = $windowAt
-    gatewayReady = [bool]$readyAt
-    windowShown = [bool]$windowAt
-    finalProcessCount = $final.Count
-    windowedProcessCount = $windowedFinal.Count
-    secondGuiInstance = ($windowedFinal.Count -gt 1)
-    logs = $logs
+  $res.sampleCount = $samples.Count
+  $res.samples = $samples
+  $res.stableReadyMs = $bestStableMs
+  $res.readyLostCount = $readyLostCount
+  $res.firstOwnedListenerAt = $firstOwnedAt
+  $res.mainWindowSeenAt = $windowAt
+  $res.windowShown = [bool]$windowAt
+  $res.ownedListenerEverSeen = [bool]$firstOwnedAt
+  $res.stableReady = ($bestStableMs -ge $STABLE_MS)
+  $res.foreignPortOwnersSeen = @($foreignOwnerSeen | Sort-Object -Unique)
+  $res.finalProcessCount = $final.Count
+  $res.windowedProcessCount = $windowedFinal.Count
+  $res.secondGuiInstance = ($windowedFinal.Count -gt 1)
+  $res.launchedProcessExited = $proc.HasExited
+  if ($proc.HasExited) { $res.launchedExitCode = $proc.ExitCode }
+  $res.logs = Collect-Findings $tag
+
+  if ($res.stableReady -and $res.windowShown -and -not $res.secondGuiInstance) {
+    $res.result = 'PASS'
+  } else {
+    $res.result = 'FAIL'
+    $res.reason = ("stableReadyMs=$($res.stableReadyMs)/$STABLE_MS ownedListenerEverSeen=$($res.ownedListenerEverSeen) " +
+                   "readyLostCount=$($res.readyLostCount) windowShown=$($res.windowShown) secondGui=$($res.secondGuiInstance)")
   }
-  $res.result = if ($res.gatewayReady -and $res.windowShown -and -not $res.secondGuiInstance) { 'PASS' } else { 'FAIL' }
-  if ($res.result -eq 'FAIL') {
-    $res.reason = "gatewayReady=$($res.gatewayReady) windowShown=$($res.windowShown) secondGui=$($res.secondGuiInstance)"
-  }
-  Note "$tag result=$($res.result) ready=$($res.gatewayReady) window=$($res.windowShown)"
+  Note "$tag result=$($res.result) stableMs=$($res.stableReadyMs) lost=$($res.readyLostCount)"
   return $res
+}
+
+function Stop-App {
+  foreach ($p in Get-AppProcs) { try { $p.CloseMainWindow() | Out-Null } catch { } }
+  Start-Sleep -Seconds 10
+  foreach ($p in Get-AppProcs) { try { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue } catch { } }
+  Start-Sleep -Seconds 5
 }
 
 $r = [ordered]@{}
 $r.at = (Get-Date).ToUniversalTime().ToString('o')
+$r.driverVersion = 2
 $r.user = "$env:USERNAME"
-$r.computer = "$env:COMPUTERNAME"
 $r.sessionName = "$env:SESSIONNAME"
 $r.isElevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-Note "driver start user=$env:USERNAME session=$env:SESSIONNAME elevated=$($r.isElevated)"
+Note "driver v2 start user=$env:USERNAME session=$env:SESSIONNAME elevated=$($r.isElevated)"
 
-# --- installer identity, re-verified in the session that runs it -------------
+# Install only if absent; a present install is reported with its identity.
 $installer = 'C:\Users\Public\Downloads\moe30.exe'
 $expected = '9f8a2dc5fc5c238d49935a7f1b0b9b90205c104ddf933124196c62210114aff7'
-if (-not (Test-Path $installer)) {
-  $r.result = 'BLOCKED'; $r.reason = 'installer not present in session'
-  $r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'phase2-receipt.json') -Encoding ascii
-  exit 1
-}
-$r.installerSha256 = (Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToLower()
-$r.installerBytes = (Get-Item $installer).Length
-$r.installerHashMatches = ($r.installerSha256 -eq $expected)
-if (-not $r.installerHashMatches) {
-  $r.result = 'BLOCKED'; $r.reason = 'installer hash does not match the verified candidate'
-  $r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'phase2-receipt.json') -Encoding ascii
-  exit 1
-}
-
-# --- pre-state --------------------------------------------------------------
-$r.profileHadOpenclawBefore = Test-Path $openclaw
 $r.appPresentBefore = Test-Path $appExe
-
-# --- silent per-user install -------------------------------------------------
-$sw = [Diagnostics.Stopwatch]::StartNew()
-$p = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru -Wait
-$r.installExitCode = $p.ExitCode
-$r.installSeconds = [math]::Round($sw.Elapsed.TotalSeconds, 1)
-$r.appPresentAfter = Test-Path $appExe
-Note "install exit=$($p.ExitCode) $($r.installSeconds)s present=$($r.appPresentAfter)"
-if (-not $r.appPresentAfter) {
-  $r.result = 'FAIL'; $r.reason = 'install produced no executable'
-  $r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'phase2-receipt.json') -Encoding ascii
-  exit 1
+if (-not $r.appPresentBefore) {
+  if (-not (Test-Path $installer)) {
+    $r.result = 'BLOCKED'; $r.reason = 'no app and no installer'
+    $r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'driver-v2-receipt.json') -Encoding ascii
+    exit 1
+  }
+  $r.installerSha256 = (Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToLower()
+  if ($r.installerSha256 -ne $expected) {
+    $r.result = 'BLOCKED'; $r.reason = 'installer hash mismatch'
+    $r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'driver-v2-receipt.json') -Encoding ascii
+    exit 1
+  }
+  $p = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru -Wait
+  $r.installExitCode = $p.ExitCode
 }
-$vi = (Get-Item $appExe).VersionInfo
-$r.installedProductVersion = $vi.ProductVersion
-$r.installedExeSha256 = (Get-FileHash -Algorithm SHA256 -Path $appExe).Hash.ToLower()
+$r.appPresentAfter = Test-Path $appExe
+if ($r.appPresentAfter) {
+  $r.installedProductVersion = (Get-Item $appExe).VersionInfo.ProductVersion
+  $r.installedExeSha256 = (Get-FileHash -Algorithm SHA256 -Path $appExe).Hash.ToLower()
+}
 
-# --- Run A: baseline on fresh profile state ---------------------------------
-$r.runA = Invoke-LaunchObservation 'runA-fresh' 300
 Stop-App
 
-# --- Run B: the CLWX-136 scenario, real pre-existing database ---------------
-$r.seedAvailable = Test-Path $seed
-if ($r.seedAvailable) {
-  # Record what the app itself wrote in Run A before replacing it, so the two
-  # runs stay distinguishable.
-  if (Test-Path $openclaw) {
-    $keep = Join-Path $evidence 'runA-openclaw-snapshot'
-    New-Item -ItemType Directory -Force -Path $keep | Out-Null
-    Copy-Item (Join-Path $openclaw '*') $keep -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item $openclaw -Recurse -Force -ErrorAction SilentlyContinue
-  }
-  New-Item -ItemType Directory -Force -Path $openclaw | Out-Null
-  Copy-Item (Join-Path $seed '*') $openclaw -Recurse -Force -ErrorAction SilentlyContinue
-  $r.seededFiles = @(Get-ChildItem $openclaw -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Name)|$($_.Length)" })
-  $r.seededSqliteBytes = (Get-ChildItem $openclaw -Recurse -Filter 'openclaw.sqlite' -ErrorAction SilentlyContinue | Select-Object -First 1).Length
-  Note "seeded $($r.seededFiles.Count) files; openclaw.sqlite=$($r.seededSqliteBytes)"
-  $r.runB = Invoke-LaunchObservation 'runB-existing-db' 360
+# --- Case 1: fresh state ----------------------------------------------------
+# Any prior .openclaw is moved aside, not deleted, so nothing is destroyed.
+if (Test-Path $openclaw) {
+  $aside = Join-Path $evidence ('preexisting-openclaw-' + (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))
+  Move-Item $openclaw $aside -Force -ErrorAction SilentlyContinue
+  $r.priorStateMovedTo = $aside
+}
+$r.case1 = Invoke-Case 'case1-fresh' 300
+Stop-App
+
+# --- Case 2: existing state database, same user ------------------------------
+# The database now on disk was written by THIS account's own app during case 1,
+# so there is no cross-user DPAPI or migration confound. This is the criterion.
+$r.case2StateFileCount = @(Get-ChildItem $openclaw -Recurse -File -ErrorAction SilentlyContinue).Count
+$sq = Get-ChildItem $openclaw -Recurse -Filter 'openclaw.sqlite' -ErrorAction SilentlyContinue | Select-Object -First 1
+$r.case2SqliteBytes = if ($sq) { $sq.Length } else { $null }
+if ($r.case2StateFileCount -gt 0) {
+  $r.case2 = Invoke-Case 'case2-existing-db' 360
   Stop-App
 } else {
-  $r.runB = [ordered]@{ tag = 'runB-existing-db'; result = 'NOT_RUN'; reason = 'no seed database staged' }
+  $r.case2 = [ordered]@{ tag = 'case2-existing-db'; result = 'NOT_RUN'; reason = 'case 1 left no state to reuse' }
 }
 
-# --- combined reading -------------------------------------------------------
-$a = $r.runA.result; $b = $r.runB.result
-$r.result = if ($a -eq 'PASS' -and $b -eq 'PASS') { 'PASS' } elseif ($a -eq 'PASS' -and $b -eq 'FAIL') { 'FAIL_EXISTING_DB_ONLY' } elseif ($a -eq 'FAIL') { 'FAIL_BASELINE' } else { "A=$a B=$b" }
-$r.interpretation = switch ($r.result) {
-  'PASS' { 'Installed startup reaches Gateway readiness with a visible window and no second GUI instance, both on fresh state and with the real pre-existing database.' }
-  'FAIL_EXISTING_DB_ONLY' { 'Baseline start works; the failure is specific to an existing state database. That is the CLWX-136 shape and the seeded database is the discriminator.' }
-  'FAIL_BASELINE' { 'The app does not start even on fresh state, so the existing-database question is not yet reachable. Do not attribute this to CLWX-136 without further isolation.' }
-  default { 'Mixed or incomplete; read the per-run records rather than this summary.' }
-}
-$r.scope = 'Installed startup only. Ordinary chat, doctor-repair, document, browser, tenant and external-tester criteria are separate stages and remain NOT_RUN here.'
-$r.seedCaveat = 'The seeded database was written by a different Windows user, so DPAPI-protected values inside it will not decrypt for this account. That affects secrets, not SQLite readability, and Run A bounds any confusion.'
-$r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'phase2-receipt.json') -Encoding ascii
-Note "driver done result=$($r.result)"
+$c1 = $r.case1.result; $c2 = $r.case2.result
+$r.result = if ($c1 -eq 'PASS' -and $c2 -eq 'PASS') { 'PASS' }
+            elseif ($c1 -eq 'PASS' -and $c2 -eq 'FAIL') { 'FAIL_EXISTING_DB_ONLY' }
+            elseif ($c1 -eq 'FAIL') { 'FAIL_FRESH' }
+            else { "case1=$c1 case2=$c2" }
+$r.criterion = ("Installed startup reaches Gateway readiness - a listener on 127.0.0.1:$PORT owned by the app's own " +
+                "process, held continuously for at least $STABLE_MS ms, with a visible window and no second GUI instance.")
+$r.notClaimed = ('Readiness here is an owned, stable TCP listener, which is stronger than a running process but weaker ' +
+                 'than an in-app assertion that a turn completes. Ordinary chat, the doctor-repair path, and all ' +
+                 'document, browser, tenant and external-tester criteria are NOT_RUN.')
+$r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'driver-v2-receipt.json') -Encoding ascii
+Note "driver v2 done result=$($r.result)"
