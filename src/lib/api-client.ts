@@ -729,7 +729,7 @@ export function createGatewayWsTransportInvoker(options: GatewayWsTransportOptio
       method: 'connect',
       params: {
         minProtocol: 3,
-        maxProtocol: 3,
+        maxProtocol: 4,
         client: {
           id: 'openclaw-control-ui',
           displayName: 'ClawX UI',

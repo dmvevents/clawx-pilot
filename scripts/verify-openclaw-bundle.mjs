@@ -201,26 +201,74 @@ try {
 function verifyGatewayProtocolContract() {
   const problems = [];
 
-  const wsClient = path.join(ROOT, 'electron', 'gateway', 'ws-client.ts');
-  if (!fs.existsSync(wsClient)) {
-    return [`PROTOCOL: cannot read ${path.relative(ROOT, wsClient)} to determine the offered range`];
+  // Applicability, before anything else. This verifier is also run by
+  // tests/unit/clwx92-bundle-fixture.test.ts against an isolated root that stages
+  // ONLY the bundle - no app source. There, no connect frame exists because there is
+  // no app to check, which is different from "an app is present but its range cannot
+  // be read". The first is not applicable; the second is a genuine unknown and must
+  // fail. Conflating them made this gate report a false failure in CI.
+  const appTreePresent = fs.existsSync(path.join(ROOT, 'electron', 'gateway'))
+    || fs.existsSync(path.join(ROOT, 'src', 'lib'));
+  if (!appTreePresent) {
+    console.log('  protocol contract: no app source in this root — check not applicable');
+    return [];
   }
-  const src = fs.readFileSync(wsClient, 'utf8');
-  const minMatch = src.match(/minProtocol:\s*(\d+)/);
-  const maxMatch = src.match(/maxProtocol:\s*(\d+)/);
-  if (!minMatch || !maxMatch) {
-    return ['PROTOCOL: could not extract minProtocol/maxProtocol from the connect frame (INDETERMINATE)'];
-  }
-  const offeredMin = Number(minMatch[1]);
-  const offeredMax = Number(maxMatch[1]);
 
-  // The gateway states its own requirement in the mismatch message it logs, e.g.
-  //   client=... min=3 max=3 expected=4 probeMin=3
-  // so it is extractable rather than a matter of inference.
+  // Scan EVERY connect frame, not just Main's. Independent review found three in
+  // the app - electron/gateway/ws-client.ts, src/lib/api-client.ts and
+  // src/lib/gateway-client.ts - and the first version of this gate read only the
+  // first, then printed a whole-bundle PASS. That would certify a build with two
+  // frames still refused, and the diagnostic transport would then fail with the very
+  // error an engineer had enabled it to investigate.
+  const frameFiles = [
+    path.join('electron', 'gateway', 'ws-client.ts'),
+    path.join('src', 'lib', 'api-client.ts'),
+    path.join('src', 'lib', 'gateway-client.ts'),
+  ];
+  const frames = [];
+  for (const rel of frameFiles) {
+    const abs = path.join(ROOT, rel);
+    if (!fs.existsSync(abs)) continue;
+    const text = fs.readFileSync(abs, 'utf8');
+    const mins = [...text.matchAll(/minProtocol:\s*(\d+)/g)];
+    const maxes = [...text.matchAll(/maxProtocol:\s*(\d+)/g)];
+    if (mins.length === 0 || maxes.length === 0) continue;
+    if (mins.length !== maxes.length) {
+      problems.push(`PROTOCOL: ${rel} declares ${mins.length} minProtocol and ${maxes.length} maxProtocol values; cannot pair them (INDETERMINATE)`);
+      continue;
+    }
+    for (let i = 0; i < mins.length; i += 1) {
+      frames.push({ rel, min: Number(mins[i][1]), max: Number(maxes[i][1]) });
+    }
+  }
+  // A repo-wide sweep catches a frame added in a file this list does not know about.
+  const sweepRoots = [path.join(ROOT, 'electron'), path.join(ROOT, 'src')];
+  const seen = new Set(frames.map((f) => f.rel));
+  const walk = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walk(full); continue; }
+      if (!/\.(ts|tsx)$/.test(entry.name)) continue;
+      const rel = path.relative(ROOT, full);
+      if (seen.has(rel)) continue;
+      const text = fs.readFileSync(full, 'utf8');
+      if (/minProtocol:\s*\d+/.test(text)) {
+        problems.push(`PROTOCOL: ${rel} declares a connect protocol range but is not in the gate's known-frame list. Add it, or the gate will pass while that frame is refused.`);
+      }
+    }
+  };
+  sweepRoots.forEach(walk);
+
+  if (frames.length === 0) {
+    return ['PROTOCOL: no connect frame found in any known location (INDETERMINATE — refusing to certify compatibility)'];
+  }
+
   const distDir = path.join(ROOT, 'build', 'openclaw', 'dist');
   if (!fs.existsSync(distDir)) {
     return [`PROTOCOL: bundled gateway dist not found at ${path.relative(ROOT, distDir)} (INDETERMINATE)`];
   }
+
   // Two signals, most authoritative first. Signal A is the gateway naming its own
   // requirement in the mismatch message; newer gateways carry it. Signal B is the
   // modal default in its negotiation code, which is present in every version
@@ -250,21 +298,24 @@ function verifyGatewayProtocolContract() {
     return ['PROTOCOL: bundled gateway states no expected protocol version and no negotiation default anywhere in dist (INDETERMINATE — refusing to certify compatibility)'];
   }
 
-  if (required < offeredMin || required > offeredMax) {
-    problems.push(
-      `PROTOCOL: bundled gateway requires protocol ${required} (from ${foundIn}) but the app offers ` +
-      `[${offeredMin},${offeredMax}] in electron/gateway/ws-client.ts. Every connect will be refused with ` +
-      `close 1002 "protocol mismatch" and the chat composer will stay permanently disabled. Note the gateway's ` +
-      `liveness probe may still accept an older version, so a listening port and a passing readiness probe ` +
-      `will BOTH report success on this build — see CLWX-138.`,
-    );
+  for (const f of frames) {
+    if (required < f.min || required > f.max) {
+      problems.push(
+        `PROTOCOL: bundled gateway requires protocol ${required} (from ${foundIn}) but ${f.rel} offers ` +
+        `[${f.min},${f.max}]. That connect is refused with close 1002 "protocol mismatch". The gateway admits ` +
+        `protocol 3 only for node clients and probes, so a ui/webchat client offering [3,3] is rejected outright. ` +
+        `Its liveness probe still accepts the older version, so a listening port and a readiness probe will BOTH ` +
+        `report success on this build — see CLWX-138.`,
+      );
+    }
+    if (f.min === f.max) {
+      problems.push(
+        `PROTOCOL: ${f.rel} pins minProtocol === maxProtocol (${f.min}). Offer a range so the gateway can ` +
+        `negotiate; pinning makes every gateway upgrade a hard break instead of a negotiation.`,
+      );
+    }
   }
-  if (offeredMin === offeredMax) {
-    problems.push(
-      `PROTOCOL: the app pins minProtocol === maxProtocol (${offeredMin}). Offer a range so the gateway can ` +
-      `negotiate; pinning makes every gateway upgrade a hard break instead of a negotiation.`,
-    );
-  }
+  console.log(`  protocol contract: gateway requires ${required}; ${frames.length} connect frame(s) checked`);
   return problems;
 }
 

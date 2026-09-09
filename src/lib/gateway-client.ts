@@ -151,7 +151,7 @@ class GatewayBrowserClient {
               method: 'connect',
               params: {
                 minProtocol: 3,
-                maxProtocol: 3,
+                maxProtocol: 4,
                 client: {
                   id: 'gateway-client',
                   displayName: 'ClawX',
