@@ -122,7 +122,8 @@ function Invoke-Case($tag, $budgetSeconds) {
   $res.launchedPid = $proc.Id
   Note "$tag launched pid=$($proc.Id)"
 
-  $deadline = (Get-Date).AddSeconds($budgetSeconds)
+  $launchedAt = Get-Date
+  $deadline = $launchedAt.AddSeconds($budgetSeconds)
   $samples = @()
   $bestStableMs = 0
   $runStart = $null
@@ -130,6 +131,11 @@ function Invoke-Case($tag, $budgetSeconds) {
   $firstOwnedAt = $null
   $windowAt = $null
   $foreignOwnerSeen = @()
+  # Duplicate GUI instances must be judged across the whole window, not from one
+  # snapshot: a second instance can appear later, or still be exiting under the
+  # single-instance lock at the moment a single snapshot is taken.
+  $maxWindowed = 0
+  $stableReachedAt = $null
 
   while ((Get-Date) -lt $deadline) {
     $procs = Get-AppProcs
@@ -152,6 +158,8 @@ function Invoke-Case($tag, $budgetSeconds) {
       $runStart = $null
     }
     if ($windowed.Count -gt 0 -and -not $windowAt) { $windowAt = $now.ToUniversalTime().ToString('o') }
+    if ($windowed.Count -gt $maxWindowed) { $maxWindowed = $windowed.Count }
+    if ($bestStableMs -ge $STABLE_MS -and -not $stableReachedAt) { $stableReachedAt = $now }
 
     $samples += [ordered]@{
       t = $now.ToUniversalTime().ToString('o')
@@ -183,7 +191,20 @@ function Invoke-Case($tag, $budgetSeconds) {
   $res.foreignPortOwnersSeen = @($foreignOwnerSeen | Sort-Object -Unique)
   $res.finalProcessCount = $final.Count
   $res.windowedProcessCount = $windowedFinal.Count
-  $res.secondGuiInstance = ($windowedFinal.Count -gt 1)
+  $res.maxWindowedObserved = $maxWindowed
+  # Judged across the window, not from the final snapshot.
+  $res.secondGuiInstance = ($maxWindowed -gt 1)
+
+  # Time-to-ready, recorded rather than assumed. A listener that only appears as
+  # the budget runs out is not the same outcome as one that appears promptly, and
+  # without these numbers both read as PASS.
+  $res.timeToFirstOwnedListenerMs = if ($firstOwnedAt) { [int]((New-TimeSpan -Start $launchedAt -End ([DateTime]::Parse($firstOwnedAt).ToLocalTime())).TotalMilliseconds) } else { $null }
+  $res.timeToStableReadyMs = if ($stableReachedAt) { [int]((New-TimeSpan -Start $launchedAt -End $stableReachedAt).TotalMilliseconds) } else { $null }
+  $res.budgetMs = $budgetSeconds * 1000
+  # Flagged, not auto-failed: the acceptable start latency is an owner decision
+  # (CLWX-43), not this harness's to invent. The flag makes a near-deadline pass
+  # impossible to mistake for a prompt one.
+  $res.readyNearDeadline = ($null -ne $res.timeToStableReadyMs -and $res.timeToStableReadyMs -gt (0.8 * $res.budgetMs))
   $res.launchedProcessExited = $proc.HasExited
   if ($proc.HasExited) { $res.launchedExitCode = $proc.ExitCode }
   $res.logs = Collect-Findings $tag
@@ -195,6 +216,13 @@ function Invoke-Case($tag, $budgetSeconds) {
     $res.reason = ("stableReadyMs=$($res.stableReadyMs)/$STABLE_MS ownedListenerEverSeen=$($res.ownedListenerEverSeen) " +
                    "readyLostCount=$($res.readyLostCount) windowShown=$($res.windowShown) secondGui=$($res.secondGuiInstance)")
   }
+  # State what was measured, not a broader claim. "Readiness" here is an owned,
+  # stable listener - a visible window alone is present in the failure mode too,
+  # so it evidences nothing by itself.
+  $res.measured = ("port $PORT bound by the app's own process continuously for $($res.stableReadyMs) ms " +
+                   "(requirement $STABLE_MS ms); readiness lost $($res.readyLostCount) time(s); " +
+                   "max windowed processes observed across the window: $maxWindowed; " +
+                   "time to stable readiness: $(if ($null -ne $res.timeToStableReadyMs) { "$($res.timeToStableReadyMs) ms" } else { 'never' })")
   Note "$tag result=$($res.result) stableMs=$($res.stableReadyMs) lost=$($res.readyLostCount)"
   return $res
 }
