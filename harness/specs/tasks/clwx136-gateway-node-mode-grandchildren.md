@@ -10,6 +10,8 @@ touchedAreas:
   - resources/gateway/clawx-gateway-node-mode-entry.mjs
   - tests/unit/config-sync.test.ts
   - tests/unit/gateway-node-mode-entry.test.ts
+  - tests/unit/gateway-supervisor-doctor-repair.test.ts
+  - tests/unit/openclaw-doctor.test.ts
   - harness/specs/tasks/clwx136-gateway-node-mode-grandchildren.md
 expectedUserBehavior:
   - Installed Windows startup reaches Gateway readiness with an existing OpenClaw state database; the SQLite read-only worker returns its one-object JSON result instead of "returned invalid JSON".
