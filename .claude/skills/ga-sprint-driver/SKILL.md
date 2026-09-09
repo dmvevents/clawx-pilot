@@ -82,6 +82,8 @@ An approved repair that is not in the candidate is **still executable work**. Re
 2. Treat any lane that is approved but absent as an open integration slice, and either integrate it or give a criterion-based exclusion. An implicit omission is not a disposition.
 3. Bind the candidate to its package receipt: the version identity, the build run, and the hashes of the installer, archive and executable, plus confirmation that each integrated repair is present in the extracted package. Source presence is not package presence.
 
+Use the session-armed [integration check](../../../docs/CLAUDE_CODE_OPERATIONS.md#reconcile-integration-before-allowing-completion) as an executable predicate before an exhausted-work claim. Register all reviewed lane heads and inspect outstanding worktree changes before replacing its baseline. Its reconciled manifest result does not prove artifact bytes or GA. After compaction, verify actual next-turn/task activity; for a pending build use one bounded session-native watchdog with an exact job ID and cleanup condition, following the operations runbook.
+
 This exists because a pass once reported executable work exhausted while six approved commits lived only in author worktrees, so the frozen installer contained none of them — and the candidate additionally shipped a rejected revision plus its first correction while the fix for two reproduced fail-opens was absent. Ancestry would have caught it in one command.
 
 ## 5. Report; stop only on a real boundary

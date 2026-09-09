@@ -105,7 +105,73 @@ The controller asks a separate model to evaluate the conversation after each com
 
 Lifecycle limits matter: repeated no-tool turns can pause a still-set goal; interactive background check-ins are capped at three between operator prompts. Inspect the reason and outstanding task receipts before deliberately resuming. Do not assume a goal indicator alone proves progress.
 
-Ask the lead to use `CronList` and cancel only a superseded GA task through `CronDelete`; never edit scheduler state files or cancel other projects' jobs. Do not layer OMC Ralph, a custom Stop loop and `/goal` on the same outcome. Existing protective hooks stay enabled. For a real pending job use its completion event, native idle notice or bounded `Monitor` output before adding a polling timer. `/loop` requires a running host/session and recurring schedules expire after seven days; it does not recover a stopped Mac or replace Windows interactive authentication. [Scheduler lifecycle](https://code.claude.com/docs/en/scheduled-tasks).
+Compaction is context maintenance, not an execution receipt. Before a planned `/compact`, save the selected criterion, candidate/worktree, pending job ID, completed evidence, exact next action and ownership in the existing handoff packet. After it, verify goal status and the pending task receipt. `/compact` is not documented to start another assistant turn. `SessionStart(compact)` can inject context and `PostCompact` can perform follow-up work, but neither has continuation decision control. Background task completion normally delivers a new turn. Do not claim an idle assistant means its background build stopped; inspect both independently. [Goal lifecycle](https://code.claude.com/docs/en/goal), [compaction hooks](https://code.claude.com/docs/en/hooks).
+
+For an active long build, use at most **one session-scoped five-minute watchdog** if background delivery is insufficient. Inspect `CronList`, then use native `CronCreate` for a prompt tied to that exact run ID and existing watcher. It checks the job, continues artifact validation on success, or diagnoses its actual failure. It never dispatches a duplicate build, repeats unchanged full tests or becomes a second completion controller. Record its task ID in the handoff packet. Delete it with `CronDelete` when the handoff finishes, the owner stops, or only an external dependency remains; verify deletion. A scheduled task is a wake-up mechanism, not evidence of progress or recovery from a stopped host. Validate an actual scheduled delivery and subsequent tool activity before claiming the watchdog works. [Supported scheduling](https://code.claude.com/docs/en/scheduled-tasks).
+
+Ask the lead to use `CronList` and cancel only a superseded GA task through `CronDelete`; never edit scheduler state files or cancel other projects' jobs. Keep `/goal` as the sole completion controller; do not add OMC Ralph or an unconditional Stop loop on the same outcome. A session-armed Stop check may reject a specific unsupported completion claim using local evidence, as described below. Existing protective hooks stay enabled. For a real pending job use its completion event, native idle notice or bounded `Monitor` output before adding a polling timer. `/loop` requires a running host/session and recurring schedules expire after seven days; it does not recover a stopped Mac or replace Windows interactive authentication. [Scheduler lifecycle](https://code.claude.com/docs/en/scheduled-tasks).
+
+### Reconcile integration before allowing completion
+
+`scripts/ga-continuation-gate.py` is a local evidence check, not a build dispatcher
+or a GA evaluator. It is inert until explicitly armed for the exact lead session
+and Git repository. Register the candidate release ref, every reviewed lane's
+base and approved head, the expected manifest, and the maintained machine pointer:
+
+```sh
+python3 scripts/ga-continuation-gate.py arm \
+  --repo "$PWD" --session 'LEAD_SESSION_UUID' \
+  --candidate 'RELEASE_BRANCH' \
+  --lane CLWX-123 'LANE_BASE_SHA' 'APPROVED_HEAD_SHA' \
+  --manifest 'docs/release-manifests/VERSION.json' \
+  --candidate-state docs/completion-state.json
+python3 scripts/ga-continuation-gate.py check \
+  --repo "$PWD" --session 'LEAD_SESSION_UUID'
+```
+
+Repeat `--lane` for each approved repair. The lead records author ownership at
+dispatch and reconciles every handoff before arming or replacing this contract.
+Re-arming takes a new worktree baseline: first inspect the previous receipt and
+disposition all outstanding changes. Never re-arm or disarm just to clear a failed
+check. The baseline cannot discover omitted historical obligations by itself.
+
+The check compares each lane's net changed file modes/blobs against the actual
+candidate, so cherry-picked equivalents can pass while reverted or modified
+repairs fail. Candidate worktree changes and a stale configured source pointer
+also block. New or advanced worktrees with unrepresented product changes require
+review and registration/disposition. Unchanged historical worktrees and branches
+containing only this controller's documentation are outside that discovery scope.
+
+The manifest check reconciles candidate SHA/version with installer and ASAR
+metadata. **`PROVENANCE_RECONCILED` is not byte verification or GA approval.** The
+lead still verifies downloaded hashes, extracted repairs, installed journeys,
+tenant flows and external acceptance using their existing gates. An omitted
+optional machine pointer is reported as `NOT_CONFIGURED`, not a pass.
+
+The command Stop hook uses a 20-second outer timeout, leaving margin above its
+10-second local-check budget and repository attribution. It writes private receipts under
+`.claude/ga-continuation/<session>/`. Missing evidence returns a concrete corrective
+reason. Two unchanged corrective responses are followed by an explicit
+`STALLED / GA RED` force-stop; that outcome never becomes a pass. Changed evidence
+or an explicit new operator turn allows a new bounded attempt. Investigate the
+receipt and actual pending jobs rather than adding another unconditional retry.
+Observe a real build through its existing watcher or bounded scheduled check-in;
+the local gate does not infer CI state from an absent manifest. Keep these private
+state files out of Git and preserve unrelated working changes. If the private
+continuation counter cannot be persisted, stop explicitly with GA RED rather
+than repeatedly retrying without a durable bound.
+
+Keep long waits event-driven: start one bounded background job and consume its
+completion receipt. Do not run foreground `sleep` loops over a download or build;
+they occupy the turn and prevent scheduled prompts from executing. Inspect the
+existing job's output, bytes and exit status before retrying. A five-minute
+watchdog cannot repair a seven-minute foreground sleep until that turn yields.
+
+Validate the script tests, independent reviews, normal-CLI callback and automatic
+repair fixture before enabling the hook in a real lead. Hook activation and
+per-session arming are distinct receipts. On handoff, retain the contract and
+verify the session ID, release ref and current check result. Explicit disarming
+is for a completed/cancelled controller or a documented transfer of ownership.
 
 ### Route tools without loading everything
 

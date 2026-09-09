@@ -23,6 +23,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/ga-continuation-gate.py\" hook --repo \"$CLAUDE_PROJECT_DIR\"",
+            "timeout": 20
+          }
+        ]
+      }
     ]
   },
   "worktree": {

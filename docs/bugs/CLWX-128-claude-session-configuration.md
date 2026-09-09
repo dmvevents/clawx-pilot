@@ -98,3 +98,248 @@ Native `/goal` status confirmed **Goal active**, and the lead advanced independe
 A separate normal CLI 2.1.266/Bedrock control subsequently verified the full continuation mechanism: first turn reads one file and ends; native Stop-hook evaluator feedback starts the second turn without user input; the second turn reads a different file and completes successfully (exit 0, 41.36 seconds). The initial identical-file control was deduplicated, so it was preserved and corrected to distinct files. This proves evaluator/continuation behavior in the probe; the existing lead remains on 2.1.265. During monitoring the lead also committed the held distribution draft (`6f0ccc70`) and the remaining-criterion dependency/owner/resume map (`fe7fdda6`).
 
 Memory/code-tool probes also passed using the installed Claude Mem MCP and project LSP. A failed launch exposed variadic `--tools` consuming a trailing positional prompt; streaming the prompt on stdin corrected it. Raw probes, failed attempts and review receipts remain private. Sanitized timestamps, source digests and callback evidence are in the linked controller receipt. Product acceptance is still **GA RED**.
+
+## Recurrence: the controller accepted an incomplete completion claim
+
+**September 9, later — OPEN pending the completion-guard validation below.** The
+owner requested autonomous, board-driven execution through repair, integration,
+testing and release, then explicitly challenged the repeated failure to do so.
+The earlier configuration tests remain valid within their stated scope. They did
+not establish this end-to-end behavior.
+
+### Reproduction and confirmed mechanism
+
+1. Freeze the candidate at `0f708082c941fbed007173c57232aec916f4eff1`
+   (`0.4.3-moe.29`). Independent approval exists for CLWX-61 commits `c0437a97`,
+   `cd88a205`, `2b5646a5`; CLWX-130 `75a40554`; and CLWX-102 `7615c43b`,
+   `8923f132` in their author worktrees.
+2. The lead reports that all executable sprint work is exhausted because the QA
+   interactive desktop is unavailable. Native `/goal` reports achieved. The
+   observed goal summary reported approximately 49 minutes and 577.8k tokens;
+   this is a CLI usage display, not a verified billing amount.
+3. Run `git log 0f708082..<reviewed-head>` and ancestry checks for those lanes.
+   All six commits are absent. The candidate includes the earlier CLWX-130
+   parent `41359e12`, but not its newly approved correction. Integration and a
+   replacement build remain executable without the QA desktop.
+4. Direct the lead to integrate those exact repairs. It acknowledges the
+   mistaken stopping decision and cherry-picks all six without conflicts into
+   `release/moe30-integration`. This is a decisive counterexample to the claim
+   that every remaining operation was externally blocked.
+
+**Expected:** review completion hands work to an integration owner; the controller
+checks candidate contents and artifact provenance before accepting an exhausted
+work claim. An unavailable Windows desktop blocks installed acceptance, not
+independent source integration or hosted packaging.
+
+**Actual:** a successful review was treated as the end of a workstream. No tool
+failed, so `PostToolUseFailure` could not detect the omission. The goal evaluator
+accepted the conversation's incomplete account rather than independently checking
+Git. Official documentation explicitly says that the evaluator sees conversation
+evidence and does not inspect files or run commands itself. The earlier receipt
+even recorded this limitation; the coordinator failed to convert it into a
+validation requirement. [Official goal behavior](https://code.claude.com/docs/en/goal)
+
+### Instruction-to-evidence audit
+
+| Owner requirement | Observed result | Missing control or remaining boundary |
+|---|---|---|
+| Submit instructions and make the session run | Earlier paste/native-command failures were corrected; actual `Goal set` and tool activity were verified | Command delivery, native activation and useful completion are separate assertions |
+| Use Claude/Bedrock with isolated worktrees | Author/reviewer lanes and receipts exist | A worktree needs an explicit integration disposition; its existence or review approval is not release progress |
+| Follow Plane acceptance through completion | Reviews and reports advanced; approved repairs stayed outside the candidate | Required handoff from review to integration was absent from the completion check |
+| Detect, report, repair and retest blockers | Execution-error hook and bounded recovery worked in their tests | Successful commands can still leave a required stage undone; completion needs a different trigger |
+| Continue independent work while Windows is blocked | Some source and documentation work continued | The lead stopped before one remaining independent integration/build stage |
+| Keep current state recoverable | Current prose, machine pointers and historical records disagreed | At recurrence, `completion-state.json` and the sprint JSON still pointed to moe.28; reconcile affected pointers against source and artifact facts |
+| Monitor until stable and autonomous | Two-turn Read control and live failure-hook callback passed | No representative test covered approved-but-unintegrated work, stale artifact identity or a false exhausted-work summary |
+| Reach GA using the tested Windows artifact | Not established | Installed, Windows client, account/tenant and unaided stakeholder criteria remain separate required proof |
+
+Stale pointers and the observed 81% context occupancy are **contributing risks**;
+neither is proven to be the sole cause. The missing integration check is confirmed
+by the Git counterexample and the immediate successful integration after direction.
+Adding more plugins or another model retry does not repair that missing predicate.
+
+### Correction and falsifiable validation contract
+
+Keep native `/goal` as the continuation controller. Add a scoped, deterministic
+command `Stop` gate that reads real Git and manifest state for registered release
+lanes. It must not start builds, agents, GUI apps or remote mutations itself.
+Missing integration or a stale artifact supplies a concrete continuation reason.
+Repeated unchanged failure must remain explicitly STALLED/GA RED, never become a
+pass merely to exit a loop. Command hooks support a blocking decision and a
+separate force-stop result; neither an allowed stop nor a stopped session is GA
+acceptance. [Official hook contract](https://code.claude.com/docs/en/hooks)
+
+The gate's validation must cover the original omission, cherry-pick equivalence,
+merged-then-reverted code, divergent reviewed files, missing/wrong-source manifests,
+dirty candidate state, unrelated sessions/worktrees, malformed armed state and
+bounded no-progress handling. A normal Claude CLI fixture must demonstrate the
+actual Stop callback and automatic corrective work, not just invoke the hook as a
+standalone script. Final results, independent reviews, source digests and live-lead
+activation must be recorded before claiming this correction works.
+
+Registration itself is a coverage boundary: a guard cannot certify an omitted
+lane. New author/reviewer handoffs must register or explicitly disposition their
+release-relevant work. Likewise, manifest reconciliation is narrower than checking
+the downloaded installer bytes, running installed journeys or proving independent
+review. Existing artifact/release gates remain responsible for those assertions.
+
+Use the existing completion plan and Plane cards for product state. The private
+gate contract and receipts are executable checks, not another current plan. The
+product lead owns source/build/pointer reconciliation; the controller author and
+reviewer own this defect. Authentication stays with the account holder. Do not
+mine credential history or confuse that legitimate boundary with a source blocker.
+
+Private direction and Git proof:
+`artifacts/ga-autonomy-audit-20260909/missed-integration-direction-receipt.json`.
+The replacement artifact's changing status belongs in `CURRENT_WINDOWS_RC.md`
+and `COMPLETION_PLAN.md`, not this defect's historical reproduction.
+
+### Independent RCA review and coordinator disposition
+
+The separate read-only Claude/Bedrock RCA completed in 260.33 seconds. It
+independently confirmed the missing commits and stale machine pointer, and
+challenged two limits of the proposed gate: omitted lane registration and treating
+a legitimate long build as a stall. Both require explicit coverage or an honest
+scope limitation. Build status must be observed through the actual job receipt;
+a timer, a documentation edit or a heartbeat is not acceptance progress.
+
+The review is advisory. Its assertion that root performed the source integration
+is corrected: root directed it; the existing Claude lead executed it. Its
+cost-motivated stopping hypothesis has no decisive evidence and is not adopted as
+a root cause. Its claim that exact tree comparison would accept a mutated reviewed
+hunk is also not adopted: exact mode/blob comparison rejects that case. Changes
+outside registered paths can still alter behavior, so integration review and tests
+remain mandatory. Do not parse historical Markdown headings to pick a candidate;
+bind the executable check to the actual release ref and reconcile the maintained
+machine pointer explicitly.
+
+### Compaction recurrence and recovery boundary
+
+At `2026-09-09T07:27:20Z`, the lead recorded a real compaction boundary. The
+native goal remained active and context occupancy fell from approximately 82% to
+9%, but no immediate assistant tool activity followed. The owner reported that
+idle state. Root delivered a resume instruction with Return; the lead then
+searched for its earlier package-check procedure and compiled the existing
+candidate for comparison. GitHub run `34323058772` continued building throughout
+this assistant pause. No duplicate build was needed.
+
+This is a second control assumption to correct: preserving the goal through
+compaction does not prove that another turn will start immediately. Official
+documentation describes background completion as a new-turn trigger and caps
+goal idle check-ins at three between user prompts. Compaction hooks supply setup
+or context, without continuation decision control. No documented ordering
+guarantee among these events was found. [Goal lifecycle](https://code.claude.com/docs/en/goal),
+[hook contracts](https://code.claude.com/docs/en/hooks).
+
+The recovery is one bounded session-native build watchdog alongside the existing
+goal, with exact run ownership and a deletion condition. Root requested its
+creation through `CronList`/`CronCreate`; instruction delivery alone does not prove
+creation, scheduled execution or cleanup. Those separate receipts must be
+recorded before this recurrence is marked resolved. Do not install a hidden
+keypress loop or have `PostCompact` recursively launch another Claude process.
+
+### Implementation attempts and verification findings
+
+The bounded Claude/Bedrock author timed out at 725.69 seconds after writing the
+script. Its last test-file tool input was incomplete and had not executed. Root
+recovered that text as data, completed its trailing assertion, and parsed the
+file; no shell command from the interrupted input was executed. The first test
+invocation used the wrong working directory and discovered zero tests, which is
+not a pass. The corrected invocation discovered 17 tests: one unsupported
+`git revert -q` fixture error and one real invalid-session disclosure failure.
+The resumed author corrected those and completed 25 passing tests.
+
+Before activation, root found and corrected additional boundary defects:
+
+- Worktree enumeration silently truncated at 32, while the real repository had
+  91 worktrees. It now inspects up to 256 and fails closed above the bound. A
+  35-worktree regression and an independent 91-worktree probe demonstrate that
+  candidate dirt beyond the old limit is detected.
+- A candidate registered by SHA could report `PROVENANCE_RECONCILED` while its
+  branch worktree contained an uncommitted regression. Conversely, a named branch
+  could include unrelated detached-review dirt. Branch registrations now inspect
+  that branch; SHA/tag registrations inspect matching checked-out revisions.
+- An invalid repository path could block an unarmed session and create counter
+  state. The hook now checks for that exact session's contract before repository
+  diagnostics.
+- Counter-write failure could keep producing first-attempt blocks. It now
+  force-stops explicitly with GA RED; required receipt-write failure also cannot
+  pass. Fault-injection tests cover both cases.
+
+Two independent Claude reviewers initially approved the 27-test version; root's
+SHA and isolation counterexamples override those approvals. Both reviewers were
+asked to assess the final delta. The outer hook timeout is 20 seconds, preserving
+margin around the local 10-second check budget and repository attribution.
+Diagnostic commands use an absolute, shell-quoted script path. Stop guidance
+restricts disarming to completion, cancellation or ownership transfer.
+
+The final focused run reports **31 gate tests plus eight existing failure-hook
+tests passing** in 17.810 seconds. One intervening run failed because an old
+assertion expected the removed lowercase disarm wording; the replacement asserts
+the ownership-transfer boundary and absence of a bypass command. Product tests
+are separate from this Python/controller change.
+
+Real-repository probes against the initial reviewed guard returned
+`NOT_READY_INTEGRATE` for moe.29, with all three lanes `PENDING`; the new candidate
+returned all three lanes `INTEGRATED`, pointer `OK`, and `NOT_READY_BUILD` while
+its manifest was still absent. Each check took less than 0.3 seconds. These are
+dated probe results, not current release status.
+
+A normal CLI 2.1.266 fixture completed in 127.29 seconds without a second user
+prompt: first-turn Read/checkpoint → actual Stop feedback → cherry-pick of the
+reviewed fixture repair → synthetic manifest → real gate result
+`PROVENANCE_RECONCILED`. Its first block was `BLOCKED_DIRTY` because the controller
+was a dirty detached checkout at the same SHA; the final branch-scoping correction
+removes that misleading fixture condition. The callback/continuation code was
+unchanged by that correction, but the earlier fixture's script digest remains
+distinct from the final digest. Synthetic artifact metadata is explicitly not
+release proof.
+
+The fixture recorded a provider `cyber` refusal for Fable and the CLI's automatic
+fallback to Opus 4.8, both through Bedrock. Root did not select a different model
+or reword the request to bypass that refusal. Consequently this is a normal-CLI
+continuation result, not Fable-only validation. Preserve the event in the private
+receipt and report observed models accurately.
+
+### A timer cannot wake a busy foreground turn
+
+The lead created watchdog `a484f16c` at `2026-09-09T07:34:53.126Z`, after
+`CronList` returned no scheduled jobs. It then used foreground sleeps of 240 and
+420 seconds while waiting for its installer download. Scheduled prompts run
+between turns, so those waits delayed delivery. Root backgrounded the read-only
+waits and directed the lead to consume the existing download's completion event.
+The verifier helper also had no subprocess timeout on `gh run download`; the
+lead owns that deadline/receipt correction. An unexpired 473,569,882-byte
+installer artifact existed in GitHub, so another build was not the next action.
+Do not confuse nested download files or a pending transfer with missing CI output.
+
+The [operations runbook](../CLAUDE_CODE_OPERATIONS.md) now requires one owner,
+one bounded background transfer and one session-native watchdog, with no extra
+foreground sleep/poll loops. A scheduled delivery followed by tool activity and
+eventual cleanup are separate acceptance checks. Until those are observed, the
+watchdog is configured but its end-to-end recovery remains unverified.
+
+Both final independent reviews returned **APPROVE**, including independent
+reproductions of the SHA/branch and unarmed-repository cases. The exact reviewed
+script/settings were integrated and armed for lead session
+`a1c33a2c-3045-4b77-ba6a-e2b0dd8950bb`. Its direct check reconciled CLWX-61/130/102,
+candidate `40cfe727`, the maintained source pointer and the moe.30 manifest.
+That direct command is not evidence of a live Stop callback. Keep the remaining
+live assertions explicit in the [sanitized validation receipt](../evidence/claude-completion-guard-20260909.json)
+and retain In Progress while required unattended-wake/cleanup proof is absent.
+
+### Live receipts inspected after integration
+
+The session log contains native `scheduled_task_fire` for `a484f16c` at
+`2026-09-09T07:47:35.288Z`, followed by Bash at `07:47:45.103Z`, additional
+inspection and edits to the verifier. It was delivered after the foreground wait
+was released; this is a real scheduled prompt, not merely a queued timer or an
+instruction to create one.
+
+The final command Stop hook returned successful scoped reconciliation at
+`07:50:24.091Z` and `07:50:56.232Z`, with native `hook_success` receipts, exit 0,
+and the expected explicit “not a GA verdict” message. The private hook receipt
+matches the registered lead/candidate. A direct `check` command cannot create
+that hook receipt. These observations establish actual scheduled continuation
+and final hook activation; they do not guarantee indefinite unattended uptime.
+The watchdog remains owned by the active artifact handoff and must be deleted
+at its documented terminal boundary. Its cleanup is still tracked separately.

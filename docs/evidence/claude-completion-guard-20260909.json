@@ -1,0 +1,273 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-09T07:53:49.837178+00:00",
+  "card": "CLWX-128",
+  "gaStatus": "RED",
+  "scope": "Claude continuation and local integration/manifest evidence; not artifact bytes or installed/tenant/stakeholder acceptance",
+  "files": {
+    "scripts/ga-continuation-gate.py": "bbb387c826e3f297f125cca075c7ecfe9b36368028a4c8e41ded0e02fcd93d40",
+    "tests/ops/test_ga_continuation_gate.py": "4afb46f348b6ce43cb3b1cef5b96a8050d704ddc6110dc12b69606b7d608798c",
+    ".claude/settings.json": "608726523588e3640b334f5d225cddb31b0a8c47752acf6e876820d5aeced498",
+    "docs/CLAUDE_CODE_OPERATIONS.md": "4bb9c6f34b78ed5ea33677fb127a661a130a4fcd330c460ea105535fae56906a",
+    ".claude/skills/ga-sprint-driver/SKILL.md": "e26065ca7a1218d95f4cdae02e9f181ad670e042bd7205a42ebbe7fc8ce13aac"
+  },
+  "tests": {
+    "command": "python3 -W error::ResourceWarning -m unittest tests.ops.test_ga_continuation_gate tests.ops.test_ga_blocker_recovery -q",
+    "gateTests": 31,
+    "existingRecoveryTests": 8,
+    "passed": 39,
+    "failed": 0,
+    "elapsedSeconds": 17.81,
+    "environment": "macOS, real temporary Git repositories plus fault injection",
+    "testedWorktree": "/private/tmp/clawx-ga-completion-guard-20260909",
+    "baseRevision": "d9c7182f",
+    "revisionIdentity": "exact file SHA256 above; byte-identical integration into coordination root"
+  },
+  "independentReviews": [
+    {
+      "job": "ga-completion-review1",
+      "verdict": "APPROVE",
+      "phase": "CLI_SUCCEEDED",
+      "elapsedSeconds": 150.24,
+      "sessionId": "9e3281c7-5dfa-4550-ac16-02c1994ec735",
+      "models": {
+        "claude-fable-5": {
+          "provider": "bedrock",
+          "canonicalModel": "claude-fable-5"
+        }
+      },
+      "scope": "initial 27-test revision; superseded by final review"
+    },
+    {
+      "job": "ga-completion-review2",
+      "verdict": "APPROVE",
+      "phase": "CLI_SUCCEEDED",
+      "elapsedSeconds": 220.37,
+      "sessionId": "da95dbe4-0b4b-4ee6-83fc-c558149e1e11",
+      "models": {
+        "claude-fable-5": {
+          "provider": "bedrock",
+          "canonicalModel": "claude-fable-5"
+        }
+      },
+      "scope": "initial 27-test revision; superseded by final review"
+    },
+    {
+      "job": "ga-completion-review1-final",
+      "verdict": "APPROVE",
+      "phase": "CLI_SUCCEEDED",
+      "elapsedSeconds": 155.22,
+      "sessionId": "9e3281c7-5dfa-4550-ac16-02c1994ec735",
+      "models": {
+        "claude-fable-5": {
+          "provider": "bedrock",
+          "canonicalModel": "claude-fable-5"
+        }
+      },
+      "scope": "final corrections"
+    },
+    {
+      "job": "ga-completion-review2-final",
+      "verdict": "APPROVE",
+      "phase": "CLI_SUCCEEDED",
+      "elapsedSeconds": 155.21,
+      "sessionId": "da95dbe4-0b4b-4ee6-83fc-c558149e1e11",
+      "models": {
+        "claude-fable-5": {
+          "provider": "bedrock",
+          "canonicalModel": "claude-fable-5"
+        }
+      },
+      "scope": "final corrections"
+    }
+  ],
+  "normalCliFixture": {
+    "cliVersion": "2.1.266",
+    "elapsedSeconds": 127.29,
+    "processExit": 0,
+    "firstTurnCheckpoint": true,
+    "actualStopFeedbackCount": 1,
+    "automaticRepair": true,
+    "repair": "cherry-pick reviewed synthetic fix; create explicitly synthetic metadata; invoke real check",
+    "finalVerdict": "PROVENANCE_RECONCILED",
+    "sourceSha256": "7f9ba1d5beb65ed0171213ca5219bbb106e9635d14b0e70ea970d7189d3862ef",
+    "sourceScope": "before final branch/isolation/storage corrections; callback path unchanged; final corrections independently tested/reviewed",
+    "observedModels": {
+      "claude-fable-5": {
+        "provider": "bedrock",
+        "canonicalModel": "claude-fable-5",
+        "inputTokens": 1183,
+        "outputTokens": 175,
+        "costUSD": 0.12471600000000002
+      },
+      "us.anthropic.claude-opus-4-8": {
+        "provider": "bedrock",
+        "canonicalModel": "claude-opus-4-8",
+        "inputTokens": 30,
+        "outputTokens": 7419,
+        "costUSD": 0.45370174999999996
+      }
+    },
+    "automaticFallback": [
+      {
+        "trigger": "refusal",
+        "original_model": "claude-fable-5",
+        "fallback_model": "us.anthropic.claude-opus-4-8",
+        "api_refusal_category": "cyber"
+      }
+    ],
+    "fableOnlyProof": false,
+    "artifactAcceptance": false
+  },
+  "lead": {
+    "sessionId": "a1c33a2c-3045-4b77-ba6a-e2b0dd8950bb",
+    "runningCliVersion": "2.1.265",
+    "hookInstalled": true,
+    "armed": true,
+    "candidate": {
+      "ref": "release/moe30-integration",
+      "sha": "40cfe727f38d1b29c4f5ff77e1eddba97556061f"
+    },
+    "registeredCards": [
+      "CLWX-61",
+      "CLWX-130",
+      "CLWX-102"
+    ],
+    "armCheck": "PROVENANCE_RECONCILED",
+    "checkElapsedSeconds": 0.267,
+    "hookCallbackObserved": true,
+    "goalPlusHookOrdering": "Live command Stop callbacks observed in the native-goal session; upstream ordering is not a general guarantee.",
+    "hookCallbacks": [
+      {
+        "at": "2026-09-09T07:50:24.091Z",
+        "type": "hook_success",
+        "hookName": "Stop",
+        "hookEvent": "Stop",
+        "exitCode": 0,
+        "stdout": "{\"systemMessage\": \"ga-continuation-gate: scoped provenance check PROVENANCE_RECONCILED for the registered lanes at candidate 40cfe727f38d. This is not a GA verdict; artifact/installed/tenant/stakeholder gates still apply.\"}\n"
+      },
+      {
+        "at": "2026-09-09T07:50:56.232Z",
+        "type": "hook_success",
+        "hookName": "Stop",
+        "hookEvent": "Stop",
+        "exitCode": 0,
+        "stdout": "{\"systemMessage\": \"ga-continuation-gate: scoped provenance check PROVENANCE_RECONCILED for the registered lanes at candidate 40cfe727f38d. This is not a GA verdict; artifact/installed/tenant/stakeholder gates still apply.\"}\n"
+      }
+    ],
+    "latestLiveHookCallback": {
+      "at": "2026-09-09T07:54:02.715Z",
+      "exitCode": 0
+    },
+    "latestObservedWork": "Second scheduled check verified existing downloader still progressing: 393.5 MB of 473.6 MB, one verifier task bq4rxl0xh, no duplicate transfer/build. Awaiting native completion event."
+  },
+  "compaction": {
+    "boundaryAt": "2026-09-09T07:27:20.917Z",
+    "goalPreserved": true,
+    "immediateContinuation": false,
+    "manualResumeVerified": true,
+    "buildContinuedWhileAssistantPaused": true,
+    "watchdog": {
+      "id": "a484f16c",
+      "cron": "*/5 * * * *",
+      "createdVerified": true,
+      "scheduledDeliveryVerified": true,
+      "cleanupVerified": false,
+      "fire": {
+        "timestamp": "2026-09-09T07:47:35.288Z",
+        "taskId": "a484f16c",
+        "cron": "*/5 * * * *",
+        "subtype": "scheduled_task_fire",
+        "uuid": "48464bd1-7487-4d6b-b091-93831ad931d3"
+      },
+      "subsequentToolCalls": [
+        {
+          "at": "2026-09-09T07:47:45.103Z",
+          "tool": "Bash",
+          "id": "toolu_bdrk_01JQ3pyy7c8gczHyWdcqXHgc"
+        },
+        {
+          "at": "2026-09-09T07:47:51.831Z",
+          "tool": "Bash",
+          "id": "toolu_bdrk_01T5UTe6BCuGY2EbGsFRKufn"
+        },
+        {
+          "at": "2026-09-09T07:48:08.247Z",
+          "tool": "Edit",
+          "id": "toolu_bdrk_01HvM137uLfKhbE9fB9w9Q6Q"
+        },
+        {
+          "at": "2026-09-09T07:48:12.338Z",
+          "tool": "Edit",
+          "id": "toolu_bdrk_01EeW9D8oqJdxNrjYPwUDomg"
+        },
+        {
+          "at": "2026-09-09T07:48:18.332Z",
+          "tool": "Edit",
+          "id": "toolu_bdrk_01WK1QiMyvRuE2A2vBKVQyzg"
+        },
+        {
+          "at": "2026-09-09T07:48:22.197Z",
+          "tool": "Edit",
+          "id": "toolu_bdrk_01SFpdxRH2ZL9TcriFm1RjJr"
+        },
+        {
+          "at": "2026-09-09T07:48:26.978Z",
+          "tool": "Edit",
+          "id": "toolu_bdrk_014USLsp5cQEZoMk21srHMNH"
+        },
+        {
+          "at": "2026-09-09T07:48:44.336Z",
+          "tool": "Write",
+          "id": "toolu_bdrk_01YMoMkyVTsaXND9zqGq5xqT"
+        }
+      ],
+      "observedFires": [
+        {
+          "timestamp": "2026-09-09T07:47:35.288Z",
+          "taskId": "a484f16c",
+          "cron": "*/5 * * * *",
+          "uuid": "48464bd1-7487-4d6b-b091-93831ad931d3"
+        },
+        {
+          "timestamp": "2026-09-09T07:53:49.394Z",
+          "taskId": "a484f16c",
+          "cron": "*/5 * * * *",
+          "uuid": "fedff89b-339a-44cc-980b-4d5b8fd98c99"
+        }
+      ],
+      "cleanupOwner": "Existing Claude release lead; delete at artifact handoff terminal boundary, verify with CronList, then update CLWX-128 cleanup evidence."
+    }
+  },
+  "limitations": [
+    "Pre-arm historical work, separate clones, stashes and uncommitted non-candidate work require explicit registration/disposition.",
+    "Exact file comparison requires a new reviewed combined lane if integration intentionally alters a reviewed file.",
+    "Manifest metadata reconciliation cannot validate downloaded bytes, installed behavior or external acceptance.",
+    "Native background check-ins are bounded; a timer cannot fire during a busy foreground turn or while the host/session is stopped.",
+    "Post-compaction scheduled delivery, subsequent tools and actual final Stop callbacks are observed. Watchdog cleanup remains pending while the artifact handoff is active; this is not a guarantee of indefinite unattended uptime."
+  ],
+  "sources": [
+    "https://code.claude.com/docs/en/goal",
+    "https://code.claude.com/docs/en/hooks",
+    "https://code.claude.com/docs/en/scheduled-tasks"
+  ],
+  "privateEvidenceDirectory": "artifacts/ga-autonomy-audit-20260909/",
+  "board": {
+    "project": "CLWX",
+    "card": 128,
+    "state": "In Progress",
+    "comments": [
+      "a755accb-d334-4238-ae1f-3af2951cf3dd",
+      "e7683fcd-7305-4216-94c0-0895b524af24"
+    ],
+    "readback": "detail and list verified by project-scoped writer",
+    "export": "136 issues, 6 states; docs/plane-board/CLWX-board-export.json and CLWX-board.md",
+    "remainingCardCriterion": "watchdog terminal cleanup; active artifact handoff owns the schedule"
+  },
+  "staticChecks": {
+    "pythonCompile": "PASS",
+    "jsonParse": "PASS (settings and receipt)",
+    "localMarkdownLinks": "PASS (15 targets checked before latest evidence backlink)",
+    "gitDiffCheck": "PASS"
+  }
+}
