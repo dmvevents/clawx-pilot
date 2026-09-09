@@ -41,7 +41,11 @@ import {
 } from './supervisor';
 import { GatewayConnectionMonitor } from './connection-monitor';
 import { GatewayLifecycleController, LifecycleSupersededError } from './lifecycle-controller';
-import { isE2EGatewayLaunchRefusedError } from '../utils/e2e-gateway-guard';
+import {
+  type E2EGatewayLaunchRefusedError,
+  getE2EGatewayLaunchRefusal,
+  isE2EGatewayLaunchRefusedError,
+} from '../utils/e2e-gateway-guard';
 import { launchGatewayProcess } from './process-launcher';
 import { GatewayRestartController } from './restart-controller';
 import { GatewayRestartGovernor } from './restart-governor';
@@ -251,6 +255,16 @@ export class GatewayManager extends EventEmitter {
     return this.deviceIdentity;
   }
 
+  /**
+   * CLWX-102: nothing was launched and nothing crashed. Stay "stopped" (the
+   * E2E baseline) rather than "error", but keep the reason visible in the
+   * status so a caller cannot believe a Gateway is starting.
+   */
+  private markStartRefused(refusal: E2EGatewayLaunchRefusedError): void {
+    logger.warn(`Gateway start refused (port=${this.status.port}): ${refusal.message}`);
+    this.setStatus({ state: 'stopped', error: refusal.message, pid: undefined, gatewayReady: false });
+  }
+
   private async initDeviceIdentity(): Promise<void> {
     if (this.deviceIdentity) return; // already loaded
     try {
@@ -318,6 +332,16 @@ export class GatewayManager extends EventEmitter {
     if (this.status.state === 'running') {
       logger.debug('Gateway already running, skipping start');
       return;
+    }
+
+    // CLWX-102: refuse before the orphan scan, Python warmup and identity I/O.
+    // The startup sequence's findExistingGateway kills whatever listens on
+    // the fixed Gateway port, so on an operator machine with a live Gateway
+    // an E2E restart would terminate it before the launch guard was reached.
+    const launchRefusal = getE2EGatewayLaunchRefusal('gateway-launch', `port=${this.status.port} stage=start`);
+    if (launchRefusal) {
+      this.markStartRefused(launchRefusal);
+      throw launchRefusal;
     }
 
     this.startLock = true;
@@ -442,11 +466,8 @@ export class GatewayManager extends EventEmitter {
         return;
       }
       if (isE2EGatewayLaunchRefusedError(error)) {
-        // CLWX-102: nothing was launched and nothing crashed. Stay "stopped"
-        // (the E2E baseline) rather than "error", keep the reason visible in
-        // the status, and let the caller see the refusal.
-        logger.warn(`Gateway start refused (port=${this.status.port}): ${error.message}`);
-        this.setStatus({ state: 'stopped', error: error.message, pid: undefined, gatewayReady: false });
+        // CLWX-102 defence in depth: prepareGatewayLaunchContext refused.
+        this.markStartRefused(error);
         throw error;
       }
       logger.error(
