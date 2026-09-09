@@ -334,3 +334,16 @@ ownership of the listener, a contiguous stable-ready window with
 `stableReadyMs`/`readyLostCount` recorded, app-exit detection, and a receipt that
 carries redacted findings rather than verbatim log lines. Then re-run fresh and
 same-user-existing-database cases. Do not quote the retracted PASS anywhere.
+
+**Review outcome for the disposition above.** The independent lane returned two
+BLOCKERs and at least one HIGH against the harness, not against any shipped path:
+single-sample readiness latching with no stability window; an unattributed
+listener with no free-port precondition or PID ownership; and a log filter that
+embedded verbatim lines into a receipt that leaves the machine. All three are
+repaired in driver v2 (`3767fc7a`), and the invalid result they produced is
+retracted above. The release-relevance disposition is unchanged and is
+strengthened by this: these files are QA tooling whose defects can corrupt
+*evidence*, which is exactly why they need review — and equally why they must
+not be integrated into a release candidate. The remainder of the review was
+truncated in transit and has been requested; any further findings will be
+recorded here.
