@@ -1,7 +1,7 @@
 /**
  * One-shot seed for a local OpenAI-compatible LLM provider account.
  *
- * Wires Ollama running `nora:4b-v3.2` at http://127.0.0.1:11434/v1 as a
+ * Wires Ollama running `qwen2.5:3b-instruct` at http://127.0.0.1:11434/v1 as a
  * ClawX provider account so that fresh installs (no cloud keys configured)
  * can still get a chat reply out of the box.
  *

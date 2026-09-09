@@ -19,15 +19,21 @@ Hand this with the installer until the in-app wizard ships.
 
 Open https://ollama.com/download/windows in Edge, click **Download for Windows**, run the installer. After it finishes, you'll see an Ollama icon in the system tray.
 
-### Step 2 — Pull the on-device AI model (~30 min on a school connection)
+### Step 2 — Pull the on-device AI model (~10 min on a school connection)
 
 Open **PowerShell** (Start → type `PowerShell` → Enter) and paste:
 
 ```powershell
-ollama pull hermes3:8b
+ollama pull qwen2.5:3b-instruct
 ```
 
-You can leave this running in the background while you do other work. ~4.7 GB.
+You can leave this running in the background while you do other work. ~1.9 GB.
+
+This must match the model the app actually requests. `hermes3:8b` is in the app's
+`LEGACY_LOCAL_MODELS` migration set — it won the May 2026 36-prompt agentic bake-off
+but its 30 GB loaded footprint does not fit a 16 GB laptop. Qwen 2.5 3B Instruct ties
+it on accuracy (11/12) while being 2.2x faster, 3.1x better at P95 cold start and 7x
+smaller.
 
 ### Step 3 — Install ClawX
 
@@ -59,7 +65,7 @@ If you see a draft come back within 30 seconds, on-device AI is working. If you 
 |---|---|---|---|
 | Bundle nothing (today) | 349 MB | ~50 MB diffs | Smallest, but pre-flight required |
 | Bundle Ollama installer | ~500 MB | ~50 MB | Saves one download step; doesn't help with model |
-| Bundle Ollama + hermes3:8b GGUF | ~5.2 GB | ~5 GB diffs | **Rejected** — too heavy for auto-update over Trinidad broadband |
+| Bundle Ollama + qwen2.5:3b-instruct GGUF | ~2.4 GB | ~50 MB diffs if the model is a separate payload | **Reopened** — the original rejection assumed the 5.2 GB Hermes bundle. With the 1.9 GB model, and the weights shipped as a one-time payload rather than inside the auto-updated app, the bandwidth objection no longer applies |
 | Detect + guide (recommended) | 349 MB | ~50 MB | True zero-prework UX with same installer footprint |
 
 ### Wizard state machine
@@ -67,7 +73,7 @@ If you see a draft come back within 30 seconds, on-device AI is working. If you 
 ```
 launch
   └─> probe ollama @ 127.0.0.1:11434/api/tags
-       ├─ reachable + hermes3:8b present  → state=ready
+       ├─ reachable + qwen2.5:3b-instruct present → state=ready
        ├─ reachable, model missing        → state=needs-model
        └─ unreachable                     → state=needs-ollama
 
@@ -81,13 +87,13 @@ needs-ollama
 
 needs-model
   └─> in-app modal: "Downloading on-device AI model"
-       ├─ stream POST /api/pull with model=hermes3:8b
+       ├─ stream POST /api/pull with model=qwen2.5:3b-instruct
        ├─ render MB/sec + ETA from stream chunks
        ├─ on success → state=ready
        └─ on failure → retry button + dismiss-to-cloud-failover button
 
 ready
-  └─> canary: ask hermes3:8b "what is 2+2?" with 8s timeout
+  └─> canary: ask qwen2.5:3b-instruct "what is 2+2?" with 8s timeout
        ├─ pass → green dot, dismiss wizard
        └─ fail → toast "On-device AI not responding; using cloud failover"
 ```
@@ -129,7 +135,7 @@ New main-process handlers (all in `electron/main/ipc-handlers.ts`):
 - **Slow connection / partial pull**: pull is resumable on Ollama's side; surface "Resume" not "Restart" if `completedBytes > 0` from prior chunks.
 - **Disk full**: catch `enospc` from the streamed write, show a clear "Need 5 GB free in `%USERPROFILE%\.ollama\models`" message.
 - **Conditional Access blocking the download**: if `:11434` returns but pull fails repeatedly, surface "Ask MoE IT to whitelist `ollama.com` and `registry.ollama.ai`".
-- **Already-pulled different quant** (`hermes3:8b-instruct-q4_K_M` vs base tag): treat any `hermes3:8b*` as a hit; don't re-pull.
+- **Already-pulled different quant** (`qwen2.5:3b-instruct-q4_K_M` vs base tag): treat any `qwen2.5:3b*` as a hit; don't re-pull.
 - **Offline first run**: state stays `needs-ollama`; chat works on cloud failover; wizard re-probes whenever `navigator.onLine` flips true.
 
 ### Anti-patterns we explicitly reject
@@ -142,7 +148,7 @@ New main-process handlers (all in `electron/main/ipc-handlers.ts`):
 ### Open questions
 
 - Do MoE IT firewalls allow `winget` egress? If not, the silent install path collapses to the manual-download fallback for every laptop.
-- Should we pin a specific GGUF quantisation (e.g. `hermes3:8b-q4_K_M`) for reproducible benchmarks? Today the bake-off used the default tag.
+- Should we pin a specific GGUF quantisation (e.g. `qwen2.5:3b-instruct-q4_K_M`) for reproducible benchmarks? Today the seed uses the default tag, and the app sends the exact id `qwen2.5:3b-instruct`, so any pinned tag must remain an accepted alias.
 - For the fleet rollout, is there a Group Policy preference for pre-imaging Ollama + the model on the school's golden image? That would skip the wizard entirely.
 
 ### Acceptance for #69
