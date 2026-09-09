@@ -275,7 +275,7 @@ describe('read_email attachment metadata negative controls (CLWX-61)', () => {
     // separator with nothing after it), so they never reach the push. This row
     // therefore covers only the fail-open path: a fallback that pushes when the
     // pattern does not match. A placeholder substituted ON the matched path
-    // ("untitled", "attachment") is covered by the whitespace-filename pin
+    // ("untitled", "attachment") is covered by the two whitespace-filename rows
     // below, not here.
     const { actions } = createActions(readingPane('Body.', [
       'Attachment:',
@@ -287,25 +287,42 @@ describe('read_email attachment metadata negative controls (CLWX-61)', () => {
     expect(attachments).toEqual([]);
   });
 
-  // KNOWN DEFECT (CLWX-61; report: docs/bugs/CLWX-61-attachment-metadata-empty-filename.md
-  // on the documentation branch), found while authoring this pin on 2026-09-09
-  // and deliberately not fixed in a test-only slice. In outlook-actions.ts the
-  // chip parser
+  // Regression for the CLWX-61 empty-filename defect (report:
+  // docs/bugs/CLWX-61-attachment-metadata-empty-filename.md on the documentation
+  // branch). The chip parser
   //   /(?:Attached file|Attachment)[:\s]+(.+?)(?:,\s*([\d.]+\s*[KMG]?B))?(?:,|$)/i
   // lets `[:\s]+` give back its trailing whitespace so that `.+?` matches a
-  // lone space, and `.trim()` then pushes an entry with filename ''. This row
-  // pins that CURRENT output exactly, on purpose: an exact pin turns red both
-  // when the defect is repaired and when it is replaced by a different
-  // fabrication on the same matched path (e.g. `.trim() || 'untitled'`), which
-  // an `it.fails` row could not tell apart from the known defect.
-  // Invert this to `[]` when the regex or push guard is fixed.
-  it('currently emits an empty-filename entry for a whitespace-only filename label (open defect, pinned exactly)', async () => {
-    const { actions } = createActions(readingPane('Body.', ['Attached file: ']));
+  // lone space; before the fix `.trim()` then pushed { filename: '' }, and an
+  // empty filename passes downloadAttachment's includes('') existence check.
+  // The push is now guarded on a non-empty trimmed filename. A valid chip sits
+  // beside the malformed one so this row also fails if the guard over-drops.
+  it('yields no entry for a whitespace-only filename label while keeping the valid chip beside it', async () => {
+    const { actions } = createActions(readingPane('Body.', [
+      'Attached file: ',
+      'Attached file: Real.pdf, 3 KB',
+    ]));
 
     const attachments = attachmentsOf(await actions.readEmail({ id: 'message-1' }));
 
-    expect(attachments).toEqual([{ filename: '', sizeBytes: undefined, mimeType: undefined }]);
-    expect(attachments[0].filename).toBe('');
+    expect(attachments).toEqual([{ filename: 'Real.pdf', sizeBytes: 3 * 1024, mimeType: 'application/pdf' }]);
+    expect(attachments.every((a) => a.filename.trim().length > 0)).toBe(true);
+  });
+
+  it('never emits a filename that does not appear verbatim in a chip label (placeholder guard)', async () => {
+    // Catches: a placeholder substituted on the matched path, e.g.
+    // `.trim() || 'untitled'`, which the row above would also reject but which
+    // this row rejects for the stated reason — the name was not in the DOM. Any
+    // future default for a nameless chip must fail here, whatever it is called.
+    const labels = ['Attached file: ', 'Attachment:', 'Attached file: Roll.xlsx, 9 KB'];
+    const { actions } = createActions(readingPane('Body.', labels));
+
+    const attachments = attachmentsOf(await actions.readEmail({ id: 'message-1' }));
+
+    expect(attachments).toHaveLength(1);
+    for (const att of attachments) {
+      expect(att.filename.length).toBeGreaterThan(0);
+      expect(labels.some((label) => label.includes(att.filename))).toBe(true);
+    }
   });
 
   it('leaves sizeBytes undefined when the size is absent or malformed, never 0 or NaN', async () => {

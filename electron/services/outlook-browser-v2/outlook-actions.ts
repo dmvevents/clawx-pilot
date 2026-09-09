@@ -832,6 +832,10 @@ export class OutlookActions {
           const m = label.match(/(?:Attached file|Attachment)[:\\s]+(.+?)(?:,\\s*([\\d.]+\\s*[KMG]?B))?(?:,|$)/i);
           if (m) {
             const filename = (m[1] || '').trim();
+            // A separator followed only by whitespace still matches (the lazy
+            // capture takes the space). An entry with no filename would pass
+            // downloadAttachment's includes('') existence check, so drop it.
+            if (!filename) continue;
             const size = m[2] ? parseSize(m[2]) : undefined;
             out.attachments.push({ filename: filename, sizeBytes: size, mimeType: guessMime(filename) });
           }
