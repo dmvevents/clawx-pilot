@@ -15,9 +15,19 @@ $seed = Join-Path $evidence 'seed-openclaw'
 $out = [ordered]@{}
 $out.at = (Get-Date).ToUniversalTime().ToString('o')
 
+# M5: the account UNDER TEST must not be able to modify the harness or, ideally,
+# rewrite evidence it has already produced. Previously an inheritable Modify ACE
+# over the whole tree meant a later read-only grant on a subpath was additive and
+# had no effect, so the observed subject could edit the driver and its receipts.
+# Split them: the driver lives outside the writable tree and is read-execute
+# only; only the evidence root is writable, because the driver creates a per-run
+# subdirectory there as that user.
+$driverDir = 'C:\clawx-driver'
+New-Item -ItemType Directory -Force -Path $driverDir | Out-Null
+icacls $driverDir /inheritance:r /grant "Administrators:(OI)(CI)F" /grant "SYSTEM:(OI)(CI)F" /grant "${accUser}:(OI)(CI)RX" | Out-Null
 New-Item -ItemType Directory -Force -Path $evidence | Out-Null
-# The standard user must be able to write its receipt and read the seed.
 icacls $evidence /grant "${accUser}:(OI)(CI)M" /T | Out-Null
+$out.driverDir = $driverDir
 $out.evidenceDir = $evidence
 
 # --- 1. seed the REAL pre-existing state database ----------------------------
@@ -69,10 +79,12 @@ icacls $dest /grant "${accUser}:RX" | Out-Null
 # All-users, not per-user: the acceptance profile does not exist until its first
 # logon, so there is no per-user Startup folder to write into yet. The driver
 # itself refuses to act for any other account and refuses to repeat.
-$driverSrc = 'C:\Windows\Temp\moe30-phase2-driver.ps1'
-$driverDst = Join-Path $evidence 'moe30-phase2-driver.ps1'
+$driverSrc = 'C:\Windows\Temp\pilot-acceptance-driver.ps1'
+$driverDst = Join-Path $driverDir 'driver.ps1'
 Copy-Item $driverSrc $driverDst -Force
-icacls $driverDst /grant "${accUser}:RX" | Out-Null
+# No grant here: the directory ACL above already gives this account RX and
+# nothing more, and adding a file-level grant is how the earlier mistake was made.
+$out.driverPath = $driverDst
 
 $startup = 'C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp'
 New-Item -ItemType Directory -Force -Path $startup | Out-Null

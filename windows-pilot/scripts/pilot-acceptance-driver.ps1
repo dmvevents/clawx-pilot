@@ -36,8 +36,12 @@
 # valid existing-database test is the database THIS account's own app wrote.
 
 $ErrorActionPreference = 'Continue'
-$evidence = 'C:\clawx-acceptance'
-$log = Join-Path $evidence 'driver-v2.log'
+$root = 'C:\clawx-acceptance'
+# Per-run directory: a shared directory let one run's copied log files be picked
+# up by the next run's signature scan and attributed to it.
+$runId = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
+$evidence = Join-Path $root "run-$runId"
+$log = Join-Path $evidence 'driver.log'
 New-Item -ItemType Directory -Force -Path $evidence | Out-Null
 
 function Note($m) {
@@ -45,16 +49,37 @@ function Note($m) {
 }
 
 $expectedUser = 'ClawXAcc0909'
-$doneMarker = Join-Path $evidence 'driver-v2.marker'
+$doneMarker = Join-Path $root 'driver-v2.marker'
 if ($env:USERNAME -ne $expectedUser) { exit 0 }
 if (Test-Path $doneMarker) { Note 'already ran; exiting'; exit 0 }
 Set-Content -Path $doneMarker -Value (Get-Date).ToUniversalTime().ToString('o') -Encoding ascii
+
+# M4: a marker written before any work means a crash - or the deliberate 8 h
+# auto-shutdown firing mid-run - leaves no receipt at all, which is the exact
+# ambiguity that cost the previous session. Write an IN_PROGRESS receipt
+# immediately, carrying the shutdown deadline, and overwrite it at every exit.
+$receiptPath = Join-Path $evidence 'receipt.json'
+$bootedAt = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
+[ordered]@{
+  status = 'IN_PROGRESS'
+  at = (Get-Date).ToUniversalTime().ToString('o')
+  runId = $runId
+  user = "$env:USERNAME"
+  bootedAt = $bootedAt.ToUniversalTime().ToString('o')
+  autoShutdownDueAt = $bootedAt.AddSeconds(28800).ToUniversalTime().ToString('o')
+  note = 'If this file still says IN_PROGRESS, the run did not reach a terminal state. Check the auto-shutdown deadline before assuming a product failure.'
+} | ConvertTo-Json -Depth 4 | Set-Content $receiptPath -Encoding ascii
 
 $appExe = Join-Path $env:LOCALAPPDATA 'Programs\Ministry of Education\Ministry of Education.exe'
 $openclaw = Join-Path $env:USERPROFILE '.openclaw'
 $PORT = 18789
 $STABLE_MS = 20000          # the verified observer's stable-ready requirement
 $SAMPLE_MS = 2000
+# docs/WINDOWS_DEPLOYMENT_PLAN.md:165 - "Gateway port 18789 listens within 30s of
+# launch". A documented expectation, so the harness enforces it rather than
+# inventing one. Distinct from CLWX-43, which is per-turn p50/p90 and does need
+# an owner decision; conflating the two is what let a ~55 s start read as PASS.
+$READY_BUDGET_MS = 30000
 
 function Get-AppProcs { @(Get-Process -Name 'Ministry of Education' -ErrorAction SilentlyContinue) }
 
@@ -204,13 +229,22 @@ function Invoke-Case($tag, $budgetSeconds) {
   # Flagged, not auto-failed: the acceptable start latency is an owner decision
   # (CLWX-43), not this harness's to invent. The flag makes a near-deadline pass
   # impossible to mistake for a prompt one.
-  $res.readyNearDeadline = ($null -ne $res.timeToStableReadyMs -and $res.timeToStableReadyMs -gt (0.8 * $res.budgetMs))
+  $res.readyBudgetMs = $READY_BUDGET_MS
+  $res.withinDocumentedBudget = ($null -ne $res.timeToFirstOwnedListenerMs -and $res.timeToFirstOwnedListenerMs -le $READY_BUDGET_MS)
+  # Readiness arriving in the last tenth of the observation window is a timeout
+  # that happened to land, not a pass.
+  $res.readyInFinalTenth = ($null -ne $res.timeToStableReadyMs -and $res.timeToStableReadyMs -gt (0.9 * $res.budgetMs))
   $res.launchedProcessExited = $proc.HasExited
   if ($proc.HasExited) { $res.launchedExitCode = $proc.ExitCode }
   $res.logs = Collect-Findings $tag
 
-  if ($res.stableReady -and $res.windowShown -and -not $res.secondGuiInstance) {
-    $res.result = 'PASS'
+  if ($res.stableReady -and $res.windowShown -and -not $res.secondGuiInstance -and -not $res.readyInFinalTenth) {
+    # PASS only inside the documented expectation; a slower start is real but is
+    # not a pass, and saying so is the whole point of recording the elapsed time.
+    $res.result = if ($res.withinDocumentedBudget) { 'PASS' } else { 'DEGRADED' }
+    if ($res.result -eq 'DEGRADED') {
+      $res.reason = "started but took $($res.timeToFirstOwnedListenerMs) ms to bind, beyond the documented $READY_BUDGET_MS ms expectation"
+    }
   } else {
     $res.result = 'FAIL'
     $res.reason = ("stableReadyMs=$($res.stableReadyMs)/$STABLE_MS ownedListenerEverSeen=$($res.ownedListenerEverSeen) " +
@@ -235,6 +269,9 @@ function Stop-App {
 }
 
 $r = [ordered]@{}
+$r.status = 'COMPLETE'
+$r.runId = $runId
+$r.autoShutdownDueAt = $bootedAt.AddSeconds(28800).ToUniversalTime().ToString('o')
 $r.at = (Get-Date).ToUniversalTime().ToString('o')
 $r.driverVersion = 2
 $r.user = "$env:USERNAME"
@@ -249,13 +286,13 @@ $r.appPresentBefore = Test-Path $appExe
 if (-not $r.appPresentBefore) {
   if (-not (Test-Path $installer)) {
     $r.result = 'BLOCKED'; $r.reason = 'no app and no installer'
-    $r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'driver-v2-receipt.json') -Encoding ascii
+    $r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'receipt.json') -Encoding ascii
     exit 1
   }
   $r.installerSha256 = (Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToLower()
   if ($r.installerSha256 -ne $expected) {
     $r.result = 'BLOCKED'; $r.reason = 'installer hash mismatch'
-    $r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'driver-v2-receipt.json') -Encoding ascii
+    $r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'receipt.json') -Encoding ascii
     exit 1
   }
   $p = Start-Process -FilePath $installer -ArgumentList '/S' -PassThru -Wait
@@ -293,14 +330,21 @@ if ($r.case2StateFileCount -gt 0) {
 }
 
 $c1 = $r.case1.result; $c2 = $r.case2.result
+# Typed verdicts only. A composed string such as "case1=PASS case2=NOT_RUN" is
+# not a verdict and, worse, CONTAINS the substring PASS - any grep or automation
+# scanning for it would match a non-pass outcome.
+$r.case1Result = $c1
+$r.case2Result = $c2
 $r.result = if ($c1 -eq 'PASS' -and $c2 -eq 'PASS') { 'PASS' }
-            elseif ($c1 -eq 'PASS' -and $c2 -eq 'FAIL') { 'FAIL_EXISTING_DB_ONLY' }
+            elseif ($c1 -in @('PASS','DEGRADED') -and $c2 -eq 'FAIL') { 'FAIL_EXISTING_DB_ONLY' }
             elseif ($c1 -eq 'FAIL') { 'FAIL_FRESH' }
-            else { "case1=$c1 case2=$c2" }
+            elseif ($c1 -eq 'DEGRADED' -or $c2 -eq 'DEGRADED') { 'DEGRADED' }
+            elseif ($c1 -like 'BLOCKED*' -or $c2 -like 'BLOCKED*') { 'BLOCKED' }
+            else { 'INCOMPLETE' }
 $r.criterion = ("Installed startup reaches Gateway readiness - a listener on 127.0.0.1:$PORT owned by the app's own " +
                 "process, held continuously for at least $STABLE_MS ms, with a visible window and no second GUI instance.")
 $r.notClaimed = ('Readiness here is an owned, stable TCP listener, which is stronger than a running process but weaker ' +
                  'than an in-app assertion that a turn completes. Ordinary chat, the doctor-repair path, and all ' +
                  'document, browser, tenant and external-tester criteria are NOT_RUN.')
-$r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'driver-v2-receipt.json') -Encoding ascii
+$r | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $evidence 'receipt.json') -Encoding ascii
 Note "driver v2 done result=$($r.result)"
