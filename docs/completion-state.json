@@ -2255,6 +2255,19 @@
         "stillOverDocumentedBudget": "Yes - 61,445ms with the exclusion applied, against a documented 30,000ms.",
         "gatewayExposure": "Loopback-only, proven by enumerating all listeners: 127.0.0.1:18789 single listener owned by the app. Our source pins no --host, so this is the bundled default rather than an asserted invariant."
       }
+    },
+    "onlineActivation": {
+      "status": "SEEDED_ON_INSTALLED_CANDIDATE",
+      "evidence": "[cloud-gateway-seed] Seeded cloud gateway provider at 2026-09-09T12:07:35.364Z, standard-user session",
+      "mechanism": "cloud-gateway.json in app.getPath('userData'); no rebuild, installer and asar hashes unchanged",
+      "provider": "Gemini via the OpenAI-compatible endpoint; a stand-in for Ministry APIM on the identical code path",
+      "stillNotRun": "an actual Online turn end to end; seeding a provider is not a completed turn"
+    },
+    "onDeviceRuntime": {
+      "ollamaBundled": false,
+      "installAttempt": "FAILED on a transient network error ~60s after boot; ollama.com returns HTTP 200 on retest",
+      "elevationRequired": "UNKNOWN \u2014 not established. An earlier note inferring requiredAdmin=True from a failed install was a false conclusion and is withdrawn.",
+      "model": "qwen2.5:3b-instruct (exact LOCAL_MODEL_ID), pull sequenced after install per owner instruction"
     }
   },
   "handoff": {
