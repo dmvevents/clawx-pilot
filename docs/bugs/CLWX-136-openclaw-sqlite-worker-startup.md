@@ -282,3 +282,55 @@ listener on port 18789 plus a windowed process, sampled over a bounded window.
 That is stronger than "a process exists" but weaker than an in-app assertion
 that a turn completes. Ordinary chat, the doctor-repair path, and every
 document, browser, tenant and external-tester criterion remain NOT_RUN.
+
+### RETRACTION — the Run A "PASS" above is not a valid result for this criterion
+
+An independent review of the harness found two blocking defects in my own driver,
+and the recorded samples confirm both. **Run A must not be read as satisfying
+this card's criterion.** The retraction is kept above the corrected evidence
+rather than replacing it, so the mistake stays visible.
+
+**Defect 1 — readiness was latched on a single sample, with no stability
+requirement.** The driver latched `gatewayReady` the first time a listener
+appeared and then broke out of the loop. Run A's own samples show
+`listening=True` in **exactly one sample, the last of eleven** (08:47:50Z), after
+ten consecutive `False` samples. This card's documented reproduction contract
+requires a **20-second stable-ready window**, and its terminal receipt recorded
+`stable-ready 0ms` — precisely because in the real defect the Gateway *does* bind
+briefly on one of its restart attempts before exiting again. A single positive
+sample is therefore consistent with the defect being present, not absent. The
+harness had dropped the stability requirement that the verified observer used,
+which means it could return PASS on the exact failure it exists to detect.
+
+**Defect 2 — the listener was never tied to the application under test.** The
+check asked only whether *something* was listening on 127.0.0.1:18789, with no
+free-port precondition and no PID ownership check (`Start-Process` was called
+without `-PassThru`, so no PID was recorded). Since a visible window is produced
+by the failing app too, the port check was the only discriminating signal in the
+driver, and it was contaminable — by the other QA profile's installed app or by a
+straggler from an earlier run. The repository already does this correctly in
+`windows-pilot/scripts/pilot-run-installed-gateway-smoke.ps1`, which refuses to
+proceed with `BLOCKED_PORT_IN_USE` when the port is already held, and separates
+`GATEWAY_TCP_READY` (a TCP accept) from `GATEWAY_READY` (a real `system.presence`
+RPC over the WebSocket). I did not reuse that pattern and should have.
+
+**What the moe.30 runs do and do not support, corrected:**
+
+| Claim | Status |
+|---|---|
+| The installer installs as a standard user, exit 0 | Supported |
+| A visible main window appears, single instance | Supported |
+| Something bound 127.0.0.1:18789 once during Run A | Supported |
+| **Gateway reached readiness on fresh state** | **NOT SUPPORTED** — one unstable sample, owner unverified |
+| **Startup with an existing state database** | **NOT_RUN** — Run B was invalid for unrelated reasons |
+| CLWX-136 is fixed | **NOT SUPPORTED** |
+
+Run B's negative result is more robust than Run A's positive one: **0 of 71
+samples** showed a listener, so nothing bound at all there — but its failure was
+caused by the seeding confounds, so it still is not evidence about this defect.
+
+Next action: repair the harness before re-running — free-port precondition, PID
+ownership of the listener, a contiguous stable-ready window with
+`stableReadyMs`/`readyLostCount` recorded, app-exit detection, and a receipt that
+carries redacted findings rather than verbatim log lines. Then re-run fresh and
+same-user-existing-database cases. Do not quote the retracted PASS anywhere.

@@ -2196,6 +2196,21 @@
       "compiledComparison": "172 of 172 compiled files byte-identical to an independent local compile at the same revision",
       "covers": "All three repairs. The compiled comparison is what covers CLWX-61 and the CLWX-130 path containment, which leave no distinguishing literal after minification.",
       "packagingObservation": "6 of 88 asar-header unpacked entries are absent from the payload (foreign-arch @napi-rs/canvas prebuilds). Filed as CLWX-137, low severity, tooling-only; the x64 runtime binding is present and the resolver guards every candidate require."
+    },
+    "installedStartupEvidence": {
+      "status": "RETRACTED_HARNESS_DEFECT",
+      "what_is_supported": [
+        "standard-user install exit 0",
+        "visible single main window",
+        "a listener appeared on 127.0.0.1:18789 once during the fresh run"
+      ],
+      "what_is_not_supported": [
+        "Gateway readiness",
+        "startup with an existing state database",
+        "CLWX-136 fixed"
+      ],
+      "reason": "Independent review found the harness latched readiness on a single sample with no stability window and never tied the listener to the app under test. The fresh run showed listening=True in exactly 1 of 11 samples, the last one; the documented contract requires a 20-second stable-ready window. The seeded run failed for unrelated confounds (cross-user DPAPI secrets, legacy workspace migration).",
+      "nextAction": "Repair the harness (free-port precondition, PID ownership, contiguous stable-ready, redacted receipt), then re-run."
     }
   },
   "handoff": {
