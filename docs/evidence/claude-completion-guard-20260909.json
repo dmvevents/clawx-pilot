@@ -269,5 +269,19 @@
     "jsonParse": "PASS (settings and receipt)",
     "localMarkdownLinks": "PASS (15 targets checked before latest evidence backlink)",
     "gitDiffCheck": "PASS"
+  },
+  "watchdogCleanup": {
+    "recordedAt": "2026-09-09T08:07:30.482984+00:00",
+    "jobId": "a484f16c",
+    "kind": "session-only recurring cron, every 5 minutes, non-durable, auto-expiring after 7 days",
+    "scope": "Wake-up only, bound to the single existing build run 34323058772; it was forbidden to dispatch a build, reload the board or history, or start new work. /goal remained the sole completion controller.",
+    "didItActuallyFire": true,
+    "firingEvidence": "Root verified native scheduled fires at 07:47:35 and 07:53:49 with live Stop callbacks through 07:54:02. Two firings were also observed directly in-session: each read the existing run receipt and the single downloader, found the build already successful and the transfer progressing, and correctly started nothing. So it fired rather than only being queued.",
+    "terminalCondition": "artifact handoff success \u2014 moe.30 package verification returned PASS",
+    "deleteCall": "CronDelete a484f16c -> \"Cancelled job a484f16c.\"",
+    "absenceVerified": "CronList -> \"No scheduled jobs.\" (the absence check is the evidence, not the delete call)",
+    "noReplacementTimer": true,
+    "guardUntouched": "scripts/ga-continuation-gate.py, tests/ops/ and .claude/settings.json were not edited by the release lane; no reviewed check was altered to make anything pass.",
+    "scopeLimit": "This records controller cleanup only. It is not acceptance evidence: it says nothing about installed, tenant, client or external-tester behaviour, and it does not move GA. GA remains RED."
   }
 }

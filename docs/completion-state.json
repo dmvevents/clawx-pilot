@@ -2162,7 +2162,7 @@
       "x64Only": true,
       "x64OnlyReason": "The arm64 installer and update-manifest upload steps report success but produced no artifact; no arm64 build exists and auto-update stays off in pilot mode."
     },
-    "artifactStatus": "BUILT_AND_PROVENANCE_VERIFIED_BYTES_IN_VERIFICATION",
+    "artifactStatus": "BUILT_AND_PACKAGE_VERIFIED_NEVER_INSTALLED",
     "manifest": "docs/release-manifests/0.4.3-moe.30.json",
     "installedAcceptance": "NOT_RUN",
     "priorAcceptance": "None. No earlier version evidence transfers to this version.",
@@ -2187,7 +2187,16 @@
       },
       "covers": "CLWX-61 nameless-entry guard and CLWX-130 path containment, neither of which leaves a distinguishing string literal after minification."
     },
-    "packagePresence": "IN_PROGRESS"
+    "packagePresence": {
+      "verdict": "PASS",
+      "installerHashMatchesManifest": true,
+      "asarHashMatchesManifest": true,
+      "packagedVersion": "0.4.3-moe.30",
+      "literalMarkers": "CLWX-130 and CLWX-102 markers all present in the shipped dist-electron/main/index.js",
+      "compiledComparison": "172 of 172 compiled files byte-identical to an independent local compile at the same revision",
+      "covers": "All three repairs. The compiled comparison is what covers CLWX-61 and the CLWX-130 path containment, which leave no distinguishing literal after minification.",
+      "packagingObservation": "6 of 88 asar-header unpacked entries are absent from the payload (foreign-arch @napi-rs/canvas prebuilds). Filed as CLWX-137, low severity, tooling-only; the x64 runtime binding is present and the resolver guards every candidate require."
+    }
   },
   "handoff": {
     "status": "COMPLETE_CLAUDE_ACKNOWLEDGED_READY_TO_RESUME",

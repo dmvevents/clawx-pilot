@@ -25,3 +25,5 @@ Earlier defects remain in [the defect register](../DEFECT_REGISTER_2026-09-02.md
 - [CLWX-135 — moe.26 packaged OpenClaw lifecycle blocks Gateway startup](CLWX-135-openclaw-package-lifecycle.md).
 
 - [CLWX-136 — packaged OpenClaw SQLite worker blocks Gateway startup](CLWX-136-openclaw-sqlite-worker-startup.md).
+
+- [CLWX-137 — packaged `app.asar` header declares 6 unpacked files the payload lacks](CLWX-137-asar-header-unpacked-mismatch.md). Low severity, tooling-only: whole-archive extraction fails, while the x64 runtime binding is verified present.

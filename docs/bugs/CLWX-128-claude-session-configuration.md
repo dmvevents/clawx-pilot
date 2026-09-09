@@ -343,3 +343,30 @@ that hook receipt. These observations establish actual scheduled continuation
 and final hook activation; they do not guarantee indefinite unattended uptime.
 The watchdog remains owned by the active artifact handoff and must be deleted
 at its documented terminal boundary. Its cleanup is still tracked separately.
+
+### Watchdog cleanup executed at its terminal boundary
+
+The release lane owned this cleanup and has now performed it. The terminal
+condition was artifact handoff success: moe.30 package verification returned
+PASS (installer and `app.asar` hashes matching the manifest, all CLWX-130 and
+CLWX-102 literal markers present in the shipped compiled bytes, and 172 of 172
+compiled files byte-identical to an independent compile of the same revision).
+
+- `CronDelete a484f16c` returned `Cancelled job a484f16c.`
+- `CronList` then returned `No scheduled jobs.` The absence check is the
+  evidence; the delete call by itself is not.
+- No replacement timer was created, so nothing survives as a general sprint
+  timer.
+
+The watchdog **did fire** rather than only sitting queued. Beyond the recorded
+native fires at `07:47:35` and `07:53:49`, two firings were observed directly:
+each read the existing run receipt and the single in-flight downloader, found
+the build already successful and the transfer progressing, and correctly started
+no new work and dispatched no build.
+
+The reviewed guard and its tests were not touched by the release lane, and no
+check was edited to make anything pass. This entry records controller cleanup
+only. It is not acceptance evidence, it says nothing about installed, tenant,
+client or external-tester behaviour, and it does not move GA, which remains RED.
+Ready for this card depends on its own remaining acceptance, not on this
+cleanup.
