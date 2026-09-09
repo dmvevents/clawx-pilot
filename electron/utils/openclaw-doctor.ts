@@ -4,6 +4,7 @@ import path from 'node:path';
 import { getGatewayNodeModeEntryPath, getOpenClawDir, getOpenClawEntryPath } from './paths';
 import { logger } from './logger';
 import { getUvMirrorEnv } from './uv-env';
+import { getE2EGatewayLaunchRefusal } from './e2e-gateway-guard';
 
 const OPENCLAW_DOCTOR_TIMEOUT_MS = 60_000;
 const MAX_DOCTOR_OUTPUT_BYTES = 10 * 1024 * 1024;
@@ -76,6 +77,24 @@ async function runDoctorCommandWithArgs(
   const openclawEntryScript = getOpenClawEntryPath();
   const command = `openclaw ${args.join(' ')}`;
   const startedAt = Date.now();
+
+  // CLWX-102: the doctor forks a real OpenClaw process; in E2E mode without
+  // the explicit opt-in return a failed result instead of launching one.
+  const refusal = getE2EGatewayLaunchRefusal('doctor-command', command);
+  if (refusal) {
+    logger.error(`Cannot run OpenClaw doctor: ${refusal.message}`);
+    return {
+      mode,
+      success: false,
+      exitCode: null,
+      stdout: '',
+      stderr: '',
+      command,
+      cwd: openclawDir,
+      durationMs: Date.now() - startedAt,
+      error: refusal.message,
+    };
+  }
 
   const missingEntry = !existsSync(openclawEntryScript)
     ? `OpenClaw entry script not found at ${openclawEntryScript}`

@@ -201,4 +201,58 @@ describe('openclaw doctor output handling', () => {
     expect(result.command).toBe('openclaw doctor');
     expect(mockFork.mock.calls[0][1]).toEqual(['doctor']);
   });
+
+  // CLWX-102: Developer Doctor actions fork a real OpenClaw process too.
+  it('refuses to fork the doctor in E2E mode without the explicit opt-in and reports a typed failure', async () => {
+    vi.stubEnv('CLAWX_E2E', '1');
+    vi.stubEnv('CLAWX_E2E_ALLOW_GATEWAY', '');
+
+    const { runOpenClawDoctor, runOpenClawDoctorFix } = await import('@electron/utils/openclaw-doctor');
+    const diagnose = await runOpenClawDoctor();
+    const fix = await runOpenClawDoctorFix();
+
+    expect(mockFork).not.toHaveBeenCalled();
+    expect(diagnose.success).toBe(false);
+    expect(diagnose.exitCode).toBeNull();
+    expect(diagnose.error).toContain('E2E_GATEWAY_LAUNCH_REFUSED');
+    expect(diagnose.command).toBe('openclaw doctor');
+    expect(fix.success).toBe(false);
+    expect(fix.error).toContain('E2E_GATEWAY_LAUNCH_REFUSED');
+    expect(fix.command).toBe('openclaw doctor --fix --yes --non-interactive');
+    expect(mockLoggerError).toHaveBeenCalledWith(expect.stringContaining('E2E_GATEWAY_LAUNCH_REFUSED'));
+  });
+
+  it('forks the doctor in E2E mode when the spec opts in with CLAWX_E2E_ALLOW_GATEWAY=1', async () => {
+    vi.stubEnv('CLAWX_E2E', '1');
+    vi.stubEnv('CLAWX_E2E_ALLOW_GATEWAY', '1');
+    const child = new MockUtilityChild();
+    mockFork.mockReturnValue(child);
+
+    const { runOpenClawDoctor } = await import('@electron/utils/openclaw-doctor');
+    const resultPromise = runOpenClawDoctor();
+
+    await vi.waitFor(() => {
+      expect(mockFork).toHaveBeenCalledTimes(1);
+    });
+    child.emit('exit', 0);
+    const result = await resultPromise;
+    expect(result.success).toBe(true);
+  });
+
+  it('ignores the opt-in variable outside E2E mode', async () => {
+    vi.stubEnv('CLAWX_E2E', '');
+    vi.stubEnv('CLAWX_E2E_ALLOW_GATEWAY', '0');
+    const child = new MockUtilityChild();
+    mockFork.mockReturnValue(child);
+
+    const { runOpenClawDoctor } = await import('@electron/utils/openclaw-doctor');
+    const resultPromise = runOpenClawDoctor();
+
+    await vi.waitFor(() => {
+      expect(mockFork).toHaveBeenCalledTimes(1);
+    });
+    child.emit('exit', 0);
+    const result = await resultPromise;
+    expect(result.success).toBe(true);
+  });
 });

@@ -41,6 +41,7 @@ import {
 } from './supervisor';
 import { GatewayConnectionMonitor } from './connection-monitor';
 import { GatewayLifecycleController, LifecycleSupersededError } from './lifecycle-controller';
+import { isE2EGatewayLaunchRefusedError } from '../utils/e2e-gateway-guard';
 import { launchGatewayProcess } from './process-launcher';
 import { GatewayRestartController } from './restart-controller';
 import { GatewayRestartGovernor } from './restart-governor';
@@ -440,6 +441,14 @@ export class GatewayManager extends EventEmitter {
         logger.debug(error.message);
         return;
       }
+      if (isE2EGatewayLaunchRefusedError(error)) {
+        // CLWX-102: nothing was launched and nothing crashed. Stay "stopped"
+        // (the E2E baseline) rather than "error", keep the reason visible in
+        // the status, and let the caller see the refusal.
+        logger.warn(`Gateway start refused (port=${this.status.port}): ${error.message}`);
+        this.setStatus({ state: 'stopped', error: error.message, pid: undefined, gatewayReady: false });
+        throw error;
+      }
       logger.error(
         `Gateway start failed (port=${this.status.port}, reconnectAttempts=${this.reconnectAttempts}, spawn=${this.lastSpawnSummary ?? 'n/a'})`,
         error
@@ -588,6 +597,12 @@ export class GatewayManager extends EventEmitter {
       try {
         await this.start();
       } catch (err) {
+        if (isE2EGatewayLaunchRefusedError(err)) {
+          // CLWX-102: a refused launch is not a transient failure; a reconnect
+          // loop would only re-run the guard and flip the UI to "reconnecting".
+          logger.warn('Gateway restart: launch refused by the E2E guard; not scheduling auto-reconnect');
+          throw err;
+        }
         // stop() set shouldReconnect=false. Restore it so the gateway
         // can self-heal via scheduleReconnect() instead of dying permanently.
         logger.warn('Gateway restart: start() failed after stop(), enabling auto-reconnect recovery', err);
@@ -1410,6 +1425,10 @@ export class GatewayManager extends EventEmitter {
           delayMs: effectiveDelay,
           error: error instanceof Error ? error.message : String(error),
         });
+        if (isE2EGatewayLaunchRefusedError(error)) {
+          logger.warn('Gateway reconnect: launch refused by the E2E guard; not rescheduling');
+          return;
+        }
         this.scheduleReconnect();
       }
     }, effectiveDelay);

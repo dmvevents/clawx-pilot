@@ -115,4 +115,50 @@ describe('runOpenClawDoctorRepair Gateway Node-mode contract (CLWX-136)', () => 
     await expect(runOpenClawDoctorRepair()).resolves.toBe(false);
     expect(mockFork).not.toHaveBeenCalled();
   });
+
+  // CLWX-102: the repair runs exactly when a Gateway start failed; in an E2E
+  // run that is the moment a second Electron application would be forked.
+  it('refuses to fork the doctor repair in E2E mode without the explicit opt-in', async () => {
+    vi.stubEnv('CLAWX_E2E', '1');
+    vi.stubEnv('CLAWX_E2E_ALLOW_GATEWAY', '');
+    const { logger } = await import('@electron/utils/logger');
+
+    const { runOpenClawDoctorRepair } = await import('@electron/gateway/supervisor');
+
+    await expect(runOpenClawDoctorRepair()).resolves.toBe(false);
+    expect(mockFork).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('E2E_GATEWAY_LAUNCH_REFUSED'));
+  });
+
+  it('forks the doctor repair in E2E mode when the spec opts in with CLAWX_E2E_ALLOW_GATEWAY=1', async () => {
+    vi.stubEnv('CLAWX_E2E', '1');
+    vi.stubEnv('CLAWX_E2E_ALLOW_GATEWAY', '1');
+    const child = new MockUtilityChild();
+    mockFork.mockReturnValue(child);
+
+    const { runOpenClawDoctorRepair } = await import('@electron/gateway/supervisor');
+    const resultPromise = runOpenClawDoctorRepair();
+
+    await vi.waitFor(() => {
+      expect(mockFork).toHaveBeenCalledTimes(1);
+    });
+    child.emit('exit', 0);
+    await expect(resultPromise).resolves.toBe(true);
+  });
+
+  it('ignores the opt-in variable outside E2E mode', async () => {
+    vi.stubEnv('CLAWX_E2E', '');
+    vi.stubEnv('CLAWX_E2E_ALLOW_GATEWAY', '0');
+    const child = new MockUtilityChild();
+    mockFork.mockReturnValue(child);
+
+    const { runOpenClawDoctorRepair } = await import('@electron/gateway/supervisor');
+    const resultPromise = runOpenClawDoctorRepair();
+
+    await vi.waitFor(() => {
+      expect(mockFork).toHaveBeenCalledTimes(1);
+    });
+    child.emit('exit', 0);
+    await expect(resultPromise).resolves.toBe(true);
+  });
 });

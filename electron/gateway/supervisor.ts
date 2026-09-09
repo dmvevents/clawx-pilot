@@ -6,6 +6,7 @@ import { getUvMirrorEnv } from '../utils/uv-env';
 import { isPythonReady, setupManagedPython } from '../utils/uv-setup';
 import { logger } from '../utils/logger';
 import { prependPathEntry } from '../utils/env-path';
+import { getE2EGatewayLaunchRefusal } from '../utils/e2e-gateway-guard';
 import { probeGatewayReady } from './ws-client';
 
 export function warmupManagedPythonReadiness(): void {
@@ -263,6 +264,14 @@ export async function findExistingGatewayProcess(options: {
 }
 
 export async function runOpenClawDoctorRepair(): Promise<boolean> {
+  // CLWX-102: the repair forks a real OpenClaw process; in E2E mode without
+  // the explicit opt-in report "not repaired" instead of launching one.
+  const refusal = getE2EGatewayLaunchRefusal('doctor-repair');
+  if (refusal) {
+    logger.error(`Cannot run OpenClaw doctor repair: ${refusal.message}`);
+    return false;
+  }
+
   const openclawDir = getOpenClawDir();
   // CLWX-136: doctor repair fires exactly when Gateway startup fails, and its
   // own chain spawns process.execPath children (SQLite read-only worker);

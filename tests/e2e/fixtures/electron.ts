@@ -7,6 +7,12 @@ import { join, resolve } from 'node:path';
 
 type LaunchElectronOptions = {
   skipSetup?: boolean;
+  /**
+   * CLWX-102: E2E launches refuse to fork a real OpenClaw Gateway/doctor
+   * process unless a spec opts in. Only set this in a spec that has an
+   * isolated GUI environment and actually needs a live Gateway.
+   */
+  allowGateway?: boolean;
 };
 
 type IpcMockConfig = {
@@ -148,6 +154,7 @@ async function launchClawXElectron(
       CLAWX_E2E: '1',
       CLAWX_USER_DATA_DIR: userDataDir,
       ...(options.skipSetup ? { CLAWX_E2E_SKIP_SETUP: '1' } : {}),
+      ...(options.allowGateway ? { CLAWX_E2E_ALLOW_GATEWAY: '1' } : {}),
       CLAWX_PORT_CLAWX_HOST_API: String(hostApiPort),
     },
     timeout: 90_000,

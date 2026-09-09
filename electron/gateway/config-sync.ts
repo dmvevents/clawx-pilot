@@ -37,6 +37,7 @@ import { prependPathEntry } from '../utils/env-path';
 import { copyPluginFromNodeModules, fixupPluginManifest, cpSyncSafe } from '../utils/plugin-install';
 import { safeRmSync } from '../utils/safe-fs';
 import { stripSystemdSupervisorEnv } from './config-sync-env';
+import { assertGatewayLaunchAllowed } from '../utils/e2e-gateway-guard';
 import { getPort } from '../utils/config';
 import { getHostApiToken } from '../api/host-api-token';
 import { cleanupAgentsSymlinkedSkills, cleanupStalePluginRuntimeDeps } from './skills-symlink-cleanup';
@@ -566,6 +567,9 @@ async function resolveChannelStartupPolicy(): Promise<{
 }
 
 export async function prepareGatewayLaunchContext(port: number): Promise<GatewayLaunchContext> {
+  // CLWX-102: refuse before any pre-launch sync so an E2E run that never
+  // opted into a Gateway does not fork one out of its temp HOME.
+  assertGatewayLaunchAllowed('gateway-launch', `port=${port}`);
   const timingsMs: Record<string, number> = {};
   const totalStartedAt = Date.now();
   const openclawDir = getOpenClawDir();

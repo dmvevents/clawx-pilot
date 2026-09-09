@@ -222,4 +222,54 @@ describe('prepareGatewayLaunchContext', () => {
       });
     }
   });
+
+  // CLWX-102: an E2E run must not fork a real Gateway out of its temp HOME.
+  it('refuses to prepare a Gateway launch in E2E mode without the explicit opt-in, before any pre-launch sync', async () => {
+    vi.stubEnv('CLAWX_E2E', '1');
+    vi.stubEnv('CLAWX_E2E_ALLOW_GATEWAY', '');
+    const { prepareGatewayLaunchContext } = await loadPrepareGatewayLaunchContext();
+    const { syncProxyConfigToOpenClaw } = await import('@electron/utils/openclaw-proxy');
+    const { sanitizeOpenClawConfig } = await import('@electron/utils/openclaw-auth');
+
+    const rejection = await prepareGatewayLaunchContext(18789).catch((error: unknown) => error);
+
+    expect(rejection).toMatchObject({
+      name: 'E2EGatewayLaunchRefusedError',
+      code: 'E2E_GATEWAY_LAUNCH_REFUSED',
+      entryPoint: 'gateway-launch',
+    });
+    expect(syncProxyConfigToOpenClaw).not.toHaveBeenCalled();
+    expect(sanitizeOpenClawConfig).not.toHaveBeenCalled();
+  });
+
+  it('still refuses when the E2E opt-in has a value other than "1"', async () => {
+    vi.stubEnv('CLAWX_E2E', '1');
+    vi.stubEnv('CLAWX_E2E_ALLOW_GATEWAY', 'true');
+    const { prepareGatewayLaunchContext } = await loadPrepareGatewayLaunchContext();
+
+    await expect(prepareGatewayLaunchContext(18789)).rejects.toMatchObject({
+      code: 'E2E_GATEWAY_LAUNCH_REFUSED',
+    });
+  });
+
+  it('prepares the launch in E2E mode when the spec opts in with CLAWX_E2E_ALLOW_GATEWAY=1', async () => {
+    vi.stubEnv('CLAWX_E2E', '1');
+    vi.stubEnv('CLAWX_E2E_ALLOW_GATEWAY', '1');
+    const { prepareGatewayLaunchContext, gatewayShimPath } = await loadPrepareGatewayLaunchContext();
+
+    const context = await prepareGatewayLaunchContext(18789);
+
+    expect(context.entryScript).toBe(gatewayShimPath);
+    expect(context.gatewayArgs).toContain('18789');
+  });
+
+  it('ignores the opt-in variable outside E2E mode (production path unchanged)', async () => {
+    vi.stubEnv('CLAWX_E2E', '');
+    vi.stubEnv('CLAWX_E2E_ALLOW_GATEWAY', '0');
+    const { prepareGatewayLaunchContext, gatewayShimPath } = await loadPrepareGatewayLaunchContext();
+
+    const context = await prepareGatewayLaunchContext(18789);
+
+    expect(context.entryScript).toBe(gatewayShimPath);
+  });
 });
