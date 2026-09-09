@@ -185,6 +185,91 @@ try {
   }
 }
 
+// ── Contract 1: gateway WebSocket protocol (CLWX-138) ────────────────────────
+// Chat was impossible on a fully package-verified installer because the app
+// offered protocol [3,3] while the bundled gateway required 4. Every other gate
+// was green, and no gate compared those two numbers.
+//
+// This runs here rather than in `pnpm run preflight` because preflight executes
+// before bundle-openclaw.mjs, so the bundled gateway does not exist on disk yet.
+// This script runs immediately after bundling, which is the first point both
+// sides are readable.
+//
+// Deliberate design: when the required version cannot be extracted, this FAILS as
+// indeterminate rather than passing. A check that silently passes when it cannot
+// see the answer is worse than no check, and is exactly how CLWX-138 survived.
+function verifyGatewayProtocolContract() {
+  const problems = [];
+
+  const wsClient = path.join(ROOT, 'electron', 'gateway', 'ws-client.ts');
+  if (!fs.existsSync(wsClient)) {
+    return [`PROTOCOL: cannot read ${path.relative(ROOT, wsClient)} to determine the offered range`];
+  }
+  const src = fs.readFileSync(wsClient, 'utf8');
+  const minMatch = src.match(/minProtocol:\s*(\d+)/);
+  const maxMatch = src.match(/maxProtocol:\s*(\d+)/);
+  if (!minMatch || !maxMatch) {
+    return ['PROTOCOL: could not extract minProtocol/maxProtocol from the connect frame (INDETERMINATE)'];
+  }
+  const offeredMin = Number(minMatch[1]);
+  const offeredMax = Number(maxMatch[1]);
+
+  // The gateway states its own requirement in the mismatch message it logs, e.g.
+  //   client=... min=3 max=3 expected=4 probeMin=3
+  // so it is extractable rather than a matter of inference.
+  const distDir = path.join(ROOT, 'build', 'openclaw', 'dist');
+  if (!fs.existsSync(distDir)) {
+    return [`PROTOCOL: bundled gateway dist not found at ${path.relative(ROOT, distDir)} (INDETERMINATE)`];
+  }
+  // Two signals, most authoritative first. Signal A is the gateway naming its own
+  // requirement in the mismatch message; newer gateways carry it. Signal B is the
+  // modal default in its negotiation code, which is present in every version
+  // observed: 2026.4.23 carries `maxProtocol ?? 3`, 2026.9.2 carries
+  // `maxProtocol ?? 4`. Both were read from real bundles rather than assumed.
+  let required = null;
+  let foundIn = null;
+  const defaults = new Map();
+  for (const entry of fs.readdirSync(distDir)) {
+    if (!entry.endsWith('.js')) continue;
+    const text = fs.readFileSync(path.join(distDir, entry), 'utf8');
+    if (required === null && text.includes('protocol mismatch')) {
+      const m = text.match(/expected=(\d+)/);
+      if (m) { required = Number(m[1]); foundIn = `dist/${entry} (expected=)`; }
+    }
+    for (const m of text.matchAll(/maxProtocol\s*\?\?\s*(\d+)/g)) {
+      const v = Number(m[1]);
+      defaults.set(v, (defaults.get(v) ?? 0) + 1);
+    }
+  }
+  if (required === null && defaults.size > 0) {
+    const [modal] = [...defaults.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0]);
+    required = modal[0];
+    foundIn = `modal \`maxProtocol ?? N\` across dist (${modal[1]} occurrence(s))`;
+  }
+  if (required === null) {
+    return ['PROTOCOL: bundled gateway states no expected protocol version and no negotiation default anywhere in dist (INDETERMINATE — refusing to certify compatibility)'];
+  }
+
+  if (required < offeredMin || required > offeredMax) {
+    problems.push(
+      `PROTOCOL: bundled gateway requires protocol ${required} (from ${foundIn}) but the app offers ` +
+      `[${offeredMin},${offeredMax}] in electron/gateway/ws-client.ts. Every connect will be refused with ` +
+      `close 1002 "protocol mismatch" and the chat composer will stay permanently disabled. Note the gateway's ` +
+      `liveness probe may still accept an older version, so a listening port and a passing readiness probe ` +
+      `will BOTH report success on this build — see CLWX-138.`,
+    );
+  }
+  if (offeredMin === offeredMax) {
+    problems.push(
+      `PROTOCOL: the app pins minProtocol === maxProtocol (${offeredMin}). Offer a range so the gateway can ` +
+      `negotiate; pinning makes every gateway upgrade a hard break instead of a negotiation.`,
+    );
+  }
+  return problems;
+}
+
+failures.push(...verifyGatewayProtocolContract());
+
 if (failures.length > 0) {
   console.error(`✗ openclaw bundle verification FAILED (${failures.length}):`);
   for (const f of failures) console.error(`  - ${f}`);

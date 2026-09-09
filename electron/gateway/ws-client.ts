@@ -161,8 +161,19 @@ export function buildGatewayConnectFrame(options: {
       id: connectId,
       method: 'connect',
       params: {
+        // The bundled gateway (openclaw 2026.9.2) requires protocol 4 for a real
+        // connect and logs `expected=4` when refusing; only its liveness PROBE
+        // still accepts 3 (`probeMin=3`), which is why a port check and a
+        // readiness probe both pass while every actual connect is rejected with
+        // close 1002 "protocol mismatch" and the composer stays disabled forever.
+        //
+        // Offer a RANGE rather than a pin: 3 keeps older gateways working, 4
+        // satisfies the bundled one, and the gateway selects the highest mutually
+        // supported version. Pinning min === max was the defect - it made a
+        // gateway upgrade a hard break instead of a negotiation. See CLWX-138 and
+        // docs/VERSION_COMPATIBILITY_MATRIX.md.
         minProtocol: 3,
-        maxProtocol: 3,
+        maxProtocol: 4,
         client: {
           id: clientId,
           displayName: 'ClawX',
