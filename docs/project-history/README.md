@@ -6,6 +6,8 @@ sessions used along the way.
 
 ## Files
 
+- [September 9 Claude GA handoff](GA_CLAUDE_HANDOFF_2026-09-09.md) — restart instructions, recursive gap analysis and evidence ledger. The [completion plan](../COMPLETION_PLAN.md) owns the current decision.
+
 - [`TIMELINE.md`](./TIMELINE.md) — dated build history (FACTS vs INFERENCE),
   a Codex-session index, the two-project separation, and the open-gaps list.
 
