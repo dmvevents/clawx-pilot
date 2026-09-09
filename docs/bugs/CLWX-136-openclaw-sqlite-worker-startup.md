@@ -191,3 +191,94 @@ SQLite state database this defect needs.
 Consequence for this card: the criterion is unchanged, but its dependency is no
 longer an external party. Do not re-record this as blocked on a human without
 first checking the auto-shutdown window and the sshd key path.
+
+### Release-relevance disposition for the acceptance-lane scripts
+
+Three new scripts were authored to remove this card's environment blocker:
+`windows-pilot/scripts/pilot-vm-startup-repair.ps1`,
+`pilot-acceptance-stage.ps1` and `pilot-acceptance-driver.ps1` (commit
+`2acb09ff`). The continuation gate correctly flagged them as product-path changes
+not represented in candidate `0.4.3-moe.30`, so they need an explicit
+disposition rather than silent omission.
+
+**Disposition: NOT RELEASE-RELEVANT — no candidate integration required.**
+
+Criterion, established from the build configuration and the verified artifact
+rather than from intent:
+
+- `electron-builder.yml` `files:` is exactly `dist`, `dist-electron`,
+  `package.json`. `windows-pilot/` is absent.
+- `extraResources:` copies `resources/`, `build/openclaw/` and
+  `build/preinstalled-skills/`. `windows-pilot/` is absent there too.
+- The extracted `app.asar` of the verified moe.30 installer contains only
+  `dist`, `dist-electron` and `package.json`, and no `windows-pilot` directory
+  exists anywhere under the packaged `resources/`.
+
+So these files cannot reach any installed build. Integrating them into the
+release candidate would change the candidate's identity — invalidating the
+already-verified installer and ASAR hashes — while adding nothing a principal
+could ever execute. That is the wrong trade, and it is why this is a disposition
+and not a deferred integration.
+
+They are also not registered as a reviewed *lane*, deliberately: lane
+registration asserts that a diff belongs in the candidate, and the gate would
+then correctly demand its integration. Recording QA-lane operator tooling as a
+release lane would make the gate enforce the opposite of the truth.
+
+What they are: operator tooling for a disposable QA virtual machine. Their blast
+radius is that machine, they are removable, and they touch no shipped path.
+Independent review of the three scripts is in flight in a separate lane at the
+time of writing; its verdict and any findings will be recorded here. That review
+concerns whether the scripts are safe and whether their evidence is trustworthy
+— it does not change the release-relevance criterion above, which follows from
+the packaging configuration alone.
+
+### September 9 installed startup results on moe.30 — Run A PASS, Run B invalid
+
+First installed startup evidence on this candidate, produced in a real
+standard-user interactive session (`ClawXAcc0909`, `SESSIONNAME=Console`,
+`isElevated=False`) on the QA VM.
+
+| Run | State | Result | Detail |
+|---|---|---|---|
+| A | fresh profile | **PASS** | install exit 0 in 251.4 s; window at 08:47:08Z; Gateway listening on 127.0.0.1:18789 at 08:47:50Z; 1 windowed process, no second GUI instance; 11 samples; **zero** CLWX-136 signature hits |
+| B | seeded from the old QA profile | **FAIL — but not a valid test** | window at 08:48:21Z; Gateway never became ready across 71 samples / 360 s |
+
+Installed identity: product version `0.4.3.0`, installed exe sha256
+`93f5a781…7fb411a8`, from installer `9f8a2dc5…` re-verified inside the session.
+
+**Run B does not reproduce CLWX-136 and must not be reported as doing so.** Its
+logs show no invalid-JSON worker error at all. What they show is:
+
+- `SECRETS_DEGRADED … cold route:~\.openclaw\agents\main\agent\openclaw-agent.sqlite: secret resolution failed`, repeating — the predicted consequence of seeding a database whose DPAPI-protected values belong to a different Windows user.
+- `gateway restart-loop breaker tripped: 3 unclean boot(s) within 300000ms`.
+- `Gateway failed to start: Legacy workspace setup state requires migration`.
+
+Two confounds, both introduced by the seeding method rather than by the product
+under test. The eight `sqlite` matches in the automated signature scan are only
+the `openclaw-agent.sqlite` path inside those secrets lines; treating them as
+CLWX-136 hits would have been a false positive, and the driver's own
+`seedCaveat` predicted exactly this.
+
+Run A is therefore the load-bearing result so far: on this candidate the SQLite
+read-only worker path completes and the Gateway reaches readiness. That is
+positive evidence for the shim, not yet proof for this card's criterion, which
+specifies an **existing** database.
+
+The clean discriminator is a same-user existing database — the state this
+account's own app wrote during Run A, restored and relaunched. That removes both
+confounds. It is running; its receipt is `phase2b-receipt.json`.
+
+**Operational finding worth keeping:** `schtasks /Run` on an `/IT` task returned
+`ERROR: Element not found.` with `Last Result: 267011`
+(`SCHED_S_TASK_HAS_NOT_RUN`) **even with an active console session for that exact
+user**. This is the same code that stalled the moe.29 attempt, so that stall was
+not caused by the missing session alone. The reliable mechanism on this machine
+is a Startup-folder shim executed by the auto-logon session; interactive
+scheduled tasks are not dependable here and should not be used as the harness.
+
+**Caveat on the readiness signal:** "Gateway ready" here means a loopback
+listener on port 18789 plus a windowed process, sampled over a bounded window.
+That is stronger than "a process exists" but weaker than an in-app assertion
+that a turn completes. Ordinary chat, the doctor-repair path, and every
+document, browser, tenant and external-tester criterion remain NOT_RUN.
