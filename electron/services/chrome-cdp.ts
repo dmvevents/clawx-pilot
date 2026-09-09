@@ -324,6 +324,21 @@ async function probeVersion(
   }
 }
 
+/**
+ * True when SOMETHING answers HTTP on the CDP endpoint, regardless of status
+ * code. Used where the question is "is this port free?" rather than "is this
+ * a ready CDP server?" — a non-2xx reply is still a listener.
+ */
+async function endpointAnswersHttp(cfg: ChromeCdpConfig, runtime: ChromeCdpRuntime): Promise<boolean> {
+  const fetchJson = runtime.fetchJson ?? defaultFetchJson;
+  try {
+    await fetchJson(`${cfg.cdpEndpoint}/json/version`, 2_000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function defaultListChromeProcesses(platform: NodeJS.Platform): Promise<ChromeProcessInfo[]> {
   if (platform === 'win32') {
     const command = [
@@ -414,8 +429,16 @@ export async function defaultDescribeLoopbackPortOwner(port: number): Promise<Lo
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     return { status: 'unknown', error: 'invalid port' };
   }
+  // The listener query runs under `-ErrorAction Stop` so a cmdlet failure
+  // (access denied, NetTCPIP module unavailable) is reported as an explicit
+  // `error` status. Under SilentlyContinue it produced the same `$c = $null`
+  // as a genuinely free port and was mis-reported as `no_listener`, which the
+  // attach gate then treated as "nothing to protect". Only ObjectNotFound —
+  // the cmdlet's own "no rows matched" signal — is a free port.
   const command = [
-    `$c = Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction SilentlyContinue | Select-Object -First 1;`,
+    `try { $c = Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction Stop | Select-Object -First 1 }`,
+    `catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound' -or $_.FullyQualifiedErrorId -like 'CmdletizationQuery_NotFound*') { $c = $null }`,
+    `else { @{ status = 'error'; error = [string]$_.Exception.Message } | ConvertTo-Json -Compress; exit 0 } };`,
     `if (-not $c) { @{ status = 'no_listener' } | ConvertTo-Json -Compress } else {`,
     `$o = [int]$c.OwningProcess;`,
     `$p = Get-CimInstance Win32_Process -Filter "ProcessId=$o" -ErrorAction SilentlyContinue;`,
@@ -429,12 +452,19 @@ export async function defaultDescribeLoopbackPortOwner(port: number): Promise<Lo
     });
     const parsed = JSON.parse(stdout.trim()) as {
       status?: string;
+      error?: string | null;
       pid?: number;
       sessionId?: number;
       currentSessionId?: number;
       commandLine?: string | null;
     };
     if (parsed.status === 'no_listener') return { status: 'no_listener' };
+    if (parsed.status === 'error') {
+      return {
+        status: 'unknown',
+        error: typeof parsed.error === 'string' && parsed.error.length > 0 ? parsed.error : 'port owner query failed',
+      };
+    }
     if (parsed.status !== 'ok') return { status: 'unknown', error: 'unrecognized probe payload' };
     return {
       status: 'ok',
@@ -670,8 +700,32 @@ function commandUsesUserOwnedProfileDir(commandLine: string, cfg: ChromeCdpConfi
   const match = /--user-data-dir=(?:"([^"]+)"|([^\s"]+))/i.exec(commandLine);
   const dir = match?.[1] ?? match?.[2];
   if (!dir) return false;
-  return normalizedPathForCompare(dir, cfg.platform)
-    .startsWith(normalizedPathForCompare(cfg.homedir, cfg.platform));
+  return isPathWithinDir(dir, cfg.homedir, cfg.platform);
+}
+
+/**
+ * Path CONTAINMENT, not string prefix: `C:\Users\Teacher2\...` is not under
+ * `C:\Users\Teacher`. Resolves `..` segments and slash variants, strips
+ * trailing separators, compares case-insensitively on Windows, and requires
+ * either equality or a separator immediately after the parent.
+ */
+function isPathWithinDir(candidate: string, parent: string, platform: NodeJS.Platform): boolean {
+  const pathApi = platform === 'win32' ? win32 : posix;
+  const canonical = (value: string): string => {
+    let normalized = pathApi.normalize(value.trim());
+    if (platform === 'win32') normalized = normalized.toLowerCase();
+    // Keep a bare root ("C:\" / "/") intact; strip trailing separators elsewhere.
+    while (normalized.length > 1 && normalized.endsWith(pathApi.sep) && normalized !== pathApi.parse(normalized).root) {
+      normalized = normalized.slice(0, -1);
+    }
+    return normalized;
+  };
+  const parentPath = canonical(parent);
+  const childPath = canonical(candidate);
+  if (parentPath.length === 0 || childPath.length === 0) return false;
+  if (childPath === parentPath) return true;
+  const prefix = parentPath.endsWith(pathApi.sep) ? parentPath : parentPath + pathApi.sep;
+  return childPath.startsWith(prefix);
 }
 
 function commandUsesRemoteDebugPort(commandLine: string, debugPort: number): boolean {
@@ -922,11 +976,12 @@ async function launchChromeForCdp(
  * endpoint on Windows.
  *
  * `allowed: true` means "no confirmed objection": non-Windows platforms,
- * non-loopback endpoints and a port with no attributable listener (the connect
- * itself will then fail honestly and route into repair) all proceed. A
- * confirmed foreign session, a profile conflict or an unverifiable owner
- * refuses the attach — fail closed, with the same typed status the diagnose
- * path reports.
+ * non-loopback endpoints and a port with no attributable listener that ALSO
+ * does not answer /json/version (the connect itself will then fail honestly
+ * and route into repair) all proceed. A confirmed foreign session, a profile
+ * conflict, an unverifiable owner, or an unattributable listener that is
+ * nevertheless answering refuses the attach — fail closed, with the same typed
+ * status the diagnose path reports.
  */
 export type ChromeCdpAttachDecision =
   | { allowed: true }
@@ -949,9 +1004,17 @@ export async function verifyCdpEndpointOwnershipForAttach(
     return { allowed: true };
   }
   if (ownership.owner.status === 'no_listener') {
-    // Nothing owns the port: there is no one to protect, and the CDP connect
-    // that follows will fail honestly and route into the repair path.
-    return { allowed: true };
+    // "No attributable listener" is only believable when nothing answers on
+    // the port. If /json/version responds, SOMETHING we cannot attribute is
+    // listening — the same evidence diagnoseChromeCdp reports as
+    // endpoint_owner_unverified — and the gate must refuse rather than let a
+    // reachable foreign-session Chrome be driven. When nothing answers, allow:
+    // the CDP connect that follows fails honestly and routes into repair.
+    // Any HTTP reply counts as answering (a non-2xx status is still a
+    // listener); only a connection failure or timeout proves the port is free.
+    if (!(await endpointAnswersHttp(cfg, runtime))) {
+      return { allowed: true };
+    }
   }
   logger.warn(`[chrome-cdp] attach refused — endpoint ownership ${ownership.verdict}: ${ownership.reason}`);
   return { allowed: false, status: ownershipRefusalStatus(cfg, ownership) };

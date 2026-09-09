@@ -686,16 +686,24 @@ describe('verifyCdpEndpointOwnershipForAttach (CLWX-130 review finding 3)', () =
     if (!decision.allowed) expect(decision.status.state).toBe('endpoint_owner_unverified');
   });
 
-  it('allows attach when the endpoint is ours, when no listener exists, on macOS and on non-loopback endpoints', async () => {
+  it('allows attach when the endpoint is ours, when no listener exists AND nothing answers, on macOS and on non-loopback endpoints', async () => {
     const ours = await verifyCdpEndpointOwnershipForAttach({ userDataDir, chromeExecutable }, baseRuntime());
     expect(ours.allowed).toBe(true);
 
-    // No listener: nothing to protect; the connect that follows fails honestly
-    // and routes into the repair path.
+    // No attributable listener AND the endpoint does not answer HTTP: nothing
+    // to protect; the connect that follows fails honestly and routes into the
+    // repair path. (Corrected pin — the earlier form of this row did not probe
+    // the endpoint, so it accepted an unprovable "no listener" even when a
+    // reachable Chrome was answering; see the fail-open B rows below.)
+    const emptyFetch = vi.fn(async () => {
+      throw new Error('ECONNREFUSED');
+    });
     const empty = await verifyCdpEndpointOwnershipForAttach({ userDataDir, chromeExecutable }, baseRuntime({
+      fetchJson: emptyFetch,
       describeLoopbackPortOwner: vi.fn(async () => ({ status: 'no_listener' as const })),
     }));
     expect(empty.allowed).toBe(true);
+    expect(emptyFetch).toHaveBeenCalledWith('http://127.0.0.1:18792/json/version', expect.any(Number));
 
     const darwinProbe = vi.fn(async () => oursOwner);
     const darwin = await verifyCdpEndpointOwnershipForAttach({}, baseRuntime({
@@ -715,6 +723,195 @@ describe('verifyCdpEndpointOwnershipForAttach (CLWX-130 review finding 3)', () =
     );
     expect(remote.allowed).toBe(true);
     expect(remoteProbe).not.toHaveBeenCalled();
+  });
+});
+
+// ── CLWX-130 fail-open B: "no listener" is only believable when nothing answers ─
+describe('verifyCdpEndpointOwnershipForAttach no_listener evidence (CLWX-130 fail-open B)', () => {
+  it('REFUSES attach when the probe reports no_listener but the endpoint answers /json/version', async () => {
+    // The ownership probe could not attribute the port, yet a Chrome IS
+    // answering on it: that is exactly the evidence diagnoseChromeCdp already
+    // calls endpoint_owner_unverified. The gate must agree — a reachable
+    // foreign-session Chrome must not be driven because the listener query
+    // came back empty.
+    const fetchJson = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: { Browser: 'Chrome/136.0.0.0', 'User-Agent': 'Chrome' },
+    }));
+    const runtime = baseRuntime({
+      fetchJson,
+      describeLoopbackPortOwner: vi.fn(async () => ({ status: 'no_listener' as const })),
+    });
+
+    const decision = await verifyCdpEndpointOwnershipForAttach({ userDataDir, chromeExecutable }, runtime);
+
+    expect(fetchJson).toHaveBeenCalledWith('http://127.0.0.1:18792/json/version', expect.any(Number));
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) {
+      expect(decision.status.state).toBe('endpoint_owner_unverified');
+      expect(decision.status.action).toBe('retry');
+      expect(decision.status.error).toMatch(/answered but no loopback listener/i);
+    }
+  });
+
+  it('REFUSES attach when the probe reports no_listener and the endpoint answers with a non-2xx status', async () => {
+    // Anything answering HTTP on our loopback port is a process we cannot
+    // attribute; only a connection failure proves the port is free.
+    const runtime = baseRuntime({
+      fetchJson: vi.fn(async () => ({ ok: false, status: 500, text: 'boom' })),
+      describeLoopbackPortOwner: vi.fn(async () => ({ status: 'no_listener' as const })),
+    });
+
+    const decision = await verifyCdpEndpointOwnershipForAttach({ userDataDir, chromeExecutable }, runtime);
+
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) expect(decision.status.state).toBe('endpoint_owner_unverified');
+  });
+
+  it('ALLOWS attach when the probe reports no_listener and the connection is refused (control)', async () => {
+    const runtime = baseRuntime({
+      fetchJson: vi.fn(async () => {
+        throw new Error('connect ECONNREFUSED 127.0.0.1:18792');
+      }),
+      describeLoopbackPortOwner: vi.fn(async () => ({ status: 'no_listener' as const })),
+    });
+
+    const decision = await verifyCdpEndpointOwnershipForAttach({ userDataDir, chromeExecutable }, runtime);
+
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('a probe ERROR (cmdlet failure) is unverified and refused even when the endpoint does not answer', async () => {
+    // Access denied / NetTCPIP unavailable is not "no rows". It is never
+    // permission to attach, regardless of what the HTTP probe says.
+    const fetchJson = vi.fn(async () => {
+      throw new Error('ECONNREFUSED');
+    });
+    const runtime = baseRuntime({
+      fetchJson,
+      describeLoopbackPortOwner: vi.fn(async () => ({ status: 'unknown' as const, error: 'Get-NetTCPConnection: Access is denied' })),
+    });
+
+    const decision = await verifyCdpEndpointOwnershipForAttach({ userDataDir, chromeExecutable }, runtime);
+
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) {
+      expect(decision.status.state).toBe('endpoint_owner_unverified');
+      expect(decision.status.error).toMatch(/access is denied/i);
+    }
+    expect(fetchJson).not.toHaveBeenCalled();
+  });
+});
+
+// ── CLWX-130 fail-open A: home-directory PREFIX is not home-directory CONTAINMENT ─
+describe('user-owned profile dir boundary (CLWX-130 fail-open A)', () => {
+  const readyFetch = () =>
+    vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: { Browser: 'Chrome/136.0.0.0', 'User-Agent': 'Chrome' },
+    }));
+
+  // Session ids unreadable (so the foreign-session check cannot fire), command
+  // line readable and carrying OUR debug port: the only remaining acceptance
+  // evidence is whether --user-data-dir lives under THIS user's home.
+  const unreadableSessionOwner = (dir: string, quoted = false) => ({
+    status: 'ok' as const,
+    pid: 7777,
+    commandLine: `"${chromeExecutable}" --remote-debugging-port=18792 --user-data-dir=${quoted ? `"${dir}"` : dir}`,
+  });
+
+  const refusedDirs: Array<[label: string, dir: string, quoted?: boolean, homeOverride?: string]> = [
+    ['sibling user with our home as a name prefix (Teacher2)', 'C:\\Users\\Teacher2\\AppData\\Local\\Google\\Chrome\\User Data'],
+    ['sibling user, forward-slash form', 'C:/Users/Teacher2/AppData/Local/Google/Chrome/User Data'],
+    ['sibling user, quoted value with spaces', 'C:\\Users\\Teacher2\\My Profile', true],
+    ['sibling user, trailing separator on the value', 'C:\\Users\\Teacher2\\Profile\\'],
+    ['sibling user reached by traversal from inside our home', 'C:\\Users\\Teacher\\..\\Teacher2\\Profile'],
+    ['sibling user when OUR home carries a trailing separator', 'C:\\Users\\Teacher2\\Profile', false, 'C:\\Users\\Teacher\\'],
+    ['sibling user when OUR home is forward-slash form', 'C:\\Users\\Teacher2\\Profile', false, 'C:/Users/Teacher'],
+    ['a completely different user', 'C:\\Users\\OtherUser\\SomeProfile'],
+  ];
+
+  for (const [label, dir, quoted = false, homeOverride] of refusedDirs) {
+    it(`diagnose: ${label} is NOT ours — endpoint_owner_unverified, never cdp_ready`, async () => {
+      const runtime = baseRuntime({
+        fetchJson: readyFetch(),
+        ...(homeOverride ? { homedir: homeOverride } : {}),
+        describeLoopbackPortOwner: vi.fn(async () => unreadableSessionOwner(dir, quoted)),
+      });
+
+      const result = await diagnoseChromeCdp({ userDataDir, chromeExecutable }, runtime);
+
+      expect(result.state).toBe('endpoint_owner_unverified');
+      expect(result.action).toBe('retry');
+    });
+
+    it(`attach gate: ${label} is refused`, async () => {
+      const runtime = baseRuntime({
+        ...(homeOverride ? { homedir: homeOverride } : {}),
+        describeLoopbackPortOwner: vi.fn(async () => unreadableSessionOwner(dir, quoted)),
+      });
+
+      const decision = await verifyCdpEndpointOwnershipForAttach({ userDataDir, chromeExecutable }, runtime);
+
+      expect(decision.allowed).toBe(false);
+      if (!decision.allowed) expect(decision.status.state).toBe('endpoint_owner_unverified');
+    });
+  }
+
+  const acceptedDirs: Array<[label: string, dir: string, quoted?: boolean, homeOverride?: string]> = [
+    ['the genuine same-user profile (control)', userDataDir, true],
+    ['same user, forward-slash form', 'C:/Users/Teacher/AppData/Local/Google/Chrome/User Data'],
+    ['same user, different letter case', 'c:\\users\\TEACHER\\AppData\\Local\\Google\\Chrome\\User Data'],
+    ['same user, trailing separator on the value', 'C:\\Users\\Teacher\\SomeProfile\\'],
+    ['same user when OUR home carries a trailing separator', 'C:\\Users\\Teacher\\SomeProfile', false, 'C:\\Users\\Teacher\\'],
+    ['same user when OUR home is forward-slash form', 'C:\\Users\\Teacher\\SomeProfile', false, 'C:/Users/Teacher'],
+    ['a profile dir that IS the home dir itself', 'C:\\Users\\Teacher'],
+  ];
+
+  for (const [label, dir, quoted = false, homeOverride] of acceptedDirs) {
+    it(`diagnose: ${label} with unreadable session ids is still cdp_ready`, async () => {
+      // Pins the decision to keep `sameSessionConfirmed OR user-owned dir`:
+      // the principal's own debug-enabled Chrome must not be demoted to
+      // unverified just because Win32_Process session metadata was unreadable.
+      const runtime = baseRuntime({
+        fetchJson: readyFetch(),
+        ...(homeOverride ? { homedir: homeOverride } : {}),
+        describeLoopbackPortOwner: vi.fn(async () => unreadableSessionOwner(dir, quoted)),
+      });
+
+      const result = await diagnoseChromeCdp({ userDataDir, chromeExecutable }, runtime);
+
+      expect(result.state).toBe('cdp_ready');
+      expect(result.endpointOwnerPid).toBe(7777);
+    });
+  }
+
+  it('attach gate: the genuine same-user profile with unreadable session ids is allowed (control)', async () => {
+    const runtime = baseRuntime({
+      describeLoopbackPortOwner: vi.fn(async () => unreadableSessionOwner(userDataDir, true)),
+    });
+
+    const decision = await verifyCdpEndpointOwnershipForAttach({ userDataDir, chromeExecutable }, runtime);
+
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('a sibling-user dir is refused even with the debug port when the session is CONFIRMED different (unchanged contract)', async () => {
+    const runtime = baseRuntime({
+      fetchJson: readyFetch(),
+      describeLoopbackPortOwner: vi.fn(async () => ({
+        ...unreadableSessionOwner('C:\\Users\\Teacher2\\Profile'),
+        sessionId: 1,
+        currentSessionId: 2,
+      })),
+    });
+
+    const result = await diagnoseChromeCdp({ userDataDir, chromeExecutable }, runtime);
+
+    expect(result.state).toBe('foreign_endpoint_owner');
+    expect(result.message).toMatch(/different windows user/i);
   });
 });
 
@@ -802,6 +999,36 @@ describe.runIf(process.platform !== 'win32')('defaultDescribeLoopbackPortOwner p
   it('degrades an unrecognized payload status to unknown', async () => {
     process.env.CLWX_TEST_PROBE_STDOUT = '{"status":"weird"}';
     expect(await defaultDescribeLoopbackPortOwner(18792)).toEqual({ status: 'unknown', error: 'unrecognized probe payload' });
+  });
+
+  it('maps an explicit probe ERROR payload to unknown with the cmdlet error preserved, never to no_listener (CLWX-130 fail-open B)', async () => {
+    process.env.CLWX_TEST_PROBE_STDOUT = '{"status":"error","error":"Access is denied"}';
+    const owner = await defaultDescribeLoopbackPortOwner(18792);
+    expect(owner.status).toBe('unknown');
+    expect(owner.error).toBe('Access is denied');
+  });
+
+  it('maps an ERROR payload without a message to unknown with a generic reason', async () => {
+    process.env.CLWX_TEST_PROBE_STDOUT = '{"status":"error"}';
+    expect(await defaultDescribeLoopbackPortOwner(18792)).toEqual({ status: 'unknown', error: 'port owner query failed' });
+  });
+
+  it('the inline PowerShell distinguishes a cmdlet failure from an empty result (CLWX-130 fail-open B)', async () => {
+    // With `-ErrorAction SilentlyContinue`, access-denied and "no rows" both
+    // produced `$c = $null` and were reported as no_listener. The listener
+    // query must run under `-ErrorAction Stop` inside try/catch, report only a
+    // genuine ObjectNotFound as no_listener, and surface anything else as an
+    // explicit error status.
+    process.env.CLWX_TEST_PROBE_STDOUT = '{"status":"no_listener"}';
+    await defaultDescribeLoopbackPortOwner(18792);
+    const invocation = readFileSync(argsLog, 'utf8');
+    const listenerQuery = /Get-NetTCPConnection[^;|]*/i.exec(invocation)?.[0] ?? '';
+    expect(listenerQuery).toContain('-ErrorAction Stop');
+    expect(listenerQuery).not.toMatch(/SilentlyContinue/i);
+    expect(invocation).toMatch(/\btry\s*\{/);
+    expect(invocation).toMatch(/\bcatch\s*\{/);
+    expect(invocation).toContain('ObjectNotFound');
+    expect(invocation).toContain("status = 'error'");
   });
 
   it('degrades a failing probe process to unknown with the error preserved', async () => {
