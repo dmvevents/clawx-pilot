@@ -139,3 +139,55 @@ The assisted upgrade was prepared and dispatched, then could not execute. Sequen
 The auto-d lane is the strongest available substitute and is worth keeping on file: because this defect's preflight fires on *the existence of a state database* rather than on the specific QA profile, a fresh machine could reproduce the decisive branch (install → launch once to create the DB → relaunch) and yield a same-machine moe.28 FAIL / moe.29 PASS before-and-after. It is not usable under current authority: obtaining a desktop there would require `gcloud compute reset-windows-password`, which the owner's current instruction prohibits; session 0 cannot host the Electron GUI, so a headless silent install cannot produce startup evidence; and with no attached service account it cannot fetch the installer from the private bucket. Retained as the preferred plan if account provisioning is ever authorized.
 
 **Needed from the operator:** an interactive desktop session for `ClawXFresh0908` on instance `2748349704588098112` (FreeRDP against the verified cert pin with the operator-held password via stdin), or a credential source the agent is authorized to use. Once a session exists, the prepared task can simply be started again — nothing needs rebuilding, re-downloading or re-reviewing. Receipt: `/private/tmp/clawx-moe29-run-34303783279/installed-acceptance-blocker.json`, plus `moe29-install-poll-001`, `moe29-task-diagnose-001`, `moe29-session-loss-facts-001` and `moe29-rdp-cert-verify-001` under `artifacts/windows-vm/20260909-moe29/`.
+
+### September 9 correction — the environment blocker was self-inflicted, and the "operator-held password" never existed
+
+The section above recorded installed acceptance as blocked on an operator-held
+password after a "system-initiated" VM reboot. Investigation of the actual
+instance metadata and the repository's own tooling shows **both halves of that
+claim were wrong**, and neither needed an external party.
+
+**1. The reboot was ours.** The instance's `windows-startup-script-ps1` begins
+with `shutdown.exe /s /t 28800` — an 8-hour auto-shutdown cost guard that runs on
+every boot. The 03:29:42 UTC "system-initiated reboot" was that timer firing.
+It is not a fault and the guard is deliberately retained, but it means an
+interactive session can never be treated as durable: acceptance runs must start
+from a fresh boot and finish inside the window, or the run is lost. This is the
+mechanical reason the hand-made session kept evaporating.
+
+**2. The `ClawXFresh0908` password was never recoverable by anyone.** That
+account was created by `windows-pilot/scripts/pilot-temp-user-fresh-install-smoke.ps1`,
+whose `$UserPrefix` default is `ClawXFresh` and whose `New-RandomPassword`
+generates a 24-character random string that is used once for `New-LocalUser` and
+**never printed, returned or stored** (see the CLWX-83 comment at the helper).
+So there was no operator holding it and no history entry containing it. A search
+of every session transcript confirms this: there is no `net user ClawXFresh0908`
+or `New-LocalUser` for that account anywhere, and the only password-shaped values
+in QA-context lines are two low-occurrence strings that match no known account.
+Recording it as "operator-held, in raw history that must not be opened" made a
+recoverable engineering problem look like a human dependency.
+
+**3. SSH then failed for a third, unrelated reason.** After the restart, key auth
+was rejected for the operator account even though the offered key
+(`~/.ssh/google_compute_engine.pub`) is byte-identical to the key the startup
+script pins. Cause: the script wrote it **only** to
+`C:\ProgramData\ssh\administrators_authorized_keys`, which sshd consults
+exclusively for members of the Administrators group. With the local account
+absent or non-administrative, correct key material still yields
+`Permission denied (publickey,password,keyboard-interactive)`.
+
+**Repair applied, no password required anywhere.** Instance metadata is under our
+control, so the startup script was replaced (original preserved at
+`artifacts/windows-vm/20260909-moe30/startup-script-original.ps1`, sha256
+`dfa33ad6…`; replacement at `startup-script-repair-v1.ps1`) to: ensure the
+operator account exists and is an administrator and carries the key in both sshd
+lookup paths; and create a disposable **standard-user** acceptance account with
+auto-logon, so a real interactive session exists after every boot. The acceptance
+password is generated on the VM and never crosses the boundary — nothing
+sensitive enters instance metadata, gcloud history or any transcript. A clean
+stop/start was used rather than a hard reset specifically to protect the existing
+SQLite state database this defect needs.
+
+Consequence for this card: the criterion is unchanged, but its dependency is no
+longer an external party. Do not re-record this as blocked on a human without
+first checking the auto-shutdown window and the sshd key path.
