@@ -626,7 +626,7 @@
   "updatedAt": "2026-09-09T00:22:34.183995+00:00",
   "snapshotAt": "2026-09-08T17:51:49.120601+00:00",
   "readiness": "RED",
-  "sourceCandidate": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+  "sourceCandidate": "40cfe727f38d1b29c4f5ff77e1eddba97556061f",
   "privateVerification": "artifacts/ga-fable-20260908/sprint-loop/sprint-verification.json",
   "boardExportVerifiedAt": "2026-09-08T18:00:23.817350+00:00",
   "boardIssueCount": 136,
@@ -973,5 +973,7 @@
     "preserveAllExistingCriteria": true,
     "boardReadbackAt": "2026-09-09T00:22:34.183995+00:00",
     "boardReadback": "PASS_4_COMMENTS_AND_EXPORT_NO_STATE_CHANGE"
-  }
+  },
+  "sourceCandidateVersion": "0.4.3-moe.30",
+  "sourceCandidateNote": "Integrates the approved CLWX-61, CLWX-130 and CLWX-102 repairs onto the moe.29 source. moe.29 was built and artifact-verified but never installed, and contains none of these repairs."
 }

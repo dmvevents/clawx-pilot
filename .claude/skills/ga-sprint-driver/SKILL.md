@@ -74,6 +74,16 @@ When board updates are authorized, post redacted evidence through the verified w
 
 Update completion-plan, candidate and evidence pointers only when the delta actually affects them; leave unaffected pointers alone. Preserve detailed dated evidence in existing artifacts/ledgers; do not duplicate the whole narrative across docs. Export the board after actual board changes. Commit requested changes with the workspace Lore protocol and appropriate validation trailers.
 
+## 4b. Integration reconciliation before claiming work is exhausted
+
+An approved repair that is not in the candidate is **still executable work**. Review approval means a diff is trustworthy; only integration lets an artifact demonstrate it. Before reporting that executable work is exhausted:
+
+1. For every approved release-relevant lane, reconcile it against the current candidate by ancestry (`git merge-base --is-ancestor <commit> <candidate>`) or, where history was rewritten, by equivalent-diff evidence. Record the result per lane, not as a summary.
+2. Treat any lane that is approved but absent as an open integration slice, and either integrate it or give a criterion-based exclusion. An implicit omission is not a disposition.
+3. Bind the candidate to its package receipt: the version identity, the build run, and the hashes of the installer, archive and executable, plus confirmation that each integrated repair is present in the extracted package. Source presence is not package presence.
+
+This exists because a pass once reported executable work exhausted while six approved commits lived only in author worktrees, so the frozen installer contained none of them — and the candidate additionally shipped a rejected revision plus its first correction while the fix for two reproduced fail-opens was absent. Ancestry would have caught it in one command.
+
 ## 5. Report; stop only on a real boundary
 
 Report the outcome advanced, evidence, remaining criterion and next action in a few lines. Valid reasons to stop: the outcome's exit is verified, the user holds/stops, or a concrete external blocker remains after independent work allowed by the completion plan is exhausted. "The next step is long" or "the checkpoint format is satisfied" are not stop reasons while an authorized next step exists — continue it under section 3's timeout/receipt/owner rules. If the tree/evidence/dependency state did not materially change and no authorized step remains, say so once and stop. A recurring timer does not override a user stop or authorize deployment, outward communication, credential changes or a new workflow.

@@ -2107,104 +2107,64 @@
     }
   },
   "currentSourceCandidate": {
-    "version": "0.4.3-moe.28",
-    "source": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
-    "productSource": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
-    "branch": "release/moe28-upgrade",
-    "worktree": "/private/tmp/clawx-plan-execution-20260908",
-    "clean": true,
-    "pushed": true,
-    "packaged": true,
-    "installed": true,
-    "published": false,
-    "fullPreflight": "PASS_NATIVE_HOSTED",
-    "buildRunId": 34288617489,
-    "buildStatus": "completed",
-    "buildUrl": "https://github.com/dmvevents/clawx-pilot/actions/runs/34288617489",
-    "profile": "keyless-public",
-    "reviewedSource": "c5c8590b",
-    "reviewedHarness": "08f0aea0",
-    "reviewAssembly": "c1891938",
-    "priorProductSource": "4c023f7e",
-    "priorAcceptance": "See execution.previousMoe27InstalledCandidate; not moe.28 acceptance",
-    "nativeUpgradePreparation": {
-      "status": "PASS",
-      "cases": 11,
-      "assertions": 93,
-      "skipped": 0,
-      "timedOut": false,
-      "nativeRunnerExit": 0,
-      "startedAt": "2026-09-08T22:58:52.4038114Z",
-      "endedAt": "2026-09-08T22:59:06.3191831Z",
-      "receipt": "artifacts/windows-vm/20260908-moe27/nsis-suite-c1891938-readback-v1.json"
-    },
-    "installedAcceptance": "FAIL_STARTUP_SQLITE_WORKER_INVALID_JSON",
-    "buildConclusion": "success",
-    "manifest": "docs/release-manifests/0.4.3-moe.28.json",
-    "artifactIdentityVerified": true,
-    "nativePreflight": {
-      "runId": 34288617489,
-      "source": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
-      "passed": 2319,
-      "failed": 0,
-      "skipped": 57,
-      "testFilesPassed": 211,
-      "testFilesSkipped": 3
-    },
-    "artifactChecks": {
-      "package": 36,
-      "compiledFiles": 172,
-      "status": "PASS",
-      "credentialSeeds": false,
-      "lifecycleMarkersPresent": false,
-      "evidenceRoot": "artifacts/windows-vm/20260908-moe28/hosted-package-34288617489"
-    },
-    "installerSha256": "f74564761651c436141cd6bd0fdfdb25b561a950336f6ce736e400d0ce56994f",
-    "installerBytes": 476771752,
-    "appAsarSha256": "730660d9816391b76b0bbb406862bef1764f3b716d8785500d5b042dc30dfa16",
-    "appExeSha256": "6055c97a567e95358f430059c5b2443e03b509de59a737b1a94c676901adcbda",
-    "nativeDownload": "PASS_HASH_LENGTH_2026-09-08T23:22:03Z",
-    "nativeInstallation": {
-      "startedAt": "2026-09-08T23:24:19.8190455Z",
-      "status": "INSTALLED_HASH_VERIFIED",
-      "sessionId": 2,
-      "username": "ClawXFresh0908",
-      "sourceCommit": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
-      "workflowRunId": 34288617489,
-      "scope": "Standard-user existing-profile assisted upgrade from moe.27",
-      "installerSha256": "f74564761651c436141cd6bd0fdfdb25b561a950336f6ce736e400d0ce56994f",
-      "installExit": 0,
-      "appAsarSha256": "730660d9816391b76b0bbb406862bef1764f3b716d8785500d5b042dc30dfa16",
-      "appExeSha256": "6055c97a567e95358f430059c5b2443e03b509de59a737b1a94c676901adcbda",
-      "completedAt": "2026-09-08T23:39:01.3968492Z"
-    },
-    "installedLifecycle": {
-      "pendingMarkerPresent": false,
-      "legacyGuardPresent": false,
-      "priorMarkerPreservedInRollback": true,
-      "receipt": "artifacts/windows-vm/20260908-moe28/native-install-identity-lifecycle-result.json"
-    },
-    "startupFailure": {
-      "card": 136,
-      "reason": "SQLite read-only worker returned invalid JSON",
-      "shortcutLaunchAt": "2026-09-08T23:39:28.0382801Z",
-      "observer": {
-        "at": "2026-09-08T23:46:03.0948072Z",
-        "nativeExit": 1,
-        "lastElapsedMs": 359721,
-        "stableReadyForMs": 0,
-        "samples": 155,
-        "status": "NOT_READY",
-        "maxDurationMs": 360000
+    "version": "0.4.3-moe.30",
+    "source": "40cfe727f38d1b29c4f5ff77e1eddba97556061f",
+    "productSource": "40cfe727f38d1b29c4f5ff77e1eddba97556061f",
+    "branch": "release/moe30-integration",
+    "worktree": "/private/tmp/clawx-moe30-integration-20260909",
+    "base": "0f708082c941fbed007173c57232aec916f4eff1",
+    "integratedRepairs": [
+      {
+        "card": "CLWX-130",
+        "original": "75a40554",
+        "integrated": "b7ac48af"
       },
-      "receipt": "artifacts/windows-vm/20260908-moe28/startup-terminal-failure-readback.json"
-    }
+      {
+        "card": "CLWX-61",
+        "original": "c0437a97",
+        "integrated": "95b96ec2"
+      },
+      {
+        "card": "CLWX-61",
+        "original": "cd88a205",
+        "integrated": "b1697d0c"
+      },
+      {
+        "card": "CLWX-61",
+        "original": "2b5646a5",
+        "integrated": "7dac940d"
+      },
+      {
+        "card": "CLWX-102",
+        "original": "7615c43b",
+        "integrated": "426d9b07"
+      },
+      {
+        "card": "CLWX-102",
+        "original": "8923f132",
+        "integrated": "3979b35e"
+      }
+    ],
+    "equivalenceEvidence": "git patch-id --stable IDENTICAL for all six picks; author branches carry no commits after those tips",
+    "sourceGates": {
+      "typecheck": "PASS",
+      "lintCheck": "PASS (0 errors, 43 pre-existing warnings)",
+      "fullUnitSuite": "PASS 2444 passed / 29 skipped / 0 failed across 216 files",
+      "commsReplayCompare": "PASS exit 0, 45 rows, 0.00% delta on history_load_qps and rpc_p95_ms",
+      "diffAwareHarnessValidate": "PASS (moe30-integration-approved-repairs spec valid against base)",
+      "integrationReview": "APPROVE (independent Claude/Bedrock lane, reviewed 4fd95ee1; the only delta to the tip is the harness spec commit 40cfe727)"
+    },
+    "artifact": null,
+    "artifactStatus": "BUILD_IN_PROGRESS_run_34323058772",
+    "manifest": null,
+    "installedAcceptance": "NOT_RUN",
+    "priorAcceptance": "None. No earlier version evidence transfers to this version."
   },
   "handoff": {
     "status": "COMPLETE_CLAUDE_ACKNOWLEDGED_READY_TO_RESUME",
     "entrypoint": "docs/COMPLETION_PLAN.md",
     "snapshot": "docs/project-history/GA_CLAUDE_HANDOFF_2026-09-09.md",
-    "sourceCandidate": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+    "sourceCandidate": "40cfe727f38d1b29c4f5ff77e1eddba97556061f",
     "releaseVerdict": "RED",
     "pilotKrsFullyAccepted": 0,
     "pilotKrsTotal": 7,
@@ -2232,7 +2192,8 @@
       127,
       133,
       136
-    ]
+    ],
+    "sourceCandidateVersion": "0.4.3-moe.30"
   },
   "execution": {
     "startedAt": "2026-09-08T11:27:19.208808+00:00",
@@ -5119,6 +5080,22 @@
       "boardCardState": "Ready",
       "boardReadback": "PASS_DETAIL_LIST_AND_EXPORT",
       "completedAt": "2026-09-08T10:42:41.730591+00:00"
+    }
+  ],
+  "priorSourceCandidates": [
+    {
+      "version": "0.4.3-moe.29",
+      "source": "0f708082c941fbed007173c57232aec916f4eff1",
+      "build": "34303783279",
+      "status": "BUILT_AND_ARTIFACT_VERIFIED_NEVER_INSTALLED",
+      "note": "Package identity verified (36 host checks, 172 compiled-file comparisons, shim byte-identical in package) and staged to the QA VM with matching hash, but installed startup was never run because the system-initiated VM reboot destroyed the interactive QA session. It also does NOT contain the CLWX-61, CLWX-130 or CLWX-102 repairs, and it ships the browser identity code with two reproduced fail-open paths live. Retained for its diagnostic evidence; superseded for acceptance by moe.30."
+    },
+    {
+      "version": "0.4.3-moe.28",
+      "source": "c5e76b5dd69d43a632b8ac817b7f253ab76ec614",
+      "manifest": "docs/release-manifests/0.4.3-moe.28.json",
+      "status": "INSTALLED_STARTUP_FAILED_CLWX136",
+      "note": "Last candidate actually installed; startup failed on the SQLite worker invalid-JSON error. Dated evidence retained elsewhere in this file."
     }
   ]
 }
