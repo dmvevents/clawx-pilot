@@ -1,5 +1,6 @@
 import type { GatewayManager } from '../../gateway/manager';
 import { getProviderAccount, listProviderAccounts } from './provider-store';
+import type { ProviderAccount } from '../../shared/providers/types';
 import { getProviderSecret } from '../secrets/secret-store';
 import type { ProviderConfig } from '../../utils/secure-storage';
 import { getAllProviders, getApiKey, getDefaultProvider, getProvider } from '../../utils/secure-storage';
@@ -21,6 +22,7 @@ import {
   piAiModelsJsonModelEntry,
 } from '../../shared/pi-ai-model-cost';
 import { logger } from '../../utils/logger';
+import { CredentialUnreadableError } from '../../utils/openclaw-auth-store';
 import { listAgentsSnapshot } from '../../utils/agent-config';
 
 const GOOGLE_OAUTH_RUNTIME_PROVIDER = 'google-gemini-cli';
@@ -245,8 +247,33 @@ export async function syncProviderApiKeyToRuntime(
 
 export async function syncAllProviderAuthToRuntime(): Promise<void> {
   const accounts = await listProviderAccounts();
+  const unreadable: string[] = [];
 
   for (const account of accounts) {
+    try {
+      await syncOneProviderAuthToRuntime(account);
+    } catch (error) {
+      if (error instanceof CredentialUnreadableError) {
+        // One provider whose credential the runtime cannot resolve must not keep
+        // every other provider from being stored, nor stop the gateway from
+        // starting; the failure is typed and logged so it is visible, not silent.
+        unreadable.push(`${account.id}: ${error.runtimeMessage}`);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (unreadable.length > 0) {
+    logger.error('[provider-runtime-sync] Credentials the OpenClaw runtime cannot read back', {
+      code: 'CREDENTIAL_UNREADABLE',
+      accounts: unreadable,
+    });
+  }
+}
+
+async function syncOneProviderAuthToRuntime(account: ProviderAccount): Promise<void> {
+  {
     const runtimeProviderKey = await resolveRuntimeProviderKey({
       id: account.id,
       name: account.label,
@@ -262,17 +289,17 @@ export async function syncAllProviderAuthToRuntime(): Promise<void> {
 
     const secret = await getProviderSecret(account.id);
     if (!secret) {
-      continue;
+      return;
     }
 
     if (secret.type === 'api_key') {
       await saveProviderKeyToOpenClaw(runtimeProviderKey, secret.apiKey);
-      continue;
+      return;
     }
 
     if (secret.type === 'local' && secret.apiKey) {
       await saveProviderKeyToOpenClaw(runtimeProviderKey, secret.apiKey);
-      continue;
+      return;
     }
 
     if (secret.type === 'oauth') {

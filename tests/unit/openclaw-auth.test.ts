@@ -73,6 +73,33 @@ async function writeAgentModels(agentId: string, store: Record<string, unknown>)
   await writeFile(join(agentDir, 'models.json'), JSON.stringify(store, null, 2), 'utf8');
 }
 
+type AuthSdk = import('@electron/utils/openclaw-auth-store').OpenClawAuthSdk;
+
+// The runtime owns the credential store (CLWX-139); these tests assert what the app
+// asks the runtime's SDK to do, not the bytes of a file the runtime no longer reads.
+async function installFakeAuthSdk(): Promise<AuthSdk & { calls: { upserts: string[]; removals: string[] } }> {
+  const calls = { upserts: [] as string[], removals: [] as string[] };
+  const sdk: AuthSdk & { calls: typeof calls } = {
+    calls,
+    upsertApiKeyProfile: vi.fn(({ provider, agentDir, profileId }) => {
+      calls.upserts.push(`${provider}@${agentDir}`);
+      return profileId ?? `${provider}:default`;
+    }),
+    writeOAuthCredentials: vi.fn(async (provider: string) => `${provider}:default`),
+    applyAuthProfileConfig: vi.fn((cfg) => cfg),
+    removeProviderAuthProfilesWithLock: vi.fn(async ({ provider, agentDir }) => {
+      calls.removals.push(`${provider}@${agentDir}`);
+      return null;
+    }),
+    removeAuthProfileConfig: vi.fn((cfg) => cfg),
+    resolveApiKeyForProvider: vi.fn(async () => ({ apiKey: 'resolved', source: 'profile' })),
+    isProviderAuthError: vi.fn(() => true),
+  };
+  const store = await import('@electron/utils/openclaw-auth-store');
+  store.setOpenClawAuthSdkForTesting(sdk);
+  return sdk;
+}
+
 describe('saveProviderKeyToOpenClaw', () => {
   beforeEach(async () => {
     vi.resetModules();
@@ -101,46 +128,43 @@ describe('saveProviderKeyToOpenClaw', () => {
         ],
       },
     });
-
+    // A stale, unconfigured agent directory must be left alone.
     await mkdir(join(testHome, '.openclaw', 'agents', 'test2', 'agent'), { recursive: true });
-    await writeFile(
-      join(testHome, '.openclaw', 'agents', 'test2', 'agent', 'auth-profiles.json'),
-      JSON.stringify({
-        version: 1,
-        profiles: {
-          'legacy:default': {
-            type: 'api_key',
-            provider: 'legacy',
-            key: 'legacy-key',
-          },
-        },
-      }, null, 2),
-      'utf8',
-    );
 
+    const sdk = await installFakeAuthSdk();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const { saveProviderKeyToOpenClaw } = await import('@electron/utils/openclaw-auth');
 
     await saveProviderKeyToOpenClaw('openrouter', 'sk-test');
 
-    const mainProfiles = await readAuthProfiles('main');
-    const test3Profiles = await readAuthProfiles('test3');
-    const staleProfiles = await readAuthProfiles('test2');
-
-    expect((mainProfiles.profiles as Record<string, { key: string }>)['openrouter:default'].key).toBe('sk-test');
-    expect((test3Profiles.profiles as Record<string, { key: string }>)['openrouter:default'].key).toBe('sk-test');
-    expect(staleProfiles.profiles).toEqual({
-      'legacy:default': {
-        type: 'api_key',
-        provider: 'legacy',
-        key: 'legacy-key',
-      },
-    });
+    const agentDir = (id: string) => join(testHome, '.openclaw', 'agents', id, 'agent');
+    expect(sdk.calls.upserts).toEqual([`openrouter@${agentDir('main')}`, `openrouter@${agentDir('test3')}`]);
+    // Each write was proven by a readback through the runtime for the same agent.
+    expect(sdk.resolveApiKeyForProvider).toHaveBeenCalledTimes(2);
+    expect(sdk.resolveApiKeyForProvider).toHaveBeenCalledWith(expect.objectContaining({ provider: 'openrouter', agentDir: agentDir('main') }));
+    // The retired file is never created for any agent.
+    for (const id of ['main', 'test3', 'test2']) {
+      await expect(readAuthProfiles(id)).rejects.toThrow();
+    }
     expect(logSpy).toHaveBeenCalledWith(
-      'Saved API key for provider "openrouter" to OpenClaw auth-profiles (agents: main, test3)',
+      'Stored API key for provider "openrouter" in the OpenClaw runtime store (agent: main, readback: profile)',
     );
 
     logSpy.mockRestore();
+  });
+
+  it('surfaces a typed failure and leaves any retired file in place when the runtime cannot read the key back', async () => {
+    await writeOpenClawJson({ agents: { list: [{ id: 'main', name: 'Main', default: true, workspace: '~/.openclaw/workspace', agentDir: '~/.openclaw/agents/main/agent' }] } });
+    await writeAgentAuthProfiles('main', { version: 1, profiles: { 'legacy:default': { type: 'api_key', provider: 'legacy', key: 'legacy-key' } } });
+    const sdk = await installFakeAuthSdk();
+    (sdk.resolveApiKeyForProvider as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('No API key found for provider "openrouter".'));
+    const { saveProviderKeyToOpenClaw } = await import('@electron/utils/openclaw-auth');
+    const { CredentialUnreadableError } = await import('@electron/utils/openclaw-auth-store');
+
+    await expect(saveProviderKeyToOpenClaw('openrouter', 'sk-test', 'main')).rejects.toBeInstanceOf(CredentialUnreadableError);
+
+    // Restored: the file may hold the only copy of a credential until the runtime proves otherwise.
+    expect((await readAuthProfiles('main')).profiles).toEqual({ 'legacy:default': { type: 'api_key', provider: 'legacy', key: 'legacy-key' } });
   });
 });
 
@@ -152,177 +176,19 @@ describe('removeProviderKeyFromOpenClaw', () => {
     await rm(testUserData, { recursive: true, force: true });
   });
 
-  it('removes only the default api-key profile for a provider', async () => {
-    await writeAgentAuthProfiles('main', {
-      version: 1,
-      profiles: {
-        'custom-abc12345:default': {
-          type: 'api_key',
-          provider: 'custom-abc12345',
-          key: 'sk-main',
-        },
-        'custom-abc12345:backup': {
-          type: 'api_key',
-          provider: 'custom-abc12345',
-          key: 'sk-backup',
-        },
-      },
-      order: {
-        'custom-abc12345': [
-          'custom-abc12345:default',
-          'custom-abc12345:backup',
-        ],
-      },
-      lastGood: {
-        'custom-abc12345': 'custom-abc12345:default',
-      },
-    });
-
+  it('asks the runtime to remove the provider credentials for the requested agent and sweeps any retired file', async () => {
+    await writeOpenClawJson({ agents: { list: [{ id: 'main', name: 'Main', default: true, workspace: '~/.openclaw/workspace', agentDir: '~/.openclaw/agents/main/agent' }] } });
+    await writeAgentAuthProfiles('main', { version: 1, profiles: {} });
+    const sdk = await installFakeAuthSdk();
     const { removeProviderKeyFromOpenClaw } = await import('@electron/utils/openclaw-auth');
 
     await removeProviderKeyFromOpenClaw('custom-abc12345', 'main');
 
-    const mainProfiles = await readAuthProfiles('main');
-    expect(mainProfiles.profiles).toEqual({
-      'custom-abc12345:backup': {
-        type: 'api_key',
-        provider: 'custom-abc12345',
-        key: 'sk-backup',
-      },
-    });
-    expect(mainProfiles.order).toEqual({
-      'custom-abc12345': ['custom-abc12345:backup'],
-    });
-    expect(mainProfiles.lastGood).toEqual({});
-  });
-
-  it('cleans stale default-profile references even when the profile object is already missing', async () => {
-    await writeAgentAuthProfiles('main', {
-      version: 1,
-      profiles: {
-        'custom-abc12345:backup': {
-          type: 'api_key',
-          provider: 'custom-abc12345',
-          key: 'sk-backup',
-        },
-      },
-      order: {
-        'custom-abc12345': [
-          'custom-abc12345:default',
-          'custom-abc12345:backup',
-        ],
-      },
-      lastGood: {
-        'custom-abc12345': 'custom-abc12345:default',
-      },
-    });
-
-    const { removeProviderKeyFromOpenClaw } = await import('@electron/utils/openclaw-auth');
-
-    await removeProviderKeyFromOpenClaw('custom-abc12345', 'main');
-
-    const mainProfiles = await readAuthProfiles('main');
-    expect(mainProfiles.profiles).toEqual({
-      'custom-abc12345:backup': {
-        type: 'api_key',
-        provider: 'custom-abc12345',
-        key: 'sk-backup',
-      },
-    });
-    expect(mainProfiles.order).toEqual({
-      'custom-abc12345': ['custom-abc12345:backup'],
-    });
-    expect(mainProfiles.lastGood).toEqual({});
-  });
-
-  it('does not remove oauth default profiles when deleting only an api key', async () => {
-    await writeAgentAuthProfiles('main', {
-      version: 1,
-      profiles: {
-        'openai-codex:default': {
-          type: 'oauth',
-          provider: 'openai-codex',
-          access: 'acc',
-          refresh: 'ref',
-          expires: 1,
-        },
-      },
-      order: {
-        'openai-codex': ['openai-codex:default'],
-      },
-      lastGood: {
-        'openai-codex': 'openai-codex:default',
-      },
-    });
-
-    const { removeProviderKeyFromOpenClaw } = await import('@electron/utils/openclaw-auth');
-
-    await removeProviderKeyFromOpenClaw('openai-codex', 'main');
-
-    const mainProfiles = await readAuthProfiles('main');
-    expect(mainProfiles.profiles).toEqual({
-      'openai-codex:default': {
-        type: 'oauth',
-        provider: 'openai-codex',
-        access: 'acc',
-        refresh: 'ref',
-        expires: 1,
-      },
-    });
-    expect(mainProfiles.order).toEqual({
-      'openai-codex': ['openai-codex:default'],
-    });
-    expect(mainProfiles.lastGood).toEqual({
-      'openai-codex': 'openai-codex:default',
-    });
-  });
-
-  it('removes api-key defaults for oauth-capable providers that support api keys', async () => {
-    await writeAgentAuthProfiles('main', {
-      version: 1,
-      profiles: {
-        'minimax-portal:default': {
-          type: 'api_key',
-          provider: 'minimax-portal',
-          key: 'sk-minimax',
-        },
-        'minimax-portal:oauth-backup': {
-          type: 'oauth',
-          provider: 'minimax-portal',
-          access: 'acc',
-          refresh: 'ref',
-          expires: 1,
-        },
-      },
-      order: {
-        'minimax-portal': [
-          'minimax-portal:default',
-          'minimax-portal:oauth-backup',
-        ],
-      },
-      lastGood: {
-        'minimax-portal': 'minimax-portal:default',
-      },
-    });
-
-    const { removeProviderKeyFromOpenClaw } = await import('@electron/utils/openclaw-auth');
-
-    await removeProviderKeyFromOpenClaw('minimax-portal', 'main');
-
-    const mainProfiles = await readAuthProfiles('main');
-    expect(mainProfiles.profiles).toEqual({
-      'minimax-portal:oauth-backup': {
-        type: 'oauth',
-        provider: 'minimax-portal',
-        access: 'acc',
-        refresh: 'ref',
-        expires: 1,
-      },
-    });
-    expect(mainProfiles.order).toEqual({
-      'minimax-portal': ['minimax-portal:oauth-backup'],
-    });
-    expect(mainProfiles.lastGood).toEqual({});
+    expect(sdk.calls.removals).toEqual([`custom-abc12345@${join(testHome, '.openclaw', 'agents', 'main', 'agent')}`]);
+    // Which profiles of a provider survive an api-key removal (oauth backups, ordering,
+    // lastGood) is the runtime's contract now; the app only asserts it asked and that no
+    // retired file remains to poison resolution.
+    await expect(readAuthProfiles('main')).rejects.toThrow();
   });
 });
 
@@ -797,7 +663,7 @@ describe('sanitizeOpenClawConfig', () => {
     expect(allow).not.toContain('anthropic');
   });
 
-  it('preserves active bundled provider plugins discovered from per-agent auth profile stores', async () => {
+  it('preserves active bundled provider plugins discovered from runtime auth profiles in openclaw.json', async () => {
     await writeOpenClawJson({
       agents: {
         list: [
@@ -815,17 +681,9 @@ describe('sanitizeOpenClawConfig', () => {
           'custom-plugin': { enabled: true },
         },
       },
-    });
-
-    await writeAgentAuthProfiles('work', {
-      version: 1,
-      profiles: {
-        'openai-codex:default': {
-          type: 'oauth',
-          provider: 'openai-codex',
-          access: 'acc',
-          refresh: 'ref',
-          expires: 1,
+      auth: {
+        profiles: {
+          'openai-codex:default': { provider: 'openai-codex', mode: 'oauth' },
         },
       },
     });
@@ -1280,7 +1138,7 @@ describe('auth-backed provider discovery', () => {
     await rm(testUserData, { recursive: true, force: true });
   });
 
-  it('detects active providers from openclaw auth profiles and per-agent auth stores', async () => {
+  it('detects active providers from openclaw auth profiles and ignores retired per-agent stores', async () => {
     await writeOpenClawJson({
       agents: {
         list: [
@@ -1296,23 +1154,19 @@ describe('auth-backed provider discovery', () => {
       },
     });
 
+    // A retired per-agent auth-profiles.json is not a source of truth any more: the
+    // runtime ignores it, so the app must not resurrect providers from it either.
     await writeAgentAuthProfiles('work', {
       version: 1,
       profiles: {
-        'google-gemini-cli:default': {
-          type: 'oauth',
-          provider: 'google-gemini-cli',
-          access: 'goog-access',
-          refresh: 'goog-refresh',
-          expires: 2,
-        },
+        'google-gemini-cli:default': { type: 'oauth', provider: 'google-gemini-cli', access: 'goog-access', refresh: 'goog-refresh', expires: 2 },
       },
     });
 
     const { getActiveOpenClawProviders } = await import('@electron/utils/openclaw-auth');
 
     await expect(getActiveOpenClawProviders()).resolves.toEqual(
-      new Set(['openai', 'anthropic', 'google']),
+      new Set(['openai', 'anthropic']),
     );
   });
 
@@ -1332,17 +1186,7 @@ describe('auth-backed provider discovery', () => {
       auth: {
         profiles: {
           'openai-codex:default': { type: 'oauth', provider: 'openai-codex', access: 'acc', refresh: 'ref', expires: 1 },
-        },
-      },
-    });
-
-    await writeAgentAuthProfiles('work', {
-      version: 1,
-      profiles: {
-        'anthropic:default': {
-          type: 'api_key',
-          provider: 'anthropic',
-          key: 'sk-ant',
+          'anthropic:default': { provider: 'anthropic', mode: 'api_key' },
         },
       },
     });
@@ -1391,30 +1235,11 @@ describe('auth-backed provider discovery', () => {
       },
     });
 
-    await writeAgentAuthProfiles('main', {
-      version: 1,
-      profiles: {
-        'custom-abc12345:default': {
-          type: 'api_key',
-          provider: 'custom-abc12345',
-          key: 'sk-main',
-        },
-        'custom-abc12345:backup': {
-          type: 'api_key',
-          provider: 'custom-abc12345',
-          key: 'sk-backup',
-        },
-      },
-      order: {
-        'custom-abc12345': [
-          'custom-abc12345:default',
-          'custom-abc12345:backup',
-        ],
-      },
-      lastGood: {
-        'custom-abc12345': 'custom-abc12345:backup',
-      },
-    });
+    // Agent discovery only consults configured agents once the agents directory exists.
+    for (const id of ['main', 'work']) {
+      await mkdir(join(testHome, '.openclaw', 'agents', id, 'agent'), { recursive: true });
+    }
+    const sdk = await installFakeAuthSdk();
 
     const {
       getActiveOpenClawProviders,
@@ -1426,13 +1251,15 @@ describe('auth-backed provider discovery', () => {
 
     await removeProviderFromOpenClaw('custom-abc12345');
 
-    const mainProfiles = await readAuthProfiles('main');
     const config = await readOpenClawJson();
     const result = await getOpenClawProvidersConfig();
 
-    expect(mainProfiles.profiles).toEqual({});
-    expect(mainProfiles.order).toEqual({});
-    expect(mainProfiles.lastGood).toEqual({});
+    // Credential removal is delegated to the runtime for every configured agent.
+    const agentDir = (id: string) => join(testHome, '.openclaw', 'agents', id, 'agent');
+    expect(sdk.calls.removals).toEqual(expect.arrayContaining([
+      `custom-abc12345@${agentDir('main')}`,
+      `custom-abc12345@${agentDir('work')}`,
+    ]));
     expect((config.auth as { profiles?: Record<string, unknown> }).profiles).toEqual({});
     expect((config.models as { providers?: Record<string, unknown> }).providers).toEqual({});
     expect(result.providers).toEqual({});

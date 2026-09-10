@@ -321,6 +321,128 @@ function verifyGatewayProtocolContract() {
 
 failures.push(...verifyGatewayProtocolContract());
 
+// ── Contract 7: credential store ownership (CLWX-139) ─────────────────────────
+//
+// openclaw 2026.9.2 retired the JSON auth files (`auth-profiles.json`, `auth-state.json`,
+// `auth.json`) in favour of a SQLite store it owns. While a retired file exists next to a
+// store the runtime's per-agent diagnostic cannot see into, EVERY auth lookup fails closed
+// before env or config is consulted, and a turn is refused. The app used to compose that
+// file on every boot. This gate reads the retired set from the bundled gateway itself and
+// fails when app source names any of those files, or provisions agents by copying one.
+//
+// Same discipline as the protocol gate: not applicable when there is no app tree; FAIL as
+// INDETERMINATE when the bundle states no retired set at all (a check that passes when
+// it cannot see the answer is how CLWX-139 shipped); FAIL naming both sides otherwise.
+// A green result here proves the shapes agree. It does not prove a credential is
+// readable — that property lives in the app's runtime readback and in installed
+// acceptance (`openclaw models auth list --json`), never in a build gate.
+function verifyCredentialStoreContract() {
+  const problems = [];
+  const appTreePresent = fs.existsSync(path.join(ROOT, 'electron', 'utils'));
+  if (!appTreePresent) {
+    console.log('  credential-store contract: no app source in this root — check not applicable');
+    return [];
+  }
+
+  const distDir = path.join(ROOT, 'build', 'openclaw', 'dist');
+  if (!fs.existsSync(distDir)) {
+    return [`CREDENTIAL-STORE: bundled gateway dist not found at ${path.relative(ROOT, distDir)} (INDETERMINATE)`];
+  }
+
+  // Signal A: the gateway's own registry of retired credential files, read from the
+  // file that defines resolveLegacyAuthProfileSourceCandidates. Signal B: the
+  // gateway's retirement statements. Both are 0 files in 2026.4.23 (where the JSON was
+  // the live store) and present in 2026.9.2, so they discriminate versions rather than
+  // asserting a constant.
+  const retired = new Set();
+  let registryFile = null;
+  let retirementStatements = 0;
+  for (const entry of fs.readdirSync(distDir)) {
+    if (!entry.endsWith('.js')) continue;
+    const text = fs.readFileSync(path.join(distDir, entry), 'utf8');
+    if (text.includes('resolveLegacyAuthProfileSourceCandidates')) {
+      for (const m of text.matchAll(/path\.join\(agentDir,\s*"([^"]+\.json)"\)/g)) retired.add(m[1]);
+      if (retired.size > 0) registryFile = `dist/${entry}`;
+    }
+    if (/retired auth profile files are ignored|AUTH_PROFILE_MIGRATION_REQUIRED|requires legacy credential migration/.test(text)) {
+      retirementStatements += 1;
+    }
+  }
+  if (retired.size === 0 && retirementStatements === 0) {
+    console.log('  credential-store contract: bundled gateway does not retire JSON auth files — check not applicable to this gateway version');
+    return [];
+  }
+  if (retired.size === 0) {
+    return ['CREDENTIAL-STORE: bundled gateway states that legacy credential files are retired but names no retired set anywhere in dist (INDETERMINATE — refusing to certify)'];
+  }
+
+  // Exactly one app module may name the retired files: the archiver that removes them
+  // (electron/utils/openclaw-auth-store.ts). Its list must equal the gateway's, so a
+  // runtime that retires another file fails the build until the archiver knows it.
+  const archiverRel = path.join('electron', 'utils', 'openclaw-auth-store.ts');
+  const archiverAbs = path.join(ROOT, archiverRel);
+  if (fs.existsSync(archiverAbs)) {
+    const m = fs.readFileSync(archiverAbs, 'utf8').match(/RETIRED_AUTH_FILES\s*=\s*\[([^\]]*)\]/);
+    const declared = new Set(m ? [...m[1].matchAll(/['"]([^'"]+)['"]/g)].map((x) => x[1]) : []);
+    const missing = [...retired].filter((n) => !declared.has(n));
+    const extra = [...declared].filter((n) => !retired.has(n));
+    if (missing.length > 0 || extra.length > 0) {
+      problems.push(
+        `CREDENTIAL-STORE: ${archiverRel} RETIRED_AUTH_FILES ${missing.length ? `is missing ${missing.join(', ')}` : ''}` +
+        `${missing.length && extra.length ? ' and ' : ''}${extra.length ? `names ${extra.join(', ')} which the gateway does not retire` : ''}. ` +
+        `The archiver must match the bundled gateway's retired set (${registryFile}) exactly.`,
+      );
+    }
+  }
+
+  // App side: enumerate, do not spot-check. Any other string literal naming a retired
+  // file under electron/ or src/ is a defect, whether it is written, read or copied.
+  const sweepRoots = [path.join(ROOT, 'electron'), path.join(ROOT, 'src')];
+  const offenders = [];
+  const walk = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walk(full); continue; }
+      if (!/\.(ts|tsx|mjs|js)$/.test(entry.name)) continue;
+      if (path.relative(ROOT, full) === archiverRel) continue;
+      const text = fs.readFileSync(full, 'utf8');
+      const lines = text.split('\n');
+      for (let i = 0; i < lines.length; i += 1) {
+        const line = lines[i];
+        if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue; // comments may name the file when explaining why not to
+        for (const name of retired) {
+          if (line.includes(`'${name}'`) || line.includes(`"${name}"`) || line.includes(`\`${name}\``)) {
+            offenders.push(`${path.relative(ROOT, full)}:${i + 1} names ${name}`);
+          }
+        }
+      }
+    }
+  };
+  sweepRoots.forEach(walk);
+  for (const o of offenders) {
+    problems.push(
+      `CREDENTIAL-STORE: ${o}, which the bundled gateway (${registryFile}) treats as a RETIRED credential file. ` +
+      `While that file exists the gateway refuses every auth lookup before consulting env or config, so no turn ` +
+      `can answer — see CLWX-139. Store credentials through the runtime's SDK and never name its retired files.`,
+    );
+  }
+
+  // The app must be able to populate the store the runtime reads at all.
+  const authStore = path.join(ROOT, 'electron', 'utils', 'openclaw-auth-store.ts');
+  const usesSupportedWriter = fs.existsSync(authStore)
+    && /upsertApiKeyProfile/.test(fs.readFileSync(authStore, 'utf8'))
+    && /resolveApiKeyForProvider/.test(fs.readFileSync(authStore, 'utf8'));
+  if (!usesSupportedWriter) {
+    problems.push('CREDENTIAL-STORE: no app module writes credentials through the runtime SDK (upsertApiKeyProfile) and reads them back (resolveApiKeyForProvider); the app cannot populate the store the gateway reads.');
+  }
+
+  console.log(`  credential-store contract: gateway retires ${[...retired].join(', ')} (${registryFile}); ${offenders.length} app reference(s)`);
+  return problems;
+}
+
+failures.push(...verifyCredentialStoreContract());
+
 if (failures.length > 0) {
   console.error(`✗ openclaw bundle verification FAILED (${failures.length}):`);
   for (const f of failures) console.error(`  - ${f}`);

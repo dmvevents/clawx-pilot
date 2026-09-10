@@ -30,6 +30,7 @@ import {
   syncDefaultProviderToRuntime,
   syncSavedProviderToRuntime,
 } from '../services/providers/provider-runtime-sync';
+import { readbackProviderApiKey } from '../utils/openclaw-auth-store';
 
 const DEFAULT_PROVIDER_ID = 'moe-cloud-gateway';
 const DEFAULT_LABEL = 'MOE Cloud Gateway';
@@ -468,13 +469,18 @@ export async function seedCloudGatewayProvider(
   }
 
   const runtimeProviderKey = getOpenClawProviderKey(account.vendorId, account.id);
+  // Report what the runtime can actually resolve, not what this seed just wrote:
+  // a file write that the gateway ignores logged `apiKeyPresent: true` on every
+  // boot of a build that could not answer a turn (CLWX-139).
+  const readback = await readbackProviderApiKey({ provider: runtimeProviderKey }).catch(() => null);
   logger.info('[cloud-gateway-seed] Seeded cloud gateway provider', {
     providerId: account.id,
     runtimeProviderKey,
     baseUrl: account.baseUrl,
     model: account.model,
     defaulted: shouldBecomeDefault,
-    apiKeyPresent: true,
+    credentialReadable: Boolean(readback?.apiKey),
+    credentialSource: readback?.source ?? null,
     userIdHeader: Boolean(userIdHeaders?.UserId),
   });
 

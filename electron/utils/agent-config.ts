@@ -22,8 +22,11 @@ const AGENT_BOOTSTRAP_FILES = [
   'HEARTBEAT.md',
   'BOOT.md',
 ];
+// Credentials are not files to copy: the OpenClaw runtime owns its credential store
+// and `auth-profiles.json` is retired (its presence makes the runtime refuse every
+// auth lookup, CLWX-139). A new agent receives credentials through
+// syncAllProviderAuthToRuntime, which writes via the runtime's SDK per agent.
 const AGENT_RUNTIME_FILES = [
-  'auth-profiles.json',
   'models.json',
 ];
 
