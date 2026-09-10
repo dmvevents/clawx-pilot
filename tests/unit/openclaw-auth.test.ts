@@ -79,6 +79,7 @@ type AuthSdk = import('@electron/utils/openclaw-auth-store').OpenClawAuthSdk;
 // asks the runtime's SDK to do, not the bytes of a file the runtime no longer reads.
 async function installFakeAuthSdk(): Promise<AuthSdk & { calls: { upserts: string[]; removals: string[] } }> {
   const calls = { upserts: [] as string[], removals: [] as string[] };
+  const profiles: Record<string, { type: string; provider: string }> = { 'custom-abc12345:default': { type: 'api_key', provider: 'custom-abc12345' } };
   const sdk: AuthSdk & { calls: typeof calls } = {
     calls,
     upsertAuthProfileWithLock: vi.fn(async ({ credential, agentDir }) => {
@@ -87,13 +88,16 @@ async function installFakeAuthSdk(): Promise<AuthSdk & { calls: { upserts: strin
     }),
     writeOAuthCredentials: vi.fn(async (provider: string) => `${provider}:default`),
     applyAuthProfileConfig: vi.fn((cfg) => cfg),
-    removeProviderAuthProfilesWithLock: vi.fn(async ({ provider, agentDir }) => {
+    removeProviderAuthProfilesWithLock: vi.fn(async ({ provider, agentDir, profileIds }) => {
       calls.removals.push(`${provider}@${agentDir}`);
-      return { profiles: {} }; // the SDK returns the updated store; null would mean "not performed"
+      for (const id of Object.keys(profiles)) {
+        if (profiles[id].provider === provider && (!profileIds || profileIds.includes(id))) delete profiles[id];
+      }
+      return { profiles }; // the SDK returns the updated store; null would mean "not performed"
     }),
     removeAuthProfileConfig: vi.fn((cfg) => cfg),
-    ensureAuthProfileStore: vi.fn(() => ({ profiles: { 'custom-abc12345:default': { type: 'api_key', provider: 'custom-abc12345' } } })),
-    resolveApiKeyForProvider: vi.fn(async () => ({ apiKey: 'resolved', source: 'profile' })),
+    ensureAuthProfileStore: vi.fn(() => ({ profiles })),
+    resolveApiKeyForProvider: vi.fn(async ({ provider }) => ({ apiKey: 'resolved', source: 'profile', profileId: `${provider}:default` })),
     isProviderAuthError: vi.fn(() => true),
   };
   const store = await import('@electron/utils/openclaw-auth-store');

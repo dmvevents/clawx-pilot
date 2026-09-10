@@ -19,6 +19,7 @@ import { getSetting, setSetting } from '../utils/store';
 import { getApiKey, storeApiKey } from '../utils/secure-storage';
 import { getMicrosoftGraphAccount } from '../services/microsoft-graph/store';
 import {
+  deleteProviderAccount,
   getDefaultProviderAccountId,
   getProviderAccount,
   providerAccountToConfig,
@@ -325,12 +326,17 @@ export async function refreshCloudGatewayUserIdHeader(): Promise<void> {
   }
 
   const apiKey = await getApiKey(account.id).catch(() => null);
-  await syncSavedProviderToRuntime(
-    providerAccountToConfig(account),
-    apiKey ?? undefined,
-    refreshGatewayManager,
-  );
   await saveProviderAccount(account);
+  try {
+    await syncSavedProviderToRuntime(
+      providerAccountToConfig(account),
+      apiKey ?? undefined,
+      refreshGatewayManager,
+    );
+  } catch (error) {
+    await saveProviderAccount(existing);
+    throw error;
+  }
   logger.debug('[cloud-gateway-seed] Refreshed UserId header on cloud gateway provider', {
     providerId: account.id,
     userIdPresent: Boolean(nextHeaders?.UserId),
@@ -407,15 +413,24 @@ export async function seedCloudGatewayProvider(
     delete account.headers;
   }
 
-  // Runtime first, app store second: if the runtime cannot read the credential back,
-  // nothing is persisted that would make the next boot's refresh think the work is done.
+  // The account is saved before the runtime sync because nested agent syncs re-read
+  // the store and must see the new endpoint; if the runtime then refuses the
+  // credential, the previous account state is restored so the next boot does not
+  // mistake a half-applied seed for a finished one.
   await storeApiKey(account.id, seed.apiKey);
-  await syncSavedProviderToRuntime(providerAccountToConfig(account), seed.apiKey, syncGatewayManager);
   await saveProviderAccount(account);
+  try {
+    await syncSavedProviderToRuntime(providerAccountToConfig(account), seed.apiKey, syncGatewayManager);
+  } catch (error) {
+    if (existing) await saveProviderAccount(existing);
+    else await deleteProviderAccount(account.id).catch(() => undefined);
+    throw error;
+  }
 
   if (shouldBecomeDefault) {
-    await setDefaultProviderAccount(account.id);
+    // Runtime first: the default is recorded only once the runtime has it.
     await syncDefaultProviderToRuntime(account.id, syncGatewayManager);
+    await setDefaultProviderAccount(account.id);
   }
 
   if (seed.setPreferredChannel) {

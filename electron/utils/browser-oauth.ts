@@ -18,6 +18,9 @@ class BrowserOAuthManager extends EventEmitter {
   private activeAccountId: string | null = null;
   private activeLabel: string | null = null;
   private active = false;
+  // Increments per startFlow: a completion or failure belonging to an earlier flow
+  // must not clear the state of a newer one that replaced it.
+  private flowId = 0;
   private mainWindow: BrowserWindow | null = null;
   private pendingManualCodeResolve: ((value: string) => void) | null = null;
   private pendingManualCodeReject: ((reason?: unknown) => void) | null = null;
@@ -35,6 +38,7 @@ class BrowserOAuthManager extends EventEmitter {
     }
 
     this.active = true;
+    this.flowId += 1;
     this.activeAccountId = options?.accountId || provider;
     this.activeLabel = options?.label || null;
     this.emit('oauth:start', { provider, accountId: this.activeAccountId });
@@ -50,6 +54,7 @@ class BrowserOAuthManager extends EventEmitter {
   }
 
   private async executeFlow(provider: BrowserOAuthProviderType): Promise<void> {
+    const myFlow = this.flowId;
     try {
       const token = provider === 'google'
         ? await loginGeminiCliOAuth({
@@ -101,9 +106,10 @@ class BrowserOAuthManager extends EventEmitter {
           },
         });
 
-      await this.onSuccess(provider, token);
+      await this.onSuccess(provider, token, myFlow);
     } catch (error) {
-      if (!this.active) {
+      if (!this.active || this.flowId !== myFlow) {
+        // Cancelled, or replaced by a newer flow whose state is not ours to touch.
         return;
       }
       logger.error(`[BrowserOAuth] Flow error for ${provider}:`, error);
@@ -142,6 +148,7 @@ class BrowserOAuthManager extends EventEmitter {
   private async onSuccess(
     providerType: BrowserOAuthProviderType,
     token: GeminiCliOAuthCredentials | OpenAICodexOAuthCredentials,
+    myFlow: number,
   ) {
     const accountId = this.activeAccountId || providerType;
     const accountLabel = this.activeLabel;
@@ -214,9 +221,11 @@ class BrowserOAuthManager extends EventEmitter {
       projectId: oauthTokenSubject,
     });
 
-    this.active = false;
-    this.activeAccountId = null;
-    this.activeLabel = null;
+    if (this.flowId === myFlow) {
+      this.active = false;
+      this.activeAccountId = null;
+      this.activeLabel = null;
+    }
     this.emit('oauth:success', { provider: providerType, accountId: nextAccount.id });
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send('oauth:success', {

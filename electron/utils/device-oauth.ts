@@ -38,6 +38,9 @@ class DeviceOAuthManager extends EventEmitter {
     private activeAccountId: string | null = null;
     private activeLabel: string | null = null;
     private active: boolean = false;
+    // Increments per startFlow: a completion or failure belonging to an earlier flow
+    // must not clear the state of a newer one that replaced it.
+    private flowId = 0;
     private mainWindow: BrowserWindow | null = null;
 
     private async runWithProxyAwareFetch<T>(task: () => Promise<T>): Promise<T> {
@@ -65,10 +68,12 @@ class DeviceOAuthManager extends EventEmitter {
         }
 
         this.active = true;
+        this.flowId += 1;
         this.emit('oauth:start', { provider, accountId: options?.accountId || provider });
         this.activeProvider = provider;
         this.activeAccountId = options?.accountId || provider;
         this.activeLabel = options?.label || null;
+        const myFlow = this.flowId;
 
         try {
             if (provider === 'minimax-portal' || provider === 'minimax-portal-cn') {
@@ -79,8 +84,8 @@ class DeviceOAuthManager extends EventEmitter {
             }
             return true;
         } catch (error) {
-            if (!this.active) {
-                // Flow was cancelled — not an error
+            if (!this.active || this.flowId !== myFlow) {
+                // Cancelled, or replaced by a newer flow whose state is not ours to touch.
                 return false;
             }
             logger.error(`[DeviceOAuth] Flow error for ${provider}:`, error);
@@ -162,6 +167,7 @@ class DeviceOAuthManager extends EventEmitter {
         api: 'anthropic-messages' | 'openai-completions';
         region?: MiniMaxRegion;
     }) {
+        const successFlow = this.flowId;
         const accountId = this.activeAccountId || providerType;
         const accountLabel = this.activeLabel;
         // Stay active until the credential is persisted AND readable by the runtime,
@@ -236,10 +242,12 @@ class DeviceOAuthManager extends EventEmitter {
         await saveProvider(providerConfig);
 
         // 4. Emit success internally so the main process can restart the Gateway
-        this.active = false;
-        this.activeProvider = null;
-        this.activeAccountId = null;
-        this.activeLabel = null;
+        if (this.flowId === successFlow) {
+            this.active = false;
+            this.activeProvider = null;
+            this.activeAccountId = null;
+            this.activeLabel = null;
+        }
         this.emit('oauth:success', { provider: providerType, accountId });
 
         // 5. Emit success to frontend

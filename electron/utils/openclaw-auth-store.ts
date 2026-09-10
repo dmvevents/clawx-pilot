@@ -10,13 +10,22 @@
  * of the process. The app used to compose that file on every boot, which also undid
  * any `doctor --fix` migration.
  *
- * This module therefore never writes the runtime's files itself, and it moves any
- * retired file out of the way BEFORE touching the SDK, so the guard is never armed
- * in this process. It writes through the runtime's supported SDK writer, then proves
- * the result by resolving the key back through the runtime — the same code path a
- * turn uses. A write that cannot be read back is reported as a typed failure; the
- * retired file stays archived by name (putting it back would refuse every provider),
- * and the app's own secret store still holds the key. Files are renamed, never deleted.
+ * Rules this module follows, each one traced to a review finding:
+ * - It never writes the runtime's files. Credentials go through the runtime's SDK.
+ * - The SDK is reachable only through `sdkFor()`, which first moves every retired file
+ *   the SDK could consult (the requested agent's, the main agent's — the SDK merges
+ *   inherited main credentials — and the shared `credentials/oauth.json`) out of the
+ *   way, under one in-process lock. A single SDK call made while such a file exists
+ *   would poison every later call in this process.
+ * - Read-only status paths never archive and never touch the SDK while a retired
+ *   file exists; they report "pending migration" (null) instead. Only writes migrate.
+ * - Before a write archives an `auth-profiles.json` the app itself wrote, the API-key
+ *   profiles of OTHER providers in it are imported through the SDK, so no credential
+ *   becomes reachable only by hand.
+ * - Every write is proven by resolving the key back through the runtime — the same
+ *   path a turn takes — and the resolved profile must be the one written. Failure is a
+ *   typed error; the archive stays archived (putting the file back would refuse every
+ *   provider). Files are renamed, never deleted.
  *
  * The SDK is loaded from the bundled runtime directory (see openclaw-sdk.ts for why a
  * static import cannot work from inside the asar), so the writer and the gateway are
@@ -25,7 +34,7 @@
 import { createRequire } from 'module';
 import { homedir } from 'os';
 import { basename, join } from 'node:path';
-import { access, rename } from 'node:fs/promises';
+import { access, readFile, rename } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { getOpenClawDir, getOpenClawResolvedDir } from './paths';
 import { readOpenClawConfig, writeOpenClawConfig } from './channel-config';
@@ -199,29 +208,57 @@ export interface ArchivedFile {
   to: string;
 }
 
+/** Every retired file the SDK could consult when operating on `agentDir`. */
+function retiredCandidates(agentDir: string): string[] {
+  const mainDir = getAgentDir(MAIN_AGENT_ID);
+  const dirs = agentDir === mainDir ? [mainDir] : [agentDir, mainDir];
+  const files = dirs.flatMap((dir) => RETIRED_AUTH_FILES.map((name) => join(dir, name)));
+  files.push(sharedRetiredOAuthFile());
+  return files;
+}
+
+/** True when any retired file the SDK would consult for `agentDir` is present. */
+export async function hasPendingLegacyCredentialFiles(agentDir: string): Promise<boolean> {
+  for (const path of retiredCandidates(agentDir)) {
+    if (await exists(path)) return true;
+  }
+  return false;
+}
+
+// Archival is serialized in-process: two operations racing on the same file would
+// otherwise let one win the rename and hand the other a raw ENOENT.
+let archiveChain: Promise<unknown> = Promise.resolve();
+function serialized<T>(fn: () => Promise<T>): Promise<T> {
+  const run = archiveChain.then(fn, fn);
+  archiveChain = run.catch(() => undefined);
+  return run;
+}
+
 /**
- * Move every retired credential file out of the agent directory, all-or-nothing.
- * Renamed, never deleted: a file may hold the only copy of a credential until the
- * readback proves the store has it. If one rename fails, the ones already moved are
- * put back and the failure is raised. Doctor's own `.migrated-*` archives are left alone.
+ * Move every retired credential file the SDK could consult for `agentDir` out of the
+ * way, all-or-nothing. Renamed, never deleted. If one rename fails, the ones already
+ * moved are put back and the failure is raised. A file that disappears between the
+ * existence check and the rename was archived by a concurrent caller and is skipped.
+ * Doctor's own `.migrated-*` archives are left alone.
  */
 export async function archiveRetiredAuthFiles(agentDir: string, now: Date = new Date()): Promise<ArchivedFile[]> {
-  const stamp = now.toISOString().replace(/[:.]/g, '-');
-  const candidates = RETIRED_AUTH_FILES.map((name) => join(agentDir, name));
-  if (agentDir === getAgentDir(MAIN_AGENT_ID)) candidates.push(sharedRetiredOAuthFile());
-  const archived: ArchivedFile[] = [];
-  for (const from of candidates) {
-    if (!(await exists(from))) continue;
-    const to = `${from}.clawx-retired-${stamp}`;
-    try {
-      await renameWithRetry(from, to);
-    } catch (error) {
-      await restoreArchivedAuthFiles(archived);
-      throw error;
+  return serialized(async () => {
+    const stamp = now.toISOString().replace(/[:.]/g, '-');
+    const archived: ArchivedFile[] = [];
+    for (const from of retiredCandidates(agentDir)) {
+      if (!(await exists(from))) continue;
+      const to = `${from}.clawx-retired-${stamp}`;
+      try {
+        await renameWithRetry(from, to);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+        await restoreArchivedAuthFiles(archived);
+        throw error;
+      }
+      archived.push({ from, to });
     }
-    archived.push({ from, to });
-  }
-  return archived;
+    return archived;
+  });
 }
 
 /** Best-effort inverse of archiveRetiredAuthFiles; returns the entries it could not restore. */
@@ -239,10 +276,43 @@ export async function restoreArchivedAuthFiles(archived: ArchivedFile[]): Promis
   return notRestored;
 }
 
+interface LegacyApiKeyProfile {
+  profileId: string;
+  provider: string;
+  key: string;
+}
+
 /**
- * The only way this module reaches the SDK. Archiving happens here, before any SDK
- * call, because the runtime caches a migration refusal for the life of the process:
- * one SDK call made while a retired file exists would poison every later call.
+ * API-key profiles the app itself once wrote into `auth-profiles.json` for providers
+ * other than `exceptProvider`. Read before the file is archived so they can be carried
+ * into the runtime store through the supported writer; OAuth entries are reported, not
+ * carried (their refresh state belongs to the runtime's own login flows).
+ */
+async function readLegacyApiKeyProfiles(agentDir: string, exceptProvider: string): Promise<{ carry: LegacyApiKeyProfile[]; skippedOAuth: string[] }> {
+  const carry: LegacyApiKeyProfile[] = [];
+  const skippedOAuth: string[] = [];
+  const path = join(agentDir, 'auth-profiles.json');
+  if (!(await exists(path))) return { carry, skippedOAuth };
+  try {
+    const raw = JSON.parse(await readFile(path, 'utf8')) as { profiles?: Record<string, { type?: string; provider?: string; key?: string }> };
+    for (const [profileId, entry] of Object.entries(raw?.profiles ?? {})) {
+      if (!entry?.provider || entry.provider === exceptProvider) continue;
+      if (entry.type === 'api_key' && typeof entry.key === 'string' && entry.key) {
+        carry.push({ profileId, provider: entry.provider, key: entry.key });
+      } else if (entry.type === 'oauth') {
+        skippedOAuth.push(profileId);
+      }
+    }
+  } catch {
+    // Unparseable: nothing to carry; the archive keeps the bytes.
+  }
+  return { carry, skippedOAuth };
+}
+
+/**
+ * The only way this module reaches the SDK. Archival of every retired file the SDK
+ * would consult happens here, before any SDK call, because the runtime caches a
+ * migration refusal for the life of the process.
  */
 async function sdkFor(agentDir: string, sdk?: OpenClawAuthSdk): Promise<{ sdk: OpenClawAuthSdk; archived: ArchivedFile[] }> {
   const archived = await archiveRetiredAuthFiles(agentDir);
@@ -269,23 +339,10 @@ async function updateConfigLocked(mutate: (cfg: RuntimeConfig) => RuntimeConfig)
   });
 }
 
-/**
- * Resolve a provider's key exactly as a turn would. Any retired file is moved aside
- * first, because the runtime would otherwise refuse and cache the refusal for this
- * process. Returns null when the runtime has no usable credential; throws only for
- * infrastructure failures (SDK missing, archive failure).
- */
-export async function readbackProviderApiKey(params: {
-  provider: string;
-  agentId?: string;
-  cfg?: RuntimeConfig;
-  sdk?: OpenClawAuthSdk;
-}): Promise<ResolvedRuntimeApiKey | null> {
-  const agentDir = getAgentDir(params.agentId);
-  const { sdk } = await sdkFor(agentDir, params.sdk);
-  const cfg = params.cfg ?? ((await readOpenClawConfig()) as unknown as RuntimeConfig);
+async function resolveThroughRuntime(sdk: OpenClawAuthSdk, provider: string, agentDir: string, cfg?: RuntimeConfig): Promise<ResolvedRuntimeApiKey | null> {
+  const config = cfg ?? ((await readOpenClawConfig()) as unknown as RuntimeConfig);
   try {
-    const resolved = await sdk.resolveApiKeyForProvider({ provider: params.provider, cfg, agentDir });
+    const resolved = await sdk.resolveApiKeyForProvider({ provider, cfg: config, agentDir });
     return typeof resolved?.apiKey === 'string' && resolved.apiKey.length > 0 ? resolved : null;
   } catch (error) {
     if (sdk.isProviderAuthError(error) || describeRuntimeError(error).includes('legacy credential migration')) {
@@ -295,10 +352,30 @@ export async function readbackProviderApiKey(params: {
   }
 }
 
+/**
+ * Status read: resolve a provider's key exactly as a turn would, WITHOUT migrating
+ * anything. While a retired file the runtime would consult is present, the answer is
+ * null ("pending migration") and the SDK is not touched, so a status read can neither
+ * arm the runtime's cached refusal nor move a file that a write path has not yet
+ * carried into the store.
+ */
+export async function readbackProviderApiKey(params: {
+  provider: string;
+  agentId?: string;
+  cfg?: RuntimeConfig;
+  sdk?: OpenClawAuthSdk;
+}): Promise<ResolvedRuntimeApiKey | null> {
+  const agentDir = getAgentDir(params.agentId);
+  if (await hasPendingLegacyCredentialFiles(agentDir)) return null;
+  const sdk = params.sdk ?? loadOpenClawAuthSdk();
+  return resolveThroughRuntime(sdk, params.provider, agentDir, params.cfg);
+}
+
 export interface UpsertCredentialResult {
   profileId: string;
   source?: string;
   archived: string[];
+  carried: string[];
 }
 
 async function upsertCredential(params: {
@@ -306,51 +383,75 @@ async function upsertCredential(params: {
   agentId: string;
   mode: 'api_key' | 'oauth';
   sdk?: OpenClawAuthSdk;
-  write: (sdk: OpenClawAuthSdk, agentDir: string, cfg: RuntimeConfig) => Promise<string>;
+  write: (sdk: OpenClawAuthSdk, agentDir: string) => Promise<{ profileId: string; accepted: boolean }>;
 }): Promise<UpsertCredentialResult> {
   const agentDir = getAgentDir(params.agentId);
 
-  // 1. Move any retired file aside first (sdkFor does this before handing over the
-  //    SDK). The runtime's writer and reader both refuse while it exists, and cache
-  //    the refusal for the life of this process.
+  // 1. Read what the app's own retired file holds for OTHER providers, then move
+  //    every retired file aside (sdkFor does this before handing over the SDK).
+  const legacy = await readLegacyApiKeyProfiles(agentDir, params.provider);
   const { sdk, archived } = await sdkFor(agentDir, params.sdk);
 
-  // On failure the archive stays archived. Putting the retired file back would re-arm
-  // the runtime's block for EVERY provider — one unreadable account would recreate
-  // CLWX-139 for the whole app. The app's own secret store still holds the key, and
-  // the archived copy is kept by name for recovery, so nothing is lost.
+  // On failure the archive stays archived: putting the file back would re-arm the
+  // runtime's block for EVERY provider. The app's own secret store still holds the key
+  // and the archived copy is kept by name.
   const fail = (message: string): never => {
     const kept = archived.length > 0 ? ` (retired file(s) kept as ${archived.map((a) => basename(a.to)).join(', ')})` : '';
     throw new CredentialUnreadableError(params.provider, params.agentId, message + kept);
   };
 
-  // 2. Write through the runtime's writer; it chooses the store (per-agent, or the
-  //    relocated shared state DB) according to its own ownership record. Then record
-  //    the auth-profile entry in openclaw.json under the shared lock.
+  // 2. Write through the runtime's writer; it chooses the store according to its own
+  //    ownership record. Then record the auth-profile entry in openclaw.json.
   let profileId = '';
   let nextCfg: RuntimeConfig = {};
   try {
-    const cfg = (await readOpenClawConfig()) as unknown as RuntimeConfig;
-    profileId = await params.write(sdk, agentDir, cfg);
+    const written = await params.write(sdk, agentDir);
+    if (!written.accepted) fail('the runtime writer did not persist the credential');
+    profileId = written.profileId;
     nextCfg = await updateConfigLocked((current) =>
       sdk.applyAuthProfileConfig(current, { profileId, provider: params.provider, mode: params.mode }),
     );
   } catch (error) {
+    if (error instanceof CredentialUnreadableError) throw error;
     fail(`write failed: ${describeRuntimeError(error)}`);
   }
 
-  // 3. Prove the property. This is the same resolution a turn performs, so it fails
-  //    exactly when a turn would.
+  // 3. Carry other providers' API keys from the archived file into the store, so
+  //    nothing becomes recoverable only by hand. Best effort; failures are reported,
+  //    not fatal for this provider.
+  const carried: string[] = [];
+  for (const entry of legacy.carry) {
+    try {
+      await sdk.upsertAuthProfileWithLock({
+        profileId: entry.profileId,
+        credential: { type: 'api_key', provider: entry.provider, key: entry.key },
+        agentDir,
+      });
+      carried.push(entry.profileId);
+    } catch (error) {
+      console.warn(`[openclaw-auth-store] could not carry legacy profile ${entry.profileId} into the runtime store: ${describeRuntimeError(error)}`);
+    }
+  }
+  if (legacy.skippedOAuth.length > 0) {
+    console.warn(`[openclaw-auth-store] legacy OAuth profile(s) ${legacy.skippedOAuth.join(', ')} were archived, not carried; re-run the provider's sign-in`);
+  }
+
+  // 4. Prove the property: the same resolution a turn performs, and the profile it
+  //    resolves must be the one just written — not an older key or a fallback source.
   let resolved: ResolvedRuntimeApiKey | null = null;
   let failure = 'runtime returned no usable credential';
   try {
-    resolved = await readbackProviderApiKey({ provider: params.provider, agentId: params.agentId, cfg: nextCfg, sdk });
+    resolved = await resolveThroughRuntime(sdk, params.provider, agentDir, nextCfg);
   } catch (error) {
     failure = describeRuntimeError(error);
   }
   if (!resolved) fail(failure);
+  const fromWrittenProfile = resolved!.profileId === profileId || (resolved!.source ?? '').includes(profileId);
+  if (!fromWrittenProfile) {
+    fail(`runtime resolved ${resolved!.profileId ?? resolved!.source ?? 'an unknown source'} instead of the written profile ${profileId}`);
+  }
 
-  return { profileId, source: resolved!.source, archived: archived.map((a) => basename(a.from)) };
+  return { profileId, source: resolved!.source, archived: archived.map((a) => basename(a.from)), carried };
 }
 
 /** Store an API key for a provider so the bundled runtime can use it, and prove it can. */
@@ -368,12 +469,13 @@ export async function upsertProviderApiKey(params: {
     sdk: params.sdk,
     write: async (sdk, agentDir) => {
       const profileId = defaultProfileId(params.provider);
-      await sdk.upsertAuthProfileWithLock({
+      const result = await sdk.upsertAuthProfileWithLock({
         profileId,
         credential: { type: 'api_key', provider: params.provider, key: params.apiKey },
         agentDir,
       });
-      return profileId;
+      // The SDK's locked writer returns the updated store, or null when it could not write.
+      return { profileId, accepted: result !== null && result !== undefined };
     },
   });
 }
@@ -391,8 +493,8 @@ export async function upsertProviderOAuthCredentials(params: {
     agentId,
     mode: 'oauth',
     sdk: params.sdk,
-    write: async (sdk, agentDir) =>
-      sdk.writeOAuthCredentials(
+    write: async (sdk, agentDir) => {
+      const profileId = await sdk.writeOAuthCredentials(
         params.provider,
         {
           type: 'oauth',
@@ -405,7 +507,9 @@ export async function upsertProviderOAuthCredentials(params: {
         },
         agentDir,
         { profileName: 'default', syncSiblingAgents: false },
-      ),
+      );
+      return { profileId, accepted: typeof profileId === 'string' && profileId.length > 0 };
+    },
   });
 }
 
@@ -415,9 +519,8 @@ export async function upsertProviderOAuthCredentials(params: {
  * With `onlyApiKeyDefault`, only the `<provider>:default` profile goes, and only if
  * it is an API-key profile — an OAuth credential stored under the same default id
  * survives a "remove API key" action, as it did when the app owned the file.
- * Without it, every profile of the provider is removed. A removal the SDK reports as
- * not performed is verified by a readback that must come back empty before any
- * config is changed.
+ * Without it, every profile of the provider is removed. Removal is verified by
+ * inspecting the store: the targeted profiles must be gone before config changes.
  */
 export async function removeProviderCredentials(params: {
   provider: string;
@@ -431,33 +534,35 @@ export async function removeProviderCredentials(params: {
   // refuses every provider (and this removal) while one exists.
   const { sdk } = await sdkFor(agentDir, params.sdk);
 
-  let profileIds: string[] | undefined;
+  const before = sdk.ensureAuthProfileStore(agentDir)?.profiles ?? {};
+  let targets: string[];
   if (params.onlyApiKeyDefault) {
     const id = defaultProfileId(params.provider);
-    const profile = sdk.ensureAuthProfileStore(agentDir)?.profiles?.[id];
+    const profile = before[id];
     if (!profile || profile.type !== 'api_key') return { removed: [] };
-    profileIds = [id];
+    targets = [id];
+  } else {
+    targets = Object.entries(before)
+      .filter(([, p]) => p?.provider === params.provider)
+      .map(([id]) => id);
+    if (targets.length === 0) targets = [defaultProfileId(params.provider)];
   }
 
-  const result = await sdk.removeProviderAuthProfilesWithLock({
+  await sdk.removeProviderAuthProfilesWithLock({
     provider: params.provider,
     agentDir,
-    ...(profileIds ? { profileIds } : {}),
+    ...(params.onlyApiKeyDefault ? { profileIds: targets } : {}),
   });
 
-  // The SDK returns null when it could not perform the removal. Verify with the same
-  // observation a turn would make — but only a PROFILE-sourced resolution counts: an
-  // inline apiKey in config still resolves (source "models.json") after every profile
-  // is gone, and must not be mistaken for a failed removal.
-  if (result === null || result === undefined) {
-    const still = await readbackProviderApiKey({ provider: params.provider, agentId, sdk }).catch(() => null);
-    const stillFromProfile = still && (Boolean(still.profileId) || /^profile/.test(still.source ?? ''));
-    if (stillFromProfile) {
-      throw new CredentialRemovalError(params.provider, agentId, `runtime still resolves profile ${still.profileId ?? still.source} after removal`);
-    }
+  // Verify against the store itself, not a readback: an inline config key or a
+  // fallback source can still resolve after the profiles are gone, and a readback
+  // that throws proves nothing.
+  const after = sdk.ensureAuthProfileStore(agentDir)?.profiles ?? {};
+  const remaining = targets.filter((id) => id in after);
+  if (remaining.length > 0) {
+    throw new CredentialRemovalError(params.provider, agentId, `profile(s) still in the runtime store: ${remaining.join(', ')}`);
   }
 
-  const toDrop = profileIds ?? [defaultProfileId(params.provider)];
-  await updateConfigLocked((cfg) => toDrop.reduce((acc, id) => sdk.removeAuthProfileConfig(acc, id), cfg));
-  return { removed: toDrop };
+  await updateConfigLocked((cfg) => targets.reduce((acc, id) => sdk.removeAuthProfileConfig(acc, id), cfg));
+  return { removed: targets };
 }

@@ -7,8 +7,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // CLWX-139: the runtime refuses every auth lookup while a retired credential file
 // exists next to a store its per-agent diagnostic cannot see into. These tests pin
 // the properties that made the defect invisible to the previous 107 green tests:
-// the retired file is never written, it is removed before the readback, the
-// readback goes through the runtime, and a failed readback restores the file.
+// the retired file is never written, it is moved aside before any SDK call, the
+// readback goes through the runtime, and a failed readback keeps the archive (never
+// puts the file back, which would refuse every provider).
 
 const testHome = join(tmpdir(), 'clawx-openclaw-auth-store-test-home');
 
@@ -70,7 +71,7 @@ function makeSdk(overrides: Partial<Sdk> = {}): Sdk & { store: Map<string, strin
       if (existsSync(retiredFile)) {
         throw new Error('Auth profile store requires legacy credential migration; run openclaw doctor --fix.');
       }
-      for (const [key, value] of store) if (key.startsWith(`${provider}|`)) return { apiKey: value, source: 'profile' };
+      for (const [key, value] of store) if (key.startsWith(`${provider}|`)) return { apiKey: value, source: 'profile', profileId: key.split('|')[1] };
       throw new Error(`No API key found for provider "${provider}".`);
     }),
     isProviderAuthError: vi.fn(() => true),
@@ -104,7 +105,7 @@ describe('openclaw-auth-store', () => {
       credential: { type: 'api_key', provider: 'custom-moecloud', key: 'k-1' },
       agentDir,
     });
-    expect(result).toEqual({ profileId: 'custom-moecloud:default', source: 'profile', archived: ['auth-profiles.json'] });
+    expect(result).toEqual({ profileId: 'custom-moecloud:default', source: 'profile', archived: ['auth-profiles.json'], carried: [] });
 
     const files = await readdir(agentDir);
     expect(files).not.toContain('auth-profiles.json');
@@ -163,21 +164,61 @@ describe('openclaw-auth-store', () => {
     expect((await readdir(sharedDir)).some((f) => f.startsWith('oauth.json.clawx-retired-'))).toBe(true);
   });
 
-  it('moves a retired file aside before reading back, so the runtime guard is never armed in this process', async () => {
+  it('status reads report pending migration (null) without touching the SDK or the file while a retired file exists', async () => {
     await writeFile(retiredFile, '{}', 'utf8');
     const sdk = makeSdk();
     sdk.store.set('custom-moecloud|custom-moecloud:default', 'k-1');
     const { readbackProviderApiKey } = await import('@electron/utils/openclaw-auth-store');
 
-    // With the file present the fake runtime would refuse; the readback archives it first.
-    expect(await readbackProviderApiKey({ provider: 'custom-moecloud', sdk })).toEqual({ apiKey: 'k-1', source: 'profile' });
-    const files = await readdir(agentDir);
-    expect(files).not.toContain('auth-profiles.json');
-    expect(files.some((f) => f.startsWith('auth-profiles.json.clawx-retired-'))).toBe(true);
+    expect(await readbackProviderApiKey({ provider: 'custom-moecloud', sdk })).toBeNull();
+    expect(sdk.resolveApiKeyForProvider).not.toHaveBeenCalled();
+    expect(await readdir(agentDir)).toEqual(['auth-profiles.json']); // not archived by a read
 
-    // And with no credential in the store the answer is null, not an exception.
+    await rm(retiredFile);
+    expect(await readbackProviderApiKey({ provider: 'custom-moecloud', sdk })).toEqual({ apiKey: 'k-1', source: 'profile', profileId: 'custom-moecloud:default' });
     sdk.store.clear();
     expect(await readbackProviderApiKey({ provider: 'custom-moecloud', sdk })).toBeNull();
+  });
+
+  it('a write also clears the main agent\'s retired files when operating on a secondary agent (the SDK merges inherited main credentials)', async () => {
+    await writeFile(retiredFile, '{}', 'utf8'); // main agent's file
+    const workDir = join(testHome, '.openclaw', 'agents', 'work', 'agent');
+    await mkdir(workDir, { recursive: true });
+    const sdk = makeSdk();
+    const { upsertProviderApiKey } = await import('@electron/utils/openclaw-auth-store');
+
+    const result = await upsertProviderApiKey({ provider: 'custom-moecloud', apiKey: 'k-1', agentId: 'work', sdk });
+
+    expect(result.archived).toEqual(['auth-profiles.json']);
+    expect((await readdir(agentDir)).includes('auth-profiles.json')).toBe(false);
+  });
+
+  it('fails typed when the runtime writer returns null, and when the readback resolves a different profile', async () => {
+    const { upsertProviderApiKey, CredentialUnreadableError } = await import('@electron/utils/openclaw-auth-store');
+    const nullWriter = makeSdk({ upsertAuthProfileWithLock: vi.fn(async () => null) });
+    await expect(upsertProviderApiKey({ provider: 'custom-moecloud', apiKey: 'k-1', sdk: nullWriter })).rejects.toBeInstanceOf(CredentialUnreadableError);
+
+    const wrongProfile = makeSdk({ resolveApiKeyForProvider: vi.fn(async () => ({ apiKey: 'old', source: 'profile', profileId: 'custom-moecloud:backup' })) });
+    await expect(upsertProviderApiKey({ provider: 'custom-moecloud', apiKey: 'k-1', sdk: wrongProfile })).rejects.toThrow(/instead of the written profile/);
+  });
+
+  it('carries other providers\' API keys from the app\'s own retired file into the runtime store before archiving it', async () => {
+    await writeFile(retiredFile, JSON.stringify({ version: 1, profiles: {
+      'anthropic:default': { type: 'api_key', provider: 'anthropic', key: 'sk-ant' },
+      'openai-codex:default': { type: 'oauth', provider: 'openai-codex', access: 'a', refresh: 'r', expires: 1 },
+      'custom-moecloud:default': { type: 'api_key', provider: 'custom-moecloud', key: 'stale' },
+    } }), 'utf8');
+    const sdk = makeSdk();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { upsertProviderApiKey } = await import('@electron/utils/openclaw-auth-store');
+
+    const result = await upsertProviderApiKey({ provider: 'custom-moecloud', apiKey: 'k-1', sdk });
+
+    expect(result.carried).toEqual(['anthropic:default']);
+    expect(sdk.store.get('anthropic|anthropic:default')).toBe('sk-ant');
+    expect(sdk.store.get('custom-moecloud|custom-moecloud:default')).toBe('k-1'); // ours, not the stale one
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('openai-codex:default'));
+    warn.mockRestore();
   });
 
   it('removes credentials through the SDK and sweeps any retired file', async () => {
@@ -229,8 +270,8 @@ describe('openclaw-auth-store', () => {
     expect(sdk.removeAuthProfileConfig).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses to report a removal as done when the SDK returns null and the runtime still resolves the key', async () => {
-    const sdk = makeSdk({ removeProviderAuthProfilesWithLock: vi.fn(async () => null) });
+  it('refuses to report a removal as done when the targeted profiles are still in the runtime store', async () => {
+    const sdk = makeSdk({ removeProviderAuthProfilesWithLock: vi.fn(async () => null) }); // does not delete
     sdk.store.set('custom-moecloud|custom-moecloud:default', 'k-1');
     const { removeProviderCredentials, CredentialRemovalError } = await import('@electron/utils/openclaw-auth-store');
 

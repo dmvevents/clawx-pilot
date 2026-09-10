@@ -336,6 +336,39 @@ failures.push(...verifyGatewayProtocolContract());
 // A green result here proves the shapes agree. It does not prove a credential is
 // readable — that property lives in the app's runtime readback and in installed
 // acceptance (`openclaw models auth list --json`), never in a build gate.
+// Remove // and /* */ comments while respecting string literals, so comment
+// markers inside strings do not truncate the scan and comments do not count as code.
+function stripJsComments(text) {
+  let out = '';
+  let i = 0;
+  let quote = null;
+  while (i < text.length) {
+    const ch = text[i];
+    const next = text[i + 1];
+    if (quote) {
+      out += ch;
+      if (ch === '\\') { out += next ?? ''; i += 2; continue; }
+      if (ch === quote) quote = null;
+      i += 1;
+      continue;
+    }
+    if (ch === '\'' || ch === '"' || ch === '`') { quote = ch; out += ch; i += 1; continue; }
+    if (ch === '/' && next === '/') {
+      while (i < text.length && text[i] !== '\n') { out += ' '; i += 1; }
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      const end = text.indexOf('*/', i + 2);
+      const stop = end === -1 ? text.length : end + 2;
+      for (; i < stop; i += 1) out += text[i] === '\n' ? '\n' : ' ';
+      continue;
+    }
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+
 function verifyCredentialStoreContract() {
   const problems = [];
   const appTreePresent = fs.existsSync(path.join(ROOT, 'electron', 'utils'));
@@ -407,11 +440,13 @@ function verifyCredentialStoreContract() {
       if (!/\.(ts|tsx|mjs|js)$/.test(entry.name)) continue;
       if (path.relative(ROOT, full) === archiverRel) continue;
       // Comments may name the file when explaining why not to; code may not, in any
-      // shape: a bare literal, a path that ends in it, or two literals concatenated.
-      const stripped = fs.readFileSync(full, 'utf8')
-        .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-        .replace(/(^|[^:'"`])\/\/[^\n]*/g, (m, lead) => lead + ' '.repeat(m.length - lead.length));
-      const lines = stripped.split('\n');
+      // shape: a bare literal, a path that ends in it, or literals concatenated across
+      // one or more lines. Comments are removed with a small string-aware scanner so a
+      // "//" inside an earlier string literal cannot hide a later literal on the line.
+      const stripped = stripJsComments(fs.readFileSync(full, 'utf8'));
+      // Join continuation lines: a line ending in "+" continues a concatenation.
+      const joined = stripped.replace(/\+\s*\n\s*/g, '+ ');
+      const lines = joined.split('\n');
       for (let i = 0; i < lines.length; i += 1) {
         let line = lines[i];
         // "auth-" + "profiles.json" → "auth-profiles.json"
