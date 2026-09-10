@@ -1322,6 +1322,8 @@ describe('auth-backed provider discovery', () => {
   });
 
   it('removes merged and legacy minimax plugin registrations when deleting the provider', async () => {
+    // Deleting a provider goes through the runtime credential SDK; never load the real one in a unit test.
+    await installFakeAuthSdk();
     await writeOpenClawJson({
       plugins: {
         allow: ['minimax', 'minimax-portal-auth', 'custom-plugin'],
@@ -1377,6 +1379,8 @@ describe('auth-backed provider discovery', () => {
   });
 
   it('sanitizes stale minimax-portal-auth entries when merged minimax plugin is installed', async () => {
+    // Deleting a provider goes through the runtime credential SDK; never load the real one in a unit test.
+    await installFakeAuthSdk();
     await writeOpenClawJson({
       plugins: {
         allow: ['minimax-portal-auth', 'custom-plugin'],

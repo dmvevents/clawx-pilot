@@ -134,6 +134,12 @@ function pick<T>(mod: Record<string, unknown>, name: string): T {
  */
 export function loadOpenClawAuthSdk(): OpenClawAuthSdk {
   if (cachedSdk) return cachedSdk;
+  // Unit tests must inject a fake: loading the real runtime SDK inside vitest is slow
+  // enough on Windows CI to time a test out, and it would touch a real store. Fail
+  // fast and name the seam instead.
+  if (process.env.VITEST) {
+    throw new OpenClawAuthSdkUnavailableError('unit tests must inject a fake through setOpenClawAuthSdkForTesting()');
+  }
   const load = (subpath: string): Record<string, unknown> => {
     const errors: string[] = [];
     for (const base of [getOpenClawResolvedDir(), getOpenClawDir()]) {
