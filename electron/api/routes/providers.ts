@@ -228,8 +228,10 @@ export async function handleProviderRoutes(
         sendJson(res, 200, { success: true, noChange: true });
         return true;
       }
-      await providerService.setDefaultAccount(body.accountId);
+      // Runtime first: if the sync fails the default is not recorded, so a retry
+      // is not short-circuited as noChange while the runtime still has the old one.
       await syncDefaultProviderToRuntime(body.accountId, ctx.gatewayManager);
+      await providerService.setDefaultAccount(body.accountId);
       sendJson(res, 200, { success: true });
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });

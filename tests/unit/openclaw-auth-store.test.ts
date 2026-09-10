@@ -1,3 +1,4 @@
+import { existsSync } from 'fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -30,6 +31,11 @@ function makeSdk(overrides: Partial<Sdk> = {}): Sdk & { store: Map<string, strin
   const sdk: Sdk & { store: Map<string, string> } = {
     store,
     upsertApiKeyProfile: vi.fn(({ provider, input, profileId }) => {
+      // Like the real writer, refuse while a retired file exists: the migration guard
+      // runs inside the SDK's store load, before any write.
+      if (existsSync(retiredFile)) {
+        throw new Error('Auth profile store requires legacy credential migration; run openclaw doctor --fix.');
+      }
       const id = profileId ?? `${provider}:default`;
       store.set(`${provider}|${id}`, input);
       return id;
@@ -53,10 +59,15 @@ function makeSdk(overrides: Partial<Sdk> = {}): Sdk & { store: Map<string, strin
       return null;
     }),
     removeAuthProfileConfig: vi.fn((cfg) => cfg),
+    ensureAuthProfileStore: vi.fn(() => ({
+      profiles: Object.fromEntries([...store.keys()].map((k) => {
+        const [provider, id] = k.split('|');
+        return [id, { type: id.endsWith(':oauth') ? 'oauth' : 'api_key', provider }];
+      })),
+    })),
     // The fake runtime behaves like 2026.9.2: a retired file next to the store
     // refuses resolution regardless of what the store holds.
     resolveApiKeyForProvider: vi.fn(async ({ provider }) => {
-      const { existsSync } = await import('fs');
       if (existsSync(retiredFile)) {
         throw new Error('Auth profile store requires legacy credential migration; run openclaw doctor --fix.');
       }
@@ -137,16 +148,21 @@ describe('openclaw-auth-store', () => {
     expect(JSON.parse(await readFile(retiredFile, 'utf8'))).toEqual({ version: 1, profiles: { keep: 'me' } });
   });
 
-  it('reads back exactly as a turn resolves: null while a retired file is present', async () => {
+  it('moves a retired file aside before reading back, so the runtime guard is never armed in this process', async () => {
     await writeFile(retiredFile, '{}', 'utf8');
     const sdk = makeSdk();
     sdk.store.set('custom-moecloud|custom-moecloud:default', 'k-1');
     const { readbackProviderApiKey } = await import('@electron/utils/openclaw-auth-store');
 
-    expect(await readbackProviderApiKey({ provider: 'custom-moecloud', sdk })).toBeNull();
-
-    await rm(retiredFile);
+    // With the file present the fake runtime would refuse; the readback archives it first.
     expect(await readbackProviderApiKey({ provider: 'custom-moecloud', sdk })).toEqual({ apiKey: 'k-1', source: 'profile' });
+    const files = await readdir(agentDir);
+    expect(files).not.toContain('auth-profiles.json');
+    expect(files.some((f) => f.startsWith('auth-profiles.json.clawx-retired-'))).toBe(true);
+
+    // And with no credential in the store the answer is null, not an exception.
+    sdk.store.clear();
+    expect(await readbackProviderApiKey({ provider: 'custom-moecloud', sdk })).toBeNull();
   });
 
   it('removes credentials through the SDK and sweeps any retired file', async () => {
@@ -160,5 +176,39 @@ describe('openclaw-auth-store', () => {
     expect(sdk.removeProviderAuthProfilesWithLock).toHaveBeenCalledWith({ provider: 'custom-moecloud', agentDir });
     expect(sdk.store.size).toBe(0);
     expect((await readdir(agentDir)).includes('auth-profiles.json')).toBe(false);
+  });
+
+  it('removes only an API-key default profile on an API-key delete, leaving an OAuth default alone', async () => {
+    const sdk = makeSdk();
+    sdk.store.set('openai-codex|openai-codex:default', 'access-token'); // an api_key profile per the fake store
+    const { removeProviderCredentials } = await import('@electron/utils/openclaw-auth-store');
+
+    const removed = await removeProviderCredentials({ provider: 'openai-codex', onlyApiKeyDefault: true, sdk });
+    expect(removed).toEqual({ removed: ['openai-codex:default'] });
+    expect(sdk.removeProviderAuthProfilesWithLock).toHaveBeenCalledWith({ provider: 'openai-codex', agentDir, profileIds: ['openai-codex:default'] });
+
+    // Same request against an OAuth profile under the default id: nothing is removed.
+    const oauthSdk = makeSdk({ ensureAuthProfileStore: vi.fn(() => ({ profiles: { 'openai-codex:default': { type: 'oauth', provider: 'openai-codex' } } })) });
+    const untouched = await removeProviderCredentials({ provider: 'openai-codex', onlyApiKeyDefault: true, sdk: oauthSdk });
+    expect(untouched).toEqual({ removed: [] });
+    expect(oauthSdk.removeProviderAuthProfilesWithLock).not.toHaveBeenCalled();
+  });
+
+  it('archives the retired file before calling the SDK writer, because the writer itself refuses while it exists', async () => {
+    await writeFile(retiredFile, '{}', 'utf8');
+    const sdk = makeSdk();
+    const { upsertProviderApiKey } = await import('@electron/utils/openclaw-auth-store');
+
+    // The fake writer throws if the file is still there when it is called.
+    await expect(upsertProviderApiKey({ provider: 'custom-moecloud', apiKey: 'k-1', sdk })).resolves.toMatchObject({ archived: ['auth-profiles.json'] });
+  });
+
+  it('refuses to report a removal as done when the SDK returns null and the runtime still resolves the key', async () => {
+    const sdk = makeSdk({ removeProviderAuthProfilesWithLock: vi.fn(async () => null) });
+    sdk.store.set('custom-moecloud|custom-moecloud:default', 'k-1');
+    const { removeProviderCredentials, CredentialRemovalError } = await import('@electron/utils/openclaw-auth-store');
+
+    await expect(removeProviderCredentials({ provider: 'custom-moecloud', sdk })).rejects.toBeInstanceOf(CredentialRemovalError);
+    expect(sdk.removeAuthProfileConfig).not.toHaveBeenCalled();
   });
 });

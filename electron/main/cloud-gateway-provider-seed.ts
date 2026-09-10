@@ -324,13 +324,13 @@ export async function refreshCloudGatewayUserIdHeader(): Promise<void> {
     delete account.headers;
   }
 
-  await saveProviderAccount(account);
   const apiKey = await getApiKey(account.id).catch(() => null);
   await syncSavedProviderToRuntime(
     providerAccountToConfig(account),
     apiKey ?? undefined,
     refreshGatewayManager,
   );
+  await saveProviderAccount(account);
   logger.debug('[cloud-gateway-seed] Refreshed UserId header on cloud gateway provider', {
     providerId: account.id,
     userIdPresent: Boolean(nextHeaders?.UserId),
@@ -407,9 +407,11 @@ export async function seedCloudGatewayProvider(
     delete account.headers;
   }
 
-  await saveProviderAccount(account);
+  // Runtime first, app store second: if the runtime cannot read the credential back,
+  // nothing is persisted that would make the next boot's refresh think the work is done.
   await storeApiKey(account.id, seed.apiKey);
   await syncSavedProviderToRuntime(providerAccountToConfig(account), seed.apiKey, syncGatewayManager);
+  await saveProviderAccount(account);
 
   if (shouldBecomeDefault) {
     await setDefaultProviderAccount(account.id);

@@ -1941,14 +1941,11 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
     try {
       await providerService.setLegacyProviderApiKey(providerId, apiKey);
 
-      // Also write to OpenClaw auth-profiles.json
+      // Store it where the OpenClaw runtime reads credentials. A key the runtime
+      // cannot read back is not a saved key, so that failure is the result.
       const provider = await providerService.getLegacyProvider(providerId);
       const providerType = provider?.type || providerId;
-      try {
-        await syncProviderApiKeyToRuntime(providerType, providerId, apiKey);
-      } catch (err) {
-        console.warn('Failed to save key to OpenClaw auth-profiles:', err);
-      }
+      await syncProviderApiKeyToRuntime(providerType, providerId, apiKey);
 
       return { success: true };
     } catch (error) {

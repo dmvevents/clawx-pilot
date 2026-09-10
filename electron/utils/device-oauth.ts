@@ -164,26 +164,22 @@ class DeviceOAuthManager extends EventEmitter {
     }) {
         const accountId = this.activeAccountId || providerType;
         const accountLabel = this.activeLabel;
-        this.active = false;
-        this.activeProvider = null;
-        this.activeAccountId = null;
-        this.activeLabel = null;
-        logger.info(`[DeviceOAuth] Successfully completed OAuth for ${providerType}`);
+        // Stay active until the credential is persisted AND readable by the runtime,
+        // so a persistence failure is reported instead of being read as a cancellation.
+        logger.info(`[DeviceOAuth] Completed OAuth for ${providerType}; persisting credential`);
 
         // 1. Write OAuth token to OpenClaw's auth-profiles.json in native OAuth format.
         //    (matches what `openclaw models auth login` → upsertAuthProfile writes).
         //    We save both MiniMax providers to the generic "minimax-portal" profile
         //    so OpenClaw's gateway auto-refresher knows how to find it.
-        try {
-            const tokenProviderId = providerType.startsWith('minimax-portal') ? 'minimax-portal' : providerType;
-            await saveOAuthTokenToOpenClaw(tokenProviderId, {
-                access: token.access,
-                refresh: token.refresh,
-                expires: token.expires,
-            });
-        } catch (err) {
-            logger.warn(`[DeviceOAuth] Failed to save OAuth token to OpenClaw:`, err);
-        }
+        // A token the runtime cannot read back is not a saved token; let that failure
+        // reach the flow's error handler instead of logging it and reporting success.
+        const tokenProviderId = providerType.startsWith('minimax-portal') ? 'minimax-portal' : providerType;
+        await saveOAuthTokenToOpenClaw(tokenProviderId, {
+            access: token.access,
+            refresh: token.refresh,
+            expires: token.expires,
+        });
 
         // 2. Write openclaw.json: set default model + provider config (baseUrl/api/models)
         //    This mirrors what the OpenClaw plugin's configPatch does after CLI login.
@@ -240,6 +236,10 @@ class DeviceOAuthManager extends EventEmitter {
         await saveProvider(providerConfig);
 
         // 4. Emit success internally so the main process can restart the Gateway
+        this.active = false;
+        this.activeProvider = null;
+        this.activeAccountId = null;
+        this.activeLabel = null;
         this.emit('oauth:success', { provider: providerType, accountId });
 
         // 5. Emit success to frontend

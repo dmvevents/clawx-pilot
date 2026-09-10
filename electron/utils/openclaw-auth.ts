@@ -15,6 +15,7 @@ import { homedir } from 'os';
 import { listConfiguredAgentIds } from './agent-config';
 import { getOpenClawResolvedDir } from './paths';
 import {
+  CredentialUnreadableError,
   readbackProviderApiKey,
   removeProviderCredentials,
   upsertProviderApiKey,
@@ -699,9 +700,34 @@ export async function saveOAuthTokenToOpenClaw(
   const agentIds = agentId ? [agentId] : await discoverAgentIds();
   if (agentIds.length === 0) agentIds.push('main');
 
-  for (const id of agentIds) {
+  await forEachAgentCollectingFailures(agentIds, async (id) => {
     const result = await upsertProviderOAuthCredentials({ provider, token, agentId: id });
     console.log(describeCredentialWrite('OAuth token', provider, id, result));
+  });
+}
+
+/**
+ * Run a credential operation for every agent even when one fails, then surface the
+ * failures together: one agent whose store the runtime cannot read must not leave
+ * later agents without the credential.
+ */
+async function forEachAgentCollectingFailures(agentIds: string[], op: (agentId: string) => Promise<void>): Promise<void> {
+  const failures: Error[] = [];
+  for (const id of agentIds) {
+    try {
+      await op(id);
+    } catch (error) {
+      failures.push(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) {
+    const first = failures[0];
+    const summary = failures.map((f) => f.message).join(' | ');
+    const combined = first instanceof CredentialUnreadableError
+      ? new CredentialUnreadableError(first.provider, `${failures.length} agents`, summary)
+      : new Error(summary);
+    throw combined;
   }
 }
 
@@ -748,14 +774,16 @@ export async function saveProviderKeyToOpenClaw(
   const agentIds = agentId ? [agentId] : await discoverAgentIds();
   if (agentIds.length === 0) agentIds.push('main');
 
-  for (const id of agentIds) {
+  await forEachAgentCollectingFailures(agentIds, async (id) => {
     const result = await upsertProviderApiKey({ provider, apiKey, agentId: id });
     console.log(describeCredentialWrite('API key', provider, id, result));
-  }
+  });
 }
 
 /**
- * Remove a provider's credentials from the OpenClaw runtime store.
+ * Remove a provider's default API-key credential from the OpenClaw runtime store.
+ * Only the `<provider>:default` profile goes; an OAuth profile for the same provider
+ * is left in place, as before this path moved to the runtime store.
  */
 export async function removeProviderKeyFromOpenClaw(
   provider: string,
@@ -765,9 +793,9 @@ export async function removeProviderKeyFromOpenClaw(
   if (agentIds.length === 0) agentIds.push('main');
 
   for (const id of agentIds) {
-    await removeProviderCredentials({ provider, agentId: id });
+    await removeProviderCredentials({ provider, agentId: id, onlyApiKeyDefault: true });
   }
-  console.log(`Removed credentials for provider "${provider}" from the OpenClaw runtime store (agents: ${agentIds.join(', ')})`);
+  console.log(`Removed API key for provider "${provider}" from the OpenClaw runtime store (agents: ${agentIds.join(', ')})`);
 }
 
 /**

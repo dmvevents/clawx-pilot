@@ -406,14 +406,26 @@ function verifyCredentialStoreContract() {
       if (entry.isDirectory()) { walk(full); continue; }
       if (!/\.(ts|tsx|mjs|js)$/.test(entry.name)) continue;
       if (path.relative(ROOT, full) === archiverRel) continue;
-      const text = fs.readFileSync(full, 'utf8');
-      const lines = text.split('\n');
+      // Comments may name the file when explaining why not to; code may not, in any
+      // shape: a bare literal, a path that ends in it, or two literals concatenated.
+      const stripped = fs.readFileSync(full, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+        .replace(/(^|[^:'"`])\/\/[^\n]*/g, (m, lead) => lead + ' '.repeat(m.length - lead.length));
+      const lines = stripped.split('\n');
       for (let i = 0; i < lines.length; i += 1) {
-        const line = lines[i];
-        if (/^\s*(\/\/|\*|\/\*)/.test(line)) continue; // comments may name the file when explaining why not to
-        for (const name of retired) {
-          if (line.includes(`'${name}'`) || line.includes(`"${name}"`) || line.includes(`\`${name}\``)) {
-            offenders.push(`${path.relative(ROOT, full)}:${i + 1} names ${name}`);
+        let line = lines[i];
+        // "auth-" + "profiles.json" → "auth-profiles.json"
+        for (let guard = 0; guard < 8; guard += 1) {
+          const collapsed = line.replace(/(['"`])((?:(?!\1).)*)\1\s*\+\s*(['"`])((?:(?!\3).)*)\3/g, (_m, q, a, _q2, b) => `${q}${a}${b}${q}`);
+          if (collapsed === line) break;
+          line = collapsed;
+        }
+        for (const literal of line.matchAll(/(['"`])((?:(?!\1)[^\n])*)\1/g)) {
+          const value = literal[2];
+          for (const name of retired) {
+            if (value === name || value.endsWith(`/${name}`) || value.endsWith(`\\${name}`) || value.includes(name)) {
+              offenders.push(`${path.relative(ROOT, full)}:${i + 1} names ${name} (in ${JSON.stringify(value)})`);
+            }
           }
         }
       }

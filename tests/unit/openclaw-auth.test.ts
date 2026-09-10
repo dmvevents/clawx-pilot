@@ -89,9 +89,10 @@ async function installFakeAuthSdk(): Promise<AuthSdk & { calls: { upserts: strin
     applyAuthProfileConfig: vi.fn((cfg) => cfg),
     removeProviderAuthProfilesWithLock: vi.fn(async ({ provider, agentDir }) => {
       calls.removals.push(`${provider}@${agentDir}`);
-      return null;
+      return { profiles: {} }; // the SDK returns the updated store; null would mean "not performed"
     }),
     removeAuthProfileConfig: vi.fn((cfg) => cfg),
+    ensureAuthProfileStore: vi.fn(() => ({ profiles: { 'custom-abc12345:default': { type: 'api_key', provider: 'custom-abc12345' } } })),
     resolveApiKeyForProvider: vi.fn(async () => ({ apiKey: 'resolved', source: 'profile' })),
     isProviderAuthError: vi.fn(() => true),
   };
@@ -185,9 +186,11 @@ describe('removeProviderKeyFromOpenClaw', () => {
     await removeProviderKeyFromOpenClaw('custom-abc12345', 'main');
 
     expect(sdk.calls.removals).toEqual([`custom-abc12345@${join(testHome, '.openclaw', 'agents', 'main', 'agent')}`]);
-    // Which profiles of a provider survive an api-key removal (oauth backups, ordering,
-    // lastGood) is the runtime's contract now; the app only asserts it asked and that no
-    // retired file remains to poison resolution.
+    // Narrowed to the API-key default (and only when it is an api_key profile): an
+    // OAuth profile for the same provider survives, exactly as before.
+    expect(sdk.removeProviderAuthProfilesWithLock).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'custom-abc12345', profileIds: ['custom-abc12345:default'] }),
+    );
     await expect(readAuthProfiles('main')).rejects.toThrow();
   });
 });

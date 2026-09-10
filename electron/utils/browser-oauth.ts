@@ -145,12 +145,12 @@ class BrowserOAuthManager extends EventEmitter {
   ) {
     const accountId = this.activeAccountId || providerType;
     const accountLabel = this.activeLabel;
-    this.active = false;
-    this.activeAccountId = null;
-    this.activeLabel = null;
+    // The flow stays active until the credential is persisted AND readable by the
+    // runtime; clearing it earlier made a failed persistence look like a user
+    // cancellation and Settings waited forever (CLWX-139 review).
     this.pendingManualCodeResolve = null;
     this.pendingManualCodeReject = null;
-    logger.info(`[BrowserOAuth] Successfully completed OAuth for ${providerType}`);
+    logger.info(`[BrowserOAuth] Completed OAuth for ${providerType}; persisting credential`);
 
     const providerService = getProviderService();
     const existing = await providerService.getAccount(accountId);
@@ -214,6 +214,9 @@ class BrowserOAuthManager extends EventEmitter {
       projectId: oauthTokenSubject,
     });
 
+    this.active = false;
+    this.activeAccountId = null;
+    this.activeLabel = null;
     this.emit('oauth:success', { provider: providerType, accountId: nextAccount.id });
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send('oauth:success', {
