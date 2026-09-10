@@ -444,8 +444,9 @@ function verifyCredentialStoreContract() {
       // one or more lines. Comments are removed with a small string-aware scanner so a
       // "//" inside an earlier string literal cannot hide a later literal on the line.
       const stripped = stripJsComments(fs.readFileSync(full, 'utf8'));
-      // Join continuation lines: a line ending in "+" continues a concatenation.
-      const joined = stripped.replace(/\+\s*\n\s*/g, '+ ');
+      // Join continuation lines: a concatenation may break after a trailing "+" or
+      // before a leading "+" on the next line.
+      const joined = stripped.replace(/\+\s*\n\s*/g, '+ ').replace(/\n\s*\+\s*/g, ' + ');
       const lines = joined.split('\n');
       for (let i = 0; i < lines.length; i += 1) {
         let line = lines[i];
