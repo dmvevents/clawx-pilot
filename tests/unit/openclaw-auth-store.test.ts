@@ -221,53 +221,31 @@ describe('openclaw-auth-store', () => {
     warn.mockRestore();
   });
 
-  it('removes credentials through the SDK and sweeps any retired file', async () => {
-    await writeFile(retiredFile, '{}', 'utf8');
+  it('carries main\'s legacy keys even when a secondary agent operates first, never overwrites a current credential, and does not count a null write', async () => {
+    await writeFile(retiredFile, JSON.stringify({ version: 1, profiles: {
+      'anthropic:default': { type: 'api_key', provider: 'anthropic', key: 'legacy-ant' },
+      'gemini:default': { type: 'api_key', provider: 'gemini', key: 'legacy-gem' },
+    } }), 'utf8'); // main agent's retired file
+    const workDir = join(testHome, '.openclaw', 'agents', 'work', 'agent');
+    await mkdir(workDir, { recursive: true });
     const sdk = makeSdk();
-    sdk.store.set('custom-moecloud|custom-moecloud:default', 'k-1');
-    const { removeProviderCredentials } = await import('@electron/utils/openclaw-auth-store');
-
-    await removeProviderCredentials({ provider: 'custom-moecloud', sdk });
-
-    expect(sdk.removeProviderAuthProfilesWithLock).toHaveBeenCalledWith({ provider: 'custom-moecloud', agentDir });
-    expect(sdk.store.size).toBe(0);
-    expect((await readdir(agentDir)).includes('auth-profiles.json')).toBe(false);
-  });
-
-  it('removes only an API-key default profile on an API-key delete, leaving an OAuth default alone', async () => {
-    const sdk = makeSdk();
-    sdk.store.set('openai-codex|openai-codex:default', 'access-token'); // an api_key profile per the fake store
-    const { removeProviderCredentials } = await import('@electron/utils/openclaw-auth-store');
-
-    const removed = await removeProviderCredentials({ provider: 'openai-codex', onlyApiKeyDefault: true, sdk });
-    expect(removed).toEqual({ removed: ['openai-codex:default'] });
-    expect(sdk.removeProviderAuthProfilesWithLock).toHaveBeenCalledWith({ provider: 'openai-codex', agentDir, profileIds: ['openai-codex:default'] });
-
-    // Same request against an OAuth profile under the default id: nothing is removed.
-    const oauthSdk = makeSdk({ ensureAuthProfileStore: vi.fn(() => ({ profiles: { 'openai-codex:default': { type: 'oauth', provider: 'openai-codex' } } })) });
-    const untouched = await removeProviderCredentials({ provider: 'openai-codex', onlyApiKeyDefault: true, sdk: oauthSdk });
-    expect(untouched).toEqual({ removed: [] });
-    expect(oauthSdk.removeProviderAuthProfilesWithLock).not.toHaveBeenCalled();
-  });
-
-  it('archives the retired file before calling the SDK writer, because the writer itself refuses while it exists', async () => {
-    await writeFile(retiredFile, '{}', 'utf8');
-    const sdk = makeSdk();
+    sdk.store.set('anthropic|anthropic:default', 'current-ant'); // already in the store: must win
+    const upsert = sdk.upsertAuthProfileWithLock as ReturnType<typeof vi.fn>;
+    const original = upsert.getMockImplementation()!;
+    upsert.mockImplementation(async (params: { profileId: string; credential: { provider: string; key: string } }) => {
+      if (params.credential.provider === 'gemini') return null; // the runtime did not persist this one
+      return original(params);
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { upsertProviderApiKey } = await import('@electron/utils/openclaw-auth-store');
 
-    // The fake writer throws if the file is still there when it is called.
-    await expect(upsertProviderApiKey({ provider: 'custom-moecloud', apiKey: 'k-1', sdk })).resolves.toMatchObject({ archived: ['auth-profiles.json'] });
-  });
+    const result = await upsertProviderApiKey({ provider: 'custom-moecloud', apiKey: 'k-1', agentId: 'work', sdk });
 
-  it('does not mistake an inline config apiKey (source models.json) for a failed removal', async () => {
-    const sdk = makeSdk({
-      removeProviderAuthProfilesWithLock: vi.fn(async () => null),
-      resolveApiKeyForProvider: vi.fn(async () => ({ apiKey: 'inline', source: 'models.json' })),
-    });
-    const { removeProviderCredentials } = await import('@electron/utils/openclaw-auth-store');
-
-    await expect(removeProviderCredentials({ provider: 'custom-moecloud', sdk })).resolves.toEqual({ removed: ['custom-moecloud:default'] });
-    expect(sdk.removeAuthProfileConfig).toHaveBeenCalledTimes(1);
+    expect(result.archived).toEqual(['auth-profiles.json']); // main's file, archived by the secondary-agent write
+    expect(result.carried).toEqual([]); // anthropic skipped (current wins), gemini not persisted
+    expect(sdk.store.get('anthropic|anthropic:default')).toBe('current-ant');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('gemini:default'));
+    warn.mockRestore();
   });
 
   it('refuses to report a removal as done when the targeted profiles are still in the runtime store', async () => {

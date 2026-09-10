@@ -283,36 +283,72 @@ export async function restoreArchivedAuthFiles(archived: ArchivedFile[]): Promis
 }
 
 interface LegacyApiKeyProfile {
+  agentDir: string;
   profileId: string;
   provider: string;
   key: string;
 }
 
 /**
- * API-key profiles the app itself once wrote into `auth-profiles.json` for providers
- * other than `exceptProvider`. Read before the file is archived so they can be carried
- * into the runtime store through the supported writer; OAuth entries are reported, not
- * carried (their refresh state belongs to the runtime's own login flows).
+ * API-key profiles found in archived `auth-profiles.json` copies (the app itself once
+ * wrote those files), except the provider currently being written or removed. They are
+ * carried into the runtime store through the supported writer so that archiving never
+ * leaves a credential reachable only by hand. OAuth entries are reported, not carried
+ * (their refresh state belongs to the runtime's own login flows).
  */
-async function readLegacyApiKeyProfiles(agentDir: string, exceptProvider: string): Promise<{ carry: LegacyApiKeyProfile[]; skippedOAuth: string[] }> {
+async function readLegacyApiKeyProfiles(archived: ArchivedFile[], exceptProvider: string): Promise<{ carry: LegacyApiKeyProfile[]; skippedOAuth: string[] }> {
   const carry: LegacyApiKeyProfile[] = [];
   const skippedOAuth: string[] = [];
-  const path = join(agentDir, 'auth-profiles.json');
-  if (!(await exists(path))) return { carry, skippedOAuth };
-  try {
-    const raw = JSON.parse(await readFile(path, 'utf8')) as { profiles?: Record<string, { type?: string; provider?: string; key?: string }> };
-    for (const [profileId, entry] of Object.entries(raw?.profiles ?? {})) {
-      if (!entry?.provider || entry.provider === exceptProvider) continue;
-      if (entry.type === 'api_key' && typeof entry.key === 'string' && entry.key) {
-        carry.push({ profileId, provider: entry.provider, key: entry.key });
-      } else if (entry.type === 'oauth') {
-        skippedOAuth.push(profileId);
+  for (const entry of archived) {
+    if (basename(entry.from) !== 'auth-profiles.json') continue;
+    const agentDir = join(entry.from, '..');
+    try {
+      const raw = JSON.parse(await readFile(entry.to, 'utf8')) as { profiles?: Record<string, { type?: string; provider?: string; key?: string }> };
+      for (const [profileId, profile] of Object.entries(raw?.profiles ?? {})) {
+        if (!profile?.provider || profile.provider === exceptProvider) continue;
+        if (profile.type === 'api_key' && typeof profile.key === 'string' && profile.key) {
+          carry.push({ agentDir, profileId, provider: profile.provider, key: profile.key });
+        } else if (profile.type === 'oauth') {
+          skippedOAuth.push(profileId);
+        }
       }
+    } catch {
+      // Unparseable: nothing to carry; the archive keeps the bytes.
     }
-  } catch {
-    // Unparseable: nothing to carry; the archive keeps the bytes.
   }
   return { carry, skippedOAuth };
+}
+
+/**
+ * Carry legacy API-key profiles into the runtime store. A profile the store already
+ * holds is left alone (the current credential wins over an archived one); a writer
+ * that returns null did not persist and is reported, not counted.
+ */
+async function carryLegacyProfiles(sdk: OpenClawAuthSdk, archived: ArchivedFile[], exceptProvider: string): Promise<string[]> {
+  const legacy = await readLegacyApiKeyProfiles(archived, exceptProvider);
+  const carried: string[] = [];
+  for (const entry of legacy.carry) {
+    try {
+      const current = sdk.ensureAuthProfileStore(entry.agentDir)?.profiles ?? {};
+      if (entry.profileId in current) continue;
+      const result = await sdk.upsertAuthProfileWithLock({
+        profileId: entry.profileId,
+        credential: { type: 'api_key', provider: entry.provider, key: entry.key },
+        agentDir: entry.agentDir,
+      });
+      if (result === null || result === undefined) {
+        console.warn(`[openclaw-auth-store] runtime did not persist carried legacy profile ${entry.profileId}; it remains only in the archive`);
+        continue;
+      }
+      carried.push(entry.profileId);
+    } catch (error) {
+      console.warn(`[openclaw-auth-store] could not carry legacy profile ${entry.profileId} into the runtime store: ${describeRuntimeError(error)}`);
+    }
+  }
+  if (legacy.skippedOAuth.length > 0) {
+    console.warn(`[openclaw-auth-store] legacy OAuth profile(s) ${legacy.skippedOAuth.join(', ')} were archived, not carried; re-run the provider's sign-in`);
+  }
+  return carried;
 }
 
 /**
@@ -320,9 +356,13 @@ async function readLegacyApiKeyProfiles(agentDir: string, exceptProvider: string
  * would consult happens here, before any SDK call, because the runtime caches a
  * migration refusal for the life of the process.
  */
-async function sdkFor(agentDir: string, sdk?: OpenClawAuthSdk): Promise<{ sdk: OpenClawAuthSdk; archived: ArchivedFile[] }> {
+async function sdkFor(agentDir: string, exceptProvider: string, sdk?: OpenClawAuthSdk): Promise<{ sdk: OpenClawAuthSdk; archived: ArchivedFile[]; carried: string[] }> {
   const archived = await archiveRetiredAuthFiles(agentDir);
-  return { sdk: sdk ?? loadOpenClawAuthSdk(), archived };
+  const resolved = sdk ?? loadOpenClawAuthSdk();
+  // Whatever the archive held for other providers - in this agent's dir or main's -
+  // goes into the store now, so no operation can strand a credential.
+  const carried = archived.length > 0 ? await carryLegacyProfiles(resolved, archived, exceptProvider) : [];
+  return { sdk: resolved, archived, carried };
 }
 
 function describeRuntimeError(error: unknown): string {
@@ -393,10 +433,9 @@ async function upsertCredential(params: {
 }): Promise<UpsertCredentialResult> {
   const agentDir = getAgentDir(params.agentId);
 
-  // 1. Read what the app's own retired file holds for OTHER providers, then move
-  //    every retired file aside (sdkFor does this before handing over the SDK).
-  const legacy = await readLegacyApiKeyProfiles(agentDir, params.provider);
-  const { sdk, archived } = await sdkFor(agentDir, params.sdk);
+  // 1. Move every retired file aside (sdkFor does this before handing over the SDK)
+  //    and carry other providers' API keys from it into the store.
+  const { sdk, archived, carried } = await sdkFor(agentDir, params.provider, params.sdk);
 
   // On failure the archive stays archived: putting the file back would re-arm the
   // runtime's block for EVERY provider. The app's own secret store still holds the key
@@ -422,27 +461,7 @@ async function upsertCredential(params: {
     fail(`write failed: ${describeRuntimeError(error)}`);
   }
 
-  // 3. Carry other providers' API keys from the archived file into the store, so
-  //    nothing becomes recoverable only by hand. Best effort; failures are reported,
-  //    not fatal for this provider.
-  const carried: string[] = [];
-  for (const entry of legacy.carry) {
-    try {
-      await sdk.upsertAuthProfileWithLock({
-        profileId: entry.profileId,
-        credential: { type: 'api_key', provider: entry.provider, key: entry.key },
-        agentDir,
-      });
-      carried.push(entry.profileId);
-    } catch (error) {
-      console.warn(`[openclaw-auth-store] could not carry legacy profile ${entry.profileId} into the runtime store: ${describeRuntimeError(error)}`);
-    }
-  }
-  if (legacy.skippedOAuth.length > 0) {
-    console.warn(`[openclaw-auth-store] legacy OAuth profile(s) ${legacy.skippedOAuth.join(', ')} were archived, not carried; re-run the provider's sign-in`);
-  }
-
-  // 4. Prove the property: the same resolution a turn performs, and the profile it
+  // 3. Prove the property: the same resolution a turn performs, and the profile it
   //    resolves must be the one just written — not an older key or a fallback source.
   let resolved: ResolvedRuntimeApiKey | null = null;
   let failure = 'runtime returned no usable credential';
@@ -538,7 +557,7 @@ export async function removeProviderCredentials(params: {
   const agentDir = getAgentDir(agentId);
   // A retired file for a removed provider is still a retired file; the runtime
   // refuses every provider (and this removal) while one exists.
-  const { sdk } = await sdkFor(agentDir, params.sdk);
+  const { sdk } = await sdkFor(agentDir, params.provider, params.sdk);
 
   const before = sdk.ensureAuthProfileStore(agentDir)?.profiles ?? {};
   let targets: string[];
