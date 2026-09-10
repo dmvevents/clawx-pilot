@@ -725,12 +725,14 @@ async function forEachAgentCollectingFailures(agentIds: string[], op: (agentId: 
   }
   if (failures.length === 1) throw failures[0];
   if (failures.length > 1) {
-    const first = failures[0];
     const summary = failures.map((f) => f.message).join(' | ');
-    const combined = first instanceof CredentialUnreadableError
-      ? new CredentialUnreadableError(first.provider, `${failures.length} agents`, summary)
+    // Stay typed if ANY agent failed for the credential reason, so the boot fan-out
+    // treats the aggregate as a tolerated credential failure rather than aborting
+    // the gateway start.
+    const typed = failures.find((f): f is CredentialUnreadableError => f instanceof CredentialUnreadableError);
+    throw typed
+      ? new CredentialUnreadableError(typed.provider, `${failures.length} agents`, summary)
       : new Error(summary);
-    throw combined;
   }
 }
 
@@ -795,9 +797,9 @@ export async function removeProviderKeyFromOpenClaw(
   const agentIds = agentId ? [agentId] : await discoverAgentIds();
   if (agentIds.length === 0) agentIds.push('main');
 
-  for (const id of agentIds) {
+  await forEachAgentCollectingFailures(agentIds, async (id) => {
     await removeProviderCredentials({ provider, agentId: id, onlyApiKeyDefault: true });
-  }
+  });
   console.log(`Removed API key for provider "${provider}" from the OpenClaw runtime store (agents: ${agentIds.join(', ')})`);
 }
 
@@ -812,11 +814,11 @@ export async function removeProviderFromOpenClaw(provider: string): Promise<void
   const providerKeysToRemove = expandProviderKeysForDeletion(provider);
   const agentIds = await discoverAgentIds();
   if (agentIds.length === 0) agentIds.push('main');
-  for (const id of agentIds) {
+  await forEachAgentCollectingFailures(agentIds, async (id) => {
     for (const key of providerKeysToRemove) {
       await removeProviderCredentials({ provider: key, agentId: id });
     }
-  }
+  });
   // 2. Remove from models.json (per-agent model registry used by pi-ai directly)
   for (const id of agentIds) {
     const modelsPath = join(homedir(), '.openclaw', 'agents', id, 'agent', 'models.json');

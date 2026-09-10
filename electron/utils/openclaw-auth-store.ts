@@ -239,6 +239,16 @@ export async function restoreArchivedAuthFiles(archived: ArchivedFile[]): Promis
   return notRestored;
 }
 
+/**
+ * The only way this module reaches the SDK. Archiving happens here, before any SDK
+ * call, because the runtime caches a migration refusal for the life of the process:
+ * one SDK call made while a retired file exists would poison every later call.
+ */
+async function sdkFor(agentDir: string, sdk?: OpenClawAuthSdk): Promise<{ sdk: OpenClawAuthSdk; archived: ArchivedFile[] }> {
+  const archived = await archiveRetiredAuthFiles(agentDir);
+  return { sdk: sdk ?? loadOpenClawAuthSdk(), archived };
+}
+
 function describeRuntimeError(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error);
@@ -250,7 +260,9 @@ async function updateConfigLocked(mutate: (cfg: RuntimeConfig) => RuntimeConfig)
   return withConfigLock(async () => {
     const cfg = (await readOpenClawConfig()) as unknown as RuntimeConfig;
     const next = mutate(cfg);
-    if (next !== cfg) {
+    // The SDK helpers return a fresh object even when nothing changed; compare content
+    // so a boot with an already-recorded profile does not rewrite openclaw.json.
+    if (JSON.stringify(next) !== JSON.stringify(cfg)) {
       await writeOpenClawConfig(next as unknown as Parameters<typeof writeOpenClawConfig>[0]);
     }
     return next;
@@ -269,9 +281,8 @@ export async function readbackProviderApiKey(params: {
   cfg?: RuntimeConfig;
   sdk?: OpenClawAuthSdk;
 }): Promise<ResolvedRuntimeApiKey | null> {
-  const sdk = params.sdk ?? loadOpenClawAuthSdk();
   const agentDir = getAgentDir(params.agentId);
-  await archiveRetiredAuthFiles(agentDir);
+  const { sdk } = await sdkFor(agentDir, params.sdk);
   const cfg = params.cfg ?? ((await readOpenClawConfig()) as unknown as RuntimeConfig);
   try {
     const resolved = await sdk.resolveApiKeyForProvider({ provider: params.provider, cfg, agentDir });
@@ -297,12 +308,12 @@ async function upsertCredential(params: {
   sdk?: OpenClawAuthSdk;
   write: (sdk: OpenClawAuthSdk, agentDir: string, cfg: RuntimeConfig) => Promise<string>;
 }): Promise<UpsertCredentialResult> {
-  const sdk = params.sdk ?? loadOpenClawAuthSdk();
   const agentDir = getAgentDir(params.agentId);
 
-  // 1. Move any retired file aside first. The runtime's writer and reader both refuse
-  //    while it exists, and cache the refusal for the life of this process.
-  const archived = await archiveRetiredAuthFiles(agentDir);
+  // 1. Move any retired file aside first (sdkFor does this before handing over the
+  //    SDK). The runtime's writer and reader both refuse while it exists, and cache
+  //    the refusal for the life of this process.
+  const { sdk, archived } = await sdkFor(agentDir, params.sdk);
 
   // On failure the archive stays archived. Putting the retired file back would re-arm
   // the runtime's block for EVERY provider — one unreadable account would recreate
@@ -414,12 +425,11 @@ export async function removeProviderCredentials(params: {
   onlyApiKeyDefault?: boolean;
   sdk?: OpenClawAuthSdk;
 }): Promise<{ removed: string[] }> {
-  const sdk = params.sdk ?? loadOpenClawAuthSdk();
   const agentId = params.agentId ?? MAIN_AGENT_ID;
   const agentDir = getAgentDir(agentId);
   // A retired file for a removed provider is still a retired file; the runtime
   // refuses every provider (and this removal) while one exists.
-  await archiveRetiredAuthFiles(agentDir);
+  const { sdk } = await sdkFor(agentDir, params.sdk);
 
   let profileIds: string[] | undefined;
   if (params.onlyApiKeyDefault) {
@@ -435,10 +445,15 @@ export async function removeProviderCredentials(params: {
     ...(profileIds ? { profileIds } : {}),
   });
 
+  // The SDK returns null when it could not perform the removal. Verify with the same
+  // observation a turn would make — but only a PROFILE-sourced resolution counts: an
+  // inline apiKey in config still resolves (source "models.json") after every profile
+  // is gone, and must not be mistaken for a failed removal.
   if (result === null || result === undefined) {
     const still = await readbackProviderApiKey({ provider: params.provider, agentId, sdk }).catch(() => null);
-    if (still) {
-      throw new CredentialRemovalError(params.provider, agentId, 'runtime still resolves a credential after removal');
+    const stillFromProfile = still && (Boolean(still.profileId) || /^profile/.test(still.source ?? ''));
+    if (stillFromProfile) {
+      throw new CredentialRemovalError(params.provider, agentId, `runtime still resolves profile ${still.profileId ?? still.source} after removal`);
     }
   }
 
