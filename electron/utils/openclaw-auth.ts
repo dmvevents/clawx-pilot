@@ -714,7 +714,7 @@ export async function saveOAuthTokenToOpenClaw(
  * failures together: one agent whose store the runtime cannot read must not leave
  * later agents without the credential.
  */
-async function forEachAgentCollectingFailures(agentIds: string[], op: (agentId: string) => Promise<void>): Promise<void> {
+export async function forEachAgentCollectingFailures(agentIds: string[], op: (agentId: string) => Promise<void>): Promise<void> {
   const failures: Error[] = [];
   for (const id of agentIds) {
     try {

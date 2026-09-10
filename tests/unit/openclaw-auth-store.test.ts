@@ -218,6 +218,17 @@ describe('openclaw-auth-store', () => {
     await expect(upsertProviderApiKey({ provider: 'custom-moecloud', apiKey: 'k-1', sdk })).resolves.toMatchObject({ archived: ['auth-profiles.json'] });
   });
 
+  it('does not mistake an inline config apiKey (source models.json) for a failed removal', async () => {
+    const sdk = makeSdk({
+      removeProviderAuthProfilesWithLock: vi.fn(async () => null),
+      resolveApiKeyForProvider: vi.fn(async () => ({ apiKey: 'inline', source: 'models.json' })),
+    });
+    const { removeProviderCredentials } = await import('@electron/utils/openclaw-auth-store');
+
+    await expect(removeProviderCredentials({ provider: 'custom-moecloud', sdk })).resolves.toEqual({ removed: ['custom-moecloud:default'] });
+    expect(sdk.removeAuthProfileConfig).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses to report a removal as done when the SDK returns null and the runtime still resolves the key', async () => {
     const sdk = makeSdk({ removeProviderAuthProfilesWithLock: vi.fn(async () => null) });
     sdk.store.set('custom-moecloud|custom-moecloud:default', 'k-1');

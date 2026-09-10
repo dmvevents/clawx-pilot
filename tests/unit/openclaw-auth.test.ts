@@ -171,12 +171,58 @@ describe('saveProviderKeyToOpenClaw', () => {
   });
 });
 
+describe('forEachAgentCollectingFailures', () => {
+  beforeEach(() => { vi.resetModules(); });
+
+  it('runs every agent, and stays typed when any failure is a credential failure — not only the first', async () => {
+    const { forEachAgentCollectingFailures } = await import('@electron/utils/openclaw-auth');
+    const { CredentialUnreadableError } = await import('@electron/utils/openclaw-auth-store');
+    const visited: string[] = [];
+    const op = async (id: string) => {
+      visited.push(id);
+      if (id === 'a') throw new Error('EPERM: archive failed');
+      if (id === 'b') throw new CredentialUnreadableError('p', 'b', 'no readback');
+    };
+
+    await expect(forEachAgentCollectingFailures(['a', 'b', 'c'], op)).rejects.toBeInstanceOf(CredentialUnreadableError);
+    expect(visited).toEqual(['a', 'b', 'c']);
+  });
+
+  it('rethrows a single failure as-is and returns quietly when all agents succeed', async () => {
+    const { forEachAgentCollectingFailures } = await import('@electron/utils/openclaw-auth');
+    const only = new Error('only');
+    await expect(forEachAgentCollectingFailures(['a'], async () => { throw only; })).rejects.toBe(only);
+    await expect(forEachAgentCollectingFailures(['a', 'b'], async () => undefined)).resolves.toBeUndefined();
+  });
+});
+
 describe('removeProviderKeyFromOpenClaw', () => {
   beforeEach(async () => {
     vi.resetModules();
     vi.restoreAllMocks();
     await rm(testHome, { recursive: true, force: true });
     await rm(testUserData, { recursive: true, force: true });
+  });
+
+  it('finishes the removal fan-out when one agent fails, then reports the failure', async () => {
+    await writeOpenClawJson({ agents: { list: [
+      { id: 'main', name: 'Main', default: true, workspace: '~/.openclaw/workspace', agentDir: '~/.openclaw/agents/main/agent' },
+      { id: 'work', name: 'Work', workspace: '~/.openclaw/workspace-work', agentDir: '~/.openclaw/agents/work/agent' },
+    ] } });
+    for (const id of ['main', 'work']) await mkdir(join(testHome, '.openclaw', 'agents', id, 'agent'), { recursive: true });
+    const sdk = await installFakeAuthSdk();
+    (sdk.removeProviderAuthProfilesWithLock as ReturnType<typeof vi.fn>).mockImplementation(async ({ provider, agentDir }: { provider: string; agentDir: string }) => {
+      sdk.calls.removals.push(`${provider}@${agentDir}`);
+      if (agentDir.includes(`${join('agents', 'main')}`)) throw new Error('store locked');
+      return { profiles: {} };
+    });
+    const { removeProviderKeyFromOpenClaw } = await import('@electron/utils/openclaw-auth');
+
+    await expect(removeProviderKeyFromOpenClaw('custom-abc12345')).rejects.toThrow('store locked');
+    expect(sdk.calls.removals).toEqual([
+      `custom-abc12345@${join(testHome, '.openclaw', 'agents', 'main', 'agent')}`,
+      `custom-abc12345@${join(testHome, '.openclaw', 'agents', 'work', 'agent')}`,
+    ]);
   });
 
   it('asks the runtime to remove the provider credentials for the requested agent and sweeps any retired file', async () => {
