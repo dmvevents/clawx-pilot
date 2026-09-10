@@ -1,7 +1,10 @@
 /**
- * OpenClaw Auth Profiles Utility
- * Writes API keys to configured OpenClaw agent auth-profiles.json files
- * so the OpenClaw Gateway can load them for AI provider calls.
+ * OpenClaw configuration and credential glue for the Electron app.
+ *
+ * Provider credentials are owned by the bundled OpenClaw runtime and reach it only
+ * through the runtime's SDK (see openclaw-auth-store.ts); this module never composes
+ * the runtime's retired `auth-profiles.json`. What remains here is openclaw.json
+ * provider/model/plugin configuration written through the canonical config writers.
  *
  * All file I/O is asynchronous (fs/promises) to avoid blocking the
  * Electron main thread.  On Windows + NTFS + Defender the synchronous

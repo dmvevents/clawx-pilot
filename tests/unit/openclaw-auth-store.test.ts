@@ -30,15 +30,14 @@ function makeSdk(overrides: Partial<Sdk> = {}): Sdk & { store: Map<string, strin
   const store = new Map<string, string>();
   const sdk: Sdk & { store: Map<string, string> } = {
     store,
-    upsertApiKeyProfile: vi.fn(({ provider, input, profileId }) => {
+    upsertAuthProfileWithLock: vi.fn(async ({ profileId, credential }) => {
       // Like the real writer, refuse while a retired file exists: the migration guard
       // runs inside the SDK's store load, before any write.
       if (existsSync(retiredFile)) {
         throw new Error('Auth profile store requires legacy credential migration; run openclaw doctor --fix.');
       }
-      const id = profileId ?? `${provider}:default`;
-      store.set(`${provider}|${id}`, input);
-      return id;
+      store.set(`${credential.provider}|${profileId}`, credential.key);
+      return { profiles: {} };
     }),
     writeOAuthCredentials: vi.fn(async (provider, creds) => {
       store.set(`${provider}|${provider}:default`, String((creds as { access: string }).access));
@@ -100,12 +99,11 @@ describe('openclaw-auth-store', () => {
 
     const result = await upsertProviderApiKey({ provider: 'custom-moecloud', apiKey: 'k-1', sdk });
 
-    expect(sdk.upsertApiKeyProfile).toHaveBeenCalledWith(expect.objectContaining({
-      provider: 'custom-moecloud',
-      input: 'k-1',
-      agentDir,
+    expect(sdk.upsertAuthProfileWithLock).toHaveBeenCalledWith({
       profileId: 'custom-moecloud:default',
-    }));
+      credential: { type: 'api_key', provider: 'custom-moecloud', key: 'k-1' },
+      agentDir,
+    });
     expect(result).toEqual({ profileId: 'custom-moecloud:default', source: 'profile', archived: ['auth-profiles.json'] });
 
     const files = await readdir(agentDir);
@@ -131,7 +129,7 @@ describe('openclaw-auth-store', () => {
     expect(await readdir(agentDir)).toEqual([]);
   });
 
-  it('restores the archived file and throws a typed error when the runtime cannot read the credential back', async () => {
+  it('keeps the retired file archived and throws a typed error when the runtime cannot read the credential back', async () => {
     await writeFile(retiredFile, JSON.stringify({ version: 1, profiles: { keep: 'me' } }), 'utf8');
     const sdk = makeSdk({
       resolveApiKeyForProvider: vi.fn(async () => {
@@ -143,9 +141,26 @@ describe('openclaw-auth-store', () => {
     await expect(upsertProviderApiKey({ provider: 'custom-moecloud', apiKey: 'k-1', sdk }))
       .rejects.toBeInstanceOf(CredentialUnreadableError);
 
-    // The only copy of the credential was never destroyed.
-    expect(await readdir(agentDir)).toEqual(['auth-profiles.json']);
-    expect(JSON.parse(await readFile(retiredFile, 'utf8'))).toEqual({ version: 1, profiles: { keep: 'me' } });
+    // Not restored: putting the retired file back would refuse every provider. The
+    // copy is kept by name for recovery.
+    const files = await readdir(agentDir);
+    expect(files).not.toContain('auth-profiles.json');
+    const kept = files.find((f) => f.startsWith('auth-profiles.json.clawx-retired-'));
+    expect(kept).toBeDefined();
+    expect(JSON.parse(await readFile(join(agentDir, kept!), 'utf8'))).toEqual({ version: 1, profiles: { keep: 'me' } });
+  });
+
+  it('also archives the shared credentials/oauth.json for the main agent', async () => {
+    const sharedDir = join(testHome, '.openclaw', 'credentials');
+    await mkdir(sharedDir, { recursive: true });
+    await writeFile(join(sharedDir, 'oauth.json'), '{}', 'utf8');
+    const sdk = makeSdk();
+    const { upsertProviderApiKey } = await import('@electron/utils/openclaw-auth-store');
+
+    const result = await upsertProviderApiKey({ provider: 'custom-moecloud', apiKey: 'k-1', sdk });
+
+    expect(result.archived).toEqual(['oauth.json']);
+    expect((await readdir(sharedDir)).some((f) => f.startsWith('oauth.json.clawx-retired-'))).toBe(true);
   });
 
   it('moves a retired file aside before reading back, so the runtime guard is never armed in this process', async () => {

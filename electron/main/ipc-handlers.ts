@@ -349,11 +349,8 @@ function registerUnifiedRequestHandlers(gatewayManager: GatewayManager): void {
               const provider = await providerService.getLegacyProvider(providerId);
               const providerType = provider?.type || providerId;
               const ock = getOpenClawProviderKey(providerType, providerId);
-              try {
-                await saveProviderKeyToOpenClaw(ock, apiKey);
-              } catch (err) {
-                console.warn('Failed to save key to OpenClaw auth-profiles:', err);
-              }
+              // A key the runtime cannot read back is not saved; report that.
+              await saveProviderKeyToOpenClaw(ock, apiKey);
               data = { success: true };
             } catch (error) {
               data = { success: false, error: String(error) };

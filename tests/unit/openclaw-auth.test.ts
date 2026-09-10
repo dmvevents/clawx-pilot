@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -81,9 +81,9 @@ async function installFakeAuthSdk(): Promise<AuthSdk & { calls: { upserts: strin
   const calls = { upserts: [] as string[], removals: [] as string[] };
   const sdk: AuthSdk & { calls: typeof calls } = {
     calls,
-    upsertApiKeyProfile: vi.fn(({ provider, agentDir, profileId }) => {
-      calls.upserts.push(`${provider}@${agentDir}`);
-      return profileId ?? `${provider}:default`;
+    upsertAuthProfileWithLock: vi.fn(async ({ credential, agentDir }) => {
+      calls.upserts.push(`${credential.provider}@${agentDir}`);
+      return { profiles: {} };
     }),
     writeOAuthCredentials: vi.fn(async (provider: string) => `${provider}:default`),
     applyAuthProfileConfig: vi.fn((cfg) => cfg),
@@ -154,7 +154,7 @@ describe('saveProviderKeyToOpenClaw', () => {
     logSpy.mockRestore();
   });
 
-  it('surfaces a typed failure and leaves any retired file in place when the runtime cannot read the key back', async () => {
+  it('surfaces a typed failure and keeps the retired file archived when the runtime cannot read the key back', async () => {
     await writeOpenClawJson({ agents: { list: [{ id: 'main', name: 'Main', default: true, workspace: '~/.openclaw/workspace', agentDir: '~/.openclaw/agents/main/agent' }] } });
     await writeAgentAuthProfiles('main', { version: 1, profiles: { 'legacy:default': { type: 'api_key', provider: 'legacy', key: 'legacy-key' } } });
     const sdk = await installFakeAuthSdk();
@@ -164,8 +164,10 @@ describe('saveProviderKeyToOpenClaw', () => {
 
     await expect(saveProviderKeyToOpenClaw('openrouter', 'sk-test', 'main')).rejects.toBeInstanceOf(CredentialUnreadableError);
 
-    // Restored: the file may hold the only copy of a credential until the runtime proves otherwise.
-    expect((await readAuthProfiles('main')).profiles).toEqual({ 'legacy:default': { type: 'api_key', provider: 'legacy', key: 'legacy-key' } });
+    // Kept archived, not restored: putting the retired file back would refuse every provider.
+    await expect(readAuthProfiles('main')).rejects.toThrow();
+    const agentFiles = await readdir(join(testHome, '.openclaw', 'agents', 'main', 'agent'));
+    expect(agentFiles.some((f) => f.startsWith('auth-profiles.json.clawx-retired-'))).toBe(true);
   });
 });
 

@@ -397,7 +397,7 @@ function verifyCredentialStoreContract() {
 
   // App side: enumerate, do not spot-check. Any other string literal naming a retired
   // file under electron/ or src/ is a defect, whether it is written, read or copied.
-  const sweepRoots = [path.join(ROOT, 'electron'), path.join(ROOT, 'src')];
+  const sweepRoots = [path.join(ROOT, 'electron'), path.join(ROOT, 'src'), path.join(ROOT, 'extensions')];
   const offenders = [];
   const walk = (dir) => {
     if (!fs.existsSync(dir)) return;
@@ -443,10 +443,10 @@ function verifyCredentialStoreContract() {
   // The app must be able to populate the store the runtime reads at all.
   const authStore = path.join(ROOT, 'electron', 'utils', 'openclaw-auth-store.ts');
   const usesSupportedWriter = fs.existsSync(authStore)
-    && /upsertApiKeyProfile/.test(fs.readFileSync(authStore, 'utf8'))
+    && /upsertAuthProfileWithLock|upsertApiKeyProfile/.test(fs.readFileSync(authStore, 'utf8'))
     && /resolveApiKeyForProvider/.test(fs.readFileSync(authStore, 'utf8'));
   if (!usesSupportedWriter) {
-    problems.push('CREDENTIAL-STORE: no app module writes credentials through the runtime SDK (upsertApiKeyProfile) and reads them back (resolveApiKeyForProvider); the app cannot populate the store the gateway reads.');
+    problems.push('CREDENTIAL-STORE: no app module writes credentials through the runtime SDK (upsertAuthProfileWithLock) and reads them back (resolveApiKeyForProvider); the app cannot populate the store the gateway reads.');
   }
 
   console.log(`  credential-store contract: gateway retires ${[...retired].join(', ')} (${registryFile}); ${offenders.length} app reference(s)`);

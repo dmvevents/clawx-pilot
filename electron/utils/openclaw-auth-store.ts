@@ -14,9 +14,9 @@
  * retired file out of the way BEFORE touching the SDK, so the guard is never armed
  * in this process. It writes through the runtime's supported SDK writer, then proves
  * the result by resolving the key back through the runtime — the same code path a
- * turn uses. A write that cannot be read back restores the archived file and is
- * reported as a typed failure, so an install is never left without its only copy of
- * a credential. Files are renamed, never deleted.
+ * turn uses. A write that cannot be read back is reported as a typed failure; the
+ * retired file stays archived by name (putting it back would refuse every provider),
+ * and the app's own secret store still holds the key. Files are renamed, never deleted.
  *
  * The SDK is loaded from the bundled runtime directory (see openclaw-sdk.ts for why a
  * static import cannot work from inside the asar), so the writer and the gateway are
@@ -26,12 +26,17 @@ import { createRequire } from 'module';
 import { homedir } from 'os';
 import { basename, join } from 'node:path';
 import { access, rename } from 'node:fs/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { getOpenClawDir, getOpenClawResolvedDir } from './paths';
 import { readOpenClawConfig, writeOpenClawConfig } from './channel-config';
 import { withConfigLock } from './config-mutex';
 
 /** Files the runtime treats as retired credential sources (`resolveLegacyAuthProfileSourceCandidates`). */
 export const RETIRED_AUTH_FILES = ['auth-profiles.json', 'auth-state.json', 'auth.json'] as const;
+/** The fourth retired source, shared and only consulted for the main agent: `<oauthDir>/oauth.json`. */
+export function sharedRetiredOAuthFile(): string {
+  return join(homedir(), '.openclaw', 'credentials', 'oauth.json');
+}
 
 export const MAIN_AGENT_ID = 'main';
 
@@ -49,13 +54,11 @@ export interface RuntimeAuthProfileStore {
 }
 
 export interface OpenClawAuthSdk {
-  upsertApiKeyProfile(params: {
-    provider: string;
-    input: string;
+  upsertAuthProfileWithLock(params: {
+    profileId: string;
+    credential: { type: 'api_key'; provider: string; key: string };
     agentDir?: string;
-    profileId?: string;
-    options?: { config?: RuntimeConfig };
-  }): string;
+  }): Promise<unknown>;
   writeOAuthCredentials(
     provider: string,
     creds: Record<string, unknown>,
@@ -136,7 +139,7 @@ export function loadOpenClawAuthSdk(): OpenClawAuthSdk {
   const auth = load('openclaw/plugin-sdk/provider-auth');
   const runtime = load('openclaw/plugin-sdk/provider-auth-runtime');
   cachedSdk = {
-    upsertApiKeyProfile: pick(auth, 'upsertApiKeyProfile'),
+    upsertAuthProfileWithLock: pick(auth, 'upsertAuthProfileWithLock'),
     writeOAuthCredentials: pick(auth, 'writeOAuthCredentials'),
     applyAuthProfileConfig: pick(auth, 'applyAuthProfileConfig'),
     ensureAuthProfileStore: pick(auth, 'ensureAuthProfileStore'),
@@ -161,6 +164,27 @@ export function defaultProfileId(provider: string): string {
   return `${provider}:default`;
 }
 
+/**
+ * Windows: renaming a file another process holds open fails with EPERM/EBUSY/EACCES
+ * for a moment (the gateway or an editor may have it). Same retry channel-config.ts
+ * uses for its atomic config write.
+ */
+async function renameWithRetry(from: string, to: string): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES') throw error;
+      lastError = error;
+      await sleep(100 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
+
 async function exists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -183,13 +207,14 @@ export interface ArchivedFile {
  */
 export async function archiveRetiredAuthFiles(agentDir: string, now: Date = new Date()): Promise<ArchivedFile[]> {
   const stamp = now.toISOString().replace(/[:.]/g, '-');
+  const candidates = RETIRED_AUTH_FILES.map((name) => join(agentDir, name));
+  if (agentDir === getAgentDir(MAIN_AGENT_ID)) candidates.push(sharedRetiredOAuthFile());
   const archived: ArchivedFile[] = [];
-  for (const name of RETIRED_AUTH_FILES) {
-    const from = join(agentDir, name);
+  for (const from of candidates) {
     if (!(await exists(from))) continue;
     const to = `${from}.clawx-retired-${stamp}`;
     try {
-      await rename(from, to);
+      await renameWithRetry(from, to);
     } catch (error) {
       await restoreArchivedAuthFiles(archived);
       throw error;
@@ -205,7 +230,7 @@ export async function restoreArchivedAuthFiles(archived: ArchivedFile[]): Promis
   for (const entry of archived) {
     try {
       if (await exists(entry.to) && !(await exists(entry.from))) {
-        await rename(entry.to, entry.from);
+        await renameWithRetry(entry.to, entry.from);
       }
     } catch {
       notRestored.push(entry);
@@ -279,19 +304,20 @@ async function upsertCredential(params: {
   //    while it exists, and cache the refusal for the life of this process.
   const archived = await archiveRetiredAuthFiles(agentDir);
 
-  const fail = async (message: string): Promise<never> => {
-    const notRestored = await restoreArchivedAuthFiles(archived);
-    const suffix = notRestored.length > 0
-      ? ` (and ${notRestored.length} archived file(s) could not be restored: ${notRestored.map((a) => basename(a.to)).join(', ')})`
-      : '';
-    throw new CredentialUnreadableError(params.provider, params.agentId, message + suffix);
+  // On failure the archive stays archived. Putting the retired file back would re-arm
+  // the runtime's block for EVERY provider — one unreadable account would recreate
+  // CLWX-139 for the whole app. The app's own secret store still holds the key, and
+  // the archived copy is kept by name for recovery, so nothing is lost.
+  const fail = (message: string): never => {
+    const kept = archived.length > 0 ? ` (retired file(s) kept as ${archived.map((a) => basename(a.to)).join(', ')})` : '';
+    throw new CredentialUnreadableError(params.provider, params.agentId, message + kept);
   };
 
   // 2. Write through the runtime's writer; it chooses the store (per-agent, or the
   //    relocated shared state DB) according to its own ownership record. Then record
   //    the auth-profile entry in openclaw.json under the shared lock.
-  let profileId: string;
-  let nextCfg: RuntimeConfig;
+  let profileId = '';
+  let nextCfg: RuntimeConfig = {};
   try {
     const cfg = (await readOpenClawConfig()) as unknown as RuntimeConfig;
     profileId = await params.write(sdk, agentDir, cfg);
@@ -299,7 +325,7 @@ async function upsertCredential(params: {
       sdk.applyAuthProfileConfig(current, { profileId, provider: params.provider, mode: params.mode }),
     );
   } catch (error) {
-    return fail(`write failed: ${describeRuntimeError(error)}`);
+    fail(`write failed: ${describeRuntimeError(error)}`);
   }
 
   // 3. Prove the property. This is the same resolution a turn performs, so it fails
@@ -311,9 +337,9 @@ async function upsertCredential(params: {
   } catch (error) {
     failure = describeRuntimeError(error);
   }
-  if (!resolved) return fail(failure);
+  if (!resolved) fail(failure);
 
-  return { profileId, source: resolved.source, archived: archived.map((a) => basename(a.from)) };
+  return { profileId, source: resolved!.source, archived: archived.map((a) => basename(a.from)) };
 }
 
 /** Store an API key for a provider so the bundled runtime can use it, and prove it can. */
@@ -329,14 +355,15 @@ export async function upsertProviderApiKey(params: {
     agentId,
     mode: 'api_key',
     sdk: params.sdk,
-    write: async (sdk, agentDir, cfg) =>
-      sdk.upsertApiKeyProfile({
-        provider: params.provider,
-        input: params.apiKey,
+    write: async (sdk, agentDir) => {
+      const profileId = defaultProfileId(params.provider);
+      await sdk.upsertAuthProfileWithLock({
+        profileId,
+        credential: { type: 'api_key', provider: params.provider, key: params.apiKey },
         agentDir,
-        profileId: defaultProfileId(params.provider),
-        options: { config: cfg },
-      }),
+      });
+      return profileId;
+    },
   });
 }
 
