@@ -242,7 +242,7 @@ export async function handleOutlookRoutes(
       // answers "is Microsoft Graph installed / configured / signed in, and
       // which path will email use" WITHOUT opening a window, navigating the
       // principal's browser, or calling any Graph mailbox API. Main owns
-      // this truth; the plugin's outlook.readiness tool only reports it.
+      // this truth; the plugin's outlook_readiness tool only reports it.
       // Graph support is bundled inside the app (this route existing proves
       // the integration), so `integrated` is a constant — the variable facts
       // are client configuration, sign-in, and per-lane transport selection.
@@ -305,8 +305,8 @@ export async function handleOutlookRoutes(
         browser: {
           state: 'unknown' as const,
           note:
-            'This read-only check does not probe the Outlook window. Use browser.diagnose for ' +
-            'Chrome automation readiness; only outlook.open (which opens a window) reveals whether ' +
+            'This read-only check does not probe the Outlook window. Use browser_diagnose for ' +
+            'Chrome automation readiness; only outlook_open (which opens a window) reveals whether ' +
             'Outlook Web itself is signed in.',
         },
         summary,

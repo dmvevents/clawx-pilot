@@ -157,8 +157,8 @@ export const ENABLE_AUTO_UPDATE = flagFromEnv('CLAWX_ENABLE_AUTO_UPDATE', !PILOT
  * available before the agent can even open Outlook.
  *
  * Pilot builds default to v2 because the product now owns Chrome CDP
- * diagnosis/repair through the Host API (`browser.diagnose` and
- * `browser.repair_chrome_cdp`) instead of asking non-technical principals to
+ * diagnosis/repair through the Host API (`browser_diagnose` and
+ * `browser_repair_chrome_cdp`) instead of asking non-technical principals to
  * enable remote debugging manually. Override with CLAWX_OUTLOOK_V2=0 to force
  * the legacy browser-plugin path for regression comparison.
  */

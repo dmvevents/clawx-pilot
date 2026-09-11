@@ -757,6 +757,7 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
     const base = { settled: true, terminalStable: true, terminalBlockers: [], runtimeFailureSentence: true };
     expect(driver.verdictFor({ ...base, lastMessageErrorChip: false })).toBe('FAILED_RUN_ERROR_NO_CHIP');
     expect(driver.exitCodeFor('FAILED_RUN_ERROR_NO_CHIP')).toBe(44);
+    expect(driver.exitCodeFor('FAILED_GENERIC_ERROR')).toBe(45);
     expect(driver.verdictFor({ ...base, lastMessageErrorChip: true })).toBe('FAILED_RUN_ERROR_VISIBLE');
     expect(driver.verdictFor({ ...base, lastMessageErrorChip: false, terminalBlockers: ['MISSING_CHANNEL_STATE'] })).toBe('FAILED_RUN_ERROR_NO_CHIP');
     // The bottom error bar (transport-class `error`) is also a visible surface —
@@ -873,7 +874,6 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
       'FAILED_SESSION_NOT_FRESH',
       'FAILED_UNEXPECTED_DEGRADE',
       'FAILED_UNEXPECTED_CHANNEL',
-      'FAILED_GENERIC_ERROR',
       'BLOCKED_CHAT_NOT_READY',
       'FAILED_NEW_SESSION_NOT_PROVEN',
       'INCOMPLETE',
@@ -1130,4 +1130,18 @@ describe('pilot-set-channel: the runtime is the truth, not the pill', () => {
     // way — so the runtime must be walked back through the other channel.
     expect(channel.legsFor('online', 'on-device', 'online')).toEqual(['on-device', 'online']);
   });
+  it('never lets a seen error bar become an answered-class verdict (review of 7f6dac55)', () => {
+    // A red bottom bar that cleared before the terminal capture is still a failed turn.
+    expect(driver.verdictFor({ settled: true, terminalBlockers: ['MISSING_CHANNEL_STATE'], errorBarSeen: true })).toBe('FAILED_GENERIC_ERROR');
+    expect(driver.verdictFor({ settled: true, terminalBlockers: ['MISSING_CHANNEL_STATE'], genericErrorSeen: true })).toBe('FAILED_GENERIC_ERROR');
+    expect(driver.verdictFor({ settled: true, terminalBlockers: ['MISSING_CHANNEL_STATE'], runErrorSeen: true })).toBe('ANSWERED_WITH_RUN_ERROR');
+    // The error bar at terminal time is a named failure, not a timeout.
+    expect(driver.verdictFor({ settled: true, terminalStable: false, terminalBlockers: ['ERROR_BAR_VISIBLE'] })).toBe('FAILED_GENERIC_ERROR');
+    expect(driver.exitCodeFor('FAILED_GENERIC_ERROR')).toBe(45);
+    // A reply that merely starts with a stream-state word is an answer.
+    expect(driver.classifyTurnText({ text: 'Done. I saved the letter to Downloads.', promptNormalized: 'x', chipText: '' }).acceptable).toBe(true);
+    expect(driver.classifyTurnText({ text: 'Done', promptNormalized: 'x', chipText: '' }).acceptable).toBe(false);
+    expect(driver.classifyTurnText({ text: 'Running...', promptNormalized: 'x', chipText: '' }).acceptable).toBe(false);
+  });
+
 });

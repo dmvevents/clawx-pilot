@@ -516,7 +516,9 @@ const SHORT_ANSWER_MAX = 40;
 // Renderer chrome and stream-state words that can stand alone in a bubble.
 // Punctuation-independent on purpose: the i18n string is "Thinking" and the
 // dots are a separate animated element (review of 7ddc8fc1, MEDIUM-1).
-const STREAMING_WORDS = /^(?:thinking|working|loading|running|done|error|pending|queued|streaming|generating|connecting|reconnecting|retrying)\b/i;
+// Anchored at both ends: a real reply that merely STARTS with one of these words
+// ("Done. I saved the letter to…") is an answer, not a placeholder (review of 7f6dac55).
+const STREAMING_WORDS = /^(?:thinking|working|loading|running|done|error|pending|queued|streaming|generating|connecting|reconnecting|retrying)[\s.…!]*$/i;
 
 // The runtime's own "the run failed" sentences, rendered as an ordinary
 // assistant bubble. When they arrive WITH the inline chip the chip check
@@ -646,8 +648,17 @@ function verdictFor(result) {
     // indicator could not be read. That is a probe gap, not an app hang, and
     // must not be reported as a timeout (moe33-turn3, 2026-09-10: a real answer
     // was labelled TIMED_OUT_MID_TURN). Still non-zero: the channel is unproven.
+    // ...unless an error surface was seen at any point in the turn: a red banner
+    // that cleared before the terminal capture is still a failed turn, never a
+    // clean-ish answer (review of 7f6dac55, MEDIUM-2).
+    const errorSeenDuringTurn = result.genericErrorSeen === true || result.errorBarSeen === true;
     if (result.settled && result.terminalBlockers.every((item) => item === 'MISSING_CHANNEL_STATE')) {
-      return 'ANSWERED_CHANNEL_UNVERIFIED';
+      if (errorSeenDuringTurn) return 'FAILED_GENERIC_ERROR';
+      return result.runErrorSeen ? 'ANSWERED_WITH_RUN_ERROR' : 'ANSWERED_CHANNEL_UNVERIFIED';
+    }
+    // The bottom error bar is a named failure surface, never a timeout (MEDIUM-3).
+    if (result.terminalBlockers.includes('ERROR_BAR_VISIBLE') || result.terminalBlockers.includes('GENERIC_ERROR_VISIBLE')) {
+      return 'FAILED_GENERIC_ERROR';
     }
     return 'TIMED_OUT_MID_TURN';
   }
@@ -672,6 +683,7 @@ function exitCodeFor(verdict) {
   if (verdict === 'ANSWERED_CHANNEL_UNVERIFIED') return 42;
   if (verdict === 'FAILED_RUN_ERROR_VISIBLE') return 43;
   if (verdict === 'FAILED_RUN_ERROR_NO_CHIP') return 44;
+  if (verdict === 'FAILED_GENERIC_ERROR') return 45;
   return 40;
 }
 

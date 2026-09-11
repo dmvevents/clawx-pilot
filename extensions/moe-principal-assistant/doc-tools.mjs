@@ -1423,6 +1423,19 @@ export async function readDocx({ path: inputPath, format = 'markdown' } = {}) {
  *  - `#`-style headings, rendered as headings.
  * Pure so it is unit-testable without the docx dependency.
  */
+/**
+ * Un-escape literal `\\r\\n` / `\\n` / `\\t` sequences in a single-line string while
+ * leaving Windows drive and UNC paths intact — `C:\\temp\\notes.docx` contains both
+ * sequences as ordinary path separators (review of 7f6dac55, MEDIUM-6).
+ */
+const WINDOWS_PATH = /(?:[A-Za-z]:|\\\\[^\\\s"']+)\\[^\s"'<>|]*/g;
+export function unescapeOutsidePaths(text) {
+  const paths = [];
+  const shielded = String(text).replace(WINDOWS_PATH, (m) => { paths.push(m); return `\u0000${paths.length - 1}\u0000`; });
+  const unescaped = shielded.replace(/\\r\\n|\\n/g, '\n').replace(/\\t/g, '\t');
+  return unescaped.replace(/\u0000(\d+)\u0000/g, (_, i) => paths[Number(i)]);
+}
+
 export function normalizeDocxParagraphs(paragraphs) {
   const items = Array.isArray(paragraphs) ? paragraphs : [paragraphs];
   const text = items
@@ -1431,7 +1444,7 @@ export function normalizeDocxParagraphs(paragraphs) {
     // Literal escapes (\\r\\n, \\n, \\t) are only escapes when the string carries no
     // real newline — a real newline proves JSON escaping did NOT happen, and then a
     // backslash is content (a Windows path such as C:\\new\\notes must survive).
-    .map((p) => (/\n/.test(p) ? p : p.replace(/\\r\\n|\\n/g, '\n').replace(/\\t/g, '\t')))
+    .map((p) => (/\n/.test(p) ? p : unescapeOutsidePaths(p)))
     .map((p) => p.replace(/\r\n?/g, '\n'))
     .join('\n\n');
   const blocks = text
@@ -1567,7 +1580,7 @@ export async function writeXlsx({ path: outputPath, sheets } = {}) {
     // Same class as CLWX-142 for cells: a string cell with no real newline but a
     // literal \\n sequence is the model's JSON escaping, not content.
     const rows = s.rows.map((row) => (Array.isArray(row)
-      ? row.map((cell) => (typeof cell === 'string' && !/\n/.test(cell) ? cell.replace(/\\r\\n|\\n/g, '\n').replace(/\\t/g, '\t') : cell))
+      ? row.map((cell) => (typeof cell === 'string' && !/\n/.test(cell) ? unescapeOutsidePaths(cell) : cell))
       : row));
     const ws = xlsx.utils.aoa_to_sheet(rows);
     xlsx.utils.book_append_sheet(wb, ws, String(s.name || 'Sheet1').slice(0, 31));

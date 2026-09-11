@@ -1,4 +1,8 @@
 import { register } from '../../../extensions/moe-principal-assistant/index.mjs';
+// Host API env makes the extension register its Outlook/Forms/browser families too,
+// so the probe declares the full plugin surface, not just document_*/principal_*.
+process.env.CLAWX_HOST_API_PORT = process.env.CLAWX_HOST_API_PORT || '13210';
+process.env.CLAWX_HOST_API_TOKEN = process.env.CLAWX_HOST_API_TOKEN || 'probe-token';
 const tools = [];
 const api = {
   pluginConfig: { principalName: 'Probe Principal', schoolName: 'Probe Primary', educationDistrict: 'Port of Spain and Environs', schoolType: 'Government Primary' },

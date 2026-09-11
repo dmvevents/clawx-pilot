@@ -3,7 +3,7 @@
 # verbatim (PowerShell 5.1 ConvertTo-Json wraps arrays of PSCustomObjects in {value,Count}).
 # Stage tools-*.json next to it with collect-plugin-tools.mjs.
 $ErrorActionPreference='Continue'
-$cfgPath='C:\Users\ClawXAcc0909\AppData\Roaming\Ministry of Education\cloud-gateway.json'
+$cfgPath=Join-Path $env:APPDATA 'Ministry of Education\cloud-gateway.json'
 $cfg=Get-Content $cfgPath -Raw | ConvertFrom-Json
 $base=$cfg.baseUrl.TrimEnd('/')
 $key=$cfg.apiKey

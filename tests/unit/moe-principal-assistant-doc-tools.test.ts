@@ -960,4 +960,12 @@ describe('document_write_docx normalises what the model actually sends (CLWX-142
     const { writeDocx } = await loadDocTools();
     await expect(writeDocx({ path: path.join(workDir, 'empty.docx'), paragraphs: [] })).rejects.toThrow(/paragraphs array required/);
   });
+  it('keeps single-line Windows paths intact while un-escaping (review of 7f6dac55 F6)', async () => {
+    const { unescapeOutsidePaths, normalizeDocxParagraphs } = await loadDocTools();
+    expect(unescapeOutsidePaths('Saved to C:\\temp\\notes.docx for you.')).toBe('Saved to C:\\temp\\notes.docx for you.');
+    expect(unescapeOutsidePaths('Line one\\nSee \\\\server\\share\\new\\notes.txt')).toBe('Line one\nSee \\\\server\\share\\new\\notes.txt');
+    expect(normalizeDocxParagraphs(['Saved to C:\\temp\\notes.docx for you.'])[0].lines).toHaveLength(1);
+    expect(normalizeDocxParagraphs(['one\\ntwo'])[0].lines).toHaveLength(2);
+  });
+
 });
