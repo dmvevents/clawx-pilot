@@ -21,6 +21,10 @@ import { EXTRA_BUNDLED_PACKAGES } from './openclaw-bundle-config.mjs';
 import { patchExtensionOpenClawSelfImports } from './openclaw-self-import-patch.mjs';
 import { patchOpenClawWindowsPtyGuard } from './openclaw-windows-pty-guard-patch.mjs';
 import {
+  OPENCLAW_CRON_TOOL_SCHEMA_PATCH_VERSION,
+  patchOpenClawCronToolSchema,
+} from './openclaw-cron-tool-schema-patch.mjs';
+import {
   assertShippedOpenClawLifecycleComplete,
   completeBundledOpenClawLifecycle,
 } from './openclaw-package-lifecycle.mjs';
@@ -919,6 +923,16 @@ function patchBundledRuntime(outputDir) {
 
   if (count > 0) {
     echo`   🩹 Patched ${count} bundled runtime spawn site(s)`;
+  }
+
+  // CLWX-141: Gemini returns empty completions when any declared tool has a parameter
+  // named `in`; the bundled automations tool does. Rename it before the bundle ships.
+  const cronSchemaPatch = patchOpenClawCronToolSchema(outputDir);
+  if (cronSchemaPatch.supported) {
+    const relativeTargets = cronSchemaPatch.files.map((file) => path.relative(outputDir, file)).join(', ');
+    echo`   ${cronSchemaPatch.patched ? '🩹 Patched' : '✓ Verified'} OpenClaw ${cronSchemaPatch.version} cron tool schema (next_check "in" → "delay") in ${relativeTargets}`;
+  } else {
+    echo`   ⚠ OpenClaw ${cronSchemaPatch.version} is not the pinned ${OPENCLAW_CRON_TOOL_SCHEMA_PATCH_VERSION} runtime; cron tool schema patch skipped`;
   }
 
   const ptyGuardPatch = patchOpenClawWindowsPtyGuard(outputDir);

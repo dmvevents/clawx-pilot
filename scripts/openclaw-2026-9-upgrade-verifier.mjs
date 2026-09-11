@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { assertOpenClawWindowsPtyGuard } from './openclaw-windows-pty-guard-patch.mjs';
+import { assertOpenClawCronToolSchemaPatch } from './openclaw-cron-tool-schema-patch.mjs';
 
 export const TARGET_OPENCLAW_VERSION = '2026.9.2';
 export const REQUIRED_OPENCLAW_NODE_ENGINE = '>=22.22.3 <23 || >=24.15.0 <25 || >=25.9.0';
@@ -328,6 +329,9 @@ export async function verifyOpenClaw20269Upgrade(openclawDir = path.join(process
   assertPricingUsesNativeCatalogPricing(openclawDir);
   if (options.requireBundlePtyGuard === true) {
     assertOpenClawWindowsPtyGuard(openclawDir);
+  }
+  if (options.requireCronToolSchemaPatch === true) {
+    assertOpenClawCronToolSchemaPatch(openclawDir);
   }
   await assertRuntimeImports(openclawDir);
   await assertMoePluginToolRegistration(openclawDir);

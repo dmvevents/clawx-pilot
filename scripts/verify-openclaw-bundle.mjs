@@ -95,7 +95,11 @@ for (const name of HOST_LOADABLE) {
 // bundle-surgery patches are obsolete only if the bundled runtime exposes the
 // upstream catalog/pricing/SDK-alias implementations we inspected.
 try {
-  await verifyOpenClaw20269Upgrade(path.join(ROOT, 'build', 'openclaw'), { requireBundlePtyGuard: true });
+  await verifyOpenClaw20269Upgrade(path.join(ROOT, 'build', 'openclaw'), {
+    requireBundlePtyGuard: true,
+    // CLWX-141: the shipped automations tool must not declare a parameter named `in`.
+    requireCronToolSchemaPatch: true,
+  });
 } catch (err) {
   failures.push(`OPENCLAW-2026.9: ${err instanceof Error ? err.message : String(err)}`);
 }
