@@ -80,6 +80,10 @@ function copyVerifierCheckoutFiles(destinationRoot: string) {
     'scripts/openclaw-2026-9-upgrade-verifier.mjs',
     'scripts/openclaw-2026-9-moe-registry-child.mjs',
     'scripts/openclaw-windows-pty-guard-patch.mjs',
+    // CLWX-141/moe.35: the upgrade verifier imports the cron tool schema patch;
+    // omitting it fails both full-verifier cases with ERR_MODULE_NOT_FOUND
+    // before any intended check runs (run 34589027420).
+    'scripts/openclaw-cron-tool-schema-patch.mjs',
     // moe.26/d343f23d: verify-openclaw-bundle.mjs imports the lifecycle guard
     // helpers; omitting this file fails both full-verifier cases with
     // ERR_MODULE_NOT_FOUND before any intended check runs (run 34270069669).
@@ -158,6 +162,31 @@ async function createFakeOpenClawBundle(destinationRoot: string, options: { incl
     'function runExecProcess(params, sandbox) {',
     '\t\t\t\tconst usePty = params.pty === true && !sandbox && process.platform !== "win32";',
     '\treturn usePty;',
+    '}',
+  ].join('\n'), 'utf8');
+  // CLWX-141/moe.35: the verifier asserts the cron tool schema patch is present in
+  // the shipped bundle, so the fake bundle carries both chunks in their PATCHED shape
+  // (parameter `delay`, never `in`). Written with tabs exactly as upstream emits them.
+  fs.writeFileSync(path.join(distDir, 'cron-tool-test.js'), [
+    'function createCronToolSchema(managementOnly) {',
+    '\tconst schema = Type.Object({',
+    '\t\tdelay: Type.Optional(Type.String({ description: "Relative duration for action=\\"next_check\\" (for example, \\"15m\\")" })),',
+    '\t}, { additionalProperties: true });',
+    '\treturn managementOnly ? Type.Omit(schema, [',
+    '\t\t"delay",',
+    '\t\t"text",',
+    '\t]) : schema;',
+    '}',
+    'const DESCRIPTION = `PACED LOOP: job calls next_check delay:"<dur>" to set the next delay`;',
+    'async function handleNextCheck(params, opts) {',
+    '\t\t\t\t\t\tconst rawDuration = readToolStringParam(params, "delay") ?? readToolStringParam(params, "in", { required: true });',
+    '\t\t\t\t\t\tif (!rawDuration) throw new Error("cron next_check delay must be a positive duration");',
+    '\t\t\t\t\t\tif (delayMs <= 0) throw new Error("cron next_check delay must be a positive duration");',
+    '}',
+  ].join('\n'), 'utf8');
+  fs.writeFileSync(path.join(distDir, 'commands-handlers.runtime-test.js'), [
+    'function buildSelfPacedLines(params, lines) {',
+    '\tif (params.selfPaced) lines.push(`Before replying, ALWAYS call the ${AUTOMATIONS_TOOL_NAME} tool action:"next_check" with delay:"<duration>" — pick the next check`);',
     '}',
   ].join('\n'), 'utf8');
   const moduleFiles = {
