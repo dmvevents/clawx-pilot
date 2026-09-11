@@ -37,6 +37,12 @@ export interface InboxMessage {
   /** Display string from Outlook ("9:42 AM", "Tue", "Mon 5/22"). */
   receivedAt: string;
   unread: boolean;
+  /**
+   * CLWX-143: the conversation holds a saved (unsent) draft reply. Present on
+   * browser-transport rows; the message is still incoming mail and is returned
+   * in newest-first order like any other row.
+   */
+  hasDraft?: boolean;
 }
 
 export interface ReadInboxResult {

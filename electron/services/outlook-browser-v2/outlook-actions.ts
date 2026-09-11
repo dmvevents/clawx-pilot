@@ -23,6 +23,7 @@ import { logger } from '../../utils/logger';
 import { PlaywrightDriver } from './playwright-driver';
 import { VlmGrounder, bboxCentre } from './vlm-grounder';
 import { matchesSearchArgsForTests } from './search-helpers';
+import { INBOX_ROW_PARSER_BROWSER_SOURCE } from './inbox-row-parser';
 import { isAutomationSubject } from './automation-subjects';
 import { focusComposeRecipientField, readOutlookDomState } from './dom-heuristics';
 import type {
@@ -107,6 +108,8 @@ type VisibleInboxRow = {
   snippet: string;
   received: string;
   unread: boolean;
+  /** CLWX-143: the conversation holds a saved (unsent) draft; it is still incoming mail. */
+  hasDraft: boolean;
 };
 
 // Predicate moved to ./search-helpers.ts for unit testing without Playwright.
@@ -259,16 +262,19 @@ function validateConfirmedSendArgs(args: SendEmailArgs): string | null {
   return null;
 }
 
+/**
+ * CLWX-143: a row is a message candidate when it has a sender and a subject.
+ * A leading "[Draft]" marker means the CONVERSATION holds a saved reply draft;
+ * the row is still the principal's incoming mail and is never skipped — the
+ * parser strips the marker (row.hasDraft) so it can no longer be mistaken for
+ * the sender. The only rows dropped are ones with no parsable sender/subject
+ * (banners, group headers) or whose sender/subject is literally the marker.
+ */
 function isInboxMessageCandidateRow(row: VisibleInboxRow): boolean {
   const sender = normalizeComparableText(row.sender);
   const subject = normalizeComparableText(row.subject);
-  const id = normalizeComparableText(row.id);
   if (!sender || !subject) return false;
-  return !(
-    /^\[?draft\]?$/i.test(sender)
-    || /^\[?draft\]?(?:\||$)/i.test(id)
-    || /^\[draft\]/i.test(subject)
-  );
+  return !(/^\[?draft\]?$/i.test(sender) || /^\[?draft\]?$/i.test(subject));
 }
 
 export class OutlookActions {
@@ -358,7 +364,14 @@ export class OutlookActions {
     const maxPasses = Math.min(Math.max(Math.ceil(top / 8) + 4, 1), 40);
     const extractionLimit = Math.max(top, Math.min(top + 12, 240));
 
+    // CLWX-143: the shared row parser is serialized into the page; bundles that
+    // keep function names need window.__name defined first.
+    await this.prepareFunctionEvaluate(page);
+    // Reset to the Inbox top and WAIT for the virtualized list to re-render:
+    // with a message selected via URL the list is scrolled to that item, and
+    // extracting immediately after scrollTop=0 read rows around the old position.
     await this.resetInboxListScroll(page);
+    await this.waitForInboxListSettle(page);
     for (let pass = 0; pass < maxPasses && rowById.size < top; pass += 1) {
       const rows = await this.extractVisibleInboxRows(page, extractionLimit);
       for (const row of rows) {
@@ -391,6 +404,7 @@ export class OutlookActions {
       snippet: r.snippet.slice(0, 120),
       receivedAt: r.received,
       unread: r.unread,
+      hasDraft: r.hasDraft,
     }));
 
     return {
@@ -1508,14 +1522,7 @@ export class OutlookActions {
         const seen = new Set();
         const nodes = document.querySelectorAll('[role="option"][aria-label], [role="row"][aria-label]');
         const limit = ${JSON.stringify(limit)};
-        const isDateLike = function(s) {
-          if (!s) return false;
-          if (s.length > 30) return false;
-          if (/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Yesterday|Today|Tomorrow)\\b/i.test(s)) return true;
-          if (/^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\b/i.test(s)) return true;
-          if (/^\\d{1,2}[:\\/]\\d/.test(s)) return true;
-          return false;
-        };
+        ${INBOX_ROW_PARSER_BROWSER_SOURCE}
         for (const el of Array.from(nodes)) {
           const label = el.getAttribute('aria-label') || '';
           if (!label) continue;
@@ -1524,50 +1531,21 @@ export class OutlookActions {
           seen.add(key);
           if (out.length >= limit) break;
 
-          const texts = [];
-          const walk = function(node) {
-            if (node.nodeType === 3) {
-              const t = (node.textContent || '').trim();
-              if (t) texts.push(t);
-            } else if (node.nodeType === 1) {
-              for (const c of Array.from(node.childNodes)) walk(c);
-            }
-          };
-          walk(el);
-
-          let sender = '';
-          let subject = '';
-          let receivedAt = '';
-          const snippetParts = [];
-          let phase = 'sender';
-          for (const t of texts) {
-            if (t.length < 3 && phase !== 'snippet') continue;
-            if (phase === 'sender') {
-              sender = t;
-              phase = 'subject';
-              continue;
-            }
-            if (phase === 'subject') {
-              if (isDateLike(t)) { receivedAt = t; phase = 'snippet'; continue; }
-              subject = subject ? subject + ' ' + t : t;
-              continue;
-            }
-            if (phase === 'snippet') {
-              snippetParts.push(t);
-            }
-          }
-          if (!receivedAt && snippetParts.length) {
-            for (let i = snippetParts.length - 1; i >= 0; i--) {
-              if (isDateLike(snippetParts[i])) {
-                receivedAt = snippetParts.splice(i, 1)[0];
-                break;
-              }
-            }
-          }
-          const snippet = snippetParts.join(' ').slice(0, 200);
-          const unread = /\\bunread\\b/i.test(label);
-          const id = (sender + '|' + subject + '|' + receivedAt).slice(0, 96) || label.slice(0, 96);
-          out.push({ id: id, sender: sender, subject: subject, snippet: snippet, received: receivedAt, unread: unread });
+          // CLWX-143: one shared parser for extraction AND locate (see
+          // inbox-row-parser.ts): "[Draft]" is a conversation marker, not the
+          // sender; day-first dates are received times; the id keeps the time
+          // part for long subjects.
+          const parsed = parseInboxRowTexts(walkRowTexts(el), label);
+          const id = inboxRowId(parsed.sender, parsed.subject, parsed.receivedAt) || label.slice(0, 96);
+          out.push({
+            id: id,
+            sender: parsed.sender,
+            subject: parsed.subject,
+            snippet: parsed.snippet,
+            received: parsed.receivedAt,
+            unread: parsed.unread,
+            hasDraft: parsed.hasDraft,
+          });
         }
         return out;
       })()
@@ -1635,6 +1613,23 @@ export class OutlookActions {
   }
 
   /**
+   * CLWX-143: after a scroll reset the virtualized message list re-renders
+   * asynchronously. Poll the visible-row fingerprint until it is unchanged
+   * across two consecutive samples (bounded), so extraction and locate read the
+   * settled top of the list rather than rows around the previous position.
+   */
+  private async waitForInboxListSettle(page: Page, timeoutMs = 1_500): Promise<void> {
+    const started = Date.now();
+    let previous = await this.visibleInboxFingerprint(page);
+    while (Date.now() - started < timeoutMs) {
+      await this.driver.sleep(150);
+      const current = await this.visibleInboxFingerprint(page);
+      if (current && current === previous) return;
+      previous = current;
+    }
+  }
+
+  /**
    * CLWX-81: id-scoped actions (read / reply / forward / markRead /
    * downloadAttachment) historically force-navigated to Inbox BEFORE trying to
    * open the message. That dead-ends with not_found whenever the target lives
@@ -1682,7 +1677,9 @@ export class OutlookActions {
    * no caller decides anything different on.
    */
   private async openMessageById(page: Page, id: string): Promise<'opened' | MessageLocateFailure> {
+    await this.prepareFunctionEvaluate(page);
     await this.resetInboxListScroll(page);
+    await this.waitForInboxListSettle(page);
     const maxPasses = 40;
     let stalePasses = 0;
     let previousVisibleFingerprint = '';
@@ -1690,41 +1687,12 @@ export class OutlookActions {
       const targetIdx = await page.evaluate(`
       (() => {
         const wantedId = ${JSON.stringify(id)};
-        const isDateLike = function(s) {
-          if (!s) return false;
-          if (s.length > 30) return false;
-          if (/^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Yesterday|Today|Tomorrow)\\b/i.test(s)) return true;
-          if (/^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\b/i.test(s)) return true;
-          if (/^\\d{1,2}[:\\/]\\d/.test(s)) return true;
-          return false;
-        };
-        const fingerprint = function(el) {
-          const texts = [];
-          const walk = function(n) {
-            if (n.nodeType === 3) {
-              const t = (n.textContent || '').trim();
-              if (t) texts.push(t);
-            } else if (n.nodeType === 1) {
-              for (const c of Array.from(n.childNodes)) walk(c);
-            }
-          };
-          walk(el);
-          let sender = '', subject = '', receivedAt = '';
-          let phase = 'sender';
-          for (const t of texts) {
-            if (t.length < 3 && phase !== 'snippet') continue;
-            if (phase === 'sender') { sender = t; phase = 'subject'; continue; }
-            if (phase === 'subject') {
-              if (isDateLike(t)) { receivedAt = t; phase = 'snippet'; continue; }
-              subject = subject ? subject + ' ' + t : t;
-              continue;
-            }
-          }
-          return (sender + '|' + subject + '|' + receivedAt).slice(0, 96);
-        };
+        ${INBOX_ROW_PARSER_BROWSER_SOURCE}
+        // CLWX-143: the SAME parser/id as extractVisibleInboxRows, so an id
+        // returned by readInbox always resolves here when the row is visible.
         const els = Array.from(document.querySelectorAll('[role="option"][aria-label], [role="row"][aria-label]'));
         for (let i = 0; i < els.length; i++) {
-          const fp = fingerprint(els[i]);
+          const fp = inboxRowFingerprint(els[i]);
           if (fp === wantedId) return i;
         }
         return -1;
