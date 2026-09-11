@@ -379,9 +379,19 @@ export class OutlookActions {
           artifactSkippedCount += 1;
           continue;
         }
-        if (!row.id || rowById.has(row.id)) continue;
+        if (!row.id) continue;
+        const existing = rowById.get(row.id);
+        if (existing) {
+          // CLWX-143: an open-compose pseudo row ("[Draft]" + the same sender,
+          // subject and time) can shadow the real message row; keep the row
+          // WITHOUT the draft marker as the canonical entry for that id.
+          if (existing.hasDraft && !row.hasDraft) rowById.set(row.id, row);
+          continue;
+        }
+        // Do not stop at `top` inside a pass: a real message row rendered right
+        // after its pseudo row must still get the chance to replace it; the
+        // result is trimmed to `top` below and rows stay in DOM order.
         rowById.set(row.id, row);
-        if (rowById.size >= top) break;
       }
       if (rowById.size >= top) break;
 
@@ -1620,10 +1630,14 @@ export class OutlookActions {
    */
   private async waitForInboxListSettle(page: Page, timeoutMs = 1_500): Promise<void> {
     const started = Date.now();
-    let previous = await this.visibleInboxFingerprint(page);
+    const sample = async () => {
+      const value = await this.visibleInboxFingerprint(page);
+      return typeof value === 'string' ? value : '';
+    };
+    let previous = await sample();
     while (Date.now() - started < timeoutMs) {
-      await this.driver.sleep(150);
-      const current = await this.visibleInboxFingerprint(page);
+      await new Promise<void>((resolve) => setTimeout(resolve, 150));
+      const current = await sample();
       if (current && current === previous) return;
       previous = current;
     }
@@ -1691,11 +1705,17 @@ export class OutlookActions {
         // CLWX-143: the SAME parser/id as extractVisibleInboxRows, so an id
         // returned by readInbox always resolves here when the row is visible.
         const els = Array.from(document.querySelectorAll('[role="option"][aria-label], [role="row"][aria-label]'));
+        // Prefer the real message row over an open-compose pseudo row that
+        // carries the same id with a "[Draft]" marker: clicking the pseudo row
+        // would open the draft compose instead of the message.
+        let draftFallback = -1;
         for (let i = 0; i < els.length; i++) {
-          const fp = inboxRowFingerprint(els[i]);
-          if (fp === wantedId) return i;
+          const detail = inboxRowFingerprintDetail(els[i]);
+          if (detail.fp !== wantedId) continue;
+          if (!detail.hasDraft) return i;
+          if (draftFallback < 0) draftFallback = i;
         }
-        return -1;
+        return draftFallback;
       })()
     `) as number;
       if (targetIdx >= 0) {

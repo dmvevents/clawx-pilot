@@ -151,4 +151,11 @@ export const INBOX_ROW_PARSER_BROWSER_SOURCE: string = [
   '  var p = parseInboxRowTexts(walkRowTexts(el), label);' +
   '  return inboxRowId(p.sender, p.subject, p.receivedAt);' +
   '}',
+  // Fingerprint plus the draft marker, so a locator can prefer the real message
+  // row over an open-compose pseudo row that carries the same id.
+  'function inboxRowFingerprintDetail(el) {' +
+  '  var label = el.getAttribute("aria-label") || "";' +
+  '  var p = parseInboxRowTexts(walkRowTexts(el), label);' +
+  '  return { fp: inboxRowId(p.sender, p.subject, p.receivedAt), hasDraft: p.hasDraft };' +
+  '}',
 ].join('\n');
