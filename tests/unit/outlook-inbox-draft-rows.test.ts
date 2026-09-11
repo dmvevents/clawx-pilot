@@ -7,7 +7,7 @@ type TestActions = OutlookActions & {
   ensureInboxFolder: (page: unknown) => Promise<void>;
   readInbox: (top?: number) => Promise<{
     status: 'ok' | 'needs_signin';
-    messages: Array<{ id: string; subject: string; sender: string; receivedAt: string; hasDraft?: boolean }>;
+    messages: Array<{ id: string; subject: string; sender: string; receivedAt: string; hasDraft?: boolean; pseudoCompose?: boolean }>;
     scan?: { artifactSkippedCount: number; returnedCount: number };
   }>;
 };
@@ -21,6 +21,7 @@ const CONVERSATION_WITH_SAVED_DRAFT = {
   received: 'Tue 2:15 PM',
   unread: false,
   hasDraft: true,
+  pseudoCompose: false,
 };
 const PLAIN_OLDER_ROW = {
   id: 'Corporate Communications|Media Release: All 777 Schools Open for the Start of the 2026/2027 Academic Year|Mon 7 Sep',
@@ -30,6 +31,7 @@ const PLAIN_OLDER_ROW = {
   received: 'Mon 7 Sep',
   unread: true,
   hasDraft: false,
+  pseudoCompose: false,
 };
 
 function createActions(rows: unknown[]) {
@@ -72,12 +74,30 @@ describe('readInbox and inbox rows that carry a saved draft (CLWX-143)', () => {
 
   it('still drops rows whose sender or subject is nothing but the marker or is missing', async () => {
     const actions = createActions([
-      { id: '[Draft]||', sender: '[Draft]', subject: '', snippet: '', received: '', unread: false, hasDraft: true },
-      { id: 'x|[Draft]|', sender: 'Someone', subject: '[Draft]', snippet: '', received: '', unread: false, hasDraft: true },
+      { id: '[Draft]||', sender: '[Draft]', subject: '', snippet: '', received: '', unread: false, hasDraft: true, pseudoCompose: false },
+      { id: 'x|[Draft]|', sender: 'Someone', subject: '[Draft]', snippet: '', received: '', unread: false, hasDraft: true, pseudoCompose: false },
       PLAIN_OLDER_ROW,
     ]);
     const result = await actions.readInbox(3);
     expect(result.messages).toHaveLength(1);
     expect(result.scan?.artifactSkippedCount).toBe(2);
+  });
+
+  /** Review lane A M1 (second pass): a flagged open-compose pseudo row is never a message. */
+  it('drops a row the parser flagged as an open-compose pseudo row', async () => {
+    const pseudo = {
+      id: 'Karunesh Ramdass Meeting|Sure, how about 3pm|Mon 10:08 PM',
+      sender: 'Karunesh Ramdass Meeting',
+      subject: 'Sure, how about 3pm',
+      snippet: '',
+      received: 'Mon 10:08 PM',
+      unread: false,
+      hasDraft: true,
+      pseudoCompose: true,
+    };
+    const actions = createActions([pseudo, PLAIN_OLDER_ROW]);
+    const result = await actions.readInbox(2);
+    expect(result.messages.map((m) => m.id)).toEqual([PLAIN_OLDER_ROW.id]);
+    expect(result.scan?.artifactSkippedCount).toBe(1);
   });
 });

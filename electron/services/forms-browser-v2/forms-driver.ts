@@ -180,6 +180,29 @@ export function normalizeChoiceText(value: unknown): string {
     .toLowerCase();
 }
 
+/**
+ * Escape a value for use inside a CSS attribute selector's double quotes.
+ * Review lane B (2026-09-11): `[role="radio"][aria-label="${target}"]` built a
+ * selector by concatenation, so option text taken from a principal's document
+ * could close the quote and append another selector — a value shaped like
+ * `x"], [role="button"][aria-label="Submit` turned a fill into a Submit click,
+ * bypassing the confirmation gate. Every attribute value interpolated into a
+ * selector in this file goes through here.
+ */
+export function cssAttrValue(value: string): string {
+  return String(value ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/** True when the control's visible value is exactly the wanted option (per line/segment, never a substring). */
+export function valueEchoesTarget(shown: string, want: string): boolean {
+  if (!want) return false;
+  const segments = String(shown ?? '')
+    .split(/\n|•|\|/)
+    .map((part) => normalizeChoiceText(part))
+    .filter(Boolean);
+  return segments.includes(want);
+}
+
 async function readComboboxValue(item: Locator): Promise<string> {
   for (const sel of ['[role="combobox"]', 'input[role="combobox"]', '[aria-selected="true"]', '[data-automation-id*="dropdown" i]']) {
     const el = item.locator(sel).first();
@@ -198,14 +221,32 @@ export type DropdownChoiceResult = { ok: boolean; reason?: string; via?: 'select
  * CLWX-62: select one option of a DROPDOWN single-choice question.
  *
  * Microsoft Forms renders long single-choice lists (the Daily Report's
- * 454-school "Name of school") as a dropdown, not radios. Tiers, per the
- * CLWX-64 selector rules: (1) native <select> by exact label; (2) ARIA
- * combobox / haspopup trigger, options read from the visible listbox (Forms
- * portals it outside the question item), exact normalized text match, one
- * type-to-filter retry for virtualized lists. Fail-safe: no exact match or
- * more than one exact match closes the list (Escape) and reports a typed
- * reason; a selection that the control does not echo back is reported, not
- * assumed. Never presses Enter or clicks anything outside the option list.
+ * 454-school "Name of school") as a dropdown, not radios, so the radio tiers
+ * of `fillField` cannot fill them. Tiers, per the CLWX-64 selector rules:
+ *   1. native `<select>` by exact label;
+ *   2. ARIA combobox / haspopup trigger inside the question item. The popup is
+ *      resolved to THIS trigger — `aria-controls`/`aria-owns` first, then a
+ *      listbox inside the question item, then a page-level visible listbox only
+ *      when exactly one exists. Review lane A/B: the previous
+ *      `page.locator('[role="listbox"]:visible').last()` was a DOM-position
+ *      heuristic with no relation to the trigger, so a stale or unrelated open
+ *      listbox could have its option clicked — an answer written to a
+ *      different question.
+ *
+ * Fail-safe rules, all verified by unit controls:
+ *   - the option is clicked through a locator filtered by exact text with a
+ *     count assertion taken immediately before the click, never a stale index
+ *     (the 454-option list is virtualized and re-renders);
+ *   - no exact match, more than one exact match, an ambiguous popup or a
+ *     re-render between read and click => typed failure;
+ *   - every non-ok exit closes the popup (Escape) and clears any filter text
+ *     this function typed, so nothing it wrote survives a failure;
+ *   - a selection the control does not echo back per line/segment is reported,
+ *     never assumed.
+ * It never presses Enter and never clicks outside the resolved option list.
+ * Escape is pressed at page level: safe on a Forms response page (the only page
+ * this driver navigates to); do not copy this helper into an Outlook path,
+ * where Escape can discard a compose.
  */
 export async function selectDropdownChoice(
   page: Page,
@@ -224,46 +265,101 @@ export async function selectDropdownChoice(
       : { ok: false, reason: `option not found in dropdown: "${target}"` };
   }
 
-  const trigger = item.locator('[role="combobox"], [aria-haspopup="listbox"], button[aria-expanded]').first();
+  const trigger = item.locator('[role="combobox"], [aria-haspopup="listbox"]').first();
   if ((await trigger.count().catch(() => 0)) === 0) {
     return { ok: false, reason: `option not found: "${target}"` };
   }
+
+  // Filter input: the combobox itself or an input inside it — never a bare
+  // text input, which on a single-choice question with an "Other" option is a
+  // free-text answer field (review lane B).
+  const filterInput = item.locator('input[role="combobox"], [role="combobox"] input').first();
+  let typedFilter = false;
+  const abandon = async (reason: string): Promise<DropdownChoiceResult> => {
+    if (typedFilter) await filterInput.fill('', { timeout: timeoutMs }).catch(() => null);
+    await page.keyboard.press('Escape').catch(() => null);
+    return { ok: false, reason };
+  };
+
   await trigger.click({ timeout: timeoutMs });
-  const listbox = page.locator('[role="listbox"]:visible').last();
+
+  // Resolve the popup that belongs to THIS trigger.
+  const popupId = (await trigger.getAttribute('aria-controls').catch(() => null))
+    ?? (await trigger.getAttribute('aria-owns').catch(() => null));
+  let listbox: Locator | null = null;
+  if (popupId && popupId.trim()) {
+    const byId = page.locator(`[id="${cssAttrValue(popupId.trim())}"]`);
+    if ((await byId.count().catch(() => 0)) === 1) listbox = byId;
+  }
+  if (!listbox) {
+    const inItem = item.locator('[role="listbox"]:visible');
+    const inItemCount = await inItem.count().catch(() => 0);
+    if (inItemCount === 1) listbox = inItem;
+    else if (inItemCount > 1) return abandon(`ambiguous dropdown popup (${inItemCount} listboxes in the question) for "${target}"`);
+  }
+  if (!listbox) {
+    const onPage = page.locator('[role="listbox"]:visible');
+    const onPageCount = await onPage.count().catch(() => 0);
+    if (onPageCount === 1) listbox = onPage;
+    else if (onPageCount > 1) {
+      return abandon(`ambiguous dropdown popup (${onPageCount} visible listboxes; cannot bind one to this question) for "${target}"`);
+    }
+  }
+  if (!listbox) return abandon(`dropdown did not open for "${target}"`);
   try {
     await listbox.waitFor({ state: 'visible', timeout: timeoutMs });
   } catch {
-    await page.keyboard.press('Escape').catch(() => null);
-    return { ok: false, reason: `dropdown did not open for "${target}"` };
+    return abandon(`dropdown did not open for "${target}"`);
   }
 
-  const readMatches = async () => {
+  const anchored = new RegExp(`^\\s*${escapeRegex(target)}\\s*$`, 'i');
+  const readState = async () => {
     const options = listbox.locator('[role="option"]');
     const texts = await options.allInnerTexts().catch(() => [] as string[]);
     const matches = texts.map((t, i) => ({ i, t })).filter((x) => normalizeChoiceText(x.t) === want);
     return { options, texts, matches };
   };
-  let { options, texts, matches } = await readMatches();
-  if (matches.length === 0) {
-    // Virtualized lists only render a window of options; Forms filters as you type.
-    const input = item.locator('input[role="combobox"], [role="combobox"] input, input[type="text"]').first();
-    if ((await input.count().catch(() => 0)) > 0) {
-      await input.fill(target, { timeout: timeoutMs }).catch(() => null);
-      await page.waitForTimeout(300);
-      ({ options, texts, matches } = await readMatches());
-    }
+  let { options, texts, matches } = await readState();
+  if (matches.length === 0 && (await filterInput.count().catch(() => 0)) > 0) {
+    // Virtualized list: only a window of options is rendered. Forms filters as you type.
+    typedFilter = true;
+    await filterInput.fill(target, { timeout: timeoutMs }).catch(() => null);
+    await page.waitForTimeout(300);
+    ({ options, texts, matches } = await readState());
   }
   if (matches.length !== 1) {
-    await page.keyboard.press('Escape').catch(() => null);
-    return matches.length === 0
-      ? { ok: false, reason: `option not found in dropdown (${texts.length} options rendered): "${target}"` }
-      : { ok: false, reason: `ambiguous dropdown option (${matches.length} exact matches): "${target}"` };
+    return abandon(
+      matches.length === 0
+        ? `option not found in dropdown (${texts.length} options rendered): "${target}"`
+        : `ambiguous dropdown option (${matches.length} exact matches): "${target}"`,
+    );
   }
-  await options.nth(matches[0].i).click({ timeout: timeoutMs });
+
+  // Click through an exact-text locator asserted immediately before the click,
+  // so a re-render between the read above and the click cannot select a
+  // different school. Fall back to the index only after re-reading its text.
+  const exact = listbox.locator('[role="option"]').filter({ hasText: anchored });
+  const exactCount = await exact.count().catch(() => 0);
+  if (exactCount === 1) {
+    await exact.first().click({ timeout: timeoutMs });
+  } else if (exactCount > 1) {
+    return abandon(`ambiguous dropdown option (${exactCount} exact matches at click time): "${target}"`);
+  } else {
+    const candidate = options.nth(matches[0].i);
+    const nowText = normalizeChoiceText(await candidate.innerText({ timeout: timeoutMs }).catch(() => ''));
+    if (nowText !== want) {
+      return abandon(`dropdown re-rendered before the option could be clicked: "${target}"`);
+    }
+    await candidate.click({ timeout: timeoutMs });
+  }
+
   await page.waitForTimeout(200);
-  const shown = normalizeChoiceText(await readComboboxValue(item));
-  if (shown !== want && !shown.includes(want)) {
-    return { ok: false, reason: `dropdown selection not confirmed for "${target}" (control shows "${shown.slice(0, 80)}")` };
+  const shown = await readComboboxValue(item);
+  if (!valueEchoesTarget(shown, want)) {
+    // Leave nothing half-written: clear our filter text and close the popup.
+    return abandon(
+      `dropdown selection not confirmed for "${target}" (control shows "${normalizeChoiceText(shown).slice(0, 80)}")`,
+    );
   }
   return { ok: true, via: 'combobox' };
 }
@@ -578,7 +674,7 @@ export class FormsDriver {
             await radio.click({ timeout: this.fieldTimeoutMs });
             return { ok: true };
           }
-          const aria = item.locator(`[role="radio"][aria-label="${target}"]`).first();
+          const aria = item.locator(`[role="radio"][aria-label="${cssAttrValue(target)}"]`).first();
           if ((await aria.count()) > 0) {
             await aria.click({ timeout: this.fieldTimeoutMs });
             return { ok: true };
@@ -603,7 +699,7 @@ export class FormsDriver {
             // CLWX-64: aria fallback mirroring the single_choice path — some
             // Forms renders expose choices as role="checkbox" without a
             // clickable <label> wrapper.
-            const aria = item.locator(`[role="checkbox"][aria-label="${t}"]`).first();
+            const aria = item.locator(`[role="checkbox"][aria-label="${cssAttrValue(t)}"]`).first();
             if ((await aria.count()) > 0) {
               await aria.click({ timeout: this.fieldTimeoutMs });
               any = true;

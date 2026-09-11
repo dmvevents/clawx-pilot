@@ -110,6 +110,8 @@ type VisibleInboxRow = {
   unread: boolean;
   /** CLWX-143: the conversation holds a saved (unsent) draft; it is still incoming mail. */
   hasDraft: boolean;
+  /** CLWX-143: looks like the pseudo row of an OPEN compose, not a conversation. */
+  pseudoCompose: boolean;
 };
 
 // Predicate moved to ./search-helpers.ts for unit testing without Playwright.
@@ -274,10 +276,26 @@ function isInboxMessageCandidateRow(row: VisibleInboxRow): boolean {
   const sender = normalizeComparableText(row.sender);
   const subject = normalizeComparableText(row.subject);
   if (!sender || !subject) return false;
+  // The pseudo row of an OPEN compose: the marker occupies the sender slot, so
+  // every later field is shifted and the split cannot be trusted — returning it
+  // would show the draft body as a subject (review lane A, 2026-09-11).
+  if (row.pseudoCompose) return false;
+  // Defence in depth for row shapes the parser has not seen: a sender or a
+  // subject that IS the marker is never a message.
   return !(/^\[?draft\]?$/i.test(sender) || /^\[?draft\]?$/i.test(subject));
 }
 
 export class OutlookActions {
+  /**
+   * CLWX-143 / review lane B: true only while a compose pane THIS process
+   * opened is still open. `recoverComposeState` treats an untitled empty
+   * compose as its own and discards it; now that a conversation holding a
+   * saved draft is reachable by id, that branch could discard a draft the
+   * PRINCIPAL opened with Reply and left empty. The discard now requires this
+   * flag, so an unrecognised compose is reported and left untouched instead.
+   */
+  private composeOpenedByThisProcess = false;
+
   constructor(
     private readonly driver: PlaywrightDriver,
     private readonly grounder: VlmGrounder,
@@ -720,6 +738,7 @@ export class OutlookActions {
       return { status: 'refused', reason };
     }
 
+    this.composeOpenedByThisProcess = false;
     return { status: 'sent', message: 'Email sent via Outlook Web.' };
   }
 
@@ -1555,6 +1574,7 @@ export class OutlookActions {
             received: parsed.receivedAt,
             unread: parsed.unread,
             hasDraft: parsed.hasDraft,
+            pseudoCompose: parsed.pseudoCompose,
           });
         }
         return out;
@@ -1635,10 +1655,15 @@ export class OutlookActions {
       return typeof value === 'string' ? value : '';
     };
     let previous = await sample();
+    let emptySamples = previous ? 0 : 1;
     while (Date.now() - started < timeoutMs) {
       await new Promise<void>((resolve) => setTimeout(resolve, 150));
       const current = await sample();
       if (current && current === previous) return;
+      // No fingerprint at all (no rows, or a probe the environment cannot run):
+      // there is nothing to settle, so do not burn the whole budget.
+      emptySamples = current ? 0 : emptySamples + 1;
+      if (emptySamples >= 2) return;
       previous = current;
     }
   }
@@ -1711,7 +1736,13 @@ export class OutlookActions {
         let draftFallback = -1;
         for (let i = 0; i < els.length; i++) {
           const detail = inboxRowFingerprintDetail(els[i]);
-          if (detail.fp !== wantedId) continue;
+          // extractVisibleInboxRows falls back to the aria-label when a row has
+          // no parsable sender/subject; accept that id shape here too, or such
+          // a row could never be opened by the id read returned.
+          const labelFallback = (els[i].getAttribute('aria-label') || '').slice(0, 96);
+          if (detail.fp !== wantedId && !(detail.fp === '' && labelFallback === wantedId)) continue;
+          // Never open the pseudo row of an open compose: it is not the message.
+          if (detail.pseudoCompose) continue;
           if (!detail.hasDraft) return i;
           if (draftFallback < 0) draftFallback = i;
         }
@@ -2624,7 +2655,8 @@ export class OutlookActions {
       }
       if (probe.hasCompose) {
         const subject = probe.subject.trim();
-        const owned = isAutomationSubject(subject) || (subject === '' && probe.bodyEmpty);
+        const owned = isAutomationSubject(subject)
+          || (subject === '' && probe.bodyEmpty && this.composeOpenedByThisProcess);
         if (!owned) {
           const label = subject ? `"${subject.slice(0, 80)}"` : 'with content the assistant did not write';
           return {
@@ -2636,6 +2668,7 @@ export class OutlookActions {
           return { cleared: false, note: 'a stale assistant draft is open but no Discard control is visible' };
         }
         await this.clickVisibleDiscard(page);
+        this.composeOpenedByThisProcess = false;
         acted = true;
         await this.driver.sleep(900);
         continue;
@@ -2820,6 +2853,7 @@ export class OutlookActions {
   }
 
   private async waitForComposePane(page: Page, timeoutMs = 15_000): Promise<void> {
+    this.composeOpenedByThisProcess = true;
     // Do not unblock on the open-message reading pane. It also exposes
     // "Message body"; a compose surface must have send/compose evidence.
     //

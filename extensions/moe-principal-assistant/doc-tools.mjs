@@ -1571,32 +1571,107 @@ export async function readXlsx({ path: inputPath, sheet, maxRows = 500 } = {}) {
 }
 
 /**
- * Per-column numeric totals for a header-first 2D sheet. A column is totalled
- * when every non-empty data cell parses as a number (thousands separators and a
- * leading currency sign tolerated); mixed text/number columns are skipped so a
- * total is never silently wrong. Returned as [{ column, index, sum, count }].
+ * Parse one spreadsheet cell as a number, or return null when it is not an
+ * unambiguous number. Accepts plain numbers, thousands separators ("1,250"), a
+ * leading currency symbol ("TT$ 750") and accounting negatives ("(50)").
+ * Returns null — which makes the whole column skip — for percentages, dates and
+ * the genuinely ambiguous European form "1.250" (1250 or 1.25 depending on
+ * locale). Fail-closed: a column is only totalled when every value is certain.
+ */
+export function parseSheetNumber(cell) {
+  if (typeof cell === 'number') return Number.isFinite(cell) ? cell : null;
+  if (cell === undefined || cell === null) return null;
+  if (cell instanceof Date) return null;
+  let text = String(cell).trim();
+  if (!text) return null;
+  if (/%$/.test(text)) return null;
+  let negative = false;
+  const accounting = /^\((.*)\)$/.exec(text);
+  if (accounting) { negative = true; text = accounting[1].trim(); }
+  text = text.replace(/^(?:TT\s*)?[$€£]\s*/i, '').trim();
+  if (/^-/.test(text)) { negative = !negative; text = text.slice(1).trim(); }
+  if (!/^[\d.,\s]+$/.test(text)) return null;
+  const compact = text.replace(/\s/g, '');
+  // "1.250" / "1.250.000": dot-grouped thousands in some locales, a decimal in
+  // others. Refuse rather than guess.
+  if (/^\d{1,3}(?:\.\d{3})+$/.test(compact) && !/,/.test(compact)) return null;
+  let normalized = compact;
+  if (/,/.test(compact) && /\./.test(compact)) {
+    normalized = compact.lastIndexOf(',') > compact.lastIndexOf('.')
+      ? compact.replace(/\./g, '').replace(',', '.')
+      : compact.replace(/,/g, '');
+  } else if (/^\d{1,3}(?:,\d{3})+$/.test(compact)) {
+    normalized = compact.replace(/,/g, '');
+  } else if (/^\d+,\d+$/.test(compact)) {
+    return null; // "1,25": decimal comma or a malformed group — ambiguous
+  }
+  if (!/^\d*\.?\d+$/.test(normalized)) return null;
+  const value = Number(normalized);
+  if (!Number.isFinite(value)) return null;
+  return negative ? -value : value;
+}
+
+const SHEET_TOTAL_ROW_LABEL = /^(?:grand\s+)?totals?\b|^sum\b|^overall\b/i;
+
+/**
+ * Per-column numeric totals for a header-first 2D sheet.
+ *
+ * A column is totalled only when every non-empty data cell is an unambiguous
+ * number (see parseSheetNumber); mixed, percentage, date or locale-ambiguous
+ * columns are skipped so a total is never silently wrong.
+ *
+ * The sheet's OWN total row ("Total", "Grand total", "Sum") is excluded from
+ * the sum and reported instead: review lane A/B found that counting it double
+ * every enrolment/attendance return, and the tool description now tells the
+ * model to quote these numbers, which would have made a wrong total
+ * authoritative. When such a row exists, `sheetTotalRow` carries its value and
+ * `matchesSheetTotal` says whether it agrees with the computed sum, so a
+ * discrepancy is visible to the reader instead of hidden.
+ *
+ * Returns [{ column, index, sum, count, rowsIncluded, sheetTotalRow?, matchesSheetTotal? }].
  */
 export function computeColumnTotals(aoa) {
   if (!Array.isArray(aoa) || aoa.length < 2) return [];
   const header = Array.isArray(aoa[0]) ? aoa[0] : [];
   const width = aoa.reduce((w, row) => Math.max(w, Array.isArray(row) ? row.length : 0), 0);
+  const isTotalsRow = (row) => {
+    if (!Array.isArray(row)) return false;
+    const firstText = row.find((cell) => cell !== undefined && cell !== null && String(cell).trim() !== '');
+    return firstText !== undefined && SHEET_TOTAL_ROW_LABEL.test(String(firstText).trim());
+  };
+  const dataRows = [];
+  const totalsRows = [];
+  for (let r = 1; r < aoa.length; r += 1) (isTotalsRow(aoa[r]) ? totalsRows : dataRows).push(r);
   const totals = [];
   for (let c = 0; c < width; c += 1) {
     let sum = 0;
     let count = 0;
     let numeric = true;
-    for (let r = 1; r < aoa.length; r += 1) {
+    for (const r of dataRows) {
       const row = aoa[r];
       const cell = Array.isArray(row) ? row[c] : undefined;
       if (cell === undefined || cell === null || String(cell).trim() === '') continue;
-      const n = typeof cell === 'number' ? cell : Number(String(cell).replace(/^[$€£TT]+\s*/i, '').replace(/,/g, '').trim());
-      if (!Number.isFinite(n)) { numeric = false; break; }
+      const n = parseSheetNumber(cell);
+      if (n === null) { numeric = false; break; }
       sum += n;
       count += 1;
     }
-    if (numeric && count > 0) {
-      totals.push({ column: String(header[c] ?? `column ${c + 1}`), index: c, sum: Number(sum.toFixed(6)), count });
+    if (!numeric || count === 0) continue;
+    const entry = {
+      column: String(header[c] ?? '').trim() || `column ${c + 1}`,
+      index: c,
+      sum: Number(sum.toFixed(6)),
+      count,
+      rowsIncluded: dataRows.length,
+    };
+    if (totalsRows.length > 0) {
+      const declared = parseSheetNumber(aoa[totalsRows[totalsRows.length - 1]]?.[c]);
+      if (declared !== null) {
+        entry.sheetTotalRow = declared;
+        entry.matchesSheetTotal = Math.abs(declared - entry.sum) < 1e-6;
+      }
     }
+    totals.push(entry);
   }
   return totals;
 }
