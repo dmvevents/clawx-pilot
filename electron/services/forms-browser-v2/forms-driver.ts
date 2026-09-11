@@ -266,10 +266,30 @@ export async function selectVirtualizedRadioChoice(
   // the item is over-scoped: refuse rather than guess.
   const radiogroups = item.locator('[role="radiogroup"]');
   const groupCount = await radiogroups.count().catch(() => 0);
-  if (groupCount > 1) {
-    return { ok: false, reason: `question scope is ambiguous (${groupCount} radiogroups resolved) for "${target}"` };
+  let scope = item;
+  if (groupCount === 1) {
+    scope = radiogroups.first();
+  } else if (groupCount > 1) {
+    // Review lane B (NIT-A): refusing outright conflated two different things —
+    // an over-scoped item spanning several questions, and one question that
+    // legitimately renders more than one radiogroup. Resolve it by the target:
+    // exactly one group offering this option is unambiguous, so use it. Zero or
+    // several is genuinely ambiguous and still refuses.
+    const owning: number[] = [];
+    for (let i = 0; i < groupCount; i += 1) {
+      const n = await radiogroups.nth(i).locator('label').filter({ hasText: anchored }).count().catch(() => 0);
+      if (n > 0) owning.push(i);
+    }
+    if (owning.length === 1) {
+      scope = radiogroups.nth(owning[0]);
+    } else {
+      return {
+        ok: false,
+        reason: `question scope is ambiguous (${groupCount} radiogroups resolved, `
+          + `${owning.length} offer this option) for "${target}"`,
+      };
+    }
   }
-  const scope = groupCount === 1 ? radiogroups.first() : item;
   const optionCount = async () => scope.locator('input[type="radio"], [role="radio"]').count().catch(() => 0);
 
   const tryClickRendered = async (): Promise<DropdownChoiceResult | null> => {
@@ -281,24 +301,67 @@ export async function selectVirtualizedRadioChoice(
     }
     await label.first().click({ timeout: timeoutMs });
     await page.waitForTimeout(150);
-    const checked = await label
-      .first()
-      .evaluate((el) => {
-        const radio = el.querySelector('input[type="radio"], [role="radio"]')
-          ?? (el.parentElement ? el.parentElement.querySelector('input[type="radio"], [role="radio"]') : null);
-        if (!radio) return null;
-        return (radio as HTMLInputElement).checked === true || radio.getAttribute('aria-checked') === 'true';
+    // Verify by RE-RESOLVING inside the question scope, never through the handle
+    // that was clicked (review lane B, MINOR-A and MINOR-D):
+    //  - the virtualizer detaches the clicked element when it re-renders the
+    //    window to show the selection, so probing that handle threw and produced
+    //    a false negative on a selection that had actually worked;
+    //  - a descendant-only lookup misses a radio associated by `for=` or
+    //    aria-labelledby rather than wrapped by its label, which now matters for
+    //    EVERY choice question because this walk is the first tier.
+    // Asking the scope "which option is selected, and is it the one I wanted"
+    // answers both, independently of how label and input are associated.
+    const selected = await scope
+      .evaluate((root) => {
+        const checked = Array.from(root.querySelectorAll('input[type="radio"], [role="radio"]')).filter(
+          (r) => (r as HTMLInputElement).checked === true || r.getAttribute('aria-checked') === 'true',
+        );
+        if (checked.length === 0) return { count: 0, text: null };
+        // The document-scoped fallbacks are guarded so this same function is
+        // exercisable outside a browser (the review found the test fake never ran
+        // it at all).
+        const doc: Document | null = typeof document === 'undefined' ? null : document;
+        const esc = (v: string) => v.replace(/["\\]/g, '\\$&');
+        const labelTextFor = (radio: Element): string => {
+          const wrapping = radio.closest('label');
+          if (wrapping && (wrapping.textContent || '').trim()) return (wrapping.textContent || '').trim();
+          const id = radio.getAttribute('id');
+          if (id) {
+            const byFor = root.querySelector(`label[for="${esc(id)}"]`)
+              ?? (doc ? doc.querySelector(`label[for="${esc(id)}"]`) : null);
+            if (byFor && (byFor.textContent || '').trim()) return (byFor.textContent || '').trim();
+          }
+          const labelledBy = radio.getAttribute('aria-labelledby');
+          if (labelledBy) {
+            const parts = labelledBy
+              .split(/\s+/)
+              .map((ref) => root.querySelector(`[id="${esc(ref)}"]`) ?? (doc ? doc.getElementById(ref) : null))
+              .filter(Boolean);
+            const text = parts.map((el) => (el as Element).textContent || '').join(' ').trim();
+            if (text) return text;
+          }
+          const aria = radio.getAttribute('aria-label');
+          if (aria && aria.trim()) return aria.trim();
+          const parent = radio.parentElement;
+          return parent ? (parent.textContent || '').trim() : '';
+        };
+        return { count: checked.length, text: labelTextFor(checked[0]) };
       })
       .catch(() => null);
-    // Review lane B (MAJOR-2): `null` means the radio could not be found to
-    // verify, so the selection is UNVERIFIED. Treating that as success let the
-    // whole verification silently no-op; it is a failure now.
-    if (checked !== true) {
+    // Review lane B (MAJOR-2): an UNVERIFIABLE selection is a failure, never a pass.
+    if (!selected) {
+      return { ok: false, reason: `option "${target}" was clicked but the selection could not be read back` };
+    }
+    if (selected.count === 0) {
+      return { ok: false, reason: `option "${target}" was clicked but no option in this question reports selected` };
+    }
+    if (selected.count > 1) {
+      return { ok: false, reason: `option "${target}" was clicked but ${selected.count} options report selected` };
+    }
+    if (normalizeChoiceText(selected.text) !== want) {
       return {
         ok: false,
-        reason: checked === null
-          ? `option "${target}" was clicked but no radio could be found to confirm the selection`
-          : `option "${target}" was clicked but the control does not report it selected`,
+        reason: `option "${target}" was clicked but the question now reports a different selection`,
       };
     }
     return { ok: true, via: 'virtualized-radio' };
@@ -309,6 +372,22 @@ export async function selectVirtualizedRadioChoice(
   // including a throw — restores the original position.
   let passes = 0;
   let rendered = await optionCount();
+  // Review lane B (MINOR-B): the option COUNT is not a render signal on this
+  // form — the virtualizer keeps a constant ~80-option window, so the count
+  // never changes and polling it degenerated into a flat 480 ms per scroll pass.
+  // The window's size plus its first and last option text do change on every
+  // re-render, so that is the signal; and the target label itself is what the
+  // walk is actually waiting for.
+  const targetLabelCount = async () => scope.locator('label').filter({ hasText: anchored }).count().catch(() => 0);
+  const windowFingerprint = async () =>
+    scope
+      .evaluate((root) => {
+        const labels = root.querySelectorAll('label');
+        if (labels.length === 0) return '0';
+        const text = (el: Element) => (el.textContent || '').trim().slice(0, 80);
+        return `${labels.length}|${text(labels[0])}|${text(labels[labels.length - 1])}`;
+      })
+      .catch(() => null);
   try {
     const first = await tryClickRendered();
     if (first) return first;
@@ -320,19 +399,26 @@ export async function selectVirtualizedRadioChoice(
     const step = Math.max(200, Math.floor(viewport * 0.8));
     const startY = box ? Math.max(0, originalScroll + box.y - viewport * 0.2) : originalScroll;
     const endY = box ? originalScroll + box.y + box.height : originalScroll + step * 40;
+    let lastY = originalScroll;
     for (let y = startY; y <= endY && passes < 60; y += step, passes += 1) {
+      // A pass that does not actually move the page (the first one often lands
+      // where the page already is) cannot re-render anything, so there is nothing
+      // to wait for — the pre-loop attempt already covered that window.
+      const moved = Math.round(y) !== Math.round(lastY);
+      const beforeScroll = moved ? await windowFingerprint() : null;
       await page.evaluate((top) => window.scrollTo(0, top), y).catch(() => null);
-      // Review lane B (MINOR-3): poll for the virtualizer to re-render instead
-      // of sleeping a flat 120 ms, which is unreliable on a loaded VM. A window
-      // that never changes simply moves on; the walk still fails typed.
-      const before = rendered;
-      for (let settle = 0; settle < 8; settle += 1) {
+      lastY = y;
+      // Review lane B (MINOR-3, MINOR-B): poll for the virtualizer instead of
+      // sleeping a flat 120 ms, which is unreliable on a loaded VM — but poll for
+      // what this pass actually needs. Stop the moment the target renders; stop
+      // as soon as the window re-rendered without it; otherwise give up on this
+      // window after a short deadline. A window that never changes still moves
+      // on, and the walk still fails typed.
+      for (let settle = 0; moved && settle < 8; settle += 1) {
+        if ((await targetLabelCount()) > 0) break;
+        const now = await windowFingerprint();
+        if (now !== null && now !== beforeScroll) break;
         await page.waitForTimeout(60);
-        const now = await optionCount();
-        if (now !== before) {
-          rendered = Math.max(rendered, now);
-          break;
-        }
       }
       const hit = await tryClickRendered();
       if (hit) return hit;

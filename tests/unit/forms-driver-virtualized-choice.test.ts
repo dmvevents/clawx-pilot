@@ -17,29 +17,101 @@ vi.mock('../../electron/services/chrome-cdp', () => ({
  * the DOM at all when filling started, which is why both original tiers failed.
  *
  * The fake models exactly that: a window of labels that shifts with scrollY.
+ *
+ * Review lane B (MINOR-C): the `evaluate` fake used to return a canned value
+ * without ever running the callback, so the read-back logic inside it was
+ * untested and MINOR-D (a radio associated by `for=` rather than wrapped by its
+ * label) was invisible. The fake now INVOKES the callback against a small DOM
+ * stub, in both association shapes.
  */
+type Association = 'wrap' | 'for';
+
+interface FakeRadio {
+  __text: string;
+  checked: boolean;
+  getAttribute: (n: string) => string | null;
+  closest: (sel: string) => unknown;
+  parentElement: { textContent: string } | null;
+}
+
 function fakeVirtualizedQuestion(opts: {
   options: string[];
   windowSize?: number;
   pxPerOption?: number;
   questionTop?: number;
   questionHeight?: number;
-  checkedAfterClick?: boolean | null;
+  association?: Association;
+  /** what the question reports as selected after the click */
+  verify?: 'ok' | 'none' | 'wrong' | 'multi' | 'throw';
   duplicateTarget?: string;
   radiogroupCount?: number;
+  /** for a multi-radiogroup item: how many groups render the target */
+  groupsOwningTarget?: number;
   throwOnClick?: boolean;
 }) {
   const windowSize = opts.windowSize ?? 80;
   const pxPerOption = opts.pxPerOption ?? 50;
+  const association = opts.association ?? 'wrap';
+  const verify = opts.verify ?? 'ok';
   let scrollY = 0;
+  let selected: string | null = null;
   const clicked: string[] = [];
   const scrolls: number[] = [];
+  const waits: number[] = [];
   const visibleOptions = () => {
     const start = Math.max(0, Math.min(opts.options.length - windowSize, Math.floor(scrollY / pxPerOption)));
     const window = opts.options.slice(start, start + windowSize);
     if (opts.duplicateTarget && window.includes(opts.duplicateTarget)) window.push(opts.duplicateTarget);
     return window;
   };
+
+  // --- the DOM stub the read-back callback actually runs against.
+  const labelId = (text: string) => `opt-${text.replace(/\W+/g, '-')}`;
+  const buildRoot = () => {
+    const texts = visibleOptions();
+    const labels = texts.map((t) => ({
+      textContent: t,
+      getAttribute: (n: string) => (n === 'for' && association === 'for' ? labelId(t) : null),
+      __for: association === 'for' ? labelId(t) : null,
+    }));
+    const selectedTexts = (): string[] => {
+      if (verify === 'none' || selected === null) return [];
+      if (verify === 'wrong') return [texts.find((t) => t !== selected) ?? '<other>'];
+      if (verify === 'multi') return [selected, texts.find((t) => t !== selected) ?? '<other>'];
+      return [selected];
+    };
+    const radios: FakeRadio[] = texts.map((t) => {
+      const wrapping = labels[texts.indexOf(t)];
+      return {
+        __text: t,
+        checked: selectedTexts().includes(t),
+        getAttribute: (n: string) => {
+          if (n === 'id') return association === 'for' ? labelId(t) : null;
+          // The live form leaves aria-label empty and points aria-labelledby at a
+          // span; neither is how the wrap shape is read back, so keep them null
+          // and let `closest('label')` / `label[for=]` do the work.
+          return null;
+        },
+        closest: (sel: string) => (sel === 'label' && association === 'wrap' ? wrapping : null),
+        parentElement: association === 'wrap' ? null : { textContent: t },
+      };
+    });
+    return {
+      querySelectorAll: (sel: string) => {
+        if (sel === 'label') return labels;
+        if (sel.includes('radio')) return radios;
+        return [];
+      },
+      querySelector: (sel: string) => {
+        const m = /^label\[for="(.*)"\]$/.exec(sel);
+        if (m) return labels.find((l) => l.__for === m[1]) ?? null;
+        const byId = /^\[id="(.*)"\]$/.exec(sel);
+        if (byId) return radios.find((r) => r.getAttribute('id') === byId[1]) ?? null;
+        return null;
+      },
+    };
+  };
+
   const labelLocator = (matcher?: RegExp) => ({
     count: async () => (matcher ? visibleOptions().filter((t) => matcher.test(t)).length : visibleOptions().length),
     filter: ({ hasText }: { hasText: RegExp }) => labelLocator(hasText),
@@ -48,27 +120,48 @@ function fakeVirtualizedQuestion(opts: {
         if (opts.throwOnClick) throw new Error('click failed');
         const hit = visibleOptions().find((t) => matcher!.test(t));
         clicked.push(hit ?? '<none>');
+        selected = hit ?? null;
       },
-      evaluate: async () => (opts.checkedAfterClick === undefined ? true : opts.checkedAfterClick),
     }),
   });
+  const emptyLabelLocator: { count: () => Promise<number>; filter: (o: unknown) => unknown; first: () => unknown } = {
+    count: async () => 0,
+    filter: () => emptyLabelLocator,
+    first: () => ({ click: async () => { throw new Error('no option'); } }),
+  };
   const scopeLocator = {
     locator: (sel: string) => {
       if (sel === 'label') return labelLocator();
       if (sel.includes('radio')) return { count: async () => visibleOptions().length };
       return { count: async () => 0 };
     },
+    evaluate: async (fn: (root: unknown) => unknown) => {
+      if (verify === 'throw') throw new Error('evaluate failed');
+      return fn(buildRoot());
+    },
   };
   const item = {
     locator: (sel: string) => {
       if (sel === '[role="radiogroup"]') {
         const n = opts.radiogroupCount ?? 0;
-        return { count: async () => n, first: () => scopeLocator };
+        const owning = opts.groupsOwningTarget ?? n;
+        return {
+          count: async () => n,
+          first: () => scopeLocator,
+          // Only the first `owning` groups render the target option.
+          nth: (i: number) => (i < owning
+            ? scopeLocator
+            : {
+              ...scopeLocator,
+              locator: (sel2: string) => (sel2 === 'label' ? emptyLabelLocator : scopeLocator.locator(sel2)),
+            }),
+        };
       }
       if (sel === 'label') return labelLocator();
       if (sel.includes('radio')) return { count: async () => visibleOptions().length };
       return { count: async () => 0 };
     },
+    evaluate: scopeLocator.evaluate,
     boundingBox: async () => ({ x: 0, y: opts.questionTop ?? 100, width: 600, height: opts.questionHeight ?? opts.options.length * pxPerOption }),
   };
   const page = {
@@ -83,9 +176,16 @@ function fakeVirtualizedQuestion(opts: {
       }
       return undefined;
     },
-    waitForTimeout: async () => undefined,
+    waitForTimeout: async (ms: number) => { waits.push(ms); },
   };
-  return { page, item, clicked: () => clicked, scrolls: () => scrolls, finalScroll: () => scrollY };
+  return {
+    page,
+    item,
+    clicked: () => clicked,
+    scrolls: () => scrolls,
+    settleWaits: () => waits.filter((ms) => ms === 60),
+    finalScroll: () => scrollY,
+  };
 }
 
 const SCHOOLS = Array.from({ length: 454 }, (_, i) => `School ${String(i).padStart(3, '0')} Government Primary`);
@@ -108,6 +208,32 @@ describe('selectVirtualizedRadioChoice (CLWX-62, live-measured shape)', () => {
     expect(f.finalScroll()).toBe(0); // original position restored
   });
 
+  /**
+   * Review lane B (MINOR-D): with the walk as tier 1 for EVERY choice question,
+   * a form that associates its radio by `for=` instead of wrapping it in the
+   * label must still verify. Reading back through the clicked handle's
+   * descendants missed exactly this shape and would have failed a correct
+   * selection.
+   */
+  it('verifies the selection when the radio is associated by for= rather than wrapped', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, association: 'for' });
+    const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[12], 1000);
+    expect(r).toEqual({ ok: true, via: 'virtualized-radio' });
+    expect(f.clicked()).toEqual([SCHOOLS[12]]);
+  });
+
+  /**
+   * Review lane B (MINOR-B): the settle poll waits for the TARGET, not for an
+   * option count that never changes on a constant-size window. When each scroll
+   * re-renders the window, no 60 ms settle wait is needed at all.
+   */
+  it('does not burn a fixed settle delay on every scroll pass', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS });
+    const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, TARGET_FAR_DOWN, 1000);
+    expect(r.ok).toBe(true);
+    expect(f.settleWaits()).toEqual([]);
+  });
+
   it('reports how far it looked when the option does not exist at all', async () => {
     const f = fakeVirtualizedQuestion({ options: SCHOOLS });
     const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, 'Nowhere Primary', 1000);
@@ -126,28 +252,65 @@ describe('selectVirtualizedRadioChoice (CLWX-62, live-measured shape)', () => {
     expect(f.clicked()).toEqual([]);
   });
 
-  it('reports a click the control does not confirm as selected', async () => {
-    const f = fakeVirtualizedQuestion({ options: SCHOOLS, checkedAfterClick: false });
+  it('fails when the question reports nothing selected after the click', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, verify: 'none' });
     const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[3], 1000);
     expect(r.ok).toBe(false);
-    expect(r.reason).toMatch(/does not report it selected/);
+    expect(r.reason).toMatch(/no option in this question reports selected/);
+  });
+
+  /**
+   * Review lane B (MINOR-A): the read-back is re-resolved inside the question
+   * scope, so a click that lands on the WRONG option is caught — the old probe
+   * asked the clicked handle whether it was checked and could not see this.
+   */
+  it('fails when the question reports a different option selected', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, verify: 'wrong' });
+    const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[3], 1000);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/reports a different selection/);
+  });
+
+  it('fails when more than one option reports selected', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, verify: 'multi' });
+    const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[3], 1000);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/2 options report selected/);
   });
 
   /** Review lane B MAJOR-2: an unverifiable selection must FAIL, not pass. */
-  it('fails when no radio can be found to confirm the selection', async () => {
-    const f = fakeVirtualizedQuestion({ options: SCHOOLS, checkedAfterClick: null });
+  it('fails when the selection cannot be read back at all', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, verify: 'throw' });
     const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[3], 1000);
     expect(r.ok).toBe(false);
-    expect(r.reason).toMatch(/no radio could be found to confirm/);
+    expect(r.reason).toMatch(/could not be read back/);
   });
 
-  /** Review lane B MINOR-2: an over-scoped question item is refused, not guessed. */
-  it('refuses when the resolved item spans more than one radiogroup', async () => {
-    const f = fakeVirtualizedQuestion({ options: SCHOOLS, radiogroupCount: 3 });
+  /**
+   * Review lane B MINOR-2 / NIT-A: an over-scoped question item is refused, not
+   * guessed — but a question that legitimately renders several radiogroups, only
+   * one of which offers this option, resolves to that group instead of failing.
+   */
+  it('refuses when several radiogroups offer the same option', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, radiogroupCount: 3, groupsOwningTarget: 2 });
     const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[3], 1000);
     expect(r.ok).toBe(false);
-    expect(r.reason).toMatch(/question scope is ambiguous \(3 radiogroups/);
+    expect(r.reason).toMatch(/3 radiogroups resolved, 2 offer this option/);
     expect(f.clicked()).toEqual([]);
+  });
+
+  it('refuses when no radiogroup in an over-scoped item offers the option', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, radiogroupCount: 3, groupsOwningTarget: 0 });
+    const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[3], 1000);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/0 offer this option/);
+  });
+
+  it('uses the one radiogroup that offers the option when the item exposes several', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, radiogroupCount: 3, groupsOwningTarget: 1 });
+    const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[3], 1000);
+    expect(r).toEqual({ ok: true, via: 'virtualized-radio' });
+    expect(f.clicked()).toEqual([SCHOOLS[3]]);
   });
 
   it('scopes the option search to the single radiogroup when the question exposes one', async () => {

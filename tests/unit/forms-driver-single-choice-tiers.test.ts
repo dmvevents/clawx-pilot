@@ -30,28 +30,57 @@ type Driver = {
 function driverWith(opts: {
   renderedOptions: string[];
   optionsAfterScroll?: string[];
-  checked?: boolean | null;
+  /** what the question reports as selected after the click */
+  verify?: 'ok' | 'none' | 'throw';
   radiogroups?: number;
   ariaRadioMatches?: number;
 }) {
   const clicked: string[] = [];
   let scrolled = false;
+  let selected: string | null = null;
+  const verify = opts.verify ?? 'ok';
   const options = () => (scrolled && opts.optionsAfterScroll ? opts.optionsAfterScroll : opts.renderedOptions);
   const labelLocator = (matcher?: RegExp) => ({
     count: async () => (matcher ? options().filter((t) => matcher.test(t)).length : options().length),
     filter: ({ hasText }: { hasText: RegExp }) => labelLocator(hasText),
     first: () => ({
-      click: async () => { clicked.push(options().find((t) => matcher!.test(t)) ?? '<none>'); },
-      evaluate: async () => (opts.checked === undefined ? true : opts.checked),
-      getAttribute: async () => (opts.checked === false ? 'false' : 'true'),
+      click: async () => {
+        const hit = options().find((t) => matcher!.test(t)) ?? '<none>';
+        clicked.push(hit);
+        selected = hit;
+      },
     }),
   });
+  // Review lane B (MINOR-C): the fake must RUN the read-back callback, against a
+  // DOM stub, or the verification logic is untested. This shape wraps the input
+  // in its label; the sibling suite covers `for=` association (MINOR-D).
+  const buildRoot = () => {
+    const texts = options();
+    const labels = texts.map((t) => ({ textContent: t, getAttribute: () => null }));
+    const radios = texts.map((t, i) => ({
+      checked: verify !== 'none' && selected === t,
+      getAttribute: () => null,
+      closest: (sel: string) => (sel === 'label' ? labels[i] : null),
+      parentElement: null,
+    }));
+    return {
+      querySelectorAll: (sel: string) => (sel === 'label' ? labels : sel.includes('radio') ? radios : []),
+      querySelector: () => null,
+    };
+  };
   const scope = {
     locator: (sel: string) => (sel === 'label' ? labelLocator() : { count: async () => options().length }),
+    evaluate: async (fn: (root: unknown) => unknown) => {
+      if (verify === 'throw') throw new Error('evaluate failed');
+      return fn(buildRoot());
+    },
   };
   const item = {
     locator: (sel: string) => {
-      if (sel === '[role="radiogroup"]') return { count: async () => opts.radiogroups ?? 0, first: () => scope };
+      if (sel === '[role="radiogroup"]') {
+        const n = opts.radiogroups ?? 0;
+        return { count: async () => n, first: () => scope, nth: () => scope };
+      }
       if (sel === 'label') return labelLocator();
       if (sel.startsWith('[role="radio"][aria-label=')) {
         const n = opts.ariaRadioMatches ?? 0;
@@ -62,6 +91,7 @@ function driverWith(opts: {
       if (sel.includes('radio')) return { count: async () => options().length };
       return { first: () => ({ count: async () => 0 }), count: async () => 0 };
     },
+    evaluate: scope.evaluate,
     boundingBox: async () => ({ x: 0, y: 100, width: 600, height: 4000 }),
   };
   const page = {
@@ -117,10 +147,29 @@ describe('fillField single_choice tier order (CLWX-62)', () => {
   });
 
   it('reports an unverifiable selection instead of assuming the click worked', async () => {
-    const { driver } = driverWith({ renderedOptions: SCHOOLS, checked: null });
+    const { driver } = driverWith({ renderedOptions: SCHOOLS, verify: 'throw' });
     const r = await driver.fillField('Name of school', SCHOOLS[2], 'single_choice');
     expect(r.ok).toBe(false);
-    expect(r.reason).toMatch(/no radio could be found to confirm/);
+    expect(r.reason).toMatch(/could not be read back/);
+  });
+
+  it('reports a selection the question does not confirm', async () => {
+    const { driver } = driverWith({ renderedOptions: SCHOOLS, verify: 'none' });
+    const r = await driver.fillField('Name of school', SCHOOLS[2], 'single_choice');
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/no option in this question reports selected/);
+  });
+
+  /**
+   * Review lane B (NIT-B): nothing locked the ORDER when both tiers could match.
+   * The walk must win, because it is the only tier that refuses duplicates and
+   * verifies the resulting selection.
+   */
+  it('prefers the verifying walk over the aria tier when both match', async () => {
+    const { driver, clicked } = driverWith({ renderedOptions: SCHOOLS, ariaRadioMatches: 1 });
+    const r = await driver.fillField('Name of school', SCHOOLS[6], 'single_choice');
+    expect(r).toEqual({ ok: true, via: 'virtualized-radio' });
+    expect(clicked()).toEqual([SCHOOLS[6]]);
   });
 
   it('uses the aria-label radio tier only when the label walk finds nothing', async () => {
