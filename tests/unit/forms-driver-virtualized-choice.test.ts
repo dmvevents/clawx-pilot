@@ -47,6 +47,14 @@ function fakeVirtualizedQuestion(opts: {
   radiogroupCount?: number;
   /** for a multi-radiogroup item: how many groups render the target */
   groupsOwningTarget?: number;
+  /**
+   * Live shape (installed moe.39, 2026-09-11): the question's boundingBox covers
+   * only the RENDERED window (~80 options), not the whole list, and it does not
+   * grow as options render. Any bound derived from it stops the walk early.
+   */
+  itemHeightCoversWindowOnly?: boolean;
+  /** total scrollable page height; scrollY clamps to pageHeight - viewport */
+  pageHeight?: number;
   throwOnClick?: boolean;
 }) {
   const windowSize = opts.windowSize ?? 80;
@@ -162,7 +170,15 @@ function fakeVirtualizedQuestion(opts: {
       return { count: async () => 0 };
     },
     evaluate: scopeLocator.evaluate,
-    boundingBox: async () => ({ x: 0, y: opts.questionTop ?? 100, width: 600, height: opts.questionHeight ?? opts.options.length * pxPerOption }),
+    boundingBox: async () => ({
+      x: 0,
+      // Viewport-relative, like Playwright's: it scrolls out of view as the page moves.
+      y: (opts.questionTop ?? 100) - (opts.itemHeightCoversWindowOnly ? Math.min(scrollY, opts.questionTop ?? 100) : 0),
+      width: 600,
+      height: opts.itemHeightCoversWindowOnly
+        ? windowSize * pxPerOption
+        : opts.questionHeight ?? opts.options.length * pxPerOption,
+    }),
   };
   const page = {
     evaluate: async (fn: unknown, arg?: unknown) => {
@@ -170,7 +186,9 @@ function fakeVirtualizedQuestion(opts: {
       if (src.includes('window.scrollY')) return scrollY;
       if (src.includes('window.innerHeight')) return 800;
       if (src.includes('scrollTo')) {
-        scrollY = Number(arg ?? 0);
+        const want = Number(arg ?? 0);
+        const max = (opts.pageHeight ?? opts.options.length * pxPerOption + 2000) - 800;
+        scrollY = Math.max(0, Math.min(want, max));
         scrolls.push(scrollY);
         return undefined;
       }
@@ -232,6 +250,29 @@ describe('selectVirtualizedRadioChoice (CLWX-62, live-measured shape)', () => {
     const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, TARGET_FAR_DOWN, 1000);
     expect(r.ok).toBe(true);
     expect(f.settleWaits()).toEqual([]);
+  });
+
+  /**
+   * The live moe.39 failure, reproduced: with the item's height covering only the
+   * rendered window, an item-height bound stopped the walk after 6 passes — about
+   * 77 of 454 options — and reported "option not found" for an option that exists.
+   * The walk must keep going while the page still moves and the window still
+   * changes, so it reaches option ~400.
+   */
+  it('reaches a far-down option when the question reports only the rendered window height', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, itemHeightCoversWindowOnly: true, pageHeight: 30000 });
+    const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, TARGET_FAR_DOWN, 1000);
+    expect(r).toEqual({ ok: true, via: 'virtualized-radio' });
+    expect(f.clicked()).toEqual([TARGET_FAR_DOWN]);
+    expect(f.scrolls().length).toBeGreaterThan(6);
+    expect(f.finalScroll()).toBe(0);
+  });
+
+  it('still stops on a short list instead of scrolling to the page bottom', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS.slice(0, 12), windowSize: 12, itemHeightCoversWindowOnly: true, pageHeight: 30000 });
+    const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, 'Nowhere Primary', 1000);
+    expect(r.ok).toBe(false);
+    expect(f.scrolls().length).toBeLessThan(8);
   });
 
   it('reports how far it looked when the option does not exist at all', async () => {

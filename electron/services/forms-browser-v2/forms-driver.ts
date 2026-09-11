@@ -394,35 +394,60 @@ export async function selectVirtualizedRadioChoice(
 
     // Walk the page across the question's extent so the virtualizer renders each
     // window of options in turn.
-    const box = await item.boundingBox().catch(() => null);
+    //
+    // The bound CANNOT be a pixel measurement of the question. Measured live on the
+    // installed moe.39 candidate (2026-09-11 19:06Z): the 454-option school question
+    // reports a height of ~4013 px because the virtualizer renders only ~80 options
+    // at a time, so an item-height bound stopped the walk after 6 passes — roughly
+    // 77 options — and the target near option 400 was never rendered. The item's
+    // height does not grow as options render, so nothing derived from it can bound
+    // the walk correctly.
+    //
+    // Drive by OBSERVABLE PROGRESS instead: keep scrolling while the page still
+    // moves or the rendered window still changes, and stop when neither happens.
+    // That reaches the end of a virtualized list of any length and stops promptly on
+    // a short one, without assuming anything about the list's pixel extent.
     const viewport = await page.evaluate(() => window.innerHeight).catch(() => 800);
     const step = Math.max(200, Math.floor(viewport * 0.8));
-    const startY = box ? Math.max(0, originalScroll + box.y - viewport * 0.2) : originalScroll;
-    const endY = box ? originalScroll + box.y + box.height : originalScroll + step * 40;
+    const box = await item.boundingBox().catch(() => null);
+    const scrollNow = async (): Promise<number> => {
+      const y = await page.evaluate(() => window.scrollY).catch(() => null);
+      return typeof y === 'number' ? y : 0;
+    };
+    let y = box ? Math.max(0, originalScroll + box.y - viewport * 0.2) : originalScroll;
     let lastY = originalScroll;
-    for (let y = startY; y <= endY && passes < 60; y += step, passes += 1) {
-      // A pass that does not actually move the page (the first one often lands
-      // where the page already is) cannot re-render anything, so there is nothing
-      // to wait for — the pre-loop attempt already covered that window.
+    let stalled = 0;
+    while (passes < 60) {
+      passes += 1;
       const moved = Math.round(y) !== Math.round(lastY);
       const beforeScroll = moved ? await windowFingerprint() : null;
       await page.evaluate((top) => window.scrollTo(0, top), y).catch(() => null);
+      const actual = await scrollNow();
       lastY = y;
       // Review lane B (MINOR-3, MINOR-B): poll for the virtualizer instead of
       // sleeping a flat 120 ms, which is unreliable on a loaded VM — but poll for
-      // what this pass actually needs. Stop the moment the target renders; stop
-      // as soon as the window re-rendered without it; otherwise give up on this
-      // window after a short deadline. A window that never changes still moves
-      // on, and the walk still fails typed.
+      // what this pass actually needs. Stop the moment the target renders; stop as
+      // soon as the window re-rendered without it; otherwise give up on this window
+      // after a short deadline.
+      let changed = false;
       for (let settle = 0; moved && settle < 8; settle += 1) {
-        if ((await targetLabelCount()) > 0) break;
+        if ((await targetLabelCount()) > 0) { changed = true; break; }
         const now = await windowFingerprint();
-        if (now !== null && now !== beforeScroll) break;
+        if (now !== null && now !== beforeScroll) { changed = true; break; }
         await page.waitForTimeout(60);
       }
       const hit = await tryClickRendered();
       if (hit) return hit;
       rendered = Math.max(rendered, await optionCount());
+      // The page clamps at its bottom, so `actual` also tells us whether there is
+      // any room left. Nothing new rendered AND no room left is the end of the list;
+      // a stall with room left is given two more chances, because a loaded VM can
+      // render late.
+      const roomLeft = actual >= y - 2;
+      if (!changed && !roomLeft) break;
+      stalled = changed ? 0 : stalled + 1;
+      if (stalled >= 3) break;
+      y = actual + step;
     }
   } finally {
     await restore();
