@@ -190,7 +190,13 @@ export function normalizeChoiceText(value: unknown): string {
  * selector in this file goes through here.
  */
 export function cssAttrValue(value: string): string {
-  return String(value ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return String(value ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    // A CSS string cannot contain a raw line break: escape rather than let the
+    // selector fail to parse (review lane B nit).
+    .replace(/\r/g, '\\00000d')
+    .replace(/\n/g, '\\00000a');
 }
 
 /** True when the control's visible value is exactly the wanted option (per line/segment, never a substring). */
@@ -356,9 +362,13 @@ export async function selectDropdownChoice(
   await page.waitForTimeout(200);
   const shown = await readComboboxValue(item);
   if (!valueEchoesTarget(shown, want)) {
-    // Leave nothing half-written: clear our filter text and close the popup.
+    // Clear our filter text and close the popup. Review lane B: the option was
+    // already clicked at this point and a Forms single choice offers no "clear",
+    // so say plainly that the field may now hold a value — the caller surfaces
+    // this and the principal reviews the field before any submit.
     return abandon(
-      `dropdown selection not confirmed for "${target}" (control shows "${normalizeChoiceText(shown).slice(0, 80)}")`,
+      `dropdown selection not confirmed for "${target}" (control shows "${normalizeChoiceText(shown).slice(0, 80)}"); `
+      + 'an option was clicked, so review this field before submitting',
     );
   }
   return { ok: true, via: 'combobox' };

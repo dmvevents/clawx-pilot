@@ -297,6 +297,20 @@ export class OutlookActions {
    */
   private composeOpenedByThisProcess = false;
 
+  /**
+   * Review lane B (2026-09-11): the ownership flag was set when a compose
+   * opened and cleared only on a successful dispatch or discard, so an aborted
+   * compose-open left it true and a LATER unrelated empty compose could be
+   * discarded as "ours". Every operation that can open a compose now clears it
+   * first, so the flag only ever describes the operation in progress. A stale
+   * empty compose from an earlier operation is therefore reported and left
+   * untouched rather than discarded; drafts with an automation subject still
+   * recover automatically, because that branch does not consult this flag.
+   */
+  private beginComposeOwnedOperation(): void {
+    this.composeOpenedByThisProcess = false;
+  }
+
   constructor(
     private readonly driver: PlaywrightDriver,
     private readonly grounder: VlmGrounder,
@@ -508,6 +522,7 @@ export class OutlookActions {
     await this.dismissBlockingDialog(page);
 
     if (await this.hasAnyVisibleOpenDraft(page)) {
+      this.beginComposeOwnedOperation();
       const recovery = await this.recoverComposeState(page);
       if (!recovery.cleared || (await this.hasAnyVisibleOpenDraft(page))) {
         return {
@@ -966,6 +981,7 @@ export class OutlookActions {
       };
     }
     if (await this.hasAnyVisibleOpenDraft(page)) {
+      this.beginComposeOwnedOperation();
       const recovery = await this.recoverComposeState(page);
       if (!recovery.cleared || (await this.hasAnyVisibleOpenDraft(page))) {
         return {
@@ -1091,6 +1107,7 @@ export class OutlookActions {
       };
     }
     if (await this.hasAnyVisibleOpenDraft(page)) {
+      this.beginComposeOwnedOperation();
       const recovery = await this.recoverComposeState(page);
       if (!recovery.cleared || (await this.hasAnyVisibleOpenDraft(page))) {
         return {

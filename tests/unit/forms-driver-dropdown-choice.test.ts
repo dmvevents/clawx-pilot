@@ -285,4 +285,8 @@ describe('cssAttrValue', () => {
   it('escapes backslashes before quotes so an escaped quote cannot be re-opened', () => {
     expect(cssAttrValue('a\\"b')).toBe('a\\\\\\"b');
   });
+  it('escapes line breaks, which a CSS string cannot contain (lane B nit)', () => {
+    expect(cssAttrValue('a\nb')).toBe('a\\00000ab');
+    expect(cssAttrValue('a\r\nb')).toBe('a\\00000d\\00000ab');
+  });
 });
