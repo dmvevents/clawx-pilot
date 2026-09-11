@@ -37,17 +37,17 @@ Outlook and Forms must run through the installed app:
 ## Safety Gates
 
 - Draft tools leave drafts open.
-- `outlook.send_email` requires `confirm: true`.
+- `outlook_send_email` requires `confirm: true`.
 - v2 send verifies exactly one visible reviewed draft before clicking Send. Normal reviewed sends use `{ confirm: true }` only; optional recipient/subject/body args are advanced assertions, not the default path.
-- `outlook.download_attachment` requires `confirm: true`.
-- `forms.preview_suspension` fills but does not submit.
-- `forms.submit_suspension` requires `confirm: true`.
+- `outlook_download_attachment` requires `confirm: true`.
+- `forms_preview_suspension` fills but does not submit.
+- `forms_submit_suspension` requires `confirm: true`.
 - Logs should contain tool names, status, counts, subject preview, and body length only.
 
 ## Acceptance Criteria
 
 - Windows Host API safe probe opens Outlook through signed-in Chrome.
-- Gemini/Claude chooses `outlook.open` and the OpenClaw tool execution result is not `tool.execute is not a function`.
-- `forms.list` returns `available` once the form URL is visible to the installed app.
+- Gemini/Claude chooses `outlook_open` and the OpenClaw tool execution result is not `tool.execute is not a function`.
+- `forms_list` returns `available` once the form URL is visible to the installed app.
 - Send/download/submit refuse without confirmation.
 - Verification artifacts are screenshots, redacted probe JSON, app logs, and transcript snippets with no secrets.

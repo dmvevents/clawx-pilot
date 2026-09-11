@@ -85,7 +85,7 @@ pnpm exec tsx scripts/outlook-shot.ts        # screenshot FIRST → /tmp/outlook
 pnpm exec tsx scripts/outlook-cleanup-compose.ts   # discard stacked compose panes
 ```
 Read the refusal reason verbatim. Per the persona steering: do NOT redraft.
-Verify exactly ONE reviewed visible draft, then retry `outlook.send_email`
+Verify exactly ONE reviewed visible draft, then retry `outlook_send_email`
 with `confirm:true`. If the refusal contradicts what you see on the
 screenshot, switch to `.claude/skills/outlook-lane-debug/SKILL.md`
 (verifier-lying class — proven 2026-09-02).
@@ -112,8 +112,8 @@ wrong email faithfully.
 pnpm exec tsx scripts/outlook-shot.ts   # is the open message the one asked about?
 ```
 Demo workaround until the settle-on-expected-item guard ships (TO-BUILD TB-1
-in `docs/FLOW_STATE_DIAGRAMS.md`): have the agent `outlook.search_inbox` for
-the exact subject and `outlook.read_email` the search hit, instead of
+in `docs/FLOW_STATE_DIAGRAMS.md`): have the agent `outlook_search_inbox` for
+the exact subject and `outlook_read_email` the search hit, instead of
 summarising "the last email"; cross-check the summary's subject against the
 screenshot before showing it. If the subject reads "Navigation pane", that is
 CLWX-46's known selector defect (TB-2), not a new bug.
@@ -150,7 +150,7 @@ curl -s http://127.0.0.1:11434/api/tags | grep -o 'qwen2.5:3b-instruct'   # PF-6
 Builds carrying `fee7294d` (moe.15+) break the loop after 3 identical
 failures automatically. On older builds: stop the turn in the UI and rephrase
 with the needed content inline (the 3B model was calling
-`principal.summarise_circular` with empty args — give it the text). Do not
+`principal_summarise_circular` with empty args — give it the text). Do not
 switch the demo to cloud to "fix" this unless the demo plan says cloud.
 
 ### 8. Stale channel choice — toggle did not stick / reverted after relaunch
@@ -177,7 +177,7 @@ Flow 3 `CDPAttach → AttachFailed`.
 # Probe
 curl -s http://127.0.0.1:18792/json/version | head -3   # empty ⇒ no debug endpoint
 ```
-In-app path first: `browser.diagnose` then `browser.repair_chrome_cdp`. If
+In-app path first: `browser_diagnose` then `browser_repair_chrome_cdp`. If
 repair returns `profile_locked_close_chrome`: ONE action — close all Chrome
 windows, retry from ClawX (never give a principal Chrome flags or commands).
 Operator lane (Mac): Chrome's singleton ignores the flag while any instance

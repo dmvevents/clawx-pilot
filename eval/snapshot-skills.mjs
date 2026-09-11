@@ -2,7 +2,7 @@
 /**
  * eval/snapshot-skills.mjs — refresh eval/fixtures/skill-descriptions.json.
  *
- * The eval pipeline ranks the document.* tools against the skills that
+ * The eval pipeline ranks the document_* tools against the skills that
  * compete with them, and a skill's pull comes entirely from its SKILL.md
  * `description` — that is the text the model sees when deciding. Those files
  * live in `~/.openclaw/skills/` and are not in the repo, so CI has nothing to

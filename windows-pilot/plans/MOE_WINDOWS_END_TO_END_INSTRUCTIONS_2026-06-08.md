@@ -226,7 +226,7 @@ Release operator setup:
    - `extensions/moe-principal-assistant/forms/daily-report-test-fac-url.txt`
    - `extensions/moe-principal-assistant/forms/suspensions-test-fac-url.txt`
 2. Confirm each file contains the intended test Microsoft Forms response URL.
-3. Confirm the packaged extension can read both URLs through `forms.list`.
+3. Confirm the packaged extension can read both URLs through `forms_list`.
 
 Microsoft 365 / Forms owner setup:
 
@@ -240,9 +240,9 @@ Microsoft 365 / Forms owner setup:
 
 The agent workflow is:
 
-1. Call `forms.list`.
+1. Call `forms_list`.
 2. Build the payload from the user's request or source document.
-3. Call `forms.preview_daily_report` or `forms.preview_suspension`.
+3. Call `forms_preview_daily_report` or `forms_preview_suspension`.
 4. Stop for human review.
 5. Call the matching `forms.submit_*` tool only after an explicit same-session
    confirmation.

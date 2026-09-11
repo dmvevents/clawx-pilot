@@ -32,10 +32,10 @@
  *   NSCC_TEXT_PATH — plain-text NSCC 2026 extraction (default: known local
  *                    extraction path, see DEFAULT_TEXT_PATHS)
  *   NSCC_PDF_PATH  — alternatively, the NSCC-2026.pdf; extracted via the
- *                    repo's own document.read_pdf path (doc-tools.mjs)
+ *                    repo's own document_read_pdf path (doc-tools.mjs)
  *   NSCC_EVAL_LANE — 'context' (default: full text in-context, the original
  *                    lane) or 'tool': each question's context is the REAL
- *                    principal.nscc_lookup retrieval output
+ *                    principal_nscc_lookup retrieval output
  *                    (extensions/moe-principal-assistant/nscc-lookup.mjs,
  *                    searchNscc over the SHIPPED data file) — proves the
  *                    in-app retrieval lane end-to-end against the same
@@ -143,12 +143,12 @@ function pageCited(normAnswer: string, pageCell: string): boolean {
 async function loadNsccText(): Promise<{ text: string; source: string }> {
   const pdfPath = process.env.NSCC_PDF_PATH;
   if (pdfPath) {
-    // The repo's own document.read_pdf path (extension dep, plain ESM).
+    // The repo's own document_read_pdf path (extension dep, plain ESM).
     const docTools = (await import(
       path.join(REPO_ROOT, 'extensions', 'moe-principal-assistant', 'doc-tools.mjs')
     )) as { readPdf: (a: { path: string; maxChars?: number }) => Promise<{ text: string; pages: number }> };
     const r = await docTools.readPdf({ path: pdfPath, maxChars: 600_000 });
-    return { text: r.text, source: `${pdfPath} (pdf, ${r.pages} pages, via document.read_pdf path)` };
+    return { text: r.text, source: `${pdfPath} (pdf, ${r.pages} pages, via document_read_pdf path)` };
   }
   const candidates = process.env.NSCC_TEXT_PATH ? [process.env.NSCC_TEXT_PATH] : DEFAULT_TEXT_PATHS;
   for (const p of candidates) {
@@ -269,7 +269,7 @@ async function callWithRetry(
   console.log(`knowledge: ${nscc.source} (${nscc.text.length} chars)\n`);
 
   // Tool lane (CLWX-42 acceptance): context per question = the REAL
-  // principal.nscc_lookup retrieval output over the SHIPPED plugin data file
+  // principal_nscc_lookup retrieval output over the SHIPPED plugin data file
   // — not the full text. Import the exact module the registered tool calls.
   const lane = process.env.NSCC_EVAL_LANE === 'tool' ? 'tool' : 'context';
   let lookup: ((q: string) => string) | null = null;
@@ -286,7 +286,7 @@ async function callWithRetry(
       const r = nsccMod.searchNscc(shipped, q);
       return `${r.note}\n\n${r.passages.map((p) => `[Passage ${p.rank}]\n${p.excerpt}`).join('\n\n')}`;
     };
-    console.log(`lane:      tool (context = principal.nscc_lookup retrieval over the shipped data file)\n`);
+    console.log(`lane:      tool (context = principal_nscc_lookup retrieval over the shipped data file)\n`);
   }
 
   const client = new BedrockRuntimeClient({ region: REGION });
@@ -298,7 +298,7 @@ async function callWithRetry(
     let latencyMs = 0;
     try {
       const context = lane === 'tool' && lookup
-        ? `NSCC 2026 PASSAGES (retrieved by principal.nscc_lookup for this question):\n\n${lookup(row.question)}`
+        ? `NSCC 2026 PASSAGES (retrieved by principal_nscc_lookup for this question):\n\n${lookup(row.question)}`
         : `NSCC 2026 DOCUMENT TEXT:\n\n${nscc.text}`;
       const turn = await callWithRetry(
         client,
@@ -393,7 +393,7 @@ async function callWithRetry(
   }
 
   const ok = passRate >= PASS_RATE_FLOOR;
-  const laneLabel = lane === 'tool' ? 'principal.nscc_lookup retrieval lane' : 'context-provided lane';
+  const laneLabel = lane === 'tool' ? 'principal_nscc_lookup retrieval lane' : 'context-provided lane';
   console.log(ok
     ? `CLWX-42 VERDICT: PASS — stakeholder Q&A answered correctly with NSCC citations (${laneLabel}).`
     : `CLWX-42 VERDICT: FAIL — pass rate below floor on the stakeholder Q&A set (${laneLabel}).`);

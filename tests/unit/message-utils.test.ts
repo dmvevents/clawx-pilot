@@ -5,8 +5,8 @@ describe('chat message utils', () => {
   it('strips provider final wrappers from assistant display text', () => {
     expect(extractText({
       role: 'assistant',
-      content: [{ type: 'text', text: '<final>The outlook.open tool succeeded.</final>' }],
-    })).toBe('The outlook.open tool succeeded.');
+      content: [{ type: 'text', text: '<final>The outlook_open tool succeeded.</final>' }],
+    })).toBe('The outlook_open tool succeeded.');
   });
 
   it('strips square-bracket final wrappers from assistant display text', () => {

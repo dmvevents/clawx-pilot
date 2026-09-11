@@ -371,7 +371,7 @@ function decodeXml(value) {
 
 /**
  * Write-path assertions (CLWX-65): exercise the SAME implementations the
- * agent's document.write_docx / document.write_xlsx tools call
+ * agent's document_write_docx / document_write_xlsx tools call
  * (extensions/moe-principal-assistant/doc-tools.mjs), then parse both
  * artifacts back with this script's own read-side summarizers. The
  * doc-tools module is imported lazily so the read-only modes keep working

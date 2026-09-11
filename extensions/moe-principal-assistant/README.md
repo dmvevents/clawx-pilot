@@ -40,18 +40,18 @@ or **Government**.
 
 | Name | Purpose |
 |---|---|
-| `principal.draft_letter` | Draft a formal letter from `templates/letter.md`. Returns prose. |
-| `principal.draft_memo` | Draft an internal memo from `templates/memo.md`. Returns prose. |
-| `principal.summarise_circular` | Returns the structural shape `{ summary, action_items, deadline }` the agent fills in. |
-| `principal.daily_report_payload` | Build the JSON payload for the Primary School Daily Report (Term 3 2025/26). |
-| `principal.daily_report_form_payload` | Build the exact Microsoft Forms field payload for the Primary School Daily Report. |
-| `principal.suspension_payload` | Build the JSON payload for the Primary School Student Suspensions form. |
-| `principal.find_school` | Substring search against `data/schools.json`; returns up to 10 matches. |
-| `forms.list` | List configured MoE Forms and their availability. |
-| `forms.preview_daily_report` | Open and fill the Daily Report form for review; never submits. |
-| `forms.submit_daily_report` | Submit the Daily Report form only after explicit `confirm:true`. |
-| `forms.preview_suspension` | Open and fill the Suspensions form for review; never submits. |
-| `forms.submit_suspension` | Submit the Suspensions form only after explicit `confirm:true`. |
+| `principal_draft_letter` | Draft a formal letter from `templates/letter.md`. Returns prose. |
+| `principal_draft_memo` | Draft an internal memo from `templates/memo.md`. Returns prose. |
+| `principal_summarise_circular` | Returns the structural shape `{ summary, action_items, deadline }` the agent fills in. |
+| `principal_daily_report_payload` | Build the JSON payload for the Primary School Daily Report (Term 3 2025/26). |
+| `principal_daily_report_form_payload` | Build the exact Microsoft Forms field payload for the Primary School Daily Report. |
+| `principal_suspension_payload` | Build the JSON payload for the Primary School Student Suspensions form. |
+| `principal_find_school` | Substring search against `data/schools.json`; returns up to 10 matches. |
+| `forms_list` | List configured MoE Forms and their availability. |
+| `forms_preview_daily_report` | Open and fill the Daily Report form for review; never submits. |
+| `forms_submit_daily_report` | Submit the Daily Report form only after explicit `confirm:true`. |
+| `forms_preview_suspension` | Open and fill the Suspensions form for review; never submits. |
+| `forms_submit_suspension` | Submit the Suspensions form only after explicit `confirm:true`. |
 
 ## Persona
 
@@ -79,14 +79,14 @@ enabled. It establishes:
 
 - **The school roster.** `data/schools.json` ships ~30 representative
   entries with a `__note__` flag. The full ~1300-school MoE roster will
-  replace it; `principal.find_school` works the same way once it does.
+  replace it; `principal_find_school` works the same way once it does.
   `educationDistrict` is left `null` for entries we are not certain about
   rather than guessed wrong.
 - **Form submission.** This plugin builds the payload and proxies to ClawX's
   host-API Forms browser driver for preview/submit. Preview opens the live
   form and fills fields. Submission is hard-gated on explicit same-session
   confirmation from the principal.
-- **`principal.summarise_circular`.** The handler returns the structural
+- **`principal_summarise_circular`.** The handler returns the structural
   shape only; the model is expected to do the actual summarisation. This
   is deliberate — keeping the structure here means the UI and downstream
   tools have a stable schema to rely on regardless of which model the
@@ -106,12 +106,12 @@ A typical end-of-day flow:
 
 1. Principal taps the mic. `whisper-asr` transcribes locally.
 2. The agent classifies the dictation (daily report? suspension? letter?
-   memo?) and calls the matching `principal.*` tool to produce a
+   memo?) and calls the matching `principal_*` tool to produce a
    structured payload or draft.
 3. The agent reads back the result. The principal says "send" or "submit".
 4. For mail, Outlook browser-session tools open a draft and only send after
-   confirmation. For Microsoft Forms, `forms.preview_daily_report` or
-   `forms.preview_suspension` fills the browser form, and submit refuses
+   confirmation. For Microsoft Forms, `forms_preview_daily_report` or
+   `forms_preview_suspension` fills the browser form, and submit refuses
    until confirmation is passed explicitly.
 
 ## Why a separate plugin and not just a system prompt?

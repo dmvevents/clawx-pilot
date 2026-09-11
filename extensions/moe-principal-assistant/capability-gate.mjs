@@ -6,7 +6,7 @@
  * plugin source ships alongside the app but can be NEWER than the installed
  * binary (re-seeded extensions, dev plugin against an installed app), in
  * which case the tool catalog advertises routes the app does not serve —
- * observed live on moe.15, where `browser.diagnose` surfaced a raw
+ * observed live on moe.15, where `browser_diagnose` surfaced a raw
  * "No route for POST /api/browser/diagnose" to the agent.
  *
  * The gate probes the host-API ONCE at plugin registration and self-parks

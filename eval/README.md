@@ -18,7 +18,7 @@ are correct, and that is the whole problem:
 | Layer | Question | Covered by |
 |---|---|---|
 | handler | does `readDocx()` parse a .docx? | `harness/run.ts` — 5/5 |
-| **selection** | **would the model call `document.read_docx` at all?** | **nothing, until now** |
+| **selection** | **would the model call `document_read_docx` at all?** | **nothing, until now** |
 | **discovery** | **does a bare filename resolve on a real laptop?** | **nothing, until now** |
 
 `harness/run.ts` reads `expect_calls_tool` from its own spec and calls that
@@ -32,7 +32,7 @@ script, and ran `uv pip install`. Seven tool calls, no answer.
 
 | Lane | Scores | Fails when |
 |---|---|---|
-| **A** selection | Ranks the shipped tool catalogue against each Ministry prompt, under **two** catalogue profiles | a Python skill out-ranks a `document.*` tool, or the wrong `document.*` tool wins |
+| **A** selection | Ranks the shipped tool catalogue against each Ministry prompt, under **two** catalogue profiles | a Python skill out-ranks a `document_*` tool, or the wrong `document_*` tool wins |
 | **B** counterfactual | Replays the **pre-fix** catalogue | the pre-fix catalogue does *not* reproduce the failure |
 | **C** discovery | Stages real files on a real tree and resolves them | a bare filename misses, or the sandbox leaks |
 | **D** steering | The catalogue/manifest state the fix rests on | steering text or `autoEnable: false` regresses |

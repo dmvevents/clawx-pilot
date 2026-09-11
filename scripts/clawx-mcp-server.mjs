@@ -68,7 +68,7 @@ export const TOOL_TABLE = [
     description: 'Fill the Primary School Daily Report in the visible browser for principal review. Args: { payload } (field map). Does NOT submit.',
     inputSchema: {
       type: 'object',
-      properties: { payload: { type: 'object', description: 'Daily Report field payload (principal.daily_report_form_payload shape)' } },
+      properties: { payload: { type: 'object', description: 'Daily Report field payload (principal_daily_report_form_payload shape)' } },
       required: ['payload'],
       additionalProperties: false,
     },
@@ -90,7 +90,7 @@ export const TOOL_TABLE = [
     description: 'Fill the Student Suspensions form in the visible browser for principal review. Args: { payload }. Does NOT submit.',
     inputSchema: {
       type: 'object',
-      properties: { payload: { type: 'object', description: 'Suspensions field payload (principal.suspension_payload shape)' } },
+      properties: { payload: { type: 'object', description: 'Suspensions field payload (principal_suspension_payload shape)' } },
       required: ['payload'],
       additionalProperties: false,
     },

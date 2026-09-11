@@ -1,7 +1,7 @@
 /**
  * CLWX-65 (Mac leg): live in-app WRITE turn — matrix gap b2.
  *
- * document.write_docx / write_xlsx are proven at runtime level (fn round-trip
+ * document_write_docx / write_xlsx are proven at runtime level (fn round-trip
  * 8/8), but no live model turn has ever produced a document in-app. This
  * harness submits a letter-drafting prompt as a live chat turn in the running
  * Ministry of Education app, waits for the turn to settle, and asserts that a
@@ -61,7 +61,7 @@ const SESSION_KEY = 'agent:main:main';
 const EXPECTED_FILENAME = 'sports-day-letter.docx';
 const PROMPT = `Draft a short letter to parents about our upcoming Sports Day and save it as a docx file named ${EXPECTED_FILENAME}`;
 // The agent legitimately asks for letterhead details before saving (it drafts
-// via principal.draft_letter first) — answer once, like a principal would.
+// via principal_draft_letter first) — answer once, like a principal would.
 const FOLLOWUP = `The school is Demo Primary School and my name is A. Alexander. Please save the letter now as ${EXPECTED_FILENAME}.`;
 // Per-turn markers matched against the turn's OWN user message (the last user
 // entry in messagesSnapshot), so turn 2 is never confused with turn 1.
@@ -290,7 +290,7 @@ async function waitForSettle(submitWallClock: number, marker: string): Promise<S
 // ── Produced-file discovery + parse-back ─────────────────────────────────────
 
 function findProducedDocx(entry: TurnEntry | undefined, submitWallClock: number): string | null {
-  // 1) Path echoed in a document.write_docx toolResult ({ path, bytes, paragraphs }).
+  // 1) Path echoed in a document_write_docx toolResult ({ path, bytes, paragraphs }).
   for (const text of entry?.toolResultTexts ?? []) {
     const m = /"path"\s*:\s*"([^"]+\.docx)"/.exec(text) ?? /(\/[^\s"']+\.docx)/.exec(text);
     if (m && existsSync(m[1])) return m[1];
@@ -376,7 +376,7 @@ async function main(): Promise<void> {
   let followupUsed = false;
   if (
     turn1.outcome === 'reply' &&
-    !turn1.entry?.toolCallNames.includes('document.write_docx') &&
+    !turn1.entry?.toolCallNames.includes('document_write_docx') &&
     !findProducedDocx(turn1.entry, submitAt)
   ) {
     followupUsed = true;
@@ -393,7 +393,7 @@ async function main(): Promise<void> {
     ...(turn1.entry?.toolCallNames ?? []),
     ...(followupUsed ? settled.entry?.toolCallNames ?? [] : []),
   ];
-  const wroteViaTool = toolCallNames.includes('document.write_docx');
+  const wroteViaTool = toolCallNames.includes('document_write_docx');
   const paraText = (parse?.firstParagraphs ?? []).join('\n').toLowerCase();
   // Letter structure = salutation + sign-off. Models legitimately pass the
   // body as a single paragraphs[] entry, so paragraph count is held to a

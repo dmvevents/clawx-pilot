@@ -94,7 +94,7 @@ try {
             exit 41
         }
         "STATE: PROFILE_LOCK_SIMULATED"
-        "Run ClawX with the APP_ENV values above and call browser.diagnose; expected app state: profile_locked_close_chrome."
+        "Run ClawX with the APP_ENV values above and call browser_diagnose; expected app state: profile_locked_close_chrome."
     }
 } finally {
     if (-not $LeaveOpen) {

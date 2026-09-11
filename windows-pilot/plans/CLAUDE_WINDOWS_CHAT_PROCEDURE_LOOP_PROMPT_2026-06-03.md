@@ -39,8 +39,8 @@ Acceptance criteria:
 - Chrome CDP 18792 is up and Outlook is signed in.
 - Electron CDP 9223 is up.
 - Electron renderer exposes window.electron.ipcRenderer.invoke.
-- Safe chat can call outlook.open exactly once and complete.
-- Safe chat can call forms.list exactly once and complete.
+- Safe chat can call outlook_open exactly once and complete.
+- Safe chat can call forms_list exactly once and complete.
 - Safe chat can list document-like files in Downloads.
 - Safe chat can choose and summarize the most relevant Excel/CSV file in Downloads.
 - Safe chat can extract suspension/report fields from an available Word/PDF/text/markdown source when one exists.

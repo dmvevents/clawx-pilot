@@ -1407,26 +1407,107 @@ export async function readDocx({ path: inputPath, format = 'markdown' } = {}) {
   };
 }
 
+/**
+ * Normalise what the model hands `document_write_docx` into real paragraphs.
+ *
+ * CLWX-142 (installed moe.33, 2026-09-11): the model passed the whole letter as
+ * ONE string whose line breaks were JSON-escaped twice, so the saved .docx was a
+ * single run reading `Dear Demo Guardian,\n\nThis letter …` with literal
+ * backslash-n sequences and markdown `**…**` around the subject line. A
+ * principal opening the letter saw the escapes. The tool, not the model, owns
+ * the file format, so it must accept the shapes models actually emit:
+ *  - a single string instead of an array;
+ *  - literal `\n` / `\r\n` escape sequences as well as real newlines;
+ *  - blank-line separated blocks (paragraphs) and single newlines (line breaks);
+ *  - markdown emphasis, rendered as bold/italic runs rather than kept as text;
+ *  - `#`-style headings, rendered as headings.
+ * Pure so it is unit-testable without the docx dependency.
+ */
+export function normalizeDocxParagraphs(paragraphs) {
+  const items = Array.isArray(paragraphs) ? paragraphs : [paragraphs];
+  const text = items
+    .filter((p) => p !== null && p !== undefined)
+    .map((p) => String(p))
+    // Literal escapes (\\r\\n, \\n, \\t) are only escapes when the string carries no
+    // real newline — a real newline proves JSON escaping did NOT happen, and then a
+    // backslash is content (a Windows path such as C:\\new\\notes must survive).
+    .map((p) => (/\n/.test(p) ? p : p.replace(/\\r\\n|\\n/g, '\n').replace(/\\t/g, '\t')))
+    .map((p) => p.replace(/\r\n?/g, '\n'))
+    .join('\n\n');
+  const blocks = text
+    .split(/\n[ \t]*\n+/)
+    .map((b) => b.replace(/^\n+|\n+$/g, ''))
+    .filter((b) => b.trim().length > 0);
+  return blocks.map((block) => {
+    const trimmed = block.trim();
+    // A heading is a single-line block starting with 1–6 hashes; a hash on a later
+    // line, or a multi-line block, is body text.
+    const heading = trimmed.includes('\n') ? null : /^(#{1,6})\s+(.+)$/.exec(trimmed);
+    const lines = (heading ? heading[2] : block).split('\n').map((line) => line.replace(/[ \t]+$/g, ''));
+    return {
+      heading: heading ? Math.min(heading[1].length, 3) : 0,
+      // Each line becomes a run list; a line break separates lines inside the paragraph.
+      lines: lines.map((line) => splitMarkdownRuns(line)),
+    };
+  });
+}
+
+/** `**bold**`, `__bold__`, `*italic*`, `_italic_` → typed runs; everything else plain. */
+export function splitMarkdownRuns(line) {
+  const runs = [];
+  // `_` delimiters need non-word context on both sides so snake_case identifiers and
+  // filenames (Suspension_Letter_Draft.docx) are never eaten as emphasis; bodies may
+  // not contain their own delimiter (review of eeadd7e9, F1).
+  const re = /(\*\*)([^*]+?)\*\*|(?<![A-Za-z0-9_])(__)([^_]+?)__(?![A-Za-z0-9_])|(?<![A-Za-z0-9])(\*)(?!\s)([^*]+?)(?<!\s)\*(?![A-Za-z0-9])|(?<![A-Za-z0-9_])(_)(?!\s)([^_]+?)(?<!\s)_(?![A-Za-z0-9_])/g;
+  let last = 0;
+  for (const m of line.matchAll(re)) {
+    if (m.index > last) runs.push({ text: line.slice(last, m.index) });
+    if (m[2] !== undefined) runs.push({ text: m[2], bold: true });
+    else if (m[4] !== undefined) runs.push({ text: m[4], bold: true });
+    else if (m[6] !== undefined) runs.push({ text: m[6], italics: true });
+    else runs.push({ text: m[8], italics: true });
+    last = m.index + m[0].length;
+  }
+  if (last < line.length) runs.push({ text: line.slice(last) });
+  return runs.length ? runs : [{ text: '' }];
+}
+
 export async function writeDocx({ path: outputPath, title, paragraphs = [] } = {}) {
-  if (!Array.isArray(paragraphs) || !paragraphs.length) {
+  const blocks = normalizeDocxParagraphs(paragraphs);
+  if (!blocks.length) {
     throw new Error('paragraphs array required (at least one non-empty string).');
   }
   const docxMod = requireDocDep('docx');
-  const { Document, Packer, Paragraph, HeadingLevel } = docxMod;
+  const { Document, Packer, Paragraph, HeadingLevel, TextRun } = docxMod;
+  const headingFor = (level) =>
+    level === 1 ? HeadingLevel.HEADING_1 : level === 2 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_3;
   const children = [];
   if (title) {
     children.push(
       new Paragraph({ text: String(title), heading: HeadingLevel.HEADING_1 }),
     );
   }
-  for (const p of paragraphs) {
-    children.push(new Paragraph({ text: String(p) }));
+  for (const block of blocks) {
+    const runs = [];
+    block.lines.forEach((lineRuns, lineIndex) => {
+      lineRuns.forEach((run, runIndex) => {
+        const options = { text: run.text, bold: run.bold === true, italics: run.italics === true };
+        // A single newline inside a block is a line break before the line's first run.
+        if (lineIndex > 0 && runIndex === 0) options.break = 1;
+        runs.push(new TextRun(options));
+      });
+    });
+    children.push(
+      block.heading
+        ? new Paragraph({ children: runs, heading: headingFor(block.heading) })
+        : new Paragraph({ children: runs }),
+    );
   }
   const doc = new Document({ sections: [{ properties: {}, children }] });
   const buffer = await Packer.toBuffer(doc);
   const filePath = await resolveWritablePath(outputPath);
   await writeFile(filePath, buffer);
-  return { path: filePath, bytes: buffer.length, paragraphs: paragraphs.length };
+  return { path: filePath, bytes: buffer.length, paragraphs: blocks.length };
 }
 
 // ── XLSX ─────────────────────────────────────────────────────────────────
@@ -1440,11 +1521,17 @@ export async function readXlsx({ path: inputPath, sheet, maxRows = 500 } = {}) {
   if (!sheetNames.length) {
     return { path: filePath, bytes: buf.length, sheets: [], sheet: null };
   }
+  // Accept a sheet name, a numeric index, or the index written as a string ("0") —
+  // the tool schema is string-only for provider compatibility (CLWX-141).
+  const sheetIndex =
+    typeof sheet === 'number' ? sheet
+      : typeof sheet === 'string' && /^\d+$/.test(sheet.trim()) && !sheetNames.includes(sheet) ? Number(sheet.trim())
+      : null;
   const target =
     typeof sheet === 'string' && sheetNames.includes(sheet)
       ? sheet
-      : typeof sheet === 'number' && sheetNames[sheet]
-      ? sheetNames[sheet]
+      : sheetIndex !== null && sheetNames[sheetIndex]
+      ? sheetNames[sheetIndex]
       : sheetNames[0];
   const ws = wb.Sheets[target];
   const aoa = xlsx.utils.sheet_to_json(ws, {
@@ -1477,7 +1564,12 @@ export async function writeXlsx({ path: outputPath, sheets } = {}) {
     if (!Array.isArray(s?.rows)) {
       throw new Error(`sheet "${s?.name ?? 'unnamed'}" must have a rows 2D array.`);
     }
-    const ws = xlsx.utils.aoa_to_sheet(s.rows);
+    // Same class as CLWX-142 for cells: a string cell with no real newline but a
+    // literal \\n sequence is the model's JSON escaping, not content.
+    const rows = s.rows.map((row) => (Array.isArray(row)
+      ? row.map((cell) => (typeof cell === 'string' && !/\n/.test(cell) ? cell.replace(/\\r\\n|\\n/g, '\n').replace(/\\t/g, '\t') : cell))
+      : row));
+    const ws = xlsx.utils.aoa_to_sheet(rows);
     xlsx.utils.book_append_sheet(wb, ws, String(s.name || 'Sheet1').slice(0, 31));
   }
   const filePath = await resolveWritablePath(outputPath);

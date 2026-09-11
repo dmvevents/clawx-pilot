@@ -1,7 +1,7 @@
 # Run the Electron CDP probe against the installed Windows app.
 #
 # Read-only against user data except screenshots/JSON artifacts in Downloads.
-# Safe app calls only: outlook.open, forms.list, optional safe chat prompt that
+# Safe app calls only: outlook_open, forms_list, optional safe chat prompt that
 # instructs the model not to send, draft, reply, forward, read inbox, or submit.
 # Explicit -SendEmail and -SubmitForms flags perform real side effects.
 # -DraftEmail drafts only and leaves the compose pane open for inspection.

@@ -2,7 +2,7 @@
   {
     "id": "P1-docx-summarize",
     "prompt": "Open the Staff Meeting Memo Draft document and summarize its main points in bullet form.",
-    "expect_calls_tool": "document.read_docx",
+    "expect_calls_tool": "document_read_docx",
     "fixture": {
       "kind": "docx",
       "name": "Staff_Meeting_Memo_Draft.docx",
@@ -19,7 +19,7 @@
   {
     "id": "P2-docx-rewrite-save",
     "prompt": "Rewrite the Staff Meeting Memo Draft into a professional internal memo. Save the edited copy as Staff_Memo_Final.docx in the Output_Files folder. Do not overwrite the original.",
-    "expect_calls_tool": "document.write_docx",
+    "expect_calls_tool": "document_write_docx",
     "fixture": {
       "kind": "docx",
       "name": "Staff_Meeting_Memo_Draft.docx"
@@ -39,7 +39,7 @@
   {
     "id": "P3-pdf-summarize",
     "prompt": "Summarize the ICT Equipment Audit circular for a teacher who has only five minutes to understand it.",
-    "expect_calls_tool": "document.read_pdf",
+    "expect_calls_tool": "document_read_pdf",
     "fixture": {
       "kind": "pdf",
       "name": "ICT_Equipment_Audit.pdf"
@@ -50,7 +50,7 @@
   {
     "id": "P4-xlsx-grade",
     "prompt": "Open the Student Marks Gradebook workbook. Calculate each student's average and assign a grade using the scale in the workbook or instructions. Save the updated copy as Marks_Updated.xlsx. Do not overwrite the original.",
-    "expect_calls_tool": "document.write_xlsx",
+    "expect_calls_tool": "document_write_xlsx",
     "fixture": {
       "kind": "xlsx",
       "name": "Student_Marks_Gradebook.xlsx",
@@ -79,7 +79,7 @@
   {
     "id": "P5-image-fields",
     "prompt": "Open the Student Support Referral Form image and list each visible field and value. Mark any blank, missing, or unclear fields.",
-    "expect_calls_tool": "document.read_image",
+    "expect_calls_tool": "document_read_image",
     "fixture": {
       "kind": "png",
       "name": "Student_Support_Referral_Form.png"

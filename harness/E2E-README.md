@@ -1,6 +1,6 @@
 # 5-prompt doc-tooling E2E harness
 
-Fixture-driven, offline harness that proves the Lane A `document.*`
+Fixture-driven, offline harness that proves the Lane A `document_*`
 native tools (`extensions/moe-principal-assistant/doc-tools.mjs`) resolve
 their bundled JS deps and produce the expected response shape on the
 target OS — including the packaged Windows runtime once the installer
@@ -32,7 +32,7 @@ For every prompt in `tests/e2e/prompts.json` the runner:
 1. Loads `tests/e2e/golden/<id>.json`.
 2. Asserts `golden.tool_called === prompt.expect_calls_tool` (guards against drift).
 3. Seeds a fixture in a temp workdir (docx / xlsx / pdf / png).
-4. Calls the matching `document.*` entrypoint with `prompt.tool_args`.
+4. Calls the matching `document_*` entrypoint with `prompt.tool_args`.
 5. Validates the return object against `golden.result_schema` (per-key type check).
 6. Runs `golden.assertions` (`_min`, `_max`, `_equals`, `_matches`, `file_exists_at_path`).
 7. Checks `prompt.expected_stdout_regex` against the response body.
@@ -51,7 +51,7 @@ and `openclaw/node_modules` deposited by the installer.
 
 The incoming task named markers `create_doc / insert_paragraph /
 apply_style / export_pdf / list_headings`. Lane A ships
-`document.read_pdf / read_docx / write_docx / read_xlsx / write_xlsx /
+`document_read_pdf / read_docx / write_docx / read_xlsx / write_xlsx /
 read_image`. The harness asserts on the shipped names, which is what
 the packaged agent actually invokes on the pilot laptop. If the
 checker prefers the abstract names, a thin alias layer in

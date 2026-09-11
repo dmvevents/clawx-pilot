@@ -40,6 +40,6 @@ ssh pilot 'powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE
 - Chrome CDP is live.
 - Outlook tab is signed in.
 - `/api/outlook/open` works through the Host API bridge.
-- `forms.list` returns available forms.
+- `forms_list` returns available forms.
 - Draft/preview works without sending/submitting.
 - Send/submit refuses without `confirm:true`.

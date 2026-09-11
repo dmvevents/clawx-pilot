@@ -275,8 +275,8 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     const summary = summarizeChatHistory(history([
       ...olderMessages,
       textMessage('user', `Verification token: ${token}`),
-      toolCallMessage('forms.list'),
-      toolResultMessage('forms.list'),
+      toolCallMessage('forms_list'),
+      toolResultMessage('forms_list'),
       finalMessage(token),
     ]), 'forms-list', token);
 
@@ -291,24 +291,24 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     const token = 'pilot-safe-chat-token';
     const summary = summarizeChatHistory(history([
       textMessage('user', `Verification token: ${token}`),
-      toolCallMessage('outlook.open'),
-      toolResultMessage('outlook.open'),
-      toolCallMessage('outlook.read_inbox'),
-      toolResultMessage('outlook.read_inbox'),
+      toolCallMessage('outlook_open'),
+      toolResultMessage('outlook_open'),
+      toolCallMessage('outlook_read_inbox'),
+      toolResultMessage('outlook_read_inbox'),
       finalMessage(token),
     ]), 'outlook-open', token);
 
     expect(summary.expectedToolResultOk).toBe(true);
     expect(summary.expectedToolOnly).toBe(false);
-    expect(summary.observedToolCalls.map((tool) => tool.name)).toContain('outlook.read_inbox');
+    expect(summary.observedToolCalls.map((tool) => tool.name)).toContain('outlook_read_inbox');
   });
 
   it('flags banned side-effect tools even when the final token is echoed', () => {
     const token = 'pilot-safe-chat-token';
     const summary = summarizeChatHistory(history([
       textMessage('user', `Verification token: ${token}`),
-      toolCallMessage('outlook.send_email'),
-      toolResultMessage('outlook.send_email'),
+      toolCallMessage('outlook_send_email'),
+      toolResultMessage('outlook_send_email'),
       finalMessage(token),
     ]), 'custom', token);
 
@@ -318,9 +318,9 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
   });
 
   it.each([
-    'outlook.download_attachment',
-    'forms.submit_daily_report',
-    'forms.submit_suspension',
+    'outlook_download_attachment',
+    'forms_submit_daily_report',
+    'forms_submit_suspension',
   ])('flags %s as a banned safe-chat side effect', (toolName) => {
     const token = 'pilot-safe-chat-token';
     const summary = summarizeChatHistory(history([
@@ -341,10 +341,10 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     const token = 'pilot-safe-chat-token';
     const summary = summarizeChatHistory(history([
       textMessage('user', `Verification token: ${token}`),
-      toolCallMessage('outlook.search_inbox', 'search-1', { fromContains: 'Karunesh', top: 10 }),
-      toolResultMessage('outlook.search_inbox', false, 'search-1'),
-      toolCallMessage('outlook.reply', 'reply-1', { id: 'message-1', body: 'Testing the reply feature' }),
-      toolResultMessage('outlook.reply', false, 'reply-1'),
+      toolCallMessage('outlook_search_inbox', 'search-1', { fromContains: 'Karunesh', top: 10 }),
+      toolResultMessage('outlook_search_inbox', false, 'search-1'),
+      toolCallMessage('outlook_reply', 'reply-1', { id: 'message-1', body: 'Testing the reply feature' }),
+      toolResultMessage('outlook_reply', false, 'reply-1'),
       {
         role: 'assistant',
         stopReason: 'stop',
@@ -360,27 +360,27 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     ]), 'custom', token);
 
     expect(summary.observedToolCalls.map((tool) => tool.name)).toEqual([
-      'outlook.search_inbox',
-      'outlook.reply',
+      'outlook_search_inbox',
+      'outlook_reply',
     ]);
     expect(summary.finalAnswerTextSample).toMatch(/draft .*open|open .*draft/i);
     expect(summary.finalAnswerTextSample).toMatch(/review/i);
     expect(summary.finalAnswerTextSample).toMatch(/not been sent|not sent/i);
     expect(summary.finalAnswerTextSample).toMatch(/confirmation/i);
     expect(summary.noBannedSideEffects).toBe(true);
-    expect(summary.observedToolCalls.map((tool) => tool.name)).not.toContain('outlook.send_email');
+    expect(summary.observedToolCalls.map((tool) => tool.name)).not.toContain('outlook_send_email');
   });
 
   it('captures bounded inbox-scan acceptance text from the final answer', () => {
     const token = 'pilot-safe-chat-token';
     const summary = summarizeChatHistory(history([
       textMessage('user', `Verification token: ${token}`),
-      toolCallMessage('outlook.search_inbox', 'search-1', {
+      toolCallMessage('outlook_search_inbox', 'search-1', {
         dateGte: '2026-06-01T00:00:00.000Z',
         dateLt: '2026-07-01T00:00:00.000Z',
         top: 200,
       }),
-      toolResultMessage('outlook.search_inbox', false, 'search-1'),
+      toolResultMessage('outlook_search_inbox', false, 'search-1'),
       {
         role: 'assistant',
         stopReason: 'stop',
@@ -396,7 +396,7 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     ]), 'custom', token);
 
     expect(summary.observedToolCalls).toEqual([
-      expect.objectContaining({ name: 'outlook.search_inbox' }),
+      expect.objectContaining({ name: 'outlook_search_inbox' }),
     ]);
     expect(summary.noBannedSideEffects).toBe(true);
     expect(summary.finalAnswerTextSample).toMatch(/June/i);
@@ -404,8 +404,8 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     expect(summary.finalAnswerTextSample).toMatch(/bounded|recent|window|scanned/i);
     expect(summary.finalAnswerTextSample).toMatch(/not exhaustive|may be more/i);
     expect(summary.observedToolCalls.map((tool) => tool.name)).not.toEqual(expect.arrayContaining([
-      'outlook.reply',
-      'outlook.send_email',
+      'outlook_reply',
+      'outlook_send_email',
     ]));
   });
 
@@ -435,14 +435,14 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     const token = 'pilot-safe-chat-token';
     const summary = summarizeChatHistory(history([
       textMessage('user', `Verification token: ${token}`),
-      toolCallMessage('forms.list'),
-      toolResultMessage('forms.list', true),
+      toolCallMessage('forms_list'),
+      toolResultMessage('forms_list', true),
       finalMessage(token),
     ]), 'forms-list', token);
 
     expect(summary.expectedToolResultOk).toBe(false);
     expect(summary.observedToolResults).toEqual([
-      expect.objectContaining({ name: 'forms.list', isError: true }),
+      expect.objectContaining({ name: 'forms_list', isError: true }),
     ]);
   });
 
@@ -457,7 +457,7 @@ describe('Windows Electron CDP probe transcript evaluator', () => {
     });
 
     expect(validation.ok).toBe(false);
-    expect(validation.reasons).toContain('hostapi outlook.open was not ok');
+    expect(validation.reasons).toContain('hostapi outlook_open was not ok');
   });
 
   it('builds visual acceptance criteria for Outlook, Forms, and safe-chat evidence', () => {

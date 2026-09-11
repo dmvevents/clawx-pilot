@@ -56,7 +56,7 @@ Type into the chat composer (verbatim):
 
 > Send it.
 
-**Expected result (~3s):** the agent calls `outlook.send_email({confirm:true})` only, sends the single visible reviewed draft, and the compose pane closes. Reply visible in Sent.
+**Expected result (~3s):** the agent calls `outlook_send_email({confirm:true})` only, sends the single visible reviewed draft, and the compose pane closes. Reply visible in Sent.
 
 **Optional 30s gate demo:** say "send it" before any draft is open, or leave two compose panes open. The gate refuses with a clear message. Close extra drafts, review the intended draft, then say "send it" again. **This is the trust moment.**
 
@@ -117,8 +117,8 @@ Otherwise: play `docs/ui-snapshots/cron-reminder-demo.mov`.
 | Symptom | Action |
 |---|---|
 | Agent turn errors with "400 status code (no body)" | Same prompt with brain icon ON (Think mode → Pro). |
-| `outlook.send_email` refuses after review | Make sure exactly one reviewed draft is open, then say "send it" again. The agent should call `outlook.send_email({confirm:true})` only. |
-| `forms.submit_suspension` fails to find Submit | Click "Next" in the form tab, then re-issue "submit the form". |
+| `outlook_send_email` refuses after review | Make sure exactly one reviewed draft is open, then say "send it" again. The agent should call `outlook_send_email({confirm:true})` only. |
+| `forms_submit_suspension` fails to find Submit | Click "Next" in the form tab, then re-issue "submit the form". |
 | Gateway disconnects (red footer) | Pause demo; tell the principal "let me restart"; relaunch app from Desktop shortcut; resume from Path 1 Turn 1. |
 | Chrome lost CDP | Same — relaunch via the FIXED shortcut OR run `pilot-attach-chrome-cdp.ps1`. |
 | Model call failed | Brain icon ON. If still fails, switch to Mac demo (have the Mac running silently in the background as backup). |

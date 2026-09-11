@@ -25,14 +25,14 @@ a structured JSON-like format at the end.
 
 GROUND RULES — DO NOT BREAK ANY:
 - DO NOT send any email. The send_email tool's hard-confirm gate must
-  NEVER fire on this run. Never call outlook.send_email.
-- DO NOT submit any form. Never call forms.submit_suspension.
+  NEVER fire on this run. Never call outlook_send_email.
+- DO NOT submit any form. Never call forms_submit_suspension.
 - DO NOT call download_attachment.
-- It is OK and expected to call: outlook.open, outlook.read_inbox,
-  outlook.search_inbox, outlook.read_email, outlook.list_attachments,
-  outlook.draft_email, outlook.reply, outlook.forward (don't actually
+- It is OK and expected to call: outlook_open, outlook_read_inbox,
+  outlook_search_inbox, outlook_read_email, outlook_list_attachments,
+  outlook_draft_email, outlook_reply, outlook_forward (don't actually
   forward — abort the call after the compose pane opens),
-  forms.list, forms.preview_suspension.
+  forms_list, forms_preview_suspension.
 - After every tool call, briefly note what the tool returned (success,
   error, count of items, etc.).
 - If a tool fails, capture the exact error message verbatim and
@@ -40,32 +40,32 @@ GROUND RULES — DO NOT BREAK ANY:
 
 STEPS:
 
-1. Call outlook.open. Note whether it returns "opened" or
+1. Call outlook_open. Note whether it returns "opened" or
    "needs_signin". If needs_signin, STOP and report which account is
    signed in (or that Chrome is missing CDP).
 
-2. Call outlook.read_inbox with top=5. Capture the count returned and
+2. Call outlook_read_inbox with top=5. Capture the count returned and
    the subject line of each (truncate to 60 chars).
 
-3. Call outlook.search_inbox with subjectContains="suspension".
+3. Call outlook_search_inbox with subjectContains="suspension".
    Capture the count and the message id of the first match (if any).
 
-4. If step 3 returned at least one match, call outlook.read_email
+4. If step 3 returned at least one match, call outlook_read_email
    with that id. Capture the body length in characters and the first
    80 chars of the body.
 
-5. Call outlook.list_attachments on the same id (only if step 4
+5. Call outlook_list_attachments on the same id (only if step 4
    returned a body). Note the count and names of any attachments.
 
-6. Call outlook.search_inbox with subjectContains="parent meeting".
+6. Call outlook_search_inbox with subjectContains="parent meeting".
    Capture the first match's id.
 
-7. If step 6 returned a match, call outlook.reply with that id and
+7. If step 6 returned a match, call outlook_reply with that id and
    body="DRAFT — confirming I'll attend at 4 pm and bring the report
    card. (This is a self-test draft; do not send.)". Note that the
    compose pane should open in Chrome but NOTHING should be sent.
 
-8. Call forms.list to confirm the suspensions form is registered.
+8. Call forms_list to confirm the suspensions form is registered.
 
 9. (Stretch goal — only if step 4 returned a usable suspension body):
    Extract the suspension fields from that email body in your head

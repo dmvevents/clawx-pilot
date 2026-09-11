@@ -128,7 +128,7 @@ For each tool, expect a log line within 10s of the prompt. Subjects truncated â‰
 **Fallback:**
 - 1-2 failures: WARN, demo proceeds. Note in risk register.
 - 3+ failures: NO-GO on Outlook. Escalate.
-- `outlook.send_email` fails: this is demo-critical. Investigate gate logic before proceeding.
+- `outlook_send_email` fails: this is demo-critical. Investigate gate logic before proceeding.
 
 ### Phase 6 â€” Forms acceptance smoke (15 min, human + plan-author)
 
@@ -140,11 +140,11 @@ For each tool, expect a log line within 10s of the prompt. Subjects truncated â‰
    ```
 2. Human types Turn A (extract + preview):
    > Read the suspension report email from this morning and fill out the Term 3 Suspensions form. Don't submit yet â€” let me review.
-3. Tail log for `forms.preview_suspension`. Capture field count.
+3. Tail log for `forms_preview_suspension`. Capture field count.
 4. Human visually confirms 30+ fields populated correctly.
 5. Human types Turn B:
    > Submit the form.
-6. Tail log for `forms.submit_suspension({confirm:true})` + DOM Submit click.
+6. Tail log for `forms_submit_suspension({confirm:true})` + DOM Submit click.
 7. Human confirms "Thanks" page.
 
 **Stop condition:** "Thanks" page reached after Turn B.
@@ -181,7 +181,7 @@ For each tool, expect a log line within 10s of the prompt. Subjects truncated â‰
 | Agent picks Bearer-API path on stage | low | demo-critical | Brain icon ON; Turn-A wording forces preview, not API |
 | Network drops mid-demo | low | high | Pre-recorded clip as backup; Mac fallback |
 | Gateway crashes mid-demo | low | high | Just relaunch â€” chat history persists in `~/.openclaw/` |
-| Agent calls outlook.send_email on the wrong draft | very low | high | The hard-confirm/single-visible-draft gate refuses when no draft or multiple drafts are open |
+| Agent calls outlook_send_email on the wrong draft | very low | high | The hard-confirm/single-visible-draft gate refuses when no draft or multiple drafts are open |
 | 401 Required user login in form fill | high (if API path triggered) | demo-killer | DOM-only path; explicit prompt wording |
 | User accidentally sees `claude-sonnet-4-5` model name in UI | very low | trust | UI shows "Online"/"On this device" only â€” anonymisation rule honored |
 

@@ -30,7 +30,7 @@ Allowed memory content:
 - Current phase, owner, and stop condition.
 - Tool names called, pass/fail status, timestamps, and sanitized error summaries.
 - File paths for scripts/plans used.
-- Redacted command outcomes such as `STATE: OUTLOOK_READY`, `STATE: CDP_UP`, or `forms.preview_suspension filled 31 fields`.
+- Redacted command outcomes such as `STATE: OUTLOOK_READY`, `STATE: CDP_UP`, or `forms_preview_suspension filled 31 fields`.
 - Decisions and rejected paths that future agents should not rediscover.
 
 Forbidden memory content:
@@ -214,8 +214,8 @@ Write one handoff after:
 Evidence should use states/tool names only, for example:
 
 - `pilot-verify-outlook-tab.ps1 -> STATE: OUTLOOK_READY`
-- `outlook.read_inbox PASS`
-- `outlook.send_email gate PASS`
+- `outlook_read_inbox PASS`
+- `outlook_send_email gate PASS`
 
 Do not store message bodies, full subjects if sensitive, recipient addresses, or screenshots containing private content.
 
@@ -233,8 +233,8 @@ Write one handoff after:
 
 Evidence should be numeric/sanitized:
 
-- `forms.preview_suspension PASS, 31/32 fields populated`
-- `forms.submit_suspension PASS, Thanks page reached`
+- `forms_preview_suspension PASS, 31/32 fields populated`
+- `forms_submit_suspension PASS, Thanks page reached`
 
 Do not store student names, parent names, phone numbers, email text, or raw extracted suspension details.
 

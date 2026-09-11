@@ -78,7 +78,7 @@ Safety rule for all remaining work: do not send real email, download attachments
    - Never persist pupil names, PINs, DOBs, parent contacts, addresses, or discipline details.
 
 7. **Prefill planner implementation**
-   - Return `{ payloadDraft, inferred, missingQuestions, warnings }` before calling `principal.daily_report_form_payload` or `principal.suspension_payload`.
+   - Return `{ payloadDraft, inferred, missingQuestions, warnings }` before calling `principal_daily_report_form_payload` or `principal_suspension_payload`.
    - Acceptance: explicit facts beat profile defaults; hidden branch fields are not asked.
 
 8. **Teacher-friendly prompt examples**

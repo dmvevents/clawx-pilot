@@ -35,6 +35,7 @@ import { useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
 import { useAgentsStore } from '@/stores/agents';
 import { getSessionActivityMs, getSessionBucket, type SessionBucketKey } from './session-buckets';
+import { shouldStartNewSession } from './new-chat-decision';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -365,8 +366,12 @@ export function Sidebar() {
           type="button"
           data-testid="sidebar-new-chat"
           onClick={() => {
-            const { messages } = useChatStore.getState();
-            if (messages.length > 0) newSession();
+            // Decide by session identity, not transcript length: on a fresh
+            // launch the main session's history is still loading, and treating
+            // "0 messages" as "already a new chat" sent the turn to yesterday's
+            // conversation (CLWX-140).
+            const state = useChatStore.getState();
+            if (shouldStartNewSession(state)) newSession();
             navigate('/');
           }}
           className={cn(

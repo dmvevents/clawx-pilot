@@ -10,19 +10,19 @@ All defined in `extensions/moe-principal-assistant/index.mjs`.
 
 | Tool | index.mjs line | Description | Gate |
 |---|---|---|---|
-| `outlook.open` | 352-360 | Open Outlook Web; returns `opened` / `needs_signin` | none |
-| `outlook.read_inbox` | 362-371 | Top N recent messages | none |
-| `outlook.draft_email` | 373-388 | Compose draft (does NOT send) | none |
-| `outlook.send_email` | 390-409 | **Send the single visible reviewed draft** | **hard-confirm gate** (see below) |
-| `outlook.search_inbox` | 415-422 | Filter by sender, subject, date, unread, attachment | none |
-| `outlook.read_email` | 424-433 | Open message; full body, recipients, attachments | none |
-| `outlook.reply` | 435-445 | Reply / reply-all; leaves draft open; body goes in message body only | none |
-| `outlook.forward` | 447-459 | Forward with optional commentary; body goes in message body only | none |
-| `outlook.mark_read` | 461-473 | Toggle read state | none |
-| `outlook.list_attachments` | 475-484 | List metadata (no download) | none |
-| `outlook.download_attachment` | 486-500 | Save to disk | hard-confirm |
+| `outlook_open` | 352-360 | Open Outlook Web; returns `opened` / `needs_signin` | none |
+| `outlook_read_inbox` | 362-371 | Top N recent messages | none |
+| `outlook_draft_email` | 373-388 | Compose draft (does NOT send) | none |
+| `outlook_send_email` | 390-409 | **Send the single visible reviewed draft** | **hard-confirm gate** (see below) |
+| `outlook_search_inbox` | 415-422 | Filter by sender, subject, date, unread, attachment | none |
+| `outlook_read_email` | 424-433 | Open message; full body, recipients, attachments | none |
+| `outlook_reply` | 435-445 | Reply / reply-all; leaves draft open; body goes in message body only | none |
+| `outlook_forward` | 447-459 | Forward with optional commentary; body goes in message body only | none |
+| `outlook_mark_read` | 461-473 | Toggle read state | none |
+| `outlook_list_attachments` | 475-484 | List metadata (no download) | none |
+| `outlook_download_attachment` | 486-500 | Save to disk | hard-confirm |
 
-### `outlook.send_email` hard-confirm gate (the trust moment)
+### `outlook_send_email` hard-confirm gate (the trust moment)
 
 **Gate 1 — confirm flag** (plugin-side, `index.mjs:406`):
 - Code: `confirm: confirm === true`
@@ -30,17 +30,17 @@ All defined in `extensions/moe-principal-assistant/index.mjs`.
 
 **Gate 2 — single visible reviewed draft** (driver-side, `electron/services/outlook-browser-v2/outlook-actions.ts`):
 - Verifies Outlook shows exactly one complete reviewed draft with its own Send button.
-- Normal reviewed sends call `outlook.send_email({confirm:true})` only. Optional recipient/subject/body values are advanced safety assertions; stale assertions can make a valid reviewed draft refuse.
+- Normal reviewed sends call `outlook_send_email({confirm:true})` only. Optional recipient/subject/body values are advanced safety assertions; stale assertions can make a valid reviewed draft refuse.
 
 Both gates must pass. Demo this by trying to send with no draft open or multiple compose panes open; the tool must refuse.
 
 ### Explicit Outlook action rules
 
-- Reply must use `outlook.reply({id, body})`; reply-all must use `outlook.reply({id, body, replyAll:true})`.
-- Forward must use `outlook.forward({id, to, body?})`.
-- Do not use generic browser clicks, toolbar guessing, keyboard shortcuts, or broad DOM automation for reply, reply-all, or forward. Find the message with `outlook.read_inbox`, `outlook.search_inbox`, or `outlook.read_email`, then call the explicit Outlook tool.
+- Reply must use `outlook_reply({id, body})`; reply-all must use `outlook_reply({id, body, replyAll:true})`.
+- Forward must use `outlook_forward({id, to, body?})`.
+- Do not use generic browser clicks, toolbar guessing, keyboard shortcuts, or broad DOM automation for reply, reply-all, or forward. Find the message with `outlook_read_inbox`, `outlook_search_inbox`, or `outlook_read_email`, then call the explicit Outlook tool.
 - The draft body belongs in the compose message body editor only. Never put body text in To, Cc, or Bcc.
-- Sending remains separate: after any reply, reply-all, forward, or new draft tool call, leave the draft open for review. Send only with `outlook.send_email({confirm:true})` after explicit review approval.
+- Sending remains separate: after any reply, reply-all, forward, or new draft tool call, leave the draft open for review. Send only with `outlook_send_email({confirm:true})` after explicit review approval.
 
 ### Windows no-send reply matrix probe
 
@@ -73,11 +73,11 @@ Defined in `extensions/moe-principal-assistant/index.mjs`.
 
 | Tool | index.mjs line | Description | Gate |
 |---|---|---|---|
-| `forms.list` | 523 | List available forms | none |
-| `forms.preview_suspension` | 530 | Open form, fill fields, **stop before submit** | none |
-| `forms.submit_suspension` | 542 | Click Submit on previewed form | hard-confirm |
+| `forms_list` | 523 | List available forms | none |
+| `forms_preview_suspension` | 530 | Open form, fill fields, **stop before submit** | none |
+| `forms_submit_suspension` | 542 | Click Submit on previewed form | hard-confirm |
 
-### `forms.submit_suspension` hard-confirm gate
+### `forms_submit_suspension` hard-confirm gate
 
 **Plugin-side wiring** (`index.mjs:545`):
 ```js
@@ -109,9 +109,9 @@ The driver reads `extensions/moe-principal-assistant/forms/suspensions-schema.js
 ## Reference cross-check before the smoke
 
 When watching the log for a tool call, expect lines like:
-- `moe-principal-assistant: outlook.send_email called {...}` — invocation
-- `moe-principal-assistant: outlook.send_email gated: confirm flag not set` — Gate 1 refusal
+- `moe-principal-assistant: outlook_send_email called {...}` — invocation
+- `moe-principal-assistant: outlook_send_email gated: confirm flag not set` — Gate 1 refusal
 - `Send blocked: multiple open drafts were detected` or `No open draft found` — Gate 2 refusal
-- `moe-principal-assistant: forms.submit_suspension status=refused reason=Submit blocked: confirm:true required` — forms hard-confirm refusal
+- `moe-principal-assistant: forms_submit_suspension status=refused reason=Submit blocked: confirm:true required` — forms hard-confirm refusal
 
 Pass-through to host-API also generates `[INFO] POST /api/outlook/* 200` style lines — useful as secondary evidence.

@@ -18,7 +18,10 @@
  *     [--terminal-quiet 30] [--expected-channel online|on-device]
  *     [--outdir C:\path\to\evidence] [--new-session]
  *
- * Exit codes: 0 = ANSWERED, 41 = ANSWERED_WITH_RUN_ERROR (answered, but the
+ * Exit codes: 0 = ANSWERED; 42 = ANSWERED_CHANNEL_UNVERIFIED (channel indicator
+ * unreadable); 43 = FAILED_RUN_ERROR_VISIBLE (the app said the run failed, visibly);
+ * 44 = FAILED_RUN_ERROR_NO_CHIP (failure sentence with no surface — the silent
+ * class); 41 = ANSWERED_WITH_RUN_ERROR (answered, but the
  * principal also saw a red banner), 40 = any non-answer verdict, 1/2/3 =
  * infrastructure (fatal / bad args / no playwright-core). Never exit 0 for a
  * turn the principal would call broken.
@@ -128,6 +131,7 @@ const SEL = {
   executionGraph: '[data-testid="chat-execution-graph"]',
   errorChip: '[data-testid="chat-message-error-chip"]',
   channel: '[data-testid="chat-composer-channel"]',
+  connectionStatus: '[data-testid="chat-connection-status"]',
   page: '[data-testid="chat-page"]',
 };
 
@@ -268,6 +272,7 @@ function browserTurnDriverHelpersSource() {
   return `(() => {
     const normalize = ${normalize.toString()};
     const semanticMessageTextFromElement = ${semanticMessageTextFromElement.toString()};
+    const resolveChannelIndicator = ${resolveChannelIndicator.toString()};
     const stableTextFingerprint = ${stableTextFingerprint.toString()};
     const messageFingerprintFromElement = ${messageFingerprintFromElement.toString()};
     const collectMessageScopeFromDocument = ${collectMessageScopeFromDocument.toString()};
@@ -275,6 +280,7 @@ function browserTurnDriverHelpersSource() {
     const collectCurrentTurnErrorChipEvidenceFromDocument = ${collectCurrentTurnErrorChipEvidenceFromDocument.toString()};
     return {
       semanticMessageTextFromElement,
+      resolveChannelIndicator,
       collectMessageScopeFromDocument,
       collectCurrentTurnErrorChipEvidenceFromDocument,
     };
@@ -497,21 +503,70 @@ async function readSemanticMessageText(locator) {
  *  - an inline error chip's text is long and stable, and the container's
  *    innerText includes it.
  */
+function resolveChannelIndicator({ composerChannel, headerState }) {
+  const composer = String(composerChannel ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (composer) return { channel: composer, channelSource: 'composer' };
+  const header = String(headerState ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (header === 'online' || header === 'on-device') return { channel: header, channelSource: 'header' };
+  return { channel: null, channelSource: null };
+}
+
+const SHORT_ANSWER_MAX = 40;
+
+// Renderer chrome and stream-state words that can stand alone in a bubble.
+// Punctuation-independent on purpose: the i18n string is "Thinking" and the
+// dots are a separate animated element (review of 7ddc8fc1, MEDIUM-1).
+const STREAMING_WORDS = /^(?:thinking|working|loading|running|done|error|pending|queued|streaming|generating|connecting|reconnecting|retrying)\b/i;
+
+// The runtime's own "the run failed" sentences, rendered as an ordinary
+// assistant bubble. When they arrive WITH the inline chip the chip check
+// catches them; when they arrive WITHOUT one (moe33-journey-policy1,
+// 2026-09-10 19:04Z: "The agent run failed before producing a reply." as a
+// plain bubble, no chip, no banner) they are the silent-failure class itself
+// and must never be recorded as an answer. Text-based on purpose: it is the
+// only signal the app gave.
+const RUNTIME_FAILURE_SENTENCE = /^(?:the )?(?:agent|assistant) run failed\b|failed before producing a reply|^embedded agent failed\b|^agent run failed\b/i;
+
+function isRuntimeFailureSentence(value) {
+  return RUNTIME_FAILURE_SENTENCE.test(normalize(value));
+}
+
+/** Which clause, if any, makes a short text read as finished. */
+function finishedBy(value) {
+  if (!/[\p{L}\p{N}]/u.test(value)) return null; // "…" or "-" alone is not an answer
+  if (/[.!?…](["'’”»)\]]*)$/.test(value)) return 'punctuation';
+  if (/^[\p{L}\p{N}'’-]+$/u.test(value)) return 'single-word';
+  return null;
+}
+
+function looksFinished(value) {
+  return finishedBy(value) !== null;
+}
+
 function classifyTurnText({ text, promptNormalized, chipText }) {
   const value = normalize(text);
-  const isPlaceholder = /Thinking\s*[.…]|^\s*Working\b/i.test(value) || value.length < 40;
+  const isStreamingWord = STREAMING_WORDS.test(value) || /Thinking\s*[.…]/i.test(value);
+  const shortClause = value.length < SHORT_ANSWER_MAX ? finishedBy(value) : null;
+  const isPlaceholder = isStreamingWord
+    || (value.length < SHORT_ANSWER_MAX && shortClause === null);
   const isPromptEcho = value.replace(/\s*just now\s*$/i, '').trim() === normalize(promptNormalized)
     && normalize(promptNormalized).length > 0;
   const chip = normalize(chipText);
   const isErrorChipOnly = Boolean(chip)
     && value.includes(chip)
     && normalize(value.split(chip).join(' ')).length < 40;
+  const isRuntimeFailure = isRuntimeFailureSentence(value);
+  const acceptable = Boolean(value) && !isPlaceholder && !isPromptEcho && !isErrorChipOnly && !isRuntimeFailure;
   return {
     isPlaceholder,
     isPromptEcho,
     isErrorChipOnly,
+    isRuntimeFailure,
+    // True only when acceptance rode the single-word clause; surfaced in the
+    // receipt so such an exit 0 is visibly qualified.
+    acceptedShortAnswer: acceptable && shortClause === 'single-word',
     // Only this combination may be recorded as the principal's answer.
-    acceptable: Boolean(value) && !isPlaceholder && !isPromptEcho && !isErrorChipOnly,
+    acceptable,
   };
 }
 
@@ -553,18 +608,51 @@ function terminalBlockersFor(surface, expectedChannel = '') {
   if (surface?.genericErrorSeen) blockers.push('GENERIC_ERROR_VISIBLE');
   if (surface?.errorChipScopeValid === false) blockers.push('ERROR_CHIP_SCOPE_UNPROVEN');
   if (surface?.errorChipSeen) blockers.push('ERROR_CHIP_VISIBLE');
+  if (surface?.errorPresent === true) blockers.push('ERROR_BAR_VISIBLE');
   return blockers;
 }
 
 /** The verdict for a completed observation. Pure; mirrors main()'s ladder. */
 function verdictFor(result) {
+  // The newest bubble IS the runtime's failure sentence. With a chip this is
+  // the visible class (below); without one it is the silent class — a hard
+  // error the principal cannot tell from an answer. Both are failures; the
+  // distinction is the finding. Checked before everything else because no
+  // blocker or channel state can turn this text into an answer.
+  if (result.runtimeFailureSentence === true) {
+    const visibleSurface = result.lastMessageErrorChip === true
+      || result.errorBarSeen === true
+      || result.genericErrorSeen === true
+      || result.runErrorSeen === true;
+    return visibleSurface ? 'FAILED_RUN_ERROR_VISIBLE' : 'FAILED_RUN_ERROR_NO_CHIP';
+  }
   if (Array.isArray(result.terminalBlockers) && result.terminalBlockers.length > 0) {
     if (result.terminalBlockers.includes('UNEXPECTED_DEGRADE_TO_ON_DEVICE')) return 'FAILED_UNEXPECTED_DEGRADE';
     if (result.terminalBlockers.some((item) => String(item).startsWith('UNEXPECTED_CHANNEL_'))) {
       return 'FAILED_UNEXPECTED_CHANNEL';
     }
+    // The newest bubble carries the inline error chip: the run failed and the
+    // app SAID so. That is the visible-failure outcome the turn-lifecycle
+    // contract asks for, not a hang, and must not be labelled a timeout
+    // (moe33-verify, 2026-09-10: four provider connect timeouts surfaced as
+    // "The agent run failed before producing a reply." + chip in 105 s and
+    // were recorded as TIMED_OUT_MID_TURN). Non-zero: the turn did not answer.
+    // ...but only when the probe could actually read the app's state. If any
+    // terminal signal is MISSING, "the app said the run failed" is not a claim
+    // this receipt can make (review of 7ddc8fc1, LOW-2).
+    const probeBlind = result.terminalBlockers.some((item) => String(item).startsWith('MISSING_TERMINAL_'));
+    if (result.settled && result.lastMessageErrorChip === true && !probeBlind) return 'FAILED_RUN_ERROR_VISIBLE';
+    // The turn settled and every terminal signal is quiet; only the channel
+    // indicator could not be read. That is a probe gap, not an app hang, and
+    // must not be reported as a timeout (moe33-turn3, 2026-09-10: a real answer
+    // was labelled TIMED_OUT_MID_TURN). Still non-zero: the channel is unproven.
+    if (result.settled && result.terminalBlockers.every((item) => item === 'MISSING_CHANNEL_STATE')) {
+      return 'ANSWERED_CHANNEL_UNVERIFIED';
+    }
     return 'TIMED_OUT_MID_TURN';
   }
+  if (result.settled && result.lastMessageErrorChip === true) return 'FAILED_RUN_ERROR_VISIBLE';
+  // Lineage rule (pre-existing): the bottom error bar alone is a failed turn.
   if (result.genericErrorSeen) return 'FAILED_GENERIC_ERROR';
   if (result.settled && result.terminalStable === false) return 'TIMED_OUT_MID_TURN';
   if (result.settled) return result.runErrorSeen ? 'ANSWERED_WITH_RUN_ERROR' : 'ANSWERED';
@@ -581,6 +669,9 @@ function verdictFor(result) {
 function exitCodeFor(verdict) {
   if (verdict === 'ANSWERED') return 0;
   if (verdict === 'ANSWERED_WITH_RUN_ERROR') return 41;
+  if (verdict === 'ANSWERED_CHANNEL_UNVERIFIED') return 42;
+  if (verdict === 'FAILED_RUN_ERROR_VISIBLE') return 43;
+  if (verdict === 'FAILED_RUN_ERROR_NO_CHIP') return 44;
   return 40;
 }
 
@@ -741,6 +832,11 @@ async function captureTerminalSurface(page, preSendMessageScope = null) {
     };
     const root = document.querySelector(selectors.page);
     const channel = document.querySelector(selectors.channel);
+    const connectionStatus = document.querySelector(selectors.connectionStatus);
+    const resolvedChannel = helpers.resolveChannelIndicator({
+      composerChannel: channel?.getAttribute('data-channel') || textOf(channel) || null,
+      headerState: connectionStatus?.getAttribute('data-state') || null,
+    });
     const degrade = document.querySelector(selectors.degrade);
     const composer = document.querySelector(selectors.composer);
     const runError = document.querySelector(selectors.runError);
@@ -755,7 +851,8 @@ async function captureTerminalSurface(page, preSendMessageScope = null) {
     return {
       at: new Date().toISOString(),
       rootPresent: Boolean(root),
-      channel: channel?.getAttribute('data-channel') || textOf(channel) || null,
+      channel: resolvedChannel.channel,
+      channelSource: resolvedChannel.channelSource,
       composerEnabled: composer ? !composer.disabled : null,
       sending: root ? readBool(root.getAttribute('data-sending')) : null,
       pendingFinal: root ? readBool(root.getAttribute('data-pending-final')) : null,
@@ -940,6 +1037,11 @@ async function main() {
     errorChipScopeValid: null,
     errorChipScopeBlockers: [],
     errorChipOnly: false,
+    lastMessageErrorChip: null,
+    failureText: null,
+    acceptedShortAnswer: false,
+    runtimeFailureSentence: false,
+    errorBarSeen: false,
     assistantPromptEcho: false,
     degradeNoticeSeen: false,
     degradeNoticeText: null,
@@ -1064,12 +1166,17 @@ async function main() {
         result.runErrorSeen = true;
         result.runErrorText = truncate(await page.locator(SEL.runError).innerText().catch(() => ''), 300);
       }
+      if ((await page.locator(SEL.page).getAttribute('data-error-present').catch(() => null)) === 'true') {
+        result.errorBarSeen = true;
+      }
       if (await page.locator(SEL.genericError).count() > 0) {
         result.genericErrorSeen = true;
         result.genericErrorText = truncate(await page.locator(SEL.genericError).innerText().catch(() => ''), 300);
       }
       if (result.messagesAfter >= result.messagesBefore + 2) {
-        const text = await readSemanticMessageText(page.locator(SEL.message).last()).catch(() => '');
+        const lastMessage = page.locator(SEL.message).last();
+        const text = await readSemanticMessageText(lastMessage).catch(() => '');
+        result.lastMessageErrorChip = await lastMessage.locator(SEL.errorChip).count().catch(() => 0) > 0;
         // Placeholders ("Thinking…"), the user's own echoed prompt (empty
         // assistant bubble = silence-on-send), and an assistant bubble holding
         // nothing but its inline error chip are all NON-answers that would
@@ -1077,6 +1184,15 @@ async function main() {
         const shape = classifyTurnText({ text, promptNormalized, chipText: chipTextRaw });
         if (shape.isPromptEcho) result.assistantPromptEcho = true;
         result.errorChipOnly = shape.isErrorChipOnly;
+        result.acceptedShortAnswer = shape.acceptedShortAnswer;
+        if (shape.isRuntimeFailure) {
+          result.runtimeFailureSentence = true;
+          result.failureText = truncate(text, 800);
+          result.settled = true;
+          result.candidateAnswerAt = new Date().toISOString();
+          result.answerLatencyMs = Date.parse(result.candidateAnswerAt) - Date.parse(result.sentAt);
+          break;
+        }
         if (text === lastText && shape.acceptable) {
           if (stableSince === 0) stableSince = Date.now();
           // 3 consecutive stable polls (~9s) of real content = streaming finished.
@@ -1143,6 +1259,10 @@ async function main() {
     if (await page.locator(SEL.genericError).count() > 0) result.genericErrorSeen = true;
 
     result.verdict = verdictFor(result);
+    if (result.verdict === 'FAILED_RUN_ERROR_VISIBLE' || result.verdict === 'FAILED_RUN_ERROR_NO_CHIP') {
+      result.failureText = result.failureText || result.answerText;
+      result.answerText = null;
+    }
 
     await page.screenshot({ path: path.join(args.outdir, `chat-turn-${stamp}.png`), fullPage: true }).catch(() => {});
     return result;
@@ -1167,6 +1287,7 @@ if (require.main === module) {
 
 module.exports = {
   classifyTurnText,
+  resolveChannelIndicator,
   terminalBlockersFor,
   verdictFor,
   exitCodeFor,

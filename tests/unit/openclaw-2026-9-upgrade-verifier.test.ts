@@ -280,16 +280,16 @@ describe('OpenClaw 2026.9 upgrade verifier', () => {
   });
 
   it('pins the MoE tool inventory to the reviewed harness registration contract (no second drifting copy)', async () => {
-    // This exact list went stale twice (missed outlook.readiness from
-    // 6ec32807, then browser.open_chrome from 41359e12) because it was a
+    // This exact list went stale twice (missed outlook_readiness from
+    // 6ec32807, then browser_open_chrome from 41359e12) because it was a
     // silent second copy of the registration inventory. Pin it to the
     // harness-artifact contract that the source-literal drift guard already
     // ties to index.mjs, so one landing cannot leave the other copy behind.
     const harness = await import('../../scripts/harness-artifact.mjs');
     expect([...MOE_HOSTAPI_TOOLS].sort()).toEqual([...harness.TRANSPORT_FULL_EXPECTED].sort());
     expect(MOE_HOSTAPI_TOOLS.length).toBe(35);
-    expect(MOE_HOSTAPI_TOOLS).toContain('outlook.readiness');
-    expect(MOE_HOSTAPI_TOOLS).toContain('browser.open_chrome');
+    expect(MOE_HOSTAPI_TOOLS).toContain('outlook_readiness');
+    expect(MOE_HOSTAPI_TOOLS).toContain('browser_open_chrome');
   });
 
   it('rejects extra and missing tools instead of accepting a near-match inventory', () => {
@@ -297,13 +297,13 @@ describe('OpenClaw 2026.9 upgrade verifier', () => {
     // inventory update must not have weakened mismatch rejection.
     expect(() => assertSameSet('ctl', [...MOE_HOSTAPI_TOOLS, 'browser.unreviewed_tool'], MOE_HOSTAPI_TOOLS))
       .toThrow(/extra=\[browser\.unreviewed_tool\]/);
-    expect(() => assertSameSet('ctl', MOE_HOSTAPI_TOOLS.filter((name) => name !== 'outlook.readiness'), MOE_HOSTAPI_TOOLS))
-      .toThrow(/missing=\[outlook\.readiness\]/);
-    expect(() => assertSameSet('ctl', MOE_HOSTAPI_TOOLS.filter((name) => name !== 'browser.open_chrome'), MOE_HOSTAPI_TOOLS))
-      .toThrow(/missing=\[browser\.open_chrome\]/);
+    expect(() => assertSameSet('ctl', MOE_HOSTAPI_TOOLS.filter((name) => name !== 'outlook_readiness'), MOE_HOSTAPI_TOOLS))
+      .toThrow(/missing=\[outlook_readiness\]/);
+    expect(() => assertSameSet('ctl', MOE_HOSTAPI_TOOLS.filter((name) => name !== 'browser_open_chrome'), MOE_HOSTAPI_TOOLS))
+      .toThrow(/missing=\[browser_open_chrome\]/);
     // Duplicate of one name while another is absent must not pass on length luck.
-    expect(() => assertSameSet('ctl', ['outlook.open', ...MOE_HOSTAPI_TOOLS.filter((name) => name !== 'outlook.readiness')], MOE_HOSTAPI_TOOLS))
-      .toThrow(/missing=\[outlook\.readiness\]/);
+    expect(() => assertSameSet('ctl', ['outlook_open', ...MOE_HOSTAPI_TOOLS.filter((name) => name !== 'outlook_readiness')], MOE_HOSTAPI_TOOLS))
+      .toThrow(/missing=\[outlook_readiness\]/);
     // Order-insensitive acceptance stays intact.
     expect(() => assertSameSet('ctl', [...MOE_HOSTAPI_TOOLS].reverse(), MOE_HOSTAPI_TOOLS)).not.toThrow();
   });
@@ -360,7 +360,7 @@ describe('OpenClaw 2026.9 upgrade verifier', () => {
     // verification error with the cleanup error. Both must surface, and a
     // cleanup success must rethrow the primary error unchanged — never a
     // false pass in any combination.
-    const primary = new Error('MoE HostAPI runtime toolNames mismatch; missing=[outlook.readiness] extra=[]');
+    const primary = new Error('MoE HostAPI runtime toolNames mismatch; missing=[outlook_readiness] extra=[]');
     const eperm = Object.assign(new Error('EPERM, Permission denied'), { code: 'EPERM', syscall: 'rm' });
 
     let thrown: unknown;
@@ -373,7 +373,7 @@ describe('OpenClaw 2026.9 upgrade verifier', () => {
     }
     expect(thrown).toBeInstanceOf(AggregateError);
     expect((thrown as AggregateError).errors).toEqual([primary, eperm]);
-    expect((thrown as Error).message).toMatch(/toolNames mismatch.*missing=\[outlook\.readiness\]/);
+    expect((thrown as Error).message).toMatch(/toolNames mismatch.*missing=\[outlook_readiness\]/);
     expect((thrown as Error).message).toContain('EPERM');
 
     // Cleanup succeeded, primary present -> primary is rethrown as-is.

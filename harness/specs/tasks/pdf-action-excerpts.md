@@ -25,7 +25,7 @@ requiredTests:
   - pnpm exec vitest run tests/unit/moe-principal-assistant-doc-tools.test.ts tests/unit/moe-principal-assistant-plugin.test.ts tests/unit/doc-tooling-steering.test.ts
   - pnpm harness validate --spec harness/specs/tasks/pdf-action-excerpts.md
 acceptance:
-  - document.read_pdf returns bounded source excerpts before raw text for explicit headings such as deadlines, required actions, submissions, exceptions and explanations.
+  - document_read_pdf returns bounded source excerpts before raw text for explicit headings such as deadlines, required actions, submissions, exceptions and explanations.
   - The excerpt helper preserves source wording, including negations, conditions and wrapped lines, without injecting fixture-specific dates, organisations or mandatory labels.
   - Raw `text`, `truncated` and `totalChars` behavior remains unchanged.
   - The actual installed P3 prompt must still pass separately before release acceptance can claim the document journey is fixed.

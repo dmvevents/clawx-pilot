@@ -52,7 +52,7 @@ Lock these classes with tests before claiming green:
 | Reply archived the source message | Reply/forward tests must prove only toolbar Reply/Forward controls are clicked, never broad VLM/generic toolbar buttons. |
 | Reviewed draft send asked for recipient or refused changed subject | Send tests must cover `{ confirm: true }` on exactly one reviewed draft, optional assertions, changed subject after review, multiple-draft refusal, and no empty body assertions. |
 | Draft body landed in `To:` | Body-fill tests must reject generic textbox fallback and target body-specific labels/probes only. |
-| User was told to enable Chrome debugging manually | Plugin/persona tests must prefer `outlook.*`, `browser.diagnose`, and `browser.repair_chrome_cdp`; forbid Chrome flags/manual remote-debugging guidance. |
+| User was told to enable Chrome debugging manually | Plugin/persona tests must prefer `outlook_*`, `browser_diagnose`, and `browser_repair_chrome_cdp`; forbid Chrome flags/manual remote-debugging guidance. |
 | Forms missed required fields but reported success | Forms preview/submit tests must require field coverage summaries, missing-field diagnostics, and submit refusal without same-session `confirm:true`. |
 | Office CSV produced headers only or PPT failed | Office tests must use real CSV rows and assert generated Excel/PowerPoint artifacts contain data rows/slides, not only headers/files. |
 | ASR reported `ffmpeg-not-found` or low quality | ASR tests must cover packaged `resources/bin/ffmpeg.exe`, `WinSpeechRecognize.exe`, Azure Speech seed resolution, and fallback status. |

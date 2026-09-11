@@ -20,7 +20,7 @@ if (-not $log) { "NO_LOG"; exit 1 }
 
 "=== Watching $($log.FullName) ==="
 "Duration: ${DurationSec}s"
-"Filters: outlook.* | forms.* | model | error | gateway"
+"Filters: outlook_* | forms_* | model | error | gateway"
 ""
 
 # Start at end of file

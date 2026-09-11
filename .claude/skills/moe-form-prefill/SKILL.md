@@ -18,7 +18,7 @@ description: Use when filling MoE Daily Report or Suspension forms and the task 
 
 1. Active `moe-principal-assistant` config in `~/.openclaw/openclaw.json`.
 2. Explicit facts in the prompt, email, document, spreadsheet, or transcript.
-3. `principal.find_school({ query })`.
+3. `principal_find_school({ query })`.
 4. Form schema options:
    - `extensions/moe-principal-assistant/forms/daily-report-schema.vlm.json`
    - `extensions/moe-principal-assistant/forms/suspensions-schema.json`
@@ -38,10 +38,10 @@ description: Use when filling MoE Daily Report or Suspension forms and the task 
    - suspension count/recorded flag if suspensions occurred
    - PTSC route/trip counts if serviced
    - whole-term absentee counts only on the last school day of the week and only if any exist
-4. Call `principal.daily_report_form_payload`.
+4. Call `principal_daily_report_form_payload`.
 5. Show the payload assumptions briefly.
-6. Call `forms.preview_daily_report`.
-7. Wait for explicit submit confirmation before `forms.submit_daily_report({ confirm: true })`.
+6. Call `forms_preview_daily_report`.
+7. Wait for explicit submit confirmation before `forms_submit_daily_report({ confirm: true })`.
 
 Teacher-facing shortcut:
 
@@ -58,8 +58,8 @@ Teacher-facing shortcut:
    - written reports, extended suspension application, SSSD referral, parent present, parent signed notice, discipline matrix followed, level of offence
    - parent/guardian name, phone, house number, street, city/town/village
 3. Derive class aliases and age from DOB when available. Suggest dropdown aliases for infractions, but show them for review.
-4. Call `principal.suspension_payload`, then `forms.preview_suspension`.
-5. Wait for explicit submit confirmation before `forms.submit_suspension({ confirm: true })`.
+4. Call `principal_suspension_payload`, then `forms_preview_suspension`.
+5. Wait for explicit submit confirmation before `forms_submit_suspension({ confirm: true })`.
 
 ## Disambiguation Questions
 

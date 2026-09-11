@@ -705,12 +705,12 @@ test.describe('ClawX chat execution graph', () => {
             sessionKey: 'agent:main:main',
             message: {
               role: 'assistant',
-              content: [{ type: 'tool_use', id: 'tool-1', name: 'outlook.read_inbox', input: {} }],
+              content: [{ type: 'tool_use', id: 'tool-1', name: 'outlook_read_inbox', input: {} }],
             },
           });
         });
       });
-      await expect(page.locator('[data-testid="chat-execution-step"]').filter({ hasText: 'outlook.read_inbox' })).toBeVisible();
+      await expect(page.locator('[data-testid="chat-execution-step"]').filter({ hasText: 'outlook_read_inbox' })).toBeVisible();
 
       await app.evaluate(() => {
         const { BrowserWindow } = process.mainModule!.require('electron') as typeof import('electron');

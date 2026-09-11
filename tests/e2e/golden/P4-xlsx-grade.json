@@ -1,6 +1,6 @@
 {
   "id": "P4-xlsx-grade",
-  "tool_called": "document.write_xlsx",
+  "tool_called": "document_write_xlsx",
   "result_schema": {
     "path": "string",
     "bytes": "number",

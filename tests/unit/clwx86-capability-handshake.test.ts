@@ -108,25 +108,25 @@ const CAPABILITIES_OK: StubResponse = {
 
 /** Tool name → minimal args that pass execute-level validation. */
 const TOOL_ROWS: Array<[string, Record<string, unknown>]> = [
-  ['browser.diagnose', {}],
-  ['browser.repair_chrome_cdp', {}],
-  ['outlook.readiness', {}],
-  ['outlook.open', {}],
-  ['outlook.read_inbox', {}],
-  ['outlook.draft_email', { to: 'someone@example.com', subject: 'Test', body: 'Body' }],
-  ['outlook.send_email', { confirm: true }],
-  ['outlook.search_inbox', {}],
-  ['outlook.read_email', { id: 'msg-1' }],
-  ['outlook.reply', { id: 'msg-1', body: 'Body' }],
-  ['outlook.forward', { id: 'msg-1', to: 'someone@example.com' }],
-  ['outlook.mark_read', { id: 'msg-1', read: true }],
-  ['outlook.list_attachments', { id: 'msg-1' }],
-  ['outlook.download_attachment', { id: 'msg-1', filename: 'a.pdf', confirm: true }],
-  ['forms.list', {}],
-  ['forms.preview_suspension', { payload: {} }],
-  ['forms.preview_daily_report', { payload: { attendance: '250' } }],
-  ['forms.submit_suspension', { confirm: true }],
-  ['forms.submit_daily_report', { confirm: true }],
+  ['browser_diagnose', {}],
+  ['browser_repair_chrome_cdp', {}],
+  ['outlook_readiness', {}],
+  ['outlook_open', {}],
+  ['outlook_read_inbox', {}],
+  ['outlook_draft_email', { to: 'someone@example.com', subject: 'Test', body: 'Body' }],
+  ['outlook_send_email', { confirm: true }],
+  ['outlook_search_inbox', {}],
+  ['outlook_read_email', { id: 'msg-1' }],
+  ['outlook_reply', { id: 'msg-1', body: 'Body' }],
+  ['outlook_forward', { id: 'msg-1', to: 'someone@example.com' }],
+  ['outlook_mark_read', { id: 'msg-1', read: true }],
+  ['outlook_list_attachments', { id: 'msg-1' }],
+  ['outlook_download_attachment', { id: 'msg-1', filename: 'a.pdf', confirm: true }],
+  ['forms_list', {}],
+  ['forms_preview_suspension', { payload: {} }],
+  ['forms_preview_daily_report', { payload: { attendance: '250' } }],
+  ['forms_submit_suspension', { confirm: true }],
+  ['forms_submit_daily_report', { confirm: true }],
 ];
 
 function collectLog() {
@@ -365,7 +365,7 @@ describe('facade 404 disambiguation + positive control — CLWX-86', () => {
       }
       return undefined;
     });
-    const result = (await byName['outlook.open'].execute?.('t1', {})) as { status: string };
+    const result = (await byName['outlook_open'].execute?.('t1', {})) as { status: string };
     expect(result.status).toBe('opened');
   });
 
@@ -376,7 +376,7 @@ describe('facade 404 disambiguation + positive control — CLWX-86', () => {
       if (method === 'GET' && pathname === '/api/capabilities') return CAPABILITIES_OK;
       return undefined; // every POST → global 404
     });
-    const result = (await byName['outlook.search_inbox'].execute?.('t1', {})) as {
+    const result = (await byName['outlook_search_inbox'].execute?.('t1', {})) as {
       status: string;
       message: string;
     };
@@ -396,7 +396,7 @@ describe('facade 404 disambiguation + positive control — CLWX-86', () => {
       }
       return undefined;
     });
-    await expect(byName['outlook.read_inbox'].execute?.('t1', {})).rejects.toThrow(
+    await expect(byName['outlook_read_inbox'].execute?.('t1', {})).rejects.toThrow(
       /capability disabled/,
     );
   });
@@ -406,10 +406,10 @@ describe('facade 404 disambiguation + positive control — CLWX-86', () => {
       if (method === 'GET' && pathname === '/api/capabilities') return CAPABILITIES_OK;
       return undefined; // every POST → global 404
     });
-    await expect(byName['forms.list'].execute?.('t1', {})).rejects.toThrow(
+    await expect(byName['forms_list'].execute?.('t1', {})).rejects.toThrow(
       /Ministry of Education app update/,
     );
-    await expect(byName['browser.diagnose'].execute?.('t1', {})).rejects.toThrow(
+    await expect(byName['browser_diagnose'].execute?.('t1', {})).rejects.toThrow(
       /Ministry of Education app update/,
     );
   });
@@ -428,13 +428,13 @@ describe('facade 404 disambiguation + positive control — CLWX-86', () => {
       }
       return undefined;
     });
-    const formsErr = await byName['forms.list'].execute?.('t1', {}).then(
+    const formsErr = await byName['forms_list'].execute?.('t1', {}).then(
       () => null,
       (e: unknown) => String(e),
     );
     expect(formsErr).toContain('Ministry of Education app update');
     expect(formsErr).not.toContain('PRINCIPAL_SKILL_ALLOWLIST');
-    await expect(byName['browser.diagnose'].execute?.('t1', {})).rejects.toThrow(
+    await expect(byName['browser_diagnose'].execute?.('t1', {})).rejects.toThrow(
       /Ministry of Education app update/,
     );
   });

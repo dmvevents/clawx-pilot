@@ -60,7 +60,7 @@ export const BM25_B = 0.75;
 /**
  * Weight of an explicit persona routing directive, expressed as a multiple
  * of the catalogue's maximum IDF. A directive in the system prompt outranks
- * a catalogue description — that is the whole reason the `outlook.*` rule
+ * a catalogue description — that is the whole reason the `outlook_*` rule
  * makes Outlook routing reliable — but it is a modelling assumption, not a
  * measurement. Lane B varies it to show what the score depends on.
  */
@@ -96,12 +96,20 @@ export function tokenize(text) {
     }
     if (STOPWORDS.has(tok) || tok.length < 2) continue;
     out.push(tok);
+    // Underscore tool names (`document_read_pdf`, CLWX-141) are one token to the
+    // regex above; also emit their parts so "read" / "pdf" in a prompt still
+    // meet the declaration, as the dotted shape used to.
+    if (tok.includes('_')) {
+      for (const part of tok.split('_')) {
+        if (part.length >= 2 && !STOPWORDS.has(part)) out.push(part);
+      }
+    }
   }
   return out;
 }
 
 /**
- * Load the `document.*` tool catalogue by running the plugin's real
+ * Load the `document_*` tool catalogue by running the plugin's real
  * `register()` against a capturing stub. Parsing the source with a regex
  * would drift from what the gateway actually registers; this cannot.
  */
@@ -109,7 +117,7 @@ export async function loadToolCatalogue() {
   const mod = await import(pathToFileURL(INDEX_MJS).href);
   const tools = [];
   const api = {
-    // Deliberately empty: the config gate then skips principal.* and we get
+    // Deliberately empty: the config gate then skips principal_* and we get
     // exactly the tools a laptop with no principal config would expose.
     pluginConfig: {},
     registerTool: (t) => {
@@ -186,8 +194,8 @@ export function loadPersona() {
 }
 
 /**
- * Extract routing directives from the persona: `document.read_docx for
- * .docx`, `document.write_xlsx to produce an .xlsx`, and so on.
+ * Extract routing directives from the persona: `document_read_docx for
+ * .docx`, `document_write_xlsx to produce an .xlsx`, and so on.
  *
  * The connecting verb carries the read/write mode, and that distinction is
  * load-bearing: "Open the gradebook and read the marks" and "Save the
@@ -199,7 +207,7 @@ export function loadPersona() {
 export function personaDirectives(persona) {
   const out = [];
   const re =
-    /(document\.[a-z_]+)\s+(for|to produce)\s+(?:a |an |the )?((?:\.[a-z0-9]+(?:\s*\/\s*)?)+)/gi;
+    /(document[._][a-z_]+)\s+(for|to produce)\s+(?:a |an |the )?((?:\.[a-z0-9]+(?:\s*\/\s*)?)+)/gi;
   for (const m of String(persona).matchAll(re)) {
     const extensions = [...m[3].matchAll(/\.[a-z0-9]+/gi)].map((x) =>
       x[0].toLowerCase(),
@@ -207,7 +215,7 @@ export function personaDirectives(persona) {
     // Fall back to the tool's own name when the verb is ambiguous — the
     // naming convention (read_* / write_*) is itself a directive.
     const byVerb = /to produce/i.test(m[2]) ? 'write' : 'read';
-    const byName = /\.write_/.test(m[1]) ? 'write' : 'read';
+    const byName = /[._]write_/.test(m[1]) ? 'write' : 'read';
     out.push({ tool: m[1], mode: byVerb === byName ? byVerb : byName, extensions });
   }
   return out;
@@ -384,7 +392,7 @@ function round(n) {
  * Build the candidate catalogue the agent sees.
  *
  * @param {object} opts
- * @param {Array}  opts.tools        document.* tools from register()
+ * @param {Array}  opts.tools        document_* tools from register()
  * @param {Array}  opts.skills       every known skill
  * @param {Set}    opts.enabled      slugs actually offered to the model
  */

@@ -60,12 +60,18 @@ describe('application menu navigation targets', () => {
     vi.clearAllMocks();
   });
 
-  it('routes "New Chat" to the chat home at "/"', async () => {
+  it('asks the renderer to start a new chat instead of merely navigating (CLWX-140)', async () => {
+    // Plain navigation left the principal in yesterday's conversation when the
+    // main session's history had not loaded yet; the renderer now applies the
+    // same decision as the sidebar button and then navigates to '/'.
     const items = await buildMenuItems();
     const newChat = items.find((item) => item.label === 'New Chat');
 
     expect(newChat).toBeDefined();
-    expect(navigateTargetsFrom(newChat!)).toEqual(['/']);
+    sendMock.mockClear();
+    newChat!.click?.();
+    expect(sendMock.mock.calls.map(([channel]) => channel)).toEqual(['new-chat']);
+    expect(navigateTargetsFrom(newChat!)).toEqual([]);
   });
 
   it('routes the "Chat" navigate item to "/"', async () => {

@@ -21,17 +21,17 @@ const TOOLS_SYSTEM_PROMPT = `You are an AI assistant for a primary-school princi
 Reply with EXACTLY ONE JSON object on a single line: { "tool": "outlook.<name>", "args": { ... } }
 
 Available tools:
-- outlook.open                  args: <none>
-- outlook.read_inbox            args: top
-- outlook.search_inbox          args: from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top?
-- outlook.read_email            args: id
-- outlook.draft_email           args: to, subject, body, cc?, bcc?
-- outlook.send_email            args: to, subject, body, confirm:true
-- outlook.reply                 args: id, body, replyAll?
-- outlook.forward               args: id, to, body?
-- outlook.mark_read             args: id, read
-- outlook.list_attachments      args: id
-- outlook.download_attachment   args: id, filename, confirm:true
+- outlook_open                  args: <none>
+- outlook_read_inbox            args: top
+- outlook_search_inbox          args: from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top?
+- outlook_read_email            args: id
+- outlook_draft_email           args: to, subject, body, cc?, bcc?
+- outlook_send_email            args: to, subject, body, confirm:true
+- outlook_reply                 args: id, body, replyAll?
+- outlook_forward               args: id, to, body?
+- outlook_mark_read             args: id, read
+- outlook_list_attachments      args: id
+- outlook_download_attachment   args: id, filename, confirm:true
 
 Reply with the JSON object only. No prose.`;
 
@@ -90,37 +90,37 @@ async function runTool(actions: OutlookActions, picked: Picked): Promise<{ ok: b
   try {
     let result: unknown;
     switch (picked.tool) {
-      case 'outlook.open':
+      case 'outlook_open':
         result = await actions.open();
         break;
-      case 'outlook.read_inbox':
+      case 'outlook_read_inbox':
         result = await actions.readInbox((picked.args?.top as number | undefined) ?? 10);
         break;
-      case 'outlook.search_inbox':
+      case 'outlook_search_inbox':
         result = await actions.searchInbox((picked.args ?? {}) as Parameters<OutlookActions['searchInbox']>[0]);
         break;
-      case 'outlook.read_email':
+      case 'outlook_read_email':
         result = await actions.readEmail({ id: picked.args!.id as string });
         break;
-      case 'outlook.draft_email':
+      case 'outlook_draft_email':
         result = await actions.draftEmail(picked.args as unknown as Parameters<OutlookActions['draftEmail']>[0]);
         break;
-      case 'outlook.send_email':
+      case 'outlook_send_email':
         result = await actions.sendEmail(picked.args as unknown as Parameters<OutlookActions['sendEmail']>[0]);
         break;
-      case 'outlook.reply':
+      case 'outlook_reply':
         result = await actions.reply(picked.args as unknown as Parameters<OutlookActions['reply']>[0]);
         break;
-      case 'outlook.forward':
+      case 'outlook_forward':
         result = await actions.forward(picked.args as unknown as Parameters<OutlookActions['forward']>[0]);
         break;
-      case 'outlook.mark_read':
+      case 'outlook_mark_read':
         result = await actions.markRead(picked.args as unknown as Parameters<OutlookActions['markRead']>[0]);
         break;
-      case 'outlook.list_attachments':
+      case 'outlook_list_attachments':
         result = await actions.listAttachments({ id: picked.args!.id as string });
         break;
-      case 'outlook.download_attachment':
+      case 'outlook_download_attachment':
         result = await actions.downloadAttachment(picked.args as unknown as Parameters<OutlookActions['downloadAttachment']>[0]);
         break;
       default:

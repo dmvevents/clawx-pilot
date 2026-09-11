@@ -35,6 +35,8 @@ const driver = require('../../windows-pilot/scripts/pilot-chat-turn-driver.js') 
   terminalBlockersFor: (surface: Record<string, unknown>, expectedChannel?: string) => string[];
   verdictFor: (result: Record<string, unknown>) => string;
   exitCodeFor: (verdict: string) => number;
+  resolveChannelIndicator: (input: { composerChannel: string | null; headerState: string | null }) =>
+    { channel: string | null; channelSource: 'composer' | 'header' | null };
   parseArgs: (argv: string[]) => {
     expectedChannel: string;
     terminalQuiet: number;
@@ -121,8 +123,45 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
     expect(result.acceptable).toBe(true);
   });
 
+  it('accepts a genuinely short finished answer but not a truncated stream', () => {
+    // moe33-repeat turn 3 (2026-09-10): "Blue." answered "Reply with one word:
+    // what colour is the sky on a clear day?" on screen, and the blanket
+    // under-40-characters rule recorded the turn as silence-on-send.
+    const blue = driver.classifyTurnText({ text: 'Blue.', promptNormalized: 'Reply with one word: what colour is the sky on a clear day?', chipText: '' });
+    expect(blue.isPlaceholder).toBe(false);
+    expect(blue.acceptable).toBe(true);
+    expect(shape('Port of Spain.').acceptable).toBe(true);
+    // moe33-verify2 (2026-09-10): the model answered "Green" with no full stop,
+    // it stayed unchanged for the whole window, and was still rejected. A
+    // single word is a finished one-word answer.
+    expect(shape('Green').isPlaceholder).toBe(false);
+    expect(shape('Green').acceptable).toBe(true);
+    expect(shape('Yes').acceptable).toBe(true);
+    // ...and the receipt says so: an exit 0 that rode the single-word clause is qualified.
+    expect(shape('Green').acceptedShortAnswer).toBe(true);
+    expect(blue.acceptedShortAnswer).toBe(false);
+    expect(shape('Port of Spain.').acceptedShortAnswer).toBe(false);
+    // Renderer chrome / stream-state words alone are never answers, punctuated or not.
+    for (const word of ['Thinking', 'Working', 'Running', 'Done', 'Error', 'Loading', 'Generating']) {
+      expect(shape(word).acceptable).toBe(false);
+    }
+    // Punctuation-only text is not an answer either.
+    expect(shape('…').acceptable).toBe(false);
+    expect(shape('-').acceptable).toBe(false);
+    expect(shape('...').acceptable).toBe(false);
+    // Unfinished short text — several words, no terminal punctuation — stays a placeholder.
+    expect(shape('The capital of').isPlaceholder).toBe(true);
+    expect(shape('Port of Spain').isPlaceholder).toBe(true);
+    expect(shape('The capital of').acceptable).toBe(false);
+    expect(shape('').acceptable).toBe(false);
+    // A short answer that is only the error chip is still not an answer.
+    expect(driver.classifyTurnText({ text: `${CHIP}`, promptNormalized: PROMPT, chipText: CHIP }).acceptable).toBe(false);
+  });
+
   it('rejects the streaming placeholder and the echoed prompt', () => {
     expect(shape('Thinking…').acceptable).toBe(false);
+    expect(shape('Thinking...').acceptable).toBe(false);
+    expect(shape('Working').acceptable).toBe(false);
     expect(shape(`${PROMPT} just now`).isPromptEcho).toBe(true);
     expect(shape(`${PROMPT} just now`).acceptable).toBe(false);
   });
@@ -603,6 +642,151 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
     })).toBe('FAILED_GENERIC_ERROR');
   });
 
+  it('reads the channel from the header badge when the composer pill is not rendered', () => {
+    // ChatInput hides the composer pill unless BOTH channels have an account, so
+    // an Online-only machine (QA VM, the tester's laptop) never renders it.
+    expect(driver.resolveChannelIndicator({ composerChannel: 'on-device', headerState: 'online' }))
+      .toEqual({ channel: 'on-device', channelSource: 'composer' });
+    expect(driver.resolveChannelIndicator({ composerChannel: null, headerState: 'online' }))
+      .toEqual({ channel: 'online', channelSource: 'header' });
+    expect(driver.resolveChannelIndicator({ composerChannel: null, headerState: 'on-device' }))
+      .toEqual({ channel: 'on-device', channelSource: 'header' });
+    // Gateway states are not channels and must stay unresolved.
+    expect(driver.resolveChannelIndicator({ composerChannel: null, headerState: 'reconnecting' }))
+      .toEqual({ channel: null, channelSource: null });
+    expect(driver.resolveChannelIndicator({ composerChannel: null, headerState: 'disconnected' }))
+      .toEqual({ channel: null, channelSource: null });
+    expect(driver.resolveChannelIndicator({ composerChannel: null, headerState: null }))
+      .toEqual({ channel: null, channelSource: null });
+    expect(driver.SEL.connectionStatus).toBe('[data-testid="chat-connection-status"]');
+  });
+
+  it('does not call an answered turn a timeout when only the channel indicator is unreadable', () => {
+    // moe33-turn3 (2026-09-10): a real answer with every terminal signal quiet
+    // was reported TIMED_OUT_MID_TURN because the channel pill was absent.
+    const blockers = driver.terminalBlockersFor({
+      rootPresent: true,
+      channel: null,
+      degradeNoticeSeen: false,
+      degradeInProgress: false,
+      sending: false,
+      pendingFinal: false,
+      activeRunIdPresent: false,
+      activeExecutionGraph: false,
+      runErrorSeen: false,
+      genericErrorSeen: false,
+      errorChipSeen: false,
+      errorChipScopeValid: true,
+    }, 'online');
+    expect(blockers).toEqual(['MISSING_CHANNEL_STATE']);
+    const verdict = driver.verdictFor({
+      settled: true,
+      runErrorSeen: false,
+      terminalStable: false,
+      terminalBlockers: blockers,
+    });
+    expect(verdict).toBe('ANSWERED_CHANNEL_UNVERIFIED');
+    // Still not success: the channel is unproven.
+    expect(driver.exitCodeFor(verdict)).toBe(42);
+    // Any real terminal blocker alongside it keeps the timeout verdict.
+    expect(driver.verdictFor({
+      settled: true,
+      terminalStable: false,
+      terminalBlockers: ['MISSING_CHANNEL_STATE', 'SEND_STILL_IN_PROGRESS'],
+    })).toBe('TIMED_OUT_MID_TURN');
+    // And an unsettled turn with the same blocker is not an answer at all.
+    expect(driver.verdictFor({
+      settled: false,
+      terminalStable: false,
+      terminalBlockers: ['MISSING_CHANNEL_STATE'],
+      messagesBefore: 0,
+      messagesAfter: 1,
+    })).toBe('TIMED_OUT_MID_TURN');
+  });
+
+  it('reports a visible run failure as FAILED_RUN_ERROR_VISIBLE, not a timeout', () => {
+    // moe33-verify (2026-09-10 13:24Z): four provider connect timeouts; the app
+    // rendered "The agent run failed before producing a reply." with its inline
+    // chip in 105 s. That is the contract's visible-failure outcome. The
+    // pre-fix driver called it TIMED_OUT_MID_TURN.
+    const chipOnNewest = {
+      settled: true,
+      terminalStable: false,
+      lastMessageErrorChip: true,
+      terminalBlockers: ['ERROR_CHIP_VISIBLE'],
+    };
+    expect(driver.verdictFor(chipOnNewest)).toBe('FAILED_RUN_ERROR_VISIBLE');
+    expect(driver.exitCodeFor('FAILED_RUN_ERROR_VISIBLE')).toBe(43);
+    // Even with the terminal check otherwise clean, a chip on the newest bubble
+    // is a failed turn, never an answer.
+    expect(driver.verdictFor({ settled: true, terminalStable: true, lastMessageErrorChip: true, terminalBlockers: [] }))
+      .toBe('FAILED_RUN_ERROR_VISIBLE');
+    // A chip on an OLDER bubble (CLWX-140 rehydrated history) is not this
+    // turn's failure: the answer stands but the terminal check still blocks.
+    expect(driver.verdictFor({ ...chipOnNewest, lastMessageErrorChip: false })).toBe('TIMED_OUT_MID_TURN');
+    // Unsettled turns keep their own ladder.
+    expect(driver.verdictFor({ settled: false, lastMessageErrorChip: true, errorChipOnly: true, messagesBefore: 0, messagesAfter: 2 }))
+      .toBe('FAILED_ERROR_CHIP_ONLY');
+    // If the probe could not read the app's terminal state, it cannot claim
+    // "the app said the run failed" — stays a timeout, still non-zero.
+    expect(driver.verdictFor({ ...chipOnNewest, terminalBlockers: ['MISSING_TERMINAL_STATE_ROOT', 'ERROR_CHIP_VISIBLE'] }))
+      .toBe('TIMED_OUT_MID_TURN');
+    expect(driver.verdictFor({ ...chipOnNewest, terminalBlockers: ['MISSING_TERMINAL_SIGNAL_SENDING'] }))
+      .toBe('TIMED_OUT_MID_TURN');
+    // A degrade/channel failure still outranks it.
+    expect(driver.verdictFor({ ...chipOnNewest, terminalBlockers: ['UNEXPECTED_DEGRADE_TO_ON_DEVICE', 'ERROR_CHIP_VISIBLE'] }))
+      .toBe('FAILED_UNEXPECTED_DEGRADE');
+  });
+
+  it('never records the runtime failure sentence as an answer, chip or no chip', () => {
+    // moe33-journey-policy1 (2026-09-10 19:04Z): "The agent run failed before
+    // producing a reply." rendered as a plain assistant bubble with NO chip and
+    // no banner; the driver returned ANSWERED / exit 0. That is the silent
+    // failure class itself, recorded as a pass.
+    const sentence = 'The agent run failed before producing a reply.';
+    const shape = driver.classifyTurnText({ text: sentence, promptNormalized: 'What are the six core values?', chipText: '' });
+    expect(shape.isRuntimeFailure).toBe(true);
+    expect(shape.acceptable).toBe(false);
+    for (const variant of ['Agent run failed (model: custom-moecloud/gemini-2.5-flash).', 'Embedded agent failed before reply: LLM request timed out.']) {
+      expect(driver.classifyTurnText({ text: variant, promptNormalized: 'x', chipText: '' }).acceptable).toBe(false);
+    }
+    // A real answer that merely mentions failure is still an answer.
+    expect(driver.classifyTurnText({ text: 'The school run failed to start on time last week because of rain.', promptNormalized: 'x', chipText: '' }).acceptable).toBe(true);
+
+    // Verdicts: no chip → the silent class; with chip → the visible class. Both non-zero, both outrank a clean terminal state.
+    const base = { settled: true, terminalStable: true, terminalBlockers: [], runtimeFailureSentence: true };
+    expect(driver.verdictFor({ ...base, lastMessageErrorChip: false })).toBe('FAILED_RUN_ERROR_NO_CHIP');
+    expect(driver.exitCodeFor('FAILED_RUN_ERROR_NO_CHIP')).toBe(44);
+    expect(driver.verdictFor({ ...base, lastMessageErrorChip: true })).toBe('FAILED_RUN_ERROR_VISIBLE');
+    expect(driver.verdictFor({ ...base, lastMessageErrorChip: false, terminalBlockers: ['MISSING_CHANNEL_STATE'] })).toBe('FAILED_RUN_ERROR_NO_CHIP');
+    // The bottom error bar (transport-class `error`) is also a visible surface —
+    // moe33-journey-policy1 showed the red bar with no chip and no run-error banner.
+    expect(driver.verdictFor({ ...base, lastMessageErrorChip: false, errorBarSeen: true })).toBe('FAILED_RUN_ERROR_VISIBLE');
+    expect(driver.verdictFor({ ...base, lastMessageErrorChip: false, runErrorSeen: true })).toBe('FAILED_RUN_ERROR_VISIBLE');
+  });
+
+  it('counts the bottom error bar as a terminal blocker', () => {
+    const quiet = {
+      rootPresent: true,
+      channel: 'online',
+      degradeNoticeSeen: false,
+      degradeInProgress: false,
+      sending: false,
+      pendingFinal: false,
+      activeRunIdPresent: false,
+      activeExecutionGraph: false,
+      runErrorSeen: false,
+      genericErrorSeen: false,
+      errorChipSeen: false,
+      errorChipScopeValid: true,
+    };
+    expect(driver.terminalBlockersFor({ ...quiet, errorPresent: true }, 'online')).toContain('ERROR_BAR_VISIBLE');
+    expect(driver.terminalBlockersFor({ ...quiet, errorPresent: false }, 'online')).toEqual([]);
+    expect(driver.terminalBlockersFor({ ...quiet }, 'online')).toEqual([]); // attribute absent on older builds: not a blocker
+    // An answer that settled under a visible error bar is not a clean pass.
+    expect(driver.verdictFor({ settled: true, terminalStable: false, terminalBlockers: ['ERROR_BAR_VISIBLE'] })).not.toBe('ANSWERED');
+  });
+
   it('treats post-answer instability as a mid-turn timeout, not a clean answer', () => {
     const verdict = driver.verdictFor({
       settled: true,
@@ -678,6 +862,9 @@ describe('pilot-chat-turn-driver: an error chip is not an answer', () => {
     expect(driver.exitCodeFor('ANSWERED')).toBe(0);
     // Answered, but the principal also saw a red banner: distinct, non-zero.
     expect(driver.exitCodeFor('ANSWERED_WITH_RUN_ERROR')).toBe(41);
+    expect(driver.exitCodeFor('ANSWERED_CHANNEL_UNVERIFIED')).toBe(42);
+    expect(driver.exitCodeFor('FAILED_RUN_ERROR_VISIBLE')).toBe(43);
+    expect(driver.exitCodeFor('FAILED_RUN_ERROR_NO_CHIP')).toBe(44);
     for (const verdict of [
       'TIMED_OUT_MID_TURN',
       'NO_RESPONSE',
@@ -733,7 +920,7 @@ describe('pilot-chat-turn-driver: execution graph evidence is scoped to the curr
   it('does not borrow a prior expanded graph when the current prompt graph is collapsed', () => {
     const html = `
       <main data-testid="chat-page">
-        ${message(0, 'Older document prompt', expandedGraph(['document.read_pdf']))}
+        ${message(0, 'Older document prompt', expandedGraph(['document_read_pdf']))}
         <div data-testid="chat-message-1"><div class="prose"><p>Old answer.</p></div></div>
         ${message(2, prompt, '<button data-testid="chat-execution-graph" data-collapsed="true">2 tool calls · 1 process messages</button>')}
         <div data-testid="chat-message-3"><div class="prose"><p>Fresh answer.</p></div></div>
@@ -755,7 +942,7 @@ describe('pilot-chat-turn-driver: execution graph evidence is scoped to the curr
         ${message(0, 'Earlier prompt', expandedGraph(['exec']))}
         ${message(4, prompt, expandedGraph(['old_tool']))}
         <div data-testid="chat-message-7"><div class="prose"><p>Prior identical answer.</p></div></div>
-        ${message(9, prompt, expandedGraph(['document.read_docx']))}
+        ${message(9, prompt, expandedGraph(['document_read_docx']))}
         <div data-testid="chat-message-10"><div class="prose"><p>Fresh answer.</p></div></div>
       </main>
     `;
@@ -766,7 +953,7 @@ describe('pilot-chat-turn-driver: execution graph evidence is scoped to the curr
     expect(evidence.promptMessageTestId).toBe('chat-message-9');
     expect(evidence.promptMessageIndex).toBe(9);
     expect(evidence.promptDomOrdinal).toBe(3);
-    expect(evidence.toolNames).toEqual(['document.read_docx']);
+    expect(evidence.toolNames).toEqual(['document_read_docx']);
     expect(evidence.toolNames).not.toContain('old_tool');
   });
 
@@ -775,7 +962,7 @@ describe('pilot-chat-turn-driver: execution graph evidence is scoped to the curr
       <main data-testid="chat-page">
         ${message(0, 'Prior prompt', expandedGraph(['old_tool']))}
         <div data-testid="chat-message-1"><div class="prose"><p>Old answer.</p></div></div>
-        ${message(2, prompt, expandedGraph(['exec', 'read', 'document.read_docx']))}
+        ${message(2, prompt, expandedGraph(['exec', 'read', 'document_read_docx']))}
         <div data-testid="chat-message-3"><div class="prose"><p>Fresh answer.</p></div></div>
       </main>
     `;
@@ -784,14 +971,14 @@ describe('pilot-chat-turn-driver: execution graph evidence is scoped to the curr
 
     expect(evidence.currentPromptMatched).toBe(true);
     expect(evidence.graphCollapsed).toBe(false);
-    expect(evidence.steps.map((step) => step.label)).toEqual(['exec', 'read', 'document.read_docx']);
-    expect(evidence.toolNames).toEqual(['exec', 'read', 'document.read_docx']);
+    expect(evidence.steps.map((step) => step.label)).toEqual(['exec', 'read', 'document_read_docx']);
+    expect(evidence.toolNames).toEqual(['exec', 'read', 'document_read_docx']);
   });
 
   it('fails closed when the indexed current prompt does not match, even if that container has graph rows', () => {
     const html = `
       <main data-testid="chat-page">
-        ${message(0, 'Different prompt', expandedGraph(['document.read_docx']))}
+        ${message(0, 'Different prompt', expandedGraph(['document_read_docx']))}
         <div data-testid="chat-message-1"><div class="prose"><p>Answer.</p></div></div>
       </main>
     `;
@@ -811,9 +998,9 @@ describe('pilot-chat-turn-driver: execution graph evidence is scoped to the curr
   it('reports no graph on the current prompt instead of reading later prose or prior rows', () => {
     const html = `
       <main data-testid="chat-page">
-        ${message(0, 'Prior prompt', expandedGraph(['document.read_pdf']))}
+        ${message(0, 'Prior prompt', expandedGraph(['document_read_pdf']))}
         ${message(1, prompt)}
-        <div data-testid="chat-message-2"><div class="prose"><p>I used document.read_docx to answer.</p></div></div>
+        <div data-testid="chat-message-2"><div class="prose"><p>I used document_read_docx to answer.</p></div></div>
       </main>
     `;
 
@@ -866,8 +1053,8 @@ describe('pilot-chat-turn-driver: execution graph evidence is scoped to the curr
       promptMessageTestId: 'chat-message-9',
       promptMessageIndex: 9,
       promptDomOrdinal: 2,
-      steps: [{ index: 0, label: 'document.read_docx', text: 'document.read_docx completed' }],
-      toolNames: ['document.read_docx'],
+      steps: [{ index: 0, label: 'document_read_docx', text: 'document_read_docx completed' }],
+      toolNames: ['document_read_docx'],
       diagnostics: [],
     };
     const fakeClick = async () => {
@@ -899,8 +1086,8 @@ describe('pilot-chat-turn-driver: execution graph evidence is scoped to the curr
     expect(evidence.expandedForCapture).toBe(true);
     expect(evidence.restoredCollapsed).toBe(true);
     expect(restored).toBe(true);
-    expect(evidence.toolNames).toEqual(['document.read_docx']);
-    expect(evidence.steps?.[0].label).toBe('document.read_docx');
+    expect(evidence.toolNames).toEqual(['document_read_docx']);
+    expect(evidence.steps?.[0].label).toBe('document_read_docx');
   });
 });
 

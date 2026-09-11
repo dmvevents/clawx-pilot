@@ -40,12 +40,12 @@ describe('harness/run.ts — 5-prompt doc-tooling E2E', () => {
       expect(typeof p.expected_stdout_regex).toBe('string');
       expect(typeof p.timeout_ms).toBe('number');
       expect([
-        'document.read_pdf',
-        'document.read_docx',
-        'document.write_docx',
-        'document.read_xlsx',
-        'document.write_xlsx',
-        'document.read_image',
+        'document_read_pdf',
+        'document_read_docx',
+        'document_write_docx',
+        'document_read_xlsx',
+        'document_write_xlsx',
+        'document_read_image',
       ]).toContain(p.expect_calls_tool);
     }
   });

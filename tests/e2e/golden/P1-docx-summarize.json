@@ -1,6 +1,6 @@
 {
   "id": "P1-docx-summarize",
-  "tool_called": "document.read_docx",
+  "tool_called": "document_read_docx",
   "result_schema": {
     "path": "string",
     "bytes": "number",

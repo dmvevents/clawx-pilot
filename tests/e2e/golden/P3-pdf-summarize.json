@@ -1,6 +1,6 @@
 {
   "id": "P3-pdf-summarize",
-  "tool_called": "document.read_pdf",
+  "tool_called": "document_read_pdf",
   "result_schema": {
     "path": "string",
     "bytes": "number",

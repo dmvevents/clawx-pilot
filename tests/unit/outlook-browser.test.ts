@@ -144,8 +144,8 @@ describe('OutlookBrowserManager.open', () => {
     const result = await mgr.open();
 
     expect(result.status).toBe('needs_signin');
-    expect(result.message).toMatch(/browser\.diagnose/);
-    expect(result.message).toMatch(/browser\.repair_chrome_cdp/);
+    expect(result.message).toMatch(/browser_diagnose/);
+    expect(result.message).toMatch(/browser_repair_chrome_cdp/);
     expect(result.message).not.toMatch(/enable Chrome remote debugging/i);
     expect(result.message).not.toMatch(/chrome:\/\/flags/i);
     expect(result.message).not.toMatch(/chrome\.exe/i);

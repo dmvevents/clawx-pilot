@@ -7,7 +7,7 @@
       "ref": "main",
       "version": "main",
       "autoEnable": false,
-      "autoEnableDisabledReason": "Shells out to Python (pypdf/pdfplumber) which the Windows build does not ship; superseded by the native document.read_pdf tool. Auto-enabling it made the agent choose the Python route and fail the Ministry 2026-07-21 prompt suite 0/5."
+      "autoEnableDisabledReason": "Shells out to Python (pypdf/pdfplumber) which the Windows build does not ship; superseded by the native document_read_pdf tool. Auto-enabling it made the agent choose the Python route and fail the Ministry 2026-07-21 prompt suite 0/5."
     },
     {
       "slug": "xlsx",
@@ -16,7 +16,7 @@
       "ref": "main",
       "version": "main",
       "autoEnable": false,
-      "autoEnableDisabledReason": "Shells out to Python (pandas/openpyxl) which the Windows build does not ship; superseded by document.read_xlsx / document.write_xlsx."
+      "autoEnableDisabledReason": "Shells out to Python (pandas/openpyxl) which the Windows build does not ship; superseded by document_read_xlsx / document_write_xlsx."
     },
     {
       "slug": "docx",
@@ -25,7 +25,7 @@
       "ref": "main",
       "version": "main",
       "autoEnable": false,
-      "autoEnableDisabledReason": "Shells out to pandoc/python-docx which the Windows build does not ship; superseded by document.read_docx / document.write_docx."
+      "autoEnableDisabledReason": "Shells out to pandoc/python-docx which the Windows build does not ship; superseded by document_read_docx / document_write_docx."
     },
     {
       "slug": "pptx",

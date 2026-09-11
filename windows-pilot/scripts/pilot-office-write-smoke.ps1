@@ -3,7 +3,7 @@
 #
 # Companion to pilot-office-runtime-check.ps1 (which only proves the docx/xlsx
 # deps `require.resolve`). This one actually exercises the write path the agent
-# tools document.write_docx / document.write_xlsx use: it requires the bundled
+# tools document_write_docx / document_write_xlsx use: it requires the bundled
 # `docx` + `xlsx` deps from the packaged module roots, writes a real .docx and
 # .xlsx into %USERPROFILE%\.openclaw\media\outbound (where write tools with a
 # relative path land), validates each output is a real OpenXML (PK zip)

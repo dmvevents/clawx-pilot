@@ -1,6 +1,6 @@
 {
   "id": "P2-docx-rewrite-save",
-  "tool_called": "document.write_docx",
+  "tool_called": "document_write_docx",
   "result_schema": {
     "path": "string",
     "bytes": "number",

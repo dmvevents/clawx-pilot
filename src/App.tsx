@@ -20,6 +20,8 @@ import { Settings } from './pages/Settings';
 import { Setup } from './pages/Setup';
 import { useSettingsStore } from './stores/settings';
 import { useGatewayStore } from './stores/gateway';
+import { useChatStore } from './stores/chat';
+import { shouldStartNewSession } from './components/layout/new-chat-decision';
 import { useProviderStore } from './stores/providers';
 import { applyGatewayTransportPreference } from './lib/api-client';
 import { rendererExtensionRegistry } from './extensions/registry';
@@ -145,6 +147,23 @@ function App() {
 
     const unsubscribe = window.electron.ipcRenderer.on('navigate', handleNavigate);
 
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, [navigate]);
+
+  // File > New Chat / Ctrl+N: same decision as the sidebar button (CLWX-140).
+  // Reads live store state so a click in the first minute after launch, when
+  // the main session's history has not loaded yet, still starts a new session.
+  useEffect(() => {
+    const handleNewChat = () => {
+      const state = useChatStore.getState();
+      if (shouldStartNewSession(state)) state.newSession();
+      navigate('/');
+    };
+    const unsubscribe = window.electron.ipcRenderer.on('new-chat', handleNewChat);
     return () => {
       if (typeof unsubscribe === 'function') {
         unsubscribe();

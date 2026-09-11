@@ -10,7 +10,7 @@ name: Windows Smoke (build + install + probe)
 #   - Electron + gateway boot to a healthy state
 #   - Host API on 13210 challenges with 401 (auth wired)
 #   - Gateway WS on 18789 accepts a TCP connect
-#   - Plugin tools register (log scan: "outlook.open" etc.)
+#   - Plugin tools register (log scan: "outlook_open" etc.)
 #   - openclaw.json doesn't get clobbered on first boot
 #   - No app-update.yml leaks into install dir
 #   - No "google-query-key" runtime-api enum errors in logs
@@ -280,11 +280,11 @@ jobs:
           Write-Host ('=== userData log files: ' + $userDataLogs.Count + ' ===')
           foreach ($l in $userDataLogs) { Write-Host ('  ' + $l.FullName + ' (' + $l.Length + ' bytes)') }
 
-          $outlookToolsHit = ([regex]::Matches($blob, 'outlook\.(open|read_inbox|search_inbox|read_email|draft_email|send_email|reply|forward|mark_read|list_attachments|download_attachment)')).Count
+          $outlookToolsHit = ([regex]::Matches($blob, 'outlook[._](open|read_inbox|search_inbox|read_email|draft_email|send_email|reply|forward|mark_read|list_attachments|download_attachment)')).Count
           $badEnumHit = ($blob -match 'google-query-key.*Invalid option' -or $blob -match 'Config validation failed.*api.*Invalid')
           $clobberHit = ($blob -match 'clobber|refusing to overwrite populated agents')
 
-          Write-Host "outlook.* tool mentions in logs: $outlookToolsHit"
+          Write-Host "outlook_* tool mentions in logs: $outlookToolsHit"
           Write-Host "bad-enum hit: $badEnumHit"
           Write-Host "clobber-guard fired: $clobberHit"
 

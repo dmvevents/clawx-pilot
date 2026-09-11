@@ -15,14 +15,14 @@ metadata:
 
 - Demo turn 2 (forms path): "Read the suspension report email and fill out the Suspensions form. Don't submit yet…" → review → "Submit the form."
 - Acceptance smoke: prove the 32-field schema fill works without manual intervention.
-- Diagnosis: a `forms.preview_suspension` or `forms.submit_suspension` call failed.
+- Diagnosis: a `forms_preview_suspension` or `forms_submit_suspension` call failed.
 
 ## Tool surface (registered by moe-principal-assistant)
 
 | Tool | Purpose | Gate |
 |---|---|---|
-| `forms.preview_suspension({payload})` | Open the form ResponsePage, fill all fields, **stop before submit** | none |
-| `forms.submit_suspension({confirm:true})` | Click Submit on the already-previewed form | hard-confirm |
+| `forms_preview_suspension({payload})` | Open the form ResponsePage, fill all fields, **stop before submit** | none |
+| `forms_submit_suspension({confirm:true})` | Click Submit on the already-previewed form | hard-confirm |
 
 The fill driver is `electron/services/forms-browser-v2/forms-driver.ts` + `suspensions-actions.ts`. It uses Playwright over the same CDP attach as Outlook.
 
@@ -89,10 +89,10 @@ Saved at `extensions/moe-principal-assistant/forms/suspensions-test-fac-url.txt`
 > Read the suspension report email from this morning and fill out the Term 3 Suspensions form. Don't submit yet — let me review.
 
 Expected sequence:
-1. `outlook.search_inbox({subjectContains: "suspension"})`
-2. `outlook.read_email({id: <top result>})`
+1. `outlook_search_inbox({subjectContains: "suspension"})`
+2. `outlook_read_email({id: <top result>})`
 3. Agent extracts the 32 fields from the body (Pro-mode, ~5-10s)
-4. `forms.preview_suspension({payload: <extracted>})` opens the form on test.fac and fills the 31 browser-fillable required fields
+4. `forms_preview_suspension({payload: <extracted>})` opens the form on test.fac and fills the 31 browser-fillable required fields
 5. Chat-side summary: "Filled X browser-fillable fields; respondent name is auto-recorded. Form is open in Chrome for your review."
 
 **Switch to the Chrome tab.** Show the principal each section. Realistic data should be in every required field.
@@ -101,7 +101,7 @@ Expected sequence:
 
 > Submit the form.
 
-Expected: `forms.submit_suspension({confirm:true})` → DOM Submit click → "Thanks" page in Chrome → success report in chat.
+Expected: `forms_submit_suspension({confirm:true})` → DOM Submit click → "Thanks" page in Chrome → success report in chat.
 
 ## Acceptance smoke (before the principal arrives)
 
@@ -126,7 +126,7 @@ Reset for demo: open the form URL fresh, Ctrl+R, leave the tab on the empty Resp
 | Phone field missed (Q28) | Apostrophe variant | Manually type the value; flag for v2 fix |
 | `401 Required user login` | Agent picked the API path | Re-issue the prompt; if it picks API again, kill the turn and start over saying "fill the form via the browser, do not use the API" |
 | Form shows "Page not found" | Owner deleted the cloned form | Recreate via `forms-clone-suspensions.ts` (Mac side) — 5 min |
-| `forms.preview_suspension` returns "no payload extracted" | Source email body too short / not structured | Re-send the demo email with the full 32-field narrative |
+| `forms_preview_suspension` returns "no payload extracted" | Source email body too short / not structured | Re-send the demo email with the full 32-field narrative |
 
 ## What's deliberately deferred
 

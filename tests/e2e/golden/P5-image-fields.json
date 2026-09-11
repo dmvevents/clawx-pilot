@@ -1,6 +1,6 @@
 {
   "id": "P5-image-fields",
-  "tool_called": "document.read_image",
+  "tool_called": "document_read_image",
   "result_schema": {
     "content": "array",
     "details": "object"

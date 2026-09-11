@@ -75,7 +75,7 @@ extension:
 - `daily-report`: Primary School Daily Report.
 - `suspensions`: Primary School Student Suspensions.
 
-The agent should call `forms.list`, preview the filled response page, stop for
+The agent should call `forms_list`, preview the filled response page, stop for
 human review, then submit only after explicit same-session confirmation.
 
 Production Forms should use an IT-owned SharePoint list or Power Automate HTTP

@@ -4,7 +4,7 @@
  * The existing `scripts/v2-eval.ts` calls v2 OutlookActions directly and
  * grades the IMPLEMENTATION. This eval grades the LLM's TOOL SELECTION:
  * given a natural-language principal prompt, does the model pick the
- * correct outlook.* tool with reasonable arguments?
+ * correct outlook_* tool with reasonable arguments?
  *
  * Method: send each prompt to a chosen LLM (default: claude-sonnet-4-5
  * via Bedrock, since it's the same provider we use for VLM grounding
@@ -34,17 +34,17 @@ interface ToolSpec {
 }
 
 const OUTLOOK_TOOLS: ToolSpec[] = [
-  { name: 'outlook.open', description: 'Open Outlook Web in the principal\'s existing Chrome session.', argShape: [] },
-  { name: 'outlook.read_inbox', description: 'Return the top N recent inbox messages.', argShape: ['top'] },
-  { name: 'outlook.search_inbox', description: 'Filter the inbox by sender, subject, date, unread, or attachment.', argShape: ['from', 'subjectContains', 'dateGte', 'dateLt', 'unread', 'hasAttachment', 'top'] },
-  { name: 'outlook.read_email', description: 'Open one message by id and return full body + attachments.', argShape: ['id'] },
-  { name: 'outlook.draft_email', description: 'Open a New Mail compose pane and fill it. Does not send.', argShape: ['to', 'subject', 'body', 'cc', 'bcc'] },
-  { name: 'outlook.send_email', description: 'Send an email. HARD GATE: requires confirm:true.', argShape: ['to', 'subject', 'body', 'confirm'] },
-  { name: 'outlook.reply', description: 'Reply or reply-all to a message.', argShape: ['id', 'body', 'replyAll'] },
-  { name: 'outlook.forward', description: 'Forward a message to a new recipient.', argShape: ['id', 'to', 'body'] },
-  { name: 'outlook.mark_read', description: 'Mark a message as read or unread.', argShape: ['id', 'read'] },
-  { name: 'outlook.list_attachments', description: 'List metadata for a message\'s attachments. Does not download.', argShape: ['id'] },
-  { name: 'outlook.download_attachment', description: 'Download a specific attachment. HARD GATE: requires confirm:true.', argShape: ['id', 'filename', 'confirm'] },
+  { name: 'outlook_open', description: 'Open Outlook Web in the principal\'s existing Chrome session.', argShape: [] },
+  { name: 'outlook_read_inbox', description: 'Return the top N recent inbox messages.', argShape: ['top'] },
+  { name: 'outlook_search_inbox', description: 'Filter the inbox by sender, subject, date, unread, or attachment.', argShape: ['from', 'subjectContains', 'dateGte', 'dateLt', 'unread', 'hasAttachment', 'top'] },
+  { name: 'outlook_read_email', description: 'Open one message by id and return full body + attachments.', argShape: ['id'] },
+  { name: 'outlook_draft_email', description: 'Open a New Mail compose pane and fill it. Does not send.', argShape: ['to', 'subject', 'body', 'cc', 'bcc'] },
+  { name: 'outlook_send_email', description: 'Send an email. HARD GATE: requires confirm:true.', argShape: ['to', 'subject', 'body', 'confirm'] },
+  { name: 'outlook_reply', description: 'Reply or reply-all to a message.', argShape: ['id', 'body', 'replyAll'] },
+  { name: 'outlook_forward', description: 'Forward a message to a new recipient.', argShape: ['id', 'to', 'body'] },
+  { name: 'outlook_mark_read', description: 'Mark a message as read or unread.', argShape: ['id', 'read'] },
+  { name: 'outlook_list_attachments', description: 'List metadata for a message\'s attachments. Does not download.', argShape: ['id'] },
+  { name: 'outlook_download_attachment', description: 'Download a specific attachment. HARD GATE: requires confirm:true.', argShape: ['id', 'filename', 'confirm'] },
 ];
 
 interface EvalRow {
@@ -71,35 +71,35 @@ interface EvalRow {
 
 const PROMPTS: EvalRow[] = [
   // W1
-  { id: 'open-1', prompt: 'Open my email', expectedTool: 'outlook.open', expectedArgKeys: [] },
+  { id: 'open-1', prompt: 'Open my email', expectedTool: 'outlook_open', expectedArgKeys: [] },
   // W2.1, W2.2
-  { id: 'inbox-1', prompt: 'What\'s in my inbox?', expectedTool: 'outlook.read_inbox', expectedArgKeys: [] },
-  { id: 'unread-1', prompt: 'How many unread emails do I have?', expectedTool: 'outlook.search_inbox', expectedArgKeys: ['unread'] },
+  { id: 'inbox-1', prompt: 'What\'s in my inbox?', expectedTool: 'outlook_read_inbox', expectedArgKeys: [] },
+  { id: 'unread-1', prompt: 'How many unread emails do I have?', expectedTool: 'outlook_search_inbox', expectedArgKeys: ['unread'] },
   // W2.3
-  { id: 'sender-1', prompt: 'Anything from districtoffice@moe.gov.tt today?', expectedTool: 'outlook.search_inbox', expectedArgKeys: ['from'] },
+  { id: 'sender-1', prompt: 'Anything from districtoffice@moe.gov.tt today?', expectedTool: 'outlook_search_inbox', expectedArgKeys: ['from'] },
   // W2.4
-  { id: 'subject-1', prompt: 'Find the email about budget approvals', expectedTool: 'outlook.search_inbox', expectedArgKeys: ['subjectContains'] },
+  { id: 'subject-1', prompt: 'Find the email about budget approvals', expectedTool: 'outlook_search_inbox', expectedArgKeys: ['subjectContains'] },
   // W3.1 — implicit "latest from district HQ" requires search first
-  { id: 'read-1', prompt: 'What does the latest message from district HQ say?', expectedTool: 'outlook.read_email', expectedArgKeys: ['id'], acceptableAlternatives: ['outlook.search_inbox'] },
+  { id: 'read-1', prompt: 'What does the latest message from district HQ say?', expectedTool: 'outlook_read_email', expectedArgKeys: ['id'], acceptableAlternatives: ['outlook_search_inbox'] },
   // W4.1
-  { id: 'draft-1', prompt: 'Draft an email to p@school.tt: Meeting at 10am tomorrow', expectedTool: 'outlook.draft_email', expectedArgKeys: ['to', 'subject', 'body'] },
+  { id: 'draft-1', prompt: 'Draft an email to p@school.tt: Meeting at 10am tomorrow', expectedTool: 'outlook_draft_email', expectedArgKeys: ['to', 'subject', 'body'] },
   // W4.3 — single-turn prompt without prior context; model can't fabricate
   // an open draft. Refusal (tool=null) is the agentically-correct answer
   // here. send_email is acceptable only if the model assumes a prior draft.
-  { id: 'send-1', prompt: 'Yes, send that email I just drafted', expectedTool: 'outlook.send_email', expectedArgKeys: ['confirm'], acceptableAlternatives: ['__none__'] },
+  { id: 'send-1', prompt: 'Yes, send that email I just drafted', expectedTool: 'outlook_send_email', expectedArgKeys: ['confirm'], acceptableAlternatives: ['__none__'] },
   // W5.1 — same implicit-id problem
-  { id: 'reply-1', prompt: 'Reply to that last email saying I\'ll attend', expectedTool: 'outlook.reply', expectedArgKeys: ['id', 'body'], acceptableAlternatives: ['outlook.search_inbox', 'outlook.read_inbox', '__none__'] },
+  { id: 'reply-1', prompt: 'Reply to that last email saying I\'ll attend', expectedTool: 'outlook_reply', expectedArgKeys: ['id', 'body'], acceptableAlternatives: ['outlook_search_inbox', 'outlook_read_inbox', '__none__'] },
   // W5.2
-  { id: 'replyall-1', prompt: 'Reply all to the budget email — I support it', expectedTool: 'outlook.reply', expectedArgKeys: ['id', 'body', 'replyAll'], acceptableAlternatives: ['outlook.search_inbox'] },
+  { id: 'replyall-1', prompt: 'Reply all to the budget email — I support it', expectedTool: 'outlook_reply', expectedArgKeys: ['id', 'body', 'replyAll'], acceptableAlternatives: ['outlook_search_inbox'] },
   // W5.3
-  { id: 'forward-1', prompt: 'Forward the school inspection report to p@school.tt', expectedTool: 'outlook.forward', expectedArgKeys: ['id', 'to'], acceptableAlternatives: ['outlook.search_inbox', '__none__'] },
+  { id: 'forward-1', prompt: 'Forward the school inspection report to p@school.tt', expectedTool: 'outlook_forward', expectedArgKeys: ['id', 'to'], acceptableAlternatives: ['outlook_search_inbox', '__none__'] },
   // W6.1
-  { id: 'markread-1', prompt: 'Mark that email as read', expectedTool: 'outlook.mark_read', expectedArgKeys: ['id', 'read'], acceptableAlternatives: ['__none__'] },
+  { id: 'markread-1', prompt: 'Mark that email as read', expectedTool: 'outlook_mark_read', expectedArgKeys: ['id', 'read'], acceptableAlternatives: ['__none__'] },
   // W8.1, W8.2
-  { id: 'listatt-1', prompt: 'What attachments are on the email about teacher evaluations?', expectedTool: 'outlook.list_attachments', expectedArgKeys: ['id'], acceptableAlternatives: ['outlook.search_inbox'] },
-  { id: 'searchatt-1', prompt: 'Find emails with PDF attachments from this week', expectedTool: 'outlook.search_inbox', expectedArgKeys: ['hasAttachment'] },
+  { id: 'listatt-1', prompt: 'What attachments are on the email about teacher evaluations?', expectedTool: 'outlook_list_attachments', expectedArgKeys: ['id'], acceptableAlternatives: ['outlook_search_inbox'] },
+  { id: 'searchatt-1', prompt: 'Find emails with PDF attachments from this week', expectedTool: 'outlook_search_inbox', expectedArgKeys: ['hasAttachment'] },
   // W8.3
-  { id: 'download-1', prompt: 'Yes, download the PDF report.pdf from that email', expectedTool: 'outlook.download_attachment', expectedArgKeys: ['id', 'filename', 'confirm'] },
+  { id: 'download-1', prompt: 'Yes, download the PDF report.pdf from that email', expectedTool: 'outlook_download_attachment', expectedArgKeys: ['id', 'filename', 'confirm'] },
 ];
 
 const SYSTEM_PROMPT = `You are an AI assistant for a primary-school principal in Trinidad & Tobago.

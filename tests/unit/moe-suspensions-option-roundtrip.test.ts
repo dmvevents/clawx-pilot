@@ -9,7 +9,7 @@
  *
  * This suite iterates EVERY option text of EVERY choice field in the
  * canonical schema (extensions/moe-principal-assistant/forms/
- * suspensions-schema.json) through the real forms.preview_suspension tool
+ * suspensions-schema.json) through the real forms_preview_suspension tool
  * and asserts identity, catching the whole alias-order class rather than
  * any single pair.
  */
@@ -119,7 +119,7 @@ describe('suspensions option-text identity round-trip (CLWX-98)', () => {
         log: { info() {}, warn() {} },
       });
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      const preview = byName['forms.preview_suspension'];
+      const preview = byName['forms_preview_suspension'];
       expect(preview?.execute).toBeDefined();
 
       const failures: string[] = [];

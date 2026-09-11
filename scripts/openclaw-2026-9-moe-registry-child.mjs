@@ -125,7 +125,7 @@ async function loadMoeRegistry(openclawDir, pluginRoot, tempRoot, hostApi = fals
 
 // The exact disposition checks previously performed in-process by
 // assertMoePluginToolRegistration: both registries (no-HostAPI and HostAPI),
-// exact inventories, and the document.read_pdf execute smoke.
+// exact inventories, and the document_read_pdf execute smoke.
 export async function runMoeRegistryVerification({ openclawDir, pluginRoot, tempRoot }) {
   const registry = await loadMoeRegistry(openclawDir, pluginRoot, tempRoot, false);
   const plugin = registry.plugins?.[0];
@@ -136,19 +136,19 @@ export async function runMoeRegistryVerification({ openclawDir, pluginRoot, temp
   if (!Array.isArray(registry.tools) || registry.tools.length !== MOE_NO_HOSTAPI_TOOLS.length) {
     throw new Error(`MoE no-HostAPI runtime registered ${registry.tools?.length ?? 0} executable tool factories`);
   }
-  const pdfEntry = registry.tools.find((entry) => Array.isArray(entry.names) && entry.names.includes('document.read_pdf'));
+  const pdfEntry = registry.tools.find((entry) => Array.isArray(entry.names) && entry.names.includes('document_read_pdf'));
   if (!pdfEntry || typeof pdfEntry.factory !== 'function') {
-    throw new Error('MoE document.read_pdf runtime factory missing from OpenClaw registry');
+    throw new Error('MoE document_read_pdf runtime factory missing from OpenClaw registry');
   }
   const pdfTool = pdfEntry.factory({ sessionKey: 'verify-session' });
-  if (pdfTool?.name !== 'document.read_pdf' || typeof pdfTool.execute !== 'function' || pdfTool.parameters?.type !== 'object') {
-    throw new Error('MoE document.read_pdf factory did not produce an execute-based JSON-schema tool');
+  if (pdfTool?.name !== 'document_read_pdf' || typeof pdfTool.execute !== 'function' || pdfTool.parameters?.type !== 'object') {
+    throw new Error('MoE document_read_pdf factory did not produce an execute-based JSON-schema tool');
   }
   const pdfFixture = path.join(tempRoot, 'clwx-openclaw-2026-9-plugin-fixture.pdf');
   fs.writeFileSync(pdfFixture, pdfWithText('OPENCLAW 2026.9 MOE PDF CONTRACT'));
   const pdfResult = await pdfTool.execute('verify-call-1', { path: pdfFixture, maxChars: 1000 });
   if (!String(pdfResult?.text ?? '').includes('OPENCLAW 2026.9 MOE PDF CONTRACT')) {
-    throw new Error('MoE document.read_pdf execute call did not return fixture text through the OpenClaw registry');
+    throw new Error('MoE document_read_pdf execute call did not return fixture text through the OpenClaw registry');
   }
 
   const hostRegistry = await loadMoeRegistry(openclawDir, pluginRoot, tempRoot, true);

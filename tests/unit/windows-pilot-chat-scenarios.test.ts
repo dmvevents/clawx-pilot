@@ -69,10 +69,10 @@ describe('Windows pilot chat procedure scenarios', () => {
     expect(scenario?.prompt).toContain('do not invent required Daily Report numbers');
     expect(scenario?.prompt).toContain('Ask only for the missing required attendance, teacher, and class or year-group counts');
     expect(scenario?.bannedToolAny).toEqual(expect.arrayContaining([
-      'forms.preview_daily_report',
-      'forms.submit_daily_report',
-      'outlook.send_email',
-      'outlook.download_attachment',
+      'forms_preview_daily_report',
+      'forms_submit_daily_report',
+      'outlook_send_email',
+      'outlook_download_attachment',
       'sessions_spawn',
       'sessions_yield',
     ]));
@@ -91,15 +91,15 @@ describe('Windows pilot chat procedure scenarios', () => {
     expect(scenario).toMatchObject({
       type: 'safe-chat-custom',
       required: true,
-      expectedToolAny: ['outlook.reply'],
+      expectedToolAny: ['outlook_reply'],
     });
     expect(scenario?.prompt).toContain('Do not use generic browser clicking to find a Reply button');
     expect(scenario?.prompt).toContain('Outlook pre-fills the recipient');
     expect(scenario?.bannedToolAny).toEqual(expect.arrayContaining([
-      'outlook.send_email',
-      'outlook.download_attachment',
-      'forms.submit_daily_report',
-      'forms.submit_suspension',
+      'outlook_send_email',
+      'outlook_download_attachment',
+      'forms_submit_daily_report',
+      'forms_submit_suspension',
       'exec',
       'process',
       'sessions_spawn',
@@ -128,7 +128,7 @@ describe('Windows pilot chat procedure scenarios', () => {
     expect(scenario?.prompt).toContain('Outlook opens a reply draft');
     expect(scenario?.prompt).toContain('ready for review');
     expect(scenario?.prompt).toContain('Do not send the draft');
-    expect(scenario?.bannedToolAny).toEqual(expect.arrayContaining(['outlook.send_email']));
+    expect(scenario?.bannedToolAny).toEqual(expect.arrayContaining(['outlook_send_email']));
   });
 
   it('keeps all-June inbox requests scoped to bounded search evidence', () => {
@@ -137,17 +137,17 @@ describe('Windows pilot chat procedure scenarios', () => {
     expect(scenario).toMatchObject({
       type: 'safe-chat-custom',
       required: true,
-      expectedToolAny: ['outlook.search_inbox'],
+      expectedToolAny: ['outlook_search_inbox'],
     });
     expect(scenario?.prompt).toContain('broad June date range');
     expect(scenario?.prompt).toContain('do not claim the result is the complete mailbox unless the tool says the scan is exhaustive');
     expect(scenario?.bannedToolAny).toEqual(expect.arrayContaining([
-      'outlook.draft_email',
-      'outlook.send_email',
-      'outlook.reply',
-      'outlook.forward',
-      'forms.submit_daily_report',
-      'forms.submit_suspension',
+      'outlook_draft_email',
+      'outlook_send_email',
+      'outlook_reply',
+      'outlook_forward',
+      'forms_submit_daily_report',
+      'forms_submit_suspension',
       'exec',
       'process',
       'sessions_spawn',
@@ -177,10 +177,10 @@ describe('Windows pilot chat procedure scenarios', () => {
     expect(scenario?.prompt).toContain('do not claim the result is the complete mailbox unless the tool says the scan is exhaustive');
     expect(scenario?.prompt).toContain('Include a short scope note');
     expect(scenario?.bannedToolAny).toEqual(expect.arrayContaining([
-      'outlook.reply',
-      'outlook.send_email',
-      'forms.submit_daily_report',
-      'forms.submit_suspension',
+      'outlook_reply',
+      'outlook_send_email',
+      'forms_submit_daily_report',
+      'forms_submit_suspension',
     ]));
   });
 
@@ -234,13 +234,13 @@ describe('Windows pilot chat procedure scenarios', () => {
     for (const scenario of documentScenarios) {
       expect([...(scenario.bannedToolAny ?? [])].sort()).toEqual([
         'edit',
-        'forms.preview_daily_report',
-        'forms.preview_suspension',
-        'forms.submit_daily_report',
-        'forms.submit_suspension',
-        'outlook.download_attachment',
-        'outlook.draft_email',
-        'outlook.send_email',
+        'forms_preview_daily_report',
+        'forms_preview_suspension',
+        'forms_submit_daily_report',
+        'forms_submit_suspension',
+        'outlook_download_attachment',
+        'outlook_draft_email',
+        'outlook_send_email',
         'patch',
         'sessions_spawn',
         'sessions_yield',

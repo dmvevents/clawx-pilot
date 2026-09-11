@@ -15,7 +15,7 @@
  * Naming note (surfaced in PR #13): the incoming spec named markers
  * `create_doc / insert_paragraph / apply_style / export_pdf /
  * list_headings`. The Lane A tools this repo actually ships are
- * `document.read_pdf / read_docx / write_docx / read_xlsx / write_xlsx /
+ * `document_read_pdf / read_docx / write_docx / read_xlsx / write_xlsx /
  * read_image`. This harness asserts on the shipped names; if the
  * checker prefers the abstract names, we add a thin alias layer in a
  * follow-up.
@@ -289,10 +289,10 @@ async function runDirect(prompt: Prompt, workDir: string): Promise<{ preview: st
   const args = { ...(prompt.tool_args ?? {}) };
   let result: Record<string, unknown>;
   switch (prompt.expect_calls_tool) {
-    case 'document.read_docx':
+    case 'document_read_docx':
       result = await docTools.readDocx({ path: fixturePath, ...(args as { format?: string }) });
       break;
-    case 'document.write_docx': {
+    case 'document_write_docx': {
       const outPath = path.join(workDir, 'Output_Files', prompt.output_name ?? 'out.docx');
       result = await docTools.writeDocx({
         path: outPath,
@@ -301,13 +301,13 @@ async function runDirect(prompt: Prompt, workDir: string): Promise<{ preview: st
       });
       break;
     }
-    case 'document.read_pdf':
+    case 'document_read_pdf':
       result = await docTools.readPdf({ path: fixturePath, ...(args as { maxChars?: number }) });
       break;
-    case 'document.read_xlsx':
+    case 'document_read_xlsx':
       result = await docTools.readXlsx({ path: fixturePath, ...(args as { sheet?: string; maxRows?: number }) });
       break;
-    case 'document.write_xlsx': {
+    case 'document_write_xlsx': {
       const outPath = path.join(workDir, 'Output_Files', prompt.output_name ?? 'out.xlsx');
       result = await docTools.writeXlsx({
         path: outPath,
@@ -315,7 +315,7 @@ async function runDirect(prompt: Prompt, workDir: string): Promise<{ preview: st
       });
       break;
     }
-    case 'document.read_image':
+    case 'document_read_image':
       result = await docTools.readImage({ path: fixturePath, ...(args as { maxDim?: number }) });
       break;
     default:

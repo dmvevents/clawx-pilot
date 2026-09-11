@@ -126,7 +126,7 @@ describe('classifyRow', () => {
     const { classifyRow } = await load();
     const v = classifyRow('no-tool', { ok: false, message: '' });
     expect(v.status).toBe('NO-TOOL');
-    expect(v.note).toContain('no document.*');
+    expect(v.note).toContain('no document_*');
   });
 
   it('FAILs a readable refusal whose row wording check does not hold (CLWX-101)', async () => {
@@ -248,16 +248,16 @@ describe('inventoryDiff + registration-row contracts (CLWX-77 registration leg)'
 
   it('names every missing tool — a partial register can never pass by count', async () => {
     const { inventoryDiff } = await load();
-    const note = inventoryDiff(['outlook.send_email', 'outlook.forward'], ['outlook.send_email', 'outlook.reply']);
-    expect(note).toContain('missing: outlook.forward');
-    expect(note).toContain('unexpected: outlook.reply');
+    const note = inventoryDiff(['outlook_send_email', 'outlook_forward'], ['outlook_send_email', 'outlook_reply']);
+    expect(note).toContain('missing: outlook_forward');
+    expect(note).toContain('unexpected: outlook_reply');
   });
 
   it('rejects an empty actual inventory loudly', async () => {
     const { inventoryDiff, DOC_TOOL_NAMES } = await load();
     const note = inventoryDiff(DOC_TOOL_NAMES, []);
     expect(note).toContain('missing:');
-    expect(note).toContain('document.read_pdf');
+    expect(note).toContain('document_read_pdf');
   });
 
   it('full-registration row check FAILs when a capability family is absent (falsifiability)', async () => {
@@ -265,10 +265,10 @@ describe('inventoryDiff + registration-row contracts (CLWX-77 registration leg)'
     const row = MATRIX.find((r: { id: string }) => r.id === 'plugin-registration.full');
     const all = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES, ...BROWSER_TOOL_NAMES, ...OUTLOOK_TOOL_NAMES, ...FORMS_TOOL_NAMES];
     expect(row.check({ names: all, networkAttempts: 1 })).toBe(true);
-    const noOutlook = all.filter((n: string) => !n.startsWith('outlook.'));
+    const noOutlook = all.filter((n: string) => !n.startsWith('outlook_'));
     const verdict = row.check({ names: noOutlook, networkAttempts: 1 });
     expect(verdict).not.toBe(true);
-    expect(String(verdict)).toContain('outlook.send_email');
+    expect(String(verdict)).toContain('outlook_send_email');
   });
 
   it('full-registration row check FAILs when the fetch stub recorded zero attempts (stub not in the path)', async () => {
@@ -285,9 +285,9 @@ describe('inventoryDiff + registration-row contracts (CLWX-77 registration leg)'
     const row = MATRIX.find((r: { id: string }) => r.id === 'plugin-registration.no-hostapi');
     const expected = [...DOC_TOOL_NAMES, ...PRINCIPAL_TOOL_NAMES];
     expect(row.check({ names: expected })).toBe(true);
-    const verdict = row.check({ names: [...expected, 'outlook.send_email'] });
+    const verdict = row.check({ names: [...expected, 'outlook_send_email'] });
     expect(verdict).not.toBe(true);
-    expect(String(verdict)).toContain('unexpected: outlook.send_email');
+    expect(String(verdict)).toContain('unexpected: outlook_send_email');
   });
 
   it('no-config row check requires the early-return contract, not just the doc inventory', async () => {
@@ -340,7 +340,7 @@ describe('registration-inventory fast-lane drift guard (Claude lens 2026-09-06)'
     const { readFile } = await import('node:fs/promises');
     const src = await readFile('extensions/moe-principal-assistant/index.mjs', 'utf8');
     const found = new Set<string>();
-    for (const m of src.matchAll(/name:\s*'((?:document|principal|browser|outlook|forms)\.[a-z_]+)'/g)) {
+    for (const m of src.matchAll(/name:\s*'((?:document|principal|browser|outlook|forms)_[a-z_]+)'/g)) {
       found.add(m[1]);
     }
     const { DOC_TOOL_NAMES, PRINCIPAL_TOOL_NAMES, BROWSER_TOOL_NAMES, OUTLOOK_TOOL_NAMES, FORMS_TOOL_NAMES, inventoryDiff } = await load();
@@ -364,7 +364,7 @@ describe('registration-inventory fast-lane drift guard (Claude lens 2026-09-06)'
     expect(row.check({ names: withoutOutlook })).toBe(true);
     // Every member of the suppressed family must be flagged by NAME if it
     // leaks — asserting one hardcoded member made the guard depend on the
-    // list's order (broke when outlook.readiness landed first, 2026-09-08).
+    // list's order (broke when outlook_readiness landed first, 2026-09-08).
     for (const leaked of OUTLOOK_TOOL_NAMES) {
       const leak = row.check({ names: [...withoutOutlook, leaked] });
       expect(leak).not.toBe(true);
@@ -684,7 +684,7 @@ function writeFakeTransportStage(options: { toolNames?: string[]; reportRawRoot?
   mkdirSync(workspaceDir, { recursive: true });
   mkdirSync(path.join(gatewayDir, 'node_modules'), { recursive: true });
   writeFileSync(path.join(gatewayDir, 'package.json'), JSON.stringify({ type: 'module' }));
-  const toolNames = options.toolNames ?? ['document.read_pdf'];
+  const toolNames = options.toolNames ?? ['document_read_pdf'];
   const stdoutFlood = options.stdoutFlood ? "process.stdout.write('x'.repeat(2 * 1024 * 1024) + '\\n');" : '';
   const rootExpression = options.reportRawRoot
     ? "options.env.CLAWX_APP_RESOURCES + '/extensions/moe-principal-assistant'"
@@ -760,10 +760,10 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
     const stdout = [
       'Config warnings:',
       '- plugins.entries.x: something',
-      'moe-principal-assistant: document.* tools registered (read_pdf)',
+      'moe-principal-assistant: document_* tools registered (read_pdf)',
       '{',
       '  "workspaceDir": "/x",',
-      '  "plugin": { "id": "moe-principal-assistant", "status": "loaded", "toolNames": ["document.read_pdf"] }',
+      '  "plugin": { "id": "moe-principal-assistant", "status": "loaded", "toolNames": ["document_read_pdf"] }',
       '}',
     ].join('\n');
     const parsed = parseInspectJson(stdout);
@@ -864,7 +864,7 @@ describe('gateway-transport rows (real plugin-host, trail 2026-09-06)', () => {
       expect(verdict.payload.ok).toBe(true);
       expect(verdict.payload.result.plugin.id).toBe('moe-principal-assistant');
       expect(verdict.payload.result.plugin.rootDir).toBe(canonicalRealpath(stage.pluginRoot));
-      expect(verdict.payload.result.plugin.toolNames).toEqual(['document.read_pdf']);
+      expect(verdict.payload.result.plugin.toolNames).toEqual(['document_read_pdf']);
       expect(JSON.stringify(verdict.payload)).not.toContain('unrelated-stock-plugin');
     } finally {
       rmSync(stage.dir, { recursive: true, force: true });
@@ -974,10 +974,10 @@ ${result.stderr}`).toBe(0);
     expect(row.mode).toBe('transport');
     const ok = row.check({ plugin: { id: 'moe-principal-assistant', status: 'loaded', activated: true, toolNames: [...TRANSPORT_FULL_EXPECTED] } });
     expect(ok).toBe(true);
-    const noOutlook = TRANSPORT_FULL_EXPECTED.filter((n: string) => !n.startsWith('outlook.'));
+    const noOutlook = TRANSPORT_FULL_EXPECTED.filter((n: string) => !n.startsWith('outlook_'));
     const verdict = row.check({ plugin: { id: 'moe-principal-assistant', status: 'loaded', activated: true, toolNames: noOutlook } });
     expect(verdict).not.toBe(true);
-    expect(String(verdict)).toContain('outlook.send_email');
+    expect(String(verdict)).toContain('outlook_send_email');
   });
 });
 

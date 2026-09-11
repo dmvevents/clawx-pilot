@@ -7,7 +7,7 @@
       "verbatim": true,
       "prompt": "Open the Staff Meeting Memo Draft document and summarize its main points in bullet form.",
       "file_ext": ".docx",
-      "expect_tool": "document.read_docx",
+      "expect_tool": "document_read_docx",
       "forbidden": ["docx", "pdf", "xlsx", "pptx"],
       "raj_result": "FAIL — agent asked for a file path, then offered to write a Python script"
     },
@@ -16,7 +16,7 @@
       "verbatim": true,
       "prompt": "Rewrite the Staff Meeting Memo Draft into a professional internal memo. Save the edited copy as Staff_Memo_Final.docx in the Output_Files folder. Do not overwrite the original.",
       "file_ext": ".docx",
-      "expect_tool": "document.write_docx",
+      "expect_tool": "document_write_docx",
       "forbidden": ["docx", "pptx"],
       "raj_result": "FAIL"
     },
@@ -25,7 +25,7 @@
       "verbatim": true,
       "prompt": "Summarize the ICT Equipment Audit circular for a teacher who has only five minutes to understand it.",
       "file_ext": ".pdf",
-      "expect_tool": "document.read_pdf",
+      "expect_tool": "document_read_pdf",
       "forbidden": ["pdf", "nano-pdf"],
       "raj_result": "FAIL — read skills/pdf/SKILL.md, then uv pip install pdfplumber"
     },
@@ -34,7 +34,7 @@
       "verbatim": false,
       "prompt": "Open the Student Marks Gradebook workbook and read the marks and the grade scale.",
       "file_ext": ".xlsx",
-      "expect_tool": "document.read_xlsx",
+      "expect_tool": "document_read_xlsx",
       "forbidden": ["xlsx", "pdf"],
       "note": "The read half of Raj's P4, split out so read and write are scored separately."
     },
@@ -43,7 +43,7 @@
       "verbatim": true,
       "prompt": "Open the Student Marks Gradebook workbook. Calculate each student's average and assign a grade using the scale in the workbook or instructions. Save the updated copy as Marks_Updated.xlsx. Do not overwrite the original.",
       "file_ext": ".xlsx",
-      "expect_tool": "document.write_xlsx",
+      "expect_tool": "document_write_xlsx",
       "forbidden": ["xlsx", "pdf"],
       "raj_result": "FAIL"
     },
@@ -52,7 +52,7 @@
       "verbatim": true,
       "prompt": "Open the Student Support Referral Form image and list each visible field and value. Mark any blank, missing, or unclear fields.",
       "file_ext": ".png",
-      "expect_tool": "document.read_image",
+      "expect_tool": "document_read_image",
       "forbidden": ["pdf", "docx"],
       "raj_result": "FAIL — told the principal to install Tesseract and run a terminal command"
     },
@@ -63,7 +63,7 @@
       "file_ext": null,
       "expect_tool": null,
       "forbidden": ["pdf", "docx", "xlsx", "pptx"],
-      "note": "Discovery prompt, only in CHAT-001-6.png. No single tool is right, so expect_tool is null — the assertion is purely that no Python skill outranks the document.* family.",
+      "note": "Discovery prompt, only in CHAT-001-6.png. No single tool is right, so expect_tool is null — the assertion is purely that no Python skill outranks the document_* family.",
       "raj_result": "FAIL — \"I couldn't find any files in that folder\""
     },
 
@@ -72,7 +72,7 @@
       "verbatim": false,
       "prompt": "I need you to edit this Word document and produce a professional memo with headings and a letterhead.",
       "file_ext": ".docx",
-      "expect_tool": "document.write_docx",
+      "expect_tool": "document_write_docx",
       "forbidden": ["docx"],
       "note": "ADVERSARIAL: 'Word document', 'memo', 'headings', 'letterhead' are lifted verbatim from the docx SKILL.md trigger list. This is the hardest docx case in the suite."
     },
@@ -81,7 +81,7 @@
       "verbatim": false,
       "prompt": "Open the xlsx in my downloads, add a column, compute the formulas and clean up the messy rows.",
       "file_ext": ".xlsx",
-      "expect_tool": "document.read_xlsx",
+      "expect_tool": "document_read_xlsx",
       "forbidden": ["xlsx"],
       "note": "ADVERSARIAL: 'the xlsx in my downloads' is quoted verbatim in the xlsx SKILL.md description as a trigger example."
     },
@@ -90,7 +90,7 @@
       "verbatim": false,
       "prompt": "Extract the text and tables from this .pdf circular for me.",
       "file_ext": ".pdf",
-      "expect_tool": "document.read_pdf",
+      "expect_tool": "document_read_pdf",
       "forbidden": ["pdf", "nano-pdf"],
       "note": "ADVERSARIAL: 'reading or extracting text/tables from PDFs' is the pdf SKILL.md's first trigger."
     },
@@ -99,7 +99,7 @@
       "verbatim": false,
       "prompt": "Draft the term-two report as a Word file I can attach to an email.",
       "file_ext": ".docx",
-      "expect_tool": "document.write_docx",
+      "expect_tool": "document_write_docx",
       "forbidden": ["docx"],
       "note": "ADVERSARIAL: docx SKILL.md claims any 'report' asked for 'as a Word file'."
     },
@@ -108,7 +108,7 @@
       "verbatim": false,
       "prompt": "This referral form is a scanned photo — read the fields off the image for me.",
       "file_ext": ".png",
-      "expect_tool": "document.read_image",
+      "expect_tool": "document_read_image",
       "forbidden": ["pdf"],
       "note": "ADVERSARIAL: the pdf skill advertises 'OCR on scanned PDFs'. The native path needs no OCR binary — the VLM reads the returned image."
     }

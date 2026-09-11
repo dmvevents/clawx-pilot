@@ -157,7 +157,7 @@ Then:
    - first-launch time
    - Gateway readiness
    - provider default
-   - `browser.diagnose` result
+   - `browser_diagnose` result
    - whether the app gives a clear Chrome/sign-in recovery state
 6. Sign back into `vyonix`.
 7. Remove the temporary account after evidence is collected:

@@ -50,15 +50,15 @@ const MANIFEST = path.join(
   'resources/skills/preinstalled-manifest.json',
 );
 
-// The seven document.* tools we actually ship.
+// The seven document_* tools we actually ship.
 const DOC_TOOLS_NAMES = [
-  'document.find',
-  'document.read_pdf',
-  'document.read_docx',
-  'document.write_docx',
-  'document.read_xlsx',
-  'document.write_xlsx',
-  'document.read_image',
+  'document_find',
+  'document_read_pdf',
+  'document_read_docx',
+  'document_write_docx',
+  'document_read_xlsx',
+  'document_write_xlsx',
+  'document_read_image',
 ] as const;
 
 // The Python-backed Anthropic skills that compete with them.
@@ -190,8 +190,8 @@ describe('Defect B — the sandbox guard must honour its own error message', () 
   });
 });
 
-describe('Defect C — the model must be steered to document.* over the Python skills', () => {
-  it('every document.* tool description tells the model to prefer it over the skill', async () => {
+describe('Defect C — the model must be steered to document_* over the Python skills', () => {
+  it('every document_* tool description tells the model to prefer it over the skill', async () => {
     const src = await readFile(INDEX_MJS, 'utf8');
     const missing: string[] = [];
     for (const name of DOC_TOOLS_NAMES) {
@@ -203,13 +203,13 @@ describe('Defect C — the model must be steered to document.* over the Python s
     }
     expect(
       missing,
-      `these document.* tools do not tell the model to prefer them over the Python skills, ` +
+      `these document_* tools do not tell the model to prefer them over the Python skills, ` +
         `so the model may pick the pdf/docx/xlsx skill and fail exactly as it did on 2026-07-21: ` +
         missing.join(', '),
     ).toEqual([]);
   });
 
-  it('every document.* tool description states no Python is required', async () => {
+  it('every document_* tool description states no Python is required', async () => {
     const src = await readFile(INDEX_MJS, 'utf8');
     const missing: string[] = [];
     for (const name of DOC_TOOLS_NAMES) {
@@ -225,16 +225,16 @@ describe('Defect C — the model must be steered to document.* over the Python s
     ).toEqual([]);
   });
 
-  it('the persona carries a hard routing rule for document.* like it does for outlook.*', async () => {
+  it('the persona carries a hard routing rule for document_* like it does for outlook_*', async () => {
     const persona = await readFile(PERSONA_MJS, 'utf8');
-    // The outlook.* rule is the standard to match — it is why Outlook routing is reliable.
+    // The outlook_* rule is the standard to match — it is why Outlook routing is reliable.
     expect(
-      /outlook\.\*/.test(persona),
-      'the outlook.* routing rule vanished — that rule is the template here',
+      /outlook_\*/.test(persona),
+      'the outlook_* routing rule vanished — that rule is the template here',
     ).toBe(true);
     expect(
-      /document\.\*/.test(persona),
-      'persona.mjs has no document.* routing rule, so nothing overrides the pdf/docx/xlsx ' +
+      /document_\*/.test(persona),
+      'persona.mjs has no document_* routing rule, so nothing overrides the pdf/docx/xlsx ' +
         'skills that tell the model to use pypdf/pdfplumber/pandas',
     ).toBe(true);
   });

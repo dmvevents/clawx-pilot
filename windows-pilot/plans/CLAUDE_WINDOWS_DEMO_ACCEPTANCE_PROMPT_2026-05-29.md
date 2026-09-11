@@ -18,7 +18,7 @@ Current known facts:
 - WiFi was previously off, causing Gemini DNS failures. WiFi is now on.
 - Chrome CDP should be on http://127.0.0.1:18792.
 - Electron CDP should be on http://127.0.0.1:9223 after relaunch.
-- The safe probe after WiFi returned proved forms.list safe chat, Outlook smoke, Forms preview, and send/submit refusal gates.
+- The safe probe after WiFi returned proved forms_list safe chat, Outlook smoke, Forms preview, and send/submit refusal gates.
 
 Hard safety rules:
 1. Do not print or store secrets: provider keys, AWS keys, Host API bearer tokens, passwords, cookies, full email bodies, full recipient lists, or Microsoft Forms response URLs.
@@ -39,8 +39,8 @@ Acceptance criteria:
 - Chrome CDP 18792 is up.
 - Electron CDP 9223 is up.
 - Electron renderer exposes window.electron.ipcRenderer.invoke.
-- outlook.open succeeds through the app Host API.
-- forms.list succeeds through the app Host API.
+- outlook_open succeeds through the app Host API.
+- forms_list succeeds through the app Host API.
 - Safe chat completes through Gemini and calls the expected tool exactly once.
 - Safe chat has no banned side effects.
 - Outlook smoke reads inbox or returns a clear non-crash result.

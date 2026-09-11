@@ -10,7 +10,7 @@ requiredProfiles:
 ---
 
 Named local document lookup returns metadata and exact candidate paths through
-`document.find`. Use the existing permitted user folders and canonical home/temp
+`document_find`. Use the existing permitted user folders and canonical home/temp
 sandbox; no shell execution, file-content indexing or arbitrary network paths.
 Bound recursion, entries and returned candidates, and report incomplete scans.
 Readers retain exact path semantics. Multiple plausible or incompletely searched

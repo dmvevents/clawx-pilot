@@ -49,8 +49,10 @@ export function createMenu(): void {
           accelerator: 'CmdOrCtrl+N',
           click: () => {
             const win = BrowserWindow.getFocusedWindow();
-            // Chat lives at '/', not '/chat'; sending '/chat' left the window blank.
-            win?.webContents.send('navigate', '/');
+            // Not plain navigation: the renderer decides whether to mint a new
+            // session (same rule as the sidebar button, CLWX-140/CLWX-51) and
+            // then navigates to '/', where chat lives.
+            win?.webContents.send('new-chat');
           },
         },
         { type: 'separator' },

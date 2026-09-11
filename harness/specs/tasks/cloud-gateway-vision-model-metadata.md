@@ -12,7 +12,7 @@ touchedAreas:
   - tests/unit/provider-runtime-sync.test.ts
   - tests/unit/openclaw-auth.test.ts
 expectedUserBehavior:
-  - Online `moe-demo-pro` document image requests can inspect native image blocks returned by `document.read_image`.
+  - Online `moe-demo-pro` document image requests can inspect native image blocks returned by `document_read_image`.
   - Generic custom providers keep the current text-only capability default unless explicitly configured elsewhere.
   - The model broker and document tools are unchanged by this repair.
 requiredProfiles:
@@ -38,4 +38,4 @@ docs:
   required: false
 ---
 
-Installed moe.22 P5 evidence showed `document.read_image` returned a native PNG content block for the verified Student Support Referral Form, but `custom-moecloud/moe-demo-pro` was registered as text-only in OpenClaw model metadata. This task scopes the source regression to managed gateway model metadata and leaves installed P5 proof to the VM acceptance pass for the rebuilt artifact.
+Installed moe.22 P5 evidence showed `document_read_image` returned a native PNG content block for the verified Student Support Referral Form, but `custom-moecloud/moe-demo-pro` was registered as text-only in OpenClaw model metadata. This task scopes the source regression to managed gateway model metadata and leaves installed P5 proof to the VM acceptance pass for the rebuilt artifact.

@@ -5,7 +5,7 @@
  * config path, reported "outlook config path does not exist" and treated that
  * as evidence about Microsoft Graph. Root cause: the plugin exposed NO
  * read-only readiness diagnosis — the only Outlook entry that reveals any
- * state is outlook.open, which navigates the principal's browser.
+ * state is outlook_open, which navigates the principal's browser.
  *
  * Contract under test:
  *  A. Main owns the truth: POST /api/outlook/readiness reports the typed
@@ -14,7 +14,7 @@
  *     real reads/composes use), Mail.Send grant, and an honest
  *     browser.state='unknown' — all WITHOUT opening a browser, navigating,
  *     or calling any Graph mailbox API.
- *  B. The plugin registers a read-only outlook.readiness tool over that
+ *  B. The plugin registers a read-only outlook_readiness tool over that
  *     route, parks readably on version-skewed installs, and disappears with
  *     the rest of the outlook family when host-API creds are absent.
  *
@@ -293,7 +293,7 @@ describe('POST /api/outlook/readiness — read-only capability diagnosis (Main o
   });
 });
 
-// ── Plugin side: outlook.readiness tool over the readiness route ───────────
+// ── Plugin side: outlook_readiness tool over the readiness route ───────────
 
 const pluginConfig = {
   principalName: 'Mrs. Test',
@@ -393,7 +393,7 @@ async function registerPlugin() {
   return Object.fromEntries(tools.map((tool) => [tool.name, tool]));
 }
 
-describe('outlook.readiness plugin tool — read-only diagnosis surface', () => {
+describe('outlook_readiness plugin tool — read-only diagnosis surface', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     delete process.env.CLAWX_HOST_API_PORT;
@@ -413,8 +413,8 @@ describe('outlook.readiness plugin tool — read-only diagnosis surface', () => 
     vi.stubGlobal('fetch', fetchImpl);
 
     const byName = await registerPlugin();
-    const tool = byName['outlook.readiness'];
-    expect(tool, 'outlook.readiness must be registered').toBeTruthy();
+    const tool = byName['outlook_readiness'];
+    expect(tool, 'outlook_readiness must be registered').toBeTruthy();
     expect(tool.parameters).toMatchObject({ type: 'object' });
     // The description is the agent's contract: read-only, no browser
     // navigation for a status question, no local-install misconception,
@@ -454,7 +454,7 @@ describe('outlook.readiness plugin tool — read-only diagnosis surface', () => 
     vi.stubGlobal('fetch', fetchImpl);
 
     const byName = await registerPlugin();
-    const result = (await byName['outlook.readiness'].execute?.('t1', {})) as {
+    const result = (await byName['outlook_readiness'].execute?.('t1', {})) as {
       status?: string;
       message?: string;
     };
@@ -467,13 +467,13 @@ describe('outlook.readiness plugin tool — read-only diagnosis surface', () => 
     delete process.env.CLAWX_HOST_API_PORT;
     delete process.env.CLAWX_HOST_API_TOKEN;
     const byName = await registerPlugin();
-    expect(byName['outlook.readiness']).toBeUndefined();
-    expect(byName['outlook.open']).toBeUndefined();
+    expect(byName['outlook_readiness']).toBeUndefined();
+    expect(byName['outlook_open']).toBeUndefined();
   });
 
-  it('persona directs Graph-availability questions to outlook.readiness, not config paths or browser opens', async () => {
+  it('persona directs Graph-availability questions to outlook_readiness, not config paths or browser opens', async () => {
     const { SYSTEM_PROMPT } = await import('../../extensions/moe-principal-assistant/persona.mjs');
-    expect(SYSTEM_PROMPT).toContain('outlook.readiness');
+    expect(SYSTEM_PROMPT).toContain('outlook_readiness');
     expect(SYSTEM_PROMPT).toMatch(/never (?:a |)requires? a local/i);
     expect(SYSTEM_PROMPT).toMatch(/configuration file|config file/i);
   });

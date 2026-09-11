@@ -15,8 +15,8 @@ Same as `outlook-verify`. Read-only on app code + state. May run scripts via SSH
 ## Pre-flight blockers
 
 The Forms path **builds on top of** the Outlook path. Do NOT run forms-fill-verify until `outlook-verify` reports PASS for at least:
-- `outlook.search_inbox` (needs to find the source email)
-- `outlook.read_email` (needs to fetch the body for extraction)
+- `outlook_search_inbox` (needs to find the source email)
+- `outlook_read_email` (needs to fetch the body for extraction)
 
 If those don't pass, exit and report "Blocked on Outlook prerequisites".
 
@@ -68,14 +68,14 @@ Tell the human to type into the chat composer:
 > Read the suspension report email from this morning and fill out the Term 3 Suspensions form. Don't submit yet — let me review.
 
 Then `pilot-tail-gateway-log.ps1` and capture the tool sequence:
-- `outlook.search_inbox` ✓
-- `outlook.read_email` ✓
-- `forms.preview_suspension` ✓
+- `outlook_search_inbox` ✓
+- `outlook_read_email` ✓
+- `forms_preview_suspension` ✓
 - Field count from the response (`filledCount`, `skippedCount`, and `errors`; expect 31 browser-fillable fields and no errors)
 
 If browser-fillable field count <31: WARN. If <25: FAIL. The current baseline is 31 browser-fillable required fields plus `respondent_name` auto-recorded by Forms.
 
-If `forms.<api-endpoint>` appears instead of `forms.preview_suspension`: FAIL with "Agent took the API path; demo path is DOM only. Re-issue with explicit DOM hint OR enable brain icon."
+If `forms.<api-endpoint>` appears instead of `forms_preview_suspension`: FAIL with "Agent took the API path; demo path is DOM only. Re-issue with explicit DOM hint OR enable brain icon."
 
 ### Phase 7 — Visual review with the human
 
@@ -94,7 +94,7 @@ Tell the human:
 > Submit the form.
 
 Tail the log for:
-- `forms.submit_suspension({confirm:true})` ✓
+- `forms_submit_suspension({confirm:true})` ✓
 - DOM Submit click in `forms-driver.ts` log lines
 - "Thanks" page in Chrome (ask human to confirm)
 

@@ -10,7 +10,7 @@
  *
  * This pipeline scores the layers the harness cannot:
  *
- *   A  selection    Does the shipped catalogue rank document.* above the
+ *   A  selection    Does the shipped catalogue rank document_* above the
  *                   Python skills for each Ministry prompt?
  *   B  counterfactual  Replay the PRE-FIX catalogue. The Python skill MUST
  *                   win. A metric that cannot reproduce the known failure
@@ -62,12 +62,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CASES_DIR = path.join(__dirname, 'cases');
 
 const DOC_TOOL_NAMES = [
-  'document.read_pdf',
-  'document.read_docx',
-  'document.write_docx',
-  'document.read_xlsx',
-  'document.write_xlsx',
-  'document.read_image',
+  'document_read_pdf',
+  'document_read_docx',
+  'document_write_docx',
+  'document_read_xlsx',
+  'document_write_xlsx',
+  'document_read_image',
 ];
 
 /** The four Python-backed skills that competed with the native tools. */
@@ -165,7 +165,7 @@ async function laneSelection() {
     const catalogue = buildCatalogue({ tools, skills, enabled: profile.enabled });
     const offered = catalogue.filter((c) => c.kind === 'skill').map((c) => c.name);
     process.stdout.write(
-      paint('dim', `  profile "${profile.id}": ${tools.length} document.* tools + ${offered.length} skills — ${profile.why}\n`),
+      paint('dim', `  profile "${profile.id}": ${tools.length} document_* tools + ${offered.length} skills — ${profile.why}\n`),
     );
 
     for (const c of spec.cases) {
@@ -236,7 +236,7 @@ async function laneCounterfactual() {
   const tools = await loadToolCatalogue();
   const skills = loadSkillCatalogue(os.homedir());
 
-  // Pre-fix state: pdf/docx/xlsx/pptx auto-enabled, no persona document.*
+  // Pre-fix state: pdf/docx/xlsx/pptx auto-enabled, no persona document_*
   // routing rule, and tool descriptions without the "prefer this" steering.
   const preFixEnabled = new Set([
     ...autoEnabledSlugs(),
@@ -265,7 +265,7 @@ async function laneCounterfactual() {
       prompt: c.prompt,
       fileExt: c.file_ext,
       candidates: catalogue,
-      persona: '', // no document.* routing rule pre-fix
+      persona: '', // no document_* routing rule pre-fix
     });
     const top = ranked[0];
     if ((c.forbidden ?? []).includes(top?.name)) {
@@ -466,13 +466,13 @@ async function laneSteering() {
   const enabled = autoEnabledSlugs();
   const indexSrc = readFileSync(INDEX_MJS, 'utf8');
 
-  // Every document.* tool registered.
+  // Every document_* tool registered.
   const names = tools.map((t) => t.name);
   const missing = DOC_TOOL_NAMES.filter((n) => !names.includes(n));
   lane.add(
     'D1-tools-registered',
     missing.length ? 'FAIL' : 'PASS',
-    missing.length ? `not registered: ${missing.join(', ')}` : `all ${DOC_TOOL_NAMES.length} document.* tools registered`,
+    missing.length ? `not registered: ${missing.join(', ')}` : `all ${DOC_TOOL_NAMES.length} document_* tools registered`,
   );
 
   // Steering language in each description.
@@ -489,7 +489,7 @@ async function laneSteering() {
     );
   }
 
-  // Persona routing rule, mirroring the outlook.* rule that makes Outlook reliable.
+  // Persona routing rule, mirroring the outlook_* rule that makes Outlook reliable.
   const directives = personaDirectives(persona);
   const routed = new Set(directives.map((d) => d.tool));
   const unrouted = DOC_TOOL_NAMES.filter((n) => !persona.includes(n));

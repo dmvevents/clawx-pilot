@@ -9,11 +9,11 @@
  *      plugin's own writeDocx, then read back through the production
  *      readDocx path (mammoth) — the same reader the agent uses.
  *   2. The letter text goes to the eval LLM (Bedrock, same lane as
- *      v2-chatbot-e2e.ts) with the REGISTERED principal.suspension_payload
+ *      v2-chatbot-e2e.ts) with the REGISTERED principal_suspension_payload
  *      tool description + JSON schema as the extraction contract — the
  *      exact surface the live agent sees.
- *   3. The LLM's args run through the real principal.suspension_payload
- *      execute(), then the real forms.preview_suspension execute() —
+ *   3. The LLM's args run through the real principal_suspension_payload
+ *      execute(), then the real forms_preview_suspension execute() —
  *      including normalizeSuspensionPreviewPayload and its statutory
  *      no-invention refusal (MOE_DEMO_DEFAULTS is never set here).
  *   4. The plugin's host-API facade is the only piece replaced: this script
@@ -28,7 +28,7 @@
  *      tests/e2e/fixtures/clwx63/expected-values.json; a field whose value
  *      matched but whose fill errored counts as a miss too. PASS iff the
  *      total misses <= 3.
- *   6. The hard-confirm gate is asserted: forms.submit_suspension with
+ *   6. The hard-confirm gate is asserted: forms_submit_suspension with
  *      { confirm: false } must refuse. The filled form is left OPEN and
  *      UNSUBMITTED in the principal's Chrome tab for human review.
  *
@@ -86,7 +86,7 @@ interface RegisteredTool {
 interface ShimState {
   actions: SuspensionsActions;
   formUrl: string;
-  /** The normalized payload forms.preview_suspension handed the driver. */
+  /** The normalized payload forms_preview_suspension handed the driver. */
   lastNormalizedPayload: Record<string, unknown> | null;
   lastFill: Pick<FillResult, 'filledCount' | 'skippedCount' | 'errors'> | null;
 }
@@ -202,7 +202,7 @@ async function registerPlugin(): Promise<Record<string, RegisteredTool>> {
 function extractionSystemPrompt(tool: RegisteredTool): string {
   return [
     'You are the Ministry of Education assistant for a primary-school principal in Trinidad & Tobago.',
-    'A suspension letter follows. Extract the arguments for the tool principal.suspension_payload and reply with EXACTLY ONE JSON object of arguments on a single line. No prose, no code fences.',
+    'A suspension letter follows. Extract the arguments for the tool principal_suspension_payload and reply with EXACTLY ONE JSON object of arguments on a single line. No prose, no code fences.',
     'Extract ONLY values stated in the letter. Never invent or guess a value that is not written there — this feeds a statutory form.',
     '',
     `Tool description: ${tool.description ?? ''}`,
@@ -301,15 +301,15 @@ async function main() {
   const shimState: ShimState = { actions, formUrl: probe.formUrl, lastNormalizedPayload: null, lastFill: null };
   installFormsFetchShim(shimState);
   const byName = await registerPlugin();
-  const payloadTool = byName['principal.suspension_payload'];
-  const previewTool = byName['forms.preview_suspension'];
-  const submitTool = byName['forms.submit_suspension'];
+  const payloadTool = byName['principal_suspension_payload'];
+  const previewTool = byName['forms_preview_suspension'];
+  const submitTool = byName['forms_submit_suspension'];
   if (!payloadTool?.execute || !previewTool?.execute || !submitTool?.execute) {
-    fail('FAIL: expected plugin tools missing (principal.suspension_payload / forms.preview_suspension / forms.submit_suspension)');
+    fail('FAIL: expected plugin tools missing (principal_suspension_payload / forms_preview_suspension / forms_submit_suspension)');
   }
 
   // Step 3: LLM extraction against the registered tool contract.
-  console.log('\nStep 2: LLM extraction (Bedrock) against the registered principal.suspension_payload contract');
+  console.log('\nStep 2: LLM extraction (Bedrock) against the registered principal_suspension_payload contract');
   let llmArgs: Record<string, unknown>;
   try {
     const client = new BedrockRuntimeClient({ region: REGION });
@@ -324,15 +324,15 @@ async function main() {
   console.log(`  -> ${Object.keys(llmArgs).length} arg(s) extracted`);
 
   // Step 4: production tool chain — structured payload, then normalize+fill.
-  console.log('\nStep 3: principal.suspension_payload (production arg validation + payload build)');
+  console.log('\nStep 3: principal_suspension_payload (production arg validation + payload build)');
   let structured: Record<string, unknown>;
   try {
     structured = (await payloadTool.execute('clwx63-payload', llmArgs)) as Record<string, unknown>;
   } catch (err) {
-    fail(`FAIL: principal.suspension_payload rejected the extracted args: ${err instanceof Error ? err.message : String(err)}`);
+    fail(`FAIL: principal_suspension_payload rejected the extracted args: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  console.log('\nStep 4: forms.preview_suspension -> normalize -> SuspensionsActions fill on the test.fac clone');
+  console.log('\nStep 4: forms_preview_suspension -> normalize -> SuspensionsActions fill on the test.fac clone');
   const preview = (await previewTool.execute('clwx63-preview', { payload: structured })) as Record<string, unknown>;
   const previewStatus = String(preview.status ?? '');
   if (previewStatus === 'refused') {
@@ -359,7 +359,7 @@ async function main() {
   // Step 6: the hard-confirm gate must hold. This is the ONLY submit call in
   // the harness and its confirm flag is hardwired false (plus the shim
   // tripwire above); the filled form stays open and unsubmitted for review.
-  console.log('\nStep 6: hard-confirm gate — forms.submit_suspension without confirm must refuse');
+  console.log('\nStep 6: hard-confirm gate — forms_submit_suspension without confirm must refuse');
   const gate = (await submitTool.execute('clwx63-gate', { confirm: false })) as Record<string, unknown>;
   const gateStatus = String(gate.status ?? '');
   console.log(`  -> status=${gateStatus}`);

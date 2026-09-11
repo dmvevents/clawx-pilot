@@ -18,6 +18,8 @@ type LaunchElectronOptions = {
 type IpcMockConfig = {
   gatewayStatus?: Record<string, unknown>;
   gatewayRpc?: Record<string, unknown>;
+  /** Per-RPC-method response delay in ms (applied before lookup). */
+  gatewayRpcDelayMs?: Record<string, number>;
   hostApi?: Record<string, unknown>;
 };
 
@@ -239,6 +241,13 @@ export async function installIpcMocks(
         ipcMain.removeHandler('gateway:rpc');
         ipcMain.handle('gateway:rpc', async (_event: unknown, method: string, payload: unknown) => {
           const key = stableStringify([method, payload ?? null]);
+          // Optional per-method latency, so a spec can hold a response back
+          // and exercise the "history not loaded yet" window that the
+          // installed build shows for 30–60 s after launch (CLWX-140).
+          const delayMs = mockConfig.gatewayRpcDelayMs?.[method];
+          if (typeof delayMs === 'number' && delayMs > 0) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
           if (key in mockConfig.gatewayRpc!) {
             return mockConfig.gatewayRpc![key];
           }

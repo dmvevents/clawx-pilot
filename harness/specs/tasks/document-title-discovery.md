@@ -30,7 +30,7 @@ touchedAreas:
   - README.ja-JP.md
 expectedUserBehavior:
   - The assistant finds a named local document inside the supplied folder before requesting the user to upload or paste content.
-  - Folder inventory and title lookup use document.find without shell commands, content reads or new dependencies.
+  - Folder inventory and title lookup use document_find without shell commands, content reads or new dependencies.
   - Ambiguous or incomplete discovery asks the principal to choose a candidate; exact readers do not guess.
 requiredProfiles:
   - fast
@@ -51,9 +51,9 @@ acceptance:
   - Discovery returns only bounded metadata from permitted canonical home or temp roots, refusing symlink escapes and UNC paths.
   - Multiple plausible candidates, exhausted traversal budget and incomplete result sets never claim a unique safe match.
   - Exact reader behavior and existing format support remain intact.
-  - document.read_image returns a native image content block plus metadata text/details; harness goldens reject legacy dataUrl-only, text-only or empty-image results.
+  - document_read_image returns a native image content block plus metadata text/details; harness goldens reject legacy dataUrl-only, text-only or empty-image results.
   - Registration and real staged plugin-host inventories include the discovery tool.
-  - A fresh installed Windows session answers the original PDF prompt with actual document.find and document.read_pdf calls and correct source content.
+  - A fresh installed Windows session answers the original PDF prompt with actual document_find and document_read_pdf calls and correct source content.
   - The original PDF prompt's summary preserves distinct actionable deadlines plus required district/form routing and explanations from the source, without collapsing separate obligations into one deadline.
 docs:
   required: true

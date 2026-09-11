@@ -360,7 +360,7 @@ describe('chat store: send-time channel degradation', () => {
   it('moves the channel but does not replay a turn that already ran tools', async () => {
     const store = await loadStore();
     store.setState({
-      streamingTools: [{ name: 'outlook.read_inbox', status: 'completed', updatedAt: Date.now() }],
+      streamingTools: [{ name: 'outlook_read_inbox', status: 'completed', updatedAt: Date.now() }],
     });
     emitError(store, 'fetch failed');
     await settle();
@@ -1142,7 +1142,7 @@ describe('chat store: send-time channel degradation', () => {
     });
     const store = await loadStore();
     store.setState({
-      streamingTools: [{ name: 'outlook.read_inbox', status: 'completed', updatedAt: Date.now() }],
+      streamingTools: [{ name: 'outlook_read_inbox', status: 'completed', updatedAt: Date.now() }],
     });
 
     emitError(store, 'fetch failed');
@@ -1801,7 +1801,7 @@ describe('chat store: send-time channel degradation', () => {
       lastSentPayload: { text: 'cloud fails into a fresh fallback episode', attachments: undefined, targetAgentId: null, generation: 999 },
       degradedThisTurn: false,
       degradeNotice: null,
-      streamingTools: [{ name: 'outlook.read_inbox', status: 'running', updatedAt: Date.now() }],
+      streamingTools: [{ name: 'outlook_read_inbox', status: 'running', updatedAt: Date.now() }],
     });
     emitError(store, 'fetch failed');
     await settle();
@@ -1833,7 +1833,7 @@ describe('chat store: send-time channel degradation', () => {
         lastSentPayload: { text: `cloud failure ${episode}`, attachments: undefined, targetAgentId: null, generation: 1000 + episode },
         degradedThisTurn: false,
         degradeNotice: null,
-        streamingTools: [{ name: 'outlook.read_inbox', status: 'running', updatedAt: Date.now() }],
+        streamingTools: [{ name: 'outlook_read_inbox', status: 'running', updatedAt: Date.now() }],
       });
       store.getState().handleChatEvent({
         state: 'error',
@@ -2072,7 +2072,7 @@ describe('chat store: send-time channel degradation', () => {
           content: [{ type: 'text', text }, {
             type: 'tool_use',
             id: 'inbox-call',
-            name: 'outlook.read_inbox',
+            name: 'outlook_read_inbox',
             input: {},
           }],
         },
@@ -2085,7 +2085,7 @@ describe('chat store: send-time channel degradation', () => {
       expect(store.getState().sending).toBe(true);
       expect(store.getState().activeRunId).toBe('run-tool-progress');
       expect(store.getState().streamingTools).toEqual([expect.objectContaining({
-        name: 'outlook.read_inbox',
+        name: 'outlook_read_inbox',
         status: 'running',
       })]);
       expect(store.getState().error).toBeNull();

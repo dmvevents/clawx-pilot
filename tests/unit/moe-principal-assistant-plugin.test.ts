@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { readFile } from 'node:fs/promises';
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const PLUGIN_DIR = fileURLToPath(new URL('../../extensions/moe-principal-assistant/', import.meta.url));
 
 const pluginConfig = {
   principalName: 'Mrs. Test',
@@ -68,12 +73,84 @@ describe('moe-principal-assistant plugin registration', () => {
       contracts?: { tools?: string[] };
     };
     const src = await readFile('extensions/moe-principal-assistant/index.mjs', 'utf8');
-    const registeredNames = [...src.matchAll(/name:\s*'((?:document|principal|browser|outlook|forms)\.[a-z_]+)'/g)]
+    const registeredNames = [...src.matchAll(/name:\s*'((?:document|principal|browser|outlook|forms)_[a-z_]+)'/g)]
       .map((match) => match[1])
       .sort();
     const declaredNames = [...(manifest.contracts?.tools ?? [])].sort();
 
     expect(declaredNames).toEqual(registeredNames);
+  });
+
+  it('declares every tool with an underscore name and the persona never advertises a dotted one (CLWX-141)', async () => {
+    // gemini-2.5-flash drops the dotted namespace from a declared tool name once
+    // several tools are present (5/5 in direct probes) and Gemini rejects the
+    // call as MALFORMED_FUNCTION_CALL. Underscore names were emitted exactly.
+    // Lock the shape at the source and in the text the model reads.
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+      register({ pluginConfig, registerTool: (tool: RegisteredTool) => tools.push(tool), log: { info() {}, warn() {} } });
+      expect(tools.length).toBeGreaterThanOrEqual(30);
+      for (const tool of tools) {
+        expect(tool.name, tool.name).toMatch(/^[a-z]+_[a-z][a-z0-9_]*$/);
+      }
+      const declared = new Set(tools.map((tool) => tool.name));
+      const prose = [
+        ...tools.map((tool) => String(tool.description ?? '')),
+        String(fs.readFileSync(path.join(PLUGIN_DIR, 'persona.mjs'), 'utf8')),
+      ].join('\n');
+      // No dotted tool name or dotted family wildcard anywhere the model reads.
+      // (URLs such as outlook.office.com are not tool names; the suffix list is
+      // the set of verbs the 32 tools start with.)
+      const dotted = /\b(document|principal|browser|outlook|forms)\.(\*|(?:read|write|draft|send|search|reply|forward|mark|list|download|preview|submit|open|diagnose|repair|summarise|daily|suspension|find|nscc)[a-z_]*)\b/;
+      expect(prose.match(dotted)?.[0] ?? null).toBeNull();
+      // Every underscore tool the prose names is a declared tool.
+      // Form field names such as `principal_status` share the prefix; only
+      // tool-shaped mentions (family + a tool verb) are checked.
+      for (const m of prose.matchAll(/\b(?:(?:document|browser|outlook|forms)_[a-z][a-z0-9_]*|principal_(?:draft|summarise|daily|suspension|find|nscc)[a-z_]*)\b/g)) {
+        if (m[0].endsWith('_*')) continue;
+        expect(declared.has(m[0]), `${m[0]} is mentioned but not declared`).toBe(true);
+      }
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT; else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN; else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+    }
+  });
+
+  it('declares every tool schema inside the Gemini function-declaration subset (CLWX-141)', async () => {
+    // gemini-2.5-pro rejected the one tool whose schema used anyOf (document_read_xlsx,
+    // installed moe.33, 2026-09-11 03:57Z) with MALFORMED_FUNCTION_CALL while every
+    // other tool call succeeded. Lock the subset at the source.
+    const previousPort = process.env.CLAWX_HOST_API_PORT;
+    const previousToken = process.env.CLAWX_HOST_API_TOKEN;
+    process.env.CLAWX_HOST_API_PORT = '13210';
+    process.env.CLAWX_HOST_API_TOKEN = 'test-token';
+    try {
+      const { register } = await loadPlugin();
+      const tools: RegisteredTool[] = [];
+      register({ pluginConfig, registerTool: (tool: RegisteredTool) => tools.push(tool), log: { info() {}, warn() {} } });
+      const forbidden = new Set(['anyOf', 'oneOf', 'allOf', '$ref', 'definitions', 'patternProperties', 'const', 'format']);
+      const offenders: string[] = [];
+      // Walk schema nodes; keys directly under `properties` are field NAMES (a field
+      // may legitimately be called "format"), so only schema-keyword positions count.
+      const walk = (node: unknown, toolName: string, isPropertyMap: boolean) => {
+        if (Array.isArray(node)) { node.forEach((n) => walk(n, toolName, false)); return; }
+        if (!node || typeof node !== 'object') return;
+        for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+          if (!isPropertyMap && forbidden.has(key)) offenders.push(`${toolName}: ${key}`);
+          walk(value, toolName, !isPropertyMap && key === 'properties');
+        }
+      };
+      for (const tool of tools) walk(tool.parameters, tool.name, false);
+      expect(offenders).toEqual([]);
+    } finally {
+      if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT; else process.env.CLAWX_HOST_API_PORT = previousPort;
+      if (previousToken === undefined) delete process.env.CLAWX_HOST_API_TOKEN; else process.env.CLAWX_HOST_API_TOKEN = previousToken;
+    }
   });
 
   it('registers Outlook and Forms tools when Host API credentials are present', async () => {
@@ -95,22 +172,22 @@ describe('moe-principal-assistant plugin registration', () => {
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
 
       for (const name of [
-        'outlook.open',
-        'outlook.read_inbox',
-        'outlook.search_inbox',
-        'outlook.read_email',
-        'outlook.draft_email',
-        'outlook.send_email',
-        'outlook.reply',
-        'outlook.forward',
-        'outlook.mark_read',
-        'outlook.list_attachments',
-        'outlook.download_attachment',
-        'forms.list',
-        'forms.preview_daily_report',
-        'forms.submit_daily_report',
-        'forms.preview_suspension',
-        'forms.submit_suspension',
+        'outlook_open',
+        'outlook_read_inbox',
+        'outlook_search_inbox',
+        'outlook_read_email',
+        'outlook_draft_email',
+        'outlook_send_email',
+        'outlook_reply',
+        'outlook_forward',
+        'outlook_mark_read',
+        'outlook_list_attachments',
+        'outlook_download_attachment',
+        'forms_list',
+        'forms_preview_daily_report',
+        'forms_submit_daily_report',
+        'forms_preview_suspension',
+        'forms_submit_suspension',
       ]) {
         expect(byName[name], name).toBeDefined();
         expect(typeof byName[name].execute).toBe('function');
@@ -128,7 +205,7 @@ describe('moe-principal-assistant plugin registration', () => {
     const { SYSTEM_PROMPT } = await loadPersona();
     const prompt = String(SYSTEM_PROMPT);
 
-    expect(prompt).toMatch(/document\.find/);
+    expect(prompt).toMatch(/document_find/);
     expect(prompt).toMatch(/safeUnique true/i);
     expect(prompt).toMatch(/ambiguous or incomplete/i);
     expect(prompt).toMatch(/ask the principal to choose/i);
@@ -136,8 +213,8 @@ describe('moe-principal-assistant plugin registration', () => {
     // the persona must forbid it for binary documents outright.
     expect(prompt).toMatch(/generic file read tool/i);
     expect(prompt).toMatch(/raw bytes/i);
-    expect(prompt).toMatch(/document\.\* tools are the only reading path/i);
-    // .pptx has no document.* reader: the persona must give the model an
+    expect(prompt).toMatch(/document_\* tools are the only reading path/i);
+    // .pptx has no document_* reader: the persona must give the model an
     // honest escape instead of cornering it into the raw-bytes path.
     expect(prompt).toMatch(/PowerPoint files are not supported yet/i);
     expect(prompt).toMatch(/PDF export or pasted text/i);
@@ -146,7 +223,7 @@ describe('moe-principal-assistant plugin registration', () => {
     expect(prompt).toMatch(/searches Downloads, Documents, Desktop, and the OneDrive-redirected/i);
   });
 
-  it('registers document.find as a metadata-only discovery tool before exact readers', async () => {
+  it('registers document_find as a metadata-only discovery tool before exact readers', async () => {
     const { register } = await loadPlugin();
     const tools: RegisteredTool[] = [];
     register({
@@ -156,9 +233,9 @@ describe('moe-principal-assistant plugin registration', () => {
     });
 
     const names = tools.map((tool) => tool.name);
-    const find = tools.find((tool) => tool.name === 'document.find');
+    const find = tools.find((tool) => tool.name === 'document_find');
     expect(find).toBeTruthy();
-    expect(names.indexOf('document.find')).toBeLessThan(names.indexOf('document.read_pdf'));
+    expect(names.indexOf('document_find')).toBeLessThan(names.indexOf('document_read_pdf'));
     expect(find!.parameters).toMatchObject({
       type: 'object',
       properties: {
@@ -173,7 +250,7 @@ describe('moe-principal-assistant plugin registration', () => {
     expect(description).toMatch(/ask the principal to choose/i);
   });
 
-  it('registers document.read_image as a native image-content tool', async () => {
+  it('registers document_read_image as a native image-content tool', async () => {
     const { register } = await loadPlugin();
     const tools: RegisteredTool[] = [];
     register({
@@ -182,7 +259,7 @@ describe('moe-principal-assistant plugin registration', () => {
       log: { info() {}, warn() {} },
     });
 
-    const readImage = tools.find((tool) => tool.name === 'document.read_image');
+    const readImage = tools.find((tool) => tool.name === 'document_read_image');
     expect(readImage).toBeTruthy();
     const description = String((readImage as { description?: unknown }).description ?? '');
     expect(description).toMatch(/native image content block/i);
@@ -190,7 +267,7 @@ describe('moe-principal-assistant plugin registration', () => {
     expect(description).not.toMatch(/data URL|dataUrl/i);
   });
 
-  it('registers principal.nscc_lookup and its execute returns grounded NSCC passages (CLWX-42)', async () => {
+  it('registers principal_nscc_lookup and its execute returns grounded NSCC passages (CLWX-42)', async () => {
     const { register } = await loadPlugin();
     const tools: RegisteredTool[] = [];
     register({
@@ -198,7 +275,7 @@ describe('moe-principal-assistant plugin registration', () => {
       registerTool: (tool: RegisteredTool) => tools.push(tool),
       log: { info() {}, warn() {} },
     });
-    const lookup = tools.find((t) => t.name === 'principal.nscc_lookup');
+    const lookup = tools.find((t) => t.name === 'principal_nscc_lookup');
     expect(lookup).toBeTruthy();
     expect(String(lookup!.description)).toMatch(/National School Code of Conduct/);
     const result = await lookup!.execute!('t1', { query: 'Is corporal punishment allowed in schools?' });
@@ -207,10 +284,10 @@ describe('moe-principal-assistant plugin registration', () => {
     expect(result.note).toMatch(/cite the NSCC/i);
   });
 
-  it('steers Code-of-Conduct questions to principal.nscc_lookup with an NSCC citation (CLWX-42)', async () => {
+  it('steers Code-of-Conduct questions to principal_nscc_lookup with an NSCC citation (CLWX-42)', async () => {
     const { SYSTEM_PROMPT } = await loadPersona();
     const prompt = String(SYSTEM_PROMPT);
-    expect(prompt).toMatch(/principal\.nscc_lookup/);
+    expect(prompt).toMatch(/principal_nscc_lookup/);
     expect(prompt).toMatch(/cite the NSCC/i);
     // The pack ships in-app — the model must never send the principal
     // hunting for the document (the K14 substance gap this closes).
@@ -254,22 +331,22 @@ describe('moe-principal-assistant plugin registration', () => {
         ...tools.map((tool) => `${tool.name}\n${String((tool as { description?: unknown }).description ?? '')}`),
       ].join('\n');
 
-      expect(modelFacingText).toMatch(/outlook\.\*/);
-      expect(modelFacingText).toMatch(/outlook\.open first/i);
-      expect(modelFacingText).toMatch(/outlook\.read_inbox/i);
-      expect(modelFacingText).toMatch(/outlook\.search_inbox/i);
-      expect(modelFacingText).toMatch(/outlook\.read_email/i);
-      expect(modelFacingText).toMatch(/outlook\.reply/i);
-      expect(modelFacingText).toMatch(/outlook\.forward/i);
-      expect(modelFacingText).toMatch(/outlook\.send_email/i);
+      expect(modelFacingText).toMatch(/outlook_\*/);
+      expect(modelFacingText).toMatch(/outlook_open first/i);
+      expect(modelFacingText).toMatch(/outlook_read_inbox/i);
+      expect(modelFacingText).toMatch(/outlook_search_inbox/i);
+      expect(modelFacingText).toMatch(/outlook_read_email/i);
+      expect(modelFacingText).toMatch(/outlook_reply/i);
+      expect(modelFacingText).toMatch(/outlook_forward/i);
+      expect(modelFacingText).toMatch(/outlook_send_email/i);
       expect(modelFacingText).toMatch(/Canonical action: read-email/i);
       expect(modelFacingText).toMatch(/transport\/source\/implementation\/version/i);
       expect(modelFacingText).toMatch(/Outlook Browser v2\/browser, Microsoft Graph, or legacy/i);
-      expect(modelFacingText).toMatch(/browser\.diagnose/);
-      expect(modelFacingText).toMatch(/browser\.repair_chrome_cdp/);
-      expect(modelFacingText).toMatch(/call outlook\.send_email with \{ confirm: true \} only/i);
+      expect(modelFacingText).toMatch(/browser_diagnose/);
+      expect(modelFacingText).toMatch(/browser_repair_chrome_cdp/);
+      expect(modelFacingText).toMatch(/call outlook_send_email with \{ confirm: true \} only/i);
       expect(modelFacingText).toMatch(/do not regenerate, redraft, or resend/i);
-      expect(modelFacingText).toMatch(/do not call outlook\.draft_email again/i);
+      expect(modelFacingText).toMatch(/do not call outlook_draft_email again/i);
       expect(modelFacingText).toMatch(/one concrete diagnostic question/i);
       expect(modelFacingText).toMatch(/exactly one reviewed Outlook compose pane/i);
       expect(modelFacingText).toMatch(/bounded recent Inbox window/i);
@@ -297,7 +374,7 @@ describe('moe-principal-assistant plugin registration', () => {
     }
   });
 
-  it('routes explicit Chrome opening to the Main repair route through browser.open_chrome (CLWX-130)', async () => {
+  it('routes explicit Chrome opening to the Main repair route through browser_open_chrome (CLWX-130)', async () => {
     const previousPort = process.env.CLAWX_HOST_API_PORT;
     const previousToken = process.env.CLAWX_HOST_API_TOKEN;
     process.env.CLAWX_HOST_API_PORT = '13210';
@@ -322,11 +399,11 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      expect(byName['browser.open_chrome']).toBeDefined();
+      expect(byName['browser_open_chrome']).toBeDefined();
 
       // Executing the tool must hit Main over the EXISTING repair/ensure route —
       // not a new parallel service, and never a stock managed-browser start.
-      const result = await byName['browser.open_chrome'].execute('call-open-chrome', {});
+      const result = await byName['browser_open_chrome'].execute('call-open-chrome', {});
 
       expect(calls).toHaveLength(1);
       expect(new URL(calls[0].url).pathname).toBe('/api/browser/repair-chrome-cdp');
@@ -341,7 +418,7 @@ describe('moe-principal-assistant plugin registration', () => {
         SYSTEM_PROMPT,
         ...tools.map((tool) => `${tool.name}\n${String((tool as { description?: unknown }).description ?? '')}`),
       ].join('\n');
-      expect(modelFacingText).toMatch(/browser\.open_chrome/);
+      expect(modelFacingText).toMatch(/browser_open_chrome/);
       expect(modelFacingText).toMatch(/never .*(?:generic\/stock|stock) browser start/i);
       expect(modelFacingText).toMatch(/foreign_endpoint_owner/);
       expect(modelFacingText).toMatch(/endpoint_owner_unverified/);
@@ -355,7 +432,7 @@ describe('moe-principal-assistant plugin registration', () => {
     }
   });
 
-  it('does not register browser.open_chrome without Host API credentials and keeps tenant gates intact (negative control)', async () => {
+  it('does not register browser_open_chrome without Host API credentials and keeps tenant gates intact (negative control)', async () => {
     const previousPort = process.env.CLAWX_HOST_API_PORT;
     const previousToken = process.env.CLAWX_HOST_API_TOKEN;
     delete process.env.CLAWX_HOST_API_PORT;
@@ -374,9 +451,9 @@ describe('moe-principal-assistant plugin registration', () => {
       const names = tools.map((tool) => tool.name);
       // No Host API → no browser tools at all; the plugin never substitutes a
       // stock managed-browser fallback for the Ministry Chrome path.
-      expect(names).not.toContain('browser.open_chrome');
-      expect(names).not.toContain('browser.diagnose');
-      expect(names).not.toContain('browser.repair_chrome_cdp');
+      expect(names).not.toContain('browser_open_chrome');
+      expect(names).not.toContain('browser_diagnose');
+      expect(names).not.toContain('browser_repair_chrome_cdp');
 
       // Preserved tenant gate wording: the new tool must not weaken the
       // managed-profile prohibition anywhere in the plugin source.
@@ -420,27 +497,27 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      expect(byName['outlook.send_email'].parameters).toMatchObject({
+      expect(byName['outlook_send_email'].parameters).toMatchObject({
         required: ['confirm'],
       });
 
-      await byName['outlook.open'].execute('call-open', {});
-      await byName['outlook.draft_email'].execute('call-draft', {
+      await byName['outlook_open'].execute('call-open', {});
+      await byName['outlook_draft_email'].execute('call-draft', {
         to: 'recipient@example.invalid',
         subject: 'Safety gate smoke',
         body: 'Body is not logged by this test.',
       });
-      await byName['outlook.send_email'].execute('call-send', {
+      await byName['outlook_send_email'].execute('call-send', {
         to: 'recipient@example.invalid',
         subject: 'Safety gate smoke',
         body: 'Body is not logged by this test.',
       });
-      await byName['outlook.download_attachment'].execute('call-download', {
+      await byName['outlook_download_attachment'].execute('call-download', {
         id: 'message-1',
         filename: 'report.pdf',
       });
-      await byName['forms.submit_daily_report'].execute('call-submit-daily', {});
-      await byName['forms.submit_suspension'].execute('call-submit', {});
+      await byName['forms_submit_daily_report'].execute('call-submit-daily', {});
+      await byName['forms_submit_suspension'].execute('call-submit', {});
 
       expect(calls.map((call) => new URL(call.url).pathname)).toEqual([
         '/api/outlook/open',
@@ -492,7 +569,7 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      await byName['outlook.send_email'].execute('call-send', { confirm: true });
+      await byName['outlook_send_email'].execute('call-send', { confirm: true });
 
       expect(calls).toHaveLength(1);
       expect(new URL(calls[0].url).pathname).toBe('/api/outlook/send');
@@ -525,7 +602,7 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      const result = await byName['outlook.reply'].execute('call-reply', {
+      const result = await byName['outlook_reply'].execute('call-reply', {
         id: 'message-1',
         body: 'Body is not logged by this test.',
       });
@@ -561,7 +638,7 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      const result = await byName['outlook.send_email'].execute('call-send', { confirm: true });
+      const result = await byName['outlook_send_email'].execute('call-send', { confirm: true });
 
       expect(result).toMatchObject({ status: 'unknown' });
       expect((result as { message?: string }).message).toMatch(/could not be confirmed/i);
@@ -586,7 +663,7 @@ describe('moe-principal-assistant plugin registration', () => {
     });
 
     const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-    const result = await byName['principal.daily_report_form_payload'].execute('call-daily-payload', {
+    const result = await byName['principal_daily_report_form_payload'].execute('call-daily-payload', {
       date: '2026-05-26',
       did_you_have_school_today: 'Yes',
       principal_status: 'Physically present at school',
@@ -640,7 +717,7 @@ describe('moe-principal-assistant plugin registration', () => {
     });
 
     const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-    const result = (await byName['principal.daily_report_form_payload'].execute('call-daily-refusal', {
+    const result = (await byName['principal_daily_report_form_payload'].execute('call-daily-refusal', {
       date: '2026-05-26',
       number_of_teachers_on_staff: 12,
       number_of_teachers_present: 11,
@@ -690,7 +767,7 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      const result = (await byName['principal.daily_report_form_payload'].execute('call-daily-demo', {
+      const result = (await byName['principal_daily_report_form_payload'].execute('call-daily-demo', {
         date: '2026-05-26',
         number_of_teachers_on_staff: 12,
         number_of_teachers_present: 11,
@@ -758,7 +835,7 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      const result = (await byName['principal.daily_report_form_payload'].execute('call-daily-no-demo', {
+      const result = (await byName['principal_daily_report_form_payload'].execute('call-daily-no-demo', {
         // demo:true is not a real parameter any more; passing it must not fabricate.
         demo: true,
         date: '2026-05-26',
@@ -816,7 +893,7 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      const nested = await byName['principal.suspension_payload'].execute('call-suspension-payload', {
+      const nested = await byName['principal_suspension_payload'].execute('call-suspension-payload', {
         student_first_name_initial: 'a',
         perpetrator_name: 'A. Test Student',
         gender: 'Male',
@@ -848,7 +925,7 @@ describe('moe-principal-assistant plugin registration', () => {
         address_city: 'Aranguez',
       });
 
-      const result = await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+      const result = await byName['forms_preview_suspension'].execute('call-preview-suspension', {
         payload: nested as Record<string, unknown>,
       });
 
@@ -918,7 +995,7 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+      const result = (await byName['forms_preview_suspension'].execute('call-preview-suspension', {
         // Partial payload: demo defaults are only allowed under the operator's
         // MOE_DEMO_DEFAULTS env var (set above), never a tool argument.
         payload: {
@@ -1003,7 +1080,7 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+      const result = (await byName['forms_preview_suspension'].execute('call-preview-suspension', {
         payload: {
           education_district: 'Victoria',
           school_type: 'Government',
@@ -1087,7 +1164,7 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+      const result = (await byName['forms_preview_suspension'].execute('call-preview-suspension', {
         payload: {
           perpetrator_name: 'T. Test',
           // Asserts a victim exists but never says who — demo defaults must
@@ -1143,7 +1220,7 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+      const result = (await byName['forms_preview_suspension'].execute('call-preview-suspension', {
         demo: true,
         payload: {
           perpetrator_name: 'T. Test',
@@ -1195,7 +1272,7 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+      const result = (await byName['forms_preview_suspension'].execute('call-preview-suspension', {
         payload: {
           // A non-numeric term count would become NaN under raw Number();
           // it must be treated as unusable, not emitted into the payload.
@@ -1247,7 +1324,7 @@ describe('moe-principal-assistant plugin registration', () => {
       });
 
       const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
-      const result = (await byName['forms.preview_suspension'].execute('call-preview-suspension', {
+      const result = (await byName['forms_preview_suspension'].execute('call-preview-suspension', {
         // typeof [] === 'object', so this slips past the caller's guard and
         // reaches the normalizer, which must reject it.
         payload: [{ perpetrator_name: 'T. Test' }],
@@ -1288,7 +1365,7 @@ describe('retry breaker (CLWX-38)', () => {
   }
 
   it('breaks the loop after 3 identical failing calls with a success-shaped instruction', async () => {
-    const tool = await registerAndFind('principal.summarise_circular');
+    const tool = await registerAndFind('principal_summarise_circular');
 
     // The live moe.14 failure: empty circular_text, retried identically.
     await expect(tool.execute!('t1', { circular_text: '' })).rejects.toThrow();
@@ -1296,12 +1373,12 @@ describe('retry breaker (CLWX-38)', () => {
 
     const broken = (await tool.execute!('t3', { circular_text: '' })) as { text: string };
     expect(broken.text).toContain('STOP');
-    expect(broken.text).toContain('principal.summarise_circular');
+    expect(broken.text).toContain('principal_summarise_circular');
     expect(broken.text).toContain('Answer the user directly');
   });
 
   it('different arguments or a success reset the counter', async () => {
-    const tool = await registerAndFind('principal.summarise_circular');
+    const tool = await registerAndFind('principal_summarise_circular');
 
     await expect(tool.execute!('t1', { circular_text: '' })).rejects.toThrow();
     await expect(tool.execute!('t2', { circular_text: '' })).rejects.toThrow();

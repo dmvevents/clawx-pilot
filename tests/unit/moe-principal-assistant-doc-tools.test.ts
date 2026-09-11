@@ -169,7 +169,7 @@ afterAll(() => {
   }
 });
 
-describe('document.* native tools (Lane A — Windows-safe)', () => {
+describe('document_* native tools (Lane A — Windows-safe)', () => {
   it('finds a numerically prefixed underscored PDF from an ordinary title in a supplied folder', async () => {
     const { findDocuments } = await loadDocTools();
     const folder = path.join(workDir, `MoE Agent Testing Folder ${process.pid}`);
@@ -274,7 +274,7 @@ describe('document.* native tools (Lane A — Windows-safe)', () => {
     ]);
   });
 
-  it('applies the document.find entry budget globally across default roots', async () => {
+  it('applies the document_find entry budget globally across default roots', async () => {
     const { findDocuments, fakeHome } = await loadDocToolsWithVirtualDefaultRoots();
     const previousHome = process.env.HOME;
     const previousUserProfile = process.env.USERPROFILE;
@@ -876,5 +876,88 @@ describe('parser dep loading is truthful: notFound vs loadError (CLWX-76)', () =
     expect(broken.notFound).toBe(false);
     expect(broken.loadError).toBeInstanceOf(Error);
     expect(String(broken.loadError.message)).toMatch(/binding boom/);
+  });
+});
+
+describe('document_write_docx normalises what the model actually sends (CLWX-142)', () => {
+  it('turns a single double-escaped string with markdown into real paragraphs and bold runs', async () => {
+    const { writeDocx, readDocx } = await loadDocTools();
+    // The observed payload shape from the installed moe.33 run (2026-09-11): one array
+    // element, newlines JSON-escaped twice, markdown emphasis on the subject line.
+    const letter = 'Demo Primary School\\nMinistry of Education\\n\\nSeptember 11, 2026\\n\\nDear Demo Guardian,\\n\\n**Re: Formal Notice of Suspension for Student A.**\\n\\nThis letter is to formally notify you.';
+    const out = path.join(workDir, 'clwx142-letter.docx');
+    const written = (await writeDocx({ path: out, paragraphs: [letter] })) as { paragraphs: number; bytes: number };
+    expect(written.paragraphs).toBe(5);
+    const back = (await readDocx({ path: out })) as { markdown: string };
+    expect(back.markdown).not.toContain('\\n');
+    expect(back.markdown).not.toMatch(/\*\*Re:.*\*\*.*\\n/);
+    // Real bold reads back as markdown bold (mammoth emits `__…__` and escapes '.');
+    // blank-line paragraphs are preserved.
+    expect(back.markdown).toMatch(/__Re: Formal Notice of Suspension for Student A\\?\.__/);
+    expect(back.markdown).toMatch(/Dear Demo Guardian,\s*\n\s*\n/);
+    expect(back.markdown).toMatch(/This letter is to formally notify you\\?\./);
+  });
+
+  it('accepts a plain string and a normal array unchanged, and renders headings', async () => {
+    const { normalizeDocxParagraphs, splitMarkdownRuns } = await loadDocTools();
+    expect(normalizeDocxParagraphs('one\n\ntwo')).toHaveLength(2);
+    expect(normalizeDocxParagraphs(['one', 'two', 'three'])).toHaveLength(3);
+    // Single newline = line break within a paragraph, not a new paragraph.
+    const block = normalizeDocxParagraphs(['1 Demo Street\nDemo Village'])[0];
+    expect(block.lines).toHaveLength(2);
+    expect(normalizeDocxParagraphs(['# Title', 'body'])[0].heading).toBe(1);
+    expect(splitMarkdownRuns('plain **bold** and *italic* end')).toEqual([
+      { text: 'plain ' }, { text: 'bold', bold: true }, { text: ' and ' }, { text: 'italic', italics: true }, { text: ' end' },
+    ]);
+    // Literal \t and CRLF are normalised; empty input is rejected by writeDocx.
+    expect(normalizeDocxParagraphs(['a\\tb\r\nc'])[0].lines).toHaveLength(2);
+    expect(normalizeDocxParagraphs(['', '   '])).toHaveLength(0);
+  });
+
+  it('never eats underscores in identifiers or backslashes in Windows paths (review F1/F2)', async () => {
+    const { normalizeDocxParagraphs, splitMarkdownRuns } = await loadDocTools();
+    // Filenames and snake_case survive intact — including this journey's own attachment name.
+    expect(splitMarkdownRuns('Attached: Suspension_Letter_Draft.docx and Report_Final.pdf'))
+      .toEqual([{ text: 'Attached: Suspension_Letter_Draft.docx and Report_Final.pdf' }]);
+    expect(splitMarkdownRuns('Please confirm the student_id_number field.'))
+      .toEqual([{ text: 'Please confirm the student_id_number field.' }]);
+    expect(splitMarkdownRuns('Total: 10_000_000 students')).toEqual([{ text: 'Total: 10_000_000 students' }]);
+    expect(splitMarkdownRuns('Rates are 5*3 and 4*2 per week.')).toEqual([{ text: 'Rates are 5*3 and 4*2 per week.' }]);
+    // Real emphasis still renders.
+    expect(splitMarkdownRuns('a _quiet_ word')).toEqual([{ text: 'a ' }, { text: 'quiet', italics: true }, { text: ' word' }]);
+    // A string that already carries real newlines is NOT JSON-escaped, so its backslashes are content.
+    const withPath = normalizeDocxParagraphs(['Files are in C:\\new\\notes for review.\nSecond line']);
+    expect(withPath[0].lines[0][0].text).toBe('Files are in C:\\new\\notes for review.');
+    expect(withPath[0].lines).toHaveLength(2);
+    // Without a real newline, the escapes are the model's JSON escaping and are unescaped.
+    expect(normalizeDocxParagraphs(['one\\ntwo'])[0].lines).toHaveLength(2);
+    // A multi-line block never becomes a heading; deep hashes clamp to level 3.
+    expect(normalizeDocxParagraphs(['# Title\nsubline'])[0].heading).toBe(0);
+    expect(normalizeDocxParagraphs(['#### Deep'])[0].heading).toBe(3);
+    expect(normalizeDocxParagraphs(['#### Deep'])[0].lines[0][0].text).toBe('Deep');
+  });
+
+  it('unescapes literal newlines in xlsx string cells the same way (review F4)', async () => {
+    const { writeXlsx, readXlsx } = await loadDocTools();
+    const out = path.join(workDir, 'clwx142-cells.xlsx');
+    await writeXlsx({ path: out, sheets: [{ name: 'Notes', rows: [['Notes'], ['line one\\nline two'], ['C:\\\\new\\\\notes\nreal newline stays']] }] });
+    const back = (await readXlsx({ path: out })) as { rows: unknown[][] };
+    expect(back.rows[1][0]).toBe('line one\nline two');
+    expect(back.rows[2][0]).toBe('C:\\\\new\\\\notes\nreal newline stays');
+  });
+
+  it('readXlsx accepts the sheet index written as a string (schema is string-only for provider compatibility)', async () => {
+    const { writeXlsx, readXlsx } = await loadDocTools();
+    const out = path.join(workDir, 'clwx141-sheets.xlsx');
+    await writeXlsx({ path: out, sheets: [{ name: 'First', rows: [['a']] }, { name: 'Second', rows: [['b']] }] });
+    expect(((await readXlsx({ path: out, sheet: '1' })) as { sheet: string }).sheet).toBe('Second');
+    expect(((await readXlsx({ path: out, sheet: 1 })) as { sheet: string }).sheet).toBe('Second');
+    expect(((await readXlsx({ path: out, sheet: 'Second' })) as { sheet: string }).sheet).toBe('Second');
+    expect(((await readXlsx({ path: out })) as { sheet: string }).sheet).toBe('First');
+  });
+
+  it('still refuses an empty request', async () => {
+    const { writeDocx } = await loadDocTools();
+    await expect(writeDocx({ path: path.join(workDir, 'empty.docx'), paragraphs: [] })).rejects.toThrow(/paragraphs array required/);
   });
 });

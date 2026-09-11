@@ -57,7 +57,7 @@ export interface DegradeDecision {
    * Deliberately narrower than `degrade`. A turn that already ran tools may
    * have had side effects before the model call died — replaying it could
    * re-open a compose pane or re-read a mailbox. The hard-confirm gates on
-   * `outlook.send_email` / `download_attachment` mean nothing irreversible can
+   * `outlook_send_email` / `download_attachment` mean nothing irreversible can
    * fire unattended, but "probably harmless" is not the standard for a
    * principal's mailbox. When tools ran, we degrade the channel and let the
    * principal resend.

@@ -17,7 +17,7 @@
  *   PASS              — expected-ok row resolved and its content check held.
  *   REFUSED-READABLY  — expected-refusal row threw a principal-readable error.
  *   FAIL              — anything else (raw trace, wrong outcome, bad content).
- *   NO-TOOL           — doc type has no document.* entrypoint (recorded so
+ *   NO-TOOL           — doc type has no document_* entrypoint (recorded so
  *                       the matrix is honest about coverage; not a failure).
  *
  * Fixture GENERATION may use workspace deps (docx/xlsx) — the system under
@@ -147,7 +147,7 @@ export function isReadableRefusal(message) {
  */
 export function classifyRow(expectation, outcome, contentCheck, refusalCheck) {
   if (expectation === 'no-tool') {
-    return { status: 'NO-TOOL', note: 'no document.* entrypoint for this type (persona carve-out, CLWX-80)' };
+    return { status: 'NO-TOOL', note: 'no document_* entrypoint for this type (persona carve-out, CLWX-80)' };
   }
   // Harness-infrastructure failures (timeout, spawn error, no verdict, child
   // crash) mean the tool NEVER RAN — they must never grade as a passing
@@ -323,28 +323,28 @@ export function buildXlsxTypedFixture() {
 // can't do email"). These lists pin the inventory per activation mode; adding
 // a tool is a conscious matrix update, exactly like adding a doc-type row.
 export const DOC_TOOL_NAMES = [
-  'document.find', 'document.read_pdf', 'document.read_docx', 'document.write_docx',
-  'document.read_xlsx', 'document.write_xlsx', 'document.read_image',
+  'document_find', 'document_read_pdf', 'document_read_docx', 'document_write_docx',
+  'document_read_xlsx', 'document_write_xlsx', 'document_read_image',
 ];
 export const PRINCIPAL_TOOL_NAMES = [
-  'principal.draft_letter', 'principal.draft_memo', 'principal.summarise_circular',
-  'principal.daily_report_payload', 'principal.daily_report_form_payload',
-  'principal.suspension_payload', 'principal.find_school', 'principal.nscc_lookup',
+  'principal_draft_letter', 'principal_draft_memo', 'principal_summarise_circular',
+  'principal_daily_report_payload', 'principal_daily_report_form_payload',
+  'principal_suspension_payload', 'principal_find_school', 'principal_nscc_lookup',
 ];
-export const BROWSER_TOOL_NAMES = ['browser.open_chrome', 'browser.diagnose', 'browser.repair_chrome_cdp'];
+export const BROWSER_TOOL_NAMES = ['browser_open_chrome', 'browser_diagnose', 'browser_repair_chrome_cdp'];
 export const OUTLOOK_TOOL_NAMES = [
-  // outlook.readiness landed in 6ec32807 (read-only capability diagnosis)
+  // outlook_readiness landed in 6ec32807 (read-only capability diagnosis)
   // inside the same host-API + skillAllowlist gate as the rest of the
   // family — contract updated 2026-09-08 when the unit drift guard caught
   // the missing matrix update.
-  'outlook.readiness',
-  'outlook.open', 'outlook.read_inbox', 'outlook.draft_email', 'outlook.send_email',
-  'outlook.search_inbox', 'outlook.read_email', 'outlook.reply', 'outlook.forward',
-  'outlook.mark_read', 'outlook.list_attachments', 'outlook.download_attachment',
+  'outlook_readiness',
+  'outlook_open', 'outlook_read_inbox', 'outlook_draft_email', 'outlook_send_email',
+  'outlook_search_inbox', 'outlook_read_email', 'outlook_reply', 'outlook_forward',
+  'outlook_mark_read', 'outlook_list_attachments', 'outlook_download_attachment',
 ];
 export const FORMS_TOOL_NAMES = [
-  'forms.list', 'forms.preview_suspension', 'forms.preview_daily_report',
-  'forms.submit_suspension', 'forms.submit_daily_report',
+  'forms_list', 'forms_preview_suspension', 'forms_preview_daily_report',
+  'forms_submit_suspension', 'forms_submit_daily_report',
 ];
 
 /**
@@ -597,7 +597,7 @@ export const MATRIX = [
       && r.matches.length === 1
       && !JSON.stringify(r).includes('%PDF')
         ? true
-        : `document.find did not return one metadata-only safe unique PDF match (${JSON.stringify(r)})`
+        : `document_find did not return one metadata-only safe unique PDF match (${JSON.stringify(r)})`
     ),
   },
   {

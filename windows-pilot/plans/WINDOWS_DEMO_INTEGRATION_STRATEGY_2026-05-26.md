@@ -26,7 +26,7 @@ Outlook and Forms are already integrated through the app, not standalone scripts
 
 Current pilot builds default to the Outlook v2 Chrome/CDP manager for full tool coverage. Keep `CLAWX_OUTLOOK_V2=1` only as an explicit compatibility setting for older installed builds; use `CLAWX_OUTLOOK_V2=0` when deliberately testing the legacy browser-plugin path.
 
-Forms uses the v2 browser driver already. `forms.preview_suspension` fills the test form without submitting. `forms.submit_suspension` requires `confirm:true` and the expected title.
+Forms uses the v2 browser driver already. `forms_preview_suspension` fills the test form without submitting. `forms_submit_suspension` requires `confirm:true` and the expected title.
 
 ## Windows Configuration Plan
 
@@ -70,5 +70,5 @@ If Azure keys are not available, use typed prompts for the demo and keep ASR as 
 - `pilot-probe-state.ps1` confirms app ports and live CDP, not just Chrome flags.
 - `pilot-verify-outlook-tab.ps1` confirms Outlook login readiness.
 - Desktop self-test prompt confirms Outlook tools do not send email during smoke.
-- Forms self-test prompt confirms `forms.preview_suspension` fills but does not submit.
+- Forms self-test prompt confirms `forms_preview_suspension` fills but does not submit.
 - Gateway logs are tailed only for tool names/status; no email body or recipient content should be logged.

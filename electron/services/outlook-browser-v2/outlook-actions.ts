@@ -979,7 +979,7 @@ export class OutlookActions {
       draftLeftOpen: true,
       preview: { to: previewTo, subject: previewSubject, body: args.body },
       message:
-        'Reply draft prepared and left open in Outlook for your review. Outlook pre-filled the reply recipient; after review, send this open draft with outlook.send_email using { confirm: true } only.',
+        'Reply draft prepared and left open in Outlook for your review. Outlook pre-filled the reply recipient; after review, send this open draft with outlook_send_email using { confirm: true } only.',
     };
   }
 

@@ -4,8 +4,8 @@
  * exercise the same IPC bridge the UI uses. This runs on the Windows pilot host.
  *
  * Safe by default:
- * - calls outlook.open only
- * - calls forms.list only
+ * - calls outlook_open only
+ * - calls forms_list only
  * - never sends email
  * - never submits Forms
  *
@@ -353,7 +353,7 @@ function safeChatPrompt(mode, verificationToken, customPrompt = '') {
     return [
       'Verification only.',
       `Verification token: ${verificationToken}.`,
-      'Use the forms.list tool exactly once, then report the returned status and available form ids.',
+      'Use the forms_list tool exactly once, then report the returned status and available form ids.',
       finalTokenInstruction,
       'Do not preview a form.',
       'Do not submit forms.',
@@ -366,7 +366,7 @@ function safeChatPrompt(mode, verificationToken, customPrompt = '') {
   return [
     'Verification only.',
     `Verification token: ${verificationToken}.`,
-    'Use the outlook.open tool exactly once, then report the returned status.',
+    'Use the outlook_open tool exactly once, then report the returned status.',
     finalTokenInstruction,
     'Do not draft email.',
     'Do not send email.',
@@ -379,18 +379,18 @@ function safeChatPrompt(mode, verificationToken, customPrompt = '') {
 
 function safeChatExpectedTool(mode) {
   if (mode === 'custom') return null;
-  return mode === 'forms-list' ? 'forms.list' : 'outlook.open';
+  return mode === 'forms-list' ? 'forms_list' : 'outlook_open';
 }
 
 function safeChatBannedTools() {
   return new Set([
-    'forms.submit_daily_report',
-    'forms.submit_suspension',
+    'forms_submit_daily_report',
+    'forms_submit_suspension',
     'forms.submit-daily-report',
     'forms.submit-suspension',
-    'outlook.send_email',
+    'outlook_send_email',
     'outlook.send-email',
-    'outlook.download_attachment',
+    'outlook_download_attachment',
     'outlook.download-attachment',
     'sessions_spawn',
     'sessions_yield',
@@ -855,7 +855,7 @@ function buildVisualAcceptance(args, screenshotPath) {
         id: 'outlook-reply-draft-state',
         required: true,
         reviewTarget: 'safe-chat reply scenario transcript and Outlook screenshot when collected',
-        accept: 'Reply workflows use outlook.reply or a safe Host API reply path, leave a reviewable draft open, and do not ask the user for the recipient after Outlook pre-fills it.',
+        accept: 'Reply workflows use outlook_reply or a safe Host API reply path, leave a reviewable draft open, and do not ask the user for the recipient after Outlook pre-fills it.',
         reject: 'The model tells the user it cannot find the Reply button, asks for the recipient after a reply draft was opened, archives/moves the source message, or sends without explicit confirmation.',
       },
       {
@@ -1003,8 +1003,8 @@ function validateProbeSummary(summary, args = {}) {
     || args.submitForms
   );
   if (!requested) {
-    addValidationReason(reasons, summary?.hostApi?.outlookOpen?.ok === true, 'hostapi outlook.open was not ok');
-    addValidationReason(reasons, summary?.hostApi?.formsList?.ok === true, 'hostapi forms.list was not ok');
+    addValidationReason(reasons, summary?.hostApi?.outlookOpen?.ok === true, 'hostapi outlook_open was not ok');
+    addValidationReason(reasons, summary?.hostApi?.formsList?.ok === true, 'hostapi forms_list was not ok');
   }
   if (args.safeChat) validateSafeChat(summary, reasons);
   if (args.outlookSmoke) validateOutlookSmoke(summary, reasons);
@@ -2482,9 +2482,9 @@ async function main() {
       events.push({ type: 'screenshot-error', text: error instanceof Error ? error.message : String(error) });
     });
 
-    const outlookOpen = await withTimeout('hostapi outlook.open', () => invokeHostApi(page, '/api/outlook/open'), 75_000)
+    const outlookOpen = await withTimeout('hostapi outlook_open', () => invokeHostApi(page, '/api/outlook/open'), 75_000)
       .catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
-    const formsList = await withTimeout('hostapi forms.list', () => invokeHostApi(page, '/api/forms/list'), 75_000)
+    const formsList = await withTimeout('hostapi forms_list', () => invokeHostApi(page, '/api/forms/list'), 75_000)
       .catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
 
     const safeChatVerificationToken = args.safeChat

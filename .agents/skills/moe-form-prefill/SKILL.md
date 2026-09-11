@@ -17,7 +17,7 @@ description: Use when filling MoE Daily Report or Suspension forms and the task 
 
 1. Active `moe-principal-assistant` config in `~/.openclaw/openclaw.json`.
 2. Explicit facts in the prompt, email, document, spreadsheet, or transcript.
-3. `principal.find_school({ query })`.
+3. `principal_find_school({ query })`.
 4. Form schemas:
    - `extensions/moe-principal-assistant/forms/daily-report-schema.vlm.json`
    - `extensions/moe-principal-assistant/forms/suspensions-schema.json`
@@ -26,11 +26,11 @@ description: Use when filling MoE Daily Report or Suspension forms and the task 
 
 ## Daily Report Flow
 
-Resolve school and date, apply "nothing to report" only to routine incident fields, ask for missing counts, call `principal.daily_report_form_payload`, preview, then wait for explicit submit confirmation.
+Resolve school and date, apply "nothing to report" only to routine incident fields, ask for missing counts, call `principal_daily_report_form_payload`, preview, then wait for explicit submit confirmation.
 
 ## Suspension Flow
 
-Resolve school, extract the required pupil/incident/suspension/parent fields, derive class aliases and age only when source facts support it, call `principal.suspension_payload`, preview, then wait for explicit submit confirmation.
+Resolve school, extract the required pupil/incident/suspension/parent fields, derive class aliases and age only when source facts support it, call `principal_suspension_payload`, preview, then wait for explicit submit confirmation.
 
 ## Product Reference
 

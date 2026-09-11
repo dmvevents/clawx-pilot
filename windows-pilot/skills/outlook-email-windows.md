@@ -1,6 +1,6 @@
 ---
 name: outlook-email-windows
-description: Drive Outlook on the pilot Windows laptop via the moe-principal-assistant plugin's outlook.* tools. Read inbox, draft, reply, send — with confirm-gated safety on send.
+description: Drive Outlook on the pilot Windows laptop via the moe-principal-assistant plugin's outlook_* tools. Read inbox, draft, reply, send — with confirm-gated safety on send.
 metadata:
   os: windows
   prereq-skill: chrome-cdp-windows
@@ -12,8 +12,8 @@ metadata:
 ## When to use
 
 - Demo turn 1 (email path): "Show me my 5 most recent emails", "Draft a reply…", "Send it."
-- Acceptance smoke before demo: prove all 11 outlook.* tools work end-to-end on Windows.
-- Diagnosis: an outlook.* tool returned an unexpected error.
+- Acceptance smoke before demo: prove all 11 outlook_* tools work end-to-end on Windows.
+- Diagnosis: an outlook_* tool returned an unexpected error.
 
 ## Tool surface (registered by the moe-principal-assistant plugin)
 
@@ -21,27 +21,27 @@ The agent calls these via the Anthropic tool-use protocol; you do **not** call t
 
 | Tool | Purpose | Gate |
 |---|---|---|
-| `outlook.open` | Ensure an Outlook tab exists; create one if not | none |
-| `outlook.read_inbox(top?)` | Top N rows: from, subject, snippet, date | none |
-| `outlook.search_inbox({subjectContains, fromContains, dateRange})` | Filtered search | none |
-| `outlook.read_email({id})` | Full body, recipients, attachments-meta | none |
-| `outlook.draft_email({to, subject, body})` | Open compose pane with values | none |
-| `outlook.reply({id, body, replyAll?})` | Open Reply or Reply All compose with recipients/subject pre-filled by Outlook | none |
-| `outlook.forward({id, to, body?})` | Open Forward compose | none |
-| `outlook.send_email({confirm:true})` | **Send the single visible reviewed draft** | **hard-confirm gate** (see below) |
-| `outlook.list_attachments({id})` | List names + sizes | none |
-| `outlook.download_attachment({id, attachmentId, confirm:true})` | Save to disk | hard-confirm |
-| `outlook.mark_read({id, read})` | Toggle read state | none |
+| `outlook_open` | Ensure an Outlook tab exists; create one if not | none |
+| `outlook_read_inbox(top?)` | Top N rows: from, subject, snippet, date | none |
+| `outlook_search_inbox({subjectContains, fromContains, dateRange})` | Filtered search | none |
+| `outlook_read_email({id})` | Full body, recipients, attachments-meta | none |
+| `outlook_draft_email({to, subject, body})` | Open compose pane with values | none |
+| `outlook_reply({id, body, replyAll?})` | Open Reply or Reply All compose with recipients/subject pre-filled by Outlook | none |
+| `outlook_forward({id, to, body?})` | Open Forward compose | none |
+| `outlook_send_email({confirm:true})` | **Send the single visible reviewed draft** | **hard-confirm gate** (see below) |
+| `outlook_list_attachments({id})` | List names + sizes | none |
+| `outlook_download_attachment({id, attachmentId, confirm:true})` | Save to disk | hard-confirm |
+| `outlook_mark_read({id, read})` | Toggle read state | none |
 
 Source of truth: `electron/services/outlook-browser-v2/manager.ts` + `outlook-actions.ts`.
 
 ## Explicit Outlook action rules
 
-- Reply must use `outlook.reply({id, body})`. Reply All must use `outlook.reply({id, body, replyAll:true})`.
-- Forward must use `outlook.forward({id, to, body?})`.
-- Never use generic browser clicks, toolbar guessing, keyboard shortcuts, or broad DOM automation for reply, reply-all, or forward. Locate the target message with `outlook.read_inbox`, `outlook.search_inbox`, or `outlook.read_email`, then call the explicit Outlook tool.
+- Reply must use `outlook_reply({id, body})`. Reply All must use `outlook_reply({id, body, replyAll:true})`.
+- Forward must use `outlook_forward({id, to, body?})`.
+- Never use generic browser clicks, toolbar guessing, keyboard shortcuts, or broad DOM automation for reply, reply-all, or forward. Locate the target message with `outlook_read_inbox`, `outlook_search_inbox`, or `outlook_read_email`, then call the explicit Outlook tool.
 - Body text belongs only in the compose message body editor. Do not place body text in To, Cc, or Bcc fields, and do not ask for a recipient after Outlook has pre-filled a reply draft.
-- Sending is separate from drafting. After `outlook.reply`, `outlook.forward`, or `outlook.draft_email`, leave the draft open for review. Send only with `outlook.send_email({confirm:true})` after the principal has reviewed the visible draft and explicitly approved sending.
+- Sending is separate from drafting. After `outlook_reply`, `outlook_forward`, or `outlook_draft_email`, leave the draft open for review. Send only with `outlook_send_email({confirm:true})` after the principal has reviewed the visible draft and explicitly approved sending.
 
 ## Outlook state vector and recovery
 
@@ -59,10 +59,10 @@ Classify Outlook before every compose, reply, reply-all, forward, cleanup, or se
 Recovery transitions:
 
 - Inbox list -> message detail -> compose draft for read, reply, reply-all, and forward.
-- Compose draft or saved Drafts row -> reviewed draft -> `outlook.send_email({confirm:true})`.
+- Compose draft or saved Drafts row -> reviewed draft -> `outlook_send_email({confirm:true})`.
 - Recipient autocomplete -> select only the intended email recipient, then verify body text is still in the message body.
 - Body text in To/Cc/Bcc -> stop, discard only that draft if marker-scoped, then recreate with body in Message body.
-- Reply button not found -> call `outlook.reply`/`outlook.forward` by message id; do not hunt toolbar buttons.
+- Reply button not found -> call `outlook_reply`/`outlook_forward` by message id; do not hunt toolbar buttons.
 - Folder delete confirmation or discard draft dialog -> cancel unless cleaning a known marker-scoped test draft.
 - Stale open drafts or multiple compose panes -> close only marker-scoped stale drafts; otherwise stop and ask for review.
 - False-positive send -> if the draft remains open or in Drafts after success, treat it as not sent and do not retry without fresh review plus `confirm:true`.
@@ -73,11 +73,11 @@ Acceptance for compose/reply/reply-all/forward/send: correct tab, folder/message
 
 ## Send gate (mandatory)
 
-`outlook.send_email` will refuse unless `confirm: true` is in the args and Outlook shows exactly one complete reviewed draft with its own Send button.
+`outlook_send_email` will refuse unless `confirm: true` is in the args and Outlook shows exactly one complete reviewed draft with its own Send button.
 
-Normal reviewed sends use `outlook.send_email({confirm:true})` only. Do not ask the principal to restate the recipient, subject, or body after they already reviewed the open Outlook draft. Optional `to`, `cc`, `bcc`, `subject`, and `body` fields are advanced safety assertions only; passing stale assertions after review can cause a correct draft to be refused.
+Normal reviewed sends use `outlook_send_email({confirm:true})` only. Do not ask the principal to restate the recipient, subject, or body after they already reviewed the open Outlook draft. Optional `to`, `cc`, `bcc`, `subject`, and `body` fields are advanced safety assertions only; passing stale assertions after review can cause a correct draft to be refused.
 
-## Prerequisites checklist (run before any outlook.* call)
+## Prerequisites checklist (run before any outlook_* call)
 
 ```
 [ ] ssh pilot 'echo ok' answers within 1s
@@ -89,7 +89,7 @@ Normal reviewed sends use `outlook.send_email({confirm:true})` only. Do not ask 
 [ ] Inbox has 3-5 demo messages (per DEMO_RUNBOOK pre-flight #3)
 ```
 
-If any unchecked, **stop and run the prerequisite skill** rather than trying the outlook.* call and parsing a confusing error.
+If any unchecked, **stop and run the prerequisite skill** rather than trying the outlook_* call and parsing a confusing error.
 
 ## Demo turn-by-turn (verbatim chat composer text)
 
@@ -97,16 +97,16 @@ If any unchecked, **stop and run the prerequisite skill** rather than trying the
 
 > Show me my 5 most recent emails
 
-Expected: agent calls `outlook.open` → `outlook.read_inbox(5)` → returns sender/subject/snippet rows. ~3-5s. Subjects show in chat.
+Expected: agent calls `outlook_open` → `outlook_read_inbox(5)` → returns sender/subject/snippet rows. ~3-5s. Subjects show in chat.
 
 ### Turn 2 — draft
 
 > Draft a reply to the parent meeting email saying I'll be there at 4pm and to bring a copy of the report card.
 
 Expected:
-1. `outlook.search_inbox({subjectContains: "parent meeting"})` to locate
-2. `outlook.read_email({id})` to fetch context
-3. `outlook.reply({id, body: "<draft>"})` opens compose pane in Chrome
+1. `outlook_search_inbox({subjectContains: "parent meeting"})` to locate
+2. `outlook_read_email({id})` to fetch context
+3. `outlook_reply({id, body: "<draft>"})` opens compose pane in Chrome
 
 The draft body must be inserted into the message body editor only. Outlook pre-fills the reply recipient and subject; do not fill To/Cc/Bcc with message body text and do not use browser clicks to hunt for a Reply button.
 
@@ -116,7 +116,7 @@ The draft body must be inserted into the message body editor only. Outlook pre-f
 
 > Send it.
 
-Expected: `outlook.send_email({confirm:true})` against the single visible reviewed compose pane. Send fires. Compose pane closes. Reply visible in Sent.
+Expected: `outlook_send_email({confirm:true})` against the single visible reviewed compose pane. Send fires. Compose pane closes. Reply visible in Sent.
 
 **Demo of the gate (optional 30s):** say "send it" before any draft is open, or leave two compose panes open. The tool refuses with a clear message. Close extra drafts, review the intended draft, then say "send it" again.
 
@@ -128,16 +128,16 @@ For each tool, run a known-good call from the chat composer and watch the gatewa
 - Subject truncation in logs (≤120 chars; never raw bodies / recipients)
 
 Order:
-1. `outlook.open`
-2. `outlook.read_inbox(5)`
-3. `outlook.search_inbox({subjectContains: "test"})`
-4. `outlook.read_email({id: <first id from #2>})`
-5. `outlook.draft_email({to: "test.fac@fac.edu.tt", subject: "Smoke A", body: "smoke"})`
-6. `outlook.reply({id: <id>, body: "ack"})`
-7. `outlook.send_email({confirm:false})` must refuse before touching Outlook; a real `confirm:true` send requires exact same-session human approval and should use `{confirm:true}` only after the draft is reviewed
-8. `outlook.list_attachments({id: <id of email with attachments>})`
-9. `outlook.download_attachment({id, attachmentId, confirm:true})`
-10. `outlook.mark_read({id, read: true})` then `false`
+1. `outlook_open`
+2. `outlook_read_inbox(5)`
+3. `outlook_search_inbox({subjectContains: "test"})`
+4. `outlook_read_email({id: <first id from #2>})`
+5. `outlook_draft_email({to: "test.fac@fac.edu.tt", subject: "Smoke A", body: "smoke"})`
+6. `outlook_reply({id: <id>, body: "ack"})`
+7. `outlook_send_email({confirm:false})` must refuse before touching Outlook; a real `confirm:true` send requires exact same-session human approval and should use `{confirm:true}` only after the draft is reviewed
+8. `outlook_list_attachments({id: <id of email with attachments>})`
+9. `outlook_download_attachment({id, attachmentId, confirm:true})`
+10. `outlook_mark_read({id, read: true})` then `false`
 
 Pass if all 10 return without `error`. Document in the smoke result row.
 

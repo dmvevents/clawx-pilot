@@ -29,7 +29,7 @@ Before compose, reply, forward, cleanup, or send, classify Outlook with this sta
 Recovery transitions:
 
 - Inbox list -> message detail -> compose is the normal read/reply/forward path.
-- Compose or saved Drafts row -> reviewed draft -> `outlook.send_email({confirm:true})` is the only send path.
+- Compose or saved Drafts row -> reviewed draft -> `outlook_send_email({confirm:true})` is the only send path.
 - Wrong folder, Sent, Drafts, Archive, or stale detail view -> search/read the intended message or navigate to Inbox before action.
 - Recipient autocomplete -> select only valid email recipients, then verify body text is in the message body editor.
 - Folder delete confirmation or discard-draft dialog -> cancel unless cleaning a known marker-scoped test draft.
@@ -80,7 +80,7 @@ Only after the safe Host API probe passes, run:
 ssh pilot 'powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\pilot-run-electron-cdp-probe.ps1" -SafeChat'
 ```
 
-Then inspect `C:\Users\VYONIX\.openclaw\agents\main\sessions\*.jsonl` for the latest tool result. A healthy run has a Gemini/Claude `toolCall` for `outlook.open` followed by a non-error tool result.
+Then inspect `C:\Users\VYONIX\.openclaw\agents\main\sessions\*.jsonl` for the latest tool result. A healthy run has a Gemini/Claude `toolCall` for `outlook_open` followed by a non-error tool result.
 
 ## Known Failure Signatures
 

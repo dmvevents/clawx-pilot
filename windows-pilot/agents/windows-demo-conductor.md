@@ -73,20 +73,20 @@ Delegate. Wait for report.
 
 ## Demo-critical tools (FAIL = NO-GO)
 
-1. `outlook.read_inbox`
-2. `outlook.search_inbox`
-3. `outlook.read_email`
-4. `outlook.reply` (opens compose pane)
-5. `outlook.send_email` (with hard-confirm gate firing)
-6. `forms.preview_suspension` (reaches >25 fields filled)
-7. `forms.submit_suspension` (reaches "Thanks" page)
+1. `outlook_read_inbox`
+2. `outlook_search_inbox`
+3. `outlook_read_email`
+4. `outlook_reply` (opens compose pane)
+5. `outlook_send_email` (with hard-confirm gate firing)
+6. `forms_preview_suspension` (reaches >25 fields filled)
+7. `forms_submit_suspension` (reaches "Thanks" page)
 
 ## Non-critical (FAIL = WARN, demo proceeds)
 
-- `outlook.forward`
-- `outlook.list_attachments` (only used if principal asks)
-- `outlook.download_attachment` (only used if principal asks)
-- `outlook.mark_read` (cosmetic)
+- `outlook_forward`
+- `outlook_list_attachments` (only used if principal asks)
+- `outlook_download_attachment` (only used if principal asks)
+- `outlook_mark_read` (cosmetic)
 
 ## Hand-off
 

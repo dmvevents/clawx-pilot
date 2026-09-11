@@ -6,7 +6,7 @@
  * the AI's memory instead of file lookups. Design decision (recorded on the
  * card): NOT a workspace bootstrap doc — the full text is ~55k tokens per
  * turn against the KR6 token floor. Instead the persona steers any
- * Code-of-Conduct question to `principal.nscc_lookup`, which returns the
+ * Code-of-Conduct question to `principal_nscc_lookup`, which returns the
  * top-scoring passages (a few KB) for the model to ground and cite.
  *
  * Pure functions + a cached loader; no model, no network, no host-API. The
@@ -310,7 +310,7 @@ export function searchNscc(text, query, { maxPassages = DEFAULT_MAX_PASSAGES } =
     // the Code lacks a policy.
     note: top.length
       ? 'Passages from the National School Code of Conduct (NSCC), Revised Edition (2026). Ground the answer in these passages and cite the NSCC.'
-      : 'No NSCC passage matched these search terms. This means the SEARCH found nothing — not that the Code lacks a policy. Retry principal.nscc_lookup once with formal policy wording (e.g. "corporal punishment" for smacking or beating, "irregular attendance" for skipping school, "expulsion" for being expelled). If a retry also returns nothing, tell the principal you could not retrieve a relevant section of the Code — do not claim the Code does not cover it.',
+      : 'No NSCC passage matched these search terms. This means the SEARCH found nothing — not that the Code lacks a policy. Retry principal_nscc_lookup once with formal policy wording (e.g. "corporal punishment" for smacking or beating, "irregular attendance" for skipping school, "expulsion" for being expelled). If a retry also returns nothing, tell the principal you could not retrieve a relevant section of the Code — do not claim the Code does not cover it.',
   };
 }
 

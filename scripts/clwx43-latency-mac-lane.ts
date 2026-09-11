@@ -61,13 +61,13 @@ const PROMPTS: PromptSpec[] = [
   },
   {
     id: 'circular-summary',
-    shape: 'document.read_pdf + summarise',
+    shape: 'document_read_pdf + summarise',
     marker: 'five short bullets',
     text: `Please summarise the key points of the Ministry circular at ${CIRCULAR_FIXTURE} in five short bullets.`,
   },
   {
     id: 'memo-write',
-    shape: 'draft + document.write_docx',
+    shape: 'draft + document_write_docx',
     marker: 'fire drill memo',
     text: 'Draft a short fire drill memo to staff about the drill this Friday at 10 am and save it as a docx named fire-drill-memo.docx. The school is Demo Primary School and my name is A. Alexander — no further details needed, please save it now.',
   },
