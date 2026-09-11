@@ -931,8 +931,15 @@ function patchBundledRuntime(outputDir) {
   if (cronSchemaPatch.supported) {
     const relativeTargets = cronSchemaPatch.files.map((file) => path.relative(outputDir, file)).join(', ');
     echo`   ${cronSchemaPatch.patched ? '🩹 Patched' : '✓ Verified'} OpenClaw ${cronSchemaPatch.version} cron tool schema (next_check "in" → "delay") in ${relativeTargets}`;
+  } else if (process.env.CLAWX_ALLOW_UNPATCHED_CRON_SCHEMA === '1') {
+    echo`   ⚠ OpenClaw ${cronSchemaPatch.version} is not the pinned ${OPENCLAW_CRON_TOOL_SCHEMA_PATCH_VERSION} runtime; cron tool schema patch skipped by CLAWX_ALLOW_UNPATCHED_CRON_SCHEMA=1`;
   } else {
-    echo`   ⚠ OpenClaw ${cronSchemaPatch.version} is not the pinned ${OPENCLAW_CRON_TOOL_SCHEMA_PATCH_VERSION} runtime; cron tool schema patch skipped`;
+    // A silently skipped patch is exactly how an unpatched installer gets cut (review F2):
+    // fail the bundle instead, and make the opt-out explicit.
+    throw new Error(
+      `OpenClaw ${cronSchemaPatch.version} is not the pinned ${OPENCLAW_CRON_TOOL_SCHEMA_PATCH_VERSION} runtime, so the CLWX-141 cron tool schema patch cannot be applied. `
+      + 'Re-pin the patch for the new runtime (scripts/openclaw-cron-tool-schema-patch.mjs) or set CLAWX_ALLOW_UNPATCHED_CRON_SCHEMA=1 to bundle knowingly unpatched.',
+    );
   }
 
   const ptyGuardPatch = patchOpenClawWindowsPtyGuard(outputDir);

@@ -16,6 +16,16 @@ import path from 'node:path';
  * one), and rewrite the runtime's own prompt text that tells automation runs to call
  * `next_check in:"<dur>"`. The bundle verifier asserts the patched shape so a runtime
  * upgrade that moves these anchors fails the build instead of shipping the defect.
+ *
+ * Compatibility contract: the handler keeps reading `in` as a fallback on purpose. Self-paced
+ * automation jobs created on moe.34 or earlier have the old prompt text (`with in:"<duration>"`)
+ * serialized into their stored payload, and the runtime never rewrites persisted jobs; the
+ * fallback is what keeps those runs pacing. Do not remove it in a later clean-up.
+ *
+ * Scope: only the root `dist/` chunks the desktop app executes. `dist/worker/worker.mjs` is a
+ * minified duplicate of the whole runtime used solely by the `openclaw worker` container lane,
+ * which nothing in electron/, src/, extensions/ or resources/ spawns; it is intentionally left
+ * untouched and is NOT covered by the verifier's guarantee (recorded on CLWX-141).
  */
 export const OPENCLAW_CRON_TOOL_SCHEMA_PATCH_VERSION = '2026.9.2';
 export const CRON_NEXT_CHECK_PARAM = 'delay';
@@ -38,9 +48,14 @@ const CRON_TOOL_ANCHORS = [
     count: 1,
   },
   {
+    // NOTE: the `const rawDuration = ` prefix is load-bearing, not incidental — the patched form
+    // re-embeds the old `readToolStringParam(params, "in", …)` call as a fallback, and
+    // classifySource() only tells baseline from patched apart because the baseline string carries
+    // this prefix while the patched string does not repeat it. The `label` keeps the "required"
+    // error naming the declared parameter (`delay required`), not the retired one.
     label: 'next_check handler read',
     baseline: 'const rawDuration = readToolStringParam(params, "in", { required: true });',
-    patched: `const rawDuration = readToolStringParam(params, "${CRON_NEXT_CHECK_PARAM}") ?? readToolStringParam(params, "in", { required: true });`,
+    patched: `const rawDuration = readToolStringParam(params, "${CRON_NEXT_CHECK_PARAM}") ?? readToolStringParam(params, "in", { required: true, label: "${CRON_NEXT_CHECK_PARAM}" });`,
     count: 1,
   },
   {
@@ -53,6 +68,14 @@ const CRON_TOOL_ANCHORS = [
     label: 'tool description paced loop',
     baseline: 'job calls next_check in:"<dur>"',
     patched: `job calls next_check ${CRON_NEXT_CHECK_PARAM}:"<dur>"`,
+    count: 1,
+  },
+  {
+    // The ACTIONS summary is the first thing the model reads in the tool description; leaving
+    // `in:` here while the schema says `delay` ships contradictory instructions (review F1).
+    label: 'tool description ACTIONS line',
+    baseline: 'next_check in:"30m" (own paced run only)',
+    patched: `next_check ${CRON_NEXT_CHECK_PARAM}:"30m" (own paced run only)`,
     count: 1,
   },
 ];

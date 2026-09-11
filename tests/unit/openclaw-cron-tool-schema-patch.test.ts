@@ -33,6 +33,7 @@ const CRON_TOOL_BASELINE = [
   '\t\t"in",',
   '\t\t"text",',
   '\t]) : schema;',
+  'ACTIONS: status | list [includeDisabled,limit?,offset?] | next_check in:"30m" (own paced run only) | wake text',
   'PACED LOOP: recurring job + pacing{min?,max?} durations ("15m","4h"; at least one). Inside its run, job calls next_check in:"<dur>" to set the next delay',
   '\t\t\t\t\tcase "next_check": {',
   '\t\t\t\t\t\tconst rawDuration = readToolStringParam(params, "in", { required: true });',
@@ -66,9 +67,13 @@ describe('openclaw cron tool schema patch (CLWX-141)', () => {
     expect(cron.source).not.toMatch(/^\t\tin: Type\.Optional/m);
     expect(cron.source).toContain(`\t\t${CRON_NEXT_CHECK_PARAM}: Type.Optional(Type.String({ description: "Relative duration for action=\\"next_check\\"`);
     expect(cron.source).toContain(`Type.Omit(schema, [\n\t\t"${CRON_NEXT_CHECK_PARAM}",`);
-    // The handler accepts the new name and still honours the old one for in-flight prompts.
-    expect(cron.source).toContain(`readToolStringParam(params, "${CRON_NEXT_CHECK_PARAM}") ?? readToolStringParam(params, "in", { required: true })`);
+    // The handler accepts the new name and still honours the old one for jobs persisted before the
+    // rename; the "required" error names the declared parameter, not the retired one.
+    expect(cron.source).toContain(`readToolStringParam(params, "${CRON_NEXT_CHECK_PARAM}") ?? readToolStringParam(params, "in", { required: true, label: "${CRON_NEXT_CHECK_PARAM}" })`);
     expect(cron.source).toContain(`job calls next_check ${CRON_NEXT_CHECK_PARAM}:"<dur>"`);
+    expect(cron.source).toContain(`next_check ${CRON_NEXT_CHECK_PARAM}:"30m" (own paced run only)`);
+    // No model-facing text may still tell the model to send `in`.
+    expect(cron.source).not.toContain('next_check in:');
     expect(cron.source).not.toContain('cron next_check in must be');
     expect(cron.source.match(new RegExp(`cron next_check ${CRON_NEXT_CHECK_PARAM} must be a positive duration`, 'g'))).toHaveLength(2);
 
@@ -129,8 +134,15 @@ describe('openclaw cron tool schema patch (CLWX-141)', () => {
     const commandChunks = fs.readdirSync(distDir).filter((n) => /^commands-handlers\.runtime-.*\.js$/.test(n));
     const baselineCommands = commandChunks.filter((n) => transformCommandsHandlersSource(fs.readFileSync(path.join(distDir, n), 'utf8')).changed);
     expect(baselineCommands).toHaveLength(1);
-    // After the transform, no built-in cron tool schema property is spelled `in` any more.
+    // After the transform, no built-in cron tool schema property is spelled `in` any more, and no
+    // model-facing text in either real chunk still asks for it.
     const patched = transformCronToolSource(fs.readFileSync(path.join(distDir, baselineChunks[0]), 'utf8')).source;
     expect(patched).not.toMatch(/^\t\tin: Type\./m);
+    expect(patched).not.toContain('next_check in:');
+    expect(patched).not.toContain('cron next_check in must be');
+    expect(patched).toContain('readToolStringParam(params, "in", { required: true, label: "delay" })');
+    const patchedCommands = transformCommandsHandlersSource(fs.readFileSync(path.join(distDir, baselineCommands[0]), 'utf8')).source;
+    expect(patchedCommands).not.toContain('with in:"<duration>"');
+    expect(patchedCommands).toContain('with delay:"<duration>"');
   });
 });

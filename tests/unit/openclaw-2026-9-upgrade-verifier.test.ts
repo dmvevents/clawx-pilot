@@ -53,6 +53,41 @@ function bashToolsPtyFixture(guarded: boolean): string {
   ].join('\n');
 }
 
+// CLWX-141: the bundled automations (cron) tool with its next_check parameter either in the
+// upstream shape (`in`) or the shipped, patched shape (`delay`). Tabs match upstream's emitter.
+function cronToolFixture(patched: boolean): string {
+  const p = patched ? 'delay' : 'in';
+  const handler = patched
+    ? '\t\t\t\t\t\tconst rawDuration = readToolStringParam(params, "delay") ?? readToolStringParam(params, "in", { required: true, label: "delay" });'
+    : '\t\t\t\t\t\tconst rawDuration = readToolStringParam(params, "in", { required: true });';
+  return [
+    'function createCronToolSchema(managementOnly) {',
+    '\tconst schema = Type.Object({',
+    `\t\t${p}: Type.Optional(Type.String({ description: "Relative duration for action=\\"next_check\\" (for example, \\"15m\\")" })),`,
+    '\t}, { additionalProperties: true });',
+    '\treturn managementOnly ? Type.Omit(schema, [',
+    `\t\t"${p}",`,
+    '\t\t"text",',
+    '\t]) : schema;',
+    '}',
+    `const DESCRIPTION = \`ACTIONS: status | next_check ${p}:"30m" (own paced run only) | wake text\nPACED LOOP: job calls next_check ${p}:"<dur>" to set the next delay\`;`,
+    'async function handleNextCheck(params, opts) {',
+    handler,
+    `\t\t\t\t\t\tif (!rawDuration) throw new Error("cron next_check ${p} must be a positive duration");`,
+    `\t\t\t\t\t\tif (delayMs <= 0) throw new Error("cron next_check ${p} must be a positive duration");`,
+    '}',
+  ].join('\n');
+}
+
+function commandsHandlersFixture(patched: boolean): string {
+  const p = patched ? 'delay' : 'in';
+  return [
+    'function buildSelfPacedLines(params, lines) {',
+    `\tif (params.selfPaced) lines.push(\`Before replying, ALWAYS call the \${AUTOMATIONS_TOOL_NAME} tool action:"next_check" with ${p}:"<duration>" — pick the next check\`);`,
+    '}',
+  ].join('\n');
+}
+
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -87,6 +122,8 @@ async function makeOpenClawFixture(overrides: Record<string, string> = {}) {
   if (overrides.pty !== null) {
     await writeFile(path.join(distDir, 'bash-tools-fixture.js'), overrides.pty ?? bashToolsPtyFixture(true), 'utf8');
   }
+  await writeFile(path.join(distDir, 'cron-tool-fixture.js'), overrides.cron ?? cronToolFixture(true), 'utf8');
+  await writeFile(path.join(distDir, 'commands-handlers.runtime-fixture.js'), overrides.commands ?? commandsHandlersFixture(true), 'utf8');
   const moduleFiles = {
     'plugin-sdk/model-catalog-pricing.js': 'export function normalizeOpenRouterModelPricing() {}\nexport function normalizeModelPricingCatalog() {}\n',
     'plugin-sdk/agent-runtime.js': 'export function resolveThinkingDefault() {}\nexport function resolveThinkingDefaultWithRuntimeCatalog() {}\n',
@@ -509,6 +546,17 @@ describe('OpenClaw 2026.9 upgrade verifier', () => {
   it('makes the bundle disposition fail when OpenClaw 2026.9 PTY remains unguarded', async () => {
     const openclawDir = await makeOpenClawFixture({ pty: bashToolsPtyFixture(false) });
     await expect(verifyOpenClaw20269Upgrade(openclawDir, { requireBundlePtyGuard: true })).rejects.toThrow(/Windows PTY guard missing/);
+  });
+
+  it('makes the bundle disposition fail when the automations tool still declares the `in` parameter (CLWX-141)', async () => {
+    const unpatched = await makeOpenClawFixture({ cron: cronToolFixture(false), commands: commandsHandlersFixture(false) });
+    await expect(verifyOpenClaw20269Upgrade(unpatched, { requireCronToolSchemaPatch: true })).rejects.toThrow(/cron tool schema patch .* missing/);
+    // Only the prompt chunk left unpatched must fail as well — a half-shipped rename is not a pass.
+    const halfShipped = await makeOpenClawFixture({ commands: commandsHandlersFixture(false) });
+    await expect(verifyOpenClaw20269Upgrade(halfShipped, { requireCronToolSchemaPatch: true })).rejects.toThrow(/cron tool schema patch .* missing/);
+    // Control: the same unpatched fixture is NOT rejected for this reason when the option is off,
+    // so the two rejections above are attributable to `requireCronToolSchemaPatch` alone.
+    await expect(verifyOpenClaw20269Upgrade(unpatched)).rejects.not.toThrow(/cron tool schema patch/);
   });
 
   it('fails closed when the old chat.history catalog await is present', async () => {
