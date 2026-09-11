@@ -171,6 +171,103 @@ export function matchesExpectedQuestionFingerprint(
   return { ok: required > 0 && matched >= required, matched, required };
 }
 
+/** Comparable option text: NBSP/whitespace collapsed, case-insensitive. */
+export function normalizeChoiceText(value: unknown): string {
+  return String(value ?? '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+async function readComboboxValue(item: Locator): Promise<string> {
+  for (const sel of ['[role="combobox"]', 'input[role="combobox"]', '[aria-selected="true"]', '[data-automation-id*="dropdown" i]']) {
+    const el = item.locator(sel).first();
+    if ((await el.count().catch(() => 0)) === 0) continue;
+    const text = await el.innerText({ timeout: 500 }).catch(() => '');
+    if (text.trim()) return text;
+    const value = await el.inputValue({ timeout: 500 }).catch(() => '');
+    if (value.trim()) return value;
+  }
+  return '';
+}
+
+export type DropdownChoiceResult = { ok: boolean; reason?: string; via?: 'select' | 'combobox' };
+
+/**
+ * CLWX-62: select one option of a DROPDOWN single-choice question.
+ *
+ * Microsoft Forms renders long single-choice lists (the Daily Report's
+ * 454-school "Name of school") as a dropdown, not radios. Tiers, per the
+ * CLWX-64 selector rules: (1) native <select> by exact label; (2) ARIA
+ * combobox / haspopup trigger, options read from the visible listbox (Forms
+ * portals it outside the question item), exact normalized text match, one
+ * type-to-filter retry for virtualized lists. Fail-safe: no exact match or
+ * more than one exact match closes the list (Escape) and reports a typed
+ * reason; a selection that the control does not echo back is reported, not
+ * assumed. Never presses Enter or clicks anything outside the option list.
+ */
+export async function selectDropdownChoice(
+  page: Page,
+  item: Locator,
+  target: string,
+  timeoutMs: number,
+): Promise<DropdownChoiceResult> {
+  const want = normalizeChoiceText(target);
+  if (!want) return { ok: false, reason: 'empty option value' };
+
+  const select = item.locator('select').first();
+  if ((await select.count().catch(() => 0)) > 0) {
+    const picked = await select.selectOption({ label: target }, { timeout: timeoutMs }).catch(() => null);
+    return picked && picked.length > 0
+      ? { ok: true, via: 'select' }
+      : { ok: false, reason: `option not found in dropdown: "${target}"` };
+  }
+
+  const trigger = item.locator('[role="combobox"], [aria-haspopup="listbox"], button[aria-expanded]').first();
+  if ((await trigger.count().catch(() => 0)) === 0) {
+    return { ok: false, reason: `option not found: "${target}"` };
+  }
+  await trigger.click({ timeout: timeoutMs });
+  const listbox = page.locator('[role="listbox"]:visible').last();
+  try {
+    await listbox.waitFor({ state: 'visible', timeout: timeoutMs });
+  } catch {
+    await page.keyboard.press('Escape').catch(() => null);
+    return { ok: false, reason: `dropdown did not open for "${target}"` };
+  }
+
+  const readMatches = async () => {
+    const options = listbox.locator('[role="option"]');
+    const texts = await options.allInnerTexts().catch(() => [] as string[]);
+    const matches = texts.map((t, i) => ({ i, t })).filter((x) => normalizeChoiceText(x.t) === want);
+    return { options, texts, matches };
+  };
+  let { options, texts, matches } = await readMatches();
+  if (matches.length === 0) {
+    // Virtualized lists only render a window of options; Forms filters as you type.
+    const input = item.locator('input[role="combobox"], [role="combobox"] input, input[type="text"]').first();
+    if ((await input.count().catch(() => 0)) > 0) {
+      await input.fill(target, { timeout: timeoutMs }).catch(() => null);
+      await page.waitForTimeout(300);
+      ({ options, texts, matches } = await readMatches());
+    }
+  }
+  if (matches.length !== 1) {
+    await page.keyboard.press('Escape').catch(() => null);
+    return matches.length === 0
+      ? { ok: false, reason: `option not found in dropdown (${texts.length} options rendered): "${target}"` }
+      : { ok: false, reason: `ambiguous dropdown option (${matches.length} exact matches): "${target}"` };
+  }
+  await options.nth(matches[0].i).click({ timeout: timeoutMs });
+  await page.waitForTimeout(200);
+  const shown = normalizeChoiceText(await readComboboxValue(item));
+  if (shown !== want && !shown.includes(want)) {
+    return { ok: false, reason: `dropdown selection not confirmed for "${target}" (control shows "${shown.slice(0, 80)}")` };
+  }
+  return { ok: true, via: 'combobox' };
+}
+
 export class FormsDriver {
   private browser: Browser | null = null;
   private page: Page | null = null;
@@ -486,7 +583,12 @@ export class FormsDriver {
             await aria.click({ timeout: this.fieldTimeoutMs });
             return { ok: true };
           }
-          return { ok: false, reason: `option not found: "${target}"` };
+          // CLWX-62 (2026-09-11): Microsoft Forms renders LARGE single-choice
+          // questions (the Daily Report's 454-school "Name of school") as a
+          // dropdown/combobox, never as radios, so the branches above cannot
+          // fill them. Third tier: native <select> or ARIA combobox with exact
+          // option text, verified after selection, fail-safe on ambiguity.
+          return selectDropdownChoice(this.page, item, target, this.fieldTimeoutMs);
         }
         case 'multi_choice': {
           const targets = Array.isArray(value) ? value : [String(value)];
