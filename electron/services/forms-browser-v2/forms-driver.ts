@@ -221,7 +221,95 @@ async function readComboboxValue(item: Locator): Promise<string> {
   return '';
 }
 
-export type DropdownChoiceResult = { ok: boolean; reason?: string; via?: 'select' | 'combobox' };
+export type DropdownChoiceResult = { ok: boolean; reason?: string; via?: 'select' | 'combobox' | 'virtualized-radio' };
+
+/**
+ * CLWX-62 — select an option from a LARGE single-choice question whose radio
+ * list is virtualized.
+ *
+ * Observed live on the production Daily Report (2026-09-11, installed moe.36):
+ * "Name of school" has 454 options in the schema but renders as ~80
+ * `input[type=radio]` elements at a time, each wrapped in a `<label>` whose
+ * text is exactly the school name, with an EMPTY aria-label and
+ * `aria-labelledby="QuestionChoiceOptionNN"`. There is no combobox, no
+ * `<select>`, no listbox, and no scroll container inside the question item
+ * (its scrollHeight equals its clientHeight); the window of rendered options
+ * changes as the PAGE scrolls across the question's 4000px extent. So the
+ * pre-existing aria-label tier could never match, and the target option is
+ * usually not in the DOM at all when filling starts.
+ *
+ * Strategy: try the rendered window first; then walk the page through the
+ * question's vertical extent in viewport-sized steps, re-querying for a label
+ * whose full text equals the target after each step. On a match, click the
+ * label and verify the associated radio reports checked. Bounded passes, and
+ * the original scroll position is restored on every exit.
+ */
+export async function selectVirtualizedRadioChoice(
+  page: Page,
+  item: Locator,
+  target: string,
+  timeoutMs: number,
+): Promise<DropdownChoiceResult> {
+  const want = normalizeChoiceText(target);
+  if (!want) return { ok: false, reason: 'empty option value' };
+  const anchored = new RegExp(`^\\s*${escapeRegex(target)}\\s*$`, 'i');
+  const originalScroll = await page.evaluate(() => window.scrollY).catch(() => 0);
+  const restore = async () => {
+    await page.evaluate((y) => window.scrollTo(0, y), originalScroll).catch(() => null);
+  };
+
+  const tryClickRendered = async (): Promise<DropdownChoiceResult | null> => {
+    const label = item.locator('label').filter({ hasText: anchored });
+    const count = await label.count().catch(() => 0);
+    if (count === 0) return null;
+    if (count > 1) {
+      await restore();
+      return { ok: false, reason: `ambiguous option (${count} labels match exactly): "${target}"` };
+    }
+    await label.first().click({ timeout: timeoutMs });
+    await page.waitForTimeout(150);
+    const checked = await label
+      .first()
+      .evaluate((el) => {
+        const radio = el.querySelector('input[type="radio"], [role="radio"]')
+          ?? (el.parentElement ? el.parentElement.querySelector('input[type="radio"], [role="radio"]') : null);
+        if (!radio) return null;
+        return (radio as HTMLInputElement).checked === true || radio.getAttribute('aria-checked') === 'true';
+      })
+      .catch(() => null);
+    await restore();
+    if (checked === false) {
+      return { ok: false, reason: `option "${target}" was clicked but the control does not report it selected` };
+    }
+    return { ok: true, via: 'virtualized-radio' };
+  };
+
+  const first = await tryClickRendered();
+  if (first) return first;
+
+  // Walk the page across the question's extent so the virtualizer renders each
+  // window of options in turn.
+  const box = await item.boundingBox().catch(() => null);
+  const viewport = await page.evaluate(() => window.innerHeight).catch(() => 800);
+  const step = Math.max(200, Math.floor(viewport * 0.8));
+  const startY = box ? Math.max(0, originalScroll + box.y - viewport * 0.2) : originalScroll;
+  const endY = box ? originalScroll + box.y + box.height : originalScroll + step * 40;
+  let rendered = 0;
+  let passes = 0;
+  for (let y = startY; y <= endY && passes < 60; y += step, passes += 1) {
+    await page.evaluate((top) => window.scrollTo(0, top), y).catch(() => null);
+    await page.waitForTimeout(120);
+    const hit = await tryClickRendered();
+    if (hit) return hit;
+    rendered = Math.max(rendered, await item.locator('input[type="radio"], [role="radio"]').count().catch(() => 0));
+  }
+  await restore();
+  return {
+    ok: false,
+    reason: `option not found in the virtualized choice list after ${passes} scroll passes `
+      + `(~${rendered} options rendered per window): "${target}"`,
+  };
+}
 
 /**
  * CLWX-62: select one option of a DROPDOWN single-choice question.
@@ -689,12 +777,20 @@ export class FormsDriver {
             await aria.click({ timeout: this.fieldTimeoutMs });
             return { ok: true };
           }
-          // CLWX-62 (2026-09-11): Microsoft Forms renders LARGE single-choice
-          // questions (the Daily Report's 454-school "Name of school") as a
-          // dropdown/combobox, never as radios, so the branches above cannot
-          // fill them. Third tier: native <select> or ARIA combobox with exact
-          // option text, verified after selection, fail-safe on ambiguity.
-          return selectDropdownChoice(this.page, item, target, this.fieldTimeoutMs);
+          // CLWX-62 (2026-09-11): a LARGE single-choice question (the Daily
+          // Report's 454-school "Name of school") is neither of the shapes
+          // above. Measured live on the production form: it renders ~80
+          // virtualized radios with EMPTY aria-labels, and the target option is
+          // usually not in the DOM until the page scrolls across the question.
+          // Tier 3 walks that virtualized list; tier 4 covers a real dropdown
+          // (native select or ARIA combobox) for forms that use one.
+          const virtualized = await selectVirtualizedRadioChoice(this.page, item, target, this.fieldTimeoutMs);
+          if (virtualized.ok) return virtualized;
+          const dropdown = await selectDropdownChoice(this.page, item, target, this.fieldTimeoutMs);
+          if (dropdown.ok) return dropdown;
+          // Report the more informative failure: the virtualized walk knows how
+          // many options it saw, the dropdown tier only that no popup existed.
+          return /option not found: /.test(dropdown.reason ?? '') ? virtualized : dropdown;
         }
         case 'multi_choice': {
           const targets = Array.isArray(value) ? value : [String(value)];
