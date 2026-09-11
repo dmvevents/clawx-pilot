@@ -26,6 +26,8 @@ function fakeVirtualizedQuestion(opts: {
   questionHeight?: number;
   checkedAfterClick?: boolean | null;
   duplicateTarget?: string;
+  radiogroupCount?: number;
+  throwOnClick?: boolean;
 }) {
   const windowSize = opts.windowSize ?? 80;
   const pxPerOption = opts.pxPerOption ?? 50;
@@ -43,14 +45,26 @@ function fakeVirtualizedQuestion(opts: {
     filter: ({ hasText }: { hasText: RegExp }) => labelLocator(hasText),
     first: () => ({
       click: async () => {
+        if (opts.throwOnClick) throw new Error('click failed');
         const hit = visibleOptions().find((t) => matcher!.test(t));
         clicked.push(hit ?? '<none>');
       },
       evaluate: async () => (opts.checkedAfterClick === undefined ? true : opts.checkedAfterClick),
     }),
   });
+  const scopeLocator = {
+    locator: (sel: string) => {
+      if (sel === 'label') return labelLocator();
+      if (sel.includes('radio')) return { count: async () => visibleOptions().length };
+      return { count: async () => 0 };
+    },
+  };
   const item = {
     locator: (sel: string) => {
+      if (sel === '[role="radiogroup"]') {
+        const n = opts.radiogroupCount ?? 0;
+        return { count: async () => n, first: () => scopeLocator };
+      }
       if (sel === 'label') return labelLocator();
       if (sel.includes('radio')) return { count: async () => visibleOptions().length };
       return { count: async () => 0 };
@@ -119,10 +133,35 @@ describe('selectVirtualizedRadioChoice (CLWX-62, live-measured shape)', () => {
     expect(r.reason).toMatch(/does not report it selected/);
   });
 
-  it('accepts a control that cannot report its state (null) rather than failing a real selection', async () => {
+  /** Review lane B MAJOR-2: an unverifiable selection must FAIL, not pass. */
+  it('fails when no radio can be found to confirm the selection', async () => {
     const f = fakeVirtualizedQuestion({ options: SCHOOLS, checkedAfterClick: null });
     const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[3], 1000);
-    expect(r.ok).toBe(true);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/no radio could be found to confirm/);
+  });
+
+  /** Review lane B MINOR-2: an over-scoped question item is refused, not guessed. */
+  it('refuses when the resolved item spans more than one radiogroup', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, radiogroupCount: 3 });
+    const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[3], 1000);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/question scope is ambiguous \(3 radiogroups/);
+    expect(f.clicked()).toEqual([]);
+  });
+
+  it('scopes the option search to the single radiogroup when the question exposes one', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, radiogroupCount: 1 });
+    const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[7], 1000);
+    expect(r).toEqual({ ok: true, via: 'virtualized-radio' });
+    expect(f.clicked()).toEqual([SCHOOLS[7]]);
+  });
+
+  /** Review lane B MINOR-1: a throwing click must not leave the page scrolled. */
+  it('restores the scroll position even when the click throws', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, throwOnClick: true });
+    await expect(selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[400], 1000)).rejects.toThrow(/click failed/);
+    expect(f.finalScroll()).toBe(0);
   });
 
   it('refuses an empty target', async () => {

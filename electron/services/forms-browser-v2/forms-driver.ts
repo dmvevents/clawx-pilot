@@ -258,12 +258,25 @@ export async function selectVirtualizedRadioChoice(
     await page.evaluate((y) => window.scrollTo(0, y), originalScroll).catch(() => null);
   };
 
+  // Review lane B (MINOR-2): scope the option search to the ONE radiogroup this
+  // question owns when it exposes one. `findQuestionItem` can resolve a
+  // container spanning several questions (the getByRole('listitem') tier
+  // matches implicit roles), and that container is the only route by which
+  // another question's option could be clicked. More than one radiogroup means
+  // the item is over-scoped: refuse rather than guess.
+  const radiogroups = item.locator('[role="radiogroup"]');
+  const groupCount = await radiogroups.count().catch(() => 0);
+  if (groupCount > 1) {
+    return { ok: false, reason: `question scope is ambiguous (${groupCount} radiogroups resolved) for "${target}"` };
+  }
+  const scope = groupCount === 1 ? radiogroups.first() : item;
+  const optionCount = async () => scope.locator('input[type="radio"], [role="radio"]').count().catch(() => 0);
+
   const tryClickRendered = async (): Promise<DropdownChoiceResult | null> => {
-    const label = item.locator('label').filter({ hasText: anchored });
+    const label = scope.locator('label').filter({ hasText: anchored });
     const count = await label.count().catch(() => 0);
     if (count === 0) return null;
     if (count > 1) {
-      await restore();
       return { ok: false, reason: `ambiguous option (${count} labels match exactly): "${target}"` };
     }
     await label.first().click({ timeout: timeoutMs });
@@ -277,33 +290,57 @@ export async function selectVirtualizedRadioChoice(
         return (radio as HTMLInputElement).checked === true || radio.getAttribute('aria-checked') === 'true';
       })
       .catch(() => null);
-    await restore();
-    if (checked === false) {
-      return { ok: false, reason: `option "${target}" was clicked but the control does not report it selected` };
+    // Review lane B (MAJOR-2): `null` means the radio could not be found to
+    // verify, so the selection is UNVERIFIED. Treating that as success let the
+    // whole verification silently no-op; it is a failure now.
+    if (checked !== true) {
+      return {
+        ok: false,
+        reason: checked === null
+          ? `option "${target}" was clicked but no radio could be found to confirm the selection`
+          : `option "${target}" was clicked but the control does not report it selected`,
+      };
     }
     return { ok: true, via: 'virtualized-radio' };
   };
 
-  const first = await tryClickRendered();
-  if (first) return first;
-
-  // Walk the page across the question's extent so the virtualizer renders each
-  // window of options in turn.
-  const box = await item.boundingBox().catch(() => null);
-  const viewport = await page.evaluate(() => window.innerHeight).catch(() => 800);
-  const step = Math.max(200, Math.floor(viewport * 0.8));
-  const startY = box ? Math.max(0, originalScroll + box.y - viewport * 0.2) : originalScroll;
-  const endY = box ? originalScroll + box.y + box.height : originalScroll + step * 40;
-  let rendered = 0;
+  // Review lane B (MINOR-1): the click inside tryClickRendered can throw past a
+  // bare restore() call, leaving the principal's page scrolled. Every exit —
+  // including a throw — restores the original position.
   let passes = 0;
-  for (let y = startY; y <= endY && passes < 60; y += step, passes += 1) {
-    await page.evaluate((top) => window.scrollTo(0, top), y).catch(() => null);
-    await page.waitForTimeout(120);
-    const hit = await tryClickRendered();
-    if (hit) return hit;
-    rendered = Math.max(rendered, await item.locator('input[type="radio"], [role="radio"]').count().catch(() => 0));
+  let rendered = await optionCount();
+  try {
+    const first = await tryClickRendered();
+    if (first) return first;
+
+    // Walk the page across the question's extent so the virtualizer renders each
+    // window of options in turn.
+    const box = await item.boundingBox().catch(() => null);
+    const viewport = await page.evaluate(() => window.innerHeight).catch(() => 800);
+    const step = Math.max(200, Math.floor(viewport * 0.8));
+    const startY = box ? Math.max(0, originalScroll + box.y - viewport * 0.2) : originalScroll;
+    const endY = box ? originalScroll + box.y + box.height : originalScroll + step * 40;
+    for (let y = startY; y <= endY && passes < 60; y += step, passes += 1) {
+      await page.evaluate((top) => window.scrollTo(0, top), y).catch(() => null);
+      // Review lane B (MINOR-3): poll for the virtualizer to re-render instead
+      // of sleeping a flat 120 ms, which is unreliable on a loaded VM. A window
+      // that never changes simply moves on; the walk still fails typed.
+      const before = rendered;
+      for (let settle = 0; settle < 8; settle += 1) {
+        await page.waitForTimeout(60);
+        const now = await optionCount();
+        if (now !== before) {
+          rendered = Math.max(rendered, now);
+          break;
+        }
+      }
+      const hit = await tryClickRendered();
+      if (hit) return hit;
+      rendered = Math.max(rendered, await optionCount());
+    }
+  } finally {
+    await restore();
   }
-  await restore();
   return {
     ok: false,
     reason: `option not found in the virtualized choice list after ${passes} scroll passes `
@@ -765,27 +802,34 @@ export class FormsDriver {
         }
         case 'single_choice': {
           const target = String(value);
-          // Radio options are usually <input type="radio"> with sibling label, OR
-          // role="radio" with aria-label. Try by visible text first.
-          const radio = item.locator('label').filter({ hasText: new RegExp(`^\\s*${escapeRegex(target)}\\s*$`, 'i') }).first();
-          if ((await radio.count()) > 0) {
-            await radio.click({ timeout: this.fieldTimeoutMs });
-            return { ok: true };
-          }
-          const aria = item.locator(`[role="radio"][aria-label="${cssAttrValue(target)}"]`).first();
-          if ((await aria.count()) > 0) {
-            await aria.click({ timeout: this.fieldTimeoutMs });
-            return { ok: true };
-          }
-          // CLWX-62 (2026-09-11): a LARGE single-choice question (the Daily
-          // Report's 454-school "Name of school") is neither of the shapes
-          // above. Measured live on the production form: it renders ~80
-          // virtualized radios with EMPTY aria-labels, and the target option is
-          // usually not in the DOM until the page scrolls across the question.
-          // Tier 3 walks that virtualized list; tier 4 covers a real dropdown
-          // (native select or ARIA combobox) for forms that use one.
+          // CLWX-62 (2026-09-11), measured live on the production Daily Report:
+          // "Name of school" renders ~80 of 454 options as radios wrapped in a
+          // <label> whose text is the option, with an EMPTY aria-label, no
+          // combobox/select/listbox, and the target option absent from the DOM
+          // until the PAGE scrolls across the question.
+          //
+          // Tier 1 is the virtualized walk, which also covers an ordinary
+          // already-rendered radio list: it refuses exact duplicates and it
+          // verifies the radio reports checked. Review lane B: the previous
+          // label tier used the SAME anchored locator but applied .first()
+          // before .count(), so the duplicate refusal could never fire, and it
+          // returned ok purely because a click was dispatched — it shadowed
+          // every guarantee this path adds. It is gone rather than reordered.
           const virtualized = await selectVirtualizedRadioChoice(this.page, item, target, this.fieldTimeoutMs);
           if (virtualized.ok) return virtualized;
+          // Tier 2: role="radio" carrying the option in aria-label (some renderings).
+          const aria = item.locator(`[role="radio"][aria-label="${cssAttrValue(target)}"]`);
+          const ariaCount = await aria.count().catch(() => 0);
+          if (ariaCount === 1) {
+            await aria.first().click({ timeout: this.fieldTimeoutMs });
+            const ariaChecked = await aria.first().getAttribute('aria-checked').catch(() => null);
+            if (ariaChecked === 'true') return { ok: true };
+            return { ok: false, reason: `option "${target}" was clicked but the control does not report it selected` };
+          }
+          if (ariaCount > 1) {
+            return { ok: false, reason: `ambiguous option (${ariaCount} aria-label matches): "${target}"` };
+          }
+          // Tier 3: a real dropdown (native select or ARIA combobox).
           const dropdown = await selectDropdownChoice(this.page, item, target, this.fieldTimeoutMs);
           if (dropdown.ok) return dropdown;
           // Report the more informative failure: the virtualized walk knows how
