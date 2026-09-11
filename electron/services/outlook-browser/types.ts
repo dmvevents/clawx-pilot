@@ -43,6 +43,13 @@ export interface InboxMessage {
    * in newest-first order like any other row.
    */
   hasDraft?: boolean;
+  /**
+   * CLWX-143: draft-marked row with NO preview text, so its from/subject split
+   * is not trustworthy — the row Outlook renders for an OPEN compose has that
+   * shape. The row is still listed (hiding rows is the defect this card fixes);
+   * reply and forward refuse on it with `notFoundReason: 'ambiguous_draft_row'`.
+   */
+  ambiguousDraftRow?: boolean;
 }
 
 export interface ReadInboxResult {
@@ -192,7 +199,15 @@ export interface EmailAttachmentInfo {
  * that greps for it eventually greps a lie. Absent means "no reason recorded",
  * which callers must treat as the unhelpful case, never as a refusal.
  */
-export type MessageLocateFailure = 'not_in_list' | 'stale_read_guard';
+/**
+ * Why an id-scoped action could not reach its message.
+ * - `not_in_list`: the row was never found (or the click failed).
+ * - `stale_read_guard`: the row was clicked but the reading pane would not confirm it (CLWX-46).
+ * - `ambiguous_draft_row`: CLWX-143 — every visible row with this id is draft-marked with no
+ *   preview, so its field split cannot be trusted and a WRITE would risk the wrong target or the
+ *   principal's own draft. Reads are unaffected; the row is still listed.
+ */
+export type MessageLocateFailure = 'not_in_list' | 'stale_read_guard' | 'ambiguous_draft_row';
 
 export interface ReadEmailResult {
   status: 'ok' | 'not_found' | 'needs_signin';

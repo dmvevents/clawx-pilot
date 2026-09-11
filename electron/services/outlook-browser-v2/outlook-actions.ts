@@ -110,8 +110,8 @@ type VisibleInboxRow = {
   unread: boolean;
   /** CLWX-143: the conversation holds a saved (unsent) draft; it is still incoming mail. */
   hasDraft: boolean;
-  /** CLWX-143: looks like the pseudo row of an OPEN compose, not a conversation. */
-  pseudoCompose: boolean;
+  /** CLWX-143: draft-marked row with no preview text; its field split is not trustworthy. */
+  ambiguousDraftRow: boolean;
 };
 
 // Predicate moved to ./search-helpers.ts for unit testing without Playwright.
@@ -276,10 +276,11 @@ function isInboxMessageCandidateRow(row: VisibleInboxRow): boolean {
   const sender = normalizeComparableText(row.sender);
   const subject = normalizeComparableText(row.subject);
   if (!sender || !subject) return false;
-  // The pseudo row of an OPEN compose: the marker occupies the sender slot, so
-  // every later field is shifted and the split cannot be trusted — returning it
-  // would show the draft body as a subject (review lane A, 2026-09-11).
-  if (row.pseudoCompose) return false;
+  // A draft-marked row with no preview (row.ambiguousDraftRow) is deliberately
+  // NOT hidden: dropping rows is the mail-loss defect this card exists to fix,
+  // and that shape cannot be told apart from a real preview-less conversation
+  // without a live DOM capture. Its uncertainty is handled where it can cause
+  // harm instead — reply and forward refuse on such a row.
   // Defence in depth for row shapes the parser has not seen: a sender or a
   // subject that IS the marker is never a message.
   return !(/^\[?draft\]?$/i.test(sender) || /^\[?draft\]?$/i.test(subject));
@@ -433,6 +434,7 @@ export class OutlookActions {
       receivedAt: r.received,
       unread: r.unread,
       hasDraft: r.hasDraft,
+      ambiguousDraftRow: r.ambiguousDraftRow,
     }));
 
     return {
@@ -933,6 +935,17 @@ export class OutlookActions {
       };
     }
     await this.dismissBlockingDialog(page);
+    // CLWX-143: refuse before touching the UI when every visible row with this
+    // id is a draft-marked row with no preview, so the write target is uncertain.
+    const ambiguousTarget = await this.ambiguousWriteTargetRefusal(page, args.id);
+    if (ambiguousTarget) {
+      return {
+        status: 'not_found',
+        draftLeftOpen: false,
+        notFoundReason: 'ambiguous_draft_row',
+        message: ambiguousTarget,
+      };
+    }
     // CLWX-81: try the current view first, then fall back to the Inbox reset.
     const located = await this.openMessageByIdInCurrentViewOrInbox(page, args.id);
     if (located.outcome === 'needs_signin') {
@@ -1047,6 +1060,17 @@ export class OutlookActions {
       };
     }
     await this.dismissBlockingDialog(page);
+    // CLWX-143: refuse before touching the UI when every visible row with this
+    // id is a draft-marked row with no preview, so the write target is uncertain.
+    const ambiguousTarget = await this.ambiguousWriteTargetRefusal(page, args.id);
+    if (ambiguousTarget) {
+      return {
+        status: 'not_found',
+        draftLeftOpen: false,
+        notFoundReason: 'ambiguous_draft_row',
+        message: ambiguousTarget,
+      };
+    }
     // CLWX-81: try the current view first, then fall back to the Inbox reset.
     const located = await this.openMessageByIdInCurrentViewOrInbox(page, args.id);
     if (located.outcome === 'needs_signin') {
@@ -1574,7 +1598,7 @@ export class OutlookActions {
             received: parsed.receivedAt,
             unread: parsed.unread,
             hasDraft: parsed.hasDraft,
-            pseudoCompose: parsed.pseudoCompose,
+            ambiguousDraftRow: parsed.ambiguousDraftRow,
           });
         }
         return out;
@@ -1640,6 +1664,51 @@ export class OutlookActions {
         ].join(' ').replace(/\\s+/g, ' ').trim().slice(0, 200))
         .join('\\n'))()
     `).catch(() => '') as Promise<string>;
+  }
+
+  /**
+   * CLWX-143 write guard. Read-only probe: is the row this id resolves to a
+   * trustworthy write target?
+   *
+   * A draft-marked row with no preview text has an untrustworthy field split —
+   * consuming the marker shifts every later field, and the row Outlook renders
+   * for an OPEN compose has exactly that shape, so its "subject" can be the
+   * draft body. The row stays visible to reads (hiding it would be the mail-loss
+   * defect), but reply and forward refuse on it: replying to the wrong target,
+   * or into someone else's draft, is not recoverable by the principal.
+   *
+   * Returns a refusal message, or null when the target is unambiguous — which
+   * includes the case where an unambiguous row with the same id also exists.
+   */
+  private async ambiguousWriteTargetRefusal(page: Page, id: string): Promise<string | null> {
+    // Same guard as prepareFunctionEvaluate: a surface without `evaluate` gives
+    // no signal, and this net must never turn that into a refusal.
+    if (typeof (page as unknown as { evaluate?: unknown }).evaluate !== 'function') return null;
+    await this.prepareFunctionEvaluate(page);
+    const verdict = await page.evaluate(`
+      (() => {
+        const wantedId = ${JSON.stringify(id)};
+        ${INBOX_ROW_PARSER_BROWSER_SOURCE}
+        const els = Array.from(document.querySelectorAll('[role="option"][aria-label], [role="row"][aria-label]'));
+        let matches = 0;
+        let ambiguous = 0;
+        for (let i = 0; i < els.length; i++) {
+          const detail = inboxRowFingerprintDetail(els[i]);
+          if (detail.fp !== wantedId) continue;
+          matches += 1;
+          if (detail.ambiguousDraftRow) ambiguous += 1;
+        }
+        return { matches: matches, ambiguous: ambiguous };
+      })()
+    `).catch(() => null) as { matches: number; ambiguous: number } | null;
+    // An unusable probe result must not refuse: this guard is an extra net over
+    // the locator and the compose-ownership check, and a DOM the probe cannot
+    // read is not evidence of an ambiguous target.
+    if (!verdict || typeof verdict.matches !== 'number' || typeof verdict.ambiguous !== 'number') return null;
+    if (verdict.matches === 0) return null; // not visible here; the locator reports honestly
+    if (verdict.ambiguous === 0 || verdict.ambiguous < verdict.matches) return null;
+    return 'This conversation row shows a saved draft and no message preview, so the assistant cannot tell which item '
+      + 'it would act on. Open the existing draft in Outlook and send, discard or close it, then ask again.';
   }
 
   /**
@@ -1741,8 +1810,6 @@ export class OutlookActions {
           // a row could never be opened by the id read returned.
           const labelFallback = (els[i].getAttribute('aria-label') || '').slice(0, 96);
           if (detail.fp !== wantedId && !(detail.fp === '' && labelFallback === wantedId)) continue;
-          // Never open the pseudo row of an open compose: it is not the message.
-          if (detail.pseudoCompose) continue;
           if (!detail.hasDraft) return i;
           if (draftFallback < 0) draftFallback = i;
         }

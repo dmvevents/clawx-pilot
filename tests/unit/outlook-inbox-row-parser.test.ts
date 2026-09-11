@@ -99,26 +99,33 @@ describe('parseInboxRowTexts', () => {
   });
 
   /**
-   * Review lane A M1 (second pass): consuming the marker shifts every later
-   * field, so the pseudo row Outlook renders for an OPEN compose would have
-   * surfaced with the conversation title as the sender — and, with a body
-   * preview node, the draft body as the subject. A marked row with fewer than
-   * two tokens before the received time is flagged and never returned.
+   * Review lane A M1 and its follow-up: consuming the marker shifts every later
+   * field, so the row Outlook renders for an OPEN compose can present the
+   * conversation title in the from slot and the draft body as the subject. That
+   * shape cannot be told apart from a real preview-less conversation without a
+   * live DOM capture, so the row stays VISIBLE (hiding it is the mail-loss
+   * defect) and is refused as a WRITE target instead. The first attempt keyed
+   * this on the token count before the received time; a reviewer proved that
+   * condition inert, since it implies an empty from-field or subject.
    */
-  it('flags the open-compose pseudo row instead of shifting its fields into a message', () => {
-    const threeNode = parseInboxRowTexts(['[Draft]', 'Karunesh Ramdass Meeting', 'Mon 10:08 PM'], '');
-    expect(threeNode).toMatchObject({ hasDraft: true, pseudoCompose: true });
-    const bare = parseInboxRowTexts(['Draft', 'Karunesh Ramdass Meeting', 'Mon 10:08 PM'], '');
-    expect(bare.pseudoCompose).toBe(true);
-    const noDate = parseInboxRowTexts(['[Draft]', 'Karunesh Ramdass Meeting'], '');
-    expect(noDate.pseudoCompose).toBe(true);
+  it('marks a draft row with no preview as an untrustworthy WRITE target, in every shape a compose row can take', () => {
+    for (const texts of [
+      ['[Draft]', 'Karunesh Ramdass Meeting', 'Mon 10:08 PM'],
+      ['Draft', 'Karunesh Ramdass Meeting', 'Mon 10:08 PM'],
+      ['[Draft]', 'Karunesh Ramdass Meeting'],
+      // the 4-node variant a reviewer measured: name and body split across two nodes
+      ['[Draft]', 'Karunesh Ramdass', 'Sure, how about 3pm', 'Mon 10:08 PM'],
+    ]) {
+      const p = parseInboxRowTexts(texts, '');
+      expect(p.hasDraft, texts.join('|')).toBe(true);
+      expect(p.ambiguousDraftRow, texts.join('|')).toBe(true);
+    }
   });
 
-  it('does NOT flag a real conversation that merely holds a saved draft', () => {
+  it('does NOT mark a real conversation that merely holds a saved draft and shows a preview', () => {
     const real = parseInboxRowTexts(DRAFT_MARKED_NEWEST, 'Collapsed [Draft] Corporate Communications');
-    expect(real).toMatchObject({ hasDraft: true, pseudoCompose: false, sender: 'Corporate Communications' });
-    const withoutPreview = parseInboxRowTexts(['CC', '[Draft]', 'Corporate Communications', 'Media Release: All 777 Schools', 'Mon 7 Sep'], '');
-    expect(withoutPreview).toMatchObject({ hasDraft: true, pseudoCompose: false, subject: 'Media Release: All 777 Schools' });
+    expect(real).toMatchObject({ hasDraft: true, ambiguousDraftRow: false, sender: 'Corporate Communications' });
+    expect(real.snippet).toMatch(/^Dear Team MOE/);
   });
 
   it('classifies row-state words', () => {
@@ -146,7 +153,7 @@ function runPayload(source: string, row: unknown) {
   const fn = new Function(
     'row',
     `${source}\nreturn { detail: inboxRowFingerprintDetail(row), fp: inboxRowFingerprint(row), texts: walkRowTexts(row) };`,
-  ) as (row: unknown) => { detail: { fp: string; hasDraft: boolean; pseudoCompose: boolean }; fp: string; texts: string[] };
+  ) as (row: unknown) => { detail: { fp: string; hasDraft: boolean; ambiguousDraftRow: boolean }; fp: string; texts: string[] };
   return fn(row);
 }
 
@@ -165,7 +172,7 @@ describe('INBOX_ROW_PARSER_BROWSER_SOURCE', () => {
     const node = parseInboxRowTexts(DRAFT_MARKED_NEWEST, 'Collapsed [Draft] Corporate Communications');
     expect(browser.texts).toEqual(DRAFT_MARKED_NEWEST);
     expect(browser.fp).toBe(inboxRowId(node.sender, node.subject, node.receivedAt));
-    expect(browser.detail).toEqual({ fp: browser.fp, hasDraft: true, pseudoCompose: false });
+    expect(browser.detail).toEqual({ fp: browser.fp, hasDraft: true, ambiguousDraftRow: false });
     expect(browser.fp.endsWith('|Tue 2:15 PM')).toBe(true);
   });
 

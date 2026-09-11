@@ -41,14 +41,24 @@ export type ParsedInboxRow = {
   hasDraft: boolean;
   unread: boolean;
   /**
-   * The row looks like the pseudo row Outlook renders for an OPEN compose
-   * rather than a conversation: it carries the draft marker and has fewer than
-   * two text tokens before the received time, so its sender/subject split
-   * cannot be trusted — consuming the marker shifts every later field, which
-   * would surface the draft body as a subject. Such a row is never returned as
-   * a message and is never opened (review lane A, 2026-09-11).
+   * The row carries the draft marker but NO preview text, so its field split is
+   * not trustworthy: consuming the marker shifts every later field, and the row
+   * Outlook renders for an OPEN compose has this shape (marker, conversation
+   * title, time) — its "subject" can actually be the draft body.
+   *
+   * Deliberately NOT used to hide the row: dropping it is the mail-loss defect
+   * CLWX-143 exists to fix, and the shape cannot be told apart from a real
+   * preview-less conversation without a live DOM capture (which the stopped QA
+   * VM prevents). It is used only to fail WRITE actions closed — reply and
+   * forward refuse and name the existing draft instead of acting on a row whose
+   * target is uncertain.
+   *
+   * Review history: the first attempt keyed this on the token count before the
+   * received time; a reviewer proved that condition inert (it implies an empty
+   * from-field or subject, which the row classifier already drops) and showed
+   * that tightening it would drop a real draft-holding conversation.
    */
-  pseudoCompose: boolean;
+  ambiguousDraftRow: boolean;
 };
 
 /**
@@ -85,7 +95,6 @@ function parseInboxRowTexts(texts, ariaLabel) {
   var hasDraft = false;
   var snippetParts = [];
   var phase = 'sender';
-  var preDateTokens = 0;
   for (var i = 0; i < texts.length; i++) {
     var t = String(texts[i] || '').trim();
     if (!t) continue;
@@ -94,7 +103,6 @@ function parseInboxRowTexts(texts, ariaLabel) {
       if (isInboxStateToken(t)) continue;
       if (t.length < 3) continue;
       sender = t;
-      preDateTokens++;
       phase = 'subject';
       continue;
     }
@@ -103,7 +111,6 @@ function parseInboxRowTexts(texts, ariaLabel) {
       if (isInboxDateLike(t)) { receivedAt = t; phase = 'snippet'; continue; }
       if (t.length < 3 && !subject) continue;
       subject = subject ? subject + ' ' + t : t;
-      preDateTokens++;
       continue;
     }
     snippetParts.push(t);
@@ -115,14 +122,15 @@ function parseInboxRowTexts(texts, ariaLabel) {
   }
   var label = String(ariaLabel || '');
   if (!hasDraft && /(^|\s)\[?draft\]?(\s|$)/i.test(label)) hasDraft = true;
+  var snippet = snippetParts.join(' ').slice(0, 200);
   return {
     sender: sender,
     subject: subject,
     receivedAt: receivedAt,
-    snippet: snippetParts.join(' ').slice(0, 200),
+    snippet: snippet,
     hasDraft: hasDraft,
     unread: /\bunread\b/i.test(label),
-    pseudoCompose: hasDraft && preDateTokens < 2
+    ambiguousDraftRow: hasDraft && snippet === ''
   };
 }
 function inboxRowId(sender, subject, receivedAt) {
@@ -148,7 +156,7 @@ function walkRowTexts(el) {
 function inboxRowFingerprintDetail(el) {
   var label = el.getAttribute('aria-label') || '';
   var p = parseInboxRowTexts(walkRowTexts(el), label);
-  return { fp: inboxRowId(p.sender, p.subject, p.receivedAt), hasDraft: p.hasDraft, pseudoCompose: p.pseudoCompose };
+  return { fp: inboxRowId(p.sender, p.subject, p.receivedAt), hasDraft: p.hasDraft, ambiguousDraftRow: p.ambiguousDraftRow };
 }
 function inboxRowFingerprint(el) {
   return inboxRowFingerprintDetail(el).fp;
