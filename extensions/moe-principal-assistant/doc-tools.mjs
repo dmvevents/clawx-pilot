@@ -1563,7 +1563,42 @@ export async function readXlsx({ path: inputPath, sheet, maxRows = 500 } = {}) {
     rows,
     totalRows: aoa.length,
     truncated,
+    // CLWX-1 (2026-09-11): the model summed a 7-row Total column to 180 instead of 160
+    // twice on the installed build. Tool-computed per-column sums over ALL data rows
+    // (not just the returned window) remove the arithmetic from the model.
+    columnTotals: computeColumnTotals(aoa),
   };
+}
+
+/**
+ * Per-column numeric totals for a header-first 2D sheet. A column is totalled
+ * when every non-empty data cell parses as a number (thousands separators and a
+ * leading currency sign tolerated); mixed text/number columns are skipped so a
+ * total is never silently wrong. Returned as [{ column, index, sum, count }].
+ */
+export function computeColumnTotals(aoa) {
+  if (!Array.isArray(aoa) || aoa.length < 2) return [];
+  const header = Array.isArray(aoa[0]) ? aoa[0] : [];
+  const width = aoa.reduce((w, row) => Math.max(w, Array.isArray(row) ? row.length : 0), 0);
+  const totals = [];
+  for (let c = 0; c < width; c += 1) {
+    let sum = 0;
+    let count = 0;
+    let numeric = true;
+    for (let r = 1; r < aoa.length; r += 1) {
+      const row = aoa[r];
+      const cell = Array.isArray(row) ? row[c] : undefined;
+      if (cell === undefined || cell === null || String(cell).trim() === '') continue;
+      const n = typeof cell === 'number' ? cell : Number(String(cell).replace(/^[$€£TT]+\s*/i, '').replace(/,/g, '').trim());
+      if (!Number.isFinite(n)) { numeric = false; break; }
+      sum += n;
+      count += 1;
+    }
+    if (numeric && count > 0) {
+      totals.push({ column: String(header[c] ?? `column ${c + 1}`), index: c, sum: Number(sum.toFixed(6)), count });
+    }
+  }
+  return totals;
 }
 
 export async function writeXlsx({ path: outputPath, sheets } = {}) {
