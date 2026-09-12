@@ -107,7 +107,12 @@ export interface GatewayDiagnosticsSnapshot {
   lastSocketCloseAt?: number;
   lastSocketCloseCode?: number;
   consecutiveRpcFailures: number;
+  /** CLWX-95: outcome of the last post-ready Windows heartbeat corroboration probe sequence. */
+  lastHeartbeatCorroborationAt?: number;
+  lastHeartbeatCorroborationResult?: HeartbeatCorroborationResult;
 }
+
+export type HeartbeatCorroborationResult = 'healthy' | 'unhealthy' | 'aborted';
 
 function isCoreRpcMethod(method: string): boolean {
   return method === 'system-presence';
@@ -120,6 +125,17 @@ function isTransportRpcFailure(method: string, error: unknown): boolean {
     : message.includes('Gateway not connected')
     || message.includes('Gateway stopped')
     || message.includes('Failed to send RPC request:');
+}
+
+/**
+ * True when an RPC rejection means the Gateway did not answer at all (request
+ * timed out or could not be sent).  Any answer — including a Gateway-declared
+ * error such as "unknown method" — proves the RPC router is alive and is
+ * therefore not "unanswered".
+ */
+function isUnansweredRpcError(method: string, error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('RPC timeout:') || isTransportRpcFailure(method, error);
 }
 
 function classifyCapabilityMethod(method: string): GatewayCapabilityName | null {
@@ -179,6 +195,10 @@ export class GatewayManager extends EventEmitter {
   private reconnectAttemptsTotal = 0;
   private reconnectSuccessTotal = 0;
   private initialReadyRecoveryRequested = false;
+  /** CLWX-95: at most one post-ready Windows heartbeat corroboration runs at a time. */
+  private heartbeatCorroborationInFlight: Promise<void> | null = null;
+  private heartbeatCorroborationRetryTimer: NodeJS.Timeout | null = null;
+  private heartbeatCorroborationRetryWake: (() => void) | null = null;
   private static readonly RELOAD_POLICY_REFRESH_MS = 15_000;
   private static readonly HEARTBEAT_INTERVAL_MS = 30_000;
   private static readonly HEARTBEAT_TIMEOUT_MS = 12_000;
@@ -189,6 +209,14 @@ export class GatewayManager extends EventEmitter {
   private static readonly HEARTBEAT_INTERVAL_MS_WIN = 60_000;
   private static readonly HEARTBEAT_TIMEOUT_MS_WIN = 25_000;
   private static readonly HEARTBEAT_MAX_MISSES_WIN = 5;
+  // CLWX-95: on Windows, post-ready pong loss is corroborated with a bounded
+  // real Gateway RPC before any recovery.  Two unanswered probes spaced by the
+  // retry delay are required so a Gateway that is merely busy (Defender scan,
+  // long synchronous work) is not restarted on pong loss alone, while a hung
+  // Gateway is recovered within about half a minute of the pong threshold.
+  private static readonly HEARTBEAT_CORROBORATION_RPC_TIMEOUT_MS_WIN = 10_000;
+  private static readonly HEARTBEAT_CORROBORATION_ATTEMPTS_WIN = 2;
+  private static readonly HEARTBEAT_CORROBORATION_RETRY_DELAY_MS_WIN = 15_000;
   public static readonly RESTART_COOLDOWN_MS = 5_000;
   private static readonly GATEWAY_READY_FALLBACK_PROBE_DELAYS_MS = [1_500, 3_000, 5_000, 8_000, 12_000, 30_000] as const;
   private static readonly INITIAL_READY_HEARTBEAT_RECOVERY_GRACE_MS = 5 * 60_000;
@@ -830,6 +858,7 @@ export class GatewayManager extends EventEmitter {
     }
     this.resetGatewayReadyFallback();
     this.clearInitialReadyHeartbeatRecoveryTimer();
+    this.cancelHeartbeatCorroborationRetry();
   }
 
   private clearGatewayReadyFallbackTimer(): void {
@@ -1273,34 +1302,168 @@ export class GatewayManager extends EventEmitter {
           this.ws.ping();
         }
       },
-      onHeartbeatTimeout: ({ consecutiveMisses, timeoutMs }) => {
-        this.recordHeartbeatTimeout(consecutiveMisses);
-        const pid = this.process?.pid ?? 'unknown';
-        const isWindows = process.platform === 'win32';
-        const initialReadyPending = this.isInitialGatewayReadyPending();
-        const shouldAttemptRecovery = this.shouldReconnect
-          && this.status.state === 'running'
-          && (!isWindows || initialReadyPending);
-        logger.warn(
-          `Gateway heartbeat: ${consecutiveMisses} consecutive pong misses ` +
-            `(timeout=${timeoutMs}ms, pid=${pid}, state=${this.status.state}, autoReconnect=${this.shouldReconnect}).`,
-        );
-        if (!shouldAttemptRecovery) {
-          const reason = isWindows
-            ? 'platform=win32'
-            : 'lifecycle is not in auto-recoverable running state';
-          logger.warn(`Gateway heartbeat recovery skipped (${reason})`);
-          return;
-        }
-        if (initialReadyPending && this.requestInitialReadyRecovery('heartbeat-timeout')) {
-          return;
-        }
-        logger.warn('Gateway heartbeat recovery: restarting unresponsive gateway process');
-        void this.restart().catch((error) => {
-          logger.warn('Gateway heartbeat recovery failed:', error);
-        });
+      onHeartbeatTimeout: (context) => {
+        this.handleHeartbeatTimeout(context);
       },
     });
+  }
+
+  private handleHeartbeatTimeout({ consecutiveMisses, timeoutMs }: { consecutiveMisses: number; timeoutMs: number }): void {
+    this.recordHeartbeatTimeout(consecutiveMisses);
+    const pid = this.process?.pid ?? 'unknown';
+    const isWindows = process.platform === 'win32';
+    const initialReadyPending = this.isInitialGatewayReadyPending();
+    const canRecover = this.shouldReconnect && this.status.state === 'running';
+    logger.warn(
+      `Gateway heartbeat: ${consecutiveMisses} consecutive pong misses ` +
+        `(timeout=${timeoutMs}ms, pid=${pid}, state=${this.status.state}, autoReconnect=${this.shouldReconnect}).`,
+    );
+    if (!canRecover) {
+      logger.warn('Gateway heartbeat recovery skipped (lifecycle is not in auto-recoverable running state)');
+      return;
+    }
+    if (initialReadyPending && this.requestInitialReadyRecovery('heartbeat-timeout')) {
+      return;
+    }
+    if (isWindows) {
+      // CLWX-95. Windows pongs are delayed by Defender scans, updates and
+      // synchronous Gateway work without the Gateway being dead (#762), so
+      // post-ready pong loss used to be observability-only here.  That left a
+      // genuinely hung Gateway (2026-09-12: 110+ misses, chat.history/chat.send
+      // RPC timeouts, GATEWAY_READY still true) attached forever.  Missed pongs
+      // are now a trigger for a bounded real RPC, not proof of death: only a
+      // Gateway that also fails to answer the probes is restarted, and only
+      // through restart() so governor/deferred/in-flight rules still apply.
+      if (this.heartbeatCorroborationInFlight) {
+        logger.debug('Gateway heartbeat corroboration already in progress; not starting another');
+        return;
+      }
+      logger.warn('Gateway heartbeat recovery (win32): corroborating missed pongs with a bounded health RPC before any restart');
+      this.heartbeatCorroborationInFlight = this.corroborateHeartbeatTimeout()
+        .catch((error) => {
+          logger.warn('Gateway heartbeat recovery failed:', error);
+        })
+        .finally(() => {
+          this.heartbeatCorroborationInFlight = null;
+        });
+      return;
+    }
+    logger.warn('Gateway heartbeat recovery: restarting unresponsive gateway process');
+    void this.restart().catch((error) => {
+      logger.warn('Gateway heartbeat recovery failed:', error);
+    });
+  }
+
+  /**
+   * CLWX-95: corroborate post-ready Windows pong loss with bounded real RPCs.
+   * Restarts only when every probe goes unanswered and the probed connection
+   * is still the live one; a stop(), a new socket or a new lifecycle epoch in
+   * the meantime makes the late result inert.
+   */
+  private async corroborateHeartbeatTimeout(): Promise<void> {
+    const probedWs = this.ws;
+    const probedEpoch = this.lifecycleController.getCurrentEpoch();
+    const probedConnectedAt = this.status.connectedAt;
+    const isProbedConnection = (): boolean =>
+      probedWs !== null
+      && this.ws === probedWs
+      && this.shouldReconnect
+      && this.status.state === 'running'
+      && this.status.connectedAt === probedConnectedAt
+      && this.lifecycleController.getCurrentEpoch() === probedEpoch;
+    const abort = (phase: string): void => {
+      this.recordHeartbeatCorroboration('aborted');
+      logger.info(`Gateway heartbeat corroboration aborted (${phase}): connection changed or stopped`);
+    };
+
+    const attempts = GatewayManager.HEARTBEAT_CORROBORATION_ATTEMPTS_WIN;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      if (!isProbedConnection()) {
+        abort(`before probe ${attempt}/${attempts}`);
+        return;
+      }
+      const answered = await this.probeGatewayAnswers();
+      if (!isProbedConnection()) {
+        abort(`after probe ${attempt}/${attempts}`);
+        return;
+      }
+      // A pong or any inbound frame during the probe already reset the miss
+      // counter; that is equally proof of life.
+      if (answered || this.connectionMonitor.getConsecutiveMisses() === 0) {
+        this.recordHeartbeatCorroboration('healthy');
+        this.connectionMonitor.markAlive('health');
+        this.recordGatewayAlive();
+        logger.warn(
+          `Gateway heartbeat corroboration: gateway answered probe ${attempt}/${attempts} despite missed pongs; not restarting`,
+        );
+        return;
+      }
+      logger.warn(`Gateway heartbeat corroboration: probe ${attempt}/${attempts} unanswered`);
+      if (attempt < attempts) {
+        await this.waitForHeartbeatCorroborationRetry();
+      }
+    }
+
+    if (!isProbedConnection()) {
+      abort('before restart');
+      return;
+    }
+    this.recordHeartbeatCorroboration('unhealthy');
+    logger.warn(
+      'Gateway heartbeat recovery (win32): missed pongs corroborated by unanswered health probes; restarting unresponsive gateway process',
+    );
+    try {
+      await this.restart();
+    } finally {
+      if (isProbedConnection()) {
+        // restart() returned without replacing this connection (governor
+        // cooldown, joined in-flight restart or deferred request).  Do not
+        // leave the one-shot heartbeat trigger latched: recheck on the next
+        // missed tick instead of never again.
+        logger.warn('Gateway heartbeat recovery (win32): restart did not replace the connection; heartbeat rechecking re-armed');
+        this.connectionMonitor.rearmHeartbeatTimeout();
+      }
+    }
+  }
+
+  /** Bounded real Gateway RPC; true when the Gateway answered (success or Gateway-declared error). */
+  private async probeGatewayAnswers(): Promise<boolean> {
+    try {
+      await this.rpc('health', { probe: false }, GatewayManager.HEARTBEAT_CORROBORATION_RPC_TIMEOUT_MS_WIN);
+      return true;
+    } catch (error) {
+      if (isUnansweredRpcError('health', error)) {
+        return false;
+      }
+      logger.debug('Gateway heartbeat corroboration probe got a gateway-declared error; gateway is responsive:', error);
+      return true;
+    }
+  }
+
+  private waitForHeartbeatCorroborationRetry(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      this.heartbeatCorroborationRetryWake = () => {
+        this.heartbeatCorroborationRetryWake = null;
+        if (this.heartbeatCorroborationRetryTimer) {
+          clearTimeout(this.heartbeatCorroborationRetryTimer);
+          this.heartbeatCorroborationRetryTimer = null;
+        }
+        resolve();
+      };
+      this.heartbeatCorroborationRetryTimer = setTimeout(() => {
+        this.heartbeatCorroborationRetryWake?.();
+      }, GatewayManager.HEARTBEAT_CORROBORATION_RETRY_DELAY_MS_WIN);
+    });
+  }
+
+  /** Wake a pending corroboration retry early; the identity guard then aborts it. */
+  private cancelHeartbeatCorroborationRetry(): void {
+    this.heartbeatCorroborationRetryWake?.();
+  }
+
+  private recordHeartbeatCorroboration(result: HeartbeatCorroborationResult): void {
+    this.diagnostics.lastHeartbeatCorroborationAt = Date.now();
+    this.diagnostics.lastHeartbeatCorroborationResult = result;
   }
 
   private getInitialReadyHeartbeatRecoveryDelayMs(now = Date.now()): number {

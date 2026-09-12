@@ -67,4 +67,40 @@ describe('GatewayConnectionMonitor heartbeat', () => {
     expect(monitor.getConsecutiveMisses()).toBe(1);
     expect(onHeartbeatTimeout).not.toHaveBeenCalled();
   });
+
+  it('fires the timeout callback once until re-armed, then again on the next miss without claiming alive', () => {
+    const monitor = new GatewayConnectionMonitor();
+    const sendPing = vi.fn();
+    const onHeartbeatTimeout = vi.fn();
+
+    monitor.startPing({
+      sendPing,
+      onHeartbeatTimeout,
+      intervalMs: 100,
+      timeoutMs: 50,
+      maxConsecutiveMisses: 2,
+    });
+
+    vi.advanceTimersByTime(100); // ping #1
+    vi.advanceTimersByTime(100); // miss #1, ping #2
+    vi.advanceTimersByTime(100); // miss #2 -> timeout callback (one-shot latch)
+    expect(onHeartbeatTimeout).toHaveBeenCalledTimes(1);
+
+    // Latched: further misses keep counting (and keep pinging) but do not
+    // re-fire.  Only the firing tick itself skips the ping.
+    vi.advanceTimersByTime(100); // ping #3
+    vi.advanceTimersByTime(100); // miss #3, ping #4 (latched: no callback)
+    expect(onHeartbeatTimeout).toHaveBeenCalledTimes(1);
+    expect(monitor.getConsecutiveMisses()).toBe(3);
+
+    // Re-arm keeps the miss count (no false "alive") and lets the next
+    // missed tick fire the callback again.
+    monitor.rearmHeartbeatTimeout();
+    expect(monitor.getConsecutiveMisses()).toBe(3);
+    vi.advanceTimersByTime(100); // miss #4 (ping #4 unanswered) -> callback again
+    expect(onHeartbeatTimeout).toHaveBeenCalledTimes(2);
+    expect(onHeartbeatTimeout).toHaveBeenLastCalledWith({ consecutiveMisses: 4, timeoutMs: 50 });
+
+    monitor.clear();
+  });
 });

@@ -1,7 +1,7 @@
 import { logger } from '../utils/logger';
 
 type HealthResult = { ok: boolean; error?: string };
-type HeartbeatAliveReason = 'pong' | 'message';
+type HeartbeatAliveReason = 'pong' | 'message' | 'health';
 
 type PingOptions = {
   sendPing: () => void;
@@ -71,6 +71,17 @@ export class GatewayConnectionMonitor {
 
   getConsecutiveMisses(): number {
     return this.consecutiveMisses;
+  }
+
+  /**
+   * Let the heartbeat timeout callback fire again on the next missed tick
+   * without claiming the gateway is alive.  `onHeartbeatTimeout` is one-shot
+   * until `markAlive()`; when a timeout was corroborated as unhealthy but no
+   * recovery could run (for example the restart governor suppressed it), the
+   * owner re-arms here so rechecking continues instead of staying latched.
+   */
+  rearmHeartbeatTimeout(): void {
+    this.timeoutTriggered = false;
   }
 
   startHealthCheck(options: {
