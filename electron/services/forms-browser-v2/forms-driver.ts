@@ -483,10 +483,41 @@ export async function selectVirtualizedRadioChoice(
   } finally {
     await restore();
   }
+  // Measured live on the pilot Daily Report (2026-09-12): the school question is NOT
+  // virtualized. It offers a fixed set of radio options, and the configured school was
+  // simply absent from it. The old message described scroll passes and a "rendered
+  // window", which sent the reader looking for a scrolling defect that does not exist.
+  // Say what a principal can act on: this form does not offer that value, how many it
+  // does offer, and the closest things it has.
+  const offered = await scope
+    .evaluate((root) => Array.from(root.querySelectorAll('label'))
+      .map((l) => (l.textContent || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim())
+      .filter((t) => t.length > 0))
+    .catch(() => null);
+  const nearest = (() => {
+    if (!offered || offered.length === 0) return [];
+    const tokens = (v: string) => new Set(normalizeChoiceText(v).split(' ').filter((w) => w.length > 2));
+    const wantTokens = tokens(target);
+    if (wantTokens.size === 0) return [];
+    return offered
+      .map((label) => {
+        const t = tokens(label);
+        let shared = 0;
+        wantTokens.forEach((w) => { if (t.has(w)) shared += 1; });
+        return { label, shared };
+      })
+      .filter((c) => c.shared > 0)
+      .sort((a, b) => b.shared - a.shared)
+      .slice(0, 3)
+      .map((c) => c.label);
+  })();
+  const scanned = offered && offered.length > 0
+    ? `the question offers ${offered.length} option(s)`
+    : `no option labels could be read (looked across ${passes} scroll pass(es), ~${rendered} radios seen)`;
+  const hint = nearest.length > 0 ? `; closest offered: ${nearest.map((n) => `"${n}"`).join(', ')}` : '';
   return {
     ok: false,
-    reason: `option not found in the virtualized choice list after ${passes} scroll passes `
-      + `(~${rendered} options rendered per window): "${target}"`,
+    reason: `this question does not offer "${target}" — ${scanned}${hint}`,
   };
 }
 

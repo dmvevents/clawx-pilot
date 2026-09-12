@@ -283,6 +283,13 @@ describe('selectVirtualizedRadioChoice (CLWX-62, live-measured shape)', () => {
     expect(f.finalScroll()).toBe(0);
   });
 
+  it('names the closest offered options when the target is absent', async () => {
+    const f = fakeVirtualizedQuestion({ options: [...SCHOOLS.slice(0, 5), 'Sangre Grande Government Primary'], windowSize: 6 });
+    const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, 'Sangre Grande Primary School', 1000);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/closest offered: "Sangre Grande Government Primary"/);
+  });
+
   it('still stops on a short list instead of scrolling to the page bottom', async () => {
     const f = fakeVirtualizedQuestion({ options: SCHOOLS.slice(0, 12), windowSize: 12, itemHeightCoversWindowOnly: true, pageHeight: 30000 });
     const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, 'Nowhere Primary', 1000);
@@ -306,8 +313,12 @@ describe('selectVirtualizedRadioChoice (CLWX-62, live-measured shape)', () => {
     const f = fakeVirtualizedQuestion({ options: SCHOOLS });
     const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, 'Nowhere Primary', 1000);
     expect(r.ok).toBe(false);
-    expect(r.reason).toMatch(/not found in the virtualized choice list after \d+ scroll passes/);
-    expect(r.reason).toMatch(/options rendered per window/);
+    // The message must name what the principal can act on: the value is not offered,
+    // how many options exist, and the nearest ones. It must NOT describe scroll passes
+    // as the explanation, because the live form is not virtualized at all.
+    expect(r.reason).toMatch(/does not offer "Nowhere Primary"/);
+    expect(r.reason).toMatch(/offers 80 option\(s\)/);
+    expect(r.reason).not.toMatch(/scroll passes\)/);
     expect(f.clicked()).toEqual([]);
     expect(f.finalScroll()).toBe(0);
   });
