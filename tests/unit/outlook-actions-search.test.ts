@@ -58,6 +58,47 @@ describe('matchesSearchArgs', () => {
     expectNoMatch({ subjectContains: 'budget' });
   });
 
+  // CLWX-143: "emails about <topic>" must reach the preview text; the existing
+  // subject filter must keep its subject-only meaning.
+  it('matches topicContains against the subject', () => {
+    expectMatch({ topicContains: 'welcome' });
+    expectMatch({ topicContains: 'GROUP' });
+  });
+
+  it('matches topicContains against preview text the subject filter cannot see', () => {
+    const previewOnly = withMsg({
+      subject: 'Welcome Back to a New School Year',
+      snippet: 'Dear Colleagues, the new Academic Year begins on Monday.',
+    });
+    expectMatch({ topicContains: 'academic year' }, previewOnly);
+    expectNoMatch({ subjectContains: 'academic year' }, previewOnly);
+  });
+
+  it('excludes rows whose subject and preview both lack the topic', () => {
+    expectNoMatch({ topicContains: 'academic year' });
+    expectNoMatch({ topicContains: 'budget' });
+  });
+
+  it('normalizes whitespace when matching a topic', () => {
+    const spaced = withMsg({ subject: 'The  academic\n year plan', snippet: '' });
+    expectMatch({ topicContains: 'academic year' }, spaced);
+    expectMatch({ topicContains: 'academic   year' }, spaced);
+  });
+
+  it('treats a blank topicContains as no filter', () => {
+    expectMatch({ topicContains: '' });
+    expectMatch({ topicContains: '   ' });
+  });
+
+  it('combines topicContains with the other filters as AND', () => {
+    expectMatch({ from: 'AllFaculty', topicContains: 'joined a group' });
+    expectNoMatch({ from: 'districtoffice', topicContains: 'joined a group' });
+    expectNoMatch({ topicContains: 'joined a group', unread: false });
+    // Both text filters supplied: subject-only AND subject-or-preview.
+    expectMatch({ subjectContains: 'welcome', topicContains: 'joined a group' });
+    expectNoMatch({ subjectContains: 'budget', topicContains: 'joined a group' });
+  });
+
   it('combines from and subjectContains as AND', () => {
     expectMatch({ from: 'AllFaculty', subjectContains: 'welcome' });
     expectNoMatch({ from: 'AllFaculty', subjectContains: 'budget' });

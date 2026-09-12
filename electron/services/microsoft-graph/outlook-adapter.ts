@@ -7,6 +7,11 @@
  */
 import { logger } from '../../utils/logger';
 import {
+  describeSearchCoverage,
+  matchesTopicText,
+  TOPIC_COVERAGE_NOTE,
+} from '../outlook-browser/search-predicates';
+import {
   getStatus,
   graphCalls,
   type DraftReplyArgs,
@@ -167,6 +172,9 @@ function matchesSearch(message: GraphInboxMessage, args: SearchInboxArgs): boole
   ) {
     return false;
   }
+  // CLWX-143: one topic semantic across transports. Graph's snippet is
+  // bodyPreview, so this is still subject-or-preview, not a full-body search.
+  if (args.topicContains && !matchesTopicText(message, args.topicContains)) return false;
   if (typeof args.unread === 'boolean' && message.unread !== args.unread) return false;
   if (args.dateGte && message.receivedAt && new Date(message.receivedAt) < new Date(args.dateGte)) {
     return false;
@@ -235,6 +243,11 @@ export async function searchInboxWithGraph(args: SearchInboxArgs): Promise<Searc
   const filtered = scanned.filter((message) => matchesSearch(message, args));
   const top = args.top ?? 25;
   const messages = filtered.slice(0, top);
+  // CLWX-143: Graph filters attachments from message metadata, not preview text.
+  const coverage = describeSearchCoverage(args, { attachmentSignal: 'metadata' });
+  const baseNote = scanned.length < fetchTop
+    ? 'Graph returned fewer messages than requested for this Inbox page.'
+    : 'Graph returned the requested page size; more Inbox messages may exist beyond this page.';
   return {
     status: 'ok',
     messages,
@@ -247,9 +260,9 @@ export async function searchInboxWithGraph(args: SearchInboxArgs): Promise<Searc
       matchedCount: filtered.length,
       returnedCount: messages.length,
       exhaustive: scanned.length < fetchTop,
-      note: scanned.length < fetchTop
-        ? 'Graph returned fewer messages than requested for this Inbox page.'
-        : 'Graph returned the requested page size; more Inbox messages may exist beyond this page.',
+      matchedFields: coverage.matchedFields,
+      bodySearched: coverage.bodySearched,
+      note: args.topicContains ? `${baseNote} ${TOPIC_COVERAGE_NOTE}` : baseNote,
     },
   };
 }

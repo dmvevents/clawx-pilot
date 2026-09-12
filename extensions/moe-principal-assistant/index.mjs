@@ -1668,10 +1668,11 @@ export function register(api) {
     registerTool({
       name: 'outlook_search_inbox',
       description:
-        'Search the principal\'s Inbox by sender, subject, date, unread, or attachment presence. Canonical action: search. Args: { from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top? (default 25) }. Returns { status, messages, capped, scan, transport?, source?, implementation?, version? }. dateGte/dateLt are ISO 8601 strings. Prefer this over read_inbox when the user mentions a sender, date, month, or topic. For broad month/all-inbox searches use top 100-200, report the bounded scan, and say capped/incomplete/not exhaustive when capped is true or scan.exhaustive is false. Do not say "these are all emails" unless scan.exhaustive is true. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy; do not infer it when absent.',
+        'Search the principal\'s Inbox by sender, subject, topic, date, unread, or attachment presence. Canonical action: search. Args: { from?, subjectContains?, topicContains?, dateGte?, dateLt?, unread?, hasAttachment?, top? (default 25) }. Returns { status, messages, capped, scan, transport?, source?, implementation?, version? }. dateGte/dateLt are ISO 8601 strings. Prefer this over read_inbox when the user mentions a sender, date, month, or topic. CHOOSING THE TEXT FILTER: use topicContains for "emails about/regarding/mentioning <topic>" — it matches the subject OR the row preview text, so a message that only mentions the topic in its opening line is included; use subjectContains only when the principal explicitly asks about subject lines, because it compares the subject alone. Both may be supplied together and then both must match. COVERAGE: scan.matchedFields lists the row text that was actually compared (sender, subject, preview) and scan.bodySearched is always false. State that plainly — for a topic search say you matched subject and preview text within the scanned window, and never claim you searched full message bodies, attachments, or the whole mailbox. For broad month/all-inbox searches use top 100-200, report the bounded scan, and say capped/incomplete/not exhaustive when capped is true or scan.exhaustive is false. Do not say "these are all emails" unless scan.exhaustive is true. If transport/source/implementation/version is present, report it as Outlook Browser v2/browser, Microsoft Graph, or legacy; do not infer it when absent.',
       parameters: toolParameters({
         from: stringSchema,
         subjectContains: stringSchema,
+        topicContains: stringSchema,
         dateGte: stringSchema,
         dateLt: stringSchema,
         unread: booleanSchema,
@@ -1679,6 +1680,11 @@ export function register(api) {
         top: nonNegativeNumberSchema,
       }),
       execute: async (_toolCallId, args = {}) => {
+        // CLWX-143: topicContains is a string filter like subjectContains; the
+        // host validates it and reports the coverage it actually applied.
+        if (args.topicContains !== undefined && typeof args.topicContains !== 'string') {
+          throw new Error('topicContains must be a string.');
+        }
         return outlook.searchInbox(args);
       },
     });

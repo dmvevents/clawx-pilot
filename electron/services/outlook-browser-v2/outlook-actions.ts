@@ -23,6 +23,7 @@ import { logger } from '../../utils/logger';
 import { PlaywrightDriver } from './playwright-driver';
 import { VlmGrounder, bboxCentre } from './vlm-grounder';
 import { matchesSearchArgsForTests } from './search-helpers';
+import { describeSearchCoverage, TOPIC_COVERAGE_NOTE } from '../outlook-browser/search-predicates';
 import { INBOX_ROW_PARSER_BROWSER_SOURCE } from './inbox-row-parser';
 import { isAutomationSubject } from './automation-subjects';
 import { focusComposeRecipientField, readOutlookDomState } from './dom-heuristics';
@@ -783,6 +784,11 @@ export class OutlookActions {
     }
     const filtered = inbox.messages.filter((m) => matchesSearchArgs(m, args));
     const capped = filtered.length > top || inbox.messages.length >= fetchN;
+    // CLWX-143: state which row text the filters compared. A topic search sees
+    // the subject and the row preview only, and the note must say so rather
+    // than letting "5 emails about X" read as a full-text mailbox search.
+    const coverage = describeSearchCoverage(args, { attachmentSignal: 'preview' });
+    const baseNote = 'Browser Outlook search filters a recent Inbox window; for all mail/month-wide audits, report the scan window and do not claim the mailbox is complete.';
     return {
       status: 'ok',
       messages: filtered.slice(0, top),
@@ -795,8 +801,9 @@ export class OutlookActions {
         matchedCount: filtered.length,
         returnedCount: Math.min(filtered.length, top),
         exhaustive: false,
-        note:
-          'Browser Outlook search filters a recent Inbox window; for all mail/month-wide audits, report the scan window and do not claim the mailbox is complete.',
+        matchedFields: coverage.matchedFields,
+        bodySearched: coverage.bodySearched,
+        note: args.topicContains ? `${baseNote} ${TOPIC_COVERAGE_NOTE}` : baseNote,
       },
     };
   }

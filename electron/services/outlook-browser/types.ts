@@ -130,8 +130,17 @@ export interface SendEmailResult {
 export interface SearchInboxArgs {
   /** Partial sender match, case-insensitive. */
   from?: string;
-  /** Partial subject match, case-insensitive. */
+  /** Partial subject match, case-insensitive. Compares the subject only. */
   subjectContains?: string;
+  /**
+   * CLWX-143: partial topic match, case-insensitive and whitespace-normalized,
+   * against the subject OR the row's visible preview text. Use this for
+   * "emails about <topic>"; `subjectContains` stays subject-only for callers
+   * that explicitly ask about subject lines. Message bodies and attachments are
+   * NOT searched, so a topic match is bounded by the scanned window and by what
+   * the preview exposes — never report it as an exhaustive topic search.
+   */
+  topicContains?: string;
   /** ISO 8601 date string; only return mail received on/after this date. */
   dateGte?: string;
   /** ISO 8601 date string; only return mail received before this date. */
@@ -157,6 +166,16 @@ export interface SearchInboxResult {
     matchedCount: number;
     returnedCount: number;
     exhaustive: boolean;
+    /**
+     * CLWX-143: which row text the supplied filters actually compared, so the
+     * agent can state coverage instead of implying a full-text search.
+     */
+    matchedFields?: Array<'sender' | 'subject' | 'preview'>;
+    /**
+     * CLWX-143: always false. Neither transport opens messages during search,
+     * so no filter has ever seen a full message body.
+     */
+    bodySearched?: boolean;
     note?: string;
   };
   message?: string;

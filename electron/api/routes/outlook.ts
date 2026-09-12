@@ -36,6 +36,7 @@ import {
   searchInboxWithGraph,
   sendEmailWithGraph,
 } from '../../services/microsoft-graph/outlook-adapter';
+import { validateSearchInboxTopicArg } from '../../services/outlook-browser/search-predicates';
 import { getMicrosoftGraphConfig } from '../../services/microsoft-graph/store';
 import { getStatus as getMicrosoftGraphStatus } from '../../services/microsoft-graph/manager';
 import { recordOutlookSendAudit } from '../../services/outbox-service';
@@ -389,12 +390,20 @@ export async function handleOutlookRoutes(
 
     if (url.pathname === '/api/outlook/search-inbox') {
       const body = await parseJsonBody<SearchInboxArgs>(req);
+      // CLWX-143: validate only the topic filter. Type-checking the older
+      // arguments here would turn requests the service currently ignores into
+      // 400s and change existing search behaviour.
+      const topicArgError = validateSearchInboxTopicArg(body);
+      if (topicArgError) {
+        sendJson(res, 400, { success: false, error: topicArgError });
+        return true;
+      }
       const graphAvailable = await shouldUseGraphOutlookRead();
       const result = graphAvailable
         ? await searchInboxWithGraph(body)
         : await requireV2Manager('search-inbox').searchInbox(body);
       logger.info(
-        `[host-api outlook/search-inbox] transport=${graphAvailable ? 'graph' : 'browser'} status=${result.status} count=${result.messages?.length ?? 0} capped=${!!result.capped}`,
+        `[host-api outlook/search-inbox] transport=${graphAvailable ? 'graph' : 'browser'} status=${result.status} count=${result.messages?.length ?? 0} capped=${!!result.capped} fields=${(result.scan?.matchedFields ?? []).join('+') || 'none'}`,
       );
       sendJson(res, 200, { success: true, data: result });
       return true;

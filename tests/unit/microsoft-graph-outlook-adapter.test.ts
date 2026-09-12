@@ -166,6 +166,44 @@ describe('Microsoft Graph Outlook adapter', () => {
     });
   });
 
+  it('applies the same topic filter to Graph rows and reports the same coverage', async () => {
+    mockGraphCalls.listMessages.mockResolvedValue({
+      value: [
+        {
+          id: '1',
+          subject: 'Academic Year calendar',
+          bodyPreview: 'Term dates attached.',
+          isRead: true,
+          from: { emailAddress: { address: 'district@example.edu' } },
+        },
+        {
+          id: '2',
+          subject: 'Welcome Back to a New School Year',
+          bodyPreview: 'Dear Colleagues, ... The new Academic Year ...',
+          isRead: true,
+          from: { emailAddress: { address: 'network@example.edu' } },
+        },
+        {
+          id: '3',
+          subject: 'Meal supplier rotation',
+          bodyPreview: 'Menu changes for next term.',
+          isRead: true,
+          from: { emailAddress: { address: 'nsdsl@example.edu' } },
+        },
+      ],
+    });
+
+    const topic = await searchInboxWithGraph({ topicContains: 'academic year' });
+    expect(topic.messages.map((message) => message.id)).toEqual(['graph:1', 'graph:2']);
+    expect(topic.scan).toMatchObject({ matchedFields: ['subject', 'preview'], bodySearched: false });
+    expect(topic.scan?.note).toContain('not an exhaustive topic search');
+
+    const subject = await searchInboxWithGraph({ subjectContains: 'academic year' });
+    expect(subject.messages.map((message) => message.id)).toEqual(['graph:1']);
+    expect(subject.scan).toMatchObject({ matchedFields: ['subject'], bodySearched: false });
+    expect(subject.scan?.note).not.toContain('not an exhaustive topic search');
+  });
+
   it('marks Graph search as capped when the fetched page reaches the limit', async () => {
     mockGraphCalls.listMessages.mockResolvedValueOnce({
       value: Array.from({ length: 25 }, (_, i) => ({

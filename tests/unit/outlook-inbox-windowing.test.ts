@@ -144,6 +144,51 @@ describe('Outlook inbox windowing', () => {
     });
   });
 
+  // CLWX-143 / moe41f (2026-09-12): the acceptance window held six rows carrying
+  // "academic year"; the sixth carried it only in its preview line, so the
+  // subject-scoped search returned five and the row failed. The topic filter
+  // must return all six, with distinct ids and dates, and the result must say
+  // which text it compared.
+  it('searchInbox topic filter includes the preview-only row and reports bounded coverage', async () => {
+    const { actions } = createActions();
+    const rows = [
+      { id: 'Corporate Communications|Media Release: 2026/2027 Academic Year|Fri 8:02 AM', subject: 'Media Release: All 777 Schools Open for the Start of the 2026/2027 Academic Year', snippet: 'For immediate release.', receivedAt: '2026-09-11T08:02:00Z' },
+      { id: 'District Office|Academic Year calendar|Thu 4:31 PM', subject: 'Academic Year calendar', snippet: 'Term dates attached.', receivedAt: '2026-09-10T16:31:00Z' },
+      { id: 'Curriculum Unit|Planning for the academic year|Wed 9:15 AM', subject: 'Planning for the academic year', snippet: 'Draft schedule.', receivedAt: '2026-09-09T09:15:00Z' },
+      { id: 'Ministry Circular|Academic Year staffing|Tue 11:04 AM', subject: 'Academic Year staffing', snippet: 'Please confirm vacancies.', receivedAt: '2026-09-08T11:04:00Z' },
+      { id: 'School Supervisor|Academic year targets|16 Jun', subject: 'Academic year targets', snippet: 'Review before July.', receivedAt: '2026-06-16T13:00:00Z' },
+      // The sixth row: subject is a greeting, the term is in the preview only.
+      { id: 'Principal Network|Welcome Back to a New School Year|Sun 6 Sep', subject: 'Welcome Back to a New School Year', snippet: 'Dear Colleagues, ... The new Academic Year ...', receivedAt: '2026-09-06T07:30:00Z' },
+      { id: 'NSDSL|Meal supplier rotation|Sat 5 Sep', subject: 'Meal supplier rotation', snippet: 'Menu changes for next term.', receivedAt: '2026-09-05T10:00:00Z' },
+    ].map((row) => ({ ...row, sender: row.id.split('|')[0], unread: false }));
+    actions.readInbox = vi.fn(async () => ({ status: 'ok', messages: rows }));
+
+    const topic = await actions.searchInbox({ topicContains: 'academic year', top: 25 });
+
+    expect(topic.messages).toHaveLength(6);
+    expect(topic.messages.map((message) => message.id)).toEqual(rows.slice(0, 6).map((row) => row.id));
+    expect(new Set(topic.messages.map((message) => message.id)).size).toBe(6);
+    expect(new Set(topic.messages.map((message) => message.receivedAt)).size).toBe(6);
+    expect(topic.messages.some((message) => message.subject === 'Meal supplier rotation')).toBe(false);
+    expect(topic.scan).toMatchObject({
+      scope: 'recent_inbox_window',
+      matchedCount: 6,
+      returnedCount: 6,
+      exhaustive: false,
+      matchedFields: ['subject', 'preview'],
+      bodySearched: false,
+    });
+    expect(topic.scan?.note).toContain('not an exhaustive topic search');
+
+    // The subject filter is unchanged: it still returns five and still says
+    // it compared subjects only.
+    const subject = await actions.searchInbox({ subjectContains: 'academic year', top: 25 });
+    expect(subject.messages).toHaveLength(5);
+    expect(subject.messages.map((message) => message.id)).toEqual(rows.slice(0, 5).map((row) => row.id));
+    expect(subject.scan).toMatchObject({ matchedFields: ['subject'], bodySearched: false });
+    expect(subject.scan?.note).not.toContain('not an exhaustive topic search');
+  });
+
   it('searchInbox caps the widened inbox read at 200 rows', async () => {
     const { actions } = createActions();
     actions.readInbox = vi.fn(async () => ({ status: 'ok', messages: [] }));
