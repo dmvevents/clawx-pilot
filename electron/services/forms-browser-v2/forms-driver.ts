@@ -403,6 +403,10 @@ export async function selectVirtualizedRadioChoice(
   // including a throw — restores the original position.
   let passes = 0;
   let rendered = await optionCount();
+  // Whether the rendered window ever changed while walking. If it never did, the
+  // question is not virtualized and the rendered count IS the total; if it did, the
+  // count is only what one window shows (review MODERATE-2).
+  let windowEverChanged = false;
   // Review lane B (MINOR-B): the option COUNT is not a render signal on this
   // form — the virtualizer keeps a constant ~80-option window, so the count
   // never changes and polling it degenerated into a flat 480 ms per scroll pass.
@@ -467,6 +471,7 @@ export async function selectVirtualizedRadioChoice(
         if (now !== null && now !== beforeScroll) { changed = true; break; }
         await page.waitForTimeout(60);
       }
+      if (changed) windowEverChanged = true;
       const hit = await tryClickRendered();
       if (hit) return hit;
       rendered = Math.max(rendered, await optionCount());
@@ -494,25 +499,47 @@ export async function selectVirtualizedRadioChoice(
       .map((l) => (l.textContent || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim())
       .filter((t) => t.length > 0))
     .catch(() => null);
+  // Review MAJOR-1: on the live vocabulary almost every option ends in "Government
+  // Primary", so counting shared tokens ranked three wrong schools above the right
+  // one ("Aranguez GPS" for "Aranguez Government Primary School"). Tokens are weighted
+  // by rarity within the offered set: a token carried by more than a quarter of the
+  // options (or by 3+ options in a short list) is generic and cannot rank a candidate
+  // on its own. A candidate must share at least one DISTINCTIVE token, and the hint is
+  // suppressed entirely when nothing does, rather than naming unrelated schools.
   const nearest = (() => {
     if (!offered || offered.length === 0) return [];
     const tokens = (v: string) => new Set(normalizeChoiceText(v).split(' ').filter((w) => w.length > 2));
     const wantTokens = tokens(target);
     if (wantTokens.size === 0) return [];
+    const offeredTokens = offered.map((label) => tokens(label));
+    const frequency = new Map<string, number>();
+    for (const t of offeredTokens) t.forEach((w) => frequency.set(w, (frequency.get(w) ?? 0) + 1));
+    const genericAt = Math.max(3, Math.ceil(offered.length * 0.25));
+    const generic = (w: string) => (frequency.get(w) ?? 0) >= genericAt;
     return offered
-      .map((label) => {
-        const t = tokens(label);
+      .map((label, i) => {
+        const t = offeredTokens[i];
+        let distinctive = 0;
         let shared = 0;
-        wantTokens.forEach((w) => { if (t.has(w)) shared += 1; });
-        return { label, shared };
+        wantTokens.forEach((w) => {
+          if (!t.has(w)) return;
+          shared += 1;
+          if (!generic(w)) distinctive += 1;
+        });
+        return { label, distinctive, shared };
       })
-      .filter((c) => c.shared > 0)
-      .sort((a, b) => b.shared - a.shared)
+      .filter((c) => c.distinctive > 0)
+      .sort((a, b) => b.distinctive - a.distinctive || b.shared - a.shared)
       .slice(0, 3)
       .map((c) => c.label);
   })();
-  const scanned = offered && offered.length > 0
-    ? `the question offers ${offered.length} option(s)`
+  // Review MODERATE-2: count radios, which is what the live probe measured (80), not
+  // labels; and claim a total only when the rendered window never changed.
+  const radios = Math.max(rendered, await optionCount());
+  const scanned = radios > 0
+    ? (windowEverChanged
+      ? `at least ${radios} option(s) were seen (the list renders in windows)`
+      : `the question offers ${radios} option(s)`)
     : `no option labels could be read (looked across ${passes} scroll pass(es), ~${rendered} radios seen)`;
   const hint = nearest.length > 0 ? `; closest offered: ${nearest.map((n) => `"${n}"`).join(', ')}` : '';
   return {

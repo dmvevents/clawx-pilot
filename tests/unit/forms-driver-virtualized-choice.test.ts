@@ -222,6 +222,20 @@ function fakeVirtualizedQuestion(opts: {
 }
 
 const SCHOOLS = Array.from({ length: 454 }, (_, i) => `School ${String(i).padStart(3, '0')} Government Primary`);
+// Live-shaped vocabulary (2026-09-12 measurement): 80 options, one distinctive token
+// each, almost all ending in "Government Primary"; the near-miss is offered as an
+// abbreviation the profile does not use.
+const LIVE_LIKE_TOWNS = ['Arouca', 'Barataria', 'Carenage', 'Curepe', 'Diego Martin', 'Laventille', 'Maraval',
+  'Morvant', 'Petit Valley', 'St James', 'Santa Cruz', 'Tunapuna', 'Valsayn', 'Woodbrook', 'Belmont', 'Cascade',
+  'Chaguanas', 'Couva', 'Cunupia', 'Freeport', 'Gasparillo', 'Marabella', 'Penal', 'Siparia', 'Fyzabad',
+  'Point Fortin', 'La Brea', 'Cedros', 'Princes Town', 'Rio Claro', 'Mayaro', 'Guayaguayare', 'Tabaquite',
+  'Talparo', 'Arima', 'Piarco', 'Wallerfield', 'Toco', 'Matelot', 'Blanchisseuse', 'Maracas', 'Paramin',
+  'Moruga', 'Debe', 'Barrackpore', 'Erin', 'Oropouche', 'Claxton Bay', 'Preysal', 'California', 'Carapichaima',
+  'Chase Village', 'Enterprise', 'Longdenville', 'Felicity', 'Edinburgh', 'Endeavour', 'Charlieville',
+  'Lange Park', 'Montrose', 'Caroni', 'Kelly Village', 'Warrenville', 'Jerningham', 'Todds Road', 'Flanagin Town',
+  'Brasso Seco', 'Lopinot', 'Surrey', 'Bon Air', 'Trincity', 'Tacarigua', 'Dinsley', 'Macoya', 'El Dorado',
+  'Five Rivers', 'Mausica', 'Malabar', 'Santa Rosa'];
+const LIVE_LIKE_SCHOOLS = [...LIVE_LIKE_TOWNS.map((t) => `${t} Government Primary`), 'Aranguez GPS'];
 const TARGET_FAR_DOWN = SCHOOLS[400];
 
 describe('selectVirtualizedRadioChoice (CLWX-62, live-measured shape)', () => {
@@ -314,13 +328,45 @@ describe('selectVirtualizedRadioChoice (CLWX-62, live-measured shape)', () => {
     const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, 'Nowhere Primary', 1000);
     expect(r.ok).toBe(false);
     // The message must name what the principal can act on: the value is not offered,
-    // how many options exist, and the nearest ones. It must NOT describe scroll passes
-    // as the explanation, because the live form is not virtualized at all.
+    // how many options were seen, and the nearest ones. It must NOT describe scroll
+    // passes as the explanation. Review MODERATE-2: on a list whose window changed
+    // while walking, the count is what was seen, never claimed as the total.
     expect(r.reason).toMatch(/does not offer "Nowhere Primary"/);
-    expect(r.reason).toMatch(/offers 80 option\(s\)/);
+    expect(r.reason).toMatch(/at least 80 option\(s\) were seen/);
+    expect(r.reason).not.toMatch(/offers 80 option/);
     expect(r.reason).not.toMatch(/scroll passes\)/);
     expect(f.clicked()).toEqual([]);
     expect(f.finalScroll()).toBe(0);
+  });
+
+  /**
+   * The live pilot form (2026-09-12): 80 fixed radio options, almost all ending in
+   * "Government Primary", and the school the profile names as "Aranguez Government
+   * Primary School" is offered as "Aranguez GPS". Review MAJOR-1: the previous ranking
+   * counted shared tokens, so "government" + "primary" outscored "aranguez" and the
+   * hint named three wrong schools. The hint must name the one option that shares a
+   * distinctive token, and the count is a total because the window never changed.
+   */
+  it('names the live near-miss and claims a total only for a fixed list', async () => {
+    const f = fakeVirtualizedQuestion({ options: LIVE_LIKE_SCHOOLS });
+    const r = await selectVirtualizedRadioChoice(
+      f.page as never, f.item as never, 'Aranguez Government Primary School', 1000,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/offers 80 option\(s\)/);
+    expect(r.reason).toMatch(/closest offered: "Aranguez GPS"/);
+    expect(r.reason).not.toMatch(/Arouca|Barataria|Carenage/);
+    expect(f.clicked()).toEqual([]);
+  });
+
+  it('suppresses the hint when the target shares only generic tokens', async () => {
+    const f = fakeVirtualizedQuestion({ options: LIVE_LIKE_SCHOOLS });
+    const r = await selectVirtualizedRadioChoice(
+      f.page as never, f.item as never, 'Sangre Grande Government Primary', 1000,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/does not offer "Sangre Grande Government Primary"/);
+    expect(r.reason).not.toMatch(/closest offered/);
   });
 
   it('refuses an exactly duplicated option rather than guessing', async () => {
