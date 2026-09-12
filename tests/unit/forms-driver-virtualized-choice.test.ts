@@ -55,6 +55,8 @@ function fakeVirtualizedQuestion(opts: {
   itemHeightCoversWindowOnly?: boolean;
   /** total scrollable page height; scrollY clamps to pageHeight - viewport */
   pageHeight?: number;
+  /** render every label with non-breaking spaces instead of ordinary ones */
+  nbspInLabels?: boolean;
   throwOnClick?: boolean;
 }) {
   const windowSize = opts.windowSize ?? 80;
@@ -66,6 +68,11 @@ function fakeVirtualizedQuestion(opts: {
   const clicked: string[] = [];
   const scrolls: number[] = [];
   const waits: number[] = [];
+  // Rendered text can differ from the target by whitespace only: Microsoft Forms
+  // renders some option labels with a non-breaking space. Review lane A: a RegExp
+  // match tests the RAW text, so that difference produced "option not found" for an
+  // option that is present — the same message a genuine absence produces.
+  const renderText = (t: string) => (opts.nbspInLabels ? t.replace(/ /g, '\u00a0') : t);
   const visibleOptions = () => {
     const start = Math.max(0, Math.min(opts.options.length - windowSize, Math.floor(scrollY / pxPerOption)));
     const window = opts.options.slice(start, start + windowSize);
@@ -78,7 +85,7 @@ function fakeVirtualizedQuestion(opts: {
   const buildRoot = () => {
     const texts = visibleOptions();
     const labels = texts.map((t) => ({
-      textContent: t,
+      textContent: renderText(t),
       getAttribute: (n: string) => (n === 'for' && association === 'for' ? labelId(t) : null),
       __for: association === 'for' ? labelId(t) : null,
     }));
@@ -121,14 +128,22 @@ function fakeVirtualizedQuestion(opts: {
   };
 
   const labelLocator = (matcher?: RegExp) => ({
-    count: async () => (matcher ? visibleOptions().filter((t) => matcher.test(t)).length : visibleOptions().length),
+    count: async () => (matcher ? visibleOptions().filter((t) => matcher.test(renderText(t))).length : visibleOptions().length),
     filter: ({ hasText }: { hasText: RegExp }) => labelLocator(hasText),
     first: () => ({
       click: async () => {
         if (opts.throwOnClick) throw new Error('click failed');
-        const hit = visibleOptions().find((t) => matcher!.test(t));
+        const hit = visibleOptions().find((t) => matcher!.test(renderText(t)));
         clicked.push(hit ?? '<none>');
         selected = hit ?? null;
+      },
+    }),
+    nth: (i: number) => ({
+      click: async () => {
+        if (opts.throwOnClick) throw new Error('click failed');
+        const t = visibleOptions()[i];
+        clicked.push(t ?? '<none>');
+        selected = t ?? null;
       },
     }),
   });
@@ -143,9 +158,9 @@ function fakeVirtualizedQuestion(opts: {
       if (sel.includes('radio')) return { count: async () => visibleOptions().length };
       return { count: async () => 0 };
     },
-    evaluate: async (fn: (root: unknown) => unknown) => {
+    evaluate: async (fn: (root: unknown, arg?: unknown) => unknown, arg?: unknown) => {
       if (verify === 'throw') throw new Error('evaluate failed');
-      return fn(buildRoot());
+      return fn(buildRoot(), arg);
     },
   };
   const item = {
@@ -273,6 +288,18 @@ describe('selectVirtualizedRadioChoice (CLWX-62, live-measured shape)', () => {
     const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, 'Nowhere Primary', 1000);
     expect(r.ok).toBe(false);
     expect(f.scrolls().length).toBeLessThan(8);
+  });
+
+  /**
+   * Review lane A: whitespace-only differences must not read as absence. The label
+   * renders with non-breaking spaces, the target uses ordinary ones, and the regex
+   * prefilter therefore misses — the normalized comparison has to find and click it.
+   */
+  it('clicks an option whose rendered label differs only by non-breaking spaces', async () => {
+    const f = fakeVirtualizedQuestion({ options: SCHOOLS, nbspInLabels: true });
+    const r = await selectVirtualizedRadioChoice(f.page as never, f.item as never, SCHOOLS[9], 1000);
+    expect(r).toEqual({ ok: true, via: 'virtualized-radio' });
+    expect(f.clicked()).toEqual([SCHOOLS[9]]);
   });
 
   it('reports how far it looked when the option does not exist at all', async () => {

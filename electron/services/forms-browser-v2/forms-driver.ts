@@ -292,15 +292,7 @@ export async function selectVirtualizedRadioChoice(
   }
   const optionCount = async () => scope.locator('input[type="radio"], [role="radio"]').count().catch(() => 0);
 
-  const tryClickRendered = async (): Promise<DropdownChoiceResult | null> => {
-    const label = scope.locator('label').filter({ hasText: anchored });
-    const count = await label.count().catch(() => 0);
-    if (count === 0) return null;
-    if (count > 1) {
-      return { ok: false, reason: `ambiguous option (${count} labels match exactly): "${target}"` };
-    }
-    await label.first().click({ timeout: timeoutMs });
-    await page.waitForTimeout(150);
+  const verifySelection = async (): Promise<DropdownChoiceResult> => {
     // Verify by RE-RESOLVING inside the question scope, never through the handle
     // that was clicked (review lane B, MINOR-A and MINOR-D):
     //  - the virtualizer detaches the clicked element when it re-renders the
@@ -365,6 +357,45 @@ export async function selectVirtualizedRadioChoice(
       };
     }
     return { ok: true, via: 'virtualized-radio' };
+  };
+
+  const tryClickRendered = async (): Promise<DropdownChoiceResult | null> => {
+    // Match on NORMALIZED text, not on the anchored regex alone (review lane A):
+    // Playwright tests a RegExp against the element's raw text, so one non-breaking
+    // space or one doubled inner space in a school name produces "option not found"
+    // for an option that is right there — a message indistinguishable from a genuine
+    // absence, which is exactly the message the live run returned. The regex stays as
+    // a cheap prefilter; the decision is normalized equality.
+    const label = scope.locator('label').filter({ hasText: anchored });
+    const count = await label.count().catch(() => 0);
+    if (count === 0) {
+      const normalizedIndexes = await scope
+        .evaluate(
+          (root, wanted) => {
+            const norm = (v: string) => v.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+            const out: number[] = [];
+            const labels = Array.from(root.querySelectorAll('label'));
+            labels.forEach((el, i) => {
+              if (norm(el.textContent || '') === wanted) out.push(i);
+            });
+            return out;
+          },
+          want,
+        )
+        .catch(() => null);
+      if (!normalizedIndexes || normalizedIndexes.length === 0) return null;
+      if (normalizedIndexes.length > 1) {
+        return { ok: false, reason: `ambiguous option (${normalizedIndexes.length} labels match exactly): "${target}"` };
+      }
+      await scope.locator('label').nth(normalizedIndexes[0]).click({ timeout: timeoutMs });
+      return await verifySelection();
+    }
+    if (count > 1) {
+      return { ok: false, reason: `ambiguous option (${count} labels match exactly): "${target}"` };
+    }
+    await label.first().click({ timeout: timeoutMs });
+    await page.waitForTimeout(150);
+    return await verifySelection();
   };
 
   // Review lane B (MINOR-1): the click inside tryClickRendered can throw past a
