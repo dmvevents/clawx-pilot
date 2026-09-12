@@ -100,6 +100,25 @@ describe('buildCronUpdatePatch (PUT surface)', () => {
   });
 });
 
+/**
+ * Principal-trust requirement, measured: on installed moe.41 the Daily Report preview
+ * row failed its "not submitted" postcondition only because the reply did not say the
+ * form was not submitted, while every hard signal (no confirmation page, Submit still
+ * present, no submit-class tool call) was clean. A principal reading "here are the
+ * values I filled" cannot tell whether the form reached the district office, and that
+ * is the one thing they must not have to guess.
+ */
+describe('form preview must state that nothing was submitted (persona)', () => {
+  it('tells the assistant to say the form was NOT submitted after a preview', () => {
+    expect(SYSTEM_PROMPT).toMatch(/NOT been submitted/);
+    expect(SYSTEM_PROMPT).toMatch(/only submit it when the principal says so/i);
+  });
+
+  it('tells the assistant to name an unfilled field instead of implying the form is ready', () => {
+    expect(SYSTEM_PROMPT).toMatch(/name it and say the form is incomplete/i);
+  });
+});
+
 describe('agent-side scheduling rule (persona)', () => {
   it('requires explicit UTC offsets on one-off timestamps and schedule.tz on exprs', () => {
     const prompt = String(SYSTEM_PROMPT);
