@@ -365,6 +365,16 @@ describe('moe-principal-assistant plugin registration', () => {
       expect(modelFacingText).not.toMatch(/advise .*manual Chrome debugging/i);
       expect(modelFacingText).not.toMatch(/chrome:\/\/flags/i);
       expect(modelFacingText).not.toMatch(/chrome\.exe/i);
+      // CLWX-143 review finding MAJOR-1: the filter follows the search
+      // phrasing, listing subject lines is an output instruction, and only one
+      // text filter may be passed.
+      expect(modelFacingText).toMatch(/topicContains/);
+      expect(modelFacingText).toMatch(/exactly one text filter/i);
+      expect(modelFacingText).toMatch(/never from how the (?:answer|reply)/i);
+      expect(modelFacingText).toMatch(/list, show,? (?:or )?report/i);
+      expect(modelFacingText).toMatch(/subjectContains only when the search (?:itself )?is scoped to the subject/i);
+      expect(modelFacingText).toMatch(/comparedFields/);
+      expect(modelFacingText).toMatch(/never claim you searched full message bodies/i);
       expect(modelFacingText).not.toMatch(/web-?search/i);
     } finally {
       if (previousPort === undefined) delete process.env.CLAWX_HOST_API_PORT;

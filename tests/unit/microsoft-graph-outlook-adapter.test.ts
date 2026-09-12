@@ -195,12 +195,23 @@ describe('Microsoft Graph Outlook adapter', () => {
 
     const topic = await searchInboxWithGraph({ topicContains: 'academic year' });
     expect(topic.messages.map((message) => message.id)).toEqual(['graph:1', 'graph:2']);
-    expect(topic.scan).toMatchObject({ matchedFields: ['subject', 'preview'], bodySearched: false });
+    expect(topic.scan).toMatchObject({ comparedFields: ['subject', 'preview'], bodySearched: false });
     expect(topic.scan?.note).toContain('not an exhaustive topic search');
+
+    // Same defence as the browser lane: both filters with one needle applies
+    // the topic filter alone, so the preview-only row survives.
+    const both = await searchInboxWithGraph({
+      subjectContains: 'academic year',
+      topicContains: 'academic year',
+    });
+    expect(both.messages.map((message) => message.id)).toEqual(['graph:1', 'graph:2']);
+    // Graph does not control its preview length, so no number is claimed.
+    expect(both.scan?.note).toMatch(/truncates/);
+    expect(both.scan?.note).not.toContain('200');
 
     const subject = await searchInboxWithGraph({ subjectContains: 'academic year' });
     expect(subject.messages.map((message) => message.id)).toEqual(['graph:1']);
-    expect(subject.scan).toMatchObject({ matchedFields: ['subject'], bodySearched: false });
+    expect(subject.scan).toMatchObject({ comparedFields: ['subject'], bodySearched: false });
     expect(subject.scan?.note).not.toContain('not an exhaustive topic search');
   });
 

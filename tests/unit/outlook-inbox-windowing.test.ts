@@ -175,17 +175,31 @@ describe('Outlook inbox windowing', () => {
       matchedCount: 6,
       returnedCount: 6,
       exhaustive: false,
-      matchedFields: ['subject', 'preview'],
+      comparedFields: ['subject', 'preview'],
       bodySearched: false,
     });
     expect(topic.scan?.note).toContain('not an exhaustive topic search');
+    // The disclosed preview ceiling reaches the model, not just the type.
+    expect(topic.scan?.note).toContain('200');
+
+    // Review finding MAJOR-1: the same call with the subject filter bolted on
+    // (the shape a model may produce from "list their exact subject lines")
+    // must still return six, not the five that failed the row.
+    const both = await actions.searchInbox({
+      subjectContains: 'academic year',
+      topicContains: 'academic year',
+      top: 25,
+    });
+    expect(both.messages).toHaveLength(6);
+    expect(both.messages.map((message) => message.id)).toEqual(rows.slice(0, 6).map((row) => row.id));
+    expect(both.scan).toMatchObject({ comparedFields: ['subject', 'preview'], bodySearched: false });
 
     // The subject filter is unchanged: it still returns five and still says
     // it compared subjects only.
     const subject = await actions.searchInbox({ subjectContains: 'academic year', top: 25 });
     expect(subject.messages).toHaveLength(5);
     expect(subject.messages.map((message) => message.id)).toEqual(rows.slice(0, 5).map((row) => row.id));
-    expect(subject.scan).toMatchObject({ matchedFields: ['subject'], bodySearched: false });
+    expect(subject.scan).toMatchObject({ comparedFields: ['subject'], bodySearched: false });
     expect(subject.scan?.note).not.toContain('not an exhaustive topic search');
   });
 

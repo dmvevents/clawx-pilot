@@ -36,7 +36,7 @@ interface ToolSpec {
 const OUTLOOK_TOOLS: ToolSpec[] = [
   { name: 'outlook_open', description: 'Open Outlook Web in the principal\'s existing Chrome session.', argShape: [] },
   { name: 'outlook_read_inbox', description: 'Return the top N recent inbox messages.', argShape: ['top'] },
-  { name: 'outlook_search_inbox', description: 'Filter the inbox by sender, subject, date, unread, or attachment.', argShape: ['from', 'subjectContains', 'dateGte', 'dateLt', 'unread', 'hasAttachment', 'top'] },
+  { name: 'outlook_search_inbox', description: 'Filter the inbox by sender, topic (subject or preview text), subject line, date, unread, or attachment. Use topicContains for "emails about <topic>"; subjectContains only when the search is scoped to the subject line.', argShape: ['from', 'subjectContains', 'topicContains', 'dateGte', 'dateLt', 'unread', 'hasAttachment', 'top'] },
   { name: 'outlook_read_email', description: 'Open one message by id and return full body + attachments.', argShape: ['id'] },
   { name: 'outlook_draft_email', description: 'Open a New Mail compose pane and fill it. Does not send.', argShape: ['to', 'subject', 'body', 'cc', 'bcc'] },
   { name: 'outlook_send_email', description: 'Send an email. HARD GATE: requires confirm:true.', argShape: ['to', 'subject', 'body', 'confirm'] },
@@ -77,8 +77,10 @@ const PROMPTS: EvalRow[] = [
   { id: 'unread-1', prompt: 'How many unread emails do I have?', expectedTool: 'outlook_search_inbox', expectedArgKeys: ['unread'] },
   // W2.3
   { id: 'sender-1', prompt: 'Anything from districtoffice@moe.gov.tt today?', expectedTool: 'outlook_search_inbox', expectedArgKeys: ['from'] },
-  // W2.4
-  { id: 'subject-1', prompt: 'Find the email about budget approvals', expectedTool: 'outlook_search_inbox', expectedArgKeys: ['subjectContains'] },
+  // W2.4 — CLWX-143: "about <topic>" is a topic search, not a subject search.
+  // The preview-only match this filter exists to find is why the moe41f
+  // acceptance row failed with subjectContains.
+  { id: 'topic-1', prompt: 'Find the email about budget approvals', expectedTool: 'outlook_search_inbox', expectedArgKeys: ['topicContains'] },
   // W3.1 — implicit "latest from district HQ" requires search first
   { id: 'read-1', prompt: 'What does the latest message from district HQ say?', expectedTool: 'outlook_read_email', expectedArgKeys: ['id'], acceptableAlternatives: ['outlook_search_inbox'] },
   // W4.1

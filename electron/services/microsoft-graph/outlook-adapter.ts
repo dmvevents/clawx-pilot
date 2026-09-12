@@ -9,7 +9,8 @@ import { logger } from '../../utils/logger';
 import {
   describeSearchCoverage,
   matchesTopicText,
-  TOPIC_COVERAGE_NOTE,
+  isSubjectFilterSupersededByTopic,
+  topicCoverageNote,
 } from '../outlook-browser/search-predicates';
 import {
   getStatus,
@@ -166,8 +167,11 @@ function toInboxMessage(message: GraphMessage): GraphInboxMessage {
 
 function matchesSearch(message: GraphInboxMessage, args: SearchInboxArgs): boolean {
   if (args.from && !message.sender.toLowerCase().includes(args.from.toLowerCase())) return false;
+  // CLWX-143: see search-helpers — a subject filter duplicating the topic
+  // needle would exclude the preview-only matches the topic filter exists for.
   if (
     args.subjectContains
+    && !isSubjectFilterSupersededByTopic(args)
     && !message.subject.toLowerCase().includes(args.subjectContains.toLowerCase())
   ) {
     return false;
@@ -260,9 +264,11 @@ export async function searchInboxWithGraph(args: SearchInboxArgs): Promise<Searc
       matchedCount: filtered.length,
       returnedCount: messages.length,
       exhaustive: scanned.length < fetchTop,
-      matchedFields: coverage.matchedFields,
+      comparedFields: coverage.comparedFields,
       bodySearched: coverage.bodySearched,
-      note: args.topicContains ? `${baseNote} ${TOPIC_COVERAGE_NOTE}` : baseNote,
+      note: args.topicContains
+        ? `${baseNote} ${topicCoverageNote({ previewCharLimit: null })}`
+        : baseNote,
     },
   };
 }

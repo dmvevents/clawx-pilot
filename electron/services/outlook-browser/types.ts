@@ -167,10 +167,12 @@ export interface SearchInboxResult {
     returnedCount: number;
     exhaustive: boolean;
     /**
-     * CLWX-143: which row text the supplied filters actually compared, so the
-     * agent can state coverage instead of implying a full-text search.
+     * CLWX-143: which row text the supplied filters compared, so the agent can
+     * state coverage instead of implying a full-text search. These are the
+     * fields examined, not the fields that matched on any one row, and
+     * 'preview' means the truncated row snippet, not the message body.
      */
-    matchedFields?: Array<'sender' | 'subject' | 'preview'>;
+    comparedFields?: Array<'sender' | 'subject' | 'preview'>;
     /**
      * CLWX-143: always false. Neither transport opens messages during search,
      * so no filter has ever seen a full message body.

@@ -23,7 +23,10 @@ Reply with EXACTLY ONE JSON object on a single line: { "tool": "outlook.<name>",
 Available tools:
 - outlook_open                  args: <none>
 - outlook_read_inbox            args: top
-- outlook_search_inbox          args: from?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top?
+- outlook_search_inbox          args: from?, topicContains?, subjectContains?, dateGte?, dateLt?, unread?, hasAttachment?, top?
+                                  ("about/regarding/mentioning <topic>" -> topicContains;
+                                   subjectContains only when the search is scoped to the subject line;
+                                   never both)
 - outlook_read_email            args: id
 - outlook_draft_email           args: to, subject, body, cc?, bcc?
 - outlook_send_email            args: to, subject, body, confirm:true

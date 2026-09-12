@@ -8,7 +8,7 @@
 import type { InboxMessage, SearchInboxArgs } from './types';
 // CLWX-143: the topic predicate and coverage descriptor are shared with the
 // Graph transport, so they live with the shared type contract.
-import { matchesTopicText } from '../outlook-browser/search-predicates';
+import { isSubjectFilterSupersededByTopic, matchesTopicText } from '../outlook-browser/search-predicates';
 
 /**
  * Client-side filter applied to a row-list returned by readInbox(). Used
@@ -165,7 +165,10 @@ export function matchesSearchArgsForTests(m: InboxMessage, args: SearchInboxArgs
   if (args.from) {
     if (!m.sender.toLowerCase().includes(args.from.toLowerCase())) return false;
   }
-  if (args.subjectContains) {
+  // CLWX-143: unchanged for every caller that supplies a subject filter alone.
+  // Skipped only when a topic filter carries the same needle, where the AND
+  // would drop exactly the preview-only rows the topic filter is for.
+  if (args.subjectContains && !isSubjectFilterSupersededByTopic(args)) {
     if (!m.subject.toLowerCase().includes(args.subjectContains.toLowerCase())) return false;
   }
   if (args.topicContains) {

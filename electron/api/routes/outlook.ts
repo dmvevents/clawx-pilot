@@ -403,7 +403,7 @@ export async function handleOutlookRoutes(
         ? await searchInboxWithGraph(body)
         : await requireV2Manager('search-inbox').searchInbox(body);
       logger.info(
-        `[host-api outlook/search-inbox] transport=${graphAvailable ? 'graph' : 'browser'} status=${result.status} count=${result.messages?.length ?? 0} capped=${!!result.capped} fields=${(result.scan?.matchedFields ?? []).join('+') || 'none'}`,
+        `[host-api outlook/search-inbox] transport=${graphAvailable ? 'graph' : 'browser'} status=${result.status} count=${result.messages?.length ?? 0} capped=${!!result.capped} fields=${(result.scan?.comparedFields ?? []).join('+') || 'none'}`,
       );
       sendJson(res, 200, { success: true, data: result });
       return true;

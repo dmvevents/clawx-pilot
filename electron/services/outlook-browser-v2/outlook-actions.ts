@@ -23,7 +23,11 @@ import { logger } from '../../utils/logger';
 import { PlaywrightDriver } from './playwright-driver';
 import { VlmGrounder, bboxCentre } from './vlm-grounder';
 import { matchesSearchArgsForTests } from './search-helpers';
-import { describeSearchCoverage, TOPIC_COVERAGE_NOTE } from '../outlook-browser/search-predicates';
+import {
+  BROWSER_PREVIEW_CHAR_LIMIT,
+  describeSearchCoverage,
+  topicCoverageNote,
+} from '../outlook-browser/search-predicates';
 import { INBOX_ROW_PARSER_BROWSER_SOURCE } from './inbox-row-parser';
 import { isAutomationSubject } from './automation-subjects';
 import { focusComposeRecipientField, readOutlookDomState } from './dom-heuristics';
@@ -801,9 +805,11 @@ export class OutlookActions {
         matchedCount: filtered.length,
         returnedCount: Math.min(filtered.length, top),
         exhaustive: false,
-        matchedFields: coverage.matchedFields,
+        comparedFields: coverage.comparedFields,
         bodySearched: coverage.bodySearched,
-        note: args.topicContains ? `${baseNote} ${TOPIC_COVERAGE_NOTE}` : baseNote,
+        note: args.topicContains
+          ? `${baseNote} ${topicCoverageNote({ previewCharLimit: BROWSER_PREVIEW_CHAR_LIMIT })}`
+          : baseNote,
       },
     };
   }

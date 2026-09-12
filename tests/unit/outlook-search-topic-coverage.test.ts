@@ -12,12 +12,15 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  BROWSER_PREVIEW_CHAR_LIMIT,
   describeSearchCoverage,
+  isSubjectFilterSupersededByTopic,
   matchesTopicText,
   normalizeTopicText,
-  TOPIC_COVERAGE_NOTE,
+  topicCoverageNote,
   validateSearchInboxTopicArg,
 } from '@electron/services/outlook-browser/search-predicates';
+import { parseInboxRowTexts } from '@electron/services/outlook-browser-v2/inbox-row-parser';
 
 describe('normalizeTopicText', () => {
   it('case-folds, collapses whitespace and trims', () => {
@@ -81,14 +84,14 @@ describe('matchesTopicText', () => {
 describe('describeSearchCoverage', () => {
   it('reports subject only for a subject filter', () => {
     expect(describeSearchCoverage({ subjectContains: 'academic year' }, { attachmentSignal: 'preview' })).toEqual({
-      matchedFields: ['subject'],
+      comparedFields: ['subject'],
       bodySearched: false,
     });
   });
 
   it('reports subject and preview for a topic filter', () => {
     expect(describeSearchCoverage({ topicContains: 'academic year' }, { attachmentSignal: 'preview' })).toEqual({
-      matchedFields: ['subject', 'preview'],
+      comparedFields: ['subject', 'preview'],
       bodySearched: false,
     });
   });
@@ -96,23 +99,23 @@ describe('describeSearchCoverage', () => {
   it('reports the sender when a from filter is supplied', () => {
     expect(
       describeSearchCoverage({ from: 'district', topicContains: 'academic year' }, { attachmentSignal: 'preview' }),
-    ).toEqual({ matchedFields: ['sender', 'subject', 'preview'], bodySearched: false });
+    ).toEqual({ comparedFields: ['sender', 'subject', 'preview'], bodySearched: false });
   });
 
   it('ignores a whitespace-only topic, which applies no filter', () => {
     expect(describeSearchCoverage({ topicContains: '  ' }, { attachmentSignal: 'preview' })).toEqual({
-      matchedFields: [],
+      comparedFields: [],
       bodySearched: false,
     });
   });
 
   it('counts preview text for the browser attachment heuristic but not for Graph metadata', () => {
     expect(describeSearchCoverage({ hasAttachment: true }, { attachmentSignal: 'preview' })).toEqual({
-      matchedFields: ['preview'],
+      comparedFields: ['preview'],
       bodySearched: false,
     });
     expect(describeSearchCoverage({ hasAttachment: true }, { attachmentSignal: 'metadata' })).toEqual({
-      matchedFields: [],
+      comparedFields: [],
       bodySearched: false,
     });
   });
@@ -124,12 +127,78 @@ describe('describeSearchCoverage', () => {
   });
 });
 
-describe('TOPIC_COVERAGE_NOTE', () => {
+describe('isSubjectFilterSupersededByTopic', () => {
+  // Review finding MAJOR-1: supplying both text filters is a strict AND, which
+  // excludes exactly the preview-only row the topic filter exists to find. The
+  // frozen prompt asks to "list their exact subject lines", which invites a
+  // model to add the subject filter to a topical search.
+  it('supersedes the subject clause when both filters carry the same needle', () => {
+    expect(
+      isSubjectFilterSupersededByTopic({ subjectContains: 'academic year', topicContains: 'academic year' }),
+    ).toBe(true);
+    expect(
+      isSubjectFilterSupersededByTopic({ subjectContains: 'Academic  Year', topicContains: 'academic year' }),
+    ).toBe(true);
+  });
+
+  it('keeps a strict AND when the two needles genuinely differ', () => {
+    expect(
+      isSubjectFilterSupersededByTopic({ subjectContains: 'circular', topicContains: 'academic year' }),
+    ).toBe(false);
+  });
+
+  it('does nothing when only one filter is supplied', () => {
+    expect(isSubjectFilterSupersededByTopic({ subjectContains: 'academic year' })).toBe(false);
+    expect(isSubjectFilterSupersededByTopic({ topicContains: 'academic year' })).toBe(false);
+    expect(isSubjectFilterSupersededByTopic({})).toBe(false);
+    expect(isSubjectFilterSupersededByTopic({ subjectContains: '  ', topicContains: 'academic year' })).toBe(false);
+  });
+});
+
+describe('topicCoverageNote', () => {
+  const browserNote = topicCoverageNote({ previewCharLimit: BROWSER_PREVIEW_CHAR_LIMIT });
+
   it('states the bounded coverage and refuses the exhaustive claim', () => {
-    expect(TOPIC_COVERAGE_NOTE).toContain('subject');
-    expect(TOPIC_COVERAGE_NOTE).toContain('preview');
-    expect(TOPIC_COVERAGE_NOTE).toContain('not an exhaustive topic search');
-    expect(TOPIC_COVERAGE_NOTE).toMatch(/bodies .*not searched|not searched/);
+    expect(browserNote).toContain('subject');
+    expect(browserNote).toContain('preview');
+    expect(browserNote).toContain('not an exhaustive topic search');
+    expect(browserNote).toMatch(/not searched/);
+  });
+
+  // Review finding MODERATE-1: the preview is capped, and measured row text in
+  // the acceptance window runs well past the cap, so "I searched the preview
+  // text" is a slightly stronger claim than what happened.
+  it('discloses the browser preview character cap as a real ceiling', () => {
+    expect(browserNote).toContain(String(BROWSER_PREVIEW_CHAR_LIMIT));
+    expect(browserNote).toMatch(/past that point/);
+  });
+
+  it('says the provider truncates the preview when the cap is not ours', () => {
+    const graphNote = topicCoverageNote({ previewCharLimit: null });
+    expect(graphNote).toMatch(/truncates/);
+    expect(graphNote).not.toContain(String(BROWSER_PREVIEW_CHAR_LIMIT));
+    expect(graphNote).toContain('not an exhaustive topic search');
+  });
+});
+
+describe('BROWSER_PREVIEW_CHAR_LIMIT', () => {
+  // Locked to the parser the browser lane actually runs, so the disclosed
+  // number cannot drift away from the truncation it describes.
+  it('equals the cap the real row parser applies', () => {
+    const filler = 'supplier rotation notice ';
+    const row = parseInboxRowTexts(
+      ['DO', 'District Office', 'Term dates', 'Mon 7 Sep', filler.repeat(40)],
+      '',
+    );
+    expect(row.snippet.length).toBe(BROWSER_PREVIEW_CHAR_LIMIT);
+  });
+
+  it('drops preview text past the cap, which the note has to admit', () => {
+    const row = parseInboxRowTexts(
+      ['DO', 'District Office', 'Term dates', 'Mon 7 Sep', `${'x'.repeat(300)} academic year`],
+      '',
+    );
+    expect(matchesTopicText(row, 'academic year')).toBe(false);
   });
 });
 

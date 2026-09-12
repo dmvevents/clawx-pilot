@@ -90,6 +90,29 @@ describe('matchesSearchArgs', () => {
     expectMatch({ topicContains: '   ' });
   });
 
+  // Review finding MAJOR-1: the frozen prompt asks for subject lines as OUTPUT,
+  // so a model may add subjectContains to a topical search. With the same
+  // needle that must not exclude the preview-only row.
+  it('applies the topic filter alone when both text filters carry the same needle', () => {
+    const previewOnly = withMsg({
+      subject: 'Welcome Back to a New School Year',
+      snippet: 'Dear Colleagues, the new Academic Year begins on Monday.',
+    });
+    expectMatch({ subjectContains: 'academic year', topicContains: 'academic year' }, previewOnly);
+    expectMatch({ subjectContains: 'Academic  Year', topicContains: 'academic year' }, previewOnly);
+    // Still excludes rows that carry the topic nowhere.
+    expectNoMatch({ subjectContains: 'academic year', topicContains: 'academic year' });
+  });
+
+  it('keeps a strict AND when the two text filters differ', () => {
+    const previewOnly = withMsg({
+      subject: 'Welcome Back to a New School Year',
+      snippet: 'Dear Colleagues, the new Academic Year begins on Monday.',
+    });
+    expectMatch({ subjectContains: 'welcome', topicContains: 'academic year' }, previewOnly);
+    expectNoMatch({ subjectContains: 'circular', topicContains: 'academic year' }, previewOnly);
+  });
+
   it('combines topicContains with the other filters as AND', () => {
     expectMatch({ from: 'AllFaculty', topicContains: 'joined a group' });
     expectNoMatch({ from: 'districtoffice', topicContains: 'joined a group' });
